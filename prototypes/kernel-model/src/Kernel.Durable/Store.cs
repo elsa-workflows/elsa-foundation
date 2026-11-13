@@ -120,6 +120,22 @@ public interface IKernelStore : IMembership
     /// <summary>The viewer's read: the view rows of these instances, as the projectors have written them. Missing ids are skipped.</summary>
     ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Decision 11, the viewer's tail: one instance's journal rows past position <paramref name="after"/>, in position order.
+    /// A provider should answer it from an index on (partition, instance); this default reads the partition's journal.
+    /// </summary>
+    async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        var rows = new List<JournalRow>();
+        for (var from = after; ;)
+        {
+            var page = await ReadJournalAsync(partition, from, 1000, cancellationToken);
+            rows.AddRange(page.Where(r => r.Instance == instance));
+            if (page.Count < 1000) return rows;
+            from = page[^1].Position;
+        }
+    }
+
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
 }

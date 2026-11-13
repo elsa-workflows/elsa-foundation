@@ -13,6 +13,27 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
     private static bool Has(Flaw flaws, Flaw flaw) => (flaws & flaw) != 0;
 
     private bool _running;
+    private Task? _catchUp;      // the round a catch-up waits for; requests while it is pending share it
+
+    /// <summary>
+    /// Decision 11, catch-up on request: a round now, for a viewer that wants the projected rows current. Requests are
+    /// coalesced: while one waits, another gets the same round, so many viewers cause one. The round starts once any
+    /// round in flight has ended, so it reads what was committed before the request.
+    /// </summary>
+    public Task CatchUpAsync(CancellationToken cancellationToken = default)
+    {
+        lock (this)
+        {
+            if (_catchUp is { IsCompleted: false } pending) return pending;
+            return _catchUp = Next(cancellationToken);
+        }
+    }
+
+    private async Task Next(CancellationToken cancellationToken)
+    {
+        while (_running) await Task.Yield();     // the round in flight may have read the cursor before the request
+        await RoundAsync(cancellationToken);
+    }
 
     public async Task RoundAsync(CancellationToken cancellationToken = default)
     {

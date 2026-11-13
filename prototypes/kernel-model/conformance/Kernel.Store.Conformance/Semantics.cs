@@ -768,6 +768,43 @@ public static class Semantics
             var left = await c.S.ReadViewsAsync(ids);
             Context.Equal("250 from 0/v600", $"{left.Count} from {left.Select(v => v.Instance).Order(StringComparer.Ordinal).FirstOrDefault()}", "views after a round of 600 deletes");
         }),
+        new("journal: one instance's rows past a position, in order", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b")]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Turn("0/a", Make.Row("0/a", 3), expected: 2), Make.Turn("0/b", Make.Row("0/b", 2), expected: 1)]));
+            var rows = await c.S.ReadJournalOfAsync(0, "0/a", 1);
+            Context.Equal("3:2,4:3", string.Join(",", rows.Select(r => $"{r.Position}:{r.Revision}")), "0/a's rows past position 1");
+            Context.Equal(0, (await c.S.ReadJournalOfAsync(0, "0/none", 0)).Count, "rows of an instance that has none");
+        }),
+        new("viewer: the tail read is current when a round commits between its reads (decision 11)", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b")]));
+            Context.That(await c.S.ProjectAsync(0, 0, 2, await c.S.ReadJournalAsync(0, 0, 10)), "the first round did not move");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1), Make.Delete("0/b", 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 4, [Make.Turn("0/a", Make.Row("0/a", 3), expected: 2)]));
+            var cursor = (await c.S.ProjectedAsync(0)).Position;       // the viewer reads the cursor first
+            Context.That(await c.S.ProjectAsync(0, 2, 4, (await c.S.ReadJournalAsync(0, 2, 10)).Where(r => r.Position <= 4).ToList()), "the round between the reads did not move");
+            string Show(ViewRow? v) => v is null ? "none" : $"{v.Revision}:{v.Commits}";
+            foreach (var (id, expected) in new[] { ("0/a", "3:3"), ("0/b", "none") })
+            {
+                var view = Viewer.Merge(id, (await c.S.ReadViewsAsync([id])).SingleOrDefault(), await c.S.ReadJournalOfAsync(0, id, cursor));
+                Context.Equal(expected, Show(view), $"the tail read of {id}");
+            }
+            Context.Equal("3:3", Show(await Viewer.ReadAsync(c.S, 0, "0/a")), "a tail read with nothing between its reads");
+        }),
+        new("projector: catch-up requests are coalesced and leave the projection current (decision 11)", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b"), Make.New("0/c")]));
+            var projector = new Projector(c.S, 0);
+            var (first, second) = (projector.CatchUpAsync(), projector.CatchUpAsync());
+            Context.That(first.IsCompleted || ReferenceEquals(first, second), "a request while another waits got a round of its own");
+            await Task.WhenAll(first, second);
+            Context.Equal(new Projection(3, 3), await c.S.ProjectedAsync(0), "the projection after the catch-up");
+        }),
         new("projection: of many concurrent writes from one position, exactly one moves it", Level.Required, async c =>
         {
             var lease = await c.Take(0);
