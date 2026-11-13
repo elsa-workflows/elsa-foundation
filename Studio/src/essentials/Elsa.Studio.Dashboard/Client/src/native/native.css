@@ -8,6 +8,8 @@
 .named-workspace :is(input, select, textarea, button, a):focus-visible, .named-dialog :is(input, select, textarea, button, a):focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .named-workspace textarea { min-height: 4rem; resize: vertical; }
 .named-workspace a { color: var(--studio-accent); overflow-wrap: anywhere; }
+.named-resource-table { min-width: 42rem; }
+.named-resource-table :is(th, td):first-child { min-width: 14rem; }
 .named-definition-meta, .named-control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 1rem; }
 .named-authoring { display: grid; grid-template-columns: minmax(20rem, 1fr) minmax(20rem, 1.1fr); align-items: start; gap: 1.5rem; }
 .named-query-controls, .named-query-controls fieldset { display: grid; gap: .875rem; min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); }
@@ -76,3 +78,5 @@
 .named-definition-inspection { max-height: 20rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--studio-surface-muted); padding: 1rem; }
 @media (max-width: 1100px) { .named-authoring { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 700px) { .named-tile, .named-tile[data-size] { grid-column: 1 / -1; } .named-condition { display: grid; } .named-preview { padding: .75rem; } .named-dialog { padding: 1rem; } }
+
+@media (max-width: 700px) { .named-picker-list li { display: grid; grid-template-columns: minmax(0, 1fr); } .named-picker-list li > span { min-width: 0; } }
