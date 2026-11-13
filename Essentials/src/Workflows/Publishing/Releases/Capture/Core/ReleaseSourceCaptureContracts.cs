@@ -12,10 +12,12 @@ public sealed class ReleaseCaptureSelection(string kind, string identity, Releas
 }
 
 /// <summary>Exact captured owner content and selected roots, valid only within the source callback.</summary>
-public sealed class ReleaseSourceCapture(IReleaseContentReader content, IReadOnlyList<ReleaseBundleRoot> roots)
+public sealed record ReleaseSourceCapture
 {
-    public IReleaseContentReader Content { get; } = content;
-    public IReadOnlyList<ReleaseBundleRoot> Roots { get; } = Array.AsReadOnly(roots.ToArray());
+    public ReleaseSourceCapture(IReleaseContentReader content, IReadOnlyList<ReleaseBundleRoot> roots)
+    { Content = content; Roots = Array.AsReadOnly(roots.ToArray()); }
+    public IReleaseContentReader Content { get; }
+    public IReadOnlyList<ReleaseBundleRoot> Roots { get; }
 }
 
 /// <summary>Exact-kind source strategies. Duplicate claims fail composition; source authorization is supplied by host context.</summary>

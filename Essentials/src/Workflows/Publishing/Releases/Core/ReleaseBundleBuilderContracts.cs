@@ -9,10 +9,12 @@ public sealed class ReleaseBundleRoot(ReleaseMemberKey member, ReleaseMemberKey 
 }
 
 /// <summary>A semantically verified portable bundle, or a located refusal. This is not durable source capture or target admission.</summary>
-public sealed class ReleaseBundleBuildResult(IReleaseBundleTransport? bundle, ReleaseSemanticVerificationResult verification)
+public sealed record ReleaseBundleBuildResult
 {
-    public IReleaseBundleTransport? Bundle { get; } = bundle;
-    public ReleaseSemanticVerificationResult Verification { get; } = verification;
+    public ReleaseBundleBuildResult(IReleaseBundleTransport? bundle, ReleaseSemanticVerificationResult verification)
+    { Bundle = bundle; Verification = verification; }
+    public IReleaseBundleTransport? Bundle { get; }
+    public ReleaseSemanticVerificationResult Verification { get; }
 }
 
 /// <summary>Replacement contract: builds the manifest from complete actual owner facts over bounded copied content.</summary>

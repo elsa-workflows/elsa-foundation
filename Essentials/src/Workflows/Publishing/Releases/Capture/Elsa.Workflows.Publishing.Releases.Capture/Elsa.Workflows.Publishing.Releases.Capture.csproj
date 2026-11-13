@@ -7,9 +7,8 @@
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
-    <ProjectReference Include="Core/Elsa.Workflows.Publishing.Releases.Capture.Core.csproj" />
-    <ProjectReference Include="../Persistence/Core/Elsa.Workflows.Publishing.Releases.Persistence.Core.csproj" />
-    <Compile Remove="Core/**/*.cs" />
+    <ProjectReference Include="../Core/Elsa.Workflows.Publishing.Releases.Capture.Core.csproj" />
+    <ProjectReference Include="../../Persistence/Core/Elsa.Workflows.Publishing.Releases.Persistence.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Releases.Capture.Tests" />
   </ItemGroup>
 </Project>

@@ -37,3 +37,7 @@ Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceMembersCapturing.Re
 Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceMembersCapturing.Roots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture!>!
 Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceMembersCapturing.Options.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions!
 Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceMembersCapturing.CompleteAsync(Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture!
+Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.Equals(Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? other) -> bool
+static Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.operator !=(Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? left, Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture.operator ==(Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? left, Elsa.Workflows.Publishing.Releases.Capture.Core.ReleaseSourceCapture? right) -> bool
