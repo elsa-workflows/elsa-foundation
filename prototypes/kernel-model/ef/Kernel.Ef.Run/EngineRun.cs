@@ -18,6 +18,8 @@ using Npgsql;
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
 ///          many=100,1000 (cost: the sizes of the large flushes)   proxy=1 wire=1 (cost: count round trips on the TCP stream; MySQL: list what the server ran)
+///          writes=1 (PostgreSQL, stress and cost: WAL per commit split by table, dead tuples, vacuums, sizes; WRITES.md)   after=70 (stress: seconds to wait, then measure again)
+///          history=full|state|minimal pad=bytes (every row at that history level, with a state that much larger)   fillfactor=n fastvacuum=1 (with writes=1: on Instances and Messages)
 /// </summary>
 static class EngineRun
 {
@@ -59,6 +61,8 @@ static class EngineRun
             if (signal != "") { File.Delete(signal + ".calm"); File.Delete(signal + ".stop"); }
             await target.ResetAsync(partitions);
         }
+        // The WAL range would hold the other process's commits, and the tally counts only this one's.
+        if (target.Writes is not null && (workersOnly || signal != "")) { Console.WriteLine("writes=1 measures one process: not with role= or signal="); return 2; }
         var ef = target.Store(create);
         var tally = new Tally(ef);
         IKernelStore store = tally;
@@ -76,7 +80,7 @@ static class EngineRun
 
         var loops = Enumerable.Range(0, nodes).SelectMany(node => Enumerable.Range(0, partitions).Select(partition => Task.Run(async () =>
         {
-            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker(name + node, partition, store, new WorkflowInstance(Models()), options));
+            var (random, worker) = (new Random(node * 31 + partition + name.GetHashCode()), new Worker(name + node, partition, store, target.Actors(Models()), options));
             while (!Stopped())
             {
                 if (!worker.Owns)
@@ -109,6 +113,10 @@ static class EngineRun
         }
 
         var deadlocksBefore = await target.DeadlocksAsync(admin);
+        var writes = target.Writes;
+        var (before, sampled) = writes is null ? (null, false) : (await writes.TakeAsync(), true);
+        var sampler = writes?.SampleAsync(TimeSpan.FromSeconds(1), () => !sampled) ?? Task.CompletedTask;
+        if (writes is not null) Console.WriteLine("writes: " + await writes.DescribeAsync() + (target.Shaper is not null ? $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes" : ""));
         var chaos = Task.Run(async () =>
         {
             var random = new Random(7);
@@ -220,6 +228,15 @@ static class EngineRun
         if (signal != "") File.WriteAllText(signal + ".stop", "");
         await Task.WhenAll(loops);
         if (signal != "") await Task.Delay(1500);   // the other process stops its loops
+        PgWrites.Snapshot? end = null;
+        List<string>? tuplesEnd = null;
+        string? sizes = null;
+        if (writes is not null)
+        {
+            NpgsqlConnection.ClearAllPools();     // the workers' sessions end, and a session that ends reports its counts
+            await Task.Delay(1500);
+            (end, tuplesEnd, sizes) = (await writes.TakeAsync(), await writes.TupleStatsAsync(), await writes.RowSizesAsync());
+        }
 
         var wrong = new List<string>();
         await using var check = admin();
@@ -273,6 +290,17 @@ static class EngineRun
         Console.WriteLine($"deadlocks: the engine counted {await target.DeadlocksAsync(admin) - deadlocksBefore}, the store saw {tally.Sum(target.DeadlockCode)} (commit {tally.Sum("commit", target.DeadlockCode)}, poll {tally.Sum("poll", target.DeadlockCode)}, other {tally.Sum(target.DeadlockCode) - tally.Sum("commit", target.DeadlockCode) - tally.Sum("poll", target.DeadlockCode)})");
         Console.WriteLine($"SUMMARY | {target.Engine} | {await target.DescribeAsync()} | {(target.Has("unfenced") ? "broken" : target.FenceInBatch ? "batch" : "checked")} | {seconds} s, {messages} | kills {kills} | stalls {stalls} | takeovers {string.Join(", ", takeovers)} | turns {turns} | commits {journal.Count} | deadlocks {tally.Sum(target.DeadlockCode)} | retries {tally.Sum("commit", "Transient")} | resets {tally.Sum("commit", "fenced") + tally.Sum("commit", "Unknown")} (fenced {tally.Sum("commit", "fenced")}, unknown {tally.Sum("commit", "Unknown")}) | definite {tally.Sum("commit", "Definite")} | {(wrong.Count == 0 ? "holds" : wrong.Count + " violations")}");
         Console.WriteLine(wrong.Count == 0 ? "end state: all properties hold" : $"end state: {wrong.Count} violations\n  " + string.Join("\n  ", wrong.Take(20)));
+        if (writes is not null)
+        {
+            var wait = target.Int("after", 70);
+            Console.WriteLine($"writes: waiting {wait} s for autovacuum{(target.Shaper is { } padded ? $"; {padded.Padded.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} rows were written with the pad" : "")}");
+            await Task.Delay(wait * 1000);
+            var after = await writes.TakeAsync();
+            var tuplesAfter = await writes.TupleStatsAsync();
+            sampled = false;
+            await sampler;
+            await writes.PrintAsync(before!, end!, after, tally.Sum("commit landed"), tally.Units, turns, tuplesEnd, tuplesAfter, sizes);
+        }
         return wrong.Count == 0 ? 0 : 1;
     }
 
@@ -301,8 +329,9 @@ static class EngineRun
         var (locks, opens, saves) = (new Locks(target), new Opens(), new Saves());
         var create = target.Has("locks") ? target.Workers(counter, counter.Transactions, opens, saves, locks) : target.Workers(counter, counter.Transactions, opens, saves);
         await target.ResetAsync(2);
-        var store = target.Store(create);
-        var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000 });
+        var tally = target.Writes is null ? null : new Tally(target.Store(create));     // in process: it adds no round trip
+        IKernelStore store = tally ?? (IKernelStore)target.Store(create);
+        var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000 });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;
@@ -310,17 +339,23 @@ static class EngineRun
         Message Start(string mode, int count = 10) => new($"m{++n}", InstanceRef.In(0, $"{mode}{n}"), Kinds.Start, Start: Sequence.Spec(count, mode));
 
         Console.WriteLine($"\n{target.Engine}: {await target.DescribeAsync()}; fence {(target.FenceInBatch ? "in the batch" : "checked")}");
+        if (target.Writes is { } described) Console.WriteLine("writes: " + await described.DescribeAsync() + $"; history {target.Get("history", "as the models say")}, pad {target.Int("pad", 0)} bytes");
         Console.WriteLine("counted: commands, COMMITs and (but for PostgreSQL) BEGINs, as FINDINGS.md section 5 counts; sent: what the driver sends, one per request (see ENGINES.md)");
         Console.WriteLine($"{"run",-58} {"commands",8} {"begin",6} {"commit",6} {"opens",6} {"saves",6} {"counted",8} {"sent",6} {"server",8} {"tcp",6}");
         async Task Row(string name, Func<Task> body, Func<Task>? before = null)
         {
+            // With writes=1 the setup's WAL is measured too: for the rows whose setup only adds outside messages, it is their inserts.
+            var setupFrom = target.Writes is { } ws && before is not null ? await ws.TakeAsync() : null;
             if (before is not null) await before();
+            var setupLine = setupFrom is not null ? (await target.Writes!.CostLineAsync(setupFrom, await target.Writes.TakeAsync(), 0)).Replace("    WAL", "    setup WAL") : null;
             counter.Reset();
             (opens.Count, saves.Set, saves.Released, locks.Largest) = (0, 0, 0, "");
             var trips = target.Proxy?.Trips ?? 0;
             var kinds = await target.WireByKindAsync();
             var wire = await target.WireAsync();
+            var (walFrom, units) = target.Writes is { } w ? (await w.TakeAsync(), tally!.Units) : (null, 0);
             await body();
+            var walLine = target.Writes is { } w2 ? await w2.CostLineAsync(walFrom!, await w2.TakeAsync(), tally!.Units - units) : null;
             wire = wire < 0 ? -1 : await target.WireAsync() - wire;
             var delta = (await target.WireByKindAsync()).Select(k => (k.Key, n: k.Value - kinds.GetValueOrDefault(k.Key))).Where(k => k.n > 0).ToList();
             var counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
@@ -328,6 +363,8 @@ static class EngineRun
             var tcp = target.Proxy is { } proxy ? (proxy.Trips - trips).ToString() : "";
             Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8} {tcp,6}");
             if (locks.Largest != "") Console.WriteLine("    locks held at the largest commit: " + locks.Largest);
+            if (walLine is not null) Console.WriteLine(walLine);
+            if (setupLine is not null) Console.WriteLine(setupLine);
             if (target.Has("wire") && target.Engine == "mysql") Console.WriteLine("    server: " + string.Join(", ", delta.OrderBy(k => k.Key).Select(k => $"{k.Key.Replace("statement/", "")} x{k.n}")));
         }
 
@@ -550,6 +587,16 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     /// <summary>With proxy=1 the workers connect through <see cref="Wire"/>, which counts round trips on the TCP stream.</summary>
     public Wire? Proxy { get; } = options.ContainsKey("proxy") && engine != "sqlite" ? Wire.Start(engine, connection) : null;
 
+    /// <summary>With writes=1 on PostgreSQL: the WAL and bloat measurement of WRITES.md.</summary>
+    public PgWrites? Writes { get; } = engine == "postgres" && options.ContainsKey("writes") ? new PgWrites(connection) : null;
+
+    /// <summary>With history= or pad=: the actor type that writes every row at that level and with that pad (WRITES.md).</summary>
+    public Leveled? Shaper { get; } = options.ContainsKey("history") || options.ContainsKey("pad")
+        ? new Leveled(options.TryGetValue("history", out var h) ? Enum.Parse<History>(h, ignoreCase: true) : null, int.Parse(options.GetValueOrDefault("pad", "0")))
+        : null;
+
+    public IActorType Actors(IExecutionModel[] models) => Shaper is { } shaper ? shaper.Over(new WorkflowInstance(models)) : new WorkflowInstance(models);
+
     private string Worker => engine switch
     {
         "postgres" => (Proxy?.Rewrite(connection) ?? connection) + ";Application Name=kernel-worker;Maximum Pool Size=40",
@@ -623,6 +670,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
                 await settings.Database.ExecuteSqlRawAsync($"PRAGMA journal_mode = {(Get("wal", "1") == "1" ? "WAL" : "DELETE")}");
                 break;
         }
+        if (Writes is not null) await Writes.PrepareAsync(Int("fillfactor", 100), Has("fastvacuum"));
     }
 
     public async Task<string> DescribeAsync()
@@ -883,6 +931,10 @@ sealed class Tally(IKernelStore inner) : IKernelStore
 
     private void Count(string key) => _counts.AddOrUpdate(key, 1, (_, n) => n + 1);
 
+    /// <summary>Instance commits that landed: the turns of landed batches that wrote or deleted a row.</summary>
+    public long Units => Interlocked.Read(ref _units);
+    private long _units;
+
     public int Sum(params string[] parts) => _counts.Where(c => parts.All(c.Key.Contains)).Sum(c => c.Value);
 
     private async ValueTask<T> Call<T>(string op, Func<ValueTask<T>> call)
@@ -929,6 +981,7 @@ sealed class Tally(IKernelStore inner) : IKernelStore
         }
         var committed = await Call("commit", () => inner.CommitAsync(batch, cancellationToken));
         Count(committed.Landed ? "commit landed" : "commit fenced");
+        if (committed.Landed) Interlocked.Add(ref _units, batch.Turns.Count(t => t.Row is not null || t.Delete));
         return committed;
     }
 
