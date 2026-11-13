@@ -34,7 +34,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         {
             case BpmnContinuation.Complete complete:
                 turn.Record($"end {complete.Outcome}");
-                turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
+                turn.SetStatus(InstanceStatus.Finished, complete.Outcome, new JsonObject(_s.Variables.Where(v => _s.Set.Contains(v.Key)).Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone()))));
                 break;
             case BpmnContinuation.Fault fault:
                 // The interpreter stops nothing on a fault; the instance ends, so nothing it started may run on.
@@ -83,6 +83,16 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 Completed(finished.Key, result.Outcomes ?? []);
                 break;
             }
+            case BpmnKinds.Signal:
+            {
+                // Not terminal: the call stays in the ledger. A signal for a call already stopped or done is absorbed here.
+                var signal = m.Read<ScopeSignal>();
+                if (_s.Live.FirstOrDefault(w => w.Value is { Kind: WorkKinds.Call } && w.Value.Key == signal.Child) is not { Key: { } handle, Value: var work }) break;
+                turn.Record($"s {handle} {signal.Code}");
+                var payload = signal.Payload is null ? (System.Text.Json.JsonElement?)null : System.Text.Json.JsonDocument.Parse(signal.Payload).RootElement.Clone();
+                Apply(BpmnModel.Semantics.OnWorkSignalled(new BpmnWorkSignalledRequest(_process.Graph, _s.Tokens, Snapshot(), work.Binding, handle, signal.Code, payload, work.Iteration) { WorkTokenId = work.Token }));
+                break;
+            }
             case WorkflowKinds.ChildFinished:
             {
                 var finished = m.Read<ChildFinished>();
@@ -111,7 +121,11 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
 
     private void Merge(JsonObject? variables)
     {
-        foreach (var (name, value) in variables ?? []) _s.Variables[name] = value?.DeepClone();
+        foreach (var (name, value) in variables ?? [])
+        {
+            _s.Variables[name] = value?.DeepClone();
+            _s.Set.Add(name);
+        }
     }
 
     /// <summary>A report for work no longer in the ledger (a stale timer, a second delivery) changes nothing.</summary>
@@ -142,15 +156,15 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     {
         var before = _s.Tokens;
         Journal(before, evaluation.State);
-        // Diagnostics are the interpreter's record of what it decided; the journal keeps them, the row does not (the
-        // interpreter never reads them back: BPMN.md, section 2).
+        // Diagnostics are the interpreter's record of what it decided. The row does not keep them (the interpreter never
+        // reads them back); the journal keeps the joins that fired, and the rest are dropped.
         _s.Tokens = evaluation.State.Prune() with { Diagnostics = [] };
         foreach (var command in evaluation.Commands)
             switch (command)
             {
                 case BpmnHostCommand.StartWork start: Begin(start); break;
                 case BpmnHostCommand.CancelWorkSubtree cancel: Stop(cancel.Handle); break;
-                case BpmnHostCommand.SignalEnclosingScope signal: turn.Record($"signal {signal.Code}"); break;     // a root has no enclosing scope here
+                case BpmnHostCommand.SignalEnclosingScope signal: Signal(signal); break;
             }
         _last = evaluation.Continuation;
         // A stopped unit never reports (a cancelled job's result is nobody's, a recalled timer never comes), so the host
@@ -160,6 +174,14 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             var late = BpmnModel.Semantics.OnWorkCompleted(new BpmnWorkCompletedRequest(_process.Graph, Tokens, Snapshot(), stopped.Work.Binding, stopped.Handle, [], stopped.Work.Iteration) { WorkTokenId = stopped.Work.Token });
             Apply(late);
         }
+    }
+
+    /// <summary>An escalation (or another signal) for the enclosing scope: a called child's parent, as a message.</summary>
+    private void Signal(BpmnHostCommand.SignalEnclosingScope signal)
+    {
+        turn.Record($"signal {signal.Code}");
+        if (turn.Instance.Parent is { } parent)
+            turn.Send(new InstanceRef(parent), BpmnKinds.Signal, new ScopeSignal(turn.Instance.Ref.Id, signal.Code, signal.Payload?.GetRawText()));
     }
 
     private void Begin(BpmnHostCommand.StartWork start)
@@ -217,7 +239,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     private BpmnHostSnapshot Snapshot()
     {
         var conditions = new Conditions(_s.Variables);
-        return new BpmnHostSnapshot(turn.Instance.Ref.Id, HasEnclosingScope: false,
+        return new BpmnHostSnapshot(turn.Instance.Ref.Id, HasEnclosingScope: turn.Instance.Parent is not null,
             [.. _s.Live.Select(w => new BpmnLiveWork(w.Value.Binding, w.Value.Iteration, w.Key) { WorkTokenId = w.Value.Token })],
             new Dictionary<string, string>(), conditions, BpmnProcess.Capabilities) { Conditions = conditions };
     }

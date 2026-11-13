@@ -68,7 +68,32 @@ public static class Smoke
         p.Chain("start", "fail");
         registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work>()));
 
+        // A called child that escalates: the non-interrupting escalation boundary on the call runs while the child goes on.
+        var escalation = new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation, new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = "X1" });
+        p = new ProcessDraft("smoke-call-escalation");
+        p.B.StartEvent("start").CallActivity("call", "smoke-escalating", bindingRef: "call").EndEvent("end")
+            .BoundaryEvent("noticed", attachedTo: "call", escalation, interrupting: false).ServiceTask("note", bindingRef: "note").EndEvent("noted");
+        p.Chain("start", "call", "end").Chain("noticed", "note", "noted");
+        registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["call"] = new CallWork("smoke-escalating"), ["note"] = new JobWork("note") }));
+        p = new ProcessDraft("smoke-escalating");
+        p.B.StartEvent("start").IntermediateThrowEvent("raise", escalation).ServiceTask("go-on", bindingRef: "go-on").EndEvent("end");
+        p.Chain("start", "raise", "go-on", "end");
+        registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["go-on"] = new JobWork("go-on") }));
+
+        // A fork with a call activity beside a service task: the child gives back only what it set.
+        p = new ProcessDraft("smoke-call-fork");
+        p.B.StartEvent("start").ParallelGateway("fork").CallActivity("call", "smoke-child", bindingRef: "call").ServiceTask("inc", bindingRef: "inc").ParallelGateway("join").EndEvent("end");
+        p.Chain("start", "fork", "call", "join", "end").Chain("fork", "inc", "join");
+        registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["call"] = new CallWork("smoke-child"), ["inc"] = new JobWork("inc") }, new JsonObject { ["n"] = 0 }));
+        p = new ProcessDraft("smoke-child");
+        p.B.StartEvent("start").ServiceTask("work", bindingRef: "child-work").EndEvent("end");
+        p.Chain("start", "work", "end");
+        registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["child-work"] = new JobWork("child-work") }));
+
         return registry
+            .Service("child-work", _ => new ServiceResult(new JsonObject { ["child-out"] = "done" }))
+            .Service("note", _ => new ServiceResult(new JsonObject { ["noted"] = true }))
+            .Service("go-on", _ => new ServiceResult(new JsonObject { ["went-on"] = true }))
             .Service("quote", v => new ServiceResult(new JsonObject { ["quote"] = $"quote for {v["order"]}" }))
             .Service("inc", v => new ServiceResult(new JsonObject { ["n"] = v["n"]!.GetValue<int>() + 1 }))
             .Service("boom", _ => throw new InvalidOperationException("boom"))
@@ -136,6 +161,37 @@ public static class Smoke
             await owner.PumpAsync(() => owner.Status(id.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && Settled());
             Check(owner.Status(id.Id) == InstanceStatus.Finished && owner.State(id.Id)!.Variables.GetValueOrDefault("handled")?.GetValue<bool>() == true,
                 $"the error boundary with code E1 caught the child's error: {owner.Status(id.Id)}, {string.Join(" | ", Journal(id))}");
+        }
+
+        Console.WriteLine("a called child's escalation reaches the call's escalation boundary");
+        {
+            var id = InstanceRef.In(0, "escalation");
+            owner.Worker.Post(new Message("m5", id, Kinds.Start, Start: BpmnModel.Spec("smoke-call-escalation")), fresh: true);
+            await owner.PumpAsync(() => owner.Status(id.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && Settled());
+            var vars = owner.State(id.Id)!.Variables;
+            Check(owner.Status(id.Id) == InstanceStatus.Finished && vars.ContainsKey("noted") && vars.ContainsKey("went-on"),
+                $"the boundary ran and the child went on: {owner.Status(id.Id)}, {string.Join(" | ", Journal(id))}");
+        }
+
+        Console.WriteLine("a called child gives back only the variables it set");
+        {
+            gates.Services.Add("child-work");
+            var id = InstanceRef.In(0, "call-fork");
+            owner.Worker.Post(new Message("m6", id, Kinds.Start, Start: BpmnModel.Spec("smoke-call-fork")), fresh: true);
+            await owner.PumpAsync(() => owner.State(id.Id)?.Variables["n"]?.GetValue<int>() == 1);     // the branch beside the call has set n
+            gates.Release("child-work");
+            await owner.PumpAsync(() => owner.Status(id.Id) == InstanceStatus.Finished && Settled());
+            var vars = owner.State(id.Id)!.Variables;
+            Check(vars["n"]!.GetValue<int>() == 1 && vars["child-out"]?.GetValue<string>() == "done", $"n is {vars["n"]} (the child's stale copy is 0), child-out is {vars.GetValueOrDefault("child-out")}");
+            gates.Services.Clear();
+            gates.Held.Clear();
+        }
+
+        Console.WriteLine("conditions");
+        foreach (var (body, holds) in new[] { ("s != 'a==b'", true), ("s == 'x<y'", true), ("n >= 2", true), ("n < 2", false), ("flag", true), ("missing", false) })
+        {
+            var vars = new Dictionary<string, JsonNode?> { ["s"] = body.Contains("x<y") ? "x<y" : "q", ["n"] = 2, ["flag"] = true };
+            Check(Conditions.Holds(body, vars) == holds, $"{body} is {holds}");
         }
 
         Check(Settled() && store.Subscriptions.Count == 0, "no message and no subscription left");

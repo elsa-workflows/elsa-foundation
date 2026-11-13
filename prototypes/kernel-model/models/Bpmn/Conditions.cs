@@ -12,7 +12,7 @@ namespace Kernel.Bpmn;
 /// <c>== != &lt; &lt;= &gt; &gt;=</c> and the literal a number, <c>true</c>, <c>false</c>, <c>null</c> or <c>'text'</c>.
 /// Answers are a function of the expression and the variables, as the port requires.
 /// </summary>
-internal sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpmnVariableReader, IBpmnConditionEvaluator
+public sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpmnVariableReader, IBpmnConditionEvaluator
 {
     private static readonly string[] Operators = ["==", "!=", "<=", ">=", "<", ">"];
 
@@ -36,10 +36,8 @@ internal sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpm
     public static bool Holds(string body, IReadOnlyDictionary<string, JsonNode?> variables)
     {
         var text = body.Trim();
-        foreach (var op in Operators)
+        if (Operator(text) is var (at, op))
         {
-            var at = text.IndexOf(op, StringComparison.Ordinal);
-            if (at <= 0) continue;
             var left = variables.GetValueOrDefault(text[..at].Trim());
             var right = Literal(text[(at + op.Length)..].Trim());
             return op switch
@@ -50,6 +48,20 @@ internal sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpm
             };
         }
         return variables.GetValueOrDefault(text) is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+    }
+
+    /// <summary>The first operator outside a quoted literal, the two-character ones first at a position.</summary>
+    private static (int At, string Op)? Operator(string text)
+    {
+        var quoted = false;
+        for (var i = 1; i < text.Length; i++)
+        {
+            if (text[i] == '\'') quoted = !quoted;
+            if (quoted) continue;
+            foreach (var op in Operators)
+                if (string.CompareOrdinal(text, i, op, 0, op.Length) == 0) return (i, op);
+        }
+        return null;
     }
 
     private static JsonNode? Literal(string text) => text switch
