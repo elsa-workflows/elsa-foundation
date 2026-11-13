@@ -39,3 +39,17 @@ python3 tools/ux-acceptance/run.py --output /tmp/studio-activity-playback-<uniqu
 ```
 
 Retain exact head/source/dirty metadata, identities/coverage/request manifest, named PNG/ARIA states and traces. Include normal, pending, failure/retry, gap/denied/unavailable and context-loss captures; all intended project/journeys must run. Download the current CI artifact and have an independent reviewer open the affected states and traces. A green machine report, a local absolute path or an illustrative concept is not final UX approval. Preserve failed/not-run states and rerun the affected full journey after fixes.
+
+
+## Recorded prerequisite qualification
+
+These supporting results do not establish T003 production/composed readiness. Exact commands, failure history, scope and local TRX hashes are in their receipts; they are not downloadable visual acceptance.
+
+| Source | Actual complete project results | Receipt |
+|---|---|---|
+| S14a `43cdff392b` | Runtime4193, API399;0 fail/0 skip at clean head | [Current-subject/component receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6861895228) |
+| S14b `0f68c9ae6f` | EF2086 with recorded source-equivalence caveat; clean strict native272;0 fail/0 skip | [Projection correction handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6862730540) |
+| Owner S11c `57fa2bfed3` | Clean EF2124;0 fail/0 skip after recorded compile correction | [Staging receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6862226651) |
+| S14c `ccbc769989` | Clean EF2208 and strict native275;0 fail/0 skip | [Reader handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6862759814) |
+
+The last row includes the owning mapper correction and actual PostgreSQL/SQLServer/MySQL reader controls. Isolated EnsureCreated, context reopen and modeled retention do not qualify generated migrations, native checkpoint/retention owners, process restart, actual persisted IAM or the normal composed host. Final composition must also include the separate S14a authorization head. T003 and all dependent UI/composed/merge tasks remain unchecked until their actual gates pass.
