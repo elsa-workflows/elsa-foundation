@@ -3700,7 +3700,8 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it.each([false, true])("keeps causal Back through local URL synchronization (retained workspace: %s)", async retained => {
+  it.each([false, true].flatMap(retained => ["sync", "original", "selected"].map(intent => ({ retained, intent }))))(
+    "distinguishes causal history synchronization and navigation (retained: $retained, intent: $intent)", async ({ retained, intent }) => {
     const capabilities = capabilityDocument();
     capabilities.capabilities.find(item => item.id === "elsa.api.runtime")!.links.push(
       { rel: "workflow-history-page", href: "runtime/workflows/instances/{workflowExecutionId}/history", templated: true },
@@ -3731,6 +3732,19 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(eventText()).toContain("causal-A"));
     await click(buttonByText(container, "Inspect causal event →"));
     await vi.waitFor(() => expect(eventText()).toContain("causal-B"));
+    if (intent !== "sync") {
+      await click(buttonByText(container, "Issues"));
+      const target = intent === "original" ? "causal-A" : "causal-B";
+      const path = `/workflows/instances/wfexec-1?historyEvent=${target}`;
+      expect(requestStudioNavigation(`${window.location.pathname}${window.location.search}`, path)).toBe(true);
+      tabLocation = path;
+      window.history.pushState({}, "", path);
+      window.dispatchEvent(new PopStateEvent("popstate")); // Accepted SDK navigation, including unchanged target URLs.
+      rerender();
+      await vi.waitFor(() => expect(eventText()).toContain(target));
+      await unmount();
+      return;
+    }
     if (retained) {
       // The current host remembers the outgoing address-bar selection when switching tabs.
       tabLocation = `${window.location.pathname}${window.location.search}`;

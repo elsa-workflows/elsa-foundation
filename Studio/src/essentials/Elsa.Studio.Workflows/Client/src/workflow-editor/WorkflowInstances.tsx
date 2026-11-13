@@ -851,7 +851,7 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
 const maxIncidentActivityLookups = 50;
 const incidentActivityLookupBatchSize = 8;
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "activity", initialReturnTo = null, initialHistoryLocation, initialHistorySearch, navigate }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "activity", initialReturnTo = null, initialHistoryLocation, initialHistorySearch, initialHistoryNavigation = 0, navigate }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
   /** The Workflows module's Weaver state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
@@ -865,6 +865,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   initialReturnTo?: string | null;
   initialHistoryLocation?: RunTimelineLocation;
   initialHistorySearch?: string;
+  initialHistoryNavigation?: number;
   navigate(path: string): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -874,7 +875,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const parsedInitialHistory = useMemo(() => initialHistoryLocation ?? readTimelineLocation(initialHistorySearch ?? ""), [initialHistoryLocation, initialHistorySearch]);
   const [historyLocation, setHistoryLocation] = useState<RunTimelineLocation>(parsedInitialHistory);
   const currentHistoryLocation = useRef(historyLocation); currentHistoryLocation.current = historyLocation;
-  const appliedHistoryIntent = useRef<{ context: string; location: string } | null>(null);
+  const appliedHistoryIntent = useRef<{ context: string; location: string; navigation: number } | null>(null);
   const initialHistoryKey = JSON.stringify(parsedInitialHistory);
   const historyBack = useRef<Array<{ location: RunTimelineLocation; evidenceId: string | null; focus: HTMLElement | null }>>([]);
   const [historyOwnerMessage, setHistoryOwnerMessage] = useState("");
@@ -905,15 +906,16 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const browserContext = observation.identity;
   useEffect(() => {
     const previous = appliedHistoryIntent.current;
-    if (previous?.context === browserContext && previous.location === initialHistoryKey) return;
-    appliedHistoryIntent.current = { context: browserContext, location: initialHistoryKey };
+    const explicitNavigation = previous?.navigation !== initialHistoryNavigation;
+    if (previous?.context === browserContext && previous.location === initialHistoryKey && !explicitNavigation) return;
+    appliedHistoryIntent.current = { context: browserContext, location: initialHistoryKey, navigation: initialHistoryNavigation };
     // Retained workspace tabs reconnect effects and remember our local address-bar writes. Neither
     // is a new investigation: keep the causal Back stack and the user's chosen inspector tab.
-    if (previous?.context === browserContext && JSON.stringify(currentHistoryLocation.current) === initialHistoryKey) return;
+    if (!explicitNavigation && previous?.context === browserContext && JSON.stringify(currentHistoryLocation.current) === initialHistoryKey) return;
     setHistoryLocation(parsedInitialHistory);
     historyBack.current = []; setHistoryOwnerMessage(""); setFocusHistoryInspector(true);
     appliedInitialInspectorTab.current = null; // A new exact target must open even after Issues/Details.
-  }, [browserContext, initialHistoryKey, parsedInitialHistory]);
+  }, [browserContext, initialHistoryKey, initialHistoryNavigation, parsedInitialHistory]);
   const [browserEvidence, setBrowserEvidence] = useState<{ context: string; items: ActivityExecutionStateSummary[] }>({ context: browserContext, items: [] });
   const [executionScopes, setExecutionScopes] = useState<{ context: string; items: Array<{ execution: ActivityExecutionStateSummary; label: string }> }>({ context: browserContext, items: [] });
   const [scopeNavigation, setScopeNavigation] = useState<{ context: string; loading: boolean; error: string; retaining?: boolean }>({ context: browserContext, loading: false, error: "" });
@@ -972,7 +974,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     // Exact history links can resolve to an unavailable result without an activity owner.
     // Activity-only links open through the resolved selection instead of an unverified ID.
     if (parsedInitialHistory.selection || requestedInitialTab === "issues") openInspector();
-  }, [browserContext, initialInspectorTab, parsedInitialHistory.selection, openInspector]);
+  }, [browserContext, initialInspectorTab, initialHistoryNavigation, parsedInitialHistory.selection, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   // The exact Run Weaver may read while it is shown: its Workflow Instance identity and the activity execution selected on
   // it, published only once the run has loaded and withdrawn while loading, after a failed load and on unmount. The server
