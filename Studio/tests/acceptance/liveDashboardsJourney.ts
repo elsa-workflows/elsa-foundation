@@ -429,8 +429,15 @@ async function shareQuestion(page: Page, info: TestInfo, capture: Capture, captu
   await keyboardUi.click(dialog.getByRole("button", { name: "Search audience", exact: true }));
   await keyboardUi.click(dialog.getByRole("listitem").filter({ hasText: "dashboard-reader" }).getByRole("button", { name: "Add audience", exact: true }));
   await capture(page, info, captureName);
+  // Sharing changes the dashboard revision and starts its ordinary two-wide tile
+  // refresh. Observe both completed reads before adding an independent API readback;
+  // a third concurrent read correctly exceeds the native per-subject admission bound.
+  const tileIds = await page.locator(".named-tile[data-tile-id]").evaluateAll(nodes => nodes.map(node => node.getAttribute("data-tile-id")!));
+  const refreshed = tileIds.map(id => page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith(`/tiles/${id}/execute`)));
   await keyboardUi.click(dialog.getByRole("button", { name: "Save audience", exact: true }));
   await expect(dialog).toBeHidden();
+  for (const response of await Promise.all(refreshed)) expect(response.ok()).toBe(true);
+  await expect(page.getByRole("button", { name: /^Cancel refresh for question / })).toHaveCount(0);
 }
 
 async function grantProfile(backend: Backend, profile: "dashboard-live-reader" | "dashboard-live-no-category") {
