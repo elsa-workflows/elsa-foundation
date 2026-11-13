@@ -16,7 +16,7 @@ export function SettingsShell({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
-  const { compact, navigationRef, selectRef } = useCompactNavigation();
+  const { compact, navigationRef, selectRef, contentRef } = useCompactNavigation();
   return (
     <div className="settings-shell">
       {compact ? (
@@ -47,7 +47,7 @@ export function SettingsShell({
           </div>
         ))}
       </nav>}
-      <div className="settings-pane">{children}</div>
+      <div ref={contentRef} className="settings-pane">{children}</div>
     </div>
   );
 }

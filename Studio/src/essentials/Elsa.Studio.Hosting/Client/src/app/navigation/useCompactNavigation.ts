@@ -2,12 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 const compactNavigationQuery = "(max-width: 800px)";
 
-/** Switches navigation without remounting the editor, and carries navigation focus across resizing. */
+/** Switches navigation without remounting the editor, keeping navigation and edited content in reach. */
 export function useCompactNavigation() {
   const [compact, setCompact] = useState(() => typeof window.matchMedia === "function" && window.matchMedia(compactNavigationQuery).matches);
   const navigationElement = useRef<HTMLElement | null>(null);
   const navigationRef = useCallback((element: HTMLElement | null) => { navigationElement.current = element; }, []);
   const selectRef = useRef<HTMLSelectElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const restoreFocus = useRef(false);
 
   useEffect(() => {
@@ -25,7 +26,13 @@ export function useCompactNavigation() {
   }, [compact]);
 
   useLayoutEffect(() => {
-    if (!restoreFocus.current) return;
+    if (!restoreFocus.current) {
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && contentRef.current?.contains(focused)) {
+        focused.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      }
+      return;
+    }
     restoreFocus.current = false;
     if (compact) selectRef.current?.focus();
     else {
@@ -35,5 +42,5 @@ export function useCompactNavigation() {
     }
   }, [compact]);
 
-  return { compact, navigationRef, selectRef };
+  return { compact, navigationRef, selectRef, contentRef };
 }

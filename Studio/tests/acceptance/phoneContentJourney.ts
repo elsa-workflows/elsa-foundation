@@ -5,7 +5,8 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/workflows/activity-definitions");
   await page.locator(".studio-page-header").getByRole("button", { name: "Create activity", exact: true }).click();
-  await page.getByRole("textbox", { name: "Display name", exact: true }).fill(`Phone authoring ${info.project.name} ${Date.now()}`);
+  const activityName = `Phone authoring ${info.project.name} ${Date.now()}`;
+  await page.getByRole("textbox", { name: "Display name", exact: true }).fill(activityName);
   const provider = page.getByRole("combobox", { name: "Implementation type", exact: true });
   if (await provider.count()) {
     const graph = provider.locator('option[value^="elsa.activity-graph|"]');
@@ -14,6 +15,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence", exact: true }) }).click();
   await page.getByRole("button", { name: "Create definition", exact: true }).click();
   await expect(page.getByRole("region", { name: "Provider implementation editor", exact: true })).toBeVisible();
+  await expect(page.locator("#activity-draft-title")).toHaveText(activityName);
   const editorUrl = page.url();
   const canvas = page.locator(".ad-graph-canvas");
   const expectCanvas = async () => expect.poll(async () => (await canvas.boundingBox())!.width).toBeGreaterThanOrEqual(260);
@@ -21,6 +23,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await expectCanvas();
   await capture(page, info, "phone-authoring-entry");
   await page.reload(); await expectCanvas();
+  await expect(page.locator("#activity-draft-title")).toHaveText(activityName);
   await page.getByRole("button", { name: "Expand inspector panel", exact: true }).press("Enter");
   await capture(page, info, "phone-inspector");
   await page.getByRole("button", { name: "Maximize inspector panel", exact: true }).click();
@@ -43,6 +46,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
     await capture(page, info, `authoring-${width}`);
   }
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto(editorUrl); await expectCanvas();
+  await expect(page.locator("#activity-draft-title")).toHaveText(activityName);
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/settings/theme-builder");
@@ -57,6 +61,10 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await expect(theme.locator(".theme-builder-list")).toHaveCount(0);
   expect((await theme.locator(".theme-builder-detail").boundingBox())!.y).toBeLessThan(844);
   await capture(page, info, "phone-theme-entry");
+  await theme.getByRole("tab", { name: "Assets", exact: true }).click();
+  expect((await themeSelect.boundingBox())!.height).toBeLessThanOrEqual((await sectionSelect.boundingBox())!.height + 2);
+  await capture(page, info, "phone-theme-assets");
+  await theme.getByRole("tab", { name: "Overview", exact: true }).click();
   await theme.getByRole("button", { name: "Duplicate", exact: true }).click();
   const name = theme.getByRole("textbox", { name: "Name", exact: true });
   await expect(name).toBeEditable();
@@ -65,12 +73,14 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await name.fill(edited);
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(name).toHaveValue(edited); await expect(name).toBeFocused();
+  await expect(name).toBeInViewport();
   await capture(page, info, "theme-desktop-dirty");
   await theme.getByRole("tab", { name: "Tokens", exact: true }).click();
   const primary = theme.getByRole("textbox", { name: "primary", exact: true });
   await primary.fill("oklch(0.5 0.15 250)");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(primary).toHaveValue("oklch(0.5 0.15 250)"); await expect(primary).toBeFocused();
+  await expect(primary).toBeInViewport();
   await expect(themeSelect).toHaveValue(selectedId);
   await capture(page, info, "phone-theme-dirty");
   await themeSelect.focus(); await page.setViewportSize({ width: 1280, height: 900 });

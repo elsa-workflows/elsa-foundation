@@ -70,7 +70,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const { previewTheme, refreshThemes } = useTheme();
   const [store, setStore] = useState<ThemeStoreResponse | null>(null);
   const [selectedThemeId, setSelectedThemeId] = useState("");
-  const { compact, navigationRef, selectRef } = useCompactNavigation();
+  const { compact, navigationRef, selectRef, contentRef } = useCompactNavigation();
   const [draft, setDraft] = useState<StudioThemeDefinition | null>(null);
   const [tab, setTab] = useState<BuilderTab>("overview");
   const [mode, setMode] = useState<ThemeMode>("light");
@@ -334,7 +334,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
-      <div className="theme-builder-workbench">
+      <div className={`theme-builder-workbench${compact ? " is-compact" : ""}`}>
         {compact ? <label className="theme-builder-select">
           <span>Current theme</span>
           <select ref={selectRef} value={selectedThemeId} onChange={event => setSelectedThemeId(event.target.value)}>
@@ -361,7 +361,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           ))}
         </aside>}
 
-        <div className="theme-builder-detail">
+        <div ref={contentRef} className="theme-builder-detail">
           <div className="theme-builder-actions">
             <div>
               <h3>{draft.name}</h3>

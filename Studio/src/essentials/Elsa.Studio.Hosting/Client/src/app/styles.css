@@ -3720,8 +3720,14 @@ html[data-theme-material] .otel-panel .otel-traces-layout {
   min-width: 0;
 }
 
+.theme-builder-workbench.is-compact {
+  align-content: start;
+}
+
 .theme-builder-select {
   display: grid;
+  align-content: start;
+  align-self: start;
   gap: 6px;
   min-width: 0;
   color: var(--studio-text-muted);
