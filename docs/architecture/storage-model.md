@@ -121,7 +121,7 @@ is which operation is authorized to write which records. An outside insert canno
 | Operation / caller | Reads and conditions | Writes |
 |---|---|---|
 | Store initialization | Existing tables/collections and partition initialization | Partitions and projection cursors; MongoDB also initializes clocks. Creates declared indexes. |
-| Take / runtime activation | Partition free, expired (`LeaseUntil < now`), or already held by this process name | Owner, epoch, lease and death flag; increments attempts of the previous epoch's unfinished trial messages in the same transaction. |
+| Take / runtime activation | Partition free, expired (`LeaseUntil < now`), or already held by this process name | Owner, epoch, lease and death flag; only a take from another process's expired lease increments attempts of the previous epoch's unfinished trial messages, in the same transaction. A free-partition take or same-process retake does not. |
 | Release / runtime | Matching partition epoch | Clears owner; does not record a death or delete instances. |
 | Heartbeat / runtime membership | Database time, live node count and free/expired partitions | Upserts the node's heartbeat. |
 | Commit / partition owner | Expected partition epoch and position; expected instance revision; required message affected-row counts | Checkpoints, inbox changes, outgoing inbox rows, waits and journal; partition lease and journal allocation. All-or-none transaction. |
@@ -277,8 +277,9 @@ the low-image results are a floor for deployments touching many more pages.
 
 Autovacuum kept up at the measured rates, approximately 70 instance commits per second on the shared test machine.
 The 4 KiB-pad runs still grew the checkpoint TOAST table to 36–39 MB for about 17 MB of live chunks, then reused
-space after vacuum rather than returning it. A Messages fill factor of 70 helped a burst workload, but its roughly
-4% improvement in the stress comparison was below the measurement's resolution. None is a selected host default.
+space after vacuum rather than returning it. Setting fill factor to 70 on both Instances and Messages helped the
+burst workload; the same two-table experiment's roughly 4% improvement in the stress comparison was below the
+measurement's resolution. None is a selected host default.
 The report did not establish MongoDB/oplog volume, SQL Server/MySQL/SQLite write amplification, production capacity,
 or WAL savings from the subsequently built external-values witness.
 
