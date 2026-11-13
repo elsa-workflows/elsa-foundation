@@ -289,7 +289,7 @@ public sealed partial class World
             var expected = NativeReference.Of(row.Definition, state.Variables.GetValueOrDefault("input"));
             var actual = NativeReference.Describe(state.Variables);
             if (actual != expected.Variables) return $"N5 {row.Id} ({row.Definition}) ended with {actual}; without faults it ends with {expected.Variables}";
-            if (row.Definition is "n-join2" or "n-graph") { Interlocked.Increment(ref NativeInstances); continue; }   // a threshold join: which branch activities complete depends on how events were batched; variables only
+            if (row.Definition is "n-join2" or "n-graph") { Interlocked.Increment(ref NativeInstances); continue; }   // a threshold join (how events were batched) or a race (which racer won) decides which activities complete; variables only
             var types = NativeReference.Types(row.Definition, Native.CompletedNodes.GetValueOrDefault(row.Id) ?? []);
             if (types != expected.Types) return $"N1 {row.Id} ({row.Definition}) completed [{types}]; without faults it completes [{expected.Types}]";
             Interlocked.Increment(ref NativeInstances);

@@ -35,7 +35,7 @@ dotnet build sim -c Release
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 20000
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --seeds 5000 --from 500001 --actions 1000
 dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native-mutations --seeds 20000
-dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 2     # replay one, shrunk
+dotnet sim/bin/Release/net10.0/Kernel.Sim.dll --native --native-flaw InFlightInMemory --seed 1     # replay one, shrunk
 ```
 
 Without `--native` the simulation runs exactly as before; its seeds replay unchanged (run: 20,000 seeds pass).
@@ -225,7 +225,7 @@ Checks:
 | Check | The brief's words | How |
 |---|---|---|
 | N1 | Every activity that completed in committed state completed exactly once | No frame id appears twice in `c:` entries of the committed journal (every action); at the end the multiset of completed activity types equals a run without faults |
-| N2 | A join fires once | No `j:` entry twice. A Parallel joins once; a Flowchart join fires at most once per scheduling id in a round, so a join behind a merge may fire once per token (narrowed in round 4: N2 no longer holds a Flowchart join to once per round; the design sketch's G2 does, once the graph checks are in) |
+| N2 | A join fires once | No `j:` entry twice. A Parallel joins once; a Flowchart join fires at most once per scheduling id in a round, so a join behind a merge may fire once per token (narrowed in round 4: N2 no longer holds a Flowchart join to once per round; the design sketch's G2 does, below) |
 | N3 | A child is started once and its parent resumes once | A child id is started by one frame, a frame starts one child, a child wait is resumed only by its own child and once; at the end every waited child of a finished parent resumed it exactly once |
 | N4 | A non-replay-safe activity's attempt is committed before it runs in Durable mode | When an External effect happens, the committed journal holds its attempt |
 | N5 | Final variables and outputs match a run without faults | Every finished native instance (children too) has the variables of the same definition and input run alone, without faults; everything started from outside finished or was cancelled by request |
@@ -251,19 +251,20 @@ Results (run):
 
 | Run | Seeds | Result |
 |---|---|---|
-| 300 actions | 20,000 | 0 failed; 162,630 finished native instances matched a run without faults |
-| 1,000 actions | 5,000 (from 500001) | 0 failed; 116,392 matched. 352 instances were parked by the kernel's poison rule as innocent bystanders (FINDINGS section 7, rule 3); the checks skip parked instances |
-| Without `--native` | 20,000 | 0 failed: the kernel changes did not disturb the existing invariants |
+| 300 actions | 20,000 | 0 failed; 133,483 finished native instances matched a run without faults (round 4, with `n-graph` in the mix and the graph checks on) |
+| 1,000 actions | 5,000 (from 500001) | 0 failed; 97,388 matched; 2 instances parked by the kernel's poison rule as innocent bystanders (FINDINGS section 7, rule 3); the checks skip parked instances |
+| 1,000 actions | 20,000 | 0 failed; 386,774 matched; 14 parked |
+| Without `--native` | 20,000 | 0 failed: the native and graph changes did not disturb the kernel's invariants |
 
 The checks bite (run: `--native-mutations`, each flaw alone, first failing seed):
 
 | Flaw | What it breaks | Caught |
 |---|---|---|
-| `InFlightInMemory` | Durable: the executed item leaves the agenda in memory only | N1, seed 2. Shrunk to two actions and a takeover: `N1 1/j1: activity frame f6 (s2) completed twice in committed state` |
-| `JoinWithoutGuard` | Parallel without its joined flag, and the join does not cancel the other branches | N2, seed 5: `the join f2 fired twice` |
-| `ResumeAnyChild` | A child-finished resumes every child wait | N3, seed 2: `the wait for child 1/j5~1.1 was resumed by child 1/j5~1.0` |
-| `NoAttemptCommit` | Durable runs an External activity without committing its attempt first | N4, seed 2 |
-| `ScopeInMemory` | The iteration scope is kept in memory only | N5, seed 6: `sum=53; without faults it ends with sum=63` |
+| `InFlightInMemory` | Durable: the executed item leaves the agenda in memory only | N5, seed 1 (round 4; N1, seed 2 before `n-graph` moved the seeds): `0/j69 (n-loop) ended with i=4 ... sum=189; without faults it ends with i=2 ... sum=63`. Shrunk to 9 actions |
+| `JoinWithoutGuard` | Parallel without its joined flag, and the join does not cancel the other branches | N2, seed 1: `1/j53: the join f2 fired twice` |
+| `ResumeAnyChild` | A child-finished resumes every child wait | N3, seed 3: `the wait for child 0/j26~1.1 was resumed by child 0/j26~1.0` |
+| `NoAttemptCommit` | Durable runs an External activity without committing its attempt first | N4, seed 18 |
+| `ScopeInMemory` | The iteration scope is kept in memory only | N5, seed 1: `sum=53; without faults it ends with sum=63` |
 | `NoDeadPaths` (round 4) | An untaken connection emits no dead arrival | G3, seed 2: `the join end of graph fired in round head:2 before no arrived, live or dead` (the graph went quiet and the engine released the join without the decision's untaken side) |
 | `NoRoundReset` (round 4) | A loop-closing connection opens no new round | G2, seed 2: `node a of graph fired twice in round -` |
 | `DeadPathRunsNode` (round 4) | An all-dead node is run instead of passing the deadness on | G1, seed 2: `a dead path ran node race of graph (round -)` |
@@ -271,7 +272,7 @@ The checks bite (run: `--native-mutations`, each flaw alone, first failing seed)
 
 The four graph flaws are the engine's (`FlowchartOptions.Flaws`, marked MUTATION in `models/Graph`); the mutation
 check fails one that another check catches first. The round-4 seeds are those of the mix with `n-graph` in it, which
-moves every seed; the five older flaws' first seeds moved with it.
+moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
 
 Found while building the checks (run): one seed of 1,000 actions failed my own event check because a parked
 instance keeps its subscriptions (seed 500963); the check now skips instances that do not run. Round 4 met the same
@@ -281,7 +282,7 @@ Delay's timer message that an earlier turn had consumed, because the resume stil
 8486); a timer whose message has arrived is no longer recalled. And a threshold join
 is not deterministic in which branch activities complete: three events in one inbox complete all three Event
 activities before the join cancels the third branch; one by one, the third is cancelled while it waits. Variables
-agree either way, so for that workflow only the variables are compared.
+agree either way, so for that workflow only the variables are compared; and for `n-graph` (round 4), where which racer wins depends on the run.
 
 ## 7. Where the contract was awkward or had to change
 
