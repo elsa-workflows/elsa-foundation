@@ -29,16 +29,16 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
         }
         try { await OneAsync(cancellationToken); }
         catch (Exception) { /* a read or a write in doubt: the next round reads the position again */ }
-        finally { Done(cancellationToken); }
+        finally { Done(); }
     }
 
     /// <summary>
-    /// Decision 11, catch-up on request. Completes once rounds that started after the request have brought the
-    /// projection to the partition's position as they read it, so the projected rows then hold every commit made before
-    /// the request: a full page, or a write that another projector beat, is followed by another round. Requests are
-    /// coalesced: all that arrive before such a round starts are served by it, so many viewers cause one. A round
-    /// already under way when one arrives does not serve it (it may have read the cursor before). The task fails if a
-    /// round fails; the token is the first waiting request's.
+    /// Decision 11, catch-up on request. Completes once the projection has reached the partition's position as the first
+    /// round started after the request read it, so the projected rows then hold every commit made before the request; a
+    /// full page, or a write another projector beat, is followed by another round. Requests are coalesced: all that
+    /// arrive before such a round starts are served by it, so many viewers cause one. A round already under way when one
+    /// arrives does not serve it (it may have read the cursor before). The task fails if a round fails, or if the
+    /// projection cannot move on. The token cancels only this caller's wait; the rounds are not the caller's to cancel.
     /// </summary>
     public Task CatchUpAsync(CancellationToken cancellationToken = default)
     {
@@ -51,25 +51,34 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
             start = !_running;
             if (start) _running = true;
         }
-        if (start) _ = ServeAsync(cancellationToken);
-        return task;
+        if (start) _ = ServeAsync();
+        return task.WaitAsync(cancellationToken);
     }
 
-    // Rounds for the requests waiting now, until the projection is current; those that come meanwhile wait for the next.
-    private async Task ServeAsync(CancellationToken cancellationToken)
+    // Rounds for the requests waiting now, until the projection reaches what the first of them read; those that come
+    // meanwhile wait for the next serve (Done).
+    private async Task ServeAsync()
     {
         TaskCompletionSource? served;
         lock (_gate) (served, _requested) = (_requested, null);
         try
         {
-            while (!await OneAsync(cancellationToken)) { }
+            long? target = null;
+            for (var stuck = 0; ;)
+            {
+                var (at, written, moved) = await OneAsync(CancellationToken.None);
+                target ??= written;
+                if (at >= target) break;
+                stuck = moved ? 0 : stuck + 1;      // a lost race moves nothing here but is progress elsewhere
+                if (stuck > 2 && !moved) throw new InvalidOperationException($"the projection of partition {partition} does not move past {at}");
+            }
             served?.TrySetResult();
         }
         catch (Exception e) { served?.TrySetException(e); }
-        finally { Done(cancellationToken); }
+        finally { Done(); }
     }
 
-    private void Done(CancellationToken cancellationToken)
+    private void Done()
     {
         bool again;
         lock (_gate)
@@ -77,12 +86,12 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
             again = _requested is not null;
             if (!again) _running = false;
         }
-        if (again) _ = ServeAsync(cancellationToken);
+        if (again) _ = ServeAsync();
     }
 
-    // One round. True when the projection is now at the partition's position as the round read it: it moved there, or
-    // was there. False after a full page, or when another projector moved it first.
-    private async Task<bool> OneAsync(CancellationToken cancellationToken)
+    // One round: where the projection is after it (as far as this round knows), the partition's position it read, and
+    // whether this round moved it or another projector did (a lost write: the next round reads again).
+    private async Task<(long At, long Written, bool Moved)> OneAsync(CancellationToken cancellationToken)
     {
         Rounds++;
         var (from, written) = await store.ProjectedAsync(partition, cancellationToken);
@@ -97,7 +106,7 @@ public sealed class Projector(IKernelStore store, int partition, int take = 100,
             next = rows.TakeWhile((row, i) => row.Position == from + i + 1).ToList();
             to = next.LastOrDefault()?.Position ?? from;
         }
-        if (to <= from) return from >= written;
-        return await store.ProjectAsync(partition, from, to, next, cancellationToken) && to >= written;
+        if (to <= from) return (from, written, false);
+        return await store.ProjectAsync(partition, from, to, next, cancellationToken) ? (to, written, true) : (from, written, true);
     }
 }

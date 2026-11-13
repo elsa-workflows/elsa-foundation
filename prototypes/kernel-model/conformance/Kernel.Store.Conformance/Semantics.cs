@@ -798,15 +798,16 @@ public static class Semantics
         new("projector: catch-up requests are coalesced and leave the projection current, past one page (decision 11)", Level.Required, async c =>
         {
             var lease = await c.Take(0);
-            await c.Lands(() => c.Commit(lease, 0, Enumerable.Range(0, 150).Select(i => Make.New($"0/p{i:D3}")).ToList()));
+            await c.Lands(() => c.Commit(lease, 0, Enumerable.Range(0, 250).Select(i => Make.New($"0/p{i:D3}")).ToList()));     // two pages past the round under way
             var projector = new Projector(c.S, 0, take: 100);
             var round = projector.RoundAsync();     // a round under way: it does not serve the requests that follow
             var (first, second) = (projector.CatchUpAsync(), projector.CatchUpAsync());
             var overlapped = !round.IsCompleted;      // a store that answers at once runs each round to its end before the next call
             if (overlapped) Context.That(ReferenceEquals(first, second), "two requests before their round started got rounds of their own");
             await Task.WhenAll(round, first, second);
-            Context.Equal(new Projection(150, 150), await c.S.ProjectedAsync(0), "the projection after the catch-up");
-            if (overlapped) Context.That(projector.Rounds <= 3, $"rounds run for one round under way and two coalesced requests: {projector.Rounds}");
+            Context.Equal(new Projection(250, 250), await c.S.ProjectedAsync(0), "the projection after the catch-up");
+            Context.That(projector.Rounds >= 3, $"rounds run: {projector.Rounds}; 250 rows at 100 a round take three");
+            if (overlapped) Context.That(projector.Rounds <= 4, $"rounds run for one round under way and two coalesced requests: {projector.Rounds}");
         }),
         new("projection: of many concurrent writes from one position, exactly one moves it", Level.Required, async c =>
         {
