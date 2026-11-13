@@ -39,6 +39,23 @@ function instrumentation(page: Page, backend: Backend) {
   };
 }
 
+/** Capture real values inside Studio/Weaver's scrolling panes, not only the page header. */
+async function captureResultViews(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator) {
+  const target = async (suffix: string, element: Locator) => {
+    await element.evaluate(value => value.scrollIntoView({ block: "end", inline: "nearest", behavior: "instant" }));
+    await expect(element).toBeInViewport(); await capture(page, info, `${name}-${suffix}`);
+  };
+  await target("periods", result.locator(".named-result-provenance > p").last());
+  const chart = result.locator(".named-chart-series");
+  if (await chart.count()) await target("chart", chart.first());
+  const values = result.getByRole("region", { name: "Exact result values", exact: true });
+  await values.evaluate(element => { element.scrollLeft = 0; });
+  await target("values", values);
+  await values.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  await capture(page, info, `${name}-values-end`);
+  await values.evaluate(element => { element.scrollLeft = 0; });
+}
+
 async function idle(page: Page) {
   const assistant = page.getByRole("region", { name: "Weaver assistant", exact: true });
   await expect(assistant).toBeVisible({ timeout: 180_000 });
@@ -80,6 +97,8 @@ async function askAndClarify(page: Page, info: TestInfo, capture: Capture, backe
   const chosen = clarification.getByRole("button", { name: supported }).first();
   await expect(chosen, "The actual model must offer a supported, recognizable interpretation").toBeVisible();
   const choice = await chosen.innerText();
+  await clarification.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
+  await expect(chosen).toBeInViewport();
   await capture(page, info, "live-clarification");
   await chosen.press("Enter");
   await expect(page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last()).toBeVisible({ timeout: 180_000 });
@@ -244,9 +263,11 @@ async function savedAppearances(page: Page, info: TestInfo, capture: Capture, ba
       await expect(page.getByRole("heading", { name: question.name, level: 2, exact: true })).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
       await expect(page.getByRole("combobox", { name: "Visualization", exact: true })).toHaveValue("bar");
+      await refresh(page, question);
       for (const narrow of [false, true]) {
         await page.setViewportSize(narrow ? { width: 360, height: 900 } : { width: 1440, height: 1000 });
         await capture(page, info, `live-saved-${mode}-${narrow ? "narrow" : "desktop"}`);
+        await captureResultViews(page, info, capture, `live-saved-${mode}-${narrow ? "narrow" : "desktop"}`, page.locator(".named-preview > .named-result"));
       }
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -274,10 +295,12 @@ export async function liveWorkflowDashboardJourney(page: Page, info: TestInfo, c
     const initial = await monitor.native("initial-native-preview", () => previewProposal(page, page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last()));
     const beforeOracle = workflowOracle(initial.definition, initial.result, seeded.definitionId, 3);
     await capture(page, info, "live-proposal-preview");
+    await captureResultViews(page, info, capture, "live-proposal-preview", page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().locator(".named-result"));
     const refinement = await refine(page, info, capture, backend, "Keep the exact accepted query, cohort, metric, parameters and UTC window. Change only presentation from a table to a bar chart, using current status as category and the started-count metric as its value. Do not add comparison periods, filters, result conditions or other metrics.");
     const final = await monitor.native("refined-native-preview", () => previewProposal(page, page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last()));
     sameQuery(initial.definition, final.definition); workflowOracle(final.definition, final.result, seeded.definitionId, 3);
     await capture(page, info, "live-refined-preview");
+    await captureResultViews(page, info, capture, "live-refined-preview", page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().locator(".named-result"));
     saved = await saveAndReopen(page, info, capture, backend, monitor, final.definition);
     const reopened = await monitor.native("reopened-native-refresh", () => refresh(page, saved!));
     workflowOracle(final.definition, reopened, seeded.definitionId, 3);
@@ -360,10 +383,12 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
     expect(Date.parse(initial.definition.query.time?.to ?? "")).toBe(Date.parse(source.to));
     expect(initial.definition.query.time).toMatchObject({ field: "startedAt", timeZone: "UTC" });
     await capture(page, info, "live-proposal-preview");
+    await captureResultViews(page, info, capture, "live-proposal-preview", page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().locator(".named-result"));
     const refinement = await refine(page, info, capture, backend, "Keep the exact accepted finished-valid-pairs average, customer-category grouping and explicit started interval in UTC. Change only the presentation from table to a bar chart, customer category on the category axis and average elapsed milliseconds on the value axis. Do not change or add filters, metrics or comparison periods.");
     const final = await monitor.native("refined-native-preview", () => previewProposal(page, page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last()));
     sameQuery(initial.definition, final.definition); acmeOracle(final.definition, final.result, source.seeds);
     await capture(page, info, "live-refined-preview");
+    await captureResultViews(page, info, capture, "live-refined-preview", page.getByRole("region", { name: "Proposed dashboard question", exact: true }).last().locator(".named-result"));
     saved = await saveAndReopen(page, info, capture, backend, monitor, final.definition);
     const ownerRefresh = await monitor.native("reopened-native-refresh", () => refresh(page, saved!));
     const ownerAfter = acmeOracle(final.definition, ownerRefresh, source.seeds);
@@ -380,6 +405,7 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
       const result = await refresh(reader, saved!);
       const oracle = acmeOracle(final.definition, result, source.seeds, true);
       await capture(reader, info, "live-shared-reader");
+      await captureResultViews(reader, info, capture, "live-shared-reader", reader.locator(".named-preview > .named-result"));
       // Real reader authorization must withhold the owner's unshared record and preserve category grants on allowed records.
       const exchange = await reader.request.get(`${backend.base}/_elsa/identity/token`); expect(exchange.ok()).toBe(true);
       const { accessToken } = await exchange.json() as { accessToken: string }; expect(typeof accessToken).toBe("string");
