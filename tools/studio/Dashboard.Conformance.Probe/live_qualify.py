@@ -2,7 +2,7 @@
 """Prepare, build, or explicitly execute an owned actual-Copilot Dashboard witness.
 
 The default only materializes a dedicated host. It does not inspect credentials,
-start a host, or call a provider. The native provider-disabled runner is separate.
+start a host, or call a provider. The native-edges mode disables the provider; unsupported mode asks one real unsupported question.
 """
 from __future__ import annotations
 
@@ -413,6 +413,35 @@ def restart_verdict(report, output, expected_sha, lifetimes):
     return 1
 
 
+UNSUPPORTED_TITLE = 'live unsupported Dashboard question preserves the request without fabrication'
+UNSUPPORTED_CAPTURES = ('live-reference','live-unsupported-request','live-unsupported-explanation','live-unsupported-preserved-question')
+
+
+def unsupported_verdict(report, output, expected_sha):
+    rows=[]
+    def visit(suites):
+        for suite in suites:
+            for spec in suite.get('specs',[]):rows.extend((spec.get('title'),test) for test in spec.get('tests',[]))
+            visit(suite.get('suites',[]))
+    visit(report.get('suites',[]))
+    if report.get('errors') or len(rows)!=1 or rows[0][0]!=UNSUPPORTED_TITLE:raise ValueError('The actual unsupported-question journey must run exactly once')
+    test=rows[0][1];results=test.get('results',[])
+    if test.get('projectName')!='live-desktop' or test.get('expectedStatus')!='passed' or test.get('status')!='expected' or len(results)!=1 or results[0].get('status')!='passed':raise ValueError('A failed, missing, skipped or retried unsupported question cannot qualify')
+    required={'source','trace','unsupported-proof.json'} | {f'{capture}.{suffix}' for capture in UNSUPPORTED_CAPTURES for suffix in ('png','aria.yml')}
+    paths={item.get('name'):Path(item.get('path','')).resolve() for item in results[0].get('attachments',[]) if item.get('name') in required}
+    if set(paths)!=required or any(not path.is_relative_to(output.resolve()) or not path.is_file() or not path.stat().st_size for path in paths.values()):raise ValueError('Required unsupported-question experience evidence is missing')
+    if paths['source'].read_text().strip()!=expected_sha:raise ValueError('Unsupported question source differs from the committed runner')
+    proof=json.loads(paths['unsupported-proof.json'].read_text())
+    if any(proof.get(key) is not True for key in ('originalRequestPreserved','unavailableMeaningExplained','savedResourcesUnchanged','selectedDatasetStillEmpty')) or proof.get('metricSubstitution') is not False:raise ValueError('The unsupported request and its meaning must be preserved')
+    if any(proof.get(key)!=0 for key in ('proposedQuestions','nativeQueryExecutions','resourceWrites')):raise ValueError('Unsupported business facts must not produce a substituted proposal, query or saved resource')
+    before=proof.get('before',{});after=proof.get('after',{})
+    if before.get('category')!='actual-sdk-forwarding' or after.get('category')!='actual-sdk-forwarding' or before.get('privacyFailures')!=0 or after.get('privacyFailures')!=0:raise ValueError('Actual SDK privacy-boundary evidence is required')
+    if after.get('counts',{}).get('session.send',0)<=before.get('counts',{}).get('session.send',0) or after.get('counts',{}).get('event.Completed',0)<=before.get('counts',{}).get('event.Completed',0) or after.get('counts',{}).get('event.Error',0):raise ValueError('A completed actual provider turn is required')
+    with zipfile.ZipFile(paths['trace']) as archive:
+        if not any(name.endswith('.trace') and name!='test.trace' and b'frame-snapshot' in archive.read(name) and b'Your question' in archive.read(name) for name in archive.namelist()):raise ValueError('Actual unsupported-question actions and DOM trace are required')
+    return 1
+
+
 EDGE_CAPTURES = ('live-reference', 'edge-module-history-withheld', 'edge-module-unavailable',
     'edge-no-denominator-and-values', 'edge-repair-saved-reopened', 'edge-repaired-definition-history',
     'edge-stale-definition-provenance', 'edge-empty-result', 'edge-empty-baseline-unknown-coverage',
@@ -455,7 +484,8 @@ def native_edge_verdict(report, output, expected_sha):
 
 def execute_live(output, options, native, report):
     edges = options.mode == 'native-edges'
-    env = native.clean_environment() if edges else credential_environment(options.mode, options.account_access_restored, options.credential_environment_variable, native)
+    unsupported = options.mode == 'unsupported'
+    env = native.clean_environment() if edges else credential_environment('live' if unsupported else options.mode, options.account_access_restored, options.credential_environment_variable, native)
     with tempfile.TemporaryDirectory(prefix='elsa-dashboard-live-state-') as temporary:
         data = Path(temporary)
         backend, studio = data / 'backend', data / 'studio'
@@ -500,13 +530,17 @@ def execute_live(output, options, native, report):
             with native.host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                              studio_env) as first_studio:
                 report['stage'] = 'actual-live-journeys'
-                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=dict(browser_env, UX_DASHBOARD_NATIVE_EDGES='1') if edges else browser_env)
-                report['executed'] = native_edge_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if edges else verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
+                journey_env = dict(browser_env, UX_DASHBOARD_NATIVE_EDGES='1') if edges else dict(browser_env, UX_DASHBOARD_UNSUPPORTED='1') if unsupported else browser_env
+                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=journey_env)
+                report['executed'] = native_edge_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if edges else unsupported_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if unsupported else verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
         lifetimes = [{'phase': 'authoring', 'backendPid': first_backend.pid, 'studioPid': first_studio.pid,
                       'backendExit': first_backend.poll(), 'studioExit': first_studio.poll()}]
         report['hostLifetimes'] = lifetimes
         if lifetimes[0]['backendExit'] != 0 or lifetimes[0]['studioExit'] != 0:
             raise ValueError('Both first-lifetime hosts must stop normally before restart')
+        if unsupported:
+            report.update(status='passed', stage='complete', unsupportedQualified=True, liveQualified=False)
+            return
         if edges:
             report.update(status='passed', stage='complete', nativeEdgesQualified=True, liveQualified=False)
             return
@@ -538,7 +572,7 @@ def run(options):
     output = options.output.resolve()
     if not options.output.is_absolute() or output.is_relative_to(ROOT) or output.exists():
         raise ValueError('Use a new absolute owned directory outside the checkout')
-    if options.mode == 'live' and not options.account_access_restored:
+    if options.mode in {'live','unsupported'} and not options.account_access_restored:
         raise ValueError('Live execution is disabled until the owner confirms restored account access')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,127}', options.model) or options.model.lower() == 'auto':
         raise ValueError('Pin an explicit provider model; auto cannot qualify a model')
@@ -549,25 +583,25 @@ def run(options):
               'providerCalls': 'not run', 'visualApproval': 'requires independent current-commit review',
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     try:
-        if options.mode in {'live','native-edges'} and start['dirty']:
+        if options.mode in {'live','native-edges','unsupported'} and start['dirty']:
             raise ValueError('Actual live qualification requires a clean committed source revision')
         project, hook, seeded = materialize(output)
-        if options.mode in {'build', 'live', 'native-edges'}:
+        if options.mode in {'build', 'live', 'native-edges', 'unsupported'}:
             report['stage'] = 'isolated-build'
             build(output, project, hook, seeded, native_helpers())
         report.update(status='prepared', stage='not-run', liveQualified=False)
-        if options.mode in {'live','native-edges'}:
+        if options.mode in {'live','native-edges','unsupported'}:
             report['providerCalls'] = 'disabled; native edge SDK counts required zero' if options.mode == 'native-edges' else 'actual preflight requested once; see preflight and SDK counter evidence'
             execute_live(output, options, native_helpers(), report)
         if source_state() != start:
-            report.update(liveQualified=False, nativeEdgesQualified=False)
+            report.update(liveQualified=False, nativeEdgesQualified=False, unsupportedQualified=False)
             raise ValueError('Source changed during the run; evidence cannot qualify a revision')
     except LiveUnavailable:
         report.update(status='unavailable', liveQualified=False)
         raise
     except BaseException as failure:
         # Tool/provider exceptions may hold request data. Retain only a fixed category and exception type.
-        report.update(status='failed', liveQualified=False, nativeEdgesQualified=False, failureType=type(failure).__name__)
+        report.update(status='failed', liveQualified=False, nativeEdgesQualified=False, unsupportedQualified=False, failureType=type(failure).__name__)
         raise
     finally:
         report['finishedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -581,10 +615,10 @@ def run(options):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path, help='New absolute private owned directory outside source')
-    parser.add_argument('--mode', choices=['prepare', 'build', 'live', 'native-edges'], default='prepare')
+    parser.add_argument('--mode', choices=['prepare', 'build', 'live', 'native-edges', 'unsupported'], default='prepare')
     parser.add_argument('--model', required=True, help='Explicit pinned model id; never auto')
-    parser.add_argument('--account-access-restored', action='store_true', help='Live mode only: owner explicitly confirmed restored account access')
-    parser.add_argument('--credential-environment-variable', help='Live mode only: approved environment-variable name; no file or token value')
+    parser.add_argument('--account-access-restored', action='store_true', help='Actual provider modes only: owner explicitly confirmed restored account access')
+    parser.add_argument('--credential-environment-variable', help='Actual provider modes only: approved environment-variable name; no file or token value')
     options = parser.parse_args()
     def terminate(_signum, _frame):
         raise InterruptedError('Owned live qualification interrupted')

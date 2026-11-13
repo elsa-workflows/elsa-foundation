@@ -530,3 +530,45 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
     }
   }
 }
+
+/** An actual provider must explain unavailable business facts without substituting a metric. */
+export async function liveUnsupportedDashboardJourney(page: Page, info: TestInfo, capture: Capture) {
+  const backend = await dashboardBackend(page.request); const monitor = instrumentation(page, backend);
+  const queries: string[] = [];
+  const collect = (request: Request) => {
+    if (request.method() === "POST" && /\/(dashboard-queries\/preview|questions\/[^/]+\/(?:preview|execute))$/.test(new URL(request.url()).pathname)) queries.push(request.url());
+  };
+  page.on("request", collect);
+  try {
+    const beforeResources = await backend.api<{ items: Resource[] }>("/_elsa/studio/questions");
+    await createEditor(page, `Unsupported financial meaning ${Date.now()}`, "acme.processing.records");
+    const prompt = "For Acme processing records, calculate net profit per customer category using revenue minus cost. If revenue, cost or profit are not exposed by the declared dataset, explain that limitation and preserve this request. Do not replace financial profit with processing time or record counts. Do not invent numbers.";
+    const before = await counters(backend); const ask = page.getByRole("region", { name: "Ask Weaver", exact: true });
+    await ask.getByLabel("Your question", { exact: true }).fill(prompt);
+    await ask.scrollIntoViewIfNeeded(); await capture(page, info, "live-unsupported-request");
+    await expect(ask.getByRole("button", { name: "Ask Weaver", exact: true })).toBeEnabled({ timeout: 60_000 });
+    const admission = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/weaver\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname));
+    await ask.getByRole("button", { name: "Ask Weaver", exact: true }).press("Enter");
+    expect((await admission).ok()).toBe(true); await idle(page);
+    const assistant = page.getByRole("region", { name: "Weaver assistant", exact: true });
+    await expect(assistant.locator('.weaver-message[data-role="user"]').filter({ hasText: prompt })).toBeVisible();
+    const explanation = assistant.locator('.weaver-message[data-role="assistant"][data-status="completed"]').last();
+    await expect(explanation).toContainText(/profit|revenue|cost/i);
+    await expect(explanation).toContainText(/not (?:exposed|available|provided|include)|does(?:n't| not)|cannot|can(?:not|'t|’t)|unavailable|unsupported|missing/i);
+    await expect(page.getByRole("region", { name: "Proposed dashboard question", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("");
+    await expect(page.getByRole("group", { name: "Metrics", exact: true }).getByRole("combobox")).toHaveCount(0);
+    await expect(page.locator(".named-result")).toHaveCount(0);
+    await explanation.scrollIntoViewIfNeeded(); await expect(explanation).toBeInViewport();
+    await capture(page, info, "live-unsupported-explanation");
+    const userMessage = assistant.locator('.weaver-message[data-role="user"]').filter({ hasText: prompt });
+    await userMessage.scrollIntoViewIfNeeded(); await capture(page, info, "live-unsupported-preserved-question");
+    const after = await counters(backend);
+    expect(sends(after)).toBeGreaterThan(sends(before));
+    expect(after.counts["event.Completed"] ?? 0).toBeGreaterThan(before.counts["event.Completed"] ?? 0);
+    expect(queries).toEqual([]); expect(monitor.writes).toEqual([]);
+    const afterResources = await backend.api<{ items: Resource[] }>("/_elsa/studio/questions");
+    expect(afterResources.items.map(item => [item.id, item.revision])).toEqual(beforeResources.items.map(item => [item.id, item.revision]));
+    await attachDashboardJson(info, "unsupported-proof.json", { before, after, originalRequestPreserved: true, unavailableMeaningExplained: true, proposedQuestions: 0, nativeQueryExecutions: queries.length, resourceWrites: monitor.writes.length, savedResourcesUnchanged: true, selectedDatasetStillEmpty: true, metricSubstitution: false });
+  } finally { page.off("request", collect); monitor.dispose(); }
+}
