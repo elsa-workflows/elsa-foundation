@@ -93,7 +93,9 @@ public sealed class RuntimeHistoryPostCommitOriginTests
     {
         var options = web ? new JsonSerializerOptions(JsonSerializerDefaults.Web) : new JsonSerializerOptions();
         var original = Complete(Intent(Origin));
-        var restored = JsonSerializer.Deserialize<RuntimeCheckpointCommit>(JsonSerializer.Serialize(original, options), options)!;
+        var retained = new RetainedOriginInput(original.CommitId, original.Checkpoint, Assert.Single(original.PostCommitIntents),
+            Assert.Single(original.StateChanges.PostCommitOutbox).State, original.Metadata);
+        var restored = JsonSerializer.Deserialize<RetainedOriginInput>(JsonSerializer.Serialize(retained, options), options)!.Reconstruct();
         RuntimeCheckpointCommitValidator.Validate(restored);
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(original), RuntimeCheckpointCommitFingerprint.Compute(restored));
         var state = new InMemoryRuntimeCheckpointStoreState();
@@ -124,5 +126,15 @@ public sealed class RuntimeHistoryPostCommitOriginTests
     {
         var envelope = Envelope(intent);
         return envelope with { StateChanges = envelope.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(envelope)) };
+    }
+
+    // The production checkpoint/change-set classes have no whole-object deserialization contract.
+    // Retain their raw supported inputs, then reconstruct the actual native commit explicitly.
+    private sealed record RetainedOriginInput(string CommitId, RuntimeCheckpoint Checkpoint, RuntimePostCommitIntent Intent,
+        RuntimePostCommitOutboxItem Pending, IReadOnlyDictionary<string, string> Metadata)
+    {
+        internal RuntimeCheckpointCommit Reconstruct() => new(CommitId, Checkpoint,
+            new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []).WithPostCommitOutbox([
+                new(Pending.OutboxItemId, RuntimeStateChangeOperation.Upsert, Pending, Metadata)]), [Intent], Metadata);
     }
 }
