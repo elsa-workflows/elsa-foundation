@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import type {
   StudioContributionRegistry,
   StudioExpressionEditorContribution,
@@ -62,7 +63,7 @@ function VariableReferenceEditor({ descriptor, value, disabled, onChange }: Stud
 
   return (
     <div className="wf-variable-picker">
-      <select
+      <StudioField label="Variable reference"><select
         aria-label="Variable reference"
         value={currentKey}
         disabled={disabled || optionsUnavailable}
@@ -94,7 +95,7 @@ function VariableReferenceEditor({ descriptor, value, disabled, onChange }: Stud
             ))}
           </optgroup>
         ) : null}
-      </select>
+      </select></StudioField>
       {authoring.status === "loading" ? (
         <p className="wf-variable-picker-note" role="status">Loading visible variables… The current reference is preserved.</p>
       ) : authoring.status === "error" ? (

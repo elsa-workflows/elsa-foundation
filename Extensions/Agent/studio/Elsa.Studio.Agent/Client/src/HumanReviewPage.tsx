@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { CheckCircle2, RefreshCw, UserCheck, XCircle } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -112,8 +113,8 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
       {receipt ? <p role="status" data-receipt={receipt.status} className="agent-review__receipt">{receiptMessages[receipt.status]}</p> : null}
       {open ? (
         <form className="agent-review__decision" aria-label="Decision" onSubmit={event => { event.preventDefault(); void decide("Approve"); }}>
-          <label htmlFor={commentId}>Comment (optional)</label>
-          <textarea id={commentId} value={comment} maxLength={4096} onChange={event => setComment(event.target.value)} disabled={busy} />
+          <StudioField controlId={commentId} label="Comment (optional)">
+          <textarea id={commentId} value={comment} maxLength={4096} onChange={event => setComment(event.target.value)} disabled={busy} /></StudioField>
           <div className="agent-review__actions">
             <StudioButton type="submit" variant="primary" disabled={busy}><CheckCircle2 aria-hidden="true" size={14} /> Approve</StudioButton>
             <StudioButton disabled={busy} onClick={() => void decide("Deny")}><XCircle aria-hidden="true" size={14} /> Deny</StudioButton>
