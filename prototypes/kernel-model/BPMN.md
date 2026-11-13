@@ -81,7 +81,8 @@ Details that matter, each found by a review or the simulation:
   reads them back (traced in its 0.5.0 source), so the row drops them and the journal keeps the joins that fired, with
   the arrivals each consumed: what the checks read.
 - **The journal** has short entries: `w handle element kind key` (work started), `d` (reported), `x` (stopped),
-  `j element merged-token arrival/flow,...` (a join fired), `r` (a child reported), `s` (a child signalled), `end`, `fault`.
+  `j element merged-token arrival/flow,...` (a join fired), `r` (a child reported), `s` (a child signalled), `e` (a job
+  failed, with its error), `end`, `fault`.
 
 ## 3. The cases
 
@@ -177,12 +178,29 @@ the host ended it (found by `--bpmn --native`, seed 6706 of 1,000 actions).
 
 Results (run, at the final head):
 
-GATES_TABLE
+| Run | Seeds | Result |
+|---|---|---|
+| `--bpmn`, 300 actions | 200,000 | 0 failed; 1,362,891 finished instances matched a run without faults |
+| `--bpmn`, 1,000 actions | 20,000 | 0 failed; 444,548 matched; 9 innocent instances parked at the threshold (the kernel's rule 3; the checks skip them) |
+| `--bpmn --native`, 1,000 actions | 20,000 | 0 failed; 269,711 BPMN and 410,057 native instances matched; 12 parked; one BPMN job parked by the kernel |
+
+Messages for `b-early` were published before their catch 121,302 times in the first run and to a waiting catch 380
+times: a catch waits only between its job's result and its message, so the idle round's publish covers most of the
+second path.
 
 The host broken on purpose (`--bpmn-mutations --seeds 20000`, each flaw alone; a catch by another check than the one
 named counts as a miss):
 
-MUTATIONS_TABLE
+| Flaw | What it breaks | Caught |
+|---|---|---|
+| `KeepStoppedWork` | a stopped unit's job, timer, subscription or child is left running | G5, seed 2: `G5 0/b39 ended Faulted and keeps jobs, subscriptions or timers` |
+| `NoLateReport` | a stopped unit is never reported to the interpreter | G5, seed 1: `G5 1/b73: cancelled token token:4 at call still holds stopped handle h1` |
+| `KeepSubscription` | a message catch that fired keeps its subscription | G5, seed 1: `G5 1/b30 ended Finished and keeps jobs, subscriptions or timers` |
+| `StaleTokens` | each message of a turn is evaluated against the turn's first token state | G1, seed 1: `G1 1/b40: the interpreter waits on tokens [token:12]; the ledger holds []` |
+| `ReuseHandles` | a new unit can take a live unit's handle | I9, seed 1: `I9 sent message 1/b40!h1 exists already` |
+| `ResurrectArrivals` | the stored state keeps the arrivals a join consumed | G4, seed 1: `G4 0/b19 finished with live tokens [join] or work []` |
+| `NeverEnd` | the host misses the interpreter's Complete | G4, seed 1: `G4 BPMN instance 0/b3 (b-exclusive) ended as Running` |
+| `LoseChildOutput` | a call's child output does not reach the state | G6, seed 10: `G6 0/b40 (b-call) ended with order="b40"; without faults it ends with child-out="child of b40", order="b40"` |
 
 No host flaw makes a join fire twice (G2) or on the wrong flows (G3) without breaking the interpreter, which the spike
 runs unchanged; those two checks guard the interpreter and the journal. Without `--bpmn` the simulation's output is
