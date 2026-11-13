@@ -40,6 +40,14 @@ public sealed record WorkerOptions
     public Func<long>? WallClock { get; init; }     // read only under Flaw.WallClockTimers
     public Flaw Flaws { get; init; }
 
+    /// <summary>
+    /// Where a background job's body runs. Null (the default): it starts inline, in the pass that started it, as the
+    /// simulation needs. A host that runs a worker's passes on a scheduler of its own (RuntimeNode, an Orleans grain)
+    /// sets another, so that a long or blocking job does not hold up the node's passes; what comes after the job, the
+    /// result into the instance's inbox, comes back on the host's scheduler, which the job's await captured.
+    /// </summary>
+    public TaskScheduler? JobScheduler { get; init; }
+
     /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
 }
@@ -487,7 +495,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         var generation = _generation;
         string? result = null, error = null;
-        try { result = Json.Write(await _type.ExecuteJobAsync(job.Model, new JobContext(ticket.Message.Target, job.Key, job.Arguments), ticket.Cancel!.Token)); }
+        var (context, token) = (new JobContext(ticket.Message.Target, job.Key, job.Arguments), ticket.Cancel!.Token);
+        try
+        {
+            result = Json.Write(_options.JobScheduler is { } scheduler
+                ? await Task.Factory.StartNew(() => _type.ExecuteJobAsync(job.Model, context, token).AsTask(), token, TaskCreationOptions.DenyChildAttach, scheduler).Unwrap()
+                : await _type.ExecuteJobAsync(job.Model, context, token));
+        }
         catch (Exception e) { error = e.Message; }
         if (generation != _generation || ticket.Taken) return;      // reset, or cancelled beside completion
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
