@@ -362,6 +362,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 current.DeliveryVisibleAfter <= _timeProvider.GetUtcNow())
                 throw new RuntimePostCommitOutboxStaleClaimException(claim.OutboxItemId, claim.OwnerId, claim.FencingToken,
                     current.DeliveringOwnerId, current.DeliveryFencingToken, current.Status);
+            if (current.SubscriptionDeliveryProtocolVersion is { } protocol &&
+                !SupportsSubscriptionDelivery(current.SourceKind, current.DeliveryKind, protocol))
+                throw new NotSupportedException("The actual delivery pipeline cannot preserve this source's subscription protocol.");
             var authoritativeClaim = new RuntimePostCommitOutboxClaim(current, claim.OwnerId, claim.FencingToken,
                 current.DeliveryStartedAt!.Value, current.DeliveryVisibleAfter.Value);
             return new(authoritativeClaim, scope);

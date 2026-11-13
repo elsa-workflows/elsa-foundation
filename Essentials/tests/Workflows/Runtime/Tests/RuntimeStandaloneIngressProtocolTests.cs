@@ -116,6 +116,64 @@ public sealed class RuntimeStandaloneIngressProtocolTests
         Assert.Empty(session.RemainingPendingOutboxChanges());
     }
 
+    [Theory]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)]
+    public async Task Subscription_bearing_workflow_sources_refuse_legacy_contributions_before_any_handler_effect(int path)
+    {
+        var handler = new LegacyDurableHandler();
+        var services = new ServiceCollection();
+        services.AddSingleton(handler);
+        services.AddRuntimePostCommitIntentHandler<LegacyDurableHandler>("Test.Workflow", Retry(), true, StimulusDeliverySnapshot.CurrentVersion);
+        services.AddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
+        using var provider = services.BuildServiceProvider();
+        var store = new SerializedStore(WorkflowPending());
+        var dispatcher = provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>();
+        Assert.False(dispatcher.SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.WorkflowCheckpoint, "Test.Workflow", RuntimeSubscriptionDelivery.CurrentVersion));
+        if (path == 0)
+            await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => Processor(store, provider).ProcessAsync(new(1)).AsTask());
+        else
+        {
+            var claim = RuntimePostCommitOutboxClaimTransitions.Claim(store.Current, new("owner", Now, TimeSpan.FromMinutes(1), 1));
+            if (path == 1)
+                await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => dispatcher.DispatchAsync(new RuntimeDeliverySourceContext(claim, Scope)).AsTask());
+            else
+                await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => dispatcher.DispatchAsync(new PostCommitDeliveryContext(claim, Scope)).AsTask());
+        }
+        Assert.Equal(0, handler.Effects);
+    }
+
+    [Fact]
+    public async Task Processor_requires_its_own_actual_protocol_contribution_before_a_capable_replacement_dispatcher_runs()
+    {
+        var dispatcher = new ProtocolClaimingDispatcher();
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimePostCommitIntentDispatcher>(dispatcher);
+        using var provider = services.BuildServiceProvider();
+        var store = new SerializedStore(WorkflowPending());
+        Assert.False(Processor(store, provider).SupportsSubscriptionDelivery(RuntimeDeliverySourceKind.WorkflowCheckpoint, "Test.Workflow", 1));
+        await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => Processor(store, provider).ProcessAsync(new(1)).AsTask());
+        Assert.Equal(0, dispatcher.Effects);
+    }
+
+    private static RuntimePostCommitOutboxItem WorkflowPending() => new("commit:intent",
+        new RuntimePostCommitIntent("intent", "workflow", "Test.Workflow", Now, null, "key", null),
+        RuntimePostCommitOutboxStatus.Pending, Now, Now, Retry(), 0, null, null, null, null, null, 0, null,
+        StimulusDeliverySnapshot.CurrentVersion, Scope, null, null, RuntimeSubscriptionDelivery.CurrentVersion, null);
+
+    private sealed class LegacyDurableHandler : IRuntimePostCommitDurableSourceIntentHandler
+    {
+        internal int Effects { get; private set; }
+        public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) { Effects++; return ValueTask.CompletedTask; }
+        public ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default) { Effects++; return ValueTask.CompletedTask; }
+    }
+    private sealed class ProtocolClaimingDispatcher : IRuntimePostCommitIntentDispatcher
+    {
+        internal int Effects { get; private set; }
+        public bool SupportsSubscriptionDelivery(RuntimeDeliverySourceKind sourceKind, string deliveryKind, int protocolVersion) => true;
+        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) { Effects++; return ValueTask.CompletedTask; }
+        public ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default) { Effects++; return ValueTask.CompletedTask; }
+    }
+
     private static RuntimeStandaloneIngressSource Source(RuntimeIngressAdmissionPolicy policy = RuntimeIngressAdmissionPolicy.RequireAll,
         string? tenantId = "tenant", PersistenceScope? scope = null)
     {

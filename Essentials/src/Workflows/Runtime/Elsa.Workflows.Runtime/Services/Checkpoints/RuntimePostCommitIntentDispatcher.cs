@@ -67,6 +67,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
     public ValueTask DispatchAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source); cancellationToken.ThrowIfCancellationRequested();
+        EnsureSubscriptionProtocol(source.Claim.Item);
         if (!_handlerTypes.TryGetValue(source.DeliveryKind, out var handlerType) ||
             !_sourceKinds.TryGetValue(source.DeliveryKind, out var expectedKind) || expectedKind != source.SourceKind)
             throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.DeliveryKind,
@@ -80,6 +81,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
+        EnsureSubscriptionProtocol(source.Claim.Item);
         if (_sourceKinds.TryGetValue(source.Intent.Kind, out var expectedKind) && expectedKind != RuntimeDeliverySourceKind.WorkflowCheckpoint)
             throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
                 new InvalidDataException("A workflow source cannot impersonate a standalone ingress source."), false);
@@ -88,6 +90,14 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         var handler = (IRuntimePostCommitDurableSourceIntentHandler)_serviceProvider
             .GetRequiredService(_handlerTypes[source.Intent.Kind]);
         return handler.HandleAsync(source, cancellationToken);
+    }
+
+    private void EnsureSubscriptionProtocol(RuntimePostCommitOutboxItem item)
+    {
+        if (item.SubscriptionDeliveryProtocolVersion is { } protocol &&
+            !SupportsSubscriptionDelivery(item.SourceKind, item.DeliveryKind, protocol))
+            throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.DeliveryKind,
+                new NotSupportedException("The selected contribution cannot preserve this source's subscription protocol."), false);
     }
 
     private static IReadOnlyDictionary<string, Type> BuildHandlerMap(
