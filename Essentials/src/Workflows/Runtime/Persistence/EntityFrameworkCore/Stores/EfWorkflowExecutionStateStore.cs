@@ -402,11 +402,18 @@ public sealed class EfWorkflowExecutionStateStore(
         bool removeRunOwnedHistory,
         CancellationToken cancellationToken)
     {
+        var deletionAccess = accessContextAccessor.Current;
+        void EnsureDeletionAccess()
+        {
+            if (!ReferenceEquals(accessContextAccessor.Current, deletionAccess) || deletionAccess.RequireScope().Value != scope)
+                throw new InvalidOperationException("Persistence access changed during execution deletion.");
+        }
         for (var attempt = 0; attempt < 3; attempt++)
         {
             var ownershipTombstoneInserted = false;
             try
             {
+                EnsureDeletionAccess();
                 context.ChangeTracker.Clear();
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
                 // Refuse retained control callers before acquiring this candidate's write lock. Sticky caller
@@ -456,9 +463,20 @@ public sealed class EfWorkflowExecutionStateStore(
                 if (removeRunOwnedHistory)
                     await DeleteRunOwnedHistoryAsync(workflowExecutionId, scope, cancellationToken);
 
+                // Both root-deletion entry points share this native lock and ownership tombstone
+                // with checkpoints and independent observations. Retire all eight history shapes
+                // before releasing the native retention root, including purged replay receipts.
+                EnsureDeletionAccess();
+                if (removeRunOwnedHistory || state.HistoryCapturePolicy is not null)
+                    await EfRuntimeHistoryRetention.StageDeleteAsync(context, accessContextAccessor, scope,
+                        workflowExecutionId, RuntimeHistoryEfModule.Chain, cancellationToken);
+                EnsureDeletionAccess();
+
                 context.WorkflowExecutionStates.Remove(row);
                 await context.SaveChangesAsync(cancellationToken);
+                EnsureDeletionAccess();
                 await transaction.CommitAsync(cancellationToken);
+                EnsureDeletionAccess();
                 return WorkflowExecutionDeletionResult.Deleted;
             }
             catch (DbUpdateConcurrencyException) when (attempt < 2)
@@ -494,6 +512,7 @@ public sealed class EfWorkflowExecutionStateStore(
                 context.ChangeTracker.Clear();
                 throw Normalize("deleting", workflowExecutionId, exception);
             }
+            catch { context.ChangeTracker.Clear(); throw; }
         }
 
         return terminalOnly ? WorkflowExecutionDeletionResult.Changed : WorkflowExecutionDeletionResult.NotFound;
