@@ -22,11 +22,12 @@ terms: [authentication architecture](../../../../../../docs/reference/authentica
 | `ILocalLoginRecovery` | Replacement | Current canonical actor first, then a bounded local user page scan; requires an enabled password method, password, active identity/membership, framework eligibility and current provider-management permission. |
 | `IConnectionSignInEvidence` | Replacement | Records successful normal external administrator sign-ins in a private protected observation envelope. Preview and ordinary reader sign-ins never establish recovery evidence. |
 
-At the catalog/admission stage, `AddFoundationExternalAuthentication` installs the catalog/registry, admission
-service, explicit JIT/matching policies, options and activation validation. The remaining contracts have no default implementation here;
-their implementations are introduced with the owning lifecycle and flow slices. Missing readiness,
-recovery, session or protocol support never counts as an installed usable path. Register replacements before
-Foundation's registration and preserve the shared duplicate-contract diagnostics.
+At the lifecycle stage, `AddFoundationExternalAuthentication` installs catalog/registry, admission policies,
+writer/delegation, protected observation, readiness/recovery and link authorization contracts. Protocol, artifact,
+flow and canonical session implementations are introduced by their owning later slices. Missing dependencies
+never count as a usable path. Register replacements before Foundation and preserve duplicate-contract diagnostics.
+Readiness describes installed configuration; recovery additionally requires current eligible authority and
+protected successful normal-sign-in evidence. A preview cannot supply that evidence.
 
 `ConnectionRecord` is a full source document. `Id` identifies a management record; immutable `Key` identifies
 long-lived provider links. Source/shadowing comes from the registry, not a writable source field. Secrets are
