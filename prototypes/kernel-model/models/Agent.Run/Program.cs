@@ -63,10 +63,11 @@ static class Scenarios
         var third = Owner("third");
         await Start(third);
         await third.WokenAsync(null);
-        Check(store.Subscriptions.Count == 1 && live.Items.Count(r => r.Channel == "tokens") == liveBefore, "fresh ownership retains approval without replaying live tokens");
+        Check(store.Subscriptions.Count == 1, "fresh ownership retains approval");
         await Events.PublishAsync(store, new EventRow(AgentModel.Approval, "approval-1", "true", time + 60_000));
         await Pump(third, () => store.Instances["0/lead"].Status == InstanceStatus.Finished, poll: true);
         Check(State("0/lead").Approved && store.Subscriptions.Count == 0, "approval resumes and finishes after takeover");
+        Check(live.Items.Count(r => r.Channel == "tokens") == liveBefore, "processing the recovered instance and approval did not replay live tokens");
         var selected = store.Instances["0/lead"];
         firstCompletion.SetResult("late");
         for (var i = 0; i < 3000 && !first.Ready.Contains("0/lead"); i++) await Task.Delay(1);
