@@ -95,6 +95,7 @@
       "Essentials/tests/Testing/Elsa.Testing.csproj",
       "Essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
       "Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
+      "Essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj",
       "Essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
       "Essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
       "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"

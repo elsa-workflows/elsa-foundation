@@ -36,9 +36,22 @@ public interface IExecutionModel
     ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken);
 }
 
+public sealed record ModelMetadataUnavailable(string Actor, string Model, int StoredVersion, int AvailableVersion);
+
+/// <summary>Optional model-owned metadata; the workflow actor keeps command and commit authority.</summary>
+public interface IModelMetadata
+{
+    bool HandlesMetadata(Message message);
+    ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken);
+    void TerminateMetadata(object state);
+    bool ProtectsDeletion(object state, long now, ICommitClock clock);
+}
+
 public interface ITurn
 {
     InstanceInfo Instance { get; }
+    long Now { get; } // the existing database-anchored owner clock
+    ICommitClock Clock { get; }
     IReadOnlyList<Message> Inbox { get; }
     object State { get; set; }
     object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
@@ -80,9 +93,8 @@ public interface ITurn
     void Unsubscribe(string key, string wait);
 
     /// <summary>
-    /// True when this message was held by an owner before this one, so a turn that took it may have run already and
-    /// its result been lost (merge, friction F-N6). A first delivery is false. It may say true for a message whose
-    /// earlier owner never ran it: "may have run", never "did run".
+    /// True when a polled row was already marked seen or on trial when observed. This is a delivery-history hint,
+    /// not proof that a turn executed. False does not prove no other owner ran it, including during takeover races.
     /// </summary>
     bool Redelivered(Message message);
 

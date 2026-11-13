@@ -270,3 +270,23 @@ override Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.ToString(
 static Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? right) -> bool
 static Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? right) -> bool
 Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.RootCapabilities.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder.BuildAsync(Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot!>! roots, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult!>
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Bundle.get -> Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.ReleaseBundleBuildResult(Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport? bundle, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult! verification) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Verification.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Action.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Content.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.ReleaseBundleRoot(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! content, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction action) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.get -> long
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? other) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.ToString() -> string!

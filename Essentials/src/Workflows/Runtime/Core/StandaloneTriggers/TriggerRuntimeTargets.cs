@@ -1,3 +1,4 @@
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.StandaloneTriggers;
@@ -6,6 +7,7 @@ namespace Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 public sealed record TriggerTargetModelDescriptor(string ModelKey, string? ProtocolKey, int? ProtocolVersion,
     IReadOnlyList<string> Profiles, bool SupportsWorkflowOwnedHttpResponse, bool AcceptsNewStarts = true);
 
+/// <summary>Metadata fan-in through TriggerTargetModelsDiscovering; no runtime interpreter is resolved.</summary>
 public interface ITriggerTargetModelSource
 {
     IEnumerable<TriggerTargetModelDescriptor> GetModels();
@@ -22,4 +24,10 @@ public interface IStandaloneTriggerRuntimeTarget
         RuntimeSubscriptionRecipient recipient, RuntimeDispatchSeal seal, CancellationToken cancellationToken = default);
     ValueTask DispatchAsync(RuntimePostCommitOutboxItem source, RuntimeSubscriptionRecipient recipient,
         RuntimeDispatchSeal seal, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Sequential target metadata fan-in; one aggregator owns contribution collection.</summary>
+public sealed class TriggerTargetModelsDiscovering : IEvent
+{
+    public ICollection<TriggerTargetModelDescriptor> Models { get; } = [];
 }
