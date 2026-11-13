@@ -155,6 +155,9 @@ public sealed partial class World
             }
             // G5: no cancelled token keeps a stopped handle: the host reported every unit it stopped.
             if (s.Tokens.Tokens.FirstOrDefault(t => t.StoppedHandle is not null) is { } stopped) return $"G5 {row.Id}: cancelled token {stopped.TokenId} at {stopped.AtElementId} still holds stopped handle {stopped.StoppedHandle}";
+            // G4: the only instances that may fault are b-fault and those whose job or child the kernel parked.
+            if (row is { Status: InstanceStatus.Faulted, Fault: null } && row.Definition != "b-fault" && !Bpmn.JobParked.Contains(row.Id))
+                return $"G4 {row.Id} ({row.Definition}) faulted: {Json.Read<List<string>>(Store.Journal.Values.Where(e => e.Instance == row.Id).MaxBy(e => e.Position)?.Entries ?? "[]").LastOrDefault()}";
             if (row.Status != InstanceStatus.Running)
             {
                 // G4: an instance completes exactly when no live token and no work remain.
@@ -258,7 +261,7 @@ public static class BpmnSwitch
     public static readonly Dictionary<BpmnFlaw, string[]> Catches = new()
     {
         [BpmnFlaw.KeepStoppedWork] = ["G1", "G5"], [BpmnFlaw.NoLateReport] = ["G5"], [BpmnFlaw.KeepSubscription] = ["G1", "G5"],
-        [BpmnFlaw.StaleTokens] = ["G1"], [BpmnFlaw.ReuseHandles] = ["I9", "G1"], [BpmnFlaw.ResurrectArrivals] = ["G4", "G2"],
+        [BpmnFlaw.StaleTokens] = ["G1", "G5"], [BpmnFlaw.ReuseHandles] = ["I9", "G1"], [BpmnFlaw.ResurrectArrivals] = ["G4", "G2"],
         [BpmnFlaw.NeverEnd] = ["G4"], [BpmnFlaw.LoseChildOutput] = ["G6"], [BpmnFlaw.KeepChild] = ["G1"],
     };
 }
