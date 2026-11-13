@@ -35,6 +35,7 @@ public static class WorkflowExecutableSourceReferenceComparer
                StringComparer.Ordinal.Equals(left.ActivationId, right.ActivationId) &&
                StringComparer.Ordinal.Equals(left.SlotId, right.SlotId) &&
                StringComparer.Ordinal.Equals(left.TenantId, right.TenantId) &&
+               left.PublicationScope == right.PublicationScope &&
                SameLayout(left.Layout, right.Layout) &&
                SameSidecar(left.LayoutSidecar, right.LayoutSidecar) &&
                SameAuthoredInputs(left.AuthoredInputs, right.AuthoredInputs) &&
