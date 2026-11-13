@@ -7,7 +7,8 @@ Deployment-only reads never resolve or query the optional provider database.
 
 Register the catalog with `AddFoundationExternalAuthentication`, or use the
 `FoundationIdentityExternalAuthentication` shell feature. The feature is not enabled by adding the package.
-No backend chooser, callback route or protocol adapter is registered by this source slice.
+The optional [protocol API](../Api/README.md) connects these services to the backend chooser and canonical
+Identity sessions; the protocol adapter and HTTP API remain separate opt-in packages.
 
 ## Connection ownership
 
@@ -28,8 +29,8 @@ delegation/readiness/recovery authorities, protected observations, flow coordina
 or an explicit custom catalog. Activation validates registration and deployment policy without querying
 schema tables before the persistence feature's migration phase.
 
-Managed protocol and durable artifact/session implementations are optional packages; HTTP entry points and
-canonical session enforcement are staged separately. Missing installed protocols, canonical sessions, durable artifacts
+Managed protocol, durable artifact/session and HTTP API implementations are optional packages; canonical
+session enforcement is supplied by the selected Identity adapter. Missing installed protocols, canonical sessions, durable artifacts
 or callback support never count as a usable sign-in/recovery path. Configuration selection is not runtime readiness,
 provider sign-in proof or complete external-authentication delivery.
 
@@ -87,6 +88,7 @@ Normal completion invokes the admission policy and returns the admitted Elsa use
 It does not itself issue a cookie or token. Preview invokes read-only assessment and stores a bounded protected
 result for the same administrator and browser; consuming the result rechecks authorization and reports changed
 connection material as stale. It creates no user, link or normal session and establishes no recovery evidence.
+The optional API invokes canonical sign-in after admission; this flow service itself issues no cookie or token.
 Production requires a durable artifact authority; a non-durable replacement is accepted only in Development.
 The controlled OIDC fixture source exercises these boundaries after execution is authorized; it is not evidence
 of a real identity-provider deployment, current cookie/session enforcement or Studio acceptance.

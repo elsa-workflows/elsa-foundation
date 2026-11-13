@@ -627,6 +627,9 @@
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
+      "elsa.api.capabilities.core": {
+        "type": "Project"
+      },
       "elsa.api.compatibility.testing": {
         "type": "Project",
         "dependencies": {
@@ -702,6 +705,18 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.ExternalAuthentication.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.foundation.identity.externalauthentication.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.ExternalAuthentication": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.ExternalAuthentication.Core": "[4.0.0-dev, )",
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
       "elsa.foundation.identity.externalauthentication.core": {

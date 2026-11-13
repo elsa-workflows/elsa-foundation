@@ -36,5 +36,6 @@ selects its existing provider backend. See the [core contracts](../../Core/EXTEN
 
 This prefix registers the optional stores without activating a callback/chooser/API route or switching local
 password sign-in, cookie validation or token issuance to the canonical session pipeline. The qualified-link
-content version is recorded here; complete flow/session enforcement follows in its owning source slices. Source presence
+content version is recorded here; the optional [protocol API](../../Api/README.md) and selected Identity adapter
+compose flow/session enforcement. Source presence
 alone is no proof of provider sign-in, database/model compatibility, restart or multi-node correctness.
