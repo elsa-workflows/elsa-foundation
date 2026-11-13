@@ -229,8 +229,10 @@ public sealed class Flowchart : CompositeActivity
     // Active) are not written; reading them back gives the same records.
     private static readonly JsonSerializerOptions Compact = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
 
+    // A run started by a trigger that is a child of this Flowchart begins there (main's SelectEntryNode), so that the
+    // trigger is delivered; otherwise at the start node.
     protected internal override void Execute(CompositeContext context) =>
-        Step(context, run => Engine.Start(GraphOf(context.Node), run));
+        Step(context, run => Engine.Start(GraphOf(context.Node), run), context.PendingTrigger);
 
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
@@ -239,17 +241,19 @@ public sealed class Flowchart : CompositeActivity
             new FlowchartChildCompletion(child.Node, child.Frame, [child.Outcome], path, scope)));
     }
 
+    // The engine faults the Flowchart when a child faults (main, #308); the fault the instance carries is the child's
+    // own, as the other native composites pass it on, not the engine's generic flowchart.child.faulted.
     protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child) =>
-        Step(context, run => Engine.OnChildFaulted(GraphOf(context.Node), run, ReadState(context), child.Node));
+        Step(context, run => Engine.OnChildFaulted(GraphOf(context.Node), run, ReadState(context), child.Node), fault: child.Fault);
 
-    private static void Step(CompositeContext context, Func<FlowchartRun, FlowchartStep> call)
+    private static void Step(CompositeContext context, Func<FlowchartRun, FlowchartStep> call, string? trigger = null, ActivityFault? fault = null)
     {
         FlowchartStep step;
         try
         {
-            step = call(new FlowchartRun(context.FrameId));
+            step = call(new FlowchartRun(context.FrameId, trigger));
         }
-        catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException)
+        catch (Exception exception) when (exception is FlowchartExecutionException or InvalidOperationException or JsonException)
         {
             context.Fault(new ActivityFault("flowchart.invalid", exception.Message));
             return;
@@ -260,7 +264,9 @@ public sealed class Flowchart : CompositeActivity
         context.SetState(JsonSerializer.SerializeToNode(step.State with { Diagnostics = [] }, Compact));
         foreach (var scheduled in step.Scheduled)
         {
-            if (scheduled.SchedulingCause == "join") context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}");
+            // A join (several inbound, not a merge) fires once per round; a merge continues on every arrival.
+            if (scheduled.SchedulingCause == "join" && context.Node.Gateways.GetValueOrDefault(scheduled.NodeId) != Gateway.Merge)
+                context.RecordJoin($"{scheduled.NodeId}:{scheduled.IterationKey ?? "-"}");
             context.Schedule(context.Children.First(c => c.Id == scheduled.NodeId), Encode(scheduled.ExecutionPathId, scheduled.ExecutionScopeId));
         }
         switch (step.Kind)
@@ -269,7 +275,7 @@ public sealed class Flowchart : CompositeActivity
                 context.Complete(step.Outcome ?? FlowchartOutcomes.Done);
                 return;
             case FlowchartStepKind.Fault:
-                context.Fault(new ActivityFault(step.Fault!.Code, step.Fault.Message));
+                context.Fault(fault ?? new ActivityFault(step.Fault!.Code, step.Fault.Message));
                 return;
         }
 
