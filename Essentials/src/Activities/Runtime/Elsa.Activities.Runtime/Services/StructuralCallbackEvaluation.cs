@@ -108,6 +108,8 @@ internal static class StructuralCallbackEvaluation
         if (alreadyProcessed?.Invoke(parentState) == true)
             return;
 
+        await ActivityHistoryPreflight.ReadPolicyAndValidateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
+
         var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var checkpointCommitter = serviceProvider.GetService<RuntimeCheckpointCommitter>()

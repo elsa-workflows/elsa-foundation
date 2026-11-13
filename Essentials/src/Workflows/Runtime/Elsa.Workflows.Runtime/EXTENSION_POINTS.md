@@ -1261,3 +1261,7 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 
 
 User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.
+
+### Retained history callback preflight (#3849, S04e)
+
+`IRuntimeHistoryCaptureSupport` qualifies a retained policy on the actual checkpoint enricher, independently of host new-admission settings. Activities Runtime checks it with the optional native source and selected atomic reader/writer before callback or activation effects, including background admission and active typed resume. Missing Required capture defers work instead of acknowledging an unrecorded callback. Legacy paths resolve no diagnostic reader. No capture implementation or history registration is installed by this supporting boundary.
