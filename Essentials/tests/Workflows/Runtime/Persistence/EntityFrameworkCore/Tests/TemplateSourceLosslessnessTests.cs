@@ -17,6 +17,7 @@ public sealed class TemplateSourceLosslessnessTests
     [InlineData("valid")]
     [InlineData("computed-alias")]
     [InlineData("constructor-added-requirement")]
+    [InlineData("constructor-deduplicated-requirement")]
     [InlineData("null-owner-requirement")]
     public async Task Current_template_source_profile_does_not_drop_aliases_or_repair_missing_owner_data(string change)
     {
@@ -33,6 +34,11 @@ public sealed class TemplateSourceLosslessnessTests
         {
             var row = await context.ExecutableActivityTemplates.AsNoTracking().SingleAsync(); var document = JsonNode.Parse(row.ContentJson)!;
             if (change == "computed-alias") document["template"]!["nodesById"] = new JsonObject();
+            else if (change == "constructor-deduplicated-requirement")
+            {
+                var requirementsBody = document["template"]!["runtimeRequirements"]!.AsArray();
+                requirementsBody.Add(requirementsBody[0]!.DeepClone());
+            }
             else if (change == "null-owner-requirement") document["template"]!["runtimeRequirements"] = JsonNode.Parse("[null]");
             else document["template"]!["runtimeRequirements"] = new JsonArray();
             await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_runtime_executable_activity_template SET ContentJson={document.ToJsonString()}");
