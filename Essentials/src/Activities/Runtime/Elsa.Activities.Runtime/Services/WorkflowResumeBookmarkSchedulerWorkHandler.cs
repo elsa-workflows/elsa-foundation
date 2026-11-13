@@ -156,7 +156,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             var execution = await ReadResumeStateAsync(() => executions.FindAsync(workItem.WorkflowExecutionId, cancellationToken), resumePayload, cancellationToken)
                 ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
             access.EnsureTenantScope(execution.TenantId);
-            if (!expected.MatchesAdmission(observed, execution, state, access.RequireScope(), _timeProvider.GetUtcNow())) return;
+            var observedAt = _timeProvider.GetUtcNow();
+            if (!expected.MatchesAdmission(observed, execution, state, access.RequireScope(), observedAt))
+            {
+                var reason = observed is null ? "receiver-bookmark-missing" : observed.State.ExpiresAt is { } expiry && expiry <= observedAt
+                    ? "receiver-bookmark-expired" : "receiver-wait-no-longer-eligible";
+                await ActivityResumeHistoryObservations.UnmatchedAsync(serviceProvider, workItem, resumePayload, execution, access,
+                    observedAt, reason, cancellationToken);
+                return;
+            }
         }
         RuntimeHistoryCapturePolicy? historyPolicy = null;
         if ((bookmark is not null || hasClaimedResume) &&
