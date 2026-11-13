@@ -19,8 +19,8 @@ internal static class TerminalReceipts
             if (list) Console.WriteLine($"terminal:{mode},nested={nested},ending={ending}");
             else RunCase(mode, nested, ending);
         if (list)
-        { Console.WriteLine("terminal:null-state"); Console.WriteLine("terminal:shared-clock"); }
-        else { TerminalEdges.NullState(); TerminalEdges.SharedClock(); }
+        { Console.WriteLine("terminal:null-state"); Console.WriteLine("terminal:shared-clock"); Console.WriteLine("terminal:parent-notice"); }
+        else { TerminalEdges.NullState(); TerminalEdges.SharedClock(); TerminalEdges.ParentNotice(); }
         foreach (var (defect, assertion) in controls)
         {
             if (list) { Console.WriteLine("terminal-control:" + defect); continue; }
@@ -35,7 +35,7 @@ internal static class TerminalReceipts
             { Console.WriteLine($"Detected {defect}: {error.Message}"); continue; }
             throw new InvalidOperationException($"Control {defect} missed named assertion {assertion}");
         }
-        if (!list) Console.WriteLine("18/18 terminal schedules passed;7/7 named controls detected. Compatible-state in-memory model only.");
+        if (!list) Console.WriteLine("19/19 terminal schedules passed;7/7 named controls detected. Compatible-state in-memory model only.");
     }
 
     private static void RunCase(string mode, bool nested, string ending, AdmissionFlaw defect = AdmissionFlaw.None)

@@ -9,6 +9,7 @@ internal sealed class EdgeHarness(AdmissionFlaw defect)
     internal readonly World World = new(new Config(1, 1, Flaw.None, Native: true, AdmissionFlaws: defect)) { Auto = true };
     internal readonly InstanceRef Target = InstanceRef.In(0, "terminal-edge");
     private int _serial;
+    internal readonly HashSet<string> FinishedNotices = [];
     internal NativeState State => Json.Read<NativeState>(World.Store.Instances[Target.Id].State);
     internal static void Require(bool ok, string name, string detail)
     { if (!ok) throw new InvalidOperationException(name + ": " + detail); }
@@ -16,12 +17,14 @@ internal sealed class EdgeHarness(AdmissionFlaw defect)
     {
         try { World.Apply(act); }
         catch (NullReferenceException nullError) { throw new InvalidOperationException("T5: missing model state reached a null reducer", nullError); }
+        foreach (var message in World.Store.Messages.Values.Select(x => x.Message))
+            if (message.Kind == WorkflowKinds.ChildFinished && message.Target.Id == Target.Id) FinishedNotices.Add(message.Id);
         if (World.Check() is { } invariant) throw new InvalidOperationException("Kernel: " + invariant);
     }
-    internal void Send(string kind, object? input = null, StartSpec? start = null, bool reply = false)
+    internal void Send(string kind, object? input = null, StartSpec? start = null, bool reply = false, InstanceRef? target = null)
     {
         var id = "edge-message-" + ++_serial;
-        Apply(new("add", M: new Message(id, Target, kind, input is null ? null : Json.Write(input), Start: start,
+        Apply(new("add", M: new Message(id, target ?? Target, kind, input is null ? null : Json.Write(input), Start: start,
             ReplyTo: reply ? ReplyTo.Of("outside", id) : null)));
     }
     internal void Drain()
@@ -31,17 +34,18 @@ internal sealed class EdgeHarness(AdmissionFlaw defect)
         {
             Apply(new("poll", actor.Id));
             if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
-            if (actor.Worker.Ready.Contains(Target.Id)) Apply(new("turn", actor.Id, S: Target.Id));
-            else if (!actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
+            var ready = actor.Worker.Ready.ToArray();
+            foreach (var instance in ready) Apply(new("turn", actor.Id, S: instance));
+            if (ready.Length == 0 && !actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
             if (actor.Worker.NeedsFlush) Apply(new("flush", actor.Id));
             if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
         }
         throw new InvalidOperationException("T5: edge harness did not settle");
     }
-    internal Admission Query(string frame, string id)
+    internal Admission Query(string frame, string id, InstanceRef? target = null)
     {
         var before = World.Deliveries.Count;
-        Send(ReceiptQuery.Kind, new ReceiptQuery(frame, id), reply: true); Drain();
+        Send(ReceiptQuery.Kind, new ReceiptQuery(frame, id), reply: true, target: target); Drain();
         Require(World.Deliveries.Count == before + 1 && World.Deliveries[^1].Reply.Item is Admission,
             "T5", "missing or duplicate metadata response");
         return (Admission)World.Deliveries[^1].Reply.Item!;
@@ -63,6 +67,36 @@ internal static class TerminalEdges
         h.Send(Kinds.Delete); h.Drain();
         EdgeHarness.Require(!h.World.Store.Instances.ContainsKey(h.Target.Id), "T5", "normal failed-start deletion wedged");
         Console.WriteLine("PASS terminal:null-state");
+    }
+
+    internal static void ParentNotice()
+    {
+        var h = new EdgeHarness(AdmissionFlaw.None);
+        ReturnCounter.Calls = 0;
+        TerminalReceiver.Forbidden = false;
+        var child = Wf.Workflow("receipt-child", Wf.Node<TerminalReceiver>("receiver")
+            .With(Wf.Event("step", "step"), Wf.Event("waiting", "waiting")));
+        NativeWorkflows.Registry.Add(child).Add(Wf.Workflow("receipt-caller",
+            Wf.Sequence("caller", Wf.Dispatch("call", child.Id, true), Wf.Node<ReturnCounter>("after"))));
+        h.Apply(new("take", h.World.Of(0, 0).Id)); h.Send(Kinds.Start, start: NativeModel.Spec("receipt-caller")); h.Drain();
+        var childRow = h.World.Store.Instances.Values.Single(row => row.Parent == h.Target.Id);
+        var target = new InstanceRef(childRow.Id);
+        var frame = Json.Read<NativeState>(childRow.State).Frames.Values.Single(f => f.Node == "receiver").Id;
+        h.Send(InvocationInput.Kind, new InvocationInput(frame, "a", "business"), target: target); h.Drain();
+        h.Send(NativeKinds.Resume, new ResumeStimulus("step"), target: target); h.Drain();
+        EdgeHarness.Require(ReturnCounter.Calls == 1 && h.World.Store.Instances[h.Target.Id].Status == InstanceStatus.Finished &&
+            h.FinishedNotices.Count == 1, "T8", "ordinary child/caller completion did not send one committed parent notice");
+        TerminalReceiver.Forbidden = true;
+        NativeWorkflows.Registry.Remove(child.Id);
+        for (var i = 0; i < 3; i++)
+        {
+            var receipt = h.Query(frame, "a", target);
+            EdgeHarness.Require(receipt.Result == "Found" && receipt.Outcome == "handled" && h.FinishedNotices.Count == 1 && ReturnCounter.Calls == 1,
+                "T8", "retained metadata query sent another workflow-finished notice or repeated the caller");
+        }
+        NativeWorkflows.Registry.Add(child);
+        TerminalReceiver.Forbidden = false;
+        Console.WriteLine("PASS terminal:parent-notice");
     }
 
     internal static void SharedClock(AdmissionFlaw defect = AdmissionFlaw.None)
@@ -106,4 +140,11 @@ public sealed class SharedReceiptReceiver : CompositeActivity
         var input = context.SelectInput()!;
         context.FinishInput(input.Id, "handled"); context.Complete();
     }
+}
+
+public sealed class ReturnCounter : Activity
+{
+    public static int Calls;
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    { Calls++; return new(Complete()); }
 }

@@ -44,7 +44,7 @@ assertion must fail and be replaced with a rejection regression. See the [termin
 
 ## Terminal receipt slice
 
-`--list-terminal` inventories eighteen compatible-state schedules and seven isolated controls; `--terminal` runs
+`--list-terminal` inventories nineteen compatible-state schedules and seven isolated controls; `--terminal` runs
 them. The slice adds an optional model-owned metadata contract at the workflow actor, cold receipt queries and
 retries, native normal/forced terminal settlement, persisted commit-time references and fenced normal delete refusal. Pending inputs have no expiry; each final disposition starts the full captured duration.
 Queries do not restamp it. The fixture removes its definition from the registry and forbids receiver construction.
@@ -57,14 +57,14 @@ reader can project pending dispositions from that original fact. If the fact is 
 `TerminalMetadataUnresolved` without inventing a time; existing ID/content conflicts still resolve first. This
 slice does not yet qualify actual future native binaries or close the full terminal plan.
 
-The current eighteen schedules do not yet qualify completion/cancellation/query commit uncertainty, actual stale
+The current nineteen schedules do not yet qualify completion/cancellation/query commit uncertainty, actual stale
 delete execution, re-entry, equal frame IDs in different actors, parent-finished notice counts, active receipt budget reuse after expiry or legacy-version fixtures. Shared identity, remaining time/version obligations,
 transport/value retention roots, provider/process restart, full business-input adapter and Studio remain open.
 No execution result is asserted until the exact-source packet is recorded. No product schema/default is selected.
 
 
 The earlier delayed-commit T4 failure remains in its separate raw packet. This source replaces staged absolute
-expiry with an immutable reference to the actual finalizing commit. The eighteen schedules include the delayed
+expiry with an immutable reference to the actual finalizing commit. The nineteen schedules include the delayed
 closing commit, cold definition-free receipt access, a normal failed-start JSONnull lookup/Delete, and different
 invocations sharing a commit fact with different receipt windows. Cleanup must keep the shared fact until the
 last reference expires and must preserve the workflow-owned end fact. The new exact-source packet is still
@@ -73,3 +73,8 @@ required before claiming that the original T4 failure is resolved.
 The cancellation-after-earlier-work cases commit one handled input before a later terminal commit, and assert
 its outcome, order, reference and original deadline through query/retry. Deletion also waits for the latest
 remaining receipt promise. Shared-reference completion uses normal event publication and fan-out to both waits.
+
+A real dispatched workflow child also completes under an ordinary caller. The harness records actual committed
+child-finished message IDs and ordinary return-work calls, then issues repeated cold child receipt queries.
+No second parent notice or caller execution is allowed. An isolated source mutation of that guard is required
+alongside the seven internal controls; it is not counted as a passing ordinary run.

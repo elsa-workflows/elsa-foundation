@@ -66,6 +66,6 @@ internal static class InvocationLifetime
             }
         var retained = state.Inboxes!.Values.SelectMany(x => x.Receipts.Values).Select(r => r.Clock).ToHashSet(StringComparer.Ordinal);
         foreach (var reference in removed)
-            if (reference.StartsWith("turn:", StringComparison.Ordinal) && (releaseEarly || !retained.Contains(reference))) clock.Release(reference);
+            if (reference.StartsWith(CommitClockFacts.ModelPrefix, StringComparison.Ordinal) && (releaseEarly || !retained.Contains(reference))) clock.Release(reference);
     }
 }
