@@ -200,11 +200,24 @@ The event describes only the atomic rejection at its observed time. It infers no
 or callback. The rejected checkpoint contributes no committed history facts. Required recording failure
 leaves work owed; actual re-entry can instead observe a now-missing/ineligible wait under S10h.
 
-Fifteen controls are written, all NOT RUN:10 removal/replacement/expiry/terminal workflow/terminal activity
-races across original capture choices;1 unchanged positive;3 recording acknowledgement/defer/re-entry
-rows;1 direct actual-handler access drift. A test-only consumption wrapper injects the native state change
-immediately before delegating to the actual service/committer/coherent memory stores and authoritative
-predicate; it does not fabricate the superseded exception or mutate validation-event handlers. The prior35
-native delivery/publication/receiver controls remain affected and NOT RUN. No public API/schema/reference/
-dependency/friend/module/host is added. Other receiver no-op branches, complete authored/multiple-recipient,
-production authority, physical provider/restart and composed UX qualification remain open.
+A terminal race plus failed recording remains queued while the normal drainer continues to forbid terminal
+activity execution. Workflows Runtime's existing terminal resumption purge now records the separate observed
+`terminal-resume-ineligible` decision before its existing targeted deletion. Required missing/unpaired/failed
+recording leaves the source item intact. No callback or consumption is authorized by that cleanup observation.
+
+Thirty-one controls are written, all NOT RUN: the original15 claim/race/positive/defer/drift cases plus16
+terminal cleanup controls (3 atomic-failure recovery,3 cleanup write/re-entry, original constructor, unpaired
+writer, old vocabulary, malformed data,2 cancellation identities, scope drift and3 bounded-walk/held-terminal fairness cases). A test-only consumption
+wrapper injects native changes immediately before the real service/committer/coherent memory predicate;
+it fabricates no superseded exception and validation handlers remain read-only. Cleanup controls instantiate
+the actual resumption service with actual native ports. Existing fixture/control defaults remain unchanged.
+The prior35 native component controls and existing resumption suite are affected and NOT RUN.
+One additive Runtime resumption constructor pairs the existing Core observation writer/reader; the old
+signature is retained. No new Core contract/schema/reference/dependency/friend/module/host is added.
+Other receiver branches and authored/provider/restart/authority/UX qualification remain open.
+
+A classified terminal history failure is returned as that execution's Faulted operational outcome, with a
+closed safe failure code and the original domain exception/cause passed to the logger. Other candidates,
+held-terminal processing and backlog-position settlement continue, preserving per-execution pump backoff.
+Partial deletion counts do not claim the failed run was fully purged, and its mailbox is not reaped.
+Requested cancellation and access drift still escape; no further work runs under a changed context.

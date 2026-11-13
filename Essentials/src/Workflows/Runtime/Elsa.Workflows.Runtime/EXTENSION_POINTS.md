@@ -1350,8 +1350,28 @@ rejects the saved recipient between preliminary eligibility and atomic admission
 The original native policy and explicit access context survive the claim attempt; the same private owner
 revalidates pairing/access and preserves Required write failure as owed work. Actual re-entry can record a
 different now-current receiver decision. See the [owning catalog](../../../Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md#atomic-saved-resume-admission-loss-3849-s10i).
-All15 new and35 affected component controls are NOT RUN. No new public contract/schema/dependency/friend/
-module/host is added; other receiver branches, authored journeys, durable provider and UX acceptance remain open.
+The existing terminal resumption purge also records `DeliveryUnmatched` / `terminal-resume-ineligible`
+before deleting exact saved-resume residue. It retains terminal status as authoritative: no activity executes
+and no bookmark consumption is invented. Recording failure keeps the native source queued for another sweep;
+a real retry is another observed cleanup decision. Live-owner exclusion, bounded paging and targeted deletion
+remain the existing purge's responsibility. The additive `RuntimeResumptionService` constructor receives the
+actual paired Core writer/reader; its original constructor remains and cannot waive retained obligations.
+No source/capture-chain qualification is claimed for this pure observation beyond the selected provider's
+native policy/scope/deletion contract; it enables no native activity effect.
+
+All31 new and35 prior native component controls plus the existing resumption suite are NOT RUN. One Runtime
+constructor/API baseline entry is added; no Core contract/schema/reference/dependency/friend/module/host.
+Other receiver branches, authored journeys, durable provider and UX acceptance remain open.
+
+Terminal observation outages are isolated as per-execution Faulted sweep outcomes, including held terminal
+candidates. Closed failure codes stay in the result; the original domain exception/cause goes to the logger,
+not history/result metadata. Other candidates and the bounded backlog walk continue, so the pump can apply
+its existing per-execution backoff. Partially purged failed executions are not counted as fully purged and
+are not reaped. Requested cancellation/access drift still escape. Three added controls cover repeated
+one-execution pages ahead of healthy live/legacy work and held-terminal partial purge accounting.
+
+The held-terminal control enqueues its pausable item before resume handoff and asserts the actual FIFO
+head plus native pause denial before sweeping; an earlier timestamp alone does not establish held discovery.
 
 ### Multiple saved publication recipients (#3849, S10j)
 
@@ -1362,7 +1382,7 @@ after handoff. Each captured recipient has its own receipt and causal consumptio
 history; one source remains one publication/routing invocation. Uncaptured recipients keep the original source
 cause without acquiring history, and one recipient's fault/retirement does not invent effects on the other.
 
-All9 new and50 existing native delivery/publication/receiver component controls are NOT RUN. Both runs reuse
+All9 new and66 existing native delivery/publication/receiver component controls are NOT RUN. Both runs reuse
 activity/bookmark IDs to exercise run scoping. Native workflow/invocation/private state/schema and controlled
 callback activations remain supplied; a second wait is created by the actual native handler. Existing fixture
 defaults are unchanged. This is not authored start/whole-workflow, concurrent node/authority, durable provider/
