@@ -1386,6 +1386,59 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   }, 20000);
 
+  it.each(["session", "backend", "restored history"] as const)("revalidates the mounted draft identity after %s redaction without retaining stale metadata", async scope => {
+    let mode: "initial" | "pending" | "denied" = "initial";
+    let reads = 0;
+    let resolveMetadata!: (value: unknown) => void;
+    const replacement = new Promise(resolve => { resolveMetadata = resolve; });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") {
+        reads += 1;
+        if (mode === "denied") throw new StudioHttpError(403, "not authorized", null);
+        if (mode === "pending") return replacement;
+        return definition({ displayName: "Before authority change" });
+      }
+      if (url === "/design/activities/drafts/draft-1") return draftDetail();
+      if (url === "/design/activities/versions/version-1") return versionDetail();
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // An unrelated cached definition must stay redacted, not be fetched speculatively.
+    queryClient.setQueryData(activityDesignKeys.definition("inactive"), definition({ definitionId: "inactive", displayName: "Inactive identity" }));
+    const path = "/workflows/activity-definitions?definition=definition-1&section=editor&draft=draft-1";
+    let rendered = renderPage(getJson, queryClient, path, undefined, [graphContribution()]);
+    await waitFor(() => expect(rendered.container.querySelector("#activity-draft-title")?.textContent).toBe("Before authority change"));
+    const initialReads = reads;
+    mode = "pending";
+    if (scope === "session") window.dispatchEvent(new Event(authSessionStartedEvent));
+    else if (scope === "backend") rendered.setBaseUrl(`${rendered.baseUrl}-changed`);
+    else {
+      const baseUrl = rendered.baseUrl;
+      await rendered.unmount();
+      const state = window.history.state;
+      window.history.replaceState({ ...state, elsaActivityDefinitions: { ...state.elsaActivityDefinitions,
+        collection: { entryId: "restored-editor", runtimeScopeId: "previous-runtime", baseUrl, authorityRevision: 0,
+          searchInput: "", search: "", providerInput: "", providerKey: "", authority: "", pageSize: 25, cursorStack: [null], cursorIndex: 0 } } }, "", path);
+      rendered = renderPage(getJson, queryClient, path, undefined, [graphContribution()], undefined, undefined, { baseUrl, preserveHistoryState: true });
+    }
+    await waitFor(() => expect(reads).toBeGreaterThan(initialReads));
+    await waitFor(() => expect(queryClient.getQueryData(activityDesignKeys.definition("definition-1"))).toBeNull());
+    expect(rendered.container.textContent).not.toContain("Before authority change");
+    expect(queryClient.getQueryData(activityDesignKeys.definition("inactive"))).toBeNull();
+    resolveMetadata(definition({ displayName: "Current authorized name" }));
+    await waitFor(() => expect(rendered.container.querySelector("#activity-draft-title")?.textContent).toBe("Current authorized name"));
+    expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-1");
+
+    mode = "denied";
+    window.dispatchEvent(new Event(authSessionStartedEvent));
+    await waitFor(() => expect(queryClient.getQueryState(activityDesignKeys.definition("definition-1"))?.status).toBe("error"));
+    expect(rendered.container.textContent).not.toContain("Current authorized name");
+    expect(rendered.container.textContent).not.toContain("Before authority change");
+    expect(queryClient.getQueryData(activityDesignKeys.definition("definition-1"))).toBeNull();
+    await rendered.unmount();
+  }, 20000);
+
   it("restarts from the first page when a retained cursor snapshot expires", async () => {
     let firstPageReads = 0;
     const getJson = vi.fn(async (url: string) => {
