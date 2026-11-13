@@ -394,7 +394,10 @@ public sealed partial class World
         var published = false;
         for (var round = 0; round < 150; round++)
         {
-            Time += 11_000;     // past any lease and any timer
+            // Expire a missing owner's lease; while every partition has an owner, give healthy owners passes within
+            // their lease. Advancing past every lease on every round would manufacture repeated owner loss.
+            var missing = Enumerable.Range(0, Config.Partitions).Any(p => !slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Owns));
+            Time += round == 0 || missing ? 11_000 : 1_000;
             for (var p = 0; p < Config.Partitions; p++)
             {
                 foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of(node, p).Worker.BeatAsync());   // a stale owner learns that it is one
@@ -432,6 +435,10 @@ public sealed partial class World
                         if (actor.Jobs.Remove(key, out var work)) work.TrySetResult("done");
                 }
             if (Check() is { } violation) return violation;
+            // I15, decision 6: after a pass, an owner holds no caller past its deadline, so no expired caller pins an instance.
+            foreach (var (node, partition) in slots)
+                if (Of(node, partition).Worker is { Owns: true } owner && owner.Callers.FirstOrDefault(c => ReplyTo.Parse(c).Deadline <= owner.Now) is { } late)
+                    return $"I15 actor {Of(node, partition).Id} still holds the reply address {late} past its deadline";
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Jobs.Count > 0))) continue;
             if (Unfair() is not null) continue;
             if (published && (!Config.Native || NativeMeet() == 0)) return End();    // native waits that appeared since get their events too
