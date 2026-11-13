@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
@@ -424,7 +425,14 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Deferred, "In-process workflow execution agent is passivated.");
 
                 if (_processedIdempotencyKeys.Contains(envelope.IdempotencyKey))
-                    return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Idempotency key was already processed.");
+                {
+                    if (NativeIngressTargetEvidence.Origin(envelope) is null && NativeIngressWaitTargetEvidence.Origin(envelope) is null)
+                        return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Idempotency key was already processed.");
+                    if (_commandProcessor is IIngressCommandWitness witness && await witness.HasIngressWitnessAsync(envelope, cancellationToken))
+                        return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Exact physical ingress target responsibility already exists.");
+                    // A memo with no physical queue/successor/state witness is not acceptance. Retry inside this mailbox.
+                    _processedIdempotencyKeys.Remove(envelope.IdempotencyKey);
+                }
 
                 // A Cancel turn must consume its queued cancellation even when another Cancel waits, including
                 // a retry with the same key that will subsequently return Duplicate without draining.
