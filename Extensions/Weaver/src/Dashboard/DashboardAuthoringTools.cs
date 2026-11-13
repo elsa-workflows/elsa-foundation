@@ -44,7 +44,7 @@ internal abstract class DashboardAuthoringTool(DashboardWeaverAccess access, IDa
         }
         catch (DashboardResourceException error) { return Failure<WeaverToolPreparation>(error); }
         catch (DashboardQueryException) { return SourceUnavailable<WeaverToolPreparation>(); }
-        catch (JsonException) { return Invalid<WeaverToolPreparation>(); }
+        catch (JsonException error) { return Invalid<WeaverToolPreparation>(error); }
     }
 
     public async Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
@@ -69,7 +69,7 @@ internal abstract class DashboardAuthoringTool(DashboardWeaverAccess access, IDa
         }
         catch (DashboardResourceException error) { return Failure<WeaverToolResult>(error); }
         catch (DashboardQueryException) { return SourceUnavailable<WeaverToolResult>(); }
-        catch (JsonException) { return Invalid<WeaverToolResult>(); }
+        catch (JsonException error) { return Invalid<WeaverToolResult>(error); }
     }
 
     protected abstract ValueTask<WeaverPayload> ProduceAsync(DashboardAuthoringContext context, JsonElement input, CancellationToken cancellationToken);
@@ -92,7 +92,30 @@ internal abstract class DashboardAuthoringTool(DashboardWeaverAccess access, IDa
     private static WeaverResult<T> Failure<T>(DashboardResourceException error) => WeaverResult<T>.Failure("dashboards.authoring." + error.Code,
         error.Code is "unavailable" or "schemaIncompatible" ? "Current Dashboard authoring support is unavailable." : error.Message,
         error.Code switch { "unavailable" or "schemaIncompatible" => 503, "notFound" => 404, "conflict" => 409, "denied" => 403, "tooLarge" => 413, _ => 422 });
-    private static WeaverResult<T> Invalid<T>() => WeaverResult<T>.Failure("dashboards.authoring.invalid", "Supply the supported declarative tool arguments.", 422);
+    private static WeaverResult<T> Invalid<T>(JsonException error) => WeaverResult<T>.Failure("dashboards.authoring.invalid",
+        "Invalid declarative arguments at " + GrammarPath(error.Path) + ". Follow the tool schema: all non-null scalar literals are JSON strings; " +
+        "IN uses values:[{type,literal}]; weekStart is \"monday\"; HAVING uses metric, not field. Omit unsupported members.", 422);
+
+    // Never echo exception text, arbitrary property names, parameter names or submitted values.
+    private static string GrammarPath(string? path)
+    {
+        HashSet<string> members = ["question", "query", "schemaVersion", "dataset", "id", "schemaRevision", "form", "parameters",
+            "name", "type", "required", "nullable", "default", "filters", "field", "metric", "operator", "value", "values", "literal",
+            "parameter", "all", "any", "fields", "groupBy", "metrics", "alias", "revision", "aggregate", "time", "window", "from", "to",
+            "timeZone", "weekStart", "bucket", "comparison", "mode", "having", "sort", "reference", "direction", "nulls", "limit",
+            "visualization", "kind", "x", "y", "label", "parameterValues"];
+        var safe = new StringBuilder("$");
+        foreach (var part in (path ?? "").Split('.').Skip(1).Take(12))
+        {
+            var member = part.Split('[')[0];
+            if (!members.Contains(member)) { safe.Append(".<member>"); break; }
+            safe.Append('.').Append(member);
+            if (part.Contains('[')) safe.Append("[]");
+            // parameterValues keys are caller data even when they happen to match a grammar word.
+            if (member == "parameterValues") break;
+        }
+        return safe.ToString();
+    }
     private static WeaverResult<T> SourceUnavailable<T>() => WeaverResult<T>.Failure("dashboards.authoring.source_unavailable",
         "Current dataset support could not be established. Retry after source support recovers.", 503);
     private sealed record PreparedDashboardTool(DashboardAuthoringDraft Draft, JsonElement Input);
@@ -126,9 +149,9 @@ internal sealed class DashboardQuestionTool(DashboardWeaverAccess access, IDashb
     public override WeaverToolDescriptor Descriptor { get; } = Contract("dashboard_preview_question", "Propose a Dashboard question",
         "Validate a newly composed declarative question against currently authorized dataset metadata. Studio executes the actual preview " +
         "natively; this tool never returns source records or numeric results. It never applies, saves or shares. Query fields/metric revisions, " +
-        "scalar types/operators/time windows come from dashboard_discover_datasets. Use explicit decimal-string literals, typed parameters, " +
+        "scalar types/operators/time windows come from dashboard_discover_datasets. Use string literals for all scalar types, typed parameters, " +
         "current./baseline./delta. references for having and sorting, and supported visualization bindings. Limit aggregates to 200 rows and records to 100 rows. Ask consequential clarifications first.",
-        """{"type":"object","required":["question"],"properties":{"question":{"type":"object","required":["query","visualization","parameterValues"],"properties":{"query":{"type":"object","required":["schemaVersion","dataset","form"],"properties":{"schemaVersion":{"const":1},"dataset":{"type":"object","required":["id","schemaRevision"],"properties":{"id":{"type":"string"},"schemaRevision":{"type":"string"}},"additionalProperties":false},"form":{"enum":["aggregate","records"]},"parameters":{"type":"array","items":{"type":"object"}},"filters":{"type":"object"},"fields":{"type":"array","items":{"type":"string"}},"groupBy":{"type":"array","items":{"type":"string"}},"metrics":{"type":"array","items":{"type":"object"}},"time":{"type":"object"},"comparison":{"type":"object"},"having":{"type":"object"},"sort":{"type":"array","items":{"type":"object"}},"limit":{"type":"integer","minimum":1,"maximum":200}},"additionalProperties":false},"visualization":{"type":"object","required":["kind","y"],"properties":{"kind":{"enum":["bar","line","table","list","metric"]},"x":{"type":"string"},"y":{"type":"array","items":{"type":"string"}},"label":{"type":"string"}},"additionalProperties":false},"parameterValues":{"type":"object"}},"additionalProperties":false}},"additionalProperties":false}""",
+        DashboardQuestionSchema.Json,
         DashboardWeaverProtocol.ProposalType);
     protected override async ValueTask<WeaverPayload> ProduceAsync(DashboardAuthoringContext context, JsonElement input, CancellationToken cancellationToken)
     {
