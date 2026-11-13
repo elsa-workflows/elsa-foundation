@@ -251,6 +251,22 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
         return new(context, access, reader, TimeProvider.System, Chain);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Independent_ports_accept_fresh_equivalent_immutable_access_values(bool purge)
+    {
+        await using var db = await CapturedDatabaseAsync(); await using var context = db.Open(); var access = new EquivalentMutationAccess();
+        var reader = new EfRuntimeHistoryStore(context, access, MutationCodec, Chain);
+        var owner = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, Chain);
+        Assert.NotSame(access.Current, access.Current); Assert.Equal(access.Current, access.Current); Assert.True(owner.CanRecordHistory(reader));
+        if (purge) Assert.Equal(1, await owner.PurgeThroughAsync(Run, long.MaxValue));
+        else Assert.Equal(2, (await owner.RecordAsync(Observation("equivalent-access"))).Event!.Sequence);
+        Assert.NotNull(await reader.FindHeadAsync(Run)); Assert.Empty(context.ChangeTracker.Entries()); Assert.Null(context.Database.CurrentTransaction);
+    }
+
+    private sealed class EquivalentMutationAccess : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(Scope)); }
+
     private sealed class MutationAckLoss(Func<Task>? afterCommit = null) : DbTransactionInterceptor
     {
         public int Hits { get; private set; }
