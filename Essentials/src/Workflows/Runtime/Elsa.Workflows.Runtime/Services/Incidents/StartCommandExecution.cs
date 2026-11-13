@@ -12,6 +12,21 @@ namespace Elsa.Workflows.Runtime.Services.Incidents;
 /// </summary>
 internal static class StartCommandExecution
 {
+    /// <summary>Optional origin of an already eligible first-fault start; unreadable diagnostics cannot replace the primary failure.</summary>
+    internal static RuntimeHistoryCausation? ReadHistoryCausation(WorkflowExecutionCommandEnvelope? envelope, string workflowExecutionId)
+    {
+        if (envelope?.Command is not { Kind: WorkflowExecutionCommandKind.Start, Payload: { } element } || envelope.WorkflowExecutionId != workflowExecutionId)
+            return null;
+        try
+        {
+            var cause = element.GetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCausation)).Deserialize<RuntimeHistoryCausation>();
+            return cause is not null && new[] { cause.HistoryEventId, cause.WorkflowExecutionId, cause.DeliveryId, cause.CommandId, cause.SchedulerWorkItemId }
+                .Any(value => value is not null && (string.IsNullOrWhiteSpace(value) || value.Length > 1024)) ? null : cause;
+        }
+        catch (Exception failure) when (failure is not (OperationCanceledException or OutOfMemoryException or StackOverflowException or AccessViolationException))
+        { return null; }
+    }
+
     /// <summary>
     /// The execution <paramref name="envelope"/>'s start command carries, as <see cref="WorkflowExecutionStatus.Running"/> at
     /// <paramref name="occurredAt"/>, or <see langword="null"/> when the envelope is not this execution's start.
@@ -35,7 +50,7 @@ internal static class StartCommandExecution
         WorkflowExecutionStartCommandPayload? payload;
         try
         {
-            payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>();
+            payload = WithoutHistoryCausation(payloadElement).Deserialize<WorkflowExecutionStartCommandPayload>();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -69,6 +84,26 @@ internal static class StartCommandExecution
             DispatchNestingDepth = payload.DispatchNestingDepth,
             TestScope = payload.TestScope
         };
+    }
+
+    // Optional diagnostics never determine native recovery eligibility. Keep all other properties, including duplicates,
+    // in their original order so the normal identity, authority and capture-policy reader still decides eligibility.
+    private static JsonElement WithoutHistoryCausation(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.HistoryCausation), out _))
+            return element;
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            foreach (var property in element.EnumerateObject())
+                if (!property.NameEquals(nameof(WorkflowExecutionStartCommandPayload.HistoryCausation)))
+                    property.WriteTo(writer);
+            writer.WriteEndObject();
+        }
+        using var document = JsonDocument.Parse(stream.ToArray());
+        return document.RootElement.Clone();
     }
 
     // Preserve the same bounded system facts as the first start checkpoint, even if start faults before that commit.

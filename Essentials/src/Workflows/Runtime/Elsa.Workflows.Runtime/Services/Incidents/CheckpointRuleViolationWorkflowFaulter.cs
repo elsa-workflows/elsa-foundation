@@ -120,7 +120,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
             return;
 
         await _checkpointCommitter.CommitAsync(
-            NewFaultCommit(faultable, violation, occurredAt, hasAcceptedState: stored is not null),
+            NewFaultCommit(faultable, violation, occurredAt, hasAcceptedState: stored is not null,
+                historyCausation: stored is null ? StartCommandExecution.ReadHistoryCausation(envelope, workflowExecutionId) : null),
             cancellationToken);
         _logger.LogWarning(
             drainFailure,
@@ -155,7 +156,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
         WorkflowExecutionState workflow,
         string violation,
         DateTimeOffset occurredAt,
-        bool hasAcceptedState)
+        bool hasAcceptedState,
+        RuntimeHistoryCausation? historyCausation)
     {
         var workflowExecutionId = workflow.WorkflowExecutionId;
         var incidentId = IncidentId(workflowExecutionId);
@@ -200,7 +202,8 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: [],
                 Metadata: metadata)
-            { HistoryStartsAtAdmission = !hasAcceptedState && workflow.HistoryCaptureEnabledAtAdmission == true && RuntimeHistorySourceFacts.IsFinalProfile(workflow.HistoryCapturePolicy) ? true : null },
+            { HistoryCausation = historyCausation,
+              HistoryStartsAtAdmission = !hasAcceptedState && workflow.HistoryCaptureEnabledAtAdmission == true && RuntimeHistorySourceFacts.IsFinalProfile(workflow.HistoryCapturePolicy) ? true : null },
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(workflowExecutionId, RuntimeStateChangeOperation.Upsert, faulted, metadata),
                 scheduler: null,

@@ -33,6 +33,58 @@ public sealed class PublishStimulusSourcePipelineTests
     private static readonly WorkflowExecutableIdentity Pin = new("artifact", "definition", "version", "1.0.0", "hash");
 
     [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Actual_saved_router_and_dispatchers_preserve_supplied_origin_for_start_and_resume_without_retrofitting_target_history(bool stamped)
+    {
+        await using var harness = new Harness(); await harness.SeedMaterial();
+        await harness.Bind("binding"); await harness.Wait("existing", "wait");
+        var pending = await harness.Commit(historyOrigin: stamped);
+        var source = new PostCommitDeliveryContext(Assert.Single(await harness.Store.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1))), Scope);
+        var routed = await harness.Router.RouteSourceAsync(source);
+        Assert.Equal(1, routed.StartedCount); Assert.Equal(1, routed.ResumedCount);
+        var started = Assert.Single(harness.Actors.Accepted, item => item.Command.Kind == WorkflowExecutionCommandKind.Start);
+        var resumed = Assert.Single(harness.Actors.Accepted, item => item.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark);
+        var startPayload = started.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var resumePayload = resumed.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        Assert.Equal(pending.Intent.HistoryCausation, startPayload.HistoryCausation);
+        Assert.Equal(pending.Intent.HistoryCausation, resumePayload.HistoryCausation);
+        Assert.Null(startPayload.HistoryCapturePolicy); Assert.Null((await harness.Executions.FindAsync("existing"))!.HistoryCapturePolicy);
+        Assert.Equal("wait", resumePayload.ExpectedBookmarkResume!.BookmarkId);
+        if (!stamped)
+        {
+            Assert.False(started.Command.Payload!.Value.TryGetProperty("HistoryCausation", out _));
+            Assert.False(resumed.Command.Payload!.Value.TryGetProperty("HistoryCausation", out _));
+        }
+        await harness.Router.RouteSourceAsync(source);
+        Assert.Equal(2, harness.Actors.Accepted.Count); // Actual mailbox keys keep the original accepted inputs.
+        Assert.Equal(1, harness.Lookup.Reads);
+        // This directly exercises the native saved router with supplied origin and a recording mailbox, not the publisher observer/processor or recipient execution.
+    }
+
+    [Fact]
+    public async Task Saved_start_refuses_an_origin_that_its_existing_command_wire_cannot_preserve()
+    {
+        await using var harness = new Harness(); await harness.SeedMaterial(); await harness.Bind("binding");
+        var pending = await harness.Commit(historyOrigin: true, opaqueOrigin: true);
+        var source = new PostCommitDeliveryContext(Assert.Single(await harness.Store.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1))), Scope);
+        var refusal = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => harness.Router.RouteSourceAsync(source).AsTask());
+        Assert.False(refusal.IsUnavailable); Assert.Empty(harness.Actors.Attempts);
+        Assert.Equal(pending.Intent.HistoryCausation, (await harness.Store.FindDurableAsync(pending.OutboxItemId))!.Intent.HistoryCausation);
+    }
+
+    [Fact]
+    public async Task Saved_resume_refuses_an_origin_that_its_existing_command_wire_cannot_preserve()
+    {
+        await using var harness = new Harness(); await harness.SeedMaterial(); await harness.Wait("existing", "wait");
+        var pending = await harness.Commit(historyOrigin: true, opaqueOrigin: true);
+        var source = new PostCommitDeliveryContext(Assert.Single(await harness.Store.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1))), Scope);
+        var refusal = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => harness.Router.RouteSourceAsync(source).AsTask());
+        Assert.False(refusal.IsUnavailable); Assert.Empty(harness.Actors.Attempts); Assert.Empty(harness.Actors.Accepted);
+        Assert.Equal(pending.Intent.HistoryCausation, (await harness.Store.FindDurableAsync(pending.OutboxItemId))!.Intent.HistoryCausation);
+        Assert.NotNull(await harness.Bookmarks.FindAsync("existing", "wait"));
+    }
+
+    [Theory]
     [InlineData(false, false)] [InlineData(false, true)]
     [InlineData(true, false)] [InlineData(true, true)]
     public async Task Native_quiescence_retains_stamped_logical_sources_and_preserves_legacy_reissue(bool capturedInputs, bool mixed)
@@ -298,7 +350,8 @@ public sealed class PublishStimulusSourcePipelineTests
                 new Dictionary<string, WorkflowExecutableResumeTarget> { ["resume"] = new("resume", "node", "test", new Dictionary<string, string>()) }, Now, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference));
             await Services.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(Execution("publisher"));
         }
-        public async Task<RuntimePostCommitOutboxItem> Commit(bool local = false, bool materialized = false, bool late = false, bool mixed = false, bool duplicate = false, bool conflicting = false)
+        public async Task<RuntimePostCommitOutboxItem> Commit(bool local = false, bool materialized = false, bool late = false, bool mixed = false, bool duplicate = false, bool conflicting = false,
+            bool historyOrigin = false, bool opaqueOrigin = false)
         {
             var buffer = Services.GetRequiredService<IPublishStimulusStagingAccessor>();
             Services.GetRequiredService<IPublishStimulusStager>().StagePublishStimulus(new("publisher", "publisher-activity", "named", null,
@@ -307,6 +360,12 @@ public sealed class PublishStimulusSourcePipelineTests
             var commit = new RuntimeCheckpointCommit("publication", new("publication-checkpoint", RuntimeCheckpointNames.ActivityCompleted,
                 "publisher", Now, ["publisher-activity"], new Dictionary<string, string>()), new(null, null, [], [], [], [], []),
                 [intent], new Dictionary<string, string>());
+            if (historyOrigin)
+            {
+                commit = RuntimeHistorySourceFacts.WithPostCommitCausation(commit, item => new RuntimeHistoryCausation("publication-event", "publisher",
+                    RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, item), opaqueOrigin ? "\ud800" : "publisher-command", "publisher-work"), Scope);
+                intent = Assert.Single(commit.PostCommitIntents);
+            }
             if (materialized)
             {
                 var row = RuntimePostCommitOutboxItems.CreatePending(commit, intent, Services.GetServices<RuntimePostCommitIntentHandlerContribution>(), Scope);

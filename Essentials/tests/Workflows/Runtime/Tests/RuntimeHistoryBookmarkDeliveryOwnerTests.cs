@@ -305,6 +305,55 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
     }
 
     [Theory]
+    [InlineData(false, "captured")] [InlineData(true, "captured")]
+    [InlineData(false, "uncaptured")] [InlineData(true, "uncaptured")]
+    public async Task Verified_source_origin_reaches_the_actual_recipient_receipt_or_uncaptured_resume_without_retrofit(bool coalescing, string profile)
+    {
+        using var f = await Fixture.CreateAsync(coalescing, profile);
+        await f.CreateWaitAsync("wait");
+        var origin = new RuntimeHistoryCausation("publication-event", "publisher", "source:send", "publisher-command", "publisher-work");
+        var source = await f.SourceAsync(origin: origin);
+        var nativeCommits = f.Commits.ListCommits().Count;
+        await f.Router.RouteSourceAsync(source);
+        var payload = Assert.Single(f.Actors.Actor.Envelopes).Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+        var page = await f.History.ReadPageAsync(new("run"));
+        if (profile == "captured")
+        {
+            var receipt = Assert.Single(page.Items, e => e.Name == "DeliveryReceived");
+            Assert.Equal(origin, receipt.Causation);
+            Assert.Equal(receipt.HistoryEventId, payload.HistoryCausation!.HistoryEventId);
+            Assert.Equal("run", payload.HistoryCausation.WorkflowExecutionId);
+            Assert.Equal(source.SourceOutboxItemId, payload.HistoryCausation.DeliveryId);
+        }
+        else
+        {
+            Assert.Empty(page.Items); Assert.Null(page.Head);
+            Assert.Equal(origin, payload.HistoryCausation);
+            Assert.Null((await f.Workflows.FindAsync("run"))!.HistoryCapturePolicy);
+        }
+        Assert.Equal(nativeCommits, f.Commits.ListCommits().Count);
+        Assert.NotNull(await f.Bookmarks.FindAsync("run", "wait"));
+        Assert.Equal("wait", payload.ExpectedBookmarkResume!.BookmarkId);
+        Assert.DoesNotContain(page.Items, e => e.Name is "BookmarkConsumed" or "ActivityCompleted");
+    }
+
+    [Fact]
+    public async Task A_retired_saved_wait_receipt_keeps_original_publication_causation_without_inventing_a_resume()
+    {
+        using var f = await Fixture.CreateAsync(); await f.CreateWaitAsync("wait");
+        var origin = new RuntimeHistoryCausation("publication-event", "publisher", "source:send");
+        var source = await f.SourceAsync(installRecipient: true, origin: origin);
+        await f.Bookmarks.DeleteAsync("run", "wait");
+        var result = await f.Dispatcher.DispatchAsync(source, "run", "wait");
+        Assert.Equal(BookmarkResumeDispatchStatus.NotFound, result.Status);
+        var page = await f.History.ReadPageAsync(new("run"));
+        Assert.Equal(origin, Assert.Single(page.Items, e => e.Name == "DeliveryReceived").Causation);
+        Assert.Single(page.Items, e => e.Name == "DeliveryUnmatched");
+        Assert.Empty(f.Actors.Actor.Envelopes);
+        Assert.DoesNotContain(page.Items, e => e.Name == "BookmarkConsumed");
+    }
+
+    [Theory]
     [InlineData("removed")]
     [InlineData("expired")]
     [InlineData("replaced")]
@@ -586,14 +635,14 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
             return f;
         }
 
-        internal async Task<PostCommitDeliveryContext> SourceAsync(bool installRecipient = false)
+        internal async Task<PostCommitDeliveryContext> SourceAsync(bool installRecipient = false, RuntimeHistoryCausation? origin = null)
         {
             var publisher = new WorkflowExecutionState("publisher", Pin, WorkflowExecutionStatus.Running, null, At, At, At,
                 null, null, null, "scope-a", new Dictionary<string, string>())
                 { Partition = new("partition"), RunKind = WorkflowRunKind.PublishedRun };
             await Workflows.SaveAsync(publisher);
             var intent = new RuntimePostCommitIntent("send", "publisher", "test.history-delivery", At, "publisher-activity", "source-key",
-                JsonSerializer.SerializeToElement(new { value = "private canonical input" }));
+                JsonSerializer.SerializeToElement(new { value = "private canonical input" })) { HistoryCausation = origin };
             var persistenceScope = new PersistenceScope("scope-a");
             await Commits.AddPendingForTestingAsync(new("source:send", intent, RuntimePostCommitOutboxStatus.Pending, At, At,
                 new(4, TimeSpan.FromSeconds(1)), 0, null, null, null, null, null, 0, null, 1, persistenceScope, null));

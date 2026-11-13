@@ -114,7 +114,7 @@ internal sealed class StimulusDeliveryServices(
             ?? throw new InvalidDataException("The exact saved wait is absent from its source cohort.");
         var resume = new BookmarkResumeDispatchRequest(executionId, request.StimulusType, request.StimulusHash, request.Input,
             $"{request.IdempotencyKey}:resume:{executionId}", request.RequestedBy, request.BuildDispatchMetadata(), request.PayloadType,
-            request.ProviderId, bookmarkId, null);
+            request.ProviderId, bookmarkId, null) { HistoryCausation = source.Intent.HistoryCausation };
         var observed = await bookmarks.ObserveAsync(executionId, bookmarkId, cancellationToken);
         if (observed is null) return new(source, resume, expected, null);
         var execution = await executions.FindAsync(executionId, cancellationToken)

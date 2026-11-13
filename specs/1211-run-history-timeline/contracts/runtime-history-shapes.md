@@ -93,3 +93,7 @@ Owner-observation support is bound to an exact post-commit intent kind. The sele
 ### HTTP common-envelope occurrence
 
 The event view carries nullable `occurredAt`, nullable `occurredAtKnown` and nullable `activityAncestryKnown`. When the source explicitly reports `OccurredAtKnown=false`, `occurredAt` is null; its canonical reference instant must not be displayed as operation time or used to compute a duration. `recordedAt` retains the independent durable observation instant. An absent occurrence flag preserves the older known-time envelope. Unknown kinds/schema versions retain these common fields, without releasing raw event payloads or widening the closed metadata vocabulary.
+
+### Saved-recipient start transport
+
+`WorkflowExecutionStartCommandPayload.HistoryCausation` and `RuntimeCheckpointCommandPayload.HistoryCausation` are optional null-omitted known causal inputs. Saved-source start dispatch derives them from the already verified immutable native source, not an additional field on the public start request. The actual start/checkpoint handlers retain this cause on the workflow-started boundary. Original absent wire remains unchanged and diagnostic origin creates no executable authority or capture policy. Saved command JSON roundtrip must preserve every exact original causal field; unrepresentable source data refuses before recipient effects. Eligible first-fault handling retains only readable bounded start diagnostics, without letting malformed optional origin replace the primary fault.
