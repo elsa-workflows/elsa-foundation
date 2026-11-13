@@ -210,17 +210,23 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Single(await read.Bookmarks.ToArrayAsync()); Assert.Empty(await read.Set<RuntimeHistoryEventEntity>().ToArrayAsync());
     }
 
-    [Fact]
-    public async Task Optional_history_head_failure_retains_its_typed_provider_cause_without_a_batch()
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Optional_history_head_failure_retains_its_typed_provider_cause_without_a_batch(bool lookupFails)
     {
         var optional = new RuntimeHistoryCapturePolicy(NativeHistoryPolicy.PolicyId, 1, false, NativeHistoryPolicy.SupportedKinds);
         await using var database = await TestDatabase.CreateAsync(); await SeedNativeHistoryAsync(database, optional);
-        await using (var context = database.Open("tenant-a"))
+        IInterceptor[] interceptors = lookupFails ? [new FailHistoryMarkerLookup()] : [];
+        await using (var context = database.Open("tenant-a", interceptors))
         {
             await context.Database.ExecuteSqlRawAsync("DROP TABLE elsa_runtime_history_head;");
             var error = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() =>
                 new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(Commit("optional-unavailable"), Decision()).AsTask());
-            Assert.IsType<Microsoft.Data.Sqlite.SqliteException>(error.InnerException); Assert.Equal("workflow-a", error.WorkflowExecutionId);
+            var causes = HistoryFailureCauses(error).ToArray();
+            Assert.Contains(causes, cause => cause is Microsoft.Data.Sqlite.SqliteException);
+            if (lookupFails) Assert.Contains(causes, cause => cause is TimeoutException);
+            else Assert.IsType<Microsoft.Data.Sqlite.SqliteException>(error.InnerException);
+            Assert.Equal("workflow-a", error.WorkflowExecutionId);
         }
         await using var read = database.Open("tenant-a"); Assert.Empty(await read.RuntimeCheckpointCommits.ToArrayAsync());
         Assert.Empty(await read.Bookmarks.ToArrayAsync()); Assert.Empty(await read.Set<RuntimeHistoryEventEntity>().ToArrayAsync());
@@ -235,22 +241,51 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         {
             insert.Arm(); var error = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() =>
                 new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(NativeHistoryCommit("lookup-failure"), Decision()).AsTask());
-            var causes = Causes(error).ToArray(); Assert.Contains(causes, cause => cause is DbUpdateException);
+            var causes = HistoryFailureCauses(error).ToArray(); Assert.Contains(causes, cause => cause is DbUpdateException);
             Assert.Contains(causes, cause => cause is TimeoutException); Assert.Equal("workflow-a", error.WorkflowExecutionId);
         }
         await AssertNoNativeHistoryAsync(database);
+    }
 
-        static IEnumerable<Exception> Causes(Exception error)
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task First_captured_head_keeps_native_fence_renewal_retry_and_stale_owner_precedence(bool leaseLost)
+    {
+        await using var database = await TestDatabase.CreateAsync(); var clock = new FixedTimeProvider(OccurredAt);
+        var heartbeat = new FenceRowChangeBeforeSave(delete: leaseLost);
+        await using (var context = database.Open("tenant-a", heartbeat))
         {
-            yield return error;
-            if (error is AggregateException group)
-            {
-                foreach (var inner in group.InnerExceptions)
-                foreach (var cause in Causes(inner)) yield return cause;
-            }
-            else if (error.InnerException is { } inner)
-                foreach (var cause in Causes(inner)) yield return cause;
+            var access = new FixedAccessor("tenant-a");
+            var lease = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(context, access, "workflow-a", "tenant-a", clock);
+            var row = await context.WorkflowExecutionStates.SingleAsync();
+            row.ContentJson = RuntimeArtifactJson.Serialize(EfWorkflowExecutionStateStore.ReadChecked(row, "tenant-a", "workflow-a") with
+            { HistoryCapturePolicy = NativeHistoryPolicy, HistoryCaptureEnabledAtAdmission = true });
+            row.Revision++; await context.SaveChangesAsync();
+            var commit = NativeHistoryCommit("first-captured-renewal") with { ExpectedFence = lease.ToFence() };
+            var store = new EfRuntimeCheckpointCommitStore(context, access, clock);
+            if (leaseLost) await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => store.CommitAsync(commit, Decision()).AsTask());
+            else await store.CommitAsync(commit, Decision());
         }
+        Assert.Equal(1, heartbeat.Executions);
+        if (leaseLost) await AssertNoNativeHistoryAsync(database);
+        else
+        {
+            await using var read = database.Open("tenant-a"); Assert.Single(await read.RuntimeCheckpointCommits.ToArrayAsync());
+            Assert.Single(await read.Bookmarks.ToArrayAsync()); Assert.Equal(2, await read.Set<RuntimeHistoryEventEntity>().CountAsync());
+            Assert.Equal(2, (await read.Set<RuntimeHistoryHeadEntity>().SingleAsync()).LastSequence);
+        }
+    }
+
+    private static IEnumerable<Exception> HistoryFailureCauses(Exception error)
+    {
+        yield return error;
+        if (error is AggregateException group)
+        {
+            foreach (var inner in group.InnerExceptions)
+            foreach (var cause in HistoryFailureCauses(inner)) yield return cause;
+        }
+        else if (error.InnerException is { } inner)
+            foreach (var cause in HistoryFailureCauses(inner)) yield return cause;
     }
 
     private sealed class FailHistoryMarkerLookup : DbCommandInterceptor

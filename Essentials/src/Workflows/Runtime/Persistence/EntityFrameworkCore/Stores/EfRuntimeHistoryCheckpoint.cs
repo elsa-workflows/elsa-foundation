@@ -166,7 +166,9 @@ internal static class EfRuntimeHistoryCheckpoint
             await EfRuntimeHistoryOccurrenceProjection.StageAsync(context, scope, run, chain, events, cancellationToken);
             EnsureAccess(); return events.AsReadOnly();
         }
-        catch (Exception exception) when (IsProviderUnavailable(exception, cancellationToken))
+        // A first-head save also flushes the native tracked fence touch. Leave its concurrency
+        // exception intact for the owner's bounded renewal/stale-fence classification after rollback.
+        catch (Exception exception) when (exception is not DbUpdateConcurrencyException && IsProviderUnavailable(exception, cancellationToken))
         { throw new RuntimeHistoryUnavailableException(run, "staging checkpoint history", exception); }
     }
 

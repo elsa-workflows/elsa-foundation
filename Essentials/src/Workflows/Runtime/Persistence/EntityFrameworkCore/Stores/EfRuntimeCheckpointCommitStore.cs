@@ -364,7 +364,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             // leaves as it is.
             RuntimeCheckpointCommitEntity? durable;
             try { durable = await FindMarkerAsync(scope, commit.CommitId, cancellationToken); }
-            catch (Exception lookupFailure) when (commit.HistoryBatches is { Count: > 0 } &&
+            catch (Exception lookupFailure) when ((commit.HistoryBatches is { Count: > 0 } || original is RuntimeHistoryUnavailableException) &&
                 EfRuntimeHistoryCheckpoint.IsProviderUnavailable(lookupFailure, cancellationToken))
             {
                 throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "reconciling atomic checkpoint history",
@@ -714,7 +714,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
                     "Exact bookmark admission could not reconcile its durable checkpoint.", new AggregateException(original, lookupFailure));
             }
-            catch (Exception lookupFailure) when (commit.HistoryBatches is { Count: > 0 } &&
+            catch (Exception lookupFailure) when ((commit.HistoryBatches is { Count: > 0 } || original is RuntimeHistoryUnavailableException) &&
                 EfRuntimeHistoryCheckpoint.IsProviderUnavailable(lookupFailure, token))
             {
                 throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "reconciling atomic checkpoint history",
