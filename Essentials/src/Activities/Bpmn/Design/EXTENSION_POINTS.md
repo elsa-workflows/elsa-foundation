@@ -33,6 +33,19 @@
   and requires exact resolved native roles. Raw-source chain facts remain conservative outside the proven subset;
   schema 1 is unchanged and no shared Publishing/Graph admission authority is replaced.
 
+## Optional complete-source Direct assessment
+
+- Private BPMN-owned optional replacement contract: `IBpmnDocumentDirectAdmission.CanPromote(WorkflowDefinitionState)`.
+- Consumer: `BpmnDocumentAdmissionValidator`; the optional Interchange Direct publishing feature
+  registers one scoped `BpmnDirectDocumentAdmission` with `TryAddScoped`. Ordinary composition has none.
+- `ValidateBpmnDirectAdmissionReplacementStartupTask` checks the shell's final service descriptors at startup
+  and rejects more than one owner before validation. Register a replacement before the default or use
+  `services.Replace(...)`; there is no ordered contributor selection or short-circuit aggregation.
+- It assesses the entire physical closed workflow using the same strict projection as Direct publication.
+  This content assessment suppresses only that validator's document execution diagnostic. Native
+  compilation, other validators, source authorization and immutable pin authorization remain independent.
+- Profiles remain the existing human formats 1/6 and service format 3; unsupported mixed content refuses.
+
 ## Published model references
 
 - Owning contract: Publishing Core `IExecutableCompilationSource`.

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Bpmn.Internal;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -33,10 +34,22 @@ internal static class BpmnAuthoredDirectProjection
             var root = state.RootActivity;
             if (root is null || root.Intrinsic is not null || root.ExecutionPlacement != ActivityExecutionPlacement.Inline ||
                 root.Inputs is null || root.Outputs is null || root.Inputs.Any() || root.Outputs.Any() ||
-                root.Structure is not { Kind: Process.StructureKind, SchemaVersion: Process.StructureSchemaVersion } structure)
+                root.Structure is not { Kind: Process.StructureKind } structure)
                 throw new BpmnModelValidationException("Direct publication requires a supported root BpmnProcess without native arguments or placement overrides.");
-            var authored = structure.Payload.Deserialize<BpmnAuthoredStructure>(Strict)
-                ?? throw new BpmnModelValidationException("The authored BPMN structure is missing.");
+            BpmnAuthoredStructure authored;
+            if (structure.SchemaVersion == BpmnAuthoredDocument.SchemaVersion)
+            {
+                try { authored = BpmnCompleteSourceDirectProjection.Read(root); }
+                catch (BpmnModelValidationException exception)
+                { throw new BpmnModelValidationException($"BPMN source '{root.NodeId}' cannot be directly published: {exception.Message}", exception); }
+            }
+            else if (structure.SchemaVersion == Process.StructureSchemaVersion)
+            {
+                BpmnLegacyStructureGuard.RejectCompleteSourceFields(structure.Payload);
+                authored = structure.Payload.Deserialize<BpmnAuthoredStructure>(Strict)
+                    ?? throw new BpmnModelValidationException("The authored BPMN structure is missing.");
+            }
+            else throw new BpmnModelValidationException("Direct publication requires an exact supported BPMN authored schema.");
             if (authored.Activities.Count != 0 || authored.Pools.Count != 0 || authored.MessageFlows.Count != 0)
                 throw new BpmnModelValidationException("The initial authored direct profile does not support native children or collaboration/message-flow bindings.");
             var humans = new List<string>();
