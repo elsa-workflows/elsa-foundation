@@ -587,7 +587,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         else
             row.Revision++;
     }
-    private static WorkflowExecutableSourceReference Read(WorkflowExecutableSourceReferenceEntity row, string expectedScope, string expectedId)
+    private static WorkflowExecutableSourceReference Read(WorkflowExecutableSourceReferenceEntity row, string expectedScope, string expectedId, RuntimeSourceReadLimits? sourceLimits = null)
     {
         try
         {
@@ -604,13 +604,26 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
                 row.DefinitionVersionIdHash != Hash(Decode(row.DefinitionVersionId)) ||
                 row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
                 throw new InvalidDataException("The persisted workflow executable source reference row is corrupt.");
-            var envelope = JsonNode.Parse(RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!)?.AsObject()
-                           ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
-            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
-                !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) ||
-                envelope["reference"] is null)
-                throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
-            var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
+            var content = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(row.SchemaVersion,
+                (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
+            WorkflowExecutableSourceReference value;
+            if (sourceLimits is null)
+            {
+                var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
+                if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
+                    !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) || envelope["reference"] is null)
+                    throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
+                value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
+            }
+            else
+            {
+                using var document = JsonDocument.Parse(content, new JsonDocumentOptions { MaxDepth = sourceLimits.MaxJsonDepth }); var envelope = document.RootElement;
+                if (envelope.EnumerateObject().Any(property => property.Name is not ("collection" or "artifactId" or "reference")))
+                    throw new RuntimeSourceReadException("runtime_source_reference_envelope_unsupported", true);
+                if (envelope.GetProperty("collection").GetString() != "workflowExecutableSourceReference" || Decode(envelope.GetProperty("artifactId").GetString()!) != Decode(row.ArtifactId))
+                    throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
+                value = RuntimeArtifactJson.DeserializeBounded<WorkflowExecutableSourceReference>(envelope.GetProperty("reference").GetRawText(), sourceLimits.MaxJsonDepth);
+            }
             Validate(value);
             if ((value.PublicationScope is { } physical ? physical.Value != expectedScope : value.TenantId is not null && value.TenantId != expectedScope) ||
                 EfRelationalIdentity.Decode(row.ScopeKey) != expectedScope ||
