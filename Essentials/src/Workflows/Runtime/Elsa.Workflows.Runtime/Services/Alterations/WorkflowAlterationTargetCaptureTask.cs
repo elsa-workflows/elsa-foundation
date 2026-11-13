@@ -161,7 +161,11 @@ public sealed class WorkflowAlterationTargetCaptureTask
                 state.RootVariableFrame?.Revision,
                 state.PinnedExecutable,
                 WorkflowAlterationCapturedConcurrencyValidator.CaptureActivities(activities),
-                state.Authority));
+                state.Authority,
+                // Spec 1221 FR-023: each root variable's own version, so ModifyVariable checks only the variable it changes.
+                state.RootVariableFrame is { } rootFrame
+                    ? rootFrame.Values.Keys.ToDictionary(key => key, key => rootFrame.VersionOf(key).Version, StringComparer.Ordinal)
+                    : null));
     }
 
     private static bool MatchesTenant(WorkflowExecutionState state, WorkflowAlterationAuthorityScope scope) =>

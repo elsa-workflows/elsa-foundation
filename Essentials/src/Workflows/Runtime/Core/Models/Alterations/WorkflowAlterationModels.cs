@@ -373,7 +373,8 @@ public sealed record WorkflowAlterationCapturedConcurrency(
     long? RootVariableFrameRevision,
     WorkflowExecutableIdentity? PinnedExecutable,
     IReadOnlyDictionary<string, string>? ActivityStateRevisions = null,
-    WorkflowExecutionAuthoritySnapshot? Authority = null);
+    WorkflowExecutionAuthoritySnapshot? Authority = null,
+    IReadOnlyDictionary<string, long>? RootVariableVersions = null);
 
 /// <summary>Lease carried by an at-least-once alteration job worker.</summary>
 public sealed record WorkflowAlterationJobClaim

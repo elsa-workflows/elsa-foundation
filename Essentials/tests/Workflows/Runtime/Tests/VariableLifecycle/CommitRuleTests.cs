@@ -108,6 +108,12 @@ public sealed class CommitRuleTests
 
         Assert.Equal(VariableValueDigest.Compute(a), VariableValueDigest.Compute(b));
         Assert.NotEqual(VariableValueDigest.Compute(a), VariableValueDigest.Compute(Int(1)));
+
+        // Escaped and plain strings, and numbers with and without an exponent, digest by meaning.
+        var escaped = Parse("{\"a\":\"\\u0078\",\"n\":[1.50,100,-0.0,0.001]}");
+        var plain = Parse("{\"a\":\"x\",\"n\":[15e-1,1E2,0,1e-3]}");
+        Assert.Equal(VariableValueDigest.Compute(escaped), VariableValueDigest.Compute(plain));
+        Assert.NotEqual(VariableValueDigest.Compute(plain), VariableValueDigest.Compute(Parse("{\"a\":\"x\",\"n\":[15e-1,1E2,0,1e-2]}")));
     }
 
     [Fact]
@@ -131,6 +137,9 @@ public sealed class CommitRuleTests
 
     private static ValueEnvelope Int(int value) =>
         ValueEnvelope.Inline(Int32Type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
+
+    private static ValueEnvelope Parse(string json) =>
+        ValueEnvelope.Inline(new ValueTypeDescriptor("Object"), JsonDocument.Parse(json).RootElement, ValueProtectionPolicy.InstanceInline);
 
     private static int Value(VariableFrameState frame) => frame.Values[Key].InlineValue!.Value.GetInt32();
 }

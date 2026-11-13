@@ -54,10 +54,14 @@ internal static class VariableLifecycleTestGraph
                 literal: ValueEnvelope.Inline(Int32Type, JsonSerializer.SerializeToElement(initial), ValueProtectionPolicy.InstanceInline)));
 
     /// <summary>A Parallel of two increment leaves of the given CLR type.</summary>
-    public static WorkflowExecutable ParallelIncrements(Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default)
+    public static WorkflowExecutable ParallelIncrements(Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default) =>
+        WorkflowExecutionHarness.NewExecutable(
+            Parallel(Increment("node-left", incrementActivity, mode), Increment("node-right", incrementActivity, mode)),
+            CountDeclaration());
+
+    /// <summary>A Parallel of the two given leaves.</summary>
+    public static ExecutableNode Parallel(ExecutableNode left, ExecutableNode right)
     {
-        var left = Increment("node-left", incrementActivity, mode);
-        var right = Increment("node-right", incrementActivity, mode);
         var root = new ExecutableNode(
             executableNodeId: "node-parallel",
             authoredActivityId: "authored-node-parallel",
@@ -84,11 +88,11 @@ internal static class VariableLifecycleTestGraph
                     }
                 })));
 
-        return WorkflowExecutionHarness.NewExecutable(root, CountDeclaration());
+        return root;
     }
 
     /// <summary>One increment leaf: input <c>Count</c> reads <c>count</c>; the result is captured into <c>count</c>.</summary>
-    public static ExecutableNode Increment(string nodeId, Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default, bool readsCount = true)
+    public static ExecutableNode Increment(string nodeId, Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default, bool readsCount = true, string captureKey = CountKey)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(incrementActivity);
         var projection = Assert.Single(contract.Result.Projections).Key;
@@ -100,15 +104,15 @@ internal static class VariableLifecycleTestGraph
             variable: new RuntimeVariableReference(CountKey, VariableReference.WorkflowScopeId));
         var capture = new RuntimeOutputCapture(
             projection,
-            $"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}count",
+            $"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}{(captureKey == CountKey ? "count" : "other")}",
             new RuntimeValueTypeDescriptor(Int32Type.Alias, WellKnownRuntimeDurableValueStorageDrivers.Json, null),
             DurableValueLifecycle.Instance,
             DurableValueStorage.Custom,
             captureOnSuccessfulCompletion: true,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [RuntimeMetadataKeys.TargetVariableReferenceKey] = CountKey,
-                [RuntimeMetadataKeys.VariableName] = "count"
+                [RuntimeMetadataKeys.TargetVariableReferenceKey] = captureKey,
+                [RuntimeMetadataKeys.VariableName] = captureKey == CountKey ? "count" : "other"
             });
 
         return new ExecutableNode(
