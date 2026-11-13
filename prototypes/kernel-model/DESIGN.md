@@ -134,7 +134,7 @@ run background jobs, read kept events, publish) is a message in that commit. A n
 ## Persistence
 
 The kernel depends on one storage contract, `IKernelStore` (`src/Kernel.Durable/Store.cs`), stated by what each operation
-guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 57 semantic cases,
+guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 58 semantic cases (57 before round 4),
 a concurrent stress test with injected connection failures and the provider's own connection killer, and the cost runs.
 
 | Operation | Guarantee |
@@ -448,8 +448,8 @@ numbers.
   innocent messages parked at the threshold in the 1,000-action runs, which invariant 14 allows.
 - **Mutation check:** 39 mutations at 20,000 runs (37 kernel flaws alone and two in combination): all caught but the two that another rule covers, at the first
   failing seeds round 3 recorded; the five native flaws are caught too.
-- **Store conformance suite:** 57 semantic cases pass (required) on in-memory, SQLite, PostgreSQL, SQL Server, MySQL
-  and MongoDB, with either fence; the reference cases differ where the contract is silent (F8). Round 4 made the two
+- **Store conformance suite:** the required cases (57 before round 4, 58 since) pass on in-memory, SQLite, PostgreSQL, SQL
+  Server, MySQL and MongoDB, with either fence, a case or two skipped where a store cannot refuse a row; the reference cases differ where the contract is silent (F8). Round 4 made the two
   subscription cases of M6 required (idempotent), and every store passes them (FINDINGS 25.2).
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and

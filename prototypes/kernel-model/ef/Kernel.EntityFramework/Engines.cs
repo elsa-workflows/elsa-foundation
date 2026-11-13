@@ -334,7 +334,8 @@ public sealed class MySqlEngine : Engine
         return rows[0];
     }
 
-    public override string SubscribeIfAbsent => Sql("""INSERT IGNORE INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3})""");
+    // Not INSERT IGNORE: IGNORE also turns a value too long into a warning and cuts it, where it must stay a definite error.
+    public override string SubscribeIfAbsent => Sql("""INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON DUPLICATE KEY UPDATE "Key" = "Key" """);
 
     public override async ValueTask SubscribeAsync(KernelDb db, SubscriptionRow s, CancellationToken cancellationToken) =>
         await db.Database.ExecuteSqlRawAsync(Sql("""INSERT IGNORE INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition", "Start") VALUES (@key, @instance, @wait, 0, @start)"""),
