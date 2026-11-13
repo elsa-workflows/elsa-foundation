@@ -102,7 +102,7 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
       if (!owns()) return;
       const previousState = currentState.current?.key === key ? currentState.current : null;
       const previous = previousState?.value ?? null;
-      if (previous && (intent === "poll" && !following || (intent === "poll" || intent === "refresh") && previous.pending.length >= 500)) return;
+      if (previous && (intent === "poll" && !following || (intent === "poll" || intent === "refresh") && previous.pending.length + (requestRef.current.limit ?? 100) > 500)) return;
       const kind = previous ? intent : "initial";
       const cursor = kind === "more" ? previous?.next : (kind === "poll" || kind === "refresh") ? previous?.liveNext ?? previous?.catchUp : null;
       if (kind !== "initial" && !cursor) return;
@@ -112,12 +112,10 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
       publish({ key, value: previous, loading: true, status: previous ? previousState?.status === "stale" ? "stale" : "ready" : "loading", error: previousState?.error ?? "" });
       try {
         if (!previous && !await supportsWorkflowHistory(context)) throw new ApiCapabilityUnavailableError("elsa.api.runtime", "workflow-history-page");
-        const requestedLimit = requestRef.current.limit ?? 100;
-        const limit = previous && (kind === "poll" || kind === "refresh")
-          ? Math.min(requestedLimit, 500 - previous.pending.length) : requestedLimit;
         const page = await getWorkflowHistoryPage(context, workflowExecutionId,
-          { ...requestRef.current, limit, continuationToken: cursor }, controller.signal);
+          { ...requestRef.current, limit: requestRef.current.limit ?? 100, continuationToken: cursor }, controller.signal);
         if (!current()) return;
+        if (page.coverage.state === "invalid") throw new RuntimeHistoryIdentityError("History integrity could not be established. Refresh after repair.");
         if (page.nextContinuationToken && page.nextContinuationToken === cursor) throw new RuntimeHistoryIdentityError("History continuation did not advance.");
         let value: HistoryWindow;
         if (!previous || kind === "initial") value = { page, items: page.items, pending: [], next: page.nextContinuationToken ?? null,
@@ -142,12 +140,13 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
       } catch (error) {
         if (!current()) return;
         const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
-        const unsupported = error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError;
+        const unsupported = status === 501 || error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError;
         const forbidden = status === 401 || status === 403;
-        const unsafe = error instanceof RuntimeHistoryIdentityError || status === 404;
+        const unsafe = error instanceof RuntimeHistoryIdentityError || status === 400 || status === 404 || status === 409;
         publish({ key, value: forbidden || unsafe || unsupported ? null : previous, loading: false,
           status: unsupported ? "unsupported" : forbidden ? "denied" : unsafe ? "unavailable" : previous ? "stale" : "failed",
           error: unsupported ? "This host does not support durable run history." : forbidden ? "Run history is unavailable with your current access."
+            : status === 400 ? "This history continuation is no longer valid. Retry to start a fresh bounded read."
             : status === 404 ? "This run history is unavailable or no longer retained."
               : error instanceof Error ? error.message : "Run history could not be read." });
         if (unsupported || forbidden || unsafe) return;
@@ -168,11 +167,12 @@ export function useRunHistory(context: StudioEndpointContext, workflowExecutionI
     publish({ ...value, value: { ...value.value, items: mergeHistoryEvents(value.value.items, value.value.pending), pending: [] } });
     issue("poll");
   }, [issue, publish]);
+  const bufferLimited = !!current?.value && current.value.pending.length + (requestRef.current.limit ?? 100) > 500;
   return {
     identity: key, value: current?.value ?? null,
     status: !auth.allowed ? "denied" as const : current?.status ?? "loading" as const,
     error: !auth.allowed ? "Sign in again to inspect run history." : !online ? "Offline · showing last confirmed history." : current?.error ?? "",
-    loading: enabled && visible && online && (current ? current.loading && !active.current?.signal.aborted : auth.allowed), paused: !following || !visible || !online,
+    loading: enabled && visible && online && (current ? current.loading && !active.current?.signal.aborted : auth.allowed), paused: !following || !visible || !online || bufferLimited, bufferLimited,
     following, setFollowing, refresh: () => issue(currentState.current?.key === currentKey.current && currentState.current.value?.catchUp ? "refresh" : "initial"), loadMore: () => issue("more"), showNew
   };
 }

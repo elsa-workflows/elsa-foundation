@@ -1,7 +1,7 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { capabilityIds, hasCapabilityLink, resolveCapabilityLink } from "./capabilities";
 import type { RuntimeHistoryBookmark, RuntimeHistoryBookmarkDetails, RuntimeHistoryBookmarkPage, RuntimeHistoryBookmarkRequest,
-  RuntimeHistoryEvent, RuntimeHistoryEventDetails, RuntimeHistoryPage, RuntimeHistoryRequest } from "../runtimeHistoryTypes";
+  RuntimeHistoryCoverage, RuntimeHistoryEvent, RuntimeHistoryEventDetails, RuntimeHistoryPage, RuntimeHistoryRequest } from "../runtimeHistoryTypes";
 
 export class RuntimeHistoryIdentityError extends Error {}
 
@@ -28,6 +28,7 @@ export async function getWorkflowHistoryPage(context: StudioEndpointContext, wor
   request: RuntimeHistoryRequest = {}, signal?: AbortSignal): Promise<RuntimeHistoryPage> {
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-page", { workflowExecutionId });
   const page = await context.http.getJson<RuntimeHistoryPage>(`${path}?${queryString(request)}`, { signal });
+  validateHistoryCoverage(page.coverage);
   let previous = 0;
   for (const event of page.items) {
     validateHistoryEvent(event, workflowExecutionId);
@@ -44,6 +45,7 @@ export async function getWorkflowHistoryEvent(context: StudioEndpointContext, wo
   historyEventId: string, signal?: AbortSignal): Promise<RuntimeHistoryEventDetails> {
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-event", { workflowExecutionId, historyEventId });
   const result = await context.http.getJson<RuntimeHistoryEventDetails>(path, { signal });
+  validateHistoryCoverage(result.coverage);
   validateHistoryEvent(result.event, workflowExecutionId, historyEventId);
   return result;
 }
@@ -52,6 +54,7 @@ export async function listWorkflowHistoryBookmarks(context: StudioEndpointContex
   request: RuntimeHistoryBookmarkRequest = {}, signal?: AbortSignal): Promise<RuntimeHistoryBookmarkPage> {
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-bookmarks", { workflowExecutionId });
   const result = await context.http.getJson<RuntimeHistoryBookmarkPage>(`${path}?${queryString(request)}`, { signal });
+  validateHistoryCoverage(result.coverage);
   for (const item of result.items) {
     validateHistoryBookmark(item, workflowExecutionId);
     if (request.activityExecutionId && !request.includeDescendants && item.bookmark.identity.activityExecutionId !== request.activityExecutionId)
@@ -64,6 +67,7 @@ export async function getWorkflowHistoryBookmark(context: StudioEndpointContext,
   bookmarkId: string, signal?: AbortSignal): Promise<RuntimeHistoryBookmarkDetails> {
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-history-bookmark", { workflowExecutionId, bookmarkId });
   const result = await context.http.getJson<RuntimeHistoryBookmarkDetails>(path, { signal });
+  validateHistoryCoverage(result.coverage);
   validateHistoryBookmark(result.bookmark, workflowExecutionId, bookmarkId);
   return result;
 }
@@ -73,4 +77,9 @@ function validateHistoryBookmark(item: RuntimeHistoryBookmark, run: string, expe
   if (!identity || identity.workflowExecutionId !== run || !identity.activityExecutionId || !identity.bookmarkId
     || expectedId && identity.bookmarkId !== expectedId)
     throw new RuntimeHistoryIdentityError("Bookmark history identity did not match this run or handle.");
+}
+
+function validateHistoryCoverage(coverage: RuntimeHistoryCoverage) {
+  if (coverage.state === "invalid")
+    throw new RuntimeHistoryIdentityError("History integrity could not be established. Refresh after repair.");
 }

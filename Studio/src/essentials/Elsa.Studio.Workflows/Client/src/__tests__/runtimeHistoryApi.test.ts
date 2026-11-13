@@ -66,3 +66,13 @@ it("uses each advertised relation independently when a legacy reader has no exac
   await expect(getWorkflowHistoryEvent(context, "run", "event-1")).rejects.toMatchObject({ name: "ApiCapabilityUnavailableError" });
   expect(getJson).toHaveBeenCalledTimes(2);
 });
+it.each(["page", "event", "bookmarks", "bookmark"] as const)("refuses explicit invalid coverage for %s without presenting confirmed content", async kind => {
+  const { context } = setup({ coverage: { ...historyCoverage, state: "invalid" }, items: [], event: historyEvent(), bookmark: historyBookmark(), readAt: "now" });
+  const reads = {
+    page: () => getWorkflowHistoryPage(context, "run"),
+    event: () => getWorkflowHistoryEvent(context, "run", "event-1"),
+    bookmarks: () => listWorkflowHistoryBookmarks(context, "run"),
+    bookmark: () => getWorkflowHistoryBookmark(context, "run", "bookmark-1")
+  };
+  await expect(reads[kind]()).rejects.toBeInstanceOf(RuntimeHistoryIdentityError);
+});

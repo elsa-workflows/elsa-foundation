@@ -128,19 +128,33 @@ it("refreshes from catch-up while paused without discarding manually loaded snap
   expect(observed.value?.items.map(item => item.sequence)).toEqual([1, 2]); expect(observed.value?.pending.map(item => item.sequence)).toEqual([6]);
   expect(observed.value?.next).toBe("snapshot-3"); expect(observed.value?.snapshotUpperSequence).toBe(5); expect(observed.paused).toBe(true);
 });
-it("bounds pending live rows to500 and resumes the exact catch-up after the reader shows them", async () => {
+it("pauses before a cursor-bound page could exceed500 pending rows and resumes without changing its limit", async () => {
   request = { limit: 500 };
   api.getWorkflowHistoryPage.mockResolvedValueOnce(historyPage([]))
     .mockResolvedValueOnce(historyPage(Array.from({ length: 499 }, (_, index) => historyEvent(index + 4)),
       { upperSequence: 502, scannedThroughSequence: 502, catchUpToken: "after-502" }))
-    .mockResolvedValue(historyPage([historyEvent(503)], { upperSequence: 503, scannedThroughSequence: 503, catchUpToken: "after-503" }));
+    .mockImplementation(async (_context, _run, query) => {
+      if (query.continuationToken && query.limit !== 500) throw Object.assign(new Error("cursor binding mismatch"), { status: 400 });
+      return historyPage([historyEvent(503)], { upperSequence: 503, scannedThroughSequence: 503, catchUpToken: "after-503" });
+    });
   render(); await settle(); await vi.advanceTimersByTimeAsync(2000); await settle();
-  expect(observed.value?.pending).toHaveLength(499);
-  await vi.advanceTimersByTimeAsync(2000); await settle();
-  expect(api.getWorkflowHistoryPage.mock.calls[2][2].limit).toBe(1);
-  expect(observed.value?.pending).toHaveLength(500);
-  await vi.advanceTimersByTimeAsync(10000); expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(3);
+  expect(observed.value?.pending).toHaveLength(499); expect(observed.bufferLimited).toBe(true); expect(observed.paused).toBe(true);
+  await vi.advanceTimersByTimeAsync(10000); expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(2);
   flushSync(() => observed.showNew()); await settle();
-  expect(observed.value?.items).toHaveLength(500);
-  expect(api.getWorkflowHistoryPage.mock.calls[3][2]).toMatchObject({ continuationToken: "after-503", limit: 500 });
+  expect(observed.value?.items).toHaveLength(499); expect(observed.value?.pending).toHaveLength(1);
+  expect(api.getWorkflowHistoryPage.mock.calls[2][2]).toMatchObject({ continuationToken: "after-502", limit: 500 });
+  expect(observed.status).toBe("ready");
+});
+it("clears a previously readable prefix when a successful page reports invalid coverage", async () => {
+  render(); await settle();
+  api.getWorkflowHistoryPage.mockResolvedValueOnce(historyPage([], { coverage: { ...historyPage().coverage, state: "invalid" } }));
+  await vi.advanceTimersByTimeAsync(2000); await settle();
+  expect(observed.status).toBe("unavailable"); expect(observed.value).toBeNull(); expect(observed.error).toContain("integrity");
+  await vi.advanceTimersByTimeAsync(10000); expect(api.getWorkflowHistoryPage).toHaveBeenCalledTimes(2);
+});
+it("recovers an invalidated continuation through an explicit fresh bounded read", async () => {
+  render(); await settle(); api.getWorkflowHistoryPage.mockRejectedValueOnce(Object.assign(new Error("invalid cursor"), { status: 400 }));
+  await vi.advanceTimersByTimeAsync(2000); await settle(); expect(observed.value).toBeNull(); expect(observed.status).toBe("unavailable");
+  flushSync(() => observed.refresh()); await settle();
+  expect(api.getWorkflowHistoryPage.mock.calls[2][2].continuationToken).toBeNull(); expect(observed.status).toBe("ready");
 });
