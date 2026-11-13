@@ -121,3 +121,10 @@ canonical terminal cleanup also removes any remaining history family. Confirmed 
 root deletion remains independent of history-only storage. Hard/access/schema failures clear staged
 tracker state, preserving rollback and preventing later accidental tombstone publication. Prefix
 retention still keeps replay receipts until this full run retirement; no capture capability is enabled.
+
+
+The existing public native aggregate selects one scoped independent EF mutation owner for both
+observation and retention only alongside its owned selected EF reader. Stable known default factory
+identity supports either registration order; explicit foreign readers/independent ports are preserved
+without invoking factories during selection. This installs no capture options or source profile and
+leaves native capture capability unadvertised pending complete provider/default-owner qualification.
