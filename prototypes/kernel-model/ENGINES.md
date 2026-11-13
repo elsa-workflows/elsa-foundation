@@ -1,5 +1,7 @@
 # Engines
 
+Commit hashes cited below are in the prototype's history, kept at the tag `prototype/kernel-model-history`.
+
 The EF store of the kernel model on PostgreSQL, SQL Server, MySQL and SQLite: the stress test of
 [FINDINGS.md](FINDINGS.md) section 4, the cost count of section 5, probes for what a review of the protocol predicted,
 the store conformance suite, and the fence broken on purpose on every engine.
@@ -33,7 +35,7 @@ nuget.org on 12 November 2026.
 dotnet build ef/Kernel.Ef.Run -c Release
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x stress|cost|probe|block|definite|deadlock <engine> "<connection>" [key=value ...]
 dotnet build ef/Kernel.Ef.Conformance -c Release
-dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll postgres|sqlserver|mysql "<server>" [--fence-in-batch] [--m5] semantic
+dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite <suite command> | postgres|sqlserver|mysql "<server>" [--fence-in-batch] [--m5] [--rcsi-off] [--rc] <suite command>   # suite command: semantic, semantic-broken, stress, cost
 ```
 
 `EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four
