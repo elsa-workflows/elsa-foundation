@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import type {
   StudioContributionRegistry,
   StudioExpressionEditorContribution,
@@ -46,7 +47,7 @@ function InputReferenceEditor({ descriptor, value, disabled, onChange }: StudioE
 
   return (
     <div className="wf-variable-picker">
-      <select
+      <StudioField label="Input reference"><select
         aria-label="Input reference"
         value={currentKey}
         disabled={disabled}
@@ -68,7 +69,7 @@ function InputReferenceEditor({ descriptor, value, disabled, onChange }: StudioE
             {incompatible.map(option => <InputOption key={option.input.referenceKey} {...option} disabled />)}
           </optgroup>
         ) : null}
-      </select>
+      </select></StudioField>
       {options.length === 0 ? (
         <p className="wf-variable-picker-note">No workflow inputs are available. Add one in workflow properties.</p>
       ) : null}

@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Clean-slate execution kernel: design record](clean-slate-kernel/README.md) - design sketch draft 5 (12 November 2026) of the proposed actor kernel, with every owner decision taken so far, and the interactive walkthrough. Proposed, not approved; program #4229.
 - [Execution-core SC-005: HTTP-level BPMN authorization on the Owned Workbench](exec-core-sc005-authz.md) - test-only hosted non-admin refusal on every registered BPMN HTTP endpoint (SQLite / one host). Tenant half and Studio half explicitly deferred. Does not complete #3650 or Program #2892.
 - [Execution-core S8: native and direct-BPMN migration and rollback](exec-core-migration-rollback.md) - docs-only statement on `a9771131c`: publish stores/tables re-verified vs `60d28493`, zero Runtime/Bpmn migrations since that SHA, ApiCompat of last-published Runtime.Core / Bpmn.Core, FR-015/016/SC-004 status, and the named unsupported list. Does not complete Program #2892.
 - [G1 common-mechanism inventory (native engine adapter vs BPMN adapter)](exec-core-g1-mechanism-inventory.md) - docs-only source inventory on `0944325db`: dispatch, resume, incidents, cancellation, retry, lease/fence, checkpoint; identical / deliberately different / unknown; no extraction.

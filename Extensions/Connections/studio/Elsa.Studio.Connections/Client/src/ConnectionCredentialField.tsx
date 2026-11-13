@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { pickConnectionSecrets } from "./connectionsApi";
@@ -130,7 +131,7 @@ export function ConnectionCredentialField({
               {visibleState.status === "error" ? "Retry" : "Refresh Secrets"}
             </button>
           </div>
-          <label htmlFor={selectId}>Existing Secret for {field.displayName}</label>
+          <StudioField controlId={selectId} label={<>Existing Secret for {field.displayName}</>}>
           <select
             id={selectId}
             value={selectedName}
@@ -155,7 +156,7 @@ export function ConnectionCredentialField({
             {visibleState.items.map(secret => (
               <option key={secret.name} value={secret.name}>{formatSecret(secret)}</option>
             ))}
-          </select>
+          </select></StudioField>
           <p
             id={statusId}
             className={`connection-secret-picker-status ${visibleState.status}`}
@@ -173,9 +174,7 @@ export function ConnectionCredentialField({
           ) : null}
         </div>
       ) : (
-        <label className="connection-new-credential" htmlFor={`${selectId}-value`}>
-          New value for {field.displayName}
-          <input
+        <StudioField className="connection-new-credential" controlId={`${selectId}-value`} label={<>New value for {field.displayName}</>}><input
             id={`${selectId}-value`}
             type="password"
             autoComplete="new-password"
@@ -185,8 +184,7 @@ export function ConnectionCredentialField({
             onBlur={() => setTouched(true)}
             value={value.source === "value" ? value.value : ""}
             onChange={event => onChange({ source: "value", value: event.target.value })}
-          />
-        </label>
+          /></StudioField>
       )}
       {validationMessage ? <p id={errorId} className="connection-credential-error" role="alert">{validationMessage}</p> : null}
     </fieldset>

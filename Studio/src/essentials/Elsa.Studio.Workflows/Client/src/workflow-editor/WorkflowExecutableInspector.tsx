@@ -1,6 +1,6 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
+import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
@@ -62,6 +62,7 @@ import {
 import { ExecutableRunButton } from "./ExecutableRunButton";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
+import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
@@ -415,7 +416,7 @@ export function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chose
             <Background />
             <FitReadOnlyFlowView nodeCount={flowNodes.length} />
             <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-            <Controls showInteractive={false} fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
+            <ReadOnlyFlowControls nodeCount={flowNodes.length} showInteractive={false} />
             <RetainFlowViewport />
           </ReactFlow>
         )}
