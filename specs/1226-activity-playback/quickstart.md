@@ -51,7 +51,6 @@ These supporting results do not establish T003 production/composed readiness. Ex
 | S14b `0f68c9ae6f` | EF2086 with recorded source-equivalence caveat; clean strict native272;0 fail/0 skip | [Projection correction handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6862730540) |
 | Owner S11c `57fa2bfed3` | Clean EF2124;0 fail/0 skip after recorded compile correction | [Staging receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6862226651) |
 | S14c `ccbc769989` | Clean EF2208 and strict native275;0 fail/0 skip | [Reader handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6862759814) |
-
 | S14c deferred correction `d79d214871` | EF2211 with recorded source-equivalence caveat; clean strict native275;0 fail/0 skip | [Deferred-read handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6864077533) |
 | S14d selected read adapter `da6b5e1895` | Clean complete EF2301, strict native278;0 fail/0 skip | [Selected-reader handoff](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6864442037) |
 | Owner F `d644cf6b61` / `453c48cbf2` | Clean EF2192 at d644; clean strict native273 at owning test-import correction453;0 fail/0 skip | [Retention qualification](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6864444640) |
