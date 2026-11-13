@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -385,6 +386,47 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         Assert.NotNull(payload.Deserialize<RuntimeResumeBookmarkCommandPayload>()!.ExpectedBookmarkResume);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task A_retained_required_delivery_profile_refuses_a_removed_module_or_original_constructor_even_for_an_unmatched_wait(
+        bool originalConstructor, bool removedWait)
+    {
+        using var f = await Fixture.CreateAsync();
+        await f.CreateWaitAsync("wait");
+        if (removedWait) await f.Bookmarks.DeleteAsync("run", "wait");
+        using var host = f.HistoryFreeHost();
+        using var scope = host.CreateScope();
+        var dispatcher = originalConstructor ? f.OriginalConstructorDispatcher() : scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>();
+        var request = new BookmarkResumeDispatchRequest("run", "task", "hash")
+            { HistoryCausation = new(WorkflowExecutionId: "run", HistoryEventId: "forged-receipt") };
+        var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () => await dispatcher.DispatchAsync(request));
+        Assert.Equal("runtime.history.capture-unavailable", failure.Code);
+        Assert.Empty(f.Actors.Activations);
+        Assert.DoesNotContain((await f.History.ReadPageAsync(new("run"))).Items,
+            e => e.Authority == RuntimeHistoryAuthority.DeliveryObservation);
+    }
+
+    [Theory]
+    [InlineData(false, "uncaptured")]
+    [InlineData(true, "uncaptured")]
+    [InlineData(false, "core-only")]
+    [InlineData(true, "core-only")]
+    public async Task A_history_free_dispatcher_keeps_older_profiles_eligible_without_observer_resolution(bool originalConstructor, string profile)
+    {
+        using var f = await Fixture.CreateAsync(profile: profile);
+        await f.CreateWaitAsync("wait");
+        using var host = f.HistoryFreeHost();
+        using var scope = host.CreateScope();
+        var dispatcher = originalConstructor ? f.OriginalConstructorDispatcher() : scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>();
+        Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, (await dispatcher.DispatchAsync(Request())).Status);
+        Assert.Single(f.Actors.Actor.Envelopes);
+        Assert.Equal(0, f.Probe.FactoryCalls);
+        Assert.False(f.Actors.Actor.Envelopes[0].Command.Payload!.Value.TryGetProperty("HistoryCausation", out _));
+    }
+
     private sealed class LegacyDispatcher : IBookmarkResumeDispatcher
     {
         public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request,
@@ -473,6 +515,29 @@ public sealed class RuntimeHistoryBookmarkDeliveryOwnerTests
         internal InMemoryRuntimeCheckpointCommitStore Commits { get; }
         internal IBookmarkResumeDispatcher Dispatcher { get; }
         internal IStimulusRouter Router => _scope.ServiceProvider.GetRequiredService<IStimulusRouter>();
+
+        internal IBookmarkResumeDispatcher OriginalConstructorDispatcher() => new BookmarkResumeDispatcher(
+            _scope.ServiceProvider.GetRequiredService<IBookmarkStimulusLookup>(), Workflows,
+            _scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>(), _scope.ServiceProvider.GetRequiredService<IBookmarkResumeResolver>(),
+            Actors, _scope.ServiceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>(), Clock);
+
+        internal ServiceProvider HistoryFreeHost()
+        {
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddSingleton<TimeProvider>(Clock);
+            services.AddSingleton<IPersistenceAccessContextAccessor>(Access);
+            services.AddSingleton<IWorkflowExecutionActorProvider>(Actors);
+            services.AddSingleton<IWorkflowExecutionStateStore>(Workflows);
+            services.AddSingleton<IActivityExecutionStateStore>(Activities);
+            services.AddSingleton<IBookmarkStateStore>(Bookmarks);
+            services.AddSingleton<IBookmarkStimulusLookup>(new BookmarkStimulusLookup(Bookmarks));
+            services.AddSingleton<IWorkflowExecutableStore>(_scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+            services.AddSingleton<IRuntimeCheckpointCommitStore>(Commits);
+            services.AddSingleton(_scope.ServiceProvider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>());
+            services.AddWorkflowRuntime();
+            return services.BuildServiceProvider(validateScopes: true); // No history options, observer, reader or capture registration.
+        }
 
         internal static async Task<Fixture> CreateAsync(bool coalescing = false, string profile = "captured")
         {

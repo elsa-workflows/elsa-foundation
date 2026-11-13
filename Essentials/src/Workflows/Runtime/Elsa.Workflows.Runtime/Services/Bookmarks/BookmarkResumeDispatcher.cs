@@ -118,13 +118,18 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         cancellationToken.ThrowIfCancellationRequested();
         BookmarkResumeDispatchResult Unmatched() => new(BookmarkResumeDispatchStatus.NotFound, request.WorkflowExecutionId,
             reason: "The exact saved wait is retired or no longer eligible.");
-        if (_historyServices is null && _history is null && _historyReader is null)
-            return unmatched is null ? await DispatchCoreAsync(request, options, saved, cancellationToken, request.HistoryCausation) : Unmatched();
         var source = saved?.Source ?? unmatched?.Source;
         var target = saved?.Expected ?? unmatched?.Expected ?? request.ExpectedRecipient;
         var receivedAt = _timeProvider.GetUtcNow();
-        var owner = await _workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
+        var owner = saved?.Workflow ?? await _workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
         var policy = owner?.HistoryCapturePolicy;
+        if (_historyServices is null && _history is null && _historyReader is null)
+        {
+            // Module absence or an original constructor cannot waive an already pinned delivery obligation.
+            if (policy?.SupportedKinds.Contains("DeliveryReceived", StringComparer.Ordinal) == true)
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The retained delivery profile requires its observation owner.");
+            return unmatched is null ? await DispatchCoreAsync(request, options, saved, owner, cancellationToken, request.HistoryCausation) : Unmatched();
+        }
         string? receiptId = null, receiptEventId = null;
         RuntimeHistoryCausation? cause = null;
         if (policy?.SupportedKinds.Contains("DeliveryReceived", StringComparer.Ordinal) == true)
@@ -148,7 +153,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         var queuedCause = receiptEventId is null ? request.HistoryCausation :
             new RuntimeHistoryCausation(HistoryEventId: receiptEventId, WorkflowExecutionId: request.WorkflowExecutionId, DeliveryId: cause!.DeliveryId);
         BookmarkResumeDispatchResult result;
-        try { result = unmatched is null ? await DispatchCoreAsync(request, options, saved, cancellationToken, queuedCause) : Unmatched(); }
+        try { result = unmatched is null ? await DispatchCoreAsync(request, options, saved, owner, cancellationToken, queuedCause) : Unmatched(); }
         catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception primary)
@@ -233,7 +238,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
     }
 
     private async ValueTask<BookmarkResumeDispatchResult> DispatchCoreAsync(BookmarkResumeDispatchRequest request,
-        WorkflowExecutionCommandDispatchOptions? dispatchOptions, SavedBookmarkResume? saved, CancellationToken cancellationToken,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions, SavedBookmarkResume? saved, WorkflowExecutionState? observedOwner, CancellationToken cancellationToken,
         RuntimeHistoryCausation? historyCause = null)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -254,7 +259,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
                 lookup: lookup);
 
         var bookmark = lookup.Bookmark!;
-        var workflowExecution = saved?.Workflow ?? await _workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
+        var workflowExecution = saved?.Workflow ?? observedOwner;
         if (workflowExecution is null)
             return new BookmarkResumeDispatchResult(
                 BookmarkResumeDispatchStatus.WorkflowExecutionMissing,
