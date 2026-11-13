@@ -118,6 +118,9 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             if (trigger is null || string.IsNullOrEmpty(trigger.Key) || string.IsNullOrEmpty(trigger.Element) ||
                 BpmnModel.StartWait(_process.Id, trigger) != supplied.Wait)
                 throw new InvalidOperationException("Invalid BPMN event start; register it through BpmnModel.MessageStart.");
+            if (!_process.Graph.StartEvents.Any(e => e.ElementId == trigger.Element &&
+                    BpmnElementFamilies.Resolve(e) == BpmnElementFamilies.StartEventMessage))
+                throw new InvalidOperationException($"'{trigger.Element}' is not a message start event of BPMN process '{_process.Id}'.");
             _s.TakenEvents.Add(new ConsumedEvent(trigger.Key, supplied.Event));
             signal = new BpmnStartSignal(trigger.Element);
         }

@@ -19,6 +19,12 @@ internal static class MessageStartChecks
                 work["again"] = new MessageWork("payment", "account");
                 p.Chain("start", "again");
             }
+            if (name == "shipment")
+            {
+                p.B.StartEvent("signal-only", null, new BpmnEventDefinition(BpmnEventDefinitionTypes.Signal));
+                p.B.EndEvent("signal-end");
+                p.Chain("signal-only", "signal-end");
+            }
             p.B.EndEvent("end");
             p.Chain(name == "payment" ? "again" : "start", "end");
             registry.Add(new BpmnProcess(p.Build(), work));
@@ -74,6 +80,21 @@ internal static class MessageStartChecks
         var original = store.Instances[firstTarget];
         check(original.Status == InstanceStatus.Finished && Json.Read<BpmnState>(original.State).Variables.GetValueOrDefault("accepted")?.ToString() == "fresh",
             "a fresh publication completes the original instance's waiting catch");
+
+        var shipment = store.Instances[Events.Deliver(shipped, ship).Target.Id];
+        check(shipment.Status == InstanceStatus.Finished && Json.Read<BpmnState>(shipment.State).TakenEvents.Contains(new ConsumedEvent(ship.Key, shipped.Id)),
+            "a process with message and signal start events accepts its registered message start");
+        foreach (var element in new[] { "signal-only", "signal-end" })
+        {
+            var wrong = BpmnModel.MessageStart("shipment", element, "misconfigured", element);
+            await Events.SubscribeAsync(store, wrong, 1);
+            var publication = new EventRow(wrong.Key, element, null, 1000);
+            await Events.PublishAsync(store, publication);
+            await Drain();
+            var rejected = store.Instances[Events.Deliver(publication, wrong).Target.Id];
+            check(rejected.Status == InstanceStatus.Faulted && rejected.Fault?.Contains($"'{element}' is not a message start event", StringComparison.Ordinal) == true,
+                $"message registration targeting '{element}' faults with the invalid start element");
+        }
 
         var incomplete = new SubscriptionRow("raw", "", "start", BpmnModel.Spec("shipment"));
         await Events.SubscribeAsync(store, incomplete, 1);
