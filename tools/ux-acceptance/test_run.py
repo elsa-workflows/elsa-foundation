@@ -278,6 +278,8 @@ class SourcePairTests(unittest.TestCase):
             self.assertEqual("backend-head", report["sourceSha"])
             self.assertEqual("frontend-head", report["studioSourceSha"])
             self.assertEqual("frontend-head", report["isolatedFieldGallery"]["sourceSha"])
+            self.assertFalse(report["isolatedFieldGallery"]["portOverrideConfirmed"])
+            self.assertNotIn("url", report["isolatedFieldGallery"])
 
 
 if __name__ == '__main__':
@@ -294,6 +296,10 @@ class FieldGalleryVerdictTests(unittest.TestCase):
                 {'contentType': 'image/png', 'path': str(screenshot)}]}]}
             report = {'config': {'metadata': {'outlinedCases': 1}}, 'suites': [{'specs': [{'title': 'Theme states', 'tests': [test]}]}]}
             self.assertEqual(1, acceptance.field_gallery_verdict(report, root))
+            self.assertEqual(1, acceptance.field_gallery_verdict(report, root, 4567))
+            report['config']['metadata']['outlinedBaseURL'] = 'http://127.0.0.1:4567'
+            self.assertEqual(1, acceptance.field_gallery_verdict(report, root, 4567))
+            with self.assertRaises(ValueError): acceptance.field_gallery_verdict(report, root, 7654)
             for change in ('empty', 'missing', 'duplicate', 'skip', 'retry', 'no-image', 'inline-only', 'external-image'):
                 with self.subTest(change=change):
                     broken = copy.deepcopy(report)

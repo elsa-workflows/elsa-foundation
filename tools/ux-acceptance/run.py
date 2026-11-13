@@ -169,7 +169,7 @@ def verdict(report, artifacts, journeys=None):
     return len(rows)
 
 
-def field_gallery_verdict(report, artifacts):
+def field_gallery_verdict(report, artifacts, requested_port=None):
     """Retain renderer-level evidence separately from composed product acceptance."""
     rows = []
     def walk(suites):
@@ -182,6 +182,9 @@ def field_gallery_verdict(report, artifacts):
     expected = report.get('config', {}).get('metadata', {}).get('outlinedCases')
     if not expected or len(rows) != expected or len({title for title, _ in rows}) != expected or report.get('errors'):
         raise ValueError('Incomplete Outlined field gallery inventory')
+    observed_url = report.get('config', {}).get('metadata', {}).get('outlinedBaseURL')
+    if requested_port is not None and observed_url is not None and observed_url != f'http://127.0.0.1:{requested_port}':
+        raise ValueError('The selected frontend gallery did not use its requested owned port')
     for title, test in rows:
         results = test.get('results', [])
         if test.get('expectedStatus') != 'passed' or test.get('status') != 'expected' or len(results) != 1 or results[0].get('status') != 'passed':
@@ -293,8 +296,14 @@ def run(output, journey=None, studio_root=None):
         gallery_port = free_port()
         command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
                 output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port)))
-        report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(json.loads((gallery / 'playwright.json').read_text()), gallery),
-                                          'sourceSha': studio_sha, 'kind': 'isolated-shared-components', 'url': f'http://127.0.0.1:{gallery_port}'}
+        gallery_report = json.loads((gallery / 'playwright.json').read_text())
+        gallery_url = gallery_report.get('config', {}).get('metadata', {}).get('outlinedBaseURL')
+        report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(gallery_report, gallery, gallery_port),
+                                          'sourceSha': studio_sha, 'kind': 'isolated-shared-components', 'portOverrideConfirmed': gallery_url is not None}
+        # Older selected frontend revisions keep their own strict fixed-port config. Its
+        # successful renderer proof remains valid, but an ignored override is not an observed URL.
+        if gallery_url is not None:
+            report['isolatedFieldGallery']['url'] = gallery_url
         report['stage'] = 'build'
 
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
