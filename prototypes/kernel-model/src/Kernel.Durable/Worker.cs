@@ -70,6 +70,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly HashSet<string> _behind = new(StringComparer.Ordinal);            // own rows written while catching up, not yet polled
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local;
+    private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
     private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp, _woken;
     private string _refusal = "";
     private readonly HashSet<Delivery> _trial = [];     // the suspects being tried now, with nothing else in flight (finding F2)
@@ -102,6 +103,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
+
+    /// <summary>Database time as far as this worker knows, whatever the flaws: what the lease is reckoned in.</summary>
+    private long DbNow => _anchor + _options.Monotonic();
 
     public bool Taking => _taking;
     public bool Polling => _polling;
@@ -152,8 +156,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     /// <summary>
     /// One pass, as the hosts drive a worker: read the inbox if woken, load, read kept events, run every turn that is
-    /// ready (in id order), and flush. Zero when the pass found work at its start; otherwise the time until the
-    /// earliest timer held in memory, or null. A cancelled token stops it before the next turn and before the flush.
+    /// ready (in id order), and flush; then, if no commit has renewed the lease for a third of it, beat (an empty fenced
+    /// commit, which also tells a stale owner that it is one). Zero when the pass found work at its start; otherwise the
+    /// time until the earliest timer held in memory or the next beat, whichever is sooner; null once the scope is not
+    /// held. A runtime that calls again when asked therefore keeps an idle scope's lease. A cancelled token stops the
+    /// pass before the next turn, the flush and the beat.
     /// </summary>
     public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
     {
@@ -172,11 +179,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
             RunTurn(id);
         }
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
+        if (!cancellationToken.IsCancellationRequested && Owns && DbNow >= RenewBy) await BeatAsync(cancellationToken);
+        if (!Owns) return null;
         if (busy) return TimeSpan.Zero;
         var now = Now;
-        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value).DefaultIfEmpty(long.MaxValue).Min();
-        return next == long.MaxValue ? null : TimeSpan.FromMilliseconds(next - now);
+        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now).DefaultIfEmpty(long.MaxValue).Min();
+        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(next, RenewBy - DbNow)));     // never zero: zero means there is work
     }
+
+    /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>
+    private long RenewBy => _renewed + (long)(_options.Lease.TotalMilliseconds / 3);
 
     // ---- ownership ---------------------------------------------------------------------------------------------
 
@@ -191,6 +203,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (lease is null) return;
         Reset();    // a take starts from empty memory
         Observe(lease.Now);
+        _renewed = lease.Now;
         Epoch = lease.Epoch;
         Position = lease.Position;
         _mine.Add(lease.Epoch);
@@ -577,6 +590,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
         while (true)
         {
+            // When the lease is renewed at the latest, as far as this worker can tell: its estimate of database time
+            // never runs ahead of the database, and the commit executes after it is sent. A store may answer without
+            // the database's time (Now 0). The EF store with the fence in the batch writes the lease from the node's
+            // own clock instead (ENGINES.md); a beat at a third of the lease then tolerates up to two thirds of a lease
+            // of skew between the node's clock and the database's.
+            var sending = DbNow;
             Committed result;
             try { result = await _store.CommitAsync(batch, cancellationToken); }
             catch (StoreException e) when (e.Failure != Failure.Unknown)
@@ -599,6 +618,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             Position += batch.Positions;
             Observe(result.Now);
+            _renewed = Math.Max(_renewed, sending);      // a commit that lands renews the lease
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
                 else item.Marked = true;
