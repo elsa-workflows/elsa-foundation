@@ -346,6 +346,8 @@ public sealed partial class EfExecutableActivityTemplateStore(
                 using var document = JsonDocument.Parse(content, new JsonDocumentOptions { MaxDepth = sourceLimits.MaxJsonDepth }); var envelope = document.RootElement;
                 if (envelope.EnumerateObject().Any(property => property.Name is not ("collection" or "templateHash" or "template")))
                     throw new RuntimeSourceReadException("runtime_source_template_envelope_unsupported", true);
+                if (!envelope.TryGetProperty("collection", out _) || !envelope.TryGetProperty("templateHash", out _) || !envelope.TryGetProperty("template", out _))
+                    throw new RuntimeSourceReadException("runtime_source_stored_content_invalid");
                 if (envelope.GetProperty("collection").GetString() != "executableActivityTemplate" || Decode(envelope.GetProperty("templateHash").GetString()!) != row.TemplateHash)
                     throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
                 value = RuntimeArtifactJson.DeserializeBounded<ExecutableActivityTemplate>(envelope.GetProperty("template").GetRawText(), sourceLimits.MaxJsonDepth);
