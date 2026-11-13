@@ -1400,7 +1400,8 @@ describe("Activity Definitions experience", () => {
         return definition({ displayName: "Before authority change" });
       }
       if (url === "/design/activities/drafts/draft-1") return draftDetail();
-      return page([]);
+      if (url === "/design/activities/versions/version-1") return versionDetail();
+      throw new Error(`Unexpected GET ${url}`);
     });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     // An unrelated cached definition must stay redacted, not be fetched speculatively.
