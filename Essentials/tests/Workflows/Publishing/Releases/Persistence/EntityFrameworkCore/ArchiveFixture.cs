@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests;
 
@@ -79,7 +80,9 @@ internal sealed class ArchiveFixture
             if (interceptor is not null) options.AddInterceptors(interceptor);
         });
         services.AddReleaseArchiveStore<ConsumerContext>(_ => selected, limits, requireDurable);
-        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        provider.GetService<IStartupValidator>()?.Validate();
+        return provider;
     }
 }
 

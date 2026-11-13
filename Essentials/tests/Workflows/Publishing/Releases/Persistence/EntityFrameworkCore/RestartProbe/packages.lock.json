@@ -236,7 +236,8 @@
           "Microsoft.Data.Sqlite": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
-          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
         }
       },
       "elsa.workflows.runtime.core": {

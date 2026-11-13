@@ -18,6 +18,10 @@ services.AddReleaseArchiveStore<ApplicationDbContext>(provider =>
     new SourceScope(trustedPartition, trustedTenant, "workflow-release-archive", trustedAuthority));
 ```
 
+Only connection-string configured options are accepted. `UseSqlite(existingConnection)` is refused with
+`archive_shared_connection_unsupported` before archive I/O, including when the context owns that connection.
+No caller connection or transaction is reused or disposed by an archive-owned context.
+
 Every archive-owned context uses a cloned concrete `DbContextOptions<TContext>` with the existing
 `EfRelationalProviderBinding.ConfigureSqliteConnectionSafety` mitigation, including the fresh template handed to
 `EfSharedTransaction`. Caller options and tracked state are untouched; unknown/nonconcrete options shapes refuse explicitly.
@@ -71,3 +75,10 @@ The test project builds its own `RestartProbe`. Its interruption witness kills t
 insert, verifies a live reader sees no partial capture, and then verifies an independent process reopens all original bytes.
 Test setup explicitly creates test schemas; this is not adapter startup behavior. See the separate
 [archive contract](../../../../../../../specs/1225-workflow-release-promotion/contracts/archive-store.md) for boundaries.
+
+Backend registration rejects competing selections. Deliberately replacing a valid prior default selection requires
+`replaceExisting: true`; all three ports move together. Late duplicates or partial replacements are detected before
+default facade/context resolution and through `ValidateOnStart`. Generic Host runs startup validation automatically;
+CShell hosts use the existing shell startup-validation bridge. Standalone providers must call
+`provider.GetService<IStartupValidator>()?.Validate()` after final composition and before using archive ports,
+including when custom registrations bypass the default factories. No separate hosted service is installed.

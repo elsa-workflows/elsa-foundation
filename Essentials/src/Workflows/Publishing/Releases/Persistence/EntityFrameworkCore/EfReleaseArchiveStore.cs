@@ -265,6 +265,9 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
     {
         if (configured.GetType() != typeof(TContext) || configured.GetService<IDbContextOptions>() is not DbContextOptions<TContext> options)
             throw new ReleaseArchiveStoreException("archive_context_options_unsupported");
+        // An explicit connection would share the caller's transaction and disposal ownership.
+        if (RelationalOptionsExtension.Extract(options).Connection is not null)
+            throw new ReleaseArchiveStoreException("archive_shared_connection_unsupported");
         var builder = new DbContextOptionsBuilder<TContext>(options);
         EfRelationalProviderBinding.ConfigureSqliteConnectionSafety(builder);
         var constructor = typeof(TContext).GetConstructor([typeof(DbContextOptions<TContext>)]) ??

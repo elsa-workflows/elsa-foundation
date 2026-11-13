@@ -8,6 +8,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
     <ProjectReference Include="../Core/Elsa.Workflows.Publishing.Releases.Persistence.Core.csproj" />
     <ProjectReference Include="../../../../../Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="../../../../Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />

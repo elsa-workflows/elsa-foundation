@@ -376,7 +376,7 @@
         }
       },
       "Microsoft.Extensions.Options": {
-        "type": "CentralTransitive",
+        "type": "Direct",
         "requested": "[10.0.10, )",
         "resolved": "10.0.10",
         "contentHash": "srnhnk7nE8krBiIXp71LvBmKBtraBONWSRzdjJgRv1Ko9Mp8IVNqv4vIS9hGeVteBig8aQkva9ZG+sC+o5sVcA==",
