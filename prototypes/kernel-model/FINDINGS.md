@@ -1158,11 +1158,14 @@ plan's aims at it), so that it bites is not shown.
   - A delete in the tail removes the view.
   - Three reads, no write.
 - **A new store read.** `IKernelStore.ReadJournalOfAsync(partition, instance, after)` gives one instance's journal rows
-  past a position. The in-memory, EF and MongoDB stores answer it from their (partition, instance) index. The other
-  implementations (wrappers, the simulation's wire) take the interface's default, which pages through the partition's
-  journal.
-- **Catch-up on request** (`Projector.CatchUpAsync`). It runs a round once any round in flight has ended. A request
-  that comes while one waits gets the same round.
+  past a position. The EF and MongoDB stores answer it from their (partition, instance) index; the in-memory store
+  scans its rows. The other implementations (wrappers, the simulation's wire) take the interface's default, which
+  pages through the partition's journal.
+- **Catch-up on request** (`Projector.CatchUpAsync`). It completes once rounds that started after the request have
+  brought the projection to the partition's position as they read it: a full page, or a write another projector beat,
+  is followed by another round. Requests are coalesced: all that arrive before such a round starts are served by it.
+  A round already under way when a request arrives does not serve it. A failed round fails the request. The timer's
+  `RoundAsync` is unchanged.
 
 **Not built:** live watching, Studio's push stream of committed entries.
 
@@ -1173,18 +1176,20 @@ plan's aims at it), so that it bites is not shown.
     would show 4 commits instead of 3 (reasoned from the case, not run).
   - Catch-up requests coalesced, and the projection current afterwards.
 - **Where they pass:** in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB.
-- **The simulation** (I6 for the viewer). After every action, while the journal has at most 3,000 rows, the tail read
-  of every instance equals what its whole journal says, whatever the projectors have done.
+- **The simulation** (I6 for the viewer). After every action the tail read of every instance (the cursor, its view, its
+  rows past the cursor, merged) equals what its whole journal says, whatever the projectors have done. It runs on the
+  in-memory rows directly, in one pass over the journal; it checks the merge against every state the projectors leave,
+  not an interleaving of the reads (the conformance case does that).
 
 **Gates.**
 
 | Gate | Before (25.7) | After |
 |---|---|---|
-| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped |
+| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped (the catch-up case cannot overlap rounds on a store that answers at once; it checks the outcome only) |
 | SQLite, PostgreSQL (default fence) | 55 passed, 2 or 3 reference differ | 58 passed, the same reference cases differ |
 | SQL Server, MySQL (default) | 54 passed, 3 reference differ, 1 skipped | 57 passed, the same |
 | MongoDB | 58 passed | 61 passed |
-| `$SIM --seeds 4000` | 0 failed | 0 failed, with the new check |
+| `$SIM --seeds 20000` | 0 failed | 0 failed, with the new check (16.8 s on this machine) |
 | `$SIM --seeds 4000 --flaw ProjectorBlindWrite` | caught | caught, at the same seed (25) |
 
 **Not run:** the full simulation gates, because the kernel's turns, commits and schedules are unchanged. The check

@@ -362,8 +362,8 @@ journal tail. It reads the projector's cursor first, then the view, then the ins
 (`IKernelStore.ReadJournalOfAsync`, on the index on (partition, instance)), and merges them in memory. A round that
 commits between the reads is in both; the merge takes a tail row only past the view's revision, which grows with the
 position for one instance. So the view is current, committed history only, three reads, no write and no call to an
-owner. `Projector.CatchUpAsync` runs a round on request; requests while one waits share it. Live watching (a push
-stream) is not built.
+owner. `Projector.CatchUpAsync` brings the projection to the partition's position with rounds that start after the
+request; requests that arrive before such a round starts share it. Live watching (a push stream) is not built.
 
 ## Invariants (what the simulation checks)
 

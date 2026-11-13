@@ -122,14 +122,16 @@ public sealed partial class World
             else if (!projected.TryGetValue(id, out var expected) || expected != (view.Revision, view.Commits))
                 return $"I6 the view of {id} says revision {view.Revision} after {view.Commits} commits; the journal up to the projector says {expected.Revision} after {expected.Commits}";
         if (projected.Keys.FirstOrDefault(id => !Store.Views.ContainsKey(id)) is { } unseen) return $"I6 the projector passed the journal rows of {unseen} and has no view of it";
-        // I6 for the viewer (decision 11): the tail read, whatever the projectors have done, says what the whole journal says.
-        if (Store.Journal.Count <= 3_000)
-            foreach (var group in Store.Journal.Values.GroupBy(j => j.Instance))
-            {
-                var whole = Viewer.Merge(group.Key, null, group.ToList());
-                var read = Viewer.ReadAsync(Store, group.First().Partition, group.Key).AsTask().Result;
-                if (whole != read) return $"I6 the tail read of {group.Key} says {read?.Revision}:{read?.Commits}; the journal says {whole?.Revision}:{whole?.Commits}";
-            }
+        // I6 for the viewer (decision 11): the tail read (cursor, view, the instance's rows past the cursor, merged) says
+        // what the instance's whole journal says, whatever the projectors have done. One pass over the journal.
+        foreach (var group in Store.Journal.Values.GroupBy(j => j.Instance))
+        {
+            var rows = group.OrderBy(j => j.Position).ToList();
+            var cursor = Store.Projection[rows[0].Partition];
+            var read = Viewer.Merge(group.Key, Store.Views.GetValueOrDefault(group.Key), rows.Where(j => j.Position > cursor).ToList());
+            var whole = Viewer.Merge(group.Key, null, rows);
+            if (whole != read) return $"I6 the tail read of {group.Key} says {read?.Revision}:{read?.Commits}; the journal says {whole?.Revision}:{whole?.Commits}";
+        }
         foreach (var (id, revisions) in commits)
         {
             revisions.Sort();
