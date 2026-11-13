@@ -99,9 +99,9 @@ public sealed class ReleaseCaptureContributorTests
             descriptor.PayloadDigest, descriptor.ByteLength + 1), original.Member.OwnerVersion), original.Payload);
         var first = new Reader([original], () => true); var second = new Reader([alias], () => true);
         var contributor = new Contributor("must-not-start", _ => []); var completes = 0;
-        var refused = await Assert.ThrowsAsync<ReleaseCaptureException>(() => new ReleaseCaptureContributors([contributor]).ExecuteAsync(
+        var refused = await Assert.ThrowsAsync<ReleaseCaptureException>(() => new CaptureReleaseSourceMembers([contributor]).Handle(new ReleaseSourceMembersCapturing(
             [new(first, []), new(second, [])], new() { TransportLimits = new() { MaxExpandedBytes = descriptor.ByteLength } },
-            (_, _) => { completes++; return ValueTask.CompletedTask; }, default).AsTask());
+            (_, _) => { completes++; return ValueTask.CompletedTask; }), default));
         Assert.Equal("capture_member_conflict", refused.Code); Assert.Equal(0, contributor.Calls);
         Assert.Equal(0, first.Reads); Assert.Equal(0, second.Reads); Assert.Equal(0, completes);
     }
