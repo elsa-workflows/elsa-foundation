@@ -55,6 +55,7 @@ $SIM --seeds 20000 --actions 1000                    # 20,000 seeds of 1,000 act
 $SIM --native --seeds 200000                         # the same with native instances in the mix (40 % of outside actions)
 $SIM --native --seeds 20000 --actions 1000
 $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a shrunk trace when it fails
+$SIM --lease-check                                   # deterministic late-ack, scheduler and takeover witness (LEASE.md)
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
 $SIM --native --native-flaw ResumeAnyChild --seed 1  # replay one native flaw

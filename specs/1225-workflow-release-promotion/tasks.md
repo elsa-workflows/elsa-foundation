@@ -2,7 +2,7 @@
 
 Input: [spec](spec.md), [plan](plan.md), [model](data-model.md), [contracts](contracts/), [qualification guide](quickstart.md).
 Status: in progress; checked design tasks are historical design work, not production acceptance.
-Production tasks are unchecked because #3911 closed without merge and must be resubmitted and requalified.
+Production tasks are checked only after their resubmitted scope is implemented and qualified; broader program gates remain T036–T037.
 See [delivery slices](delivery-slices.md) for the reviewable sequence and [historical evidence](historical-evidence.md) for prior results.
 All native/BPMN/ETL criteria remain required.
 Risk-based test cadence follows ADR 0080/framework §2.23; no blanket test-first order or coverage quota is imposed.
@@ -17,10 +17,14 @@ Every behavioral delivery needs a meaningful red/green mutation or before/after 
 
 ## Phase 2 — Shared foundations
 
-- [ ] T005 Create lightweight release target Core/engine projects under `Essentials/src/Workflows/Publishing/Releases/`, excluding Design-bearing Publishing dependencies; prepare the packed consumer witness under `tools/releases/` (execution belongs to T008).
-- [ ] T006 Implement compiler-free immutable manifest/member/root/requirement identities and bounded transport/hash/declared-graph validation in `Essentials/src/Workflows/Publishing/Releases/Core/` and `Elsa.Workflows.Publishing.Releases/`.
-- [ ] T007 Prove canonical vectors, original blob preservation, duplicate/conflicting keys, malformed/oversized transport, cycles, missing/unrelated members and tamper rejection in `Essentials/tests/Workflows/Publishing/Releases/`; re-establish canonical, tamper and bounded I/O controls on the resubmitted head.
-- [ ] T008 Add optional feature composition, public API/extension catalogs and solution/tier/PR-shard registration in `EXTENSION_POINTS.md`, `Elsa.Server.slnx` and `tools/ci/test-tiers.json`; re-establish structural checks and a clean exact-package consumer for this slice. Full program gates remain T036.
+- [x] T005 Create lightweight release target Core/engine projects under `Essentials/src/Workflows/Publishing/Releases/`, excluding Design-bearing Publishing dependencies; prepare the packed consumer witness under `tools/releases/` (execution belongs to T008).
+- [x] T006 Implement compiler-free immutable manifest/member/root/requirement identities and bounded transport/hash/declared-graph validation in `Essentials/src/Workflows/Publishing/Releases/Core/` and `Elsa.Workflows.Publishing.Releases/`.
+- [x] T007 Prove canonical vectors, original blob preservation, duplicate/conflicting keys, malformed/oversized transport, cycles, missing/unrelated members and tamper rejection in `Essentials/tests/Workflows/Publishing/Releases/`; re-establish canonical, tamper and bounded I/O controls on the resubmitted head.
+- [x] T008 Add optional feature composition, public API/extension catalogs and solution/tier/PR-shard registration in `EXTENSION_POINTS.md`, `Elsa.Server.slnx` and `tools/ci/test-tiers.json`; re-establish structural checks and a clean exact-package consumer for this slice. Full program gates remain T036.
+
+Transport T005–T008 landed in [#4220](https://github.com/elsa-workflows/elsa-foundation/pull/4220).
+The [resulting-main receipt](https://github.com/elsa-workflows/elsa-foundation/pull/4379#issuecomment-6859366563)
+qualifies shared 143/143 and the exact packed consumer at `a9e6bca372`; pending full CI is recorded separately.
 
 Transport validity is distinct from owner semantic validity/readiness; no bundle may activate without owner verification.
 

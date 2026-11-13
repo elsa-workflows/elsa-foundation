@@ -42,7 +42,7 @@ public sealed partial class World
         Flaws = Config.NativeFlaws,
         AdmissionFlaws = Config.AdmissionFlaws,
         Gate = async (job, cancel) => await Work(actor, job, cancel),
-        OnExternal = (instance, frame, _, attempt, again) => External(instance.Id, frame, attempt, again),
+        OnExternal = (instance, frame, _, attempt, again) => External(actor, instance.Id, frame, attempt, again),
     });
 
     // ---- the generator's part ------------------------------------------------------------------------------------------
@@ -232,7 +232,7 @@ public sealed partial class World
     }
 
     /// <summary>N4: a side effect that is not replay-safe runs, in Durable mode, only under an attempt the journal has committed.</summary>
-    private void External(string instance, string frame, int attempt, bool again)
+    private void External(Actor actor, string instance, string frame, int attempt, bool again)
     {
         ScanJournal();
         var key = instance + "|" + frame;
@@ -241,8 +241,10 @@ public sealed partial class World
         {
             Interlocked.Increment(ref NativeReruns);
             if (again) Interlocked.Increment(ref NativeRerunsFlagged);
-            else Faults.Add($"N6 {instance}: the External activity of frame {frame} ran again and its turn was not told that it may have run before");
         }
+        var observed = actor.TurnHistoryHint.GetValueOrDefault(instance);
+        if (again != observed)
+            Faults.Add($"N6 {instance}: delivery-history hint {again} disagrees with the metadata observed before its mark ({observed})");
         var mode = Native.Started.TryGetValue(instance, out var started) ? started.Mode : Modes.Balanced;
         if (mode == Modes.Durable && !Native.Attempts.Contains($"{key}:{Math.Max(attempt, 1)}"))
             Faults.Add($"N4 {instance}: the External activity of frame {frame} ran in Durable mode without a committed attempt");
