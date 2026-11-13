@@ -558,5 +558,197 @@
     "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end.png",
     "sha256": "2d7aa0dce81798042f21d13774c89e7ad869294b4818c192810b01fb1b955e9e",
     "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-light--comparison-excluded-empty.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-light/comparison-excluded-empty.png",
+    "sha256": "aa4b82f754b7de63e13bc045a24a247a2e8077a5379d997ec4eb4637d94c1dda",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-light--comparison-included-periods.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-light/comparison-included-periods.png",
+    "sha256": "c2e2a9667c48ec1004346e16c50d7760e9040dd923ca55de26bcb385add0a609",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-light--comparison-included-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-light/comparison-included-values.png",
+    "sha256": "e39820cf918e140eef582f4241fc262e872e3f8677e7c01643d79eeae22467f0",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-light--comparison-reopened-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-light/comparison-reopened-values.png",
+    "sha256": "8d4e497d774aa69e0f9d2049071f7a049b271ecfa801fe6ca823d592bbbf6791",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-light--comparison-current-drill.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-light/comparison-current-drill.png",
+    "sha256": "8be3583de110e701655418b8505140983200be3ef6fc9e86865451e3ec9f96d8",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-dark--comparison-excluded-empty.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-dark/comparison-excluded-empty.png",
+    "sha256": "bbfbdcdd5c7972f1a4faa2810eeecccfc0f7a0b32707e3c4105d946909c848b5",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-dark--comparison-included-periods.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-dark/comparison-included-periods.png",
+    "sha256": "3027b2cca407f981b2692f0af4a7ad8649bba0bffa40de90542593393b54e2d7",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-dark--comparison-included-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-dark/comparison-included-values.png",
+    "sha256": "7af91201eb62007182aa112c2c551c1321cc7cc12d8c814b533b8d4309c42a09",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-dark--comparison-reopened-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-dark/comparison-reopened-values.png",
+    "sha256": "f5d8adfece8cbf914c3dfd96ed72f71df9f1e6ba1ac06da024a6f0700c8591c8",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-desktop-dark--comparison-current-drill.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-desktop-dark/comparison-current-drill.png",
+    "sha256": "cf7efb411ad1134e1b6cc6e42b210361b91a4a0d04c306b35bb029b7d6b00682",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-light--comparison-excluded-empty.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-light/comparison-excluded-empty.png",
+    "sha256": "85d3d1e456dcace4d8b4c004657a8b2d4b1871c34b6f09a2f3830c8affe1b78a",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-light--comparison-included-periods.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-light/comparison-included-periods.png",
+    "sha256": "1370cf8265f2325116a455c2e3b148eafc56b68fed8ab0cc8405ee311803e1eb",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-light--comparison-included-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-light/comparison-included-values.png",
+    "sha256": "230780a49cd619d7897f65770a28a487f4c97a1a10f3962aae389a6644f3e1fb",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-light--comparison-reopened-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-light/comparison-reopened-values.png",
+    "sha256": "39edcd3a9eaa8cbaff9eb613bd37f2fb26cf77e74a53225b6e36cea8cf0fbf05",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-light--comparison-current-drill.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-light/comparison-current-drill.png",
+    "sha256": "b87170c0c81fdfafba677a6fb3710d26a490ce89c79ac09e3fcc94d28b4d59cf",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-light--comparison-included-values-end.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-light/comparison-included-values-end.png",
+    "sha256": "7869dd35204383763ccced01af4ff07fb95616c25724790d3453cf0e6bb557f6",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-light--comparison-reopened-values-end.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-light/comparison-reopened-values-end.png",
+    "sha256": "4f48a0fc31ee6d73594a56390ff7ba29d58e2675bf6ada670aade20c73e8d956",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-dark--comparison-excluded-empty.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-dark/comparison-excluded-empty.png",
+    "sha256": "9c82794f4b694ab6625b53246d33aa67d6df0d517486f2d7e4b0b79cb53dc192",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-dark--comparison-included-periods.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-dark/comparison-included-periods.png",
+    "sha256": "a8909e9b31e99a970d587e8401bc0aac1a844b0fdb10bc70e6d848c3299f0bb8",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-dark--comparison-included-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-dark/comparison-included-values.png",
+    "sha256": "cc0edbfc81c183c041325a672d01c0299eb459697f0a5bd0ab529dcfb60c7d68",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-dark--comparison-reopened-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-dark/comparison-reopened-values.png",
+    "sha256": "af21a07f32f8cbb175c5d3ee175e6f1c9229fd9dc68abfedaddb1ec033b0232c",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-dark--comparison-current-drill.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-dark/comparison-current-drill.png",
+    "sha256": "5a6b8033268b16b6bb3c359481fe86091fd8d9e9e7d1808efb91c7f4c04fcd05",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-dark--comparison-included-values-end.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-dark/comparison-included-values-end.png",
+    "sha256": "66fa87d950789894f242a5f582e218793dbaf2c517c5cc3c932d9285da9b23d2",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/comparison-narrow-dark--comparison-reopened-values-end.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-comparison-main-final-20261113",
+    "original": "results/journeys-saved-dashboard-period-comparison-and-membership-narrow-dark/comparison-reopened-values-end.png",
+    "sha256": "724c89ed19516029dd2a5cca41a2d49a0aaad46f4ac1aae6bc0cd8675fb8f449",
+    "independentlyInspected": true
   }
 ]

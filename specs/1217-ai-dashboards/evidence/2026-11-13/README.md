@@ -1,21 +1,22 @@
 # Dashboard delivery evidence — 13 November 2026
 
-Status: local Home and live Copilot qualification and independent visual review passed. Final comparison visual review, ordered merges and resulting-main verification remain in progress.
+Status: native, Home, comparison and live Copilot qualification and independent visual reviews passed. Ordered merges and resulting-main verification remain in progress.
 
-The screenshots below are unmodified originals from owned, disposable composed hosts using synthetic qualification data. An independent acceptance subagent actually opened all 70 retained originals. [The manifest](screenshots.json) records their exact tested source, original run filename and SHA-256. These retained files provide downloadable evidence while Actions is delayed. Raw traces, browser storage, fixture tokens and backend/provider logs stay private.
+The screenshots below are unmodified originals from owned, disposable composed hosts using synthetic qualification data. An independent acceptance subagent actually opened all 94 retained originals. [The manifest](screenshots.json) records their exact tested source, original run filename and SHA-256. These retained files provide downloadable evidence while Actions is delayed. Raw traces, browser storage, fixture tokens and backend/provider logs stay private.
 
 | Witness | Tested source | Result |
 | --- | --- | --- |
 | Existing Home widgets/layout/defaults | `6f7db4b23dd22891edb2523eb08b0912ead90ad5` | 4/4 browser profiles, 59/59 field gallery; 20 actual PNGs independently inspected |
 | Actual Copilot authoring over Weaver | `c56b64e365bffc775ba2034655f290f985a1c2cc` | 2/2 real Workflow/Acme journeys; 20 actual PNGs independently inspected |
 | Native Dashboard questions/sharing | `9d65c70a3a1095a29462f81cbdf97bc22762c373` | 4/4 browser profiles, 59/59 field gallery; 30 actual PNGs independently inspected |
+| Native saved-period comparison | `9d65c70a3a1095a29462f81cbdf97bc22762c373` | 4/4 browser profiles, 59/59 field gallery; 24 actual PNGs independently inspected |
 | Independent local package contribution | `11c48db71b17972771507f5f1b4da2238975a0e0` | 20 archives, 19/19 native cases, offline package-only restore, no frontend calls |
 
-[Native receipt](native-receipt.json), [Home receipt](home-receipt.json), [live receipt](live-receipt.json), [allowlisted package receipt](package-witness.json).
+[Comparison receipt](comparison-receipt.json), [Native receipt](native-receipt.json), [Home receipt](home-receipt.json), [live receipt](live-receipt.json), [allowlisted package receipt](package-witness.json).
 
 Live qualification uses the existing GitHub Copilot SDK adapter (SDK 1.0.4, explicitly selected `gpt-6.1-sol`) through model-agnostic Weaver Dashboard authoring. Actual SDK sends are Workflow 0→2→3→3 and Acme 3→5→6→6. All native phases have zero additional sends; privacy-failure counters remain zero. Acme independently recomputes reader Retail 60000 versus owner 120000, with Enterprise 300000 unchanged. After permission removal and ordinary sign-in, the new reader principal receives 403 and no query/result disclosure. This does not qualify invalidation of outstanding signed tokens.
 
-The later integration changes add only the Architecture project lock entries and align unpublished Acme package/API-tracking metadata. Runtime C#/TypeScript/CSS behavior is unchanged from these tested sources. Native/comparison evidence will name its own committed final source.
+The later integration changes add only the Architecture project lock entries and align unpublished Acme package/API-tracking metadata. Runtime C#/TypeScript/CSS behavior is unchanged from these tested sources. Native/comparison evidence names the final product source; the later generated Workbench filter adds only the six reviewed dependency paths.
 
 ## Independently inspected originals
 
@@ -58,6 +59,22 @@ The later integration changes add only the Architecture project lock entries and
 ### native-narrow-dark
 
 [questions-collection-appearance-1](screenshots/native-narrow-dark--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-narrow-dark--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-narrow-dark--question-share.png) | [dashboard-share-dependency-review](screenshots/native-narrow-dark--dashboard-share-dependency-review.png) | [dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1](screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1.png) | [question-access-lost](screenshots/native-narrow-dark--question-access-lost.png) | [dashboard-copy-independent-question](screenshots/native-narrow-dark--dashboard-copy-independent-question.png) | [dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end](screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end.png)
+
+### comparison-desktop-light
+
+[comparison-excluded-empty](screenshots/comparison-desktop-light--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-desktop-light--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-desktop-light--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-desktop-light--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-desktop-light--comparison-current-drill.png)
+
+### comparison-desktop-dark
+
+[comparison-excluded-empty](screenshots/comparison-desktop-dark--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-desktop-dark--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-desktop-dark--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-desktop-dark--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-desktop-dark--comparison-current-drill.png)
+
+### comparison-narrow-light
+
+[comparison-excluded-empty](screenshots/comparison-narrow-light--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-narrow-light--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-narrow-light--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-narrow-light--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-narrow-light--comparison-current-drill.png) | [comparison-included-values-end](screenshots/comparison-narrow-light--comparison-included-values-end.png) | [comparison-reopened-values-end](screenshots/comparison-narrow-light--comparison-reopened-values-end.png)
+
+### comparison-narrow-dark
+
+[comparison-excluded-empty](screenshots/comparison-narrow-dark--comparison-excluded-empty.png) | [comparison-included-periods](screenshots/comparison-narrow-dark--comparison-included-periods.png) | [comparison-included-values](screenshots/comparison-narrow-dark--comparison-included-values.png) | [comparison-reopened-values](screenshots/comparison-narrow-dark--comparison-reopened-values.png) | [comparison-current-drill](screenshots/comparison-narrow-dark--comparison-current-drill.png) | [comparison-included-values-end](screenshots/comparison-narrow-dark--comparison-included-values-end.png) | [comparison-reopened-values-end](screenshots/comparison-narrow-dark--comparison-reopened-values-end.png)
 
 ## Failed and superseded evidence
 
