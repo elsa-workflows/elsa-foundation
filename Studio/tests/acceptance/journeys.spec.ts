@@ -1,5 +1,6 @@
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
 import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
+import { dashboardComparisonJourney } from "./dashboardComparisonJourney";
 import { dashboardHomeJourney } from "./dashboardHomeJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
@@ -38,6 +39,7 @@ const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
+test("saved dashboard period comparison and membership", async ({ page }, info) => dashboardComparisonJourney(page, info, capture));
 test("existing home widgets and layout defaults", async ({ page }, info) => dashboardHomeJourney(page, info, capture));
 test("user task authoring and workflow result", async ({ page }, info) => {
   const creations: CreatedWorkflow[] = [];

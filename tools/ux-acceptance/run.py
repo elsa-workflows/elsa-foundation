@@ -20,6 +20,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'saved dashboard period comparison and membership': ['reference', 'comparison-excluded', 'comparison-included', 'comparison-saved-reopened', 'comparison-current-drill'],
     'tabbed Secrets authoring and metadata': ['reference', 'secret-section', 'first-invalid-field', 'storage-section', 'details-section', 'persisted-list', 'persisted-metadata', 'metadata-390', 'storage-390', 'configuration-reference', 'configuration-metadata'],
     'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab', 'decision-picker-saved-tab', 'decision-picker-selected-toast', 'decision-picker-returned'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
@@ -50,6 +51,7 @@ CAPTURES['native dashboard questions and sharing'] += (
 )
 JOURNEYS = set(CAPTURES)
 ADDITIONAL_ARTIFACTS = {
+    'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
     'existing home widgets and layout defaults': {'native-weaver-boundary.json', 'home-populated-appearance-matrix.json', 'home-default-baseline.json', 'home-module-widgets.json', 'home-preferences-restored.json'},
 }
