@@ -55,9 +55,17 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentKind);
         ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
-        return IsSelectedPair(writer, reader) &&
-            _handlerTypes.TryGetValue(intentKind, out var type) &&
-            _serviceProvider.GetService(type) is IRuntimePostCommitDurableSourceIntentHandler owner && owner.CanRecordHistory(writer, reader);
+        try
+        {
+            return IsSelectedPair(writer, reader) &&
+                _handlerTypes.TryGetValue(intentKind, out var type) &&
+                _serviceProvider.GetService(type) is IRuntimePostCommitDurableSourceIntentHandler owner && owner.CanRecordHistory(writer, reader);
+        }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (Exception failure)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(null, intentKind, failure, RuntimeHistoryReadFailures.IsUnavailable(failure));
+        }
     }
 
     public ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)

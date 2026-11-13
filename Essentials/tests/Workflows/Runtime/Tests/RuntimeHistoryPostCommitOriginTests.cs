@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -11,6 +12,7 @@ public sealed class RuntimeHistoryPostCommitOriginTests
 {
     private static readonly DateTimeOffset At = new(2026, 10, 26, 0, 0, 0, TimeSpan.Zero);
     private static readonly RuntimeHistoryCausation Origin = new("event", "run", "commit:send", "command", "work");
+    private static readonly PersistenceScope Scope = new("tenant");
 
     [Theory]
     [InlineData(false)]
@@ -43,13 +45,14 @@ public sealed class RuntimeHistoryPostCommitOriginTests
     }
 
     [Fact]
-    public void A_diagnostic_origin_does_not_grant_source_protocol_scope_or_a_recipient_cohort()
+    public void A_diagnostic_origin_requires_supplied_scope_without_granting_protocol_or_a_recipient_cohort()
     {
         var intent = Intent(Origin);
-        var item = RuntimePostCommitOutboxItems.CreatePending(Envelope(intent), intent);
+        Assert.Throws<RuntimePostCommitSourceBoundaryException>(() => RuntimePostCommitOutboxItems.CreatePending(Envelope(intent), intent));
+        var item = RuntimePostCommitOutboxItems.CreatePending(Envelope(intent), intent, [], Scope);
         Assert.Equal(Origin, item.Intent.HistoryCausation);
         Assert.Null(item.StimulusDeliveryProtocolVersion);
-        Assert.Null(item.StimulusDeliverySourceScope);
+        Assert.Equal(Scope, item.StimulusDeliverySourceScope);
         Assert.Null(item.RecipientSnapshot);
     }
 
@@ -79,7 +82,7 @@ public sealed class RuntimeHistoryPostCommitOriginTests
         var intent = Intent(Origin);
         var valid = Complete(intent);
         RuntimeCheckpointCommitValidator.Validate(valid);
-        var foreign = RuntimePostCommitOutboxItems.CreatePending(valid, Intent(Origin with { HistoryEventId = "another-event" }));
+        var foreign = RuntimePostCommitOutboxItems.CreatePending(valid, Intent(Origin with { HistoryEventId = "another-event" }), [], Scope);
         var mismatch = valid with { StateChanges = valid.StateChanges.WithPostCommitOutbox([
             new(foreign.OutboxItemId, RuntimeStateChangeOperation.Upsert, foreign, valid.Metadata)]) };
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(valid), RuntimeCheckpointCommitFingerprint.Compute(mismatch));
@@ -99,7 +102,7 @@ public sealed class RuntimeHistoryPostCommitOriginTests
         RuntimeCheckpointCommitValidator.Validate(restored);
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(original), RuntimeCheckpointCommitFingerprint.Compute(restored));
         var state = new InMemoryRuntimeCheckpointStoreState();
-        var store = new InMemoryRuntimeCheckpointCommitStore(state: state);
+        var store = new InMemoryRuntimeCheckpointCommitStore(state: state, persistenceAccessContextAccessor: new Access());
         var immediate = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         await store.CommitAsync(restored, immediate);
         await store.CommitAsync(original, immediate);
@@ -125,8 +128,11 @@ public sealed class RuntimeHistoryPostCommitOriginTests
     private static RuntimeCheckpointCommit Complete(RuntimePostCommitIntent intent)
     {
         var envelope = Envelope(intent);
-        return envelope with { StateChanges = envelope.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(envelope)) };
+        return envelope with { StateChanges = envelope.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(envelope, [], Scope)) };
     }
+
+    private sealed class Access : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(Scope); }
 
     // The production checkpoint/change-set classes have no whole-object deserialization contract.
     // Retain their raw supported inputs, then reconstruct the actual native commit explicitly.

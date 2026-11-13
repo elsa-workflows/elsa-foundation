@@ -57,8 +57,7 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         var registrations = HistoryServices();
         if (transient) registrations.Replace(ServiceDescriptor.Transient<HistoryHandler>(services =>
         {
-            var owner = services.GetRequiredService<HistoryOwner>(); owner.Resolutions++;
-            return new(owner);
+            return new(services.GetRequiredService<HistoryOwner>());
         }));
         using var provider = registrations.BuildServiceProvider(); using var scope = provider.CreateScope();
         var services = scope.ServiceProvider; var store = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
@@ -72,7 +71,8 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         Assert.Equal(0, services.GetRequiredService<HistoryReader>().Reads);
         Assert.Equal(0, services.GetRequiredService<HistoryWriter>().Writes);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await store.FindDurableAsync(source.SourceOutboxItemId))!.Status);
-        if (transient) Assert.Equal(1, services.GetRequiredService<HistoryOwner>().Resolutions);
+        var owner = services.GetRequiredService<HistoryOwner>();
+        Assert.Contains(Assert.Single(owner.InvokedInstances), owner.QualifiedInstances);
     }
 
     [Theory]
@@ -136,6 +136,47 @@ public sealed partial class RuntimePostCommitDurableSourceTests
     }
 
     [Theory]
+    [InlineData("legacy-context")] [InlineData("explicit-false")] [InlineData("qualified")]
+    public async Task Context_capable_replacement_requires_actual_recording_opt_in_before_handoff_or_acknowledgement(string support)
+    {
+        var registrations = HistoryServices();
+        ContextAwareLegacyDispatcher replacement = support == "legacy-context" ? new() : new QualifyingContextDispatcher(support == "qualified");
+        registrations.Replace(ServiceDescriptor.Singleton<IRuntimePostCommitIntentDispatcher>(replacement));
+        using var provider = registrations.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var services = scope.ServiceProvider; var store = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        await store.AddPendingForTestingAsync(HistoryItem());
+        var processor = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        if (support == "qualified")
+        {
+            Assert.Equal(1, (await processor.ProcessAsync(new(10))).DeliveredCount);
+            Assert.Equal("source:send", replacement.Source!.SourceOutboxItemId);
+        }
+        else
+        {
+            var failure = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => processor.ProcessAsync(new(10)).AsTask());
+            Assert.True(failure.IsUnavailable); Assert.Equal("source:send", failure.SourceOutboxItemId);
+            Assert.Null(replacement.Source);
+            var retained = (await store.FindDurableAsync("source:send"))!;
+            Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, retained.Status); Assert.Equal(0, retained.DeliveryAttemptCount);
+        }
+        Assert.Null(replacement.Intent);
+        Assert.Equal(0, services.GetRequiredService<HistoryReader>().Reads); Assert.Equal(0, services.GetRequiredService<HistoryWriter>().Writes);
+    }
+
+    [Fact]
+    public async Task Preserved_full_constructor_cannot_infer_recording_providers_from_an_opted_in_dispatcher()
+    {
+        var registrations = HistoryServices(); var replacement = new QualifyingContextDispatcher(true);
+        registrations.Replace(ServiceDescriptor.Singleton<IRuntimePostCommitIntentDispatcher>(replacement));
+        using var provider = registrations.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var services = scope.ServiceProvider; var store = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        await store.AddPendingForTestingAsync(HistoryItem());
+        var failure = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(() => Processor(store, services, new Access()).ProcessAsync(new(10)).AsTask());
+        Assert.True(failure.IsUnavailable); Assert.Null(replacement.Source); Assert.Null(replacement.Intent);
+        Assert.Equal(0, (await store.FindDurableAsync("source:send"))!.DeliveryAttemptCount);
+    }
+
+    [Theory]
     [InlineData("event")] [InlineData("run")] [InlineData("delivery")] [InlineData("scope")]
     [InlineData("missing-scope")] [InlineData("blank-work")] [InlineData("oversized")]
     public async Task Diagnostic_origin_cannot_substitute_foreign_or_malformed_native_identity(string defect)
@@ -178,6 +219,25 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         Assert.Empty(services.GetRequiredService<HistoryOwner>().Contexts);
     }
 
+    [Theory]
+    [InlineData("io", true)] [InlineData("hard", false)] [InlineData("unrequested-cancel", true)]
+    public void Public_qualification_normalizes_provider_failures_and_retains_the_original_cause(string kind, bool unavailable)
+    {
+        using var provider = HistoryServices().BuildServiceProvider(); using var scope = provider.CreateScope();
+        var services = scope.ServiceProvider;
+        Exception original = kind switch
+        {
+            "io" => new IOException("private provider detail"),
+            "hard" => new InvalidDataException("private malformed data", new IOException()),
+            _ => new OperationCanceledException()
+        };
+        services.GetRequiredService<HistoryWriter>().Failure = original;
+        var refusal = Assert.Throws<RuntimePostCommitSourceBoundaryException>(() => services.GetRequiredService<IRuntimePostCommitIntentDispatcher>()
+            .CanRecordHistory(Kind, services.GetRequiredService<HistoryWriter>(), services.GetRequiredService<HistoryReader>()));
+        Assert.Equal(unavailable, refusal.IsUnavailable); Assert.Same(original, refusal.InnerException);
+        Assert.Equal(Kind, refusal.IntentKind); Assert.Null(refusal.SourceOutboxItemId);
+    }
+
     [Fact]
     public async Task Requested_cancellation_propagates_before_origin_qualification_or_delivery()
     {
@@ -205,18 +265,30 @@ public sealed partial class RuntimePostCommitDurableSourceTests
         RuntimePostCommitOutboxStatus.Pending, Now, Now, null, 0, null, null, null, null, null, 0, null, null, withScope ? Scope : null, null);
     private sealed class HistoryOwner
     {
-        internal bool Supported = true; internal int Resolutions;
+        internal bool Supported = true;
         internal List<PostCommitDeliveryContext> Contexts { get; } = [];
         internal List<RuntimePostCommitIntent> Intents { get; } = [];
+        internal List<Guid> QualifiedInstances { get; } = [];
+        internal List<Guid> InvokedInstances { get; } = [];
     }
     private sealed class HistoryHandler(HistoryOwner owner) : IRuntimePostCommitDurableSourceIntentHandler
     {
-        public bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => owner.Supported;
+        private readonly Guid identity = Guid.NewGuid();
+        public bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+        { owner.QualifiedInstances.Add(identity); return owner.Supported; }
         public ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
-        { owner.Contexts.Add(source); return ValueTask.CompletedTask; }
+        { owner.Contexts.Add(source); owner.InvokedInstances.Add(identity); return ValueTask.CompletedTask; }
         public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
         { owner.Intents.Add(intent); return ValueTask.CompletedTask; }
     }
+    private class ContextAwareLegacyDispatcher : LegacyDispatcher, IRuntimePostCommitIntentDispatcher
+    {
+        internal PostCommitDeliveryContext? Source;
+        public ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+        { Source = source; return ValueTask.CompletedTask; }
+    }
+    private sealed class QualifyingContextDispatcher(bool supported) : ContextAwareLegacyDispatcher, IRuntimePostCommitIntentDispatcher
+    { public bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => supported; }
     private sealed class HistoryWriter(HistoryReader reader) : IRuntimeHistoryObservationWriter
     {
         internal bool Paired = true; internal Exception? Failure; internal int Writes;
