@@ -42,6 +42,23 @@ public sealed class StandaloneTriggerStoreTests
     }
 
     [Fact]
+    public async Task Retained_associations_are_detached_from_the_writers_collection_and_read_only_to_readers()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var store = Store(state);
+        var association = Subscription("subscription", "http");
+        var submitted = new List<TriggerSubscription> { association };
+        await store.WriteAsync(Scope, Write(Resource("http"), submitted));
+        submitted.Clear();
+
+        var captured = (await Store(state).FindAsync(Scope, "http"))!;
+        Assert.Same(association, Assert.Single(captured.Subscriptions));
+        var exposed = Assert.IsAssignableFrom<IList<TriggerSubscription>>(captured.Subscriptions);
+        Assert.Throws<NotSupportedException>(() => exposed.Clear());
+        Assert.Same(association, Assert.Single((await store.ListSubscriptionsAsync(Scope, new(DefinitionId: "definition"))).Items));
+    }
+
+    [Fact]
     public async Task Replay_precedes_CAS_and_an_update_does_not_overwrite_the_first_receipt()
     {
         var store = Store(new());
