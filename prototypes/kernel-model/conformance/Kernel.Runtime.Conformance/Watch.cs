@@ -17,6 +17,7 @@ public sealed class Watcher
     private readonly Dictionary<(string, int), int> _generations = [];  // a node's successful activations of a scope so far
     private readonly List<string> _violations = [];
     private readonly List<string> _fenced = [];
+    private readonly HashSet<string> _killing = [];
 
     /// <summary>Activations asked for while another node held the scope: a second activation at once.</summary>
     public int Second { get; private set; }
@@ -38,6 +39,12 @@ public sealed class Watcher
     public IReadOnlyList<string> Violations { get { lock (_lock) return [.. _violations]; } }
 
     public IScopeHost Wrap(string node, IScopeHost inner) => new Host(this, node, inner);
+
+    /// <summary>The node is being killed: a crash gives nothing up, so it may not give a scope up from now on.</summary>
+    public void Killing(string node)
+    {
+        lock (_lock) _killing.Add(node);
+    }
 
     /// <summary>The node crashed (its kill has returned): its activations are no one's now, whatever their memory says, and none of them may start a pass.</summary>
     public void Dead(string node)
@@ -165,6 +172,8 @@ public sealed class Watcher
                 // would give up the new epoch.
                 if (watcher._generations.GetValueOrDefault((node, scope)) > generation && inner.Active)
                     watcher._violations.Add($"SEAM {node} gave up an old activation of scope {scope} after activating it again");
+                if (watcher._killing.Contains(node) && inner.Active)
+                    watcher._violations.Add($"SEAM {node} gave scope {scope} up while it was being killed: a crash gives nothing up");
             }
             watcher.Enter(node, scope, "gave up");
             try { await inner.DisposeAsync(); }
