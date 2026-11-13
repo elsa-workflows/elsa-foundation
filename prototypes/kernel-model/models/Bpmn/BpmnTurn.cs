@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Bpmn.Model;
 using Bpmn.Model.State;
 using Bpmn.Semantics;
 
@@ -184,19 +185,19 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         var self = turn.Instance.Ref;
         var (kind, key) = _process.Work[start.BindingRef] switch
         {
-            JobWork job => (WorkKinds.Job, StartJob(handle, job, start.ElementId)),
+            JobWork job => (WorkKinds.Job, StartJob(handle, job, start)),
             TimerWork timer => (WorkKinds.Timer, turn.Send(self, BpmnKinds.Timer, new TimerDue(handle), new SendOptions(Delay: TimeSpan.FromMilliseconds(timer.Milliseconds)))),
             MessageWork message => (WorkKinds.Message, Subscribe(handle, message)),
-            CallWork call => (WorkKinds.Call, turn.Start(BpmnModel.Spec(call.Process, Variables())).Id),
+            CallWork call => (WorkKinds.Call, turn.Start(BpmnModel.Spec(call.Process, Variables(start.IterationScope))).Id),
             var other => throw new InvalidOperationException($"No host work for {other}."),
         };
         _s.Live[handle] = new LiveWork(start.BindingRef, start.IterationScope?.IterationId, start.TokenId, start.ElementId, kind, key);
         turn.Record($"w {handle} {start.ElementId} {kind} {key}");
     }
 
-    private string StartJob(string handle, JobWork job, string element)
+    private string StartJob(string handle, JobWork job, BpmnHostCommand.StartWork start)
     {
-        turn.StartJob(handle, new JobArgs(_process.Id, job.Service, element, Variables()));
+        turn.StartJob(handle, new JobArgs(_process.Id, job.Service, start.ElementId, Variables(start.IterationScope)));
         return handle;
     }
 
@@ -227,7 +228,22 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         turn.Record($"x {handle} {work.Element}");
     }
 
-    private JsonObject Variables() => new(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone())));
+    private JsonObject Variables(BpmnIterationScope? scope)
+    {
+        var snapshot = new JsonObject(_s.Variables.Select(v => KeyValuePair.Create(v.Key, v.Value?.DeepClone())));
+        if (scope is null) return snapshot;
+        foreach (var (name, value) in scope.Values)
+        {
+            if (value.Presence == BpmnValuePresence.Absent) snapshot.Remove(name);
+            else snapshot[name] = value.Presence switch
+            {
+                BpmnValuePresence.Null => null,
+                BpmnValuePresence.Present when value.Json is { } json => JsonNode.Parse(json.GetRawText()),
+                _ => throw new InvalidOperationException($"Cannot pass {value.Presence} iteration variable '{name}' to work."),
+            };
+        }
+        return snapshot;
+    }
 
     private BpmnHostSnapshot Snapshot()
     {

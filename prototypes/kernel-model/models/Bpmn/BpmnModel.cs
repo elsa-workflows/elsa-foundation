@@ -81,7 +81,10 @@ public sealed class BpmnModel(ProcessRegistry registry, BpmnOptions? options = n
         new(ModelKey, process, Json.Write(new BpmnStart(variables)), History: history);
 
     /// <summary>The event key a message catch waits for, and a publisher publishes to.</summary>
-    public static string MessageKey(string name, string correlation) => $"msg:{name}:{correlation}";
+    public static string MessageKey(string name, string correlation) => $"msg:{Escape(name)}:{Escape(correlation)}";
+
+    // Escape only the separator and the escape marker. All other UTF-16 code units retain their identity.
+    private static string Escape(string component) => component.Replace("%", "%25").Replace(":", "%3A");
 
     public object CreateState(StartSpec start) => new BpmnState();
 

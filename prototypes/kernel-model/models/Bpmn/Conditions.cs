@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Numerics;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Bpmn.Model;
@@ -39,13 +41,16 @@ public sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpmnV
         if (Operator(text) is var (at, op))
         {
             var left = variables.GetValueOrDefault(text[..at].Trim());
-            var right = Literal(text[(at + op.Length)..].Trim());
-            return op switch
+            var literal = text[(at + op.Length)..].Trim();
+            if (Numeric.TryRead(literal) is { } number)
             {
-                "==" => Same(left, right),
-                "!=" => !Same(left, right),
-                _ => Compare(left, right, op),
-            };
+                if (left is not JsonValue value || value.GetValueKind() != JsonValueKind.Number) return op == "!=";
+                var comparison = Numeric.TryRead(value.ToJsonString())!.CompareTo(number);
+                return op switch { "==" => comparison == 0, "!=" => comparison != 0, "<" => comparison < 0,
+                    "<=" => comparison <= 0, ">" => comparison > 0, _ => comparison >= 0 };
+            }
+            var right = Literal(literal);
+            return op switch { "==" => JsonNode.DeepEquals(left, right), "!=" => !JsonNode.DeepEquals(left, right), _ => false };
         }
         return variables.GetValueOrDefault(text) is JsonValue v && v.TryGetValue<bool>(out var b) && b;
     }
@@ -70,21 +75,37 @@ public sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpmnV
         "false" => JsonValue.Create(false),
         "null" => null,
         _ when text.Length >= 2 && text[0] == '\'' && text[^1] == '\'' => JsonValue.Create(text[1..^1]),
-        _ when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) => JsonValue.Create(d),
         _ => throw new FormatException($"'{text}' is not a literal"),
     };
 
-    private static bool Same(JsonNode? a, JsonNode? b) =>
-        a is null || b is null ? a is null && b is null
-        : Number(a) is { } x && Number(b) is { } y ? x == y
-        : JsonNode.DeepEquals(a, b);
-
-    private static bool Compare(JsonNode? a, JsonNode? b, string op)
+    // Compare normalized decimal digits and the place of their leading digit. No conversion to binary floating
+    // point or expansion of large exponents is necessary, even for integers beyond decimal's 96-bit range.
+    private sealed record Numeric(int Sign, string Digits, BigInteger Place)
     {
-        if (a is null || b is null || Number(a) is not { } x || Number(b) is not { } y) return false;
-        return op switch { "<" => x < y, "<=" => x <= y, ">" => x > y, _ => x >= y };
-    }
+        private static readonly Regex Syntax = new(@"\A(?<sign>[+-]?)(?<whole>[0-9]*)(?:\.(?<fraction>[0-9]*))?(?:[eE](?<exp>[+-]?[0-9]+))?\z",
+            RegexOptions.NonBacktracking);
 
-    private static double? Number(JsonNode node) =>
-        node is JsonValue v && v.GetValueKind() == JsonValueKind.Number ? double.Parse(v.ToJsonString(), CultureInfo.InvariantCulture) : null;
+        public static Numeric? TryRead(string text)
+        {
+            var match = Syntax.Match(text);
+            if (!match.Success) return null;
+            var fraction = match.Groups["fraction"].Value;
+            var digits = match.Groups["whole"].Value + fraction;
+            if (digits.Length == 0) return null;
+            digits = digits.TrimStart('0');
+            if (digits.Length == 0) return new(0, "", 0);
+            var exp = match.Groups["exp"];
+            var power = exp.Success ? BigInteger.Parse(exp.Value, CultureInfo.InvariantCulture) : BigInteger.Zero;
+            return new(match.Groups["sign"].Value == "-" ? -1 : 1, digits.TrimEnd('0'), power + digits.Length - fraction.Length);
+        }
+
+        public int CompareTo(Numeric other)
+        {
+            if (Sign != other.Sign) return Sign.CompareTo(other.Sign);
+            var place = Place.CompareTo(other.Place);
+            // With equal leading places the first differing digit decides. Trailing zeroes were removed, so a
+            // strict prefix sorts before its longer positive counterpart (the implicit remaining digits are zero).
+            return Sign * (place != 0 ? place : Math.Sign(string.CompareOrdinal(Digits, other.Digits)));
+        }
+    }
 }
