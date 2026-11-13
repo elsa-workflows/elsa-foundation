@@ -160,6 +160,25 @@ public static class CaseSmoke
             Check(joins.Count == BpmnCases.Rounds && arrivals.Count == 2 * BpmnCases.Rounds && arrivals.Distinct().Count() == arrivals.Count, $"the join fired once per round, each arrival once: {string.Join(" ", joins)}");
         }
 
+        Console.WriteLine("known: an inclusive join in a loop beside a parallel branch (Bpmn.Semantics 0.5.0, BPMN.md section 7)");
+        {
+            var id = InstanceRef.In(0, $"b-inclusive-loop-{++_n}");
+            owner.Worker.Post(new Message($"m{_n}", id, Kinds.Start, Start: BpmnModel.Spec("b-inclusive-loop")), fresh: true);
+            await owner.PumpAsync(() => owner.Status(id.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
+            var journal = store.Journal.Values.Where(j => j.Instance == id.Id).OrderBy(j => j.Position).SelectMany(j => Json.Read<List<string>>(j.Entries)).ToList();
+            Check(owner.Status(id.Id) == InstanceStatus.Faulted && journal[^1] == "fault bpmn.join.deadlock",
+                $"still faults with bpmn.join.deadlock (an upgrade that fires the join should update BPMN.md): {owner.Status(id.Id)}, {journal[^1]}");
+            var plain = InstanceRef.In(0, $"b-inclusive-noloop-{++_n}");
+            owner.Worker.Post(new Message($"m{_n}", plain, Kinds.Start, Start: BpmnModel.Spec("b-inclusive-noloop")), fresh: true);
+            await owner.PumpAsync(() => owner.Status(plain.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
+            Check(owner.Status(plain.Id) == InstanceStatus.Finished, $"the same process without the flow back finishes: {owner.Status(plain.Id)}");
+            var never = InstanceRef.In(0, $"b-inclusive-never-{++_n}");
+            owner.Worker.Post(new Message($"m{_n}", never, Kinds.Start, Start: BpmnModel.Spec("b-inclusive-never")), fresh: true);
+            await owner.PumpAsync(() => owner.Status(never.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
+            var last = store.Journal.Values.Where(j => j.Instance == never.Id).OrderBy(j => j.Position).SelectMany(j => Json.Read<List<string>>(j.Entries)).LastOrDefault();
+            Check(owner.Status(never.Id) == InstanceStatus.Faulted && last == "fault bpmn.join.deadlock", $"with the flow back on a condition that never holds, it still deadlocks: {owner.Status(never.Id)}, {last}");
+        }
+
         Check(store.Messages.Values.All(m => m.Done) && store.Subscriptions.Count == 0, "no message and no subscription left");
         Console.WriteLine(_failures == 0 ? "cases: all passed" : $"cases: {_failures} FAILED");
         return _failures;

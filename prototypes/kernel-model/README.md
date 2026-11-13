@@ -10,7 +10,8 @@ What was found is in [FINDINGS.md](FINDINGS.md) (section 27: the runtime conform
 section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names;
 section 23: the merge of the four branches and its gates); what each database engine does to the EF store is in
 [ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), native workflows as an execution model in
-[NATIVE.md](NATIVE.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
+[NATIVE.md](NATIVE.md), write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md), and BPMN on the
+`Bpmn.Semantics` interpreter in [BPMN.md](BPMN.md).
 
 ## Layout
 
@@ -24,6 +25,8 @@ section 23: the merge of the four branches and its gates); what each database en
 | `models/Graph.Tests` | Main's Flowchart conformance corpus and join tests against the graph engine |
 | `models/Native` | The native Elsa workflow model: authoring surface, activities (its Flowchart on the graph engine), interpreter, HTTP routes and host on the kernel's live output |
 | `models/Native.Run` | Native smoke tests, cost and memory measurement |
+| `models/Bpmn` | BPMN as an execution model: the `Bpmn.Semantics` 0.5.0 interpreter (NuGet, pinned) behind the contract, the host's table of work, the spike's cases |
+| `models/Bpmn.Run` | BPMN smoke tests and cost measurement |
 | `ef/Kernel.EntityFramework` | The storage interface on Entity Framework Core: PostgreSQL and SQLite in `EfStore.cs`, SQL Server and MySQL dialects in `Engines.cs` |
 | `ef/Kernel.Ef.Run` | The cost measurement and the concurrent stress test; `EngineRun.cs` runs them on PostgreSQL, SQL Server, MySQL and SQLite (`x ...`) |
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
@@ -42,7 +45,7 @@ section 23: the merge of the four branches and its gates); what each database en
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance; do dotnet build $p -c Release; done
+for p in sim models/Native.Run models/Bpmn.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -58,6 +61,8 @@ $SIM --seed 22 --flaw TrialPerPartition              # replay one seed; prints a
 $SIM --mutations --seeds 20000                       # break the kernel on purpose, one flaw at a time
 $SIM --native-mutations --seeds 20000                # break the native model on purpose
 $SIM --native --native-flaw ResumeAnyChild --seed 1  # replay one native flaw
+$SIM --bpmn --seeds 200000                           # BPMN instances in the mix (40 % of outside actions), BPMN.md
+$SIM --bpmn-mutations --seeds 20000                  # break the BPMN host on purpose
 $SIM --seeds 4000 --coverage                         # also count what happened
 $SIM --seeds 5000 --actions 1000 --faults 2          # scale the faults
 $SIM --backlog 1000                                  # how long a backlog of suspects takes to recover
@@ -148,6 +153,15 @@ $NAT smoke
 $NAT cost sqlite
 $NAT cost postgres "$PG;Database=kernel_native"
 $NAT memory 3000
+```
+
+## BPMN
+
+```
+BP="dotnet models/Bpmn.Run/bin/Release/net10.0/Kernel.Bpmn.Run.dll"
+$BP smoke
+$BP cost sqlite
+$BP cost postgres "$PG;Database=kernel_bpmn"
 ```
 
 ## The gates of a refactor
