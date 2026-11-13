@@ -95,7 +95,8 @@ public sealed class ActivityPublicationSnapshotTests
         await using var connection = new SqliteConnection("Data Source=:memory:;Pooling=False"); await connection.OpenAsync();
         await using var context = new ActivitiesDesignSqliteDbContext(new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options);
         await context.Database.EnsureCreatedAsync(); context.ActivityDefinitionVersionPublications.Add(Publication()); await context.SaveChangesAsync();
-        var frame = EfPayloadCodec.Encode("{}", EfPayloadCompression.GZip, 0)!;
+        var frame = EfPayloadCodec.Encode("{\"padding\":\"" + new string('x', 4096) + "\"}", EfPayloadCompression.GZip, 0)!;
+        Assert.True(EfPayloadCodec.IsFrame(frame));
         if (providerColumn) await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_activity_version_publications SET Provider={frame}");
         else await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_activity_version_publications SET Contract={frame}");
         var error = await Assert.ThrowsAsync<ActivityPublicationSnapshotException>(() => ((IActivityPublicationSnapshotReader)new EfActivityDesignStores(context, new Accessor()))
