@@ -270,3 +270,49 @@ override Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.ToString(
 static Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? right) -> bool
 static Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? right) -> bool
 Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.RootCapabilities.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder.BuildAsync(Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot!>! roots, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult!>
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Bundle.get -> Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.ReleaseBundleBuildResult(Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport? bundle, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult! verification) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Verification.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Action.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Content.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.ReleaseBundleRoot(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! content, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction action) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.get -> long
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection.ReleaseCaptureSelection(string! kind, string! identity, Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? version, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction action) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection.Kind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection.Identity.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection.Version.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection.Action.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSourceCapture
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSourceCapture.ReleaseSourceCapture(Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot!>! roots) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSourceCapture.Content.get -> Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSourceCapture.Roots.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureReceipt
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureReceipt.ReleaseCaptureReceipt(string! captureId, string! releaseDigest, Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome outcome) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureReceipt.CaptureId.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureReceipt.ReleaseDigest.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureReceipt.Outcome.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureException
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureException.ReleaseCaptureException(string! code, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult? verification = null) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureException.Code.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureException.Verification.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome.Unknown = 0 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome.Created = 1 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome.Existing = 2 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureOutcome
+Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureService
+Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureService.CreateAsync(string! captureId, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection!>! selections, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureReceipt!>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureSource
+Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureSource.Identity.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureSource.SupportedSelectionKinds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseCaptureSource.ExecuteAsync(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseCaptureSelection!>! selections, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits! limits, System.Func<Elsa.Workflows.Publishing.Releases.Core.ReleaseSourceCapture!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! capture, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Publishing.Releases.Core.IReleaseSourceMemberContributor
+Elsa.Workflows.Publishing.Releases.Core.IReleaseSourceMemberContributor.Identity.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseSourceMemberContributor.SupportedContainerCodecs.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseSourceMemberContributor.ExecuteAsync(System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember!>! containers, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! captured, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits! limits, System.Func<Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! capture, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
