@@ -116,7 +116,11 @@ export function ActivityDefinitionsPage({
     setAuthorizationRevision(activityAuthorityRevision);
     setAuthorizationInvalidating(true);
     pendingRedactionsRef.current += 1;
-    void redactActivityDefinitionManagementCache(queryClient).then(() => queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections })).finally(() => {
+    void redactActivityDefinitionManagementCache(queryClient).then(() => Promise.all([
+      queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections }),
+      // A mounted draft has a separate cache key: refresh its redacted definition identity too.
+      queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources })
+    ])).finally(() => {
       pendingRedactionsRef.current -= 1;
       if (pendingRedactionsRef.current === 0) setAuthorizationInvalidating(false);
     });
