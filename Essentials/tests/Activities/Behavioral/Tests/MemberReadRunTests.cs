@@ -426,6 +426,7 @@ public sealed class MemberReadRunTests
     /// <summary>A reader that also closes a loop with the run's next scripted outcome.</summary>
     [ActivityOutcome("again")]
     [ActivityOutcome("done")]
+    [SelectsOutcomeOnEveryCompletion]
     public sealed class LoopingReader(ActivityResultOccurrenceTests.LoopOutcomes outcomes) : Activity<Echo>
     {
         [ActivityInput] public object? Value { get; set; }

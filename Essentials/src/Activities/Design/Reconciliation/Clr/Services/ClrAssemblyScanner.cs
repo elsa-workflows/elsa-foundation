@@ -376,7 +376,7 @@ public sealed class ClrAssemblyScanner(
 
                 if (attribute.AttributeType.FullName == ActivityScriptOutcomesAttributeFullName)
                 {
-                    scriptInput ??= attribute.ConstructorArguments is [{ Value: string key }] ? key : null;
+                    scriptInput ??= attribute.ConstructorArguments is [{ Value: string scriptKey }] ? scriptKey : null;
                     continue;
                 }
 

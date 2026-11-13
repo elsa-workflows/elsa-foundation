@@ -163,6 +163,12 @@ public sealed class FlowchartExecutionEngine(
 
         var scheduledTargets = new HashSet<string>(StringComparer.Ordinal);
         var takenConnectionIds = new HashSet<string>(StringComparer.Ordinal);
+        // A join answers per source node, so the first of two taken connections to one target would otherwise fire
+        // it alone and strand the second arrival, leaving the Flowchart running. Every arrival but the last one this
+        // completion makes at a target waits there; the last one decides and the firing consumes them all.
+        var lastConnectionByTarget = new Dictionary<string, FlowchartConnection>(StringComparer.Ordinal);
+        foreach (var connection in outboundConnections)
+            lastConnectionByTarget[connection.Target.NodeId] = connection;
         foreach (var connection in outboundConnections)
         {
             var connectionId = graph.GetConnectionId(connection);
@@ -183,7 +189,8 @@ public sealed class FlowchartExecutionEngine(
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, completionContext.CompletedChildActivityExecutionId);
 
-            if (joinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
+            if (!ReferenceEquals(lastConnectionByTarget[connection.Target.NodeId], connection) ||
+                joinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, connection.Target.NodeId, connectionId, arrivalPath.ExecutionPathId, targetScope.ExecutionScopeId, $"Flowchart path '{arrivalPath.ExecutionPathId}' is waiting at implicit join '{connection.Target.NodeId}'.");

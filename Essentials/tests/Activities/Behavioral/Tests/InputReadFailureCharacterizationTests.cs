@@ -227,6 +227,7 @@ public sealed class InputReadFailureCharacterizationTests
     /// <summary>Returns its input and closes a loop with the run's next scripted outcome.</summary>
     [ActivityOutcome("again")]
     [ActivityOutcome("done")]
+    [SelectsOutcomeOnEveryCompletion]
     public sealed class LoopingEcho(ActivityResultOccurrenceTests.LoopOutcomes outcomes) : Activity<Echo>
     {
         [ActivityInput] public object? Value { get; set; }
