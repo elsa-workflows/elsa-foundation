@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -29,7 +30,12 @@ public sealed record ActivityInvocationContractIdentity
 public static class ActivityExecutionValueFlowDocumentVersions
 {
     public const int Legacy = 1;
-    public const int Current = 2;
+
+    /// <summary>The completion record carries one outcome key (<c>outcomeKey</c>); upcast to a named selection.</summary>
+    public const int SingleOutcomeKey = 2;
+
+    /// <summary>The completion record carries an outcome selection (spec 1208, ADR 0045 §6).</summary>
+    public const int Current = 3;
 }
 
 /// <summary>
@@ -202,7 +208,9 @@ public sealed record ActivityPrivateState
 }
 
 /// <summary>
-/// One atomic successful activity result and authored control outcome.
+/// One atomic successful activity result and the outcome selection it took (unspecified, named or explicitly empty).
+/// A record written before document version <see cref="ActivityExecutionValueFlowDocumentVersions.Current"/> carried one
+/// outcome key and is read as a named selection of that key.
 /// </summary>
 public sealed record ActivityCompletion
 {
@@ -211,13 +219,13 @@ public sealed record ActivityCompletion
         string invocationId,
         string attemptId,
         ValueEnvelope result,
-        string outcomeKey,
+        OutcomeSelection selection,
         DateTimeOffset completedAt,
         string contractFingerprint)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(attemptId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outcomeKey);
+        ArgumentNullException.ThrowIfNull(selection);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractFingerprint);
         ArgumentNullException.ThrowIfNull(result);
 
@@ -227,7 +235,7 @@ public sealed record ActivityCompletion
         InvocationId = invocationId;
         AttemptId = attemptId;
         Result = result;
-        OutcomeKey = outcomeKey;
+        Selection = selection;
         CompletedAt = completedAt;
         ContractFingerprint = contractFingerprint;
     }
@@ -236,7 +244,12 @@ public sealed record ActivityCompletion
     public string AttemptId { get; }
     public ValueEnvelope Result { get; }
     public ValueTypeDescriptor ResultType => Result.Type;
-    public string OutcomeKey { get; }
+    public OutcomeSelection Selection { get; }
+
+    /// <summary>The outcome names a routing parent follows: <c>[Done]</c>, the selected names, or none.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> OutcomeNames => Selection.ResolveNames();
+
     public DateTimeOffset CompletedAt { get; }
     public string ContractFingerprint { get; }
 }

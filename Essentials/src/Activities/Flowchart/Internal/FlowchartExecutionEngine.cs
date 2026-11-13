@@ -140,9 +140,9 @@ public sealed class FlowchartExecutionEngine(
             return ValueTask.FromResult(PersistAndMaybeComplete(state));
         }
 
+        // Every taken connection is an arrival at its target, also when two selected outcomes lead to the same node:
+        // by default the target's implicit join runs it once after both arrivals (ADR 0045 §6, Q4).
         var outboundConnections = graph.SelectOutboundConnections(completionContext.CompletedChildExecutableNodeId, completionContext.OutcomeNames);
-        if (outboundConnections.Select(connection => connection.Target.NodeId).Distinct(StringComparer.Ordinal).Count() != outboundConnections.Count)
-            throw new FlowchartExecutionException($"Flowchart completion for child executable node '{completionContext.CompletedChildExecutableNodeId}' contains duplicate connection targets.");
 
         if (outboundConnections.Count == 0)
         {

@@ -144,12 +144,12 @@ public sealed class FlowchartGraph
 
     public IReadOnlyCollection<ExecutableNode> SelectTargets(string completedChildExecutableNodeId, IReadOnlyCollection<string> outcomeNames)
     {
+        // Two taken connections to one node are two arrivals at its implicit join, not a fault (ADR 0045 §6, Q4): the
+        // node is one target, run once.
         var targetIds = SelectOutboundConnections(completedChildExecutableNodeId, outcomeNames)
             .Select(connection => connection.Target.NodeId)
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
-
-        if (targetIds.Distinct(StringComparer.Ordinal).Count() != targetIds.Length)
-            throw new FlowchartExecutionException($"Flowchart completion for child executable node '{completedChildExecutableNodeId}' contains duplicate connection targets.");
 
         return targetIds.Select(targetId => _nodesById[targetId]).ToArray();
     }
@@ -454,9 +454,13 @@ public sealed class FlowchartGraph
         }
     }
 
+    /// <summary>
+    /// The completed child's outcome names as ports. An empty set stays empty: an explicitly empty selection takes no
+    /// connection (ADR 0045 §6); an unspecified selection already arrives resolved as <c>Done</c>.
+    /// </summary>
     private static HashSet<string> NormalizeOutcomes(IReadOnlyCollection<string> outcomeNames)
     {
-        var normalized = (outcomeNames.Count == 0 ? [FlowchartEndpoint.NormalizePort(null)] : outcomeNames.Select(FlowchartEndpoint.NormalizePort)).ToArray();
+        var normalized = outcomeNames.Select(FlowchartEndpoint.NormalizePort).ToArray();
         if (normalized.Distinct(StringComparer.Ordinal).Count() != normalized.Length)
             throw new FlowchartExecutionException("Flowchart child completion outcomes cannot contain duplicates after normalization.");
 

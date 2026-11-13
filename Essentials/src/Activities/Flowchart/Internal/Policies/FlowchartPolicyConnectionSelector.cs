@@ -28,8 +28,9 @@ internal static class FlowchartPolicyConnectionSelector
             nodeId: connection.Target.NodeId,
             connectionId: ConnectionId(connection));
 
+    // An empty set stays empty: an explicitly empty selection takes no connection (ADR 0045 §6).
     private static HashSet<string> NormalizeOutcomes(IReadOnlyCollection<string> outcomeNames) =>
-        (outcomeNames.Count == 0 ? [FlowchartEndpoint.NormalizePort(null)] : outcomeNames.Select(FlowchartEndpoint.NormalizePort)).ToHashSet(StringComparer.Ordinal);
+        outcomeNames.Select(FlowchartEndpoint.NormalizePort).ToHashSet(StringComparer.Ordinal);
 
     private static string ConnectionId(FlowchartConnection connection) =>
         connection.Id ?? $"{connection.Source.NodeId}:{connection.Source.Port}->{connection.Target.NodeId}";

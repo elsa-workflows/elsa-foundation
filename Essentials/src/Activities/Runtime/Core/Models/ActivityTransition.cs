@@ -3,7 +3,11 @@ using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Runtime.Core.Models;
 
-/// <summary>Exactly one closed decision returned by one transient activity attempt.</summary>
+/// <summary>
+/// Exactly one closed decision returned by one transient activity attempt. A successful completion carries an
+/// <see cref="OutcomeSelection"/>: unspecified (<c>Done</c>), one or more named outcomes, or explicitly none
+/// (ADR 0045 §6).
+/// </summary>
 public abstract record ActivityTransition
 {
     protected ActivityTransition()
@@ -12,8 +16,21 @@ public abstract record ActivityTransition
 
     public abstract ActivityTransitionKind Kind { get; }
 
-    public static ActivityTransition<TResult> Complete<TResult>(TResult result, string outcome = "Done") =>
-        new CompleteActivityTransition<TResult>(result, outcome);
+    /// <summary>Completes without choosing a branch: an unspecified selection, which routes <c>Done</c>.</summary>
+    public static ActivityTransition<TResult> Complete<TResult>(TResult result) =>
+        new CompleteActivityTransition<TResult>(result, OutcomeSelection.Unspecified);
+
+    /// <summary>Completes and selects one named outcome.</summary>
+    public static ActivityTransition<TResult> Complete<TResult>(TResult result, string outcome) =>
+        new CompleteActivityTransition<TResult>(result, OutcomeSelection.Named(outcome));
+
+    /// <summary>Completes and selects several named outcomes; the node's outcome set must allow several.</summary>
+    public static ActivityTransition<TResult> Complete<TResult>(TResult result, IReadOnlyCollection<string> outcomes) =>
+        new CompleteActivityTransition<TResult>(result, OutcomeSelection.Named(outcomes));
+
+    /// <summary>Completes with an explicit selection (unspecified, named or empty).</summary>
+    public static ActivityTransition<TResult> Complete<TResult>(TResult result, OutcomeSelection selection) =>
+        new CompleteActivityTransition<TResult>(result, selection);
 
     public static ActivityTransition<TResult> Suspend<TResult, TState>(
         TState state,
@@ -28,16 +45,16 @@ public abstract record ActivityTransition
 
     private sealed record CompleteActivityTransition<TResult> : ActivityTransition<TResult>, IActivityCompletionTransition<TResult>
     {
-        public CompleteActivityTransition(TResult result, string outcome)
+        public CompleteActivityTransition(TResult result, OutcomeSelection selection)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(outcome);
+            ArgumentNullException.ThrowIfNull(selection);
             Result = result;
-            Outcome = outcome;
+            Selection = selection;
         }
 
         public override ActivityTransitionKind Kind => ActivityTransitionKind.Complete;
         public TResult Result { get; }
-        public string Outcome { get; }
+        public OutcomeSelection Selection { get; }
         object? IActivityCompletionTransition.Result => Result;
         public Type ResultType => typeof(TResult);
     }
@@ -90,8 +107,21 @@ public abstract record ActivityTransition<TResult> : ActivityTransition;
 /// </summary>
 public abstract record ActivityTransition<TResult, TState> : ActivityTransition<TResult>
 {
-    public static ActivityTransition<TResult, TState> Complete(TResult result, string outcome = "Done") =>
-        new CompleteStatefulActivityTransition(result, outcome);
+    /// <summary>Completes without choosing a branch: an unspecified selection, which routes <c>Done</c>.</summary>
+    public static ActivityTransition<TResult, TState> Complete(TResult result) =>
+        new CompleteStatefulActivityTransition(result, OutcomeSelection.Unspecified);
+
+    /// <summary>Completes and selects one named outcome.</summary>
+    public static ActivityTransition<TResult, TState> Complete(TResult result, string outcome) =>
+        new CompleteStatefulActivityTransition(result, OutcomeSelection.Named(outcome));
+
+    /// <summary>Completes and selects several named outcomes; the node's outcome set must allow several.</summary>
+    public static ActivityTransition<TResult, TState> Complete(TResult result, IReadOnlyCollection<string> outcomes) =>
+        new CompleteStatefulActivityTransition(result, OutcomeSelection.Named(outcomes));
+
+    /// <summary>Completes with an explicit selection (unspecified, named or empty).</summary>
+    public static ActivityTransition<TResult, TState> Complete(TResult result, OutcomeSelection selection) =>
+        new CompleteStatefulActivityTransition(result, selection);
 
     public static ActivityTransition<TResult, TState> Suspend<TTrigger>(
         TState state,
@@ -107,16 +137,16 @@ public abstract record ActivityTransition<TResult, TState> : ActivityTransition<
 
     private sealed record CompleteStatefulActivityTransition : ActivityTransition<TResult, TState>, IActivityCompletionTransition<TResult>
     {
-        public CompleteStatefulActivityTransition(TResult result, string outcome)
+        public CompleteStatefulActivityTransition(TResult result, OutcomeSelection selection)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(outcome);
+            ArgumentNullException.ThrowIfNull(selection);
             Result = result;
-            Outcome = outcome;
+            Selection = selection;
         }
 
         public override ActivityTransitionKind Kind => ActivityTransitionKind.Complete;
         public TResult Result { get; }
-        public string Outcome { get; }
+        public OutcomeSelection Selection { get; }
         object? IActivityCompletionTransition.Result => Result;
         public Type ResultType => typeof(TResult);
     }
@@ -187,7 +217,9 @@ public interface IActivityCompletionTransition
 {
     object? Result { get; }
     Type ResultType { get; }
-    string Outcome { get; }
+
+    /// <summary>The outcomes this completion takes; validated against the node's pinned outcome set.</summary>
+    OutcomeSelection Selection { get; }
 }
 
 /// <summary>Author-facing, strongly typed view of a successful activity completion.</summary>

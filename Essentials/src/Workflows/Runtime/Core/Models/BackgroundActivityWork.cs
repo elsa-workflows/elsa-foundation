@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Security.Cryptography;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -136,7 +137,7 @@ public sealed record BackgroundActivityWorkTerminalResult
 {
     public BackgroundActivityWorkTerminalResult(
         BackgroundActivityWorkResultKind kind,
-        string outcome = ActivityOutcomes.Done,
+        OutcomeSelection? selection = null,
         string? resultJson = null,
         NormalizedActivityFault? fault = null,
         string? cancellationReason = null)
@@ -146,7 +147,7 @@ public sealed record BackgroundActivityWorkTerminalResult
 
         if (kind == BackgroundActivityWorkResultKind.Complete)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(outcome);
+            selection ??= OutcomeSelection.Unspecified;
             if (fault is not null || cancellationReason is not null)
                 throw new ArgumentException("A completed result cannot carry fault or cancellation details.");
             if (resultJson is not null)
@@ -155,6 +156,8 @@ public sealed record BackgroundActivityWorkTerminalResult
                 catch (JsonException exception) { throw new ArgumentException("A result payload must contain valid JSON.", nameof(resultJson), exception); }
             }
         }
+        else if (selection is not null)
+            throw new ArgumentException("Only a completed result carries an outcome selection.", nameof(selection));
         else if (kind == BackgroundActivityWorkResultKind.Fault)
         {
             if (resultJson is not null || cancellationReason is not null)
@@ -167,14 +170,16 @@ public sealed record BackgroundActivityWorkTerminalResult
             ArgumentException.ThrowIfNullOrWhiteSpace(cancellationReason);
 
         Kind = kind;
-        Outcome = outcome;
+        Selection = selection;
         ResultJson = resultJson;
         Fault = fault;
         CancellationReason = cancellationReason;
     }
 
     public BackgroundActivityWorkResultKind Kind { get; }
-    public string Outcome { get; }
+
+    /// <summary>The outcome selection of a completed result (unspecified when the worker chose none); null otherwise.</summary>
+    public OutcomeSelection? Selection { get; }
     public string? ResultJson { get; }
     public NormalizedActivityFault? Fault { get; }
     public string? CancellationReason { get; }
@@ -229,7 +234,7 @@ public static class BackgroundActivityWorkReceipt
             request.ContractFingerprint,
             request.InputSnapshot,
             result.Kind,
-            result.Outcome,
+            result.Selection,
             ResultJson = resultJson,
             result.Fault,
             result.CancellationReason
