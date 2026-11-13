@@ -397,7 +397,7 @@
                             "kind": "set",
                             "valueType": {
                               "alias": "Elsa.Any",
-                              "collectionKind": "single"
+                              "collectionKind": "Single"
                             },
                             "variable": {
                               "referenceKey": "block-result-1",
@@ -465,7 +465,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -538,7 +538,7 @@
                     "kind": "set",
                     "valueType": {
                       "alias": "Elsa.Any",
-                      "collectionKind": "single"
+                      "collectionKind": "Single"
                     },
                     "variable": {
                       "referenceKey": "block-result-1",
@@ -602,7 +602,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -791,7 +791,7 @@
                             "kind": "set",
                             "valueType": {
                               "alias": "Elsa.Any",
-                              "collectionKind": "single"
+                              "collectionKind": "Single"
                             },
                             "variable": {
                               "referenceKey": "block-result-1",
@@ -872,7 +872,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -944,7 +944,7 @@
                     "kind": "set",
                     "valueType": {
                       "alias": "Elsa.Any",
-                      "collectionKind": "single"
+                      "collectionKind": "Single"
                     },
                     "variable": {
                       "referenceKey": "block-result-1",
@@ -1021,7 +1021,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -1382,7 +1382,7 @@
                                           "kind": "set",
                                           "valueType": {
                                             "alias": "Elsa.Any",
-                                            "collectionKind": "single"
+                                            "collectionKind": "Single"
                                           },
                                           "variable": {
                                             "referenceKey": "block-result-1",
@@ -1418,7 +1418,7 @@
                                 "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
-                                  "collectionKind": "single"
+                                  "collectionKind": "Single"
                                 },
                                 "storageDriverType": null,
                                 "default": null
@@ -1597,7 +1597,7 @@
                                   "kind": "set",
                                   "valueType": {
                                     "alias": "Elsa.Any",
-                                    "collectionKind": "single"
+                                    "collectionKind": "Single"
                                   },
                                   "variable": {
                                     "referenceKey": "block-result-1",
@@ -1629,7 +1629,7 @@
                                 "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
-                                  "collectionKind": "single"
+                                  "collectionKind": "Single"
                                 },
                                 "storageDriverType": null,
                                 "default": null
@@ -1869,7 +1869,7 @@
                             "kind": "set",
                             "valueType": {
                               "alias": "Elsa.Any",
-                              "collectionKind": "single"
+                              "collectionKind": "Single"
                             },
                             "variable": {
                               "referenceKey": "block-result-1",
@@ -1977,7 +1977,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -2050,7 +2050,7 @@
                     "kind": "set",
                     "valueType": {
                       "alias": "Elsa.Any",
-                      "collectionKind": "single"
+                      "collectionKind": "Single"
                     },
                     "variable": {
                       "referenceKey": "block-result-1",
@@ -2149,7 +2149,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -2363,7 +2363,7 @@
                             "kind": "set",
                             "valueType": {
                               "alias": "Elsa.Any",
-                              "collectionKind": "single"
+                              "collectionKind": "Single"
                             },
                             "variable": {
                               "referenceKey": "block-result-1",
@@ -2484,7 +2484,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -2556,7 +2556,7 @@
                     "kind": "set",
                     "valueType": {
                       "alias": "Elsa.Any",
-                      "collectionKind": "single"
+                      "collectionKind": "Single"
                     },
                     "variable": {
                       "referenceKey": "block-result-1",
@@ -2668,7 +2668,7 @@
                   "name": "Block result 1",
                   "type": {
                     "alias": "Elsa.Any",
-                    "collectionKind": "single"
+                    "collectionKind": "Single"
                   },
                   "storageDriverType": null,
                   "default": null
@@ -3054,7 +3054,7 @@
                                           "kind": "set",
                                           "valueType": {
                                             "alias": "Elsa.Any",
-                                            "collectionKind": "single"
+                                            "collectionKind": "Single"
                                           },
                                           "variable": {
                                             "referenceKey": "block-result-1",
@@ -3130,7 +3130,7 @@
                                 "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
-                                  "collectionKind": "single"
+                                  "collectionKind": "Single"
                                 },
                                 "storageDriverType": null,
                                 "default": null
@@ -3309,7 +3309,7 @@
                                   "kind": "set",
                                   "valueType": {
                                     "alias": "Elsa.Any",
-                                    "collectionKind": "single"
+                                    "collectionKind": "Single"
                                   },
                                   "variable": {
                                     "referenceKey": "block-result-1",
@@ -3376,7 +3376,7 @@
                                 "name": "Block result 1",
                                 "type": {
                                   "alias": "Elsa.Any",
-                                  "collectionKind": "single"
+                                  "collectionKind": "Single"
                                 },
                                 "storageDriverType": null,
                                 "default": null

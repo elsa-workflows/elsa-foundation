@@ -173,7 +173,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
   const body = block.structure!.payload;
   const captures = new Map<string, ActivityNode[]>();
   const added = [...transfers.values()].map(transfer => {
-    const variable: VariableDefinition = { referenceKey: transfer.key, name: allocateName(), type: { alias: "Elsa.Any", collectionKind: "single" }, storageDriverType: null, default: null };
+    const variable: VariableDefinition = { referenceKey: transfer.key, name: allocateName(), type: { alias: "Elsa.Any", collectionKind: "Single" }, storageDriverType: null, default: null };
     const capture: ActivityNode = { nodeId: transfer.nodeId, activityVersionId: setDescriptors[0].activityVersionId, inputs: [{ referenceKey: "value", value: {
       expressionType: "ActivityResult", value: { producerNodeId: transfer.producerId, projectionKey: transfer.projection, ...(transfer.scope ? { producerScopeId: transfer.scope } : {}) }
     } }], outputs: [], intrinsic: { kind: "set", valueType: variable.type, variable: { referenceKey: transfer.key, declaringScopeId: ownerId } } };
