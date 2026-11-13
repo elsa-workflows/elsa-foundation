@@ -23,6 +23,9 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
 {
     private IFlowchartJoinPolicy? _joinPolicy;
 
+    /// <summary>The host-level options, for the engine's deliberate flaws (not main's).</summary>
+    internal FlowchartOptions Options => options;
+
     /// <summary>The configured join semantics. Resolved once, from the same registry every other policy lives in.</summary>
     public IFlowchartJoinPolicy JoinPolicy => _joinPolicy ??=
         policyRegistry.GetRequired(options.JoinPolicyKind) as IFlowchartJoinPolicy
@@ -142,7 +145,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         IReadOnlySet<string> takenConnectionIds,
         string producingActivityExecutionId)
     {
-        if (!JoinPolicy.PropagatesDeadPaths)
+        if (!JoinPolicy.PropagatesDeadPaths || options.Flaws.HasFlag(FlowchartFlaws.NoDeadPaths))     // MUTATION: NoDeadPaths
             return state;
 
         var untaken = graph.GetOutboundConnections(sourceNodeId)
@@ -200,9 +203,13 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         // from "must it wait" and has to be asked directly. A Merge node is exempted from waiting because it
         // must never block — not because nothing more is coming — so reading that exemption as an all-dead
         // verdict would carry deadness past a live branch still in flight.
-        return MissingInboundSourceIds(state, graph, group).Length == 0
-            ? CarryDeadnessThrough(context, state, graph, group, producingActivityExecutionId)
-            : state;
+        if (MissingInboundSourceIds(state, graph, group).Length != 0)
+            return state;
+
+        // MUTATION: DeadPathRunsNode. The all-dead node is scheduled as if a live token had reached it.
+        return options.Flaws.HasFlag(FlowchartFlaws.DeadPathRunsNode)
+            ? FireJoinOrContinuation(context, state, graph, group.TargetNodeId, group.ExecutionScopeId, group.IterationKey, producingActivityExecutionId, connectionId)
+            : CarryDeadnessThrough(context, state, graph, group, producingActivityExecutionId);
     }
 
     /// <summary>

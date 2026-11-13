@@ -105,6 +105,9 @@ internal static class FlowchartScopeResolver
         if (!reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
             return currentScope;
 
+        if (reachabilityAnalyzer.Flaws.HasFlag(FlowchartFlaws.NoRoundReset))     // MUTATION: NoRoundReset
+            return currentScope;
+
         // Iteration numbering derives from the explicit monotonic per-owner counter, not the live scope
         // count — this is what lets stale loop-iteration scopes be pruned without a later iteration ever
         // reusing an earlier key. FlowchartStateMutator.AddScope advances the counter atomically when this

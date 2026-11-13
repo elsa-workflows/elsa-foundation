@@ -97,7 +97,9 @@ public sealed class FlowchartExecutionEngine(
         }
 
         if (scope.Kind == ExecutionScopeKind.Race && scope.Status == ExecutionScopeStatus.Active)
-            state = CompleteRaceScope(state, scope, path);
+            state = joinCoordinator.Options.Flaws.HasFlag(FlowchartFlaws.CancelLeavesPaths)     // MUTATION: CancelLeavesPaths
+                ? UpdateScope(state, scope with { Status = ExecutionScopeStatus.Completed })
+                : CompleteRaceScope(state, scope, path);
         var continuationScope = ResolveContinuationScope(state, scope);
 
         var sourceMetadata = graph.GetNodeMetadata(completionContext.CompletedChildExecutableNodeId);

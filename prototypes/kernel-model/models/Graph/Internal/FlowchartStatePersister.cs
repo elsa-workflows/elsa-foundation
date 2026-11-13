@@ -164,7 +164,7 @@ public sealed class FlowchartStatePersister
         if (kind != FlowchartStepKind.Defer && run.Scheduled.Count > 0)
             throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same execution.");
 
-        return new FlowchartStep(kind, PruneForPersistence(state), run.Scheduled.ToArray(), outcome, fault);
+        return new FlowchartStep(kind, PruneForPersistence(state), run.Scheduled.ToArray(), outcome, fault) { Live = state };
     }
 
     /// <summary>The serializer main's persister uses: web defaults, enums as ordinals.</summary>
