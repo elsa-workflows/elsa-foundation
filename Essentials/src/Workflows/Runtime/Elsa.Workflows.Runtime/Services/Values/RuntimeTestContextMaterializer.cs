@@ -158,6 +158,8 @@ internal static class RuntimeTestContextMaterializer
         foreach (var value in root.Values.Values.Where(x => x.Presence != ValuePresence.Absent))
             Validate(value, value.Type, value.Policy);
         var results = new List<RuntimeTestResultFixture>();
+        if (seed.Results.GroupBy(x => (x.ProducerNodeId, x.ProducerScopeId)).Any(x => x.Count() != 1))
+            throw Refused("Prior-result fixture identities must be unique within the supplied test context.");
         foreach (var fixture in seed.Results)
         {
             RequireDurable(fixture.Result);
@@ -244,8 +246,7 @@ internal static class RuntimeTestContextMaterializer
                             case Elsa.Expressions.Core.Models.VariableExpressionParameterBinding variable: RequireVariable(variable.DeclaringScopeNodeId, variable.VariableKey, node); break;
                             case Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding request when !HasOwnedClosedAncestor(node): RequireRequest(request.MemberKey); break;
                         }
-                    if (StringComparer.OrdinalIgnoreCase.Equals(expression.Language, "JavaScript"))
-                        await RequireCompleteAmbientContextAsync(node);
+                    await RequireCompleteAmbientContextAsync(node);
                 }
                 if (binding.Variable is { } variableReference)
                 {
@@ -441,7 +442,7 @@ internal static class RuntimeTestContextMaterializer
         async ValueTask RequireCompleteAmbientContextAsync(ExecutableNode node)
         {
             // The engine exposes names and computed access. Without an engine-owned dependency manifest we
-            // conservatively require every captured enclosing declaration; Runtime never parses JavaScript.
+            // conservatively require every captured enclosing declaration, regardless of evaluator language alias.
             if (HasOwnedClosedAncestor(node)) return;
             var lastClosedIndex = frames.FindLastIndex(x => x.IsClosedBoundary);
             var visibleAncestors = lastClosedIndex < 0 ? path.Take(path.Count - 1) :
@@ -453,7 +454,7 @@ internal static class RuntimeTestContextMaterializer
                 var contribution = new RuntimeTestScopeContractsCollecting(executable, ancestor, kind);
                 await (publisher ?? throw Refused("Ambient context discovery is unavailable.")).Publish(contribution, cancellationToken);
                 if (contribution.Contracts.Count != 1)
-                    throw Refused("The JavaScript ambient context requires one complete model-owned enclosing contract.");
+                    throw Refused("The expression ambient context requires one complete model-owned enclosing contract.");
                 var contract = contribution.Contracts.Single();
                 foreach (var declaration in contract.Variables.Values)
                     RequireVariable(contract.ScopeId, declaration.VariableKey);

@@ -189,6 +189,45 @@ public sealed class RuntimeTestContextSafetyTests
         Assert.Equal("runtime.test-context.conversion-unavailable", Assert.Single(result.Findings).Code);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Duplicate_unreferenced_fixtures_are_setup_refusals(bool duplicate)
+    {
+        await using var harness = WorkflowExecutionHarness.Create().Build();
+        var type = TypeOf<string>(harness);
+        var contract = new ActivityContract("producer", "1", "producer", JsonSerializer.SerializeToElement(new { }), [],
+            new(type, false, ActivityValuePolicy.Default, []), ["Done"], new("producer", "probe"));
+        var before = new ExecutableNode("before", "before", "producer", "1", "producer", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), activityContract: contract);
+        var fixture = new RuntimeTestResultFixture("before", "scope", ValueEnvelope.Null(type, ValueProtectionPolicy.InstanceInline));
+        var result = await Inspect(harness, WorkflowExecutionHarness.NewExecutable(Container(Leaf("selected"), before: before)),
+            duplicate ? [fixture, fixture] : [fixture]);
+        Assert.Equal(!duplicate, result.IsAvailable);
+        if (duplicate) Assert.Equal(RuntimeTestContextFindingKind.Unavailable, Assert.Single(result.Findings).Kind);
+    }
+
+    [Theory]
+    [InlineData("JavaScript", false)]
+    [InlineData("CustomScript", false)]
+    [InlineData("JavaScript", true)]
+    [InlineData("CustomScript", true)]
+    public async Task Qualified_expression_aliases_require_the_same_complete_ambient_setup(string language, bool supplied)
+    {
+        await using var harness = WorkflowExecutionHarness.Create().ConfigureServices(s =>
+            s.AddSingleton<IPortableExpressionEvaluator, QualifiedEvaluator>()).Build();
+        var type = TypeOf<int>(harness);
+        var node = Leaf("selected", new("value", type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
+            expression: new(language, "amount")));
+        var executable = WorkflowExecutionHarness.NewExecutable(node, new RuntimeVariableDeclaration("amount", "amount", type,
+            ValueProtectionPolicy.InstanceInline));
+        var result = await harness.Services.GetRequiredService<IRuntimeTestContextInspector>().InspectAsync(new(executable,
+            "selected", "inspection", new("setup", "fingerprint", [], []), new Dictionary<string, JsonElement>(),
+            supplied ? new Dictionary<string, JsonElement> { ["amount"] = JsonSerializer.SerializeToElement(7) } : new Dictionary<string, JsonElement>()));
+        Assert.Equal(supplied, result.IsAvailable);
+        if (!supplied) Assert.Equal(RuntimeTestContextFindingKind.Unavailable, Assert.Single(result.Findings).Kind);
+    }
+
     private sealed class QualifiedEvaluator : IPortableExpressionEvaluator, IPortableExpressionCapabilities
     {
         public bool CanEvaluate(ExpressionDefinition definition) => true;

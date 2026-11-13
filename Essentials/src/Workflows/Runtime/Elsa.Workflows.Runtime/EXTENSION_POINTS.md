@@ -1297,7 +1297,9 @@ This initial inspection profile reports member-read setup and outside results wi
 unavailable until a completion/selection-equivalent preflight is qualified. It also refuses missing
 closed ancestors, custom-converted types, legacy request paths, named result projections, and direct
 or expression-parameter conversion plans. Unsupported setup is not returned as available and no
-runtime binding or completion semantics are weakened.
+runtime binding or completion semantics are weakened. Duplicate outside fixture identities are setup
+refusals, and every qualified evaluator alias requires complete ambient setup until an engine-owned
+dependency manifest can qualify a narrower profile.
 
 ### Trusted test-context admission preflight (dormant prerequisite)
 
