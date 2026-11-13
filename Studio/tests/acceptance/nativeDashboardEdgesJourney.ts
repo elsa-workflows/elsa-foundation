@@ -10,7 +10,7 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
   info.setTimeout(300_000);
   const backend = await dashboardBackend(page.request); const boundary = observeNativeWeaverBoundary(page);
   const suffix = `edges-${Date.now()}`; const category = `In-flight ${suffix}`;
-  let question: Resource | undefined; let recordId: string | undefined; let disabled = false;
+  let question: Resource | undefined; let disabled = false;
   const counters = () => backend.api<{ counts: Record<string, number> }>("/__qualification/dashboard-live/counters");
   const before = await counters(); expect(before.counts["session.send"] ?? 0).toBe(0);
   async function feature(enabled: boolean) {
@@ -56,7 +56,6 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await capture(page, info, "edge-module-unavailable");
     const startedAt = new Date(Date.now() - 3_600_000).toISOString();
     const record = await backend.api<{ id: string; customerCategory: string; status: string; completedAt: string | null }>("/_acme/processing/records", "POST", { customerCategory: category, startedAt, completedAt: null, status: "processing", readerIds: [] });
-    recordId = record.id;
     expect(await backend.api(`/_acme/processing/records/${record.id}`)).toMatchObject({ id: record.id, customerCategory: category, status: "processing", completedAt: null });
     await page.getByRole("button", { name: "Replace unavailable query", exact: true }).click();
     const confirm = page.getByRole("dialog", { name: "Replace unavailable query", exact: true });
@@ -170,10 +169,8 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
         const current = await backend.api<Resource>(`/_elsa/studio/questions/${question.id}`);
         await backend.api(`/_elsa/studio/questions/${question.id}`, "DELETE", undefined, tag(current.revision));
       }
-      if (recordId) {
-        const removed = await backend.response(`/_acme/processing/records/${recordId}`, "DELETE");
-        expect(removed.ok() || removed.status() === 404).toBe(true);
-      }
+      // Acme's reference store has no deletion endpoint. It belongs only to this private
+      // owned host and disappears when the runner stops that host; no user store is touched.
     }
   }
 }
