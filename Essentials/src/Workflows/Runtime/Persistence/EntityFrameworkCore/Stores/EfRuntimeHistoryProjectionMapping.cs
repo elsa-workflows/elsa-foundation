@@ -27,7 +27,7 @@ internal sealed class EfRuntimeHistoryProjectionMapping(EfSchemaChain chain)
         return item;
     });
 
-    internal EventReceipt ReadReceipt(RuntimeHistoryEventEntity row, string scope, string run, RuntimeHistoryHead? head) => Checked(run, () =>
+    internal EventReceipt ReadReceipt(RuntimeHistoryEventEntity row, string scope, string run, RuntimeHistoryHead? head) => Checked<EventReceipt>(run, () =>
     {
         // Settle schema compatibility before interpreting any stamped identity or content.
         EfSchemaVersion.EnsureReadable(chain, row.SchemaVersion);
