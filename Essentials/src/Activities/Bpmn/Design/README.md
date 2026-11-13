@@ -2,7 +2,7 @@
 
 This package owns the authored structure, child/outcome projection, executable lowering and exact
 published-model reference contribution described by the approved [package boundary](../../../../../specs/1179-agents/plan.md#d7--bpmn-runtimeauthoring-separation).
-It depends on [neutral Core](../Core/README.md), Workflows Design Core, Validations Core and Publishing Core, with no
+It depends on [neutral Core](../Core/README.md), Tasks Core, Workflows Design Core, Validations Core and Publishing Core, with no
 reference to the concrete BPMN runtime or interpreter. [Extension points](EXTENSION_POINTS.md) record
 the owning contracts and registration lifetimes.
 
@@ -19,6 +19,11 @@ material and source-reference stores. Runtime-only hosts enable `ActivitiesBpmn`
   `BpmnDocumentStructureHandler` and `BpmnDocumentScopeViewHandler` provide the retention/query contract below.
 - Workflows Design Validations `IDraftValidator`: scoped `BpmnScopeViewSourceValidator` rejects physical
   derived views; `BpmnDocumentAdmissionValidator` reports the interim execution-closed diagnostic.
+- Tasks [`IStartupTask`](../../../Tasks/Elsa.Tasks/EXTENSION_POINTS.md#istartuptask--itask-core--elsataskscore):
+  `ValidateBpmnDirectAdmissionReplacementStartupTask`, order -100, checks only final shell service
+  descriptors and rejects competing optional Direct assessment replacements before draft validation.
+  It resolves no scoped assessor and performs no publication or execution. Repeated/copied composition
+  retains one guard bound to the current shell's collection.
 - Workflows Publishing [`IExecutableCompilationSource`](../../../Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md#iexecutablecompilationsource):
   the scoped `BpmnEmbeddingPinSource` validates exact live tenant-matched model material and contributes its immutable metadata/dependency pin.
 
