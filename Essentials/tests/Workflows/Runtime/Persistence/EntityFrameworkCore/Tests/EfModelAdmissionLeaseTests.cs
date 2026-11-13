@@ -76,7 +76,7 @@ public sealed class EfModelAdmissionLeaseTests
             var reader = Activator.CreateInstance(readerType, [context, access, new AdmissionCodec()])!;
             var native = new EfWorkflowExecutionStateStore(context, access, new AdmissionCodec());
             var commits = new EfRuntimeCheckpointCommitStore(context, access);
-            var selector = Activator.CreateInstance(Type("RuntimeExecutionProtocolSelector"), [registry, store, native, commits, access, provider, queue, reader])!;
+            var selector = Activator.CreateInstance(Type("RuntimeExecutionProtocolSelector"), [registry, store, native, commits, access, provider, queue, reader, null])!;
             IWorkflowExecutableRootWriteLeaseManager leases = new WorkflowExecutableRootWriteLeaseManager(store, options, TimeProvider.System);
             if (unique)
                 leases = new AdmissionUniqueLeaseManager(leases);
