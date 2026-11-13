@@ -409,7 +409,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// in every poll; a poll limit of them hides the resume behind them. So it is shelved: its row is marked seen at this
     /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
     /// </summary>
-    private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && Withheld(slot);
+    private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && Withheld(slot)
+        && CreationError(slot, suspect.Message) is null;
 
     /// <summary>
     /// An instance that cannot be given its messages now, as its actor type says (<see cref="IActorType.Withholds"/>).
@@ -446,7 +447,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private bool CanTry(Delivery suspect) =>
         _slots.TryGetValue(suspect.Message.Target.Id, out var slot) && (slot.Loaded || Has(Flaw.TrialBeforeLoad))
-        && (!slot.Busy || Has(Flaw.SuspendDuringTrial) || Has(Flaw.TrialBeforeLoad)) && !Withheld(slot)
+        && (!slot.Busy || Has(Flaw.SuspendDuringTrial) || Has(Flaw.TrialBeforeLoad))
+        && (!Withheld(slot) || CreationError(slot, suspect.Message) is not null)
         && !slot.Inbox.TakeWhile(i => i != suspect).Any(i => Kinds.IsControl(i.Message.Kind));
 
     /// <summary>
@@ -464,8 +466,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             if (item.Ticket || item.Taken) continue;    // taken here: recalled by a commit in flight
             var control = Kinds.IsControl(item.Message.Kind);
-            var identityReply = item.Message.Start?.Creation is not null || slot.Row?.Creation > 0 && item.Message.Start is not null ||
-                CreationProtocol.TargetError(slot.Row, item.Message) is not null;
+            var identityReply = CreationError(slot, item.Message) is not null;
             if (suspended && !control && !identityReply) continue;    // identity refusal does not activate suspended authored work
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
             // Keep lifecycle changes/refusals separate. Compatible messages of this creation retain normal batching.
@@ -531,12 +532,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var item in due) (item.Taken, item.Held) = (true, false);
         (slot.Busy, slot.Used) = (true, ++_used);
         var request = due[0].Message;
-        var creationError = request.Start is not null && (request.Start.Creation is not null || slot.Row?.Creation > 0)
-            ? request.Start.Creation is null ? "IdentityRequired"
-                : !CreationIdentityAvailable ? "CreationIdentityUnavailable"
-                : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
-                : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload)
-            : CreationProtocol.TargetError(slot.Row, request);
+        var creationError = CreationError(slot, request);
         if (creationError is not null)
         {
             Enqueue(Bound(CreationProtocol.Refuse(instance, slot.Row, due, creationError), slot));
@@ -555,6 +551,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         else
             _ = Drive(input);
     }
+
+    // One classifier for trial/shelving, withholding and dispatch: a refusal never enters the actor's authored work.
+    private string? CreationError(Slot slot, Message request) => request.Start is not null && (request.Start.Creation is not null || slot.Row?.Creation > 0)
+            ? request.Start.Creation is null ? "IdentityRequired"
+                : !CreationIdentityAvailable ? "CreationIdentityUnavailable"
+                : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
+                : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload)
+            : CreationProtocol.TargetError(slot.Row, request);
 
     private async Task Drive(TurnInput input)
     {
