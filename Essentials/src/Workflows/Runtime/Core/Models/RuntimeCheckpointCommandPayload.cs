@@ -227,6 +227,10 @@ public sealed class RuntimeCheckpointCommandPayload
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelNativeWorkOrigin? ModelWorkOrigin { get; init; }
 
+    /// <summary>Exact standalone root origin retained independently of an expired source delivery claim.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressCommandOrigin? IngressOrigin { get; init; }
+
     /// <summary>Durable cross-workflow dispatch depth. Missing legacy values default to zero.</summary>
     public int DispatchNestingDepth { get; }
 

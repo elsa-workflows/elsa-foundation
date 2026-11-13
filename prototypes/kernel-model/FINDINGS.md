@@ -1004,6 +1004,51 @@ is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds,
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
 
+### 25.2 Subscribing twice and removing what is absent (M6). Run
+
+**What the contract says now.** `TurnCommit.Subscribed` and `Unsubscribed` are idempotent: a wait that is there
+already stays one wait, and removing one that is not there changes nothing; neither is a count that does not match.
+Within a turn its subscribes apply before its unsubscribes, as the in-memory store always did. The conformance
+suite's two reference cases of M6 are required, and a third case covers a commit that names a wait twice and one that
+subscribes and unsubscribes the same wait.
+
+**How each store meets it.** In memory: a set, as before. MongoDB: an upsert and a delete without a count, as before
+(it passed both cases already). EF: the change tracker writes a subscription as a row, so a wait that is there is a key
+violation (definite, which parked the instance) and an absent one removed is a count that does not match (not landed,
+which reset the partition). The EF store now:
+
+- writes each wait a batch names once, with what the batch leaves of it (`Waits`), so a batch never tracks the same
+  row twice;
+- when the batch fails with a count that does not match on a subscription, or with a definite error while it
+  subscribes something and the fence still holds, rolls back and sends the batch once more with its waits as
+  statements of their own after the `SaveChanges`: `INSERT ... ON CONFLICT DO NOTHING` (PostgreSQL, SQLite), `INSERT
+  ... WHERE NOT EXISTS` (SQL Server), `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL: `INSERT IGNORE` would also turn a value too long
+  into a warning and cut it), and a plain `DELETE` by key. Only the partition's
+  owner writes its instances' waits, under the fence, so nothing races the check.
+
+The common path costs nothing more: the waits are still in the one batch. The second attempt costs a commit's round
+trips plus one per wait. A batch pays it when its first count that does not match is on a wait (a wait removed while
+absent, or a stale owner's batch whose unsubscribe is checked before its fence), or when it subscribes anything and
+fails with a definite error while the fence holds (a wait that is there, or any other definite error, which then fails
+the second attempt too, and each of the kernel's one-by-one commits after it). M6 reasoned that the kernel's own turns
+never re-subscribe or remove what is absent.
+
+**Gates.**
+
+| Store | Fence | Before (section 24, and 25.1) | After |
+|---|---|---|---|
+| In memory | – | 56 passed, 1 skipped | 57 passed, 1 skipped |
+| SQLite | checked, batch | 54 passed, 2 reference differ (the two of M6), 1 skipped | 57 passed, 0 reference differ, 1 skipped |
+| PostgreSQL 17 | checked, batch | 54 passed, 3 reference differ | 57 passed, 1 reference differ (F8) |
+| SQL Server 2022 (RCSI) | checked, batch | 53 passed, 3 reference differ, 1 skipped | 56 passed, 1 reference differ (F8), 1 skipped |
+| MySQL 8.4 (REPEATABLE READ) | batch, checked | (ENGINES.md) | 56 passed, 1 reference differ (F8), 1 skipped |
+| MongoDB 8.0 | checked | (MONGO.md) | 58 passed |
+
+EF cost runs, SQLite and PostgreSQL (`proxy=1`), each fence: every counted and sent round trip the same as before; the
+TCP-read column of the PostgreSQL rows of 100 and 1,000 instances moved by up to three reads, the noise README
+describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (not run for this
+item; whether their models ever reach the second attempt was not checked).
+
 ### 25.5 A poisoned job parks its instance (decision 9). Run
 
 **What changed.** A job's ticket was already counted like any message: it goes on trial alone, and a take after a lost
@@ -1035,6 +1080,73 @@ the oracle counted every `dierun` instance as allowed to fault, whatever parked 
 native seeds found 6,116 parkings of such instances: 6,114 by their own job's ticket, and two by a message (`0/f2` by
 `x15`, `0/f1` by `x8`, each "on trial when 3 owners were lost"). That version hid those two from the innocent count;
 the oracle now counts them. Not run: the stores (no store or commit code changed).
+
+### 25.9 Park removes active subscriptions (owner decision, 13 November). Run
+
+The owner decided that Park removes active event subscriptions in the same fenced commit that faults a workflow
+instance. Its last committed state, fault details and configured history remain; its parent still receives the
+faulted-child notice. A previously routed delivery can still arrive and is dropped by the faulted instance. A future
+explicit recovery operation must restore waits; events in the gap require kept-event semantics. Suspension retains
+active subscriptions. This does not add a recovery operation or preserve consumed deliveries in a dead-letter queue.
+
+`WorkflowInstance.Park` now sets the existing all-subscriptions removal on its `TurnOutcome`. No new storage operation
+or transaction is introduced. I8 no longer exempts parked instances with active subscriptions: faulted rows must have
+none, while their preserved checkpoint may still describe inactive waits.
+
+`$NAT park` runs the actual worker/store path. On the prior implementation five cases failed at subscription cleanup:
+an exception at Full, State and Minimal history, a definite storage refusal, and a lost owner on trial reaching the
+poison threshold. The suspension control passed. With the change all six pass, also checking retained state and
+configured history, the parent's fault notice, no routing from later publishes, and dropping an already-routed event.
+The native smoke suite passes. A native simulation of 2,000 seeds × 1,000 actions passes: 38,800 completed instances
+match fault-free execution; this sweep parks no innocent instance, so the deterministic trial case supplies that path.
+Provider conformance and cost evidence for the unchanged unsubscribe operation remains separate; no new all-provider
+or round-trip execution result is claimed here.
+
+Independent review found a combined path the initial six cases omitted: a refused Resume parks the previous
+suspended checkpoint. Withholding that faulted row indefinitely prevented already-routed events from reaching the
+drop path. Withholding now applies only to running instances; faulted instances consume late deliveries without
+deserializing their inactive checkpoint. Two additional real-worker cases failed before this correction, including
+an older owner holding a newer-version checkpoint. All eight cases now pass while preserving state and version.
+
+### 25.7 Set-based projector rounds (decision 8). Run
+
+**What changed.** `EfStore.ProjectAsync` writes a round's view rows set-based. It first works out, in memory, what the
+round leaves of each instance's view:
+- an instance whose delete is in the round is removed, as before (the old code wrote its views and then removed them);
+- every other instance is moved on by its commits.
+
+On PostgreSQL the round's write is one statement, so it is one round trip and its own transaction. A data-modifying
+CTE moves the projector's row only from where the round read it. It upserts the views from `unnest` arrays, and deletes
+the removed views, both only if the row moved. On SQLite it is one transaction: the move, one multi-row upsert per 200
+views, and one delete per 500. SQL Server and MySQL still write one statement per view (`Engine.ViewAsync`), with the
+delete set-based; they are not tuned here. The contract is unchanged.
+
+**The check.** The existing case already projects a round that moves one view and removes another (an instance whose
+view an earlier round wrote). A new required case crosses every chunk of the statements: one round of 850 new
+instances (more than SQLite's 200 views per statement), then one round of 600 deletes alone (more than 500 ids per
+delete), with no view to write: `projection: rounds larger than a statement's chunk: 850 views in one, then 600
+deletes alone`. It passes on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB. It commits in chunks of 170
+and 200: one commit of 850 new instances failed on MySQL's provider ("The CommandText property has not been properly
+initialized"). A reviewer's probe found the failure from about 420 such turns in one commit, below the kernel's flush
+cap of 500 turns (`WorkerOptions.MaxBatch` counts turns, not rows), with the cause not known; ENGINES.md's 1,000
+instances started at once did land, so the row shape matters. Not fixed here: issue #4358.
+
+**Gates.**
+
+| Gate | Before | After |
+|---|---|---|
+| EF cost, PostgreSQL (`proxy=1`), "a projector round over the journal so far", checked and batch | 17 round trips | **3** (two reads, one write) |
+| EF cost, SQLite, the same row, checked and batch | 18 engine calls | 7 |
+| Every other row of both cost runs | | the same, counted and sent |
+| Semantic suite, in-memory | 56 passed, 1 skipped | 57 passed, 1 skipped |
+| SQLite (both fences), PostgreSQL (batch and checked) | 54 passed, 2 or 3 reference differ | 55 passed, the same reference cases differ |
+| SQL Server (default), MySQL (default) | 53 passed, 3 reference differ, 1 skipped | 54 passed, the same |
+| MongoDB | 57 passed | 58 passed |
+
+These original gate runs predate the subscription change in section 25.2. Their reference differences are M6 and F8; M6 is required after that change.
+
+**Not run:** the simulation (it uses the in-memory store, unchanged) and the stress tests (the projector does not run in
+them, section 23).
 
 ## 26. Round 4: the graph engine. Run
 
@@ -1128,8 +1240,9 @@ plan's aims at it), so that it bites is not shown.
 
 ### Open, and for the owner
 
-- **Should Park remove a parked instance's subscriptions?** The kernel keeps them (a parked instance is faulted, not
-  deleted; recovery might want its waits). The simulation now accepts that; a kernel decision, not made here.
+- **Park subscriptions, resolved 13 November:** this round initially kept them and exempted parked instances in I8.
+  The owner subsequently chose atomic removal of active subscriptions while retaining the checkpoint and fault
+  evidence. Section 25.9 records the new behavior and checks; the old exemption is removed.
 - **Main's engine, possibly:** a decision with both outcomes connected to one node schedules that node on the live
   arrival and then carries the dead arrival from the same source through it as well, which could fire a later join
   twice. Found by reading (a reviewer), not run; it is main's behaviour and no workflow in the mix has that shape. A

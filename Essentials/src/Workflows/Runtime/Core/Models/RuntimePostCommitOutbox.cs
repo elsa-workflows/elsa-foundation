@@ -60,7 +60,6 @@ public sealed class RuntimePostCommitOutboxItem
     }
 
     /// <summary>Reads additive delivery protocol state while retaining the original CLR constructor.</summary>
-    [JsonConstructor]
     public RuntimePostCommitOutboxItem(
         string outboxItemId,
         RuntimePostCommitIntent intent,
@@ -79,9 +78,27 @@ public sealed class RuntimePostCommitOutboxItem
         int? stimulusDeliveryProtocolVersion,
         PersistenceScope? stimulusDeliverySourceScope,
         StimulusDeliverySnapshot? recipientSnapshot)
+        : this(outboxItemId, intent ?? throw new ArgumentNullException(nameof(intent)), status, recordedAt, availableAt,
+            retryPolicy, deliveryAttemptCount, deliveringOwnerId, deliveryStartedAt, deliveredAt, lastFailureMessage,
+            metadata, deliveryFencingToken, deliveryVisibleAfter, stimulusDeliveryProtocolVersion, stimulusDeliverySourceScope,
+            recipientSnapshot, null, null, null)
+    {
+    }
+
+    /// <summary>Source-discriminated wire; absent additive members preserve historical workflow serialization.</summary>
+    [JsonConstructor]
+    public RuntimePostCommitOutboxItem(string outboxItemId, RuntimePostCommitIntent? intent,
+        RuntimePostCommitOutboxStatus status, DateTimeOffset recordedAt, DateTimeOffset? availableAt,
+        RuntimePostCommitRetryPolicy? retryPolicy, int deliveryAttemptCount, string? deliveringOwnerId,
+        DateTimeOffset? deliveryStartedAt, DateTimeOffset? deliveredAt, string? lastFailureMessage,
+        IReadOnlyDictionary<string, string>? metadata, long deliveryFencingToken, DateTimeOffset? deliveryVisibleAfter,
+        int? stimulusDeliveryProtocolVersion, PersistenceScope? stimulusDeliverySourceScope, StimulusDeliverySnapshot? recipientSnapshot,
+        RuntimeStandaloneIngressSource? standaloneIngress, int? subscriptionDeliveryProtocolVersion,
+        RuntimeSubscriptionDelivery? subscriptionDelivery)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
-        ArgumentNullException.ThrowIfNull(intent);
+        if ((intent is null) == (standaloneIngress is null))
+            throw new ArgumentException("Exactly one actual workflow intent or standalone ingress source is required.", nameof(intent));
 
         if (deliveryAttemptCount < 0)
             throw new ArgumentOutOfRangeException(nameof(deliveryAttemptCount), "Delivery attempt count cannot be negative.");
@@ -96,8 +113,31 @@ public sealed class RuntimePostCommitOutboxItem
             throw new ArgumentException("A declared recipient protocol requires its committed persistence scope.", nameof(stimulusDeliverySourceScope));
         if (recipientSnapshot is not null && (stimulusDeliveryProtocolVersion != recipientSnapshot.Version ||
             recipientSnapshot.SourceOutboxItemId != outboxItemId || recipientSnapshot.Scope.PersistenceScope != stimulusDeliverySourceScope ||
-            recipientSnapshot.IntentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeIntent(intent)))
+            intent is null || recipientSnapshot.IntentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeIntent(intent)))
             throw new ArgumentException("The recipient snapshot does not belong to this declared source protocol.", nameof(recipientSnapshot));
+
+        if (subscriptionDeliveryProtocolVersion is not null and not RuntimeSubscriptionDelivery.CurrentVersion)
+            throw new NotSupportedException("The subscription delivery protocol version is unsupported.");
+        if (standaloneIngress is not null && (outboxItemId != standaloneIngress.OutboxItemId || recordedAt != standaloneIngress.RecordedAt ||
+            stimulusDeliveryProtocolVersion is not null || stimulusDeliverySourceScope is not null || recipientSnapshot is not null ||
+            subscriptionDeliveryProtocolVersion != RuntimeSubscriptionDelivery.CurrentVersion || subscriptionDelivery is null ||
+            subscriptionDelivery.Recipients.Count == 0))
+            throw new ArgumentException("Standalone ingress requires its exact source identity and a complete nonempty accepted selection.", nameof(standaloneIngress));
+        if (intent is not null && subscriptionDeliveryProtocolVersion is not null && stimulusDeliverySourceScope is null)
+            throw new ArgumentException("Workflow subscription delivery requires its actual committed source scope.", nameof(subscriptionDeliveryProtocolVersion));
+        if (subscriptionDelivery is not null && (subscriptionDeliveryProtocolVersion != subscriptionDelivery.Version ||
+            subscriptionDelivery.SourceOutboxItemId != outboxItemId || subscriptionDelivery.Scope != (standaloneIngress?.Scope ?? stimulusDeliverySourceScope) ||
+            subscriptionDelivery.SourceFingerprint != (standaloneIngress?.Fingerprint ?? RuntimeCheckpointCommitFingerprint.ComputeIntent(intent!))))
+            throw new ArgumentException("Subscription delivery must belong to this actual source and scope.", nameof(subscriptionDelivery));
+        if (standaloneIngress is not null && (standaloneIngress.AdmissionPolicy == RuntimeIngressAdmissionPolicy.RequireAll && subscriptionDelivery!.Refusals.Count != 0 ||
+            subscriptionDelivery!.Recipients.Any(recipient => recipient.TenantId != standaloneIngress.TenantId || recipient.Partition != standaloneIngress.Partition)))
+            throw new ArgumentException("The accepted cohort violates its source admission policy or scope.", nameof(subscriptionDelivery));
+        if (subscriptionDeliveryProtocolVersion is not null && status == RuntimePostCommitOutboxStatus.Delivered && subscriptionDelivery?.IsSettled != true)
+            throw new ArgumentException("Delivery cannot complete before every accepted recipient transfers responsibility or is cancelled before dispatch.", nameof(status));
+        if (subscriptionDeliveryProtocolVersion is not null && status == RuntimePostCommitOutboxStatus.Cancelled &&
+            (subscriptionDelivery is null || subscriptionDelivery.Progress.Any(item => item.Phase != RuntimeRecipientPhase.CancelledBeforeDispatch) ||
+             subscriptionDelivery.WaitDelivery?.IsSettled == false))
+            throw new ArgumentException("Cancellation cannot discard committed dispatch responsibility.", nameof(status));
 
         StimulusDeliveryProtocolVersion = stimulusDeliveryProtocolVersion;
         StimulusDeliverySourceScope = stimulusDeliverySourceScope;
@@ -116,10 +156,14 @@ public sealed class RuntimePostCommitOutboxItem
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         DeliveryFencingToken = deliveryFencingToken;
         DeliveryVisibleAfter = deliveryVisibleAfter;
+        StandaloneIngress = standaloneIngress;
+        SubscriptionDeliveryProtocolVersion = subscriptionDeliveryProtocolVersion;
+        SubscriptionDelivery = subscriptionDelivery;
     }
 
     public string OutboxItemId { get; }
-    public RuntimePostCommitIntent Intent { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimePostCommitIntent? Intent { get; }
     public RuntimePostCommitOutboxStatus Status { get; }
     public DateTimeOffset RecordedAt { get; }
     public DateTimeOffset? AvailableAt { get; }
@@ -145,14 +189,70 @@ public sealed class RuntimePostCommitOutboxItem
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusDeliverySnapshot? RecipientSnapshot { get; }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeStandaloneIngressSource? StandaloneIngress { get; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SubscriptionDeliveryProtocolVersion { get; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeSubscriptionDelivery? SubscriptionDelivery { get; }
+
+    [JsonIgnore] public RuntimeDeliverySourceKind SourceKind => StandaloneIngress is null ? RuntimeDeliverySourceKind.WorkflowCheckpoint : RuntimeDeliverySourceKind.StandaloneIngress;
+    [JsonIgnore] public string DeliveryKind => StandaloneIngress?.DeliveryKind ?? Intent!.Kind;
+    [JsonIgnore] public string LogicalIntentId => StandaloneIngress?.LogicalIntentId ?? Intent!.IntentId;
+    [JsonIgnore] public string SourceFingerprint => StandaloneIngress?.Fingerprint ?? RuntimeCheckpointCommitFingerprint.ComputeIntent(Intent!);
+    [JsonIgnore] public PersistenceScope? SourceScope => StandaloneIngress?.Scope ?? StimulusDeliverySourceScope;
+    [JsonIgnore] public string? WorkflowExecutionId => Intent?.WorkflowExecutionId;
+    [JsonIgnore] public IReadOnlyDictionary<string, string> DeliveryMetadata => Intent?.Metadata ?? Metadata;
+
+    public RuntimePostCommitIntent RequireWorkflowIntent() => Intent ??
+        throw new InvalidOperationException("A standalone ingress source has no workflow publisher intent.");
+
+    public static RuntimePostCommitOutboxItem CreateStandaloneIngress(RuntimeStandaloneIngressSource source,
+        RuntimeSubscriptionDelivery delivery, RuntimePostCommitRetryPolicy retryPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(delivery); ArgumentNullException.ThrowIfNull(retryPolicy);
+        if (delivery.Progress.Any(item => item.Phase != RuntimeRecipientPhase.Pending))
+            throw new ArgumentException("New source admission begins with pending recipients.", nameof(delivery));
+        return new(source.OutboxItemId, null, RuntimePostCommitOutboxStatus.Pending, source.RecordedAt, source.RecordedAt,
+            retryPolicy, 0, null, null, null, null, null, 0, null, null, null, null,
+            source, RuntimeSubscriptionDelivery.CurrentVersion, delivery);
+    }
+
+    /// <summary>Providers still own the physical compare/fence and retention acceptance of this immutable transition.</summary>
+    public RuntimePostCommitOutboxItem WithSubscriptionDelivery(RuntimeSubscriptionDelivery delivery)
+    {
+        ArgumentNullException.ThrowIfNull(delivery);
+        if (SubscriptionDelivery is { } current && current.SelectionFingerprint != delivery.SelectionFingerprint)
+            throw new InvalidOperationException("An accepted complete subscription selection cannot be replaced.");
+        if (SubscriptionDelivery is { } previous)
+        {
+            foreach (var state in delivery.Progress) _ = previous.WithProgress(state);
+            if (previous.WaitDelivery is not null)
+                _ = previous.WithWaitDelivery(delivery.WaitDelivery ?? throw new InvalidOperationException("Accepted ordinary waits cannot be removed."));
+        }
+        if (SubscriptionDelivery?.ControlFacts is { } previousFacts)
+            (delivery.ControlFacts ?? throw new InvalidOperationException("Source control facts cannot be erased.")).EnsurePreserves(previousFacts);
+        return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
+            DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
+            DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, RecipientSnapshot,
+            StandaloneIngress, SubscriptionDeliveryProtocolVersion, delivery);
+    }
+
     /// <summary>Whether unresolved stimulus delivery still needs this publisher or an exact recipient's execution/dedup state.</summary>
     /// <remarks>Every status except Delivered is owed, including FailedFinal and Cancelled. Snapshot absence retains the
     /// declared publisher; a selected start requires the original per-artifact key. Source rows themselves remain retained.</remarks>
     public bool RetainsExecutionForStimulusDelivery(string workflowExecutionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        if (Status == RuntimePostCommitOutboxStatus.Delivered || StimulusDeliveryProtocolVersion is null) return false;
-        if (Intent.WorkflowExecutionId == workflowExecutionId) return true;
+        if (Status == RuntimePostCommitOutboxStatus.Delivered) return false;
+        if (SubscriptionDeliveryProtocolVersion is not null && Intent?.WorkflowExecutionId == workflowExecutionId) return true;
+        if (SubscriptionDelivery?.Recipients.Any(recipient => recipient.StartIdentity.WorkflowExecutionId == workflowExecutionId &&
+            SubscriptionDelivery.Progress.Single(progress => progress.RecipientId == recipient.RecipientId).Phase != RuntimeRecipientPhase.CancelledBeforeDispatch) == true) return true;
+        if (SubscriptionDelivery?.WaitDelivery?.Recipients.Any(recipient => recipient.Identity.WorkflowExecutionId == workflowExecutionId) == true) return true;
+        if (StimulusDeliveryProtocolVersion is null) return false;
+        if (Intent!.WorkflowExecutionId == workflowExecutionId) return true;
         if (RecipientSnapshot is not { } snapshot) return false;
         if (snapshot.Resumes.Any(recipient => recipient.WorkflowExecutionId == workflowExecutionId)) return true;
         if (snapshot.Starts.Count == 0) return false;
@@ -183,7 +283,8 @@ public sealed class RuntimePostCommitOutboxItem
         }
         return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
             DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
-            DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, candidate);
+            DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, candidate,
+            StandaloneIngress, SubscriptionDeliveryProtocolVersion, SubscriptionDelivery);
     }
 
     /// <summary>Validate a provider's canonical source and current claim before selection or saved-recipient effects.</summary>
@@ -231,7 +332,7 @@ public sealed class RuntimePostCommitOutboxItem
         string ownerId, long fencingToken, WorkflowExecutionState publisher, PersistenceScope scope, DateTimeOffset observedAt)
     {
         if (OutboxItemId != sourceOutboxItemId || scope != expectedScope ||
-            RuntimeCheckpointCommitFingerprint.ComputeIntent(Intent) != intentFingerprint || publisher.WorkflowExecutionId != Intent.WorkflowExecutionId)
+            Intent is null || RuntimeCheckpointCommitFingerprint.ComputeIntent(Intent) != intentFingerprint || publisher.WorkflowExecutionId != Intent.WorkflowExecutionId)
             throw new InvalidDataException("The persisted source or authoritative publisher differs from delivery provenance.");
         if (Status != RuntimePostCommitOutboxStatus.Delivering || DeliveringOwnerId != ownerId ||
             DeliveryFencingToken != fencingToken || DeliveryVisibleAfter is null || DeliveryVisibleAfter <= observedAt)
@@ -249,7 +350,7 @@ public sealed class RuntimePostCommitOutboxItem
     public bool IsEquivalentTo(RuntimePostCommitOutboxItem? other) =>
         other is not null &&
         StringComparer.Ordinal.Equals(OutboxItemId, other.OutboxItemId) &&
-        Intent.IsEquivalentTo(other.Intent) &&
+        (Intent is null ? other.Intent is null : Intent.IsEquivalentTo(other.Intent)) &&
         Status == other.Status &&
         RecordedAt == other.RecordedAt &&
         AvailableAt == other.AvailableAt &&
@@ -264,7 +365,10 @@ public sealed class RuntimePostCommitOutboxItem
         DeliveryVisibleAfter == other.DeliveryVisibleAfter &&
         StimulusDeliveryProtocolVersion == other.StimulusDeliveryProtocolVersion &&
         StimulusDeliverySourceScope == other.StimulusDeliverySourceScope &&
-        (RecipientSnapshot is null ? other.RecipientSnapshot is null : RecipientSnapshot.IsEquivalentTo(other.RecipientSnapshot));
+        (RecipientSnapshot is null ? other.RecipientSnapshot is null : RecipientSnapshot.IsEquivalentTo(other.RecipientSnapshot)) &&
+        (StandaloneIngress is null ? other.StandaloneIngress is null : StandaloneIngress.IsEquivalentTo(other.StandaloneIngress)) &&
+        SubscriptionDeliveryProtocolVersion == other.SubscriptionDeliveryProtocolVersion &&
+        (SubscriptionDelivery is null ? other.SubscriptionDelivery is null : SubscriptionDelivery.IsEquivalentTo(other.SubscriptionDelivery));
 
     /// <summary>
     /// Exact-replay idempotency for saving a pending item whose identity already exists: the save is a replay only when both
@@ -293,7 +397,7 @@ public sealed class RuntimePostCommitOutboxItem
     public bool CarriesResponsibilityFor(RuntimePostCommitIntent intent)
     {
         ArgumentNullException.ThrowIfNull(intent);
-        return Intent.IsEquivalentTo(intent);
+        return Intent?.IsEquivalentTo(intent) == true;
     }
 
     private static void Validate(
@@ -438,7 +542,7 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
             var identity = new WorkflowDispatchIdentity(
                 workflowDispatch.ParentWorkflowExecutionId,
                 workflowDispatch.ParentActivityExecutionId);
-            var authorized = StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, WorkflowDispatchLifecycle.StartChildIntentKind) &&
+            var authorized = claim.Item.Intent is not null && StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, WorkflowDispatchLifecycle.StartChildIntentKind) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.WorkflowExecutionId, workflowDispatch.ParentWorkflowExecutionId) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.ActivityExecutionId, workflowDispatch.ParentActivityExecutionId) &&
                 StringComparer.Ordinal.Equals(claim.Item.Intent.IntentId, identity.StartIntentId) &&
@@ -461,7 +565,7 @@ public sealed class RuntimePostCommitOutboxClaimCompletion
                 workflowDispatch.ParentWorkflowExecutionId,
                 workflowDispatch.ParentActivityExecutionId);
             var generation = WorkflowDispatchLifecycle.ReadDeliveryGeneration(workflowDispatch);
-            var authorized = followUpOutboxItem.Status == RuntimePostCommitOutboxStatus.Pending &&
+            var authorized = followUpOutboxItem.Intent is not null && followUpOutboxItem.Status == RuntimePostCommitOutboxStatus.Pending &&
                 StringComparer.Ordinal.Equals(followUpOutboxItem.Intent.Kind, WorkflowDispatchLifecycle.ResumeParentIntentKind) &&
                 followUpOutboxItem.DeliveryAttemptCount == 0 &&
                 followUpOutboxItem.DeliveringOwnerId is null &&
@@ -586,9 +690,9 @@ public static class RuntimePostCommitOutboxClaimTransitions
         ArgumentNullException.ThrowIfNull(request);
 
         if (request.WorkflowExecutionId is not null &&
-            !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, request.WorkflowExecutionId))
+            !StringComparer.Ordinal.Equals(item.WorkflowExecutionId, request.WorkflowExecutionId))
             return false;
-        if (request.IntentKind is not null && !StringComparer.Ordinal.Equals(item.Intent.Kind, request.IntentKind))
+        if (request.IntentKind is not null && !StringComparer.Ordinal.Equals(item.DeliveryKind, request.IntentKind))
             return false;
         if (item.Status == RuntimePostCommitOutboxStatus.Delivering)
             return item.DeliveryVisibleAfter is { } visibleAfter && visibleAfter <= request.Now;
@@ -833,7 +937,10 @@ public static class RuntimePostCommitOutboxClaimTransitions
             deliveryVisibleAfter,
             item.StimulusDeliveryProtocolVersion,
             item.StimulusDeliverySourceScope,
-            item.RecipientSnapshot);
+            item.RecipientSnapshot,
+            item.StandaloneIngress,
+            item.SubscriptionDeliveryProtocolVersion,
+            item.SubscriptionDelivery);
 }
 
 public sealed class RuntimePostCommitRetryPolicy
@@ -1004,8 +1111,8 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
         ArgumentNullException.ThrowIfNull(item);
         return (item.Status is RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable ||
                 IsDeliveredByClaimSince(item)) &&
-               StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, WorkflowExecutionId) &&
-               StringComparer.Ordinal.Equals(item.Intent.Kind, IntentKind);
+               StringComparer.Ordinal.Equals(item.WorkflowExecutionId, WorkflowExecutionId) &&
+               StringComparer.Ordinal.Equals(item.DeliveryKind, IntentKind);
     }
 
     private bool IsDeliveredByClaimSince(RuntimePostCommitOutboxItem item) =>

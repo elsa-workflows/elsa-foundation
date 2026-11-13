@@ -39,6 +39,9 @@ public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 /// <c>Held</c> messages stay, and are no longer on trial: their turn ran and did not kill the process.
 /// <c>Delete</c> removes the instance's row (at revision <c>Expected</c>) and its journal rows; its own journal row says so.
 /// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
+/// <c>Subscribed</c> and <c>Unsubscribed</c> are idempotent (FINDINGS 25.2): a wait that is there already stays one wait,
+/// and removing one that is not there changes nothing; neither is a count that does not match. Within a turn its
+/// subscribes apply before its unsubscribes.
 /// </summary>
 public sealed record TurnCommit(
     string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,

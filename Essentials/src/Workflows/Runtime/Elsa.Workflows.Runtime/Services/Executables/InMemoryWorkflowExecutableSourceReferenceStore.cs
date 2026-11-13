@@ -35,6 +35,7 @@ public sealed partial class InMemoryWorkflowExecutableSourceReferenceStore : IWo
     {
         ArgumentNullException.ThrowIfNull(reference);
         ArgumentException.ThrowIfNullOrWhiteSpace(reference.SourceReferenceId);
+        if (reference.PublicationScope is not null) throw new NotSupportedException("Generic source saves cannot assert protected logical publication scope.");
 
         lock (_gate)
             _references[reference.SourceReferenceId] = reference;

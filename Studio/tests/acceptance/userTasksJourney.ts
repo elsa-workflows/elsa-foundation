@@ -104,6 +104,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     // #4068: a completed response reads as a record, with no required marker, resize handle or empty action row.
     const record = detail.getByRole("textbox", { name: "Note", exact: true });
     await expect(record).toBeDisabled(); await expect(record).toHaveCSS("resize", "none");
+    expect(await record.evaluate(element => { const frame = element.closest(".studio-form-control"); const style = frame ? getComputedStyle(frame) : null; return { border: style?.borderTopWidth, opacity: style?.opacity }; })).toEqual({ border: "0px", opacity: "1" });
     await expect(detail.locator(".user-task-actions")).toHaveCount(0);
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "completed");
     await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();

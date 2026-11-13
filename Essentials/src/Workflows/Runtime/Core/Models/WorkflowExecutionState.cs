@@ -44,6 +44,10 @@ public sealed record WorkflowExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelNativeWorkOrigin? ModelWorkOrigin { get; init; }
 
+    /// <summary>Immutable accepted standalone source, copied at the first physical checkpoint.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressCommandOrigin? IngressOrigin { get; init; }
+
     /// <summary>
     /// Number of cross-workflow dispatch edges from the root execution. Root and legacy states default to zero.
     /// </summary>

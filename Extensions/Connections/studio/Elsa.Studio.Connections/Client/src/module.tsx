@@ -29,7 +29,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "connections", requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
         path: "/security/connections",
         label: "Connections",
-        component: () => <ConnectionsPage context={api.backend} dialogs={api.dialogs} />
+        component: () => <ConnectionsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} />
       }
     ]
   });

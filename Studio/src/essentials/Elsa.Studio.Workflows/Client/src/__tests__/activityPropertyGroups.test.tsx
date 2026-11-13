@@ -144,7 +144,7 @@ function input(name: string, overrides: Partial<StudioActivityInputDescriptor> =
 }
 
 function propertyLabels(container: HTMLElement) {
-  return [...container.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent);
+  return [...container.querySelectorAll(".wf-property-row[role='group']")].map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""));
 }
 
 it("commits related literal inputs atomically and refreshes contributed editors after a sibling edit", () => {
@@ -477,10 +477,10 @@ describe("activity property organization", () => {
     expect(advanced).not.toBeNull();
     expect(advanced!.querySelector(".studio-disclosure-fold-label")?.textContent).toBe("More options");
     expect(advanced!.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("false");
-    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row-header label")]
-      .map(label => label.textContent)).toEqual(["Url", "Method", "Content", "Connection"]);
-    expect([...advanced!.querySelectorAll(".wf-property-row-header label")]
-      .map(label => label.textContent)).toEqual(["ContentType", "RequestHeaders", "ExpectedStatusCodes", "Timeout"]);
+    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row[role='group']")]
+      .map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""))).toEqual(["Url", "Method", "Content", "Connection"]);
+    expect([...advanced!.querySelectorAll(".wf-property-row[role='group']")]
+      .map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""))).toEqual(["ContentType", "RequestHeaders", "ExpectedStatusCodes", "Timeout"]);
     expect(advanced!.querySelectorAll(".wf-property-row")).toHaveLength(4);
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -497,11 +497,11 @@ describe("activity property organization", () => {
     ]);
 
     const advanced = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row-header label")]
-      .map(label => label.textContent)).toEqual([
+    expect([...container.querySelectorAll(".wf-properties > .wf-property-group .wf-property-row[role='group']")]
+      .map(label => label.getAttribute("aria-label")?.replace(/ property$/, ""))).toEqual([
       "Legacy", "NullTier", "UnknownTier", "SettingTier", "CaseMismatch", "RequiredOptional"
     ]);
-    expect([...advanced.querySelectorAll(".wf-property-row-header label")].map(label => label.textContent))
+    expect([...advanced.querySelectorAll(".wf-property-row[role='group']")].map(label => label.getAttribute("aria-label")?.replace(/ property$/, "")))
       .toEqual(["Optional"]);
   });
 
@@ -515,9 +515,8 @@ describe("activity property organization", () => {
     };
     const container = renderPanel([input("UnknownEditor", { tier: "optional" })], { editors: [unknownEditor] });
 
-    await nextFrame();
     const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    await vi.waitFor(() => expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true"));
     expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
   });
 
@@ -586,9 +585,8 @@ describe("activity property organization", () => {
       tier: "optional"
     })], { expressionEditors: [expressionEditor] });
 
-    await nextFrame();
     const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    await vi.waitFor(() => expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true"));
     expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
   });
 
@@ -1337,7 +1335,7 @@ describe("activity property organization", () => {
     ], { activity: initial, onChange: next => changes.push(next) });
 
     const methodRow = [...container.querySelectorAll<HTMLElement>(".wf-property-row")]
-      .find(row => row.querySelector(".wf-property-row-header label")?.textContent === "Method")!;
+      .find(row => row.getAttribute("aria-label") === "Method property")!;
     const methodInput = methodRow.querySelector<HTMLInputElement>("input")!;
     for (const method of ["HEAD", "POST", "GET"]) {
       changeTextInput(methodInput, method);
@@ -2149,7 +2147,7 @@ describe("secret-only inputs", () => {
     ...options
   });
   const rowOf = (container: HTMLElement, label: string) =>
-    [...container.querySelectorAll<HTMLElement>(".wf-property-row")].find(row => row.querySelector("label")?.textContent === label)!;
+    [...container.querySelectorAll<HTMLElement>(".wf-property-row")].find(row => row.getAttribute("aria-label") === `${label} property`)!;
   const syntaxOptions = (row: HTMLElement) => {
     flushSync(() => row.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.click());
     return [...document.querySelectorAll("[role='option']")].map(option => option.textContent);

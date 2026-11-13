@@ -113,10 +113,14 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 { Role: "Input", Error: null } => ActivityDataReadRoles.InputMember,
                 _ => null
             };
-            if (options.Value.MemberReads && !query.MemberPath.IsDefaultOrEmpty && memberRole is not null)
-                binding = ActivityDataMemberPath.IsWithinBounds(query.MemberPath)
-                    ? binding with { Role = memberRole, MemberPath = query.MemberPath }
-                    : binding with { Role = memberRole, Error = "InvalidMemberPath" };
+            // A member path always asks for a member read, so it is never answered with the whole read: with member
+            // reads off the member read is refused as a stored one is, and a source with no member read is invalid.
+            if (!query.MemberPath.IsDefaultOrEmpty)
+                binding = memberRole is null
+                    ? binding.Error is null ? binding with { Error = "InvalidSource" } : binding
+                    : ActivityDataMemberPath.IsWithinBounds(query.MemberPath)
+                        ? binding with { Role = memberRole, MemberPath = query.MemberPath }
+                        : binding with { Role = memberRole, Error = "InvalidMemberPath" };
             var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
             if (source is not null)
             {
@@ -520,9 +524,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         return constraints.Count == 1 ? constraints[0] : new(string.Join("+", constraints.Select(item => item.Owner)),
             [.. allowed], "ActivityData/SourceRestricted", "The selected source does not satisfy all owning input restrictions.");
     }
-    private static ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
+    private ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
         ImmutableArray<ActivityDataSelectionSourceFacts> sources, IEnumerable<ValidationError> findings, bool hasMore = false) =>
-        new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore);
+        new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore)
+        {
+            MemberReadsEnabled = options.Value.MemberReads
+        };
     private sealed record Source(string Id, string DisplayName, string? ScopeId, ArgumentValue? Binding,
         ActivityChildResultAvailability Availability, TypeReference? Type, IActivityDefinitionVersion? Version, string? Projection,
         bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null)

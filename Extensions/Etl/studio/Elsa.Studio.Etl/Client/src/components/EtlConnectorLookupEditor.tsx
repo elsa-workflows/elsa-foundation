@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import type { EtlColumn, EtlConnectorBindingSummary, EtlCsvLookup } from "../etlTypes";
 import { PipelineBindingSelect } from "./PipelineBindingSelect";
@@ -74,14 +75,14 @@ function KeyChoice({ label, value, fields, counterpartFields, counterpart, disab
   const validPair = !!selected && !!matching && selected.required && matching.required && selected.type === matching.type;
   const helpId = `${id}-help`;
   return (
-    <div className="etl-editor-field">
-      <label htmlFor={id}>{label}</label>
+    <div className="etl-editor-field"><StudioField controlId={id} label={<>{label}</>}>
+
       <select id={id} value={value} disabled={disabled} aria-describedby={helpId} aria-invalid={value !== "" && !validPair} onChange={event => onChange(event.currentTarget.value)}>
         <option value="">Choose a required field</option>
         {value && !selected ? <option value={value}>{value} (unavailable)</option> : null}
         {fields.map((field, index) => <option key={`${field.name}-${index}`} value={field.name} disabled={!field.required}>{field.name || `Unnamed field ${index + 1}`}{field.required ? ` (${field.type})` : " (optional)"}</option>)}
       </select>
       <small id={helpId}>{validPair ? `Key type: ${selected.type}. Both key fields are required.` : "Choose required source and lookup key fields with the same type."}</small>
-    </div>
+    </StudioField></div>
   );
 }

@@ -67,14 +67,16 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
     setAnnouncements(next);
   }
 
-  // A toast that closed while focused hands focus to the toast now in its place, else to the bell.
+  // A toast that closed while focused hands focus to the toast now in its place, else to the visible shell control.
   useLayoutEffect(() => {
     const index = focusedRemovalIndex.current;
     if (index === null) return;
     focusedRemovalIndex.current = null;
     const remaining = hostRef.current?.querySelectorAll<HTMLElement>(".studio-toast") ?? [];
     if (focusIfConnected(remaining[Math.min(index, remaining.length - 1)])) return;
-    focusIfConnected(document.querySelector<HTMLElement>(".studio-notification-bell"));
+    const fallback = document.querySelector<HTMLElement>('.bottom-panel.maximized [aria-label="Restore bottom panel"]')
+      ?? document.querySelector<HTMLElement>(".studio-notification-bell");
+    focusIfConnected(fallback);
   });
 
   return (

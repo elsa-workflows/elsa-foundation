@@ -38,7 +38,9 @@ for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
     await navigation.getByRole("button", { name: "Collapse folders", exact: true }).click();
     await page.getByRole("button", { name: "Delete", exact: true }).click();
-    await expect(page.getByText("Deleted folder Empty folder", { exact: true })).toBeVisible();
+    await expect(page.locator(".studio-toast").getByText("Deleted folder Empty folder", { exact: true })).toBeVisible();
+    await expect(page.locator(".studio-toast-host")).toHaveCSS("position", "fixed");
+    await expect(page.locator('.studio-toast-live[aria-live="polite"]')).toHaveCSS("clip-path", "inset(50%)");
     await expect(navigation.getByRole("button", { name: "Expand folders", exact: true })).toBeFocused();
     await expect(navigation.getByRole("tree")).toBeHidden();
     await expect(page.getByText("Archive workflow")).toBeVisible();
@@ -68,7 +70,7 @@ test("keyboard users can rename, restructure, and empty-delete folders in a narr
   await renameDialog.getByRole("button", { name: "Rename", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(renameDialog).toBeHidden();
-  await expect(page.getByText("Folder renamed", { exact: true })).toBeVisible();
+  await expect(page.locator(".studio-toast").getByText("Folder renamed", { exact: true })).toBeVisible();
   await expect(page.locator(".wf-folder-breadcrumb")).toContainText("Renamed operations");
   await expect(rename).toBeFocused();
 
@@ -103,7 +105,7 @@ test("keyboard users can rename, restructure, and empty-delete folders in a narr
   await remove.focus();
   await page.keyboard.press("Enter");
 
-  await expect(page.getByText("Deleted folder Empty folder", { exact: true })).toBeVisible();
+  await expect(page.locator(".studio-toast").getByText("Deleted folder Empty folder", { exact: true })).toBeVisible();
   await expect(page.getByText("Archive workflow")).toBeVisible();
   await expect(folderPicker).toBeFocused();
   await expect.poll(() => page.evaluate(() => (window as Window & { folderConfirmations?: unknown[] }).folderConfirmations?.length)).toBe(1);
@@ -152,7 +154,7 @@ test("rejected delete retains tree, table, selection, and action focus", async (
   await remove.focus();
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("alert")).toContainText("Folder is not empty");
+  await expect(page.locator(".wf-alert[role=alert]")).toContainText("Folder is not empty");
   await expect(empty).toHaveAttribute("aria-selected", "true");
   await expect(archive).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByText("No active workflow definitions")).toBeVisible();

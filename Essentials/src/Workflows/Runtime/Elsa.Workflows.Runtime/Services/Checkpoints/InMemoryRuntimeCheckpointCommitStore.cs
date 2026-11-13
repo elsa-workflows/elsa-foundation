@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -22,6 +23,10 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<(string Scope, string? Tenant, string Id), TriggerAggregate> StandaloneTriggers { get; } = [];
+    internal Dictionary<(string Scope, string? Tenant, string Actor, string Request), TriggerMutationReceipt> TriggerMutations { get; } = [];
+    internal Dictionary<(string Scope, string? Tenant, string Id), string> TriggerSubscriptionOwners { get; } = [];
+
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowTestScopeRecord> WorkflowTestScopes { get; } = new(StringComparer.Ordinal);
     internal Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem> BackgroundActivityWorkItems { get; } = [];

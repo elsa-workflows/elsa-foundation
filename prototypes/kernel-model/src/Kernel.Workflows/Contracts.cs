@@ -49,6 +49,8 @@ public interface ITurn
     /// turn ends instead, so it may see output of a turn whose commit is then lost.
     /// </summary>
     void Emit(string channel, object? item);
+    /// <summary>Reply only to this turn's consumed request, after commit, without observing future workflow output.</summary>
+    void Reply(Message request, string channel, object? item);
 
     /// <summary>Returns the message's id, derived from this instance and its revision: what <see cref="Recall"/> takes.</summary>
     string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);

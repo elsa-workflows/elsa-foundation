@@ -226,6 +226,8 @@ public sealed class RuntimeCoalescingSession
     public void BufferDeferred(RuntimeCheckpointCommit commit)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        if (commit.StateChanges.PostCommitOutbox.Any(change => change.State.SubscriptionDeliveryProtocolVersion is not null))
+            throw new NotSupportedException("Subscription protocol declarations require a physical checkpoint before delivery.");
 
         ApplyToOverlay(commit.StateChanges, includeOutbox: true);
         _bufferedChangeSets.Add(commit.StateChanges);
@@ -396,7 +398,7 @@ public sealed class RuntimeCoalescingSession
         foreach (var change in changes)
         {
             _durablyPersistedOutboxIds.Add(change.StateId);
-            if (StringComparer.Ordinal.Equals(change.State.Intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+            if (StringComparer.Ordinal.Equals(change.State.DeliveryKind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
                 _mayReceiveDurableSchedulerDeliveries = true;
         }
     }
@@ -406,7 +408,7 @@ public sealed class RuntimeCoalescingSession
 
     internal IReadOnlyCollection<string> DurablyPersistedOutboxKinds() =>
         _outboxOrder.Where(_durablyPersistedOutboxIds.Contains)
-            .Select(id => _outboxItems[id].Intent.Kind).Distinct(StringComparer.Ordinal).ToArray();
+            .Select(id => _outboxItems[id].DeliveryKind).Distinct(StringComparer.Ordinal).ToArray();
 
     internal void RegisterFusedScheduleAnchor(RuntimeSchedulerWorkItem workItem)
     {
@@ -517,6 +519,9 @@ public sealed class RuntimeCoalescingSession
 
     private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes, bool includeOutbox)
     {
+        if (changes.PostCommitOutbox.Any(change => change.State.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress ||
+            change.State.SubscriptionDelivery is not null))
+            throw new NotSupportedException("Source/recipient protocol changes require their coherent physical writer, not a workflow overlay.");
         // Only the session-owned delta is indexed. Durable pages still pass through their existing
         // read/authorization path, and every overlay mutation (including cap flushes) drops the view.
         if (changes.ActivityExecutions.Count > 0)
@@ -760,7 +765,7 @@ public sealed class RuntimeCoalescingSession
                 continue;
             var id = RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intent);
             if (_outboxItems.TryGetValue(id, out var item) && item.Status == RuntimePostCommitOutboxStatus.Pending &&
-                item.DeliveryAttemptCount == 0 && item.Intent.IsEquivalentTo(intent))
+                item.DeliveryAttemptCount == 0 && item.Intent?.IsEquivalentTo(intent) == true)
                 _immediateSchedulerOutboxIds.Add(id);
         }
     }
@@ -774,10 +779,10 @@ public sealed class RuntimeCoalescingSession
             item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount))
             return false;
 
-        if (query.WorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, query.WorkflowExecutionId))
+        if (query.WorkflowExecutionId is not null && !StringComparer.Ordinal.Equals(item.WorkflowExecutionId, query.WorkflowExecutionId))
             return false;
 
-        if (query.IntentKind is not null && !StringComparer.Ordinal.Equals(item.Intent.Kind, query.IntentKind))
+        if (query.IntentKind is not null && !StringComparer.Ordinal.Equals(item.DeliveryKind, query.IntentKind))
             return false;
 
         return IsOwnedImmediateSchedulerIntent(item) ||
@@ -882,7 +887,10 @@ public sealed class RuntimeCoalescingSession
                 deliveryVisibleAfter: null,
                 stimulusDeliveryProtocolVersion: existing.StimulusDeliveryProtocolVersion,
                 stimulusDeliverySourceScope: existing.StimulusDeliverySourceScope,
-                recipientSnapshot: existing.RecipientSnapshot);
+                recipientSnapshot: existing.RecipientSnapshot,
+                standaloneIngress: existing.StandaloneIngress,
+                subscriptionDeliveryProtocolVersion: existing.SubscriptionDeliveryProtocolVersion,
+                subscriptionDelivery: existing.SubscriptionDelivery);
     }
 
     public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)

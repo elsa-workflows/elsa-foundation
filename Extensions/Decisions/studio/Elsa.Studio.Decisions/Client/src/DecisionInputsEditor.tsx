@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioExpressionEditorContribution, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { ValueInput } from "./CasePanel";
 import { decisionsCapability, failureMessage, type Scalar } from "./decisionsApi";
 import {
@@ -182,7 +182,7 @@ export function DecisionInputsEditor({
     <details className="decision-inputs-json">
       <summary>Advanced JSON</summary>
       <p className="decision-muted">Tagged values update the draft immediately. Kind and value stay exact text.</p>
-      <textarea
+      <StudioField label="Decision inputs JSON"><textarea
         aria-label="Decision inputs JSON"
         aria-invalid={jsonError ? true : undefined}
         aria-describedby={jsonError ? jsonErrorId : undefined}
@@ -203,7 +203,7 @@ export function DecisionInputsEditor({
           setJsonError("");
           onChange(parsedJson.value);
         }}
-      />
+      /></StudioField>
       {jsonError ? <p id={jsonErrorId} role="alert">{jsonError}</p> : null}
     </details>
   </div>;
