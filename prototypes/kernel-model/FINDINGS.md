@@ -1070,10 +1070,11 @@ to complete. If storage definitely refuses the outcome, the worker releases its 
 sibling result that completed while the write was pending stays available for the next pass. A successful
 cancellation removes the ticket and cancels the running job's token at commit. The subscription rule is in 25.9.
 
-| Focused gate | Main `d672f5d7a7` (includes the Park, reply and lease changes) | With the job-poison fix |
+| Focused gate | Main `310cd84b91` (includes the Park, reply, lease and mutation-bit changes) | With the job-poison fix |
 |---|---|---|
 | Native.Run `park` | 8 pass | 14 pass. The original two witnesses failed on `7ff84f862c`; childless terminate and both abandoned-cancellation races failed on `27b362312b` |
 | Native.Run `smoke` | All 34 checks pass | All 34 checks pass |
+| Sim `--check-flaws` | 44 distinct single-bit mutations | 45 distinct single-bit mutations, including `JobPoisonAsError` at bit 43 |
 | 1,000 seeds × 300 actions | 0 failed, 0 innocent parkings | Same |
 | Native, 200 seeds × 1,000 actions | 0 failed, 0 innocent parkings; 3,756 matched; 11 external reruns, all flagged | Same |
 | `JobPoisonAsError`, 1,000 seeds × 300 actions | Mutation absent | 155 failures, first seed 2, I14 (a killing job's instance remained Running) |
@@ -1085,9 +1086,10 @@ faulted row and terminates the child after takeover. Both verify checkpoint rete
 ticket removal. Three other witnesses trace the sibling's real token and completion through a throw, a
 definite refusal with a completion during the write, and a committed cancellation. The childless terminate
 case verifies the surviving ticket and its token are cleared with the faulted row's next revision. The merged
-deadline eviction check and the 23 lease checks also passed. The simulation generator on both comparison heads includes `dierun`; the candidate changes its
-oracle to recognize parking by the killing job's own ticket. Its counts therefore describe each version's own
-oracle. The older broad sweeps and full mutation matrices in the original PR ran against earlier bases and were
+deadline eviction check and the 23 lease checks also passed. Both simulation generators include `dierun`.
+The candidate changes the oracle to recognize parking by the killing job's own ticket. Each count uses the
+oracle from the corresponding version. The mutation result above was rerun after `HideDeliveryHistory` moved
+to bit 48. The older broad sweeps and full mutation matrices in the original PR ran against earlier bases and were
 not repeated here. This change uses the existing commit contract; no provider-specific persistence run was made.
 
 ### 25.9 Park removes active subscriptions (owner decision, 13 November). Run
