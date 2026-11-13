@@ -179,7 +179,6 @@ for (const mode of ["light", "dark"] as const) {
               return text.top >= box.top - 1 && text.bottom <= box.bottom + 1;
             });
           });
-          const labelsContained = labelsFit();
           // Prove this guard rejects clipped text without assuming that a flex-shrink
           // change alone produces clipping. Restore styles and scrolling before captures.
           let clippedLabelsContained: boolean | null = null;
@@ -201,6 +200,7 @@ for (const mode of ["light", "dark"] as const) {
               options.scrollTop = previousScrollTop;
             }
           }
+          const labelsContained = labelsFit();
           return {
             width: element.parentElement!.getBoundingClientRect().width,
             beside: rect.right <= list.left,
