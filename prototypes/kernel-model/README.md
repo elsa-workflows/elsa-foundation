@@ -105,7 +105,7 @@ $EFR x stress postgres "$PG;Database=kernel_stress" seconds=40 messages=5000 [fe
 $EFR x stress sqlserver "$MS;Database=kernel_stress" seconds=40 messages=5000          # RCSI on unless rcsi=0
 $EFR x stress mysql "$MY;database=kernel_stress" seconds=40 messages=5000 [isolation=rc]
 $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [wal=0]
-$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1       # the fence broken on purpose: must fail
+$EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=checked   # the fence broken on purpose: must fail (recorded with the checked fence; ENGINES.md)
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
 ```
