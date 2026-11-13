@@ -117,7 +117,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Round 3's state versions: native's state has one shape so far.</summary>
+    /// <summary>Version 2 adds optional invocation inbox metadata; version 1 preserves its ordinary frames on upgrade.</summary>
     public int StateVersion => 2;
     public object UpgradeState(string state, int fromVersion) => fromVersion == 1 ? Json.Read<NativeState>(state)
         : throw new NotSupportedException($"native state has no version {fromVersion}");
@@ -164,6 +164,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             if (message.Kind == InvocationInput.Kind) turn.Hold(message);
             else Accept(message);
         await DrainAsync();
+        FinishSignals();
         if (turn.Inbox.Any(m => m.Kind == InvocationInput.Kind)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
 
@@ -183,6 +184,9 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
                 break;
             }
+            case CompositeSignal.Kind:
+                AcceptSignal(m);
+                break;
             case NativeKinds.Timer:
             {
                 // The timer's message is consumed by this turn. Its resume may wait in the agenda past a Durable boundary,
@@ -592,7 +596,7 @@ public sealed partial class CompositeContext
     public void Complete(string outcome = "Done", JsonNode? result = null) => _burst.Complete(_frame, outcome, result);
     public void Join() => _burst.Join(_frame);
     public void RecordJoin(string node) => _burst.RecordJoin(_frame, node);
-    internal void Record(string entry) => _burst.Record(entry);
+    public void Record(string entry) => _burst.Record(entry);
     public void Fault(ActivityFault fault) => _burst.Fail(_frame, fault);
     public void Cancel(string childFrame) => _burst.Cancel(childFrame);
 }

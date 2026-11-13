@@ -9,6 +9,9 @@ var services = new ServiceCollection();
 var feature = new WorkflowReleaseTransportFeature();
 feature.ConfigureServices(services);
 feature.PostConfigureServices(services);
+var verificationFeature = new WorkflowReleaseVerificationFeature();
+verificationFeature.ConfigureServices(services);
+verificationFeature.PostConfigureServices(services);
 using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
 using var scope = provider.CreateScope();
 var codec = scope.ServiceProvider.GetRequiredService<IReleaseBundleCodec>();
@@ -41,10 +44,16 @@ var imported = await codec.ReadZipAsync(archive);
 if (imported.Digest != transport.Digest || !imported.GetBlobBytes(blobDigest).SequenceEqual(expectedBlob))
     throw new InvalidOperationException("Packaged ZIP transport round-trip changed identity or original bytes.");
 
+// The packed semantic framework must refuse an unknown owner; structural validity cannot grant owner validity.
+var semanticVerifier = scope.ServiceProvider.GetRequiredService<IReleaseSemanticVerifier>();
+var semantic = await semanticVerifier.VerifyAsync(imported, new() { ExpectedDigest = imported.Digest });
+if (semantic.Status != ReleaseSemanticStatus.Unsupported || !semantic.Diagnostics.Any(x => x.Code == "unsupported_artifact_codec"))
+    throw new InvalidOperationException("The packed verifier failed to refuse the unregistered owner codec.");
+
 var forbidden = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName().Name ?? "")
     .Where(name => name.StartsWith("Elsa.", StringComparison.Ordinal)
         && name is not "Elsa.Workflows.Publishing.Releases" and not "Elsa.Workflows.Publishing.Releases.Core").ToArray();
 if (forbidden.Length != 0)
     throw new InvalidOperationException("Target transport consumer loaded Design-bearing assemblies: " + string.Join(", ", forbidden));
 Console.WriteLine(JsonSerializer.Serialize(new { outcome = "passed", transportDigest = imported.Digest,
-    members = imported.Members.Count, semanticValidation = "not performed", promotion = "not attempted", forbiddenAssemblies = forbidden }));
+    members = imported.Members.Count, semanticValidation = "unknown owner refused", semanticStatus = semantic.Status.ToString(), promotion = "not attempted", forbiddenAssemblies = forbidden }));

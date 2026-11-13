@@ -15,3 +15,6 @@ packages in the consumer graph. Final evidence must identify a committed source;
 
 The complete native/BPMN/ETL two-target and process/Studio qualification remains in
 [spec 1225](../../specs/1225-workflow-release-promotion/quickstart.md).
+
+The installed package witness also resolves the semantic framework and proves an unregistered owner codec remains
+Unsupported. This is a fail-closed framework/package boundary control; it does not qualify any native, BPMN or ETL owner adapter.
