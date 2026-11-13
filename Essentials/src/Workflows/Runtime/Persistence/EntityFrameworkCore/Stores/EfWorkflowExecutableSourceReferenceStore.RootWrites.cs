@@ -30,13 +30,16 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore
         return SaveRootAsync(reference, root, leases, cancellationToken);
     }
 
+    /// <summary>Publishes with physical scope derived from this provider and the existing complete root fence.</summary>
+    /// <exception cref="ArgumentException">The supplied scope or logical publication provenance is invalid.</exception>
+    /// <exception cref="RuntimeArtifactEntityFrameworkPersistenceException">Provider or IO failure during publication; retains identity and cause.</exception>
     public ValueTask<WorkflowExecutableSourceReference> SaveScopedPublicationAsync(WorkflowExecutableSourceReference reference,
         WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference);
         var physical = access.Current.RequireScope();
         if (reference.PublicationScope is not null && reference.PublicationScope != physical)
-            throw new InvalidDataException("The logical publication cannot replace its actual physical source scope.");
+            throw new ArgumentException("The logical publication cannot replace its actual physical source scope.", nameof(reference));
         return SaveRootAsync(reference with { PublicationScope = physical }, root, leases, cancellationToken);
     }
 

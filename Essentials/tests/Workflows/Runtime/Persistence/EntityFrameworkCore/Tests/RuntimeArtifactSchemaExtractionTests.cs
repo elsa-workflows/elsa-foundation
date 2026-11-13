@@ -127,6 +127,10 @@ public sealed class RuntimeArtifactSchemaExtractionTests
             Layout = [new("layout-node", 1, 2)]
         };
         var before = await context.WorkflowExecutableCoordinations.AsNoTracking().SingleAsync();
+        await Assert.ThrowsAsync<ArgumentException>(() => references.SaveScopedPublicationAsync(
+            reference with { PublicationScope = new PersistenceScope("unrelated-scope") }, executable.Identity, [lease]).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => references.SaveScopedPublicationAsync(
+            reference with { SlotId = null }, executable.Identity, [lease]).AsTask());
         await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(() => references.SaveScopedPublicationAsync(
             reference, executable.Identity, [lease]).AsTask());
         Assert.Empty(await context.WorkflowExecutableSourceReferences.AsNoTracking().ToArrayAsync());

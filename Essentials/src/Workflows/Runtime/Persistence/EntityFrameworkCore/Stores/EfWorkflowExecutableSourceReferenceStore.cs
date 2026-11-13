@@ -650,7 +650,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         if (value.PublicationScope is not null && (value.Scope != WorkflowExecutableReferenceScope.Published || value.PublishedAt is null || value.ActivationId is null ||
             value.SlotId is null || value.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(value.ActivationId) ||
             !value.SlotId.StartsWith($"activation-slot:{value.DefinitionId.Length.ToString(CultureInfo.InvariantCulture)}:{value.DefinitionId}:", StringComparison.Ordinal)))
-            throw new InvalidDataException("Scoped publication requires its exact logical activation source provenance.");
+            throw new ArgumentException("Scoped publication requires its exact logical activation source provenance.", nameof(value));
     }
 
     private static void ValidateBound(string value, string parameterName)
