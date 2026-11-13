@@ -276,7 +276,7 @@ static class EngineRun
         return wrong.Count == 0 ? 0 : 1;
     }
 
-    /// <summary>Round 3's end state, as the conformance suite's stress test checks it (Stress.RoundThree there).</summary>
+    /// <summary>Round 3's end state, as the conformance suite's stress test checks it (Workload.RoundThree there).</summary>
     private static IEnumerable<string> RoundThree(IReadOnlyDictionary<string, InstanceRow> rows, IReadOnlyList<string> lifecycles, IReadOnlySet<string> deleted, IReadOnlyList<string> onEvents)
     {
         string Name(string id) => id[(id.IndexOf('/') + 1)..];
