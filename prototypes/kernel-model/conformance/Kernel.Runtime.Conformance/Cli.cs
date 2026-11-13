@@ -16,7 +16,8 @@ public static class Cli
         {
             case ["semantic", .. var rest]:
                 var outcomes = await Cases.RunAsync(runtime, store, filter: Filter(rest));
-                return outcomes.Any(o => !o.Passed && o.Case.Level == Level.Required) ? 1 : 0;
+                if (outcomes.Count == 0) Console.Error.WriteLine("no case matches the filter");
+                return outcomes.Count == 0 || outcomes.Any(o => !o.Passed && o.Case.Level == Level.Required) ? 1 : 0;
             case ["semantic-broken", .. var rest]:
                 var broken = await Cases.RunAsync(runtime, store, brokenFence: true, filter: c => c.Fence && (Filter(rest)?.Invoke(c) ?? true));
                 // Each fence case must fail on what the fence guards: a precondition that did not hold, or a timeout, is no catch.

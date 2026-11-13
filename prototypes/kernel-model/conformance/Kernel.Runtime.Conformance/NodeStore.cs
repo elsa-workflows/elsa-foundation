@@ -13,13 +13,19 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     private TaskCompletionSource? _stall;
     private long _until;                    // when the stall ends, on Environment.TickCount64
     private TimeSpan _nextCommit;
-    private int _commitPartition, _inFlight, _refused;
+    private int _commitPartition, _inFlight, _refused, _commits, _heldRefused;
     private readonly TaskCompletionSource<string> _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public int Stalls { get; private set; }
 
     /// <summary>The node's commits answered "not landed".</summary>
     public int Refused => Volatile.Read(ref _refused);
+
+    /// <summary>The node's commits that reached the store (after any stall).</summary>
+    public int Commits => Volatile.Read(ref _commits);
+
+    /// <summary>Commits held by <see cref="StallNextCommit"/> that the store then answered "not landed": a stale writer the fence refused.</summary>
+    public int HeldRefused => Volatile.Read(ref _heldRefused);
 
     /// <summary>No call of the node is under way, stalled or not.</summary>
     public bool Idle => Volatile.Read(ref _inFlight) == 0;
@@ -58,11 +64,14 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
             while (true)
             {
                 long left;
-                lock (_lock) left = _until - Environment.TickCount64;
+                lock (_lock)
+                {
+                    left = _until - Environment.TickCount64;
+                    if (left <= 0) _stall = null;      // under the same lock that extends it: no extension is lost
+                }
                 if (left <= 0) break;
                 await Task.Delay(TimeSpan.FromMilliseconds(left));
             }
-            lock (_lock) _stall = null;
             stall.SetResult();
         });
     }
@@ -105,6 +114,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
         try
         {
             var held = await Gate(batch);
+            Interlocked.Increment(ref _commits);
             Committed result;
             try { result = await inner.CommitAsync(batch, cancellationToken); }
             catch (Exception e)
@@ -113,6 +123,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
                 throw;
             }
             if (!result.Landed) Interlocked.Increment(ref _refused);
+            if (held && !result.Landed) Interlocked.Increment(ref _heldRefused);
             if (held) _held.TrySetResult(result.Landed ? "landed" : "refused");
             return result;
         }

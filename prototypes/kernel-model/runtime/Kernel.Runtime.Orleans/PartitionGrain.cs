@@ -56,7 +56,10 @@ public sealed class PartitionGrain(OrleansActorRuntime runtime) : Grain, IPartit
 
     public async Task WakeAsync(string actor)
     {
-        if (_activation is { Active: true } activation) await activation.WokenAsync(new InstanceRef(actor), runtime.Crashing);
+        // Only a held scope runs at once: a grain that waits for the fence keeps asking every RetryEvery, whatever the
+        // hints, since each ask is a take.
+        if (_activation is not { Active: true } activation) return;
+        await activation.WokenAsync(new InstanceRef(actor), runtime.Crashing);
         Arm(TimeSpan.Zero);
     }
 
