@@ -53,7 +53,7 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
                 file.Write(bytes);
                 file.Flush(true);
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
             {
                 throw Invalidate(error);
             }
@@ -79,7 +79,7 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
                 using var file = new FileStream(settings.ExecutionObservationFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 return Decode(file).Where(row => row.Actor == key.SubjectId && row.Tenant == key.TenantId && row.Host == key.StudioHostId).ToArray();
             }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or DecoderFallbackException)
             {
                 failed = true;
                 var retained = ownedPath && MarkFailed();
@@ -139,7 +139,7 @@ internal sealed class WidgetExecutionJournal(WidgetEffectsSettings settings)
             file.Flush(true);
             return true;
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // No durable-retention claim when storage fails. The caller/qualifier
             // must retain failed/unknown outside this namespace and never reuse it.
