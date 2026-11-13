@@ -14,11 +14,12 @@ internal sealed partial class EfRuntimeHistoryStore
         var binding = Binding(bound.Scope, query.WorkflowExecutionId, query.Limit, query.AccessBinding, query.ActivityExecutionId,
             query.IncludeDescendants, query.BookmarkId, query.Category, query.Name, query.Search);
         var cursor = Decode(EventPurpose, query.ContinuationToken, binding);
-        return Read(bound, query.WorkflowExecutionId, "read-page", () => EventPage(bound.Scope, query, binding, cursor, cancellationToken), cancellationToken);
+        return Read(bound, query.WorkflowExecutionId, "read-page", policy => EventPage(bound.Scope, query, binding, cursor, policy, cancellationToken),
+            () => new RuntimeHistoryPage(null, [], 0, 0, 0, null, Encode(EventPurpose, new(binding, 0, 0, true, null))), cancellationToken);
     }
-    private async Task<RuntimeHistoryPage> EventPage(string scope, RuntimeHistoryQuery query, string binding, Cursor? cursor, CancellationToken token)
+    private async Task<RuntimeHistoryPage> EventPage(string scope, RuntimeHistoryQuery query, string binding, Cursor? cursor, RuntimeHistoryCapturePolicy policy, CancellationToken token)
     {
-        var run = query.WorkflowExecutionId; var head = await Head(scope, run, token);
+        var run = query.WorkflowExecutionId; var head = await Head(scope, run, policy, token);
         var upper = cursor is null || cursor.CatchUp ? head?.LastSequence ?? 0 : cursor.Upper; var after = cursor?.After ?? 0;
         ValidateWindow(run, head, cursor, after, upper);
         var source = Events(scope, run);
@@ -67,11 +68,12 @@ internal sealed partial class EfRuntimeHistoryStore
             query.ActivityExecutionId, query.IncludeDescendants, query.Status);
         var cursor = Decode(BookmarkPurpose, query.ContinuationToken, binding);
         if (cursor is { CatchUp: true }) throw new ArgumentException("Bookmark inventory does not accept catch-up tokens.", nameof(query));
-        return Read(bound, query.WorkflowExecutionId, "list-bookmarks", () => BookmarkPage(bound.Scope, query, binding, cursor, cancellationToken), cancellationToken);
+        return Read(bound, query.WorkflowExecutionId, "list-bookmarks", policy => BookmarkPage(bound.Scope, query, binding, cursor, policy, cancellationToken),
+            static () => new RuntimeHistoryBookmarkPage(null, [], null), cancellationToken);
     }
-    private async Task<RuntimeHistoryBookmarkPage> BookmarkPage(string scope, RuntimeHistoryBookmarkQuery query, string binding, Cursor? cursor, CancellationToken token)
+    private async Task<RuntimeHistoryBookmarkPage> BookmarkPage(string scope, RuntimeHistoryBookmarkQuery query, string binding, Cursor? cursor, RuntimeHistoryCapturePolicy policy, CancellationToken token)
     {
-        var run = query.WorkflowExecutionId; var head = await Head(scope, run, token);
+        var run = query.WorkflowExecutionId; var head = await Head(scope, run, policy, token);
         var upper = cursor?.Upper ?? head?.LastSequence ?? 0; var after = cursor?.After ?? 0;
         ValidateWindow(run, head, cursor, after, upper);
         var source = Bookmarks(scope, run);
@@ -106,7 +108,9 @@ internal sealed partial class EfRuntimeHistoryStore
             var row = await context.Set<RuntimeHistoryBookmarkCountEntity>().AsNoTracking().SingleOrDefaultAsync(item => item.Id == id, token);
             if (row is null && await source.AnyAsync(token)) throw Invalid(run, "known bookmark inventory has no maintained count projection");
             var count = row is null ? new Mapping.BookmarkCount(query.ActivityExecutionId, 0, 0) : mapping.Read(row, scope, run, query.ActivityExecutionId);
-            if (count.TotalCount < records.Length || count.ActiveCount < records.Count(item => item.Status == RuntimeHistoryBookmarkStatus.Active))
+            if (count.TotalCount < records.Length || count.ActiveCount < records.Count(item => item.Status == RuntimeHistoryBookmarkStatus.Active) ||
+                after == 0 && rows.Length <= scanLimit && (count.TotalCount != records.Length ||
+                    count.ActiveCount != records.Count(item => item.Status == RuntimeHistoryBookmarkStatus.Active)))
                 throw Invalid(run, "maintained bookmark counts contradict the bounded current inventory");
             active = count.ActiveCount; total = query.Status is null ? count.TotalCount : query.Status == RuntimeHistoryBookmarkStatus.Active ? active : null;
         }

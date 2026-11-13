@@ -17,18 +17,18 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class EfRuntimeHistoryStoreTests
 {
     [Theory]
-    [InlineData(false)] [InlineData(true)]
-    public async Task Mutable_bookmark_details_and_counts_share_the_head_snapshot_during_a_real_concurrent_commit(bool inventory)
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Mutable_bookmark_details_and_counts_share_the_head_snapshot_during_a_real_concurrent_commit(bool inventory, bool caller)
     {
         await using var seed = await Database.Create(); await seed.Append(new Fact("created", "a", "BookmarkCreated", Mutation: Mutation("b", "a")));
         await using var file = new TemporarySqliteDatabase("selected-history-snapshot");
         await using (var target = new SqliteConnection(file.ConnectionString))
         { await target.OpenAsync(); seed.BackupTo(target); await using var command = target.CreateCommand(); command.CommandText = "PRAGMA journal_mode=WAL"; await command.ExecuteNonQueryAsync(); }
         await using var connection = new SqliteConnection(file.ConnectionString); await connection.OpenAsync();
-        await using var nativeTransaction = connection.BeginTransaction(System.Data.IsolationLevel.Serializable, deferred: true);
+        await using var nativeTransaction = caller ? connection.BeginTransaction(System.Data.IsolationLevel.Serializable, deferred: true) : null;
         var gate = new SnapshotGate();
         await using var context = new HistoryContext(new DbContextOptionsBuilder<HistoryContext>().UseSqlite(connection).AddInterceptors(gate).Options);
-        await using var transaction = await context.Database.UseTransactionAsync(nativeTransaction);
+        await using var transaction = caller ? await context.Database.UseTransactionAsync(nativeTransaction) : null;
         var store = seed.Store(context);
         var pending = inventory ? ReadInventory() : ReadDetails();
         await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(20));
@@ -45,7 +45,8 @@ public sealed partial class EfRuntimeHistoryStoreTests
             await writer.SaveChangesAsync(); await writeTransaction.CommitAsync();
         }
         gate.Release.SetResult(); await pending.WaitAsync(TimeSpan.FromSeconds(20));
-        Assert.Same(transaction, context.Database.CurrentTransaction); await transaction!.RollbackAsync();
+        if (caller) { Assert.Same(transaction, context.Database.CurrentTransaction); await transaction!.RollbackAsync(); }
+        else Assert.Null(context.Database.CurrentTransaction);
         await using var after = new HistoryContext(new DbContextOptionsBuilder<HistoryContext>().UseSqlite(file.ConnectionString).Options);
         Assert.Equal(RuntimeHistoryBookmarkStatus.Consumed, (await seed.Store(after).FindBookmarkAsync("run", "b"))!.Status);
         async Task ReadInventory()

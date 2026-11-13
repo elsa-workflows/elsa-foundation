@@ -121,15 +121,15 @@ public sealed partial class EfRuntimeHistoryStoreTests
         protected override void ConfigureProvider(ModelBuilder model)
         { RuntimeHistoryEntityConfiguration.Configure(model); RuntimeHistoryOccurrenceEntityConfiguration.Configure(model); }
     }
-    private sealed class Database(SqliteConnection keeper) : IAsyncDisposable
+    private sealed class Database(SqliteConnection keeper, RuntimeHistoryCapturePolicy pinned) : IAsyncDisposable
     {
         internal Access Access { get; } = new(); private int batches;
-        internal static async Task<Database> Create()
+        internal static async Task<Database> Create(RuntimeHistoryCapturePolicy? policy = null)
         {
-            var keeper = new SqliteConnection("Data Source=:memory:"); await keeper.OpenAsync(); var db = new Database(keeper);
+            var keeper = new SqliteConnection("Data Source=:memory:"); await keeper.OpenAsync(); var db = new Database(keeper, policy ?? Policy);
             await using var context = db.Open(); await context.Database.EnsureCreatedAsync();
             var workflow = new WorkflowExecutionState("run", new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running,
-                null, At, At, At, null, null, null, "scope", new Dictionary<string, string>()) { HistoryCapturePolicy = Policy, HistoryCaptureEnabledAtAdmission = true };
+                null, At, At, At, null, null, null, "scope", new Dictionary<string, string>()) { HistoryCapturePolicy = policy ?? Policy, HistoryCaptureEnabledAtAdmission = true };
             context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(workflow, "scope", EfWorkflowExecutionStateStore.CreateId("scope", "run"), 1));
             await context.SaveChangesAsync(); return db;
         }
@@ -144,7 +144,7 @@ public sealed partial class EfRuntimeHistoryStoreTests
                 fact.Name, At.AddMinutes(-batches), fact.Activity, checkpointId: logical, metadata: fact.Metadata)
             { Authority = RuntimeHistoryAuthority.CommittedTransition, ParentActivityExecutionId = fact.Parent, ActivityAncestryKnown = fact.Known,
                 BookmarkId = fact.Mutation?.Bookmark.Identity.BookmarkId, OccurredAtKnown = fact.KnownTime }, index, fact.Mutation)).ToArray();
-            var batch = new RuntimeHistoryBatch(Policy, logical, At, batches == 1, candidates);
+            var batch = new RuntimeHistoryBatch(pinned, logical, At, batches == 1, candidates);
             var commit = new RuntimeCheckpointCommit("physical-" + batches, new(logical, "control", "run", At, [], new Dictionary<string, string>()),
                 new(null, null, [], [], [], [], []), [], new Dictionary<string, string>()) { HistoryBatches = [batch] };
             await using var context = Open(); await using var transaction = await context.Database.BeginTransactionAsync();

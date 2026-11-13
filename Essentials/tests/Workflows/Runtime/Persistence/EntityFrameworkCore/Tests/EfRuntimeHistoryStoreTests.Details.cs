@@ -79,10 +79,10 @@ public sealed partial class EfRuntimeHistoryStoreTests
     [InlineData("gap")] [InlineData("capture-late")] [InlineData("missing-kind")]
     public async Task Incomplete_capture_cannot_expose_a_maintained_count_as_a_known_complete_inventory(string limitation)
     {
-        await using var db = await Database.Create(); await db.Append(new Fact("created", "a", "BookmarkCreated", Mutation: Mutation("b", "a")));
-        await db.ChangeHead(head => limitation switch
-        { "gap" => head with { HasGaps = true }, "capture-late" => head with { CapturedFromStart = false },
-          _ => head with { Policy = new("limited", 1, true, ["ActivityStarted"]) } });
+        await using var db = await Database.Create(limitation == "missing-kind" ? new("limited", 1, true, ["BookmarkConsumed"]) : null);
+        await db.Append(limitation == "missing-kind" ? new Fact("observed", "a", "BookmarkConsumed", Mutation: Mutation("b", "a", RuntimeHistoryBookmarkStatus.Consumed))
+            : new Fact("created", "a", "BookmarkCreated", Mutation: Mutation("b", "a")));
+        if (limitation != "missing-kind") await db.ChangeHead(head => limitation == "gap" ? head with { HasGaps = true } : head with { CapturedFromStart = false });
         await using var context = db.Open(); var page = await db.Store(context).ListBookmarksAsync(new("run")); Assert.Null(page.TotalCount); Assert.Null(page.ActiveCount);
     }
 
