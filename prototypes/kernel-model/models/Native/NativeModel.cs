@@ -454,6 +454,13 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
         return work.Frame;
     }
 
+    /// <summary>The children of a frame that run or are scheduled, with the tags they were scheduled with.</summary>
+    internal IReadOnlyList<(string Frame, string? Tag)> RunningWithTags(string frame) =>
+        [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => (f.Id, f.Tag)), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => (w.Frame, w.Tag))];
+
+    /// <summary>The node whose start trigger is still to be delivered, if any.</summary>
+    internal string? PendingTrigger => _s.Trigger is null ? null : _s.TriggerNode;
+
     internal IReadOnlyList<string> Running(string frame) =>
         [.. _s.Frames.Values.Where(f => f.Parent == frame).Select(f => f.Id), .. _s.Agenda.Where(w => !w.Resume && !w.Gone && w.Parent == frame).Select(w => w.Frame)];
 
@@ -552,6 +559,12 @@ public sealed class CompositeContext
     internal bool Flawed(NativeFlaw flaw) => _burst.Flawed(flaw);
 
     public T GetState<T>() where T : new() => Values.To<T>(_frame.State) ?? new T();
+    /// <summary>The private state, or null before the first <see cref="SetState{T}"/>.</summary>
+    public T? ReadState<T>() where T : class => Values.To<T>(_frame.State);
+    /// <summary>The children that run or are scheduled, with their tags.</summary>
+    public IReadOnlyList<(string Frame, string? Tag)> RunningWithTags => _burst.RunningWithTags(_frame.Id);
+    /// <summary>The node whose start trigger (an HTTP request, an event) is still to be delivered, if any.</summary>
+    public string? PendingTrigger => _burst.PendingTrigger;
     public void SetState<T>(T state) => _frame.State = Values.From(state);
 
     public string Schedule(Node child, string? tag = null, IReadOnlyDictionary<string, JsonNode?>? scope = null) => _burst.Schedule(_frame, child, tag, scope);
