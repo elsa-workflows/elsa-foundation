@@ -2,11 +2,105 @@ import { describe, expect, it } from "vitest";
 import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, readBpmnDocument } from "../bpmn/bpmnDocument";
 import { bpmnAppearanceNamespaces as colors, readBpmnDocumentAppearance } from "../bpmn/bpmnDocumentAppearance";
 import { prepareBpmnReparent } from "../bpmn/bpmnDocumentContainmentOperations";
+import { planBpmnCreateShape } from "../bpmn/bpmnDocumentCreateOperations";
 import { planBpmnAppearance, planBpmnStandardProperty, readBpmnStandardProperties } from "../bpmn/bpmnDocumentPropertyOperations";
-import { prepareBpmnDelete } from "../bpmn/bpmnDocumentTransformOperations";
+import { planBpmnReplace, prepareBpmnDelete } from "../bpmn/bpmnDocumentTransformOperations";
 import { operationOwner, operationScope } from "./bpmnDocumentOperationsFixture";
 
 describe("complete operation identity and property fidelity", () => {
+  it("allocates first-label paint against the generated label's actual context", () => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('targetNamespace="urn:test"', 'xmlns:paint="urn:root" targetNamespace="urn:test"')
+      .replace('<bd:BPMNShape id="ADI"', `<bd:BPMNShape xmlns:paint="${colors.color}" id="ADI"`);
+    const before = structuredClone(owner);
+    const next = readBpmnDocument(applyBpmnDocumentTransaction(owner, planBpmnAppearance(owner, operationScope, "ADI", { labelColor: "teal" }).transaction));
+    const di = next.byId.get("ADI")!, label = di.getElementsByTagNameNS(ns.diagram, "BPMNLabel")[0];
+    expect(label.getAttributeNS(colors.color, "color")).toBe("teal");
+    expect(di.lookupNamespaceURI("paint")).toBe(colors.color);
+    expect(next.document.documentElement.lookupNamespaceURI("paint")).toBe("urn:root");
+    expect(owner).toEqual(before);
+  });
+
+  it("does not create an empty label when clearing absent label color", () => {
+    const owner = operationOwner();
+    expect(applyBpmnDocumentTransaction(owner, planBpmnAppearance(owner, operationScope, "ADI", { labelColor: null }).transaction)).toBe(owner);
+  });
+
+  function cancelEvent(kind: "end" | "boundary") {
+    const owner = operationOwner();
+    const created = planBpmnCreateShape(owner, operationScope, { toolId: kind === "end" ? "endEvent-cancel" : "boundaryEvent-cancel",
+      ...(kind === "end" ? { parentElementId: "TX" } : { attachedToElementId: "TX" }), position: { x: 330, y: 350 } });
+    return { owner: applyBpmnDocumentTransaction(owner, created.transaction), created };
+  }
+
+  it.each([false, true])("refuses moving transaction cancellation into a process (referenced=%s)", referenced => {
+    const prepared = cancelEvent("end"); let owner = prepared.owner;
+    if (referenced) {
+      const parsed = readBpmnDocument(owner), event = parsed.byId.get(prepared.created.selection!.elementId)!;
+      const definition = event.getElementsByTagNameNS(ns.model, "cancelEventDefinition")[0]; definition.setAttribute("id", "SharedCancel");
+      parsed.document.documentElement.insertBefore(definition, parsed.document.documentElement.firstElementChild);
+      const reference = parsed.document.createElementNS(ns.model, "b:eventDefinitionRef"); reference.textContent = "q:SharedCancel"; event.append(reference);
+      owner = { ...owner, structure: { ...owner.structure!, payload: { ...owner.structure!.payload, documentXml: new XMLSerializer().serializeToString(parsed.document) } } };
+    }
+    const before = structuredClone(owner);
+    expect(() => prepareBpmnReparent(owner, operationScope, { elementIds: [prepared.created.selection!.elementId], parentElementId: "P" })).toThrow("transaction");
+    expect(owner).toEqual(before);
+  });
+
+  it.each(["end", "boundary"] as const)("refuses replacing a transaction while retaining its cancel %s event", kind => {
+    const { owner } = cancelEvent(kind), before = structuredClone(owner);
+    expect(() => planBpmnReplace(owner, operationScope, { elementId: "TX", diId: "TXDI" }, "subProcess-expanded")).toThrow("transaction");
+    expect(owner).toEqual(before);
+  });
+
+  it("checks an idless cancellation event when replacing its transaction scope", () => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('<b:transaction id="TX"/>', '<b:transaction id="TX"><b:endEvent><b:cancelEventDefinition/></b:endEvent></b:transaction>');
+    const before = structuredClone(owner);
+    expect(() => planBpmnReplace(owner, operationScope, { elementId: "TX", diId: "TXDI" }, "subProcess-expanded")).toThrow("transaction");
+    expect(owner).toEqual(before);
+  });
+
+  it("refuses leaving an idless boundary behind when moving its host", () => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('<b:exclusiveGateway id="G"/>', '<b:boundaryEvent attachedToRef="A"><b:timerEventDefinition/></b:boundaryEvent><b:exclusiveGateway id="G"/>');
+    const before = structuredClone(owner);
+    expect(() => prepareBpmnReparent(owner, operationScope, { elementIds: ["A", "B"], parentElementId: "TX" })).toThrow("same standard flow scope");
+    expect(owner).toEqual(before);
+  });
+
+  it("keeps an unchanged valid cancellation context as a no-op", () => {
+    const { owner, created } = cancelEvent("end");
+    const result = prepareBpmnReparent(owner, operationScope, { elementIds: [created.selection!.elementId], parentElementId: "TX" });
+    if (result.kind !== "ready") throw new Error("An unchanged event needs no native context transition");
+    expect(applyBpmnDocumentTransaction(owner, result.plan.transaction)).toBe(owner);
+  });
+
+  it("keeps event-body-only start triggers inside an event subprocess", () => {
+    const owner = operationOwner(), created = planBpmnCreateShape(owner, operationScope, { toolId: "startEvent-error-event-body", parentElementId: "ES", position: { x: 680, y: 330 } });
+    const next = applyBpmnDocumentTransaction(owner, created.transaction), before = structuredClone(next);
+    expect(() => prepareBpmnReparent(next, operationScope, { elementIds: [created.selection!.elementId], parentElementId: "P" })).toThrow("event subprocess");
+    expect(next).toEqual(before);
+  });
+
+  it("does not globally reject unrelated unfinished event contexts during a data move", () => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('<b:task id="A"', '<b:endEvent id="Unfinished"><b:cancelEventDefinition/></b:endEvent><b:task id="A"');
+    const result = prepareBpmnReparent(owner, operationScope, { elementIds: ["Data"], parentElementId: "TX" });
+    expect(result.kind).toBe("ready");
+  });
+
+  it("retains an unfinished inner event context when moving its enclosing scope unchanged", () => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('<b:task id="Child"/>', '<b:task id="Child"/><b:endEvent><b:cancelEventDefinition/></b:endEvent>');
+    const result = prepareBpmnReparent(owner, operationScope, { elementIds: ["S"], parentElementId: "TX" });
+    if (result.kind !== "ready") throw new Error("Unconfigured standard scope needs no native ownership change");
+    const next = readBpmnDocument(applyBpmnDocumentTransaction(owner, result.plan.transaction));
+    expect(next.byId.get("S")!.parentElement!.getAttribute("id")).toBe("TX");
+    expect(next.byId.get("S")!.getElementsByTagNameNS(ns.model, "cancelEventDefinition")).toHaveLength(1);
+  });
+
   it.each([false, true])("does not delete standard B through an opaque vendor ID (bound=%s)", bound => {
     const owner = operationOwner(), payload = owner.structure!.payload;
     payload.bindings = bound ? [{ elementId: "B", childNodeId: "native" }] : [];

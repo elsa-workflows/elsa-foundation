@@ -1,5 +1,6 @@
 import type { ActivityNode } from "../workflowTypes";
 import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, resolveBpmnDocumentReference, type BpmnDocumentCommand, type BpmnDocumentConfigurationChange, type BpmnDocumentSelection, type BpmnScopeAddress } from "./bpmnDocument";
+import { verifyBpmnEventContexts } from "./bpmnDocumentEventContext";
 import { assessBpmnDocumentConnection, bpmnBoolean, bpmnEventDefinitions, bpmnFlowScope, isBpmnModelElement } from "./bpmnDocumentPolicy";
 import { isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType } from "./bpmnNotationTypes";
 import { planBpmnCreateConnection, type BpmnCreateConnectionIntent, type BpmnDocumentOperationPlan } from "./bpmnDocumentCreateOperations";
@@ -48,6 +49,7 @@ export function planBpmnReplace(owner: ActivityNode, scope: BpmnScopeAddress, se
   if (entry.expanded !== undefined && selection.diId) commands.push({ kind: "attribute", target: { elementId: selection.diId }, name: "isExpanded", value: String(entry.expanded) });
   const plan = { transaction: { commands }, selection };
   const next = applyBpmnDocumentTransaction(owner, plan.transaction), parsed = bpmnOperationContext(next, scope).parsed;
+  verifyBpmnEventContexts(context.parsed, parsed, [selection.elementId]);
   for (const flow of parsed.byId.values()) if (["sequenceFlow", "messageFlow"].includes(flow.localName)) {
     const source = resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("sourceRef")), target = resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("targetRef"));
     if (source?.id !== selection.elementId && target?.id !== selection.elementId) continue;

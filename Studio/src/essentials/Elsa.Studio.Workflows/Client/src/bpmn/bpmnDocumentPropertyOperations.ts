@@ -126,18 +126,22 @@ export function planBpmnAppearance(owner: ActivityNode, scope: BpmnScopeAddress,
   };
   if (intent.fill !== undefined) { if (di.localName !== "BPMNShape") refuseBpmnOperation("a connection has no background fill"); color({ elementId: diId }, di, "background-color", intent.fill); }
   if (intent.stroke !== undefined) color({ elementId: diId }, di, "border-color", intent.stroke);
-  if (intent.labelColor !== undefined || intent.font) {
-    const labels = [...di.children].filter(child => child.namespaceURI === ns.diagram && child.localName === "BPMNLabel");
+  const labels = [...di.children].filter(child => child.namespaceURI === ns.diagram && child.localName === "BPMNLabel");
+  if (intent.font || intent.labelColor !== undefined && (intent.labelColor !== null || labels.length)) {
     if (labels.length > 1) refuseBpmnOperation("label appearance needs one unambiguous label");
-    if (!labels.length) commands.push(insertBpmnFragment(context, di, bpmnFragment(context, "BPMNLabel", {}, ns.diagram)));
-    const labelAddress: BpmnXmlAddress = { elementId: diId, path: [{ namespaceURI: ns.diagram, localName: "BPMNLabel" }] };
-    if (intent.labelColor !== undefined) color(labelAddress, labels[0] ?? di, "color", intent.labelColor);
+    const label = labels[0] ?? bpmnFragment(context, "BPMNLabel", {}, ns.diagram);
+    if (!labels.length) {
+      commands.push(insertBpmnFragment(context, di, label));
+      di.append(label); // Only the private planning DOM advances; subsequent commands address this exact new label.
+    }
+    const labelAddress = bpmnSourceAddress(label, context.parsed);
+    if (intent.labelColor !== undefined) color(labelAddress, label, "color", intent.labelColor);
     if (intent.font) {
       const font = intent.font;
       if (font.size !== undefined && (!Number.isFinite(font.size) || font.size < 0) || font.name !== undefined && (!font.name.trim() || [...font.name].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))) refuseBpmnOperation("font name and size must be valid diagram values");
       // Create a private label style: editing this instance must not restyle other labels sharing the old style.
       const diagram = context.parsed.byId.get(scope.diagramId)!;
-      const priorStyleId = labels[0]?.getAttribute("labelStyle"), priorStyle = priorStyleId ? resolveBpmnDocumentReference(context.parsed, labels[0], priorStyleId) : undefined;
+      const priorStyleId = label.getAttribute("labelStyle"), priorStyle = priorStyleId ? resolveBpmnDocumentReference(context.parsed, label, priorStyleId) : undefined;
       if (priorStyleId && (!priorStyle || priorStyle.namespaceURI !== ns.diagram || priorStyle.localName !== "BPMNLabelStyle")) refuseBpmnOperation("the current label style is unresolved; repair that actual reference before changing font");
       const styleId = context.allocate("LabelStyle"), style = priorStyle ? cloneBpmnPropertyFragment(priorStyle, diagram) : bpmnFragment(context, "BPMNLabelStyle", {}, ns.diagram);
       style.setAttribute("id", styleId);

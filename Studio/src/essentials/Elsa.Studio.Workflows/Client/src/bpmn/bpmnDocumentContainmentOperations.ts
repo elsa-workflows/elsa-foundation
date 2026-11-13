@@ -7,6 +7,7 @@ import { isActivityBearingElementType, isEventElementType, isGatewayElementType,
 import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, insertBpmnFragment,
   isBpmnOwnedSyntax, refuseBpmnOperation, requireBpmnFlowScope, requireBpmnVisibleElement, resolveBpmnOperationAddress } from "./bpmnDocumentOperationXml";
 import type { BpmnDocumentOperationPlan } from "./bpmnDocumentCreateOperations";
+import { verifyBpmnEventContexts } from "./bpmnDocumentEventContext";
 
 export interface BpmnReparentIntent {
   elementIds: readonly string[];
@@ -118,6 +119,7 @@ export function prepareBpmnReparent(owner: ActivityNode, scope: BpmnScopeAddress
   }
   // Native configuration is omitted only from this transient syntax assessment, never from the returned plan.
   const syntax = readBpmnDocument(applyBpmnDocumentTransaction(owner, { commands, configuration: { activities: [], bindings: [], scopeHeaders: [] } }));
+  verifyBpmnEventContexts(context.parsed, syntax, [...roots].map(bpmnIdentity));
   for (const edge of syntax.byId.values()) if (isBpmnOwnedSyntax(edge) && ["sequenceFlow", "messageFlow"].includes(edge.localName)) {
     const source = resolveBpmnDocumentReference(syntax, edge, edge.getAttribute("sourceRef")), destination = resolveBpmnDocumentReference(syntax, edge, edge.getAttribute("targetRef"));
     if (!source || !destination || !inside(context.parsed.byId.get(bpmnIdentity(source))!) && !inside(context.parsed.byId.get(bpmnIdentity(destination))!)) continue;
