@@ -74,4 +74,7 @@ public enum Flaw : long
     DeleteLeavesJournal = 1L << 39, // a delete leaves the instance's journal rows
     ProjectorStopsAtGap = 1L << 40, // the projector stops at the first missing position, as in section 10
     TrialBeforeLoad = 1L << 41,    // for the measurement of section 21: a trial may start before its instance is loaded and idle
+
+    // Round 4 (FINDINGS 25).
+    JobPoisonAsError = 1L << 43,   // a job past the threshold becomes an error result and its instance goes on (round 3's rule)
 }

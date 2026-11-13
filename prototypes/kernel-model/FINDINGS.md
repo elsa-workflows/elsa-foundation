@@ -1004,6 +1004,38 @@ is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds,
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
 
+### 25.5 A poisoned job parks its instance (decision 9). Run
+
+**What changed.** A job's ticket was already counted like any message: it goes on trial alone, and a take after a lost
+owner adds an attempt. At the threshold, round 3 turned the ticket into an error result (`JobFinished` with "the job
+was on trial when N owners were lost") and the instance went on. Now `Worker.Hold` neither starts such a job nor
+rewrites its ticket; the ticket is given to a turn as it is, and `RunTurn` parks the instance: faulted with "message
+<ticket> was on trial when N owners were lost", the ticket consumed, as for any poison message. The old rule stays as
+`Flaw.JobPoisonAsError`.
+
+**The check.** The simulation's oracle now expects an instance whose job kills the process (the fragile model's
+`dierun`) to end faulted, parked by its own job's ticket (`<instance>!<key>`). Any other parking of it still counts as
+innocent, and any other fault of it fails I14. With the old rule the instance ends Running: `--flaw JobPoisonAsError` is
+caught at seed 2, `I14 1/f2 ended as Running`.
+
+**Gates.** Before: main at d8eb8c9727 for the native run (measured here); section 24 for the others, which were not
+re-run on that main.
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 12 innocent parked | the same |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 14 innocent parked; 386,774 matched; 850 reruns, all told | the same, count for count |
+| `$SIM --mutations --seeds 20000` | every flaw caught but the two caught only in combination | the same, plus `JobPoisonAsError` at seed 2 |
+| `$SIM --native-mutations --seeds 20000` | 9 of 9 (the five native flaws and four graph flaws) | the same |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+
+The native counts equal main's (why exactly, given the instances now parked, is not traced). A first version of
+the oracle counted every `dierun` instance as allowed to fault, whatever parked it. A probe over the same 20,000
+native seeds found 6,116 parkings of such instances: 6,114 by their own job's ticket, and two by a message (`0/f2` by
+`x15`, `0/f1` by `x8`, each "on trial when 3 owners were lost"). That version hid those two from the innocent count;
+the oracle now counts them. Not run: the stores (no store or commit code changed).
+
 ## 26. Round 4: the graph engine. Run
 
 The owner's decision of 12 November (design sketch draft 5, "Containers and their semantics"): the native model stays
