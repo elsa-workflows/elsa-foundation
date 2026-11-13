@@ -39,6 +39,18 @@ public sealed class EfRuntimeCheckpointCommitStore(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
+    bool IRuntimeCheckpointCommitStore.SupportsHistory => true;
+    bool IRuntimeCheckpointCommitStore.CanCommitHistory(IRuntimeHistoryStore reader)
+    {
+        if (reader is not EfRuntimeHistoryStore selected || !selected.Uses(context, accessContextAccessor, RuntimeHistoryEfModule.Chain)) return false;
+        try
+        {
+            _ = accessContextAccessor.Current.RequireScope();
+            return context.Database.IsRelational() && RuntimeHistoryEfModule.HasProjectionModel(context);
+        }
+        catch (InvalidOperationException) { return false; }
+    }
+
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => true;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => true;
     bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => true;

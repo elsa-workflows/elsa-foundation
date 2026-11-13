@@ -18,7 +18,7 @@ internal sealed class EfRuntimeHistoryMutationStore(RuntimeDbContext context, IP
     public bool CanRecordHistory(IRuntimeHistoryStore selectedStore)
     {
         if (!ReferenceEquals(reader, selectedStore) || !reader.Uses(context, access, chain)) return false;
-        try { _ = access.Current.RequireScope(); return context.Database.IsRelational(); }
+        try { _ = access.Current.RequireScope(); return context.Database.IsRelational() && RuntimeHistoryEfModule.HasProjectionModel(context); }
         catch (InvalidOperationException) { return false; }
     }
 

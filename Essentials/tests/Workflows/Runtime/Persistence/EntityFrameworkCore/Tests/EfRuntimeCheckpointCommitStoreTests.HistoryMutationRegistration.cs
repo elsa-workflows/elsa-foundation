@@ -34,7 +34,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.True(observation.CanRecordHistory(reader));
         Assert.False(observation.CanRecordHistory(second.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>()));
         Assert.False(first.ServiceProvider.GetRequiredService<RuntimeHistoryOptions>().Enabled);
-        Assert.False(first.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>().SupportsHistory);
+        Assert.True(first.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>().CanCommitHistory(reader));
     }
 
     [Theory]
@@ -88,7 +88,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Equal(3, await retention.PurgeThroughAsync("workflow-a", long.MaxValue));
         var purgedReplay = await observer.RecordAsync(observation); Assert.True(purgedReplay.Recorded); Assert.Null(purgedReplay.Event);
         Assert.Single(await context.Bookmarks.AsNoTracking().ToArrayAsync()); Assert.Single(await context.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync());
-        Assert.False(scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>().SupportsHistory);
+        Assert.True(scope.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>().CanCommitHistory(reader));
         Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryOptions>());
     }
 }
