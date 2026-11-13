@@ -1064,21 +1064,28 @@ its live child remained unterminated. A turn that threw while consuming a comple
 is the same durable ticket with an in-memory result payload. Other job keys, child references and the serialized
 model checkpoint survive Park. When a remaining job finishes after Park, the drop of its result retires its key in
 the same commit, advancing the revision and recording the selected history. Later termination can cancel live
-siblings and forward to the children. It preserves the parent's fault and checkpoint. The subscription rule is in 25.9.
+siblings even on a childless workflow and can forward to children. It preserves the fault and checkpoint.
+A proposed cancellation reserves the ticket once the turn produces an outcome. A throw leaves the sibling free
+to complete. If storage definitely refuses the outcome, the worker releases its reservation before parking. A
+sibling result that completed while the write was pending stays available for the next pass. A successful
+cancellation removes the ticket and cancels the running job's token at commit. The subscription rule is in 25.9.
 
-| Focused gate | Main `84371a23ef` (includes #4400) | With the job-poison fix |
+| Focused gate | Main `d672f5d7a7` (includes the Park, reply and lease changes) | With the job-poison fix |
 |---|---|---|
-| Native.Run `park` | 8 pass | 10 pass; the two new cases failed on the merged, unfixed job-poison branch `7ff84f862c` |
+| Native.Run `park` | 8 pass | 14 pass. The original two witnesses failed on `7ff84f862c`; childless terminate and both abandoned-cancellation races failed on `27b362312b` |
 | Native.Run `smoke` | All 34 checks pass | All 34 checks pass |
 | 1,000 seeds × 300 actions | 0 failed, 0 innocent parkings | Same |
-| Native, 200 seeds × 1,000 actions | 0 failed, 0 innocent parkings; 3,805 matched; 14 external reruns, all flagged | Same |
-| `JobPoisonAsError`, 1,000 seeds × 300 actions | Mutation absent | 157 failures, first seed 2, I14 (a killing job's instance remained Running) |
+| Native, 200 seeds × 1,000 actions | 0 failed, 0 innocent parkings; 3,756 matched; 11 external reruns, all flagged | Same |
+| `JobPoisonAsError`, 1,000 seeds × 300 actions | Mutation absent | 155 failures, first seed 2, I14 (a killing job's instance remained Running) |
 
 The deterministic cases use actual workers and the in-memory store. One loses the owner during an isolated job
 trial, faults the parent without restarting the job, then terminates its live child and cancels a sibling ticket.
 The other loses the model's result-handling turn to an exception, consumes the sibling's late result against the
 faulted row and terminates the child after takeover. Both verify checkpoint retention, jobs, subscriptions and
-ticket removal. The simulation generator on both comparison heads includes `dierun`; the candidate changes its
+ticket removal. Three other witnesses trace the sibling's real token and completion through a throw, a
+definite refusal with a completion during the write, and a committed cancellation. The childless terminate
+case verifies the surviving ticket and its token are cleared with the faulted row's next revision. The merged
+deadline eviction check and the 23 lease checks also passed. The simulation generator on both comparison heads includes `dierun`; the candidate changes its
 oracle to recognize parking by the killing job's own ticket. Its counts therefore describe each version's own
 oracle. The older broad sweeps and full mutation matrices in the original PR ran against earlier bases and were
 not repeated here. This change uses the existing commit contract; no provider-specific persistence run was made.

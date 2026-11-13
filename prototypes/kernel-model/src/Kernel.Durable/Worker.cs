@@ -574,7 +574,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         catch (Exception e) { error = e.Message; }
         // A cancellation in flight can still be refused. Keep a completed result on the ticket until the
         // commit either forgets it or releases its cancellation mark. A landed cancellation already removed it.
-        if (!JobMayRun(generation) || !_items.TryGetValue(ticket.Message.Id, out var current) || current != ticket) return;
+        if (!JobMayRun(generation) || token.IsCancellationRequested) return;
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
         ticket.Message = ticket.Message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) };
         ticket.Ticket = false;

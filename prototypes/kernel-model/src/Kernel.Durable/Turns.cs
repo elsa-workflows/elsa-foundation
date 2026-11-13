@@ -37,7 +37,6 @@ public interface ITurnServices
     int Partitions { get; }
 
     bool Has(Flaw flaw);
-
 }
 
 /// <summary>A message as the durable layer holds it in memory. An actor type reads the message; the rest is layer 2's.</summary>
