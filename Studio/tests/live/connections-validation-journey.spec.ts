@@ -58,5 +58,5 @@ test("connection validation explains client and real API rejections, then preser
   await nameInput.fill(`${name}-corrected`);
   await create.click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole("status")).toContainText(`Connection '${name}-corrected' created.`);
+  await expect(page.locator(".studio-toast")).toContainText(`Connection '${name}-corrected' created.`);
 });

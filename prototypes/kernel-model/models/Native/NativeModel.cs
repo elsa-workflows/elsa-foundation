@@ -56,6 +56,7 @@ public sealed class NativeOptions
     /// </summary>
     public Action<InstanceRef, string, string, int, bool>? OnExternal { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
+    public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
 }
 
@@ -73,6 +74,8 @@ public sealed class NativeState
     public Dictionary<string, JsonNode?> Results { get; set; } = new(StringComparer.Ordinal);
     public string? TriggerNode { get; set; }
     public JsonNode? Trigger { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
 
 /// <summary>A live activity: a composite with children, or an activity that waits.</summary>
@@ -114,9 +117,10 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Round 3's state versions: native's state has one shape so far.</summary>
-    public int StateVersion => 1;
-    public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException($"native state has no version {fromVersion}");
+    /// <summary>Version 2 adds optional invocation inbox metadata; version 1 preserves its ordinary frames on upgrade.</summary>
+    public int StateVersion => 2;
+    public object UpgradeState(string state, int fromVersion) => fromVersion == 1 ? Json.Read<NativeState>(state)
+        : throw new NotSupportedException($"native state has no version {fromVersion}");
 
     internal WorkflowRegistry Registry => registry;
     internal NativeOptions Options { get; } = options ?? new NativeOptions();
@@ -141,7 +145,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 }
 
 /// <summary>One turn: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
-internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken)
+internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken)
 {
     private readonly NativeState _s = (NativeState)turn.State;
     private readonly Workflow _wf = model.Registry.Get(turn.Instance.Definition);
@@ -155,8 +159,13 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
 
     public async ValueTask RunAsync()
     {
-        foreach (var message in turn.Inbox) Accept(message);
+        if (AdmitPrefix()) return;
+        foreach (var message in turn.Inbox)
+            if (message.Kind == InvocationInput.Kind) turn.Hold(message);
+            else Accept(message);
         await DrainAsync();
+        FinishSignals();
+        if (turn.Inbox.Any(m => m.Kind == InvocationInput.Kind)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
 
     // ---- messages in -------------------------------------------------------------------------------------------------
@@ -175,6 +184,9 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
                 _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
                 break;
             }
+            case CompositeSignal.Kind:
+                AcceptSignal(m);
+                break;
             case NativeKinds.Timer:
             {
                 // The timer's message is consumed by this turn. Its resume may wait in the agenda past a Durable boundary,
@@ -287,8 +299,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
             case ILeaf leaf:
                 if (node.External)
                 {
-                    // Friction F-N6, fixed in the merge: the kernel says when the turn may have run before, so the
-                    // journal can say "this side effect may have happened already" instead of nobody knowing.
+                    // The observed delivery history can flag a possible earlier turn; a false hint does not rule out a race.
                     var again = turn.Inbox.Any(turn.Redelivered);
                     if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
                     model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
@@ -558,7 +569,7 @@ internal sealed class FrameScope(Burst burst, Frame frame) : IScope
 }
 
 /// <summary>What a composite sees: its children, its private state, and the structural requests it may make.</summary>
-public sealed class CompositeContext
+public sealed partial class CompositeContext
 {
     private readonly Burst _burst;
     private readonly Frame _frame;
@@ -584,7 +595,7 @@ public sealed class CompositeContext
     public void Complete(string outcome = "Done", JsonNode? result = null) => _burst.Complete(_frame, outcome, result);
     public void Join() => _burst.Join(_frame);
     public void RecordJoin(string node) => _burst.RecordJoin(_frame, node);
-    internal void Record(string entry) => _burst.Record(entry);
+    public void Record(string entry) => _burst.Record(entry);
     public void Fault(ActivityFault fault) => _burst.Fail(_frame, fault);
     public void Cancel(string childFrame) => _burst.Cancel(childFrame);
 }

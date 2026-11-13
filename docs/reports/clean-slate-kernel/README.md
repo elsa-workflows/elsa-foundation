@@ -7,6 +7,7 @@ Status: a proposed design, not approved. No product code exists for it. It super
 | [design-sketch-draft-5.md](design-sketch-draft-5.md) | The design sketch, draft 5 (12 November 2026), with every owner decision taken so far: the three layers, partitions only, the kernel defaults, the deployment profiles, turn/job/pass, the container semantics, standalone jobs, the seven design-now questions, the release 1 scope and the architecture documentation plan |
 | [walkthrough.html](walkthrough.html) | The interactive walkthrough of the same design, built from the parts below; open it in a browser |
 | [walkthrough-src/](walkthrough-src/) | The walkthrough in five parts: the files to edit |
+| [kernel-in-motion.html](kernel-in-motion.html) | The kernel in motion: one order workflow animated through every part, the three persistence modes side by side, three faults, the fence lab and a visual glossary. A single self-contained file; also published at https://crystal-pellet-h5m3.here.now/ |
 
 The walkthrough is also published at https://vowful-mustard-pd8t.here.now/. To rebuild it after editing a part:
 
