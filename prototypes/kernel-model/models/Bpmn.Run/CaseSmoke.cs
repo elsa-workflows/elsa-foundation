@@ -172,6 +172,10 @@ public static class CaseSmoke
             owner.Worker.Post(new Message($"m{_n}", plain, Kinds.Start, Start: BpmnModel.Spec("b-inclusive-noloop")), fresh: true);
             await owner.PumpAsync(() => owner.Status(plain.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
             Check(owner.Status(plain.Id) == InstanceStatus.Finished, $"the same process without the flow back finishes: {owner.Status(plain.Id)}");
+            var never = InstanceRef.In(0, $"b-inclusive-never-{++_n}");
+            owner.Worker.Post(new Message($"m{_n}", never, Kinds.Start, Start: BpmnModel.Spec("b-inclusive-never")), fresh: true);
+            await owner.PumpAsync(() => owner.Status(never.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
+            Check(owner.Status(never.Id) == InstanceStatus.Faulted, $"with the flow back on a condition that never holds, it still faults: {owner.Status(never.Id)}");
         }
 
         Check(store.Messages.Values.All(m => m.Done) && store.Subscriptions.Count == 0, "no message and no subscription left");

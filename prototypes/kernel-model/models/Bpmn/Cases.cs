@@ -115,16 +115,17 @@ public static class BpmnCases
 
         // Not in the simulation's mix: an inclusive join inside a loop, one flow taken, beside a parallel branch that waits
         // at a parallel join downstream. Bpmn.Semantics 0.5.0 faults it with bpmn.join.deadlock (BPMN.md, section 7).
-        // b-inclusive-noloop is the same without the flow back, and finishes.
-        foreach (var loop in new[] { true, false })
+        // b-inclusive-noloop is the same without the flow back, and finishes; b-inclusive-never has the flow back on a
+        // condition that never holds, and still faults: the interpreter's search reads the graph, not the flows taken.
+        foreach (var (name, back) in new[] { ("b-inclusive-loop", $"count < {Rounds}"), ("b-inclusive-noloop", null), ("b-inclusive-never", "count < 0") })
         {
-            p = new ProcessDraft(loop ? "b-inclusive-loop" : "b-inclusive-noloop");
+            p = new ProcessDraft(name);
             p.B.StartEvent("start").ExclusiveGateway("again").ParallelGateway("fork").InclusiveGateway("or").ServiceTask("express", bindingRef: "express")
                 .ServiceTask("insured", bindingRef: "insured").InclusiveGateway("or-join").ServiceTask("side", bindingRef: "note").ParallelGateway("join")
                 .ServiceTask("count", bindingRef: "count").ExclusiveGateway("decide").EndEvent("end");
             p.Chain("start", "again", "fork", "or").Flow("or", "express", when: "express").Flow("or", "insured", when: "insured")
                 .Chain("express", "or-join", "join").Chain("insured", "or-join").Chain("fork", "side", "join").Chain("join", "count", "decide");
-            if (loop) p.Flow("decide", "again", when: $"count < {Rounds}");
+            if (back is not null) p.Flow("decide", "again", when: back);
             p.Flow("decide", "end", isDefault: true);
             yield return new BpmnProcess(p.Build(), Jobs("express", "insured", "note", "count"), new JsonObject { ["express"] = true, ["insured"] = false, ["count"] = 0, ["notes"] = 0 });
         }

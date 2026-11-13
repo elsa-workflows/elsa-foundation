@@ -149,11 +149,12 @@ Where the commits go (run, from the traced commands):
   subscriptions, none yet). Published after: the meet finds nothing, and the publish is three commands (insert the
   event, read the subscriptions, insert the delivery), which the owner finds by its poll. Both total 15 / 10 commands.
 - **State.** 480 to 910 bytes per commit, 1,150 at most here: the interpreter's token state (its record shape with
-  every field named), the variables, and about 100 bytes per unit in flight in the ledger. The diagnostics are not
+  every field named), the variables, and about 100 bytes per unit in flight in the ledger (reasoned, from the shape of
+  a ledger entry's JSON). The diagnostics are not
   kept; the interpreter would keep up to 200 of them.
 
 Today's Elsa has no BPMN runtime to compare with. The nearest native row (NATIVE.md section 5: fork-join-resume,
-Balanced, 15 / 11 round trips, 4 commits) waits for events, not jobs.
+Balanced, 15 / 11 round trips, 4 commits) resumes waits, not jobs.
 
 ## 5. The simulation
 
@@ -231,7 +232,8 @@ Frictions, none of them a contract change; whether any becomes one is the owner'
   every wait that subscribes within its window; BPMN consumes a message once. The model keeps the ids of the events
   its catches took, in its state, and skips them; the set grows by one id per message taken and is never trimmed here
   (a real host would drop ids past their window, which a turn cannot see). A kernel option to consume a kept event on
-  delivery would remove it. Run (`smoke`: the catch in a loop; checked to fail without the fix).
+  delivery would remove it. Run (`smoke`: the catch in a loop); that the case fails without the fix was run once during
+  review, with the fix taken out.
 - **F-B2. The owner's own meet goes through the table.** Scenario: a catch whose message was published before it. The
   meet that reads the kept events inserts the delivery as a message row, and the owner finds it only by a poll, as
   F-N10 found for a publish within one partition. Run (`cost`: one poll and one commit to mark it seen).
@@ -283,19 +285,19 @@ nothing was built. Traced in both engines' code (BPMN paths under the library's 
 **The difference shows in a run.** An inclusive join inside a loop, with a parallel sibling branch that waits at a
 parallel join downstream, faults in `Bpmn.Semantics` 0.5.0 with `bpmn.join.deadlock`: the sibling's token can reach the
 untaken branch only round the loop, and the whole-graph search counts that path. The same process without the loop
-finishes (run: `smoke` runs both). The fault needs only the flow back to exist: with a loop condition that never holds,
-the join still deadlocks (run, in a probe outside the repository: the same process with the flow back conditioned on
-`count < 0`), since the search reads the graph, not the flows taken. Reasoned, from the specification's wording: BPMN
+finishes (run: `smoke` runs all three). The fault needs only the flow back to exist: with a loop condition that never holds,
+the join still deadlocks (run: `smoke`, `b-inclusive-never`, the flow back conditioned on `count < 0`), since the
+search reads the graph, not the flows taken. Reasoned, from the specification's wording: BPMN
 2.0's rule for the inclusive join leaves out a path that passes a node with a path to an arrived flow (here the
 inclusive split), so the join should fire. Elsa's Flowchart decides differently (reasoned, not run on this process):
 its default dead-path join searches nothing and would see the untaken branch's dead arrival; its older reachability
-join searches forward only within the iteration (`FlowchartGraph.CanReachForward`), leaving out the path round the
+join searches forward only within the execution scope (`FlowchartGraph.CanReachForward`), leaving out the path round the
 loop. `smoke` expects the fault, so an upgrade that fixes it shows. An
 upstream issue in valence-works/bpmn would be the way to report it; none was filed.
 
 **Verdict: a neutral token package is not real enough to extract.** What is truly the same is generic graph and id
-code: the back-edge classification (about 35 lines in each), the breadth-first reachability (25 to 30) and
-sequence-based ids (5), about 70 to 80 lines per engine, with no token or join type in it. Everything a join
+code (traced, counted in both sources): the back-edge classification (about 35 lines in each), the breadth-first
+reachability (25 to 30) and sequence-based ids (5), about 70 to 80 lines per engine, with no token or join type in it. Everything a join
 coordinator decides (which nodes join, readiness, surplus arrivals, the iteration-key scheme, dead paths,
 cancellation) differs by rule, not by name, and both persisted formats are fixed (Elsa's golden fixtures, the
 library's payload format). A shared package would give `Bpmn.Semantics` a dependency on Elsa-owned code and let a BPMN
