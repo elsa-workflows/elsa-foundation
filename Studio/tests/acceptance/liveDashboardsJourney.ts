@@ -51,7 +51,13 @@ async function createEditor(page: Page, name: string, dataset: string) {
   await page.goto("/questions");
   await page.getByRole("button", { name: "Create question", exact: true }).first().click();
   await page.getByLabel("Name", { exact: true }).fill(name);
-  await page.getByRole("combobox", { name: "Dataset", exact: true }).selectOption(dataset);
+  const datasets = page.getByRole("combobox", { name: "Dataset", exact: true });
+  await expect(datasets.locator(`option[value="${dataset}"]`)).toHaveCount(1);
+  // Start authoring from the canonical empty native draft. Selecting a dataset creates
+  // an incomplete aggregate until its owner-required time window is entered; that
+  // populated query must pass normal validation before it can be disclosed to a model.
+  // The real model discovers the installed source from the user's question instead.
+  await expect(datasets).toHaveValue("");
   await expect(page.getByRole("button", { name: "Save question", exact: true })).toBeEnabled();
 }
 
@@ -61,7 +67,10 @@ async function askAndClarify(page: Page, info: TestInfo, capture: Capture, backe
   const ask = page.getByRole("region", { name: "Ask Weaver", exact: true });
   await ask.getByLabel("Your question", { exact: true }).fill(prompt);
   await expect(ask.getByRole("button", { name: "Ask Weaver", exact: true })).toBeEnabled({ timeout: 60_000 });
+  const admission = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/weaver\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname));
   await ask.getByRole("button", { name: "Ask Weaver", exact: true }).press("Enter");
+  const admitted = await admission;
+  expect(admitted.ok(), `Dashboard admission: HTTP ${admitted.status()}; ${JSON.stringify(await counters(backend))}`).toBe(true);
   const clarification = page.getByRole("region", { name: "Clarify dashboard question", exact: true }).last();
   await expect(clarification).toBeVisible({ timeout: 180_000 });
   await idle(page);
