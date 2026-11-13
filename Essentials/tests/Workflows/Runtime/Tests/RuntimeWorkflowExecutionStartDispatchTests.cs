@@ -121,7 +121,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var dispatcher = new WorkflowStartDispatcher(_store, _references, _agentProvider,
             new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now))
         {
-            HistoryAdmission = () => { resolutions++; return (enabled ? policy : null, enabled); }
+            HistoryAdmission = executionId => { Assert.Equal("wfexec-1", executionId); resolutions++; return (enabled ? policy : null, enabled); }
         };
 
         await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
@@ -140,7 +140,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var dispatcher = new WorkflowStartDispatcher(_store, _references, _agentProvider,
             new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now))
         {
-            HistoryAdmission = () => { resolutions++; return (null, false); }
+            HistoryAdmission = _ => { resolutions++; return (null, false); }
         };
 
         await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>

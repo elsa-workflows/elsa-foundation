@@ -12,7 +12,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
     // The optional composition qualifies the selected capture/writer/reader chain at actual admission.
     // No resolver is installed until that complete production path is available.
-    internal Func<(RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
+    internal Func<string, (RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
 
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&
@@ -501,7 +501,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var requestedAt = _timeProvider.GetUtcNow();
         var enqueuedAt = retainedDispatch?.CreatedAt ?? requestedAt;
         var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope, persistenceMode);
-        var history = HistoryAdmission?.Invoke() ?? (null, null);
+        var history = HistoryAdmission?.Invoke(workflowExecutionId) ?? (null, null);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,

@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
@@ -590,7 +591,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetService<IStimulusDeliveryStore>(),
                 serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>());
+                serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>())
+            { HistoryAdmission = workflowExecutionId => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider, workflowExecutionId) };
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();
