@@ -344,6 +344,41 @@ public sealed class DashboardResourceApiTests
         Assert.Equal(HttpStatusCode.UnprocessableEntity, invalid.StatusCode);
     }
 
+    [Theory]
+    [InlineData("owner", null, true)]
+    [InlineData("editor", null, true)]
+    [InlineData("viewer", null, false)]
+    [InlineData("editor", "read-only", false)]
+    [InlineData("owner", "read-only", false)]
+    public async Task Bound_replacement_preview_requires_current_edit_rights_and_rechecks_the_new_source(string actor, string? fixture, bool allowed)
+    {
+        await using var host = await DashboardResourceApiHost.CreateAsync();
+        var question = await host.CreateQuestionAsync();
+        using var grant = await host.SendAsync(HttpMethod.Put, $"/_elsa/studio/questions/{question.Id}/audience", "owner",
+            new DashboardAudiencePage([new("user", "editor", "editor"), new("user", "viewer", "viewer")]), question.Revision);
+        grant.EnsureSuccessStatusCode(); question = (await grant.Content.ReadFromJsonAsync<DashboardResourceView>())!;
+        // Original source support disappeared. Resource ACLs and edit permissions remain independent.
+        host.Validator.Disclosure = (_, _) => false;
+        var replacement = DashboardResourceTests.Question("replacement").Definition!;
+        replacement = replacement with { Query = replacement.Query with { Dataset = new("replacement.records", "1") } };
+        var route = $"/_elsa/studio/questions/{question.Id}/preview";
+        using var preview = await host.SendAsync(HttpMethod.Post, route, actor, replacement, question.Revision, fixture);
+        Assert.Equal(allowed ? HttpStatusCode.OK : HttpStatusCode.Forbidden, preview.StatusCode);
+        Assert.Equal(allowed ? 1 : 0, host.Queries.Executions);
+        if (!allowed) return;
+        Assert.Equal("replacement.records", host.Queries.LastDatasetId);
+        Assert.Equal(actor, host.Queries.LastScope!.SubjectId);
+        using (var saved = await host.SendAsync(HttpMethod.Get, $"/_elsa/studio/questions/{question.Id}", "owner"))
+        {
+            var current = (await saved.Content.ReadFromJsonAsync<DashboardResourceView>())!;
+            Assert.Equal(question.Revision, current.Revision); Assert.Equal("withheld", current.DefinitionState); Assert.Null(current.Definition);
+        }
+        host.Queries.FailureCode = "QUERY_SCOPE_REQUIRED";
+        using var deniedSource = await host.SendAsync(HttpMethod.Post, route, actor, replacement, question.Revision);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedSource.StatusCode);
+        Assert.Equal(2, host.Queries.Executions);
+    }
+
     [Fact]
     public async Task Bound_saved_draft_preview_rechecks_current_acl_and_revision_before_query_execution()
     {
@@ -498,13 +533,14 @@ internal sealed class DashboardQueryExecutionFixture : IDashboardQueryService
     public string? FailureCode { get; set; }
     public int Executions => Volatile.Read(ref executions);
     public DashboardRequestScope? LastScope { get; private set; }
+    public string? LastDatasetId { get; private set; }
     public ValueTask<IReadOnlyList<DashboardDatasetDeclaration>> DiscoverAsync(DashboardRequestScope scope, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult<IReadOnlyList<DashboardDatasetDeclaration>>([]);
     public ValueTask<DashboardQueryValidation> ValidateAsync(DashboardRequestScope scope, DashboardQueryRequest request, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(new DashboardQueryValidation(true, []));
     public ValueTask<DashboardQueryResult> ExecuteAsync(DashboardRequestScope scope, DashboardQueryRequest request, CancellationToken cancellationToken = default)
     {
-        LastScope = scope; Interlocked.Increment(ref executions);
+        LastScope = scope; LastDatasetId = request.Query.Dataset.Id; Interlocked.Increment(ref executions);
         if (FailureCode is { } code) throw new DashboardQueryException(code, "The current source operation could not produce this preview.");
         return ValueTask.FromResult(new DashboardQueryResult { Interpretation = "Deterministic API authorization fixture; no provider or source query qualification." });
     }

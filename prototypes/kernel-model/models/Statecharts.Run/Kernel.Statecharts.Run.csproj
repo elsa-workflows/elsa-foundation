@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Statecharts.Native/Kernel.Statecharts.Native.csproj" />
+    <ProjectReference Include="../../sim/Kernel.Sim.csproj" />
+  </ItemGroup>
+</Project>

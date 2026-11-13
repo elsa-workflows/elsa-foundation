@@ -147,6 +147,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CommitClockFacts.RejectUnsupported(batch);
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {

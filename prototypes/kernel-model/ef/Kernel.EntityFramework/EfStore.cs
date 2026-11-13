@@ -275,6 +275,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CommitClockFacts.RejectUnsupported(batch);
         // FINDINGS 25.2 (M6): subscriptions are idempotent. The change tracker writes them as rows, so subscribing what is
         // there is a key violation and unsubscribing what is not is a count that does not match. A commit whose first
         // count that does not match is on a wait, or that subscribes anything and fails with a definite error while the
