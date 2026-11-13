@@ -1,3 +1,5 @@
+using Elsa.Events.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
@@ -523,6 +525,11 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IWorkflowOutputSource, WorkflowOutputSource>();
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
+        services.TryAddScoped<IRuntimeTestContextInspector, RuntimeTestContextInspector>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeTestScopeContractSource, NativeRuntimeTestScopeContractSource>());
+        services.AddEventHandler<RuntimeTestScopeContractsCollecting, CollectRuntimeTestScopeContracts>();
+        services.TryAddSingleton(new RuntimeTestContextInspectionRegistrations(() => services.ToArray()));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeTestContextInspectionComposition>());
         // Issue #977: shared snapshot materialization, resolvable by the parent-completion evaluation so an
         // IRuntimeRematerializeInputsOnChildCompletion composite (While) re-reads live frames per pass.
         services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();

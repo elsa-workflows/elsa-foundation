@@ -1262,3 +1262,41 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 
 
 User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.
+
+### Runtime test-context materialization (dormant prerequisite)
+
+`IRuntimeTestContextInspector` checks explicit setup against the retained full executable and returns
+immutable prepared frame/result data or safe unavailable/infrastructure findings. Inspection creates
+no execution, activity history, artifact or start authority. The workflow-root initializer is shared
+with normal checkpoints; enclosing declarations come through `RuntimeTestScopeContractsCollecting`
+and model-owned `IRuntimeTestScopeContractSource` contributions, requiring one matching contract.
+Outside-result fixtures cannot shadow selected owned work; missing optional producers still need an
+explicit fixture, and explicit null remains distinct from missing setup. Values retain captured type
+and protection requirements. Unknown CLR/schema, external/transient/withheld payloads and unqualified
+expression routing are unavailable before activity construction or evaluation.
+
+`IPortableExpressionCapabilities` qualifies routing on the actual selected evaluator; a separate
+capability service cannot qualify a different evaluator. It performs no evaluation. This slice does
+not qualify an existing language implementation automatically. Inspection grants no admission: trusted
+context lookup, physical provider/routing qualification and native selected starts are separate gates.
+
+Inspector replacement: `services.AddScoped<IRuntimeTestContextInspector, CustomInspector>()` before
+`AddWorkflowRuntime`; the default is `RuntimeTestContextInspector`. Its signature is
+`InspectAsync(RuntimeTestContextInspectionRequest, CancellationToken)`. Missing/duplicate selections
+are rejected by `ValidateRuntimeTestContextInspectionComposition`; inspection never authorizes starts.
+
+Scope contract contribution: `services.AddScoped<IRuntimeTestScopeContractSource, PackageScopeSource>()`.
+The single aggregator is `CollectRuntimeTestScopeContracts`; the built-in source is
+`NativeRuntimeTestScopeContractSource` for ordinary native container declarations. Collection is the
+sequential inline `RuntimeTestScopeContractsCollecting` event from Runtime Core. Materialization
+publishes it for each supplied enclosing scope, with the exact executable, canonical scope node and
+frame kind; sources append matching contracts and exactly one match is required. Closed/reusable and
+iteration scopes require their owning module's qualified contribution.
+
+This initial inspection profile reports member-read setup and outside results with projections as
+unavailable until a completion/selection-equivalent preflight is qualified. It also refuses missing
+closed ancestors, custom-converted types, legacy request paths, named result projections, and direct
+or expression-parameter conversion plans. Unsupported setup is not returned as available and no
+runtime binding or completion semantics are weakened. Duplicate outside fixture identities are setup
+refusals, and every qualified evaluator alias requires complete ambient setup until an engine-owned
+dependency manifest can qualify a narrower profile.
