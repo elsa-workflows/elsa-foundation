@@ -66,7 +66,7 @@ public sealed class AgentModel(Func<IJob, CancellationToken, ValueTask<object?>>
                     state.Replied = true;
                     state.Transcript.Add("peer: " + message.Read<string>());
                     break;
-                case Kinds.Event when state.Stage == "approval":
+                case Kinds.Event when state.Stage == "approval" && !state.Approved:
                     turn.Unsubscribe(Approval, "approval");
                     if (message.Read<bool>())
                     {

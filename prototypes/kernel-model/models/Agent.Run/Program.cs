@@ -27,8 +27,9 @@ static class Scenarios
             return "facts";
         }
         var live = new Capture();
+        int staleResultTurns = 0;
         Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new AgentModel(Tool, duplicateResult: args.Contains("--mutate-result"), persistLive: args.Contains("--mutate-live"))]),
-            new WorkerOptions { Monotonic = () => time, Transport = live });
+            new WorkerOptions { Monotonic = () => time, Transport = live, OnTurn = (_, inbox, _) => { if (node == "first" && inbox.Any(m => m.Kind == Kinds.JobFinished)) staleResultTurns++; } });
         async Task Start(Worker worker) { await new DurableHost([worker]).ActivateAsync(0); await worker.PollAsync(); }
         async Task Pump(Worker worker, Func<bool> done, bool poll = false)
         {
@@ -66,26 +67,63 @@ static class Scenarios
         await Events.PublishAsync(store, new EventRow(AgentModel.Approval, "approval-1", "true", time + 60_000));
         await Pump(third, () => store.Instances["0/lead"].Status == InstanceStatus.Finished, poll: true);
         Check(State("0/lead").Approved && store.Subscriptions.Count == 0, "approval resumes and finishes after takeover");
+        var selected = store.Instances["0/lead"];
         firstCompletion.SetResult("late");
-        await Task.Delay(10);
+        for (var i = 0; i < 3000 && !first.Ready.Contains("0/lead"); i++) await Task.Delay(1);
+        Check(first.Ready.Contains("0/lead"), "old tool result reached the old owner's inbox");
         await first.RunAsync();
-        Check(State("0/lead").Results == 1, "late original tool result cannot overwrite selected state");
+        Check(staleResultTurns == 1 && !first.Owns && store.Instances["0/lead"] == selected,
+            "old result turn lost its fence and preserved the complete selected row");
+
+        // Both decisions arrive before the peer's reply; the first decision is final.
+        var decisionStore = new InMemoryStore(1, () => time);
+        var decisionWorker = new Worker("decision", 0, decisionStore,
+            new WorkflowInstance([new AgentModel((_, _) => new ValueTask<object?>("facts"))]), new WorkerOptions { Monotonic = () => time });
+        await new DurableHost([decisionWorker]).ActivateAsync(0);
+        await decisionWorker.PollAsync();
+        decisionWorker.Post(new Message("decision-start", InstanceRef.In(0, "decision"), Kinds.Start,
+            Start: new StartSpec(AgentModel.ModelKey, "coordinator")), fresh: true);
+        await Pump(decisionWorker, () => decisionStore.Subscriptions.Count == 1);
+        Check(!Json.Read<Conversation>(decisionStore.Instances["0/decision"].State).Replied, "both decisions are queued before the peer reply");
+        await Events.PublishAsync(decisionStore, new EventRow(AgentModel.Approval, "yes", "true", time + 60_000));
+        await Events.PublishAsync(decisionStore, new EventRow(AgentModel.Approval, "no", "false", time + 60_000));
+        await Pump(decisionWorker, () => decisionStore.Instances["0/decision"].Status != InstanceStatus.Running, poll: true);
+        var decision = Json.Read<Conversation>(decisionStore.Instances["0/decision"].State);
+        Check(decisionStore.Instances["0/decision"].Status == InstanceStatus.Finished && decision.Approved &&
+              decision.Transcript.Count(x => x.StartsWith("human:")) == 1, "first approval wins over a later denial before peer reply");
 
         // Independent cancellation journey: cancel while the tool is running.
-        var held = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = new TaskCompletionSource<object?>();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cancelledStore = new InMemoryStore(1, () => time);
+        async ValueTask<object?> HeldTool(IJob job, CancellationToken token)
+        {
+            using var registration = token.Register(() => signalled.TrySetResult());
+            started.TrySetResult();
+            var result = await held.Task; // deliberately ignores cancellation like a non-cooperative external effect
+            completed.TrySetResult();
+            return result;
+        }
         var cancelWorker = new Worker("cancel", 0, cancelledStore,
-            new WorkflowInstance([new AgentModel(async (_, _) => await held.Task)]), new WorkerOptions { Monotonic = () => time });
+            new WorkflowInstance([new AgentModel(HeldTool)]), new WorkerOptions { Monotonic = () => time });
         await new DurableHost([cancelWorker]).ActivateAsync(0);
         await cancelWorker.PollAsync();
         cancelWorker.Post(new Message("s", InstanceRef.In(0, "cancelled"), Kinds.Start, Start: new StartSpec(AgentModel.ModelKey, "coordinator")), fresh: true);
-        await Pump(cancelWorker, () => cancelledStore.Instances.TryGetValue("0/cancelled", out var r) && Json.Read<Conversation>(r.State).Stage == "tool");
+        await Pump(cancelWorker, () => started.Task.IsCompleted && cancelledStore.Instances.TryGetValue("0/cancelled", out var r) && Json.Read<Conversation>(r.State).Stage == "tool");
+        Check(started.Task.IsCompleted, "the tool actually started before cancellation");
         await cancelledStore.AddAsync(new Message("cancel", InstanceRef.In(0, "cancelled"), "cancel", KeepUntil: time + 60_000));
         await Pump(cancelWorker, () => cancelledStore.Instances["0/cancelled"].Status == InstanceStatus.Cancelled, poll: true);
+        await signalled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var cancelled = cancelledStore.Instances["0/cancelled"];
+        Check(cancelled.Status == InstanceStatus.Cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
+            "cancellation signalled the running tool and removed its ticket");
         held.SetResult("late");
-        await Task.Delay(10);
-        for (var i = 0; i < 5; i++) await cancelWorker.RunAsync();
-        Check(Json.Read<Conversation>(cancelledStore.Instances["0/cancelled"].State).Results == 0, "cancelled tool cannot later change the conversation");
+        await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        for (var i = 0; i < 5; i++) { await cancelWorker.WokenAsync(null); await cancelWorker.RunAsync(); }
+        Check(cancelledStore.Instances["0/cancelled"] == cancelled && !cancelledStore.Messages.ContainsKey(Worker.TicketId("0/cancelled", "lookup")),
+            "non-cooperative tool completed late without changing the terminal row or recreating its ticket");
         Console.WriteLine(failures == 0 ? "agent spike: all passed" : $"agent spike: {failures} failed");
         return failures == 0 ? 0 : 1;
     }
