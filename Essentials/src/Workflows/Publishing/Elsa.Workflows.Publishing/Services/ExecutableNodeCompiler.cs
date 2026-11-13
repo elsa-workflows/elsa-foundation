@@ -166,20 +166,26 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType),
+            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType, activity.LostUpdateMode),
             childSlots: childSlots,
             structure: structure,
             activityContract: activityContract,
             executionPlacement: activity.ExecutionPlacement);
     }
 
-    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType)
+    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType, LostUpdateMode nodeLostUpdateMode)
     {
         var metadata = new Dictionary<string, string>
         {
             ["authoredNodeId"] = nodeId,
             [TriggerNodeMetadata.ExecutionTypeKey] = executionType
         };
+
+        // Spec 1221 FR-012: strict read-modify-write is an opt-in, by the activity type's declaration or the author's
+        // per-node setting. Either one opts the node in; the default mode is pinned by the key's absence.
+        if (nodeLostUpdateMode == LostUpdateMode.Fault ||
+            clrActivityType?.GetCustomAttribute<ActivityLostUpdateModeAttribute>(inherit: true)?.Mode == LostUpdateMode.Fault)
+            metadata[RuntimeMetadataKeys.LostUpdateMode] = RuntimeMetadataKeys.LostUpdateModeFault;
 
         // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
         if (StructuralFaultHandling(clrActivityType) is { } faultHandling)

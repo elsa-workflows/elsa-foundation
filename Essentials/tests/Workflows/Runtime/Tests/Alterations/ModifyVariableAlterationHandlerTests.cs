@@ -168,10 +168,52 @@ public sealed class ModifyVariableAlterationHandlerTests
         Assert.Equal("after-2", builder.WorkflowExecution.RootVariableFrame.Values["second"].InlineValue!.Value.GetString());
     }
 
-    private static WorkflowAlterationPreflightContext Context(WorkflowExecutionState workflow, long capturedRevision, Staging staging, object payload) =>
+    // Spec 1221 FR-023 (T034): with per-variable versions captured, only a change to the target variable conflicts; a
+    // write to another variable that moved the frame revision does not.
+    [Fact]
+    public async Task PreflightAsync_ChecksTheTargetVariablesOwnVersionNotTheFrameRevision()
+    {
+        var identity = new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash");
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(Executable(identity));
+        var handler = new ModifyVariableAlterationHandler(store);
+        var payload = new { variableKey = "stable-name", value = "corrected" };
+        var captured = new Dictionary<string, long> { ["stable-name"] = 0 };
+
+        // The frame revision moved past the captured one, but the target variable is still at version 0.
+        var unrelatedStaging = new Staging();
+        var unrelated = await handler.PreflightAsync(Context(Workflow(identity, revision: 9), capturedRevision: 4, unrelatedStaging, payload, captured));
+
+        // The target variable itself moved to version 1 after capture.
+        var moved = Workflow(identity, revision: 4);
+        moved = moved with { RootVariableFrame = moved.RootVariableFrame!.Set("stable-name", Inline("other"), 4) };
+        var movedStaging = new Staging();
+        var conflict = await handler.PreflightAsync(Context(moved, capturedRevision: 4, movedStaging, payload, captured));
+
+        Assert.True(unrelated.IsAccepted);
+        var builder = new WorkflowAlterationRuntimeCheckpointStateBuilder(Workflow(identity, revision: 9));
+        Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(unrelatedStaging.StagedChanges)).Apply(builder);
+        var version = builder.WorkflowExecution.RootVariableFrame!.VersionOf("stable-name");
+        Assert.Equal(1, version.Version);
+        Assert.Equal(VariableWriteSource.Alteration, version.Writer!.Source);
+        Assert.Equal("alteration:job", version.Writer.InvocationId);
+
+        Assert.Equal("VariableVersionConflict", conflict.Failure!.Code);
+        Assert.Empty(movedStaging.StagedChanges);
+    }
+
+    private static ValueEnvelope Inline(string value) =>
+        ValueEnvelope.Inline(new ValueTypeDescriptor("String"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
+
+    private static WorkflowAlterationPreflightContext Context(
+        WorkflowExecutionState workflow,
+        long capturedRevision,
+        Staging staging,
+        object payload,
+        IReadOnlyDictionary<string, long>? capturedVersions = null) =>
         new(new WorkflowAlterationJobState("job", "plan", workflow.WorkflowExecutionId, "tenant", 0, WorkflowAlterationJobStatus.Running,
                 new WorkflowAlterationJobClaim("worker", "claim", DateTimeOffset.MaxValue), 1, [], null, null, DateTimeOffset.UnixEpoch, null, null, 0,
-                new Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationCapturedConcurrency("1", capturedRevision, workflow.PinnedExecutable)),
+                new Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationCapturedConcurrency("1", capturedRevision, workflow.PinnedExecutable, RootVariableVersions: capturedVersions)),
             new Elsa.Workflows.Runtime.Core.Models.Alterations.WorkflowAlterationEnvelope("ModifyVariable", 1, JsonSerializer.SerializeToElement(payload)), 0,
             new WorkflowAlterationProjectedState([workflow]), staging);
 

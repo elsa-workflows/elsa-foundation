@@ -695,18 +695,34 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var occurredAt = TimeProvider.GetUtcNow();
 
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
-        // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-        var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+        // completion (#972), mirroring how the Set intrinsic commits its changed frame. Each capture is judged against
+        // the base the invocation's input read set holds (spec 1221 commit rule); its write history rides the completion.
+        var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
             workItem.WorkflowExecutionId,
-            invokePayload.ExecutableNodeId,
+            executableNode,
+            completedState,
             workflowVariableWrites,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = invokePayload.Reason
             },
+            backgroundResult is null ? VariableWriteSource.Capture : VariableWriteSource.BackgroundResult,
+            occurredAt,
             cancellationToken);
+        if (captureCommit.LostUpdateFault is { } lostUpdate)
+        {
+            // A Fault-mode lost update refuses the whole completion: no capture applies, the step faults through the
+            // ordinary incident path, and the faulted invocation keeps the refused write as its rejected completion.
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem,
+                invokePayload, state.WithVariableWrites(captureCommit.Records), new VariableLostUpdateException(lostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(captureCommit.Records);
+        var workflowVariableWriteBack = captureCommit.Change;
 
         await CommitCompletedActivityAsync(
             checkpointCommitter,

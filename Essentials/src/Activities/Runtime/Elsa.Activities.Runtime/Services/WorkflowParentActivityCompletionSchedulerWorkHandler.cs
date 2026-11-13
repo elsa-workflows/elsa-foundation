@@ -653,6 +653,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> containerVariableSnapshots;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> completionDurableValueChanges;
         RuntimeStateChange<WorkflowExecutionState>? completionWorkflowVariableWriteBack = null;
+        IReadOnlyList<VariableWriteRecord>? writesBeforeCapture = null;
+        var captureRecordsAdded = false;
         try
         {
             var completedAt = TimeProvider.GetUtcNow();
@@ -687,17 +689,27 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 .ToArray();
             // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
             // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-            completionWorkflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+            // Judged under the spec 1221 commit rule against the composite's input read set; the history rides along.
+            var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
                 workItem.WorkflowExecutionId,
-                parentExecutableNode.ExecutableNodeId,
+                parentExecutableNode,
+                currentParentState,
                 captureProjection.WorkflowVariableWrites,
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                     [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
                 },
+                VariableWriteSource.Capture,
+                completedAt,
                 cancellationToken);
+            if (captureCommit.LostUpdateFault is { } lostUpdate)
+                throw new VariableLostUpdateException(lostUpdate);
+            completionWorkflowVariableWriteBack = captureCommit.Change;
+            writesBeforeCapture = currentParentState.VariableWrites;
+            captureRecordsAdded = true;
+            currentParentState = currentParentState.WithVariableWrites(captureCommit.Records);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId,
                 openAttempt.InvocationId,
@@ -777,9 +789,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 faultMasking,
                 workItem,
                 payload,
-                currentParentState,
+                // A Fault-mode lost update on a composite's capture keeps its own sub-status and its refused write (spec 1221).
+                exception is VariableLostUpdateException lostUpdate
+                    ? currentParentState.WithVariableWrites([lostUpdate.Record])
+                    // A later failure drops the capture write-back, so the records of captures that never applied go too.
+                    : captureRecordsAdded ? currentParentState with { VariableWrites = writesBeforeCapture } : currentParentState,
                 exception,
-                "ParentCompletionFaulted",
+                exception is VariableLostUpdateException ? VariableLostUpdateException.SubStatus : "ParentCompletionFaulted",
                 valueSnapshots,
                 cancellationToken);
             return;

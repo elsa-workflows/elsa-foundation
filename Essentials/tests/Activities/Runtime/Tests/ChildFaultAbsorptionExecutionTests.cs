@@ -72,7 +72,11 @@ public sealed class ChildFaultAbsorptionExecutionTests
                     StructuralExecutionTestSupport.NewWaitingNode("node-b-wait"),
                     WorkflowExecutionHarness.NewFaultingNode("node-b-fault")),
                 StructuralExecutionTestSupport.NewStructuralNode("node-a", typeof(PassthroughStructuralActivity), WorkflowExecutionHarness.NewProbeNode("node-a-child"))),
-            waitingNodeIds: ["node-b-wait"]));
+            waitingNodeIds: ["node-b-wait"]),
+            // The probe leaf runs in one fused span (spec 1221), so node-a finishes before the parent absorbs and
+            // completes the run. Its completion notice to the parent is then left behind the terminal run, as for
+            // any fused leaf; the drain never dispatches sibling work past a terminal status.
+            allowPendingWorkOnTerminalCompletion: true);
 
         run.AssertWorkflowCompleted();
         run.AssertCompleted("node-parent");

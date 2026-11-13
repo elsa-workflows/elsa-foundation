@@ -2320,6 +2320,37 @@ public sealed class WorkflowExecutableCompilerTests
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
 
+    public static TheoryData<Type, LostUpdateMode, string?> LostUpdateModeCases => new()
+    {
+        { typeof(LegacyTriggerActivity), LostUpdateMode.Default, null },
+        { typeof(LegacyTriggerActivity), LostUpdateMode.Fault, RuntimeMetadataKeys.LostUpdateModeFault },
+        { typeof(StrictLostUpdateProbe), LostUpdateMode.Default, RuntimeMetadataKeys.LostUpdateModeFault },
+        { typeof(StrictLostUpdateProbe), LostUpdateMode.Fault, RuntimeMetadataKeys.LostUpdateModeFault }
+    };
+
+    // Spec 1221 FR-012 (T022): strict read-modify-write is pinned when the activity type declares it or the author sets it
+    // on the node; a node setting never downgrades a type's declaration, and the default mode leaves no key.
+    [Theory]
+    [MemberData(nameof(LostUpdateModeCases))]
+    public async Task The_node_pins_the_Fault_lost_update_mode_from_its_type_or_its_own_setting(Type activityType, LostUpdateMode nodeMode, string? expected)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("node", activityVersion.Id, [], []) { LostUpdateMode = nodeMode })),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(expected, executable.RootActivity.Metadata.GetValueOrDefault(RuntimeMetadataKeys.LostUpdateMode));
+    }
+
+    [ActivityLostUpdateMode(LostUpdateMode.Fault)]
+    private sealed class StrictLostUpdateProbe : IActivityResult<ActivityUnit>;
+
     [Theory]
     [InlineData(typeof(ChildControlProbe), true)]
     [InlineData(typeof(ChildFaultHandlingProbe), false)]

@@ -62,8 +62,10 @@ internal static class ActivitySuccessorStaging
             PrivateState = null,
             // Values and binding policy stay pinned, but the typed snapshot belongs to this new
             // native invocation. Carrying the old owner fails VF-ACT-001 at typed completion.
+            // The kept values keep the read set they were materialized against (spec 1221), so the successor's captures
+            // are still judged against the versions those values were read at.
             InputSnapshot = source.InputSnapshot is { } input ? new ActivityInputSnapshot(successorId,
-                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) : null,
+                input.ContractFingerprint, input.BindingFingerprint, input.Values, input.MaterializedAt) { InputReadSet = input.InputReadSet } : null,
             Completion = null,
             Fault = null,
             TriggerRegistrations = [],

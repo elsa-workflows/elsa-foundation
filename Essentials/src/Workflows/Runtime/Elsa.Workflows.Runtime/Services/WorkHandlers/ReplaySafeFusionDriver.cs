@@ -89,13 +89,35 @@ public sealed class ReplaySafeFusionDriver
         if (!_options.Enabled || node.ExecutionPlacement != Elsa.Primitives.Models.ActivityExecutionPlacement.Inline)
             return false;
 
-        var nodeIsFusable = node.IntrinsicKind is { } intrinsicKind
-            ? WorkflowIntrinsicFusion.IsFusable(intrinsicKind)
-            : node.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe;
-
-        return nodeIsFusable
+        return IsFusableNode(node)
             && _coalescingSessionAccessor?.Current is { } session
             && session.AppliesTo(workflowExecutionId);
+    }
+
+    /// <summary>
+    /// Whether a node may run its Schedule → Start → Invoke stages as one fused span, whatever the session: a fusable
+    /// intrinsic kind, a ReplaySafe typed node, or an <c>External</c> typed <b>leaf</b> (spec 1221, ADR 0092 decision
+    /// 10). An External leaf fuses so that no other branch's work item runs between its input materialization and its
+    /// transition commit. Its <c>ActivityAttemptClaimed</c> claim still flushes immediately, as an intermediate commit
+    /// inside the span: the coalescing policy keeps an External claim <c>Immediate</c>, and the session continues past
+    /// that boundary after persisting the span's Schedule anchor. Claim, fencing and durability are therefore unchanged,
+    /// and no transaction is held around the body. External composites keep the discrete chain.
+    /// </summary>
+    internal static bool IsFusableNode(ExecutableNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (node.IntrinsicKind is { } intrinsicKind)
+            return WorkflowIntrinsicFusion.IsFusable(intrinsicKind);
+
+        return node.ActivityContract?.SideEffectProfile switch
+        {
+            SideEffectProfile.ReplaySafe => true,
+            // Only an inline leaf: a background External leaf is admitted to a worker and must never be re-driven
+            // through Start by a redelivered Schedule (WorkflowScheduleActivitySchedulerWorkHandler's Running branch).
+            SideEffectProfile.External => node.ExecutionPlacement == Elsa.Primitives.Models.ActivityExecutionPlacement.Inline &&
+                                          node.Structure is null && node.ChildSlots.Count == 0,
+            _ => false
+        };
     }
 
     /// <summary>

@@ -25,9 +25,23 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
             return WorkflowAlterationPreflightResult.Rejected("RootVariableFrameUnavailable", "The target workflow has no writable root variable frame.");
 
         var originalWorkflow = context.ProjectedState.GetRequiredOriginal<WorkflowExecutionState>();
-        var capturedRevision = context.Job.CapturedConcurrency?.RootVariableFrameRevision;
-        if (capturedRevision is null || capturedRevision.Value != originalWorkflow.RootVariableFrame?.Revision)
-            return WorkflowAlterationPreflightResult.Rejected("RootVariableFrameRevisionConflict", "The target root variable frame changed after target capture.");
+        if (context.Job.CapturedConcurrency?.RootVariableVersions is { } capturedVersions)
+        {
+            // Spec 1221 FR-023: the change applies only if this variable is still at the version captured when it was
+            // requested. A write to another variable in the frame does not conflict with it.
+            if (!capturedVersions.TryGetValue(variableKey, out var capturedVersion) ||
+                originalWorkflow.RootVariableFrame is not { } originalFrame ||
+                !originalFrame.Values.ContainsKey(variableKey) ||
+                capturedVersion != originalFrame.VersionOf(variableKey).Version)
+                return WorkflowAlterationPreflightResult.Rejected("VariableVersionConflict", "The target variable changed after target capture.");
+        }
+        else
+        {
+            // A job captured before per-variable versions keeps the frame revision check it was captured with.
+            var capturedRevision = context.Job.CapturedConcurrency?.RootVariableFrameRevision;
+            if (capturedRevision is null || capturedRevision.Value != originalWorkflow.RootVariableFrame?.Revision)
+                return WorkflowAlterationPreflightResult.Rejected("RootVariableFrameRevisionConflict", "The target root variable frame changed after target capture.");
+        }
 
         var capturedExecutable = context.Job.CapturedConcurrency?.PinnedExecutable;
         if (capturedExecutable is not null && !Equals(capturedExecutable, workflow.PinnedExecutable))
@@ -50,7 +64,15 @@ public sealed class ModifyVariableAlterationHandler(IWorkflowExecutableStore exe
         VariableFrameState updatedFrame;
         try
         {
-            updatedFrame = rootFrame.Set(variableKey, value, rootFrame.Revision);
+            // The operator's value is versioned with an Alteration writer, so a later write on a stale base names it
+            // and keeps it, as the overwritten value of the lost-update warning, for restoring (spec 1221 US2 #5).
+            updatedFrame = rootFrame.Commit(
+                variableKey,
+                value,
+                rootFrame.Revision,
+                writeBase: null,
+                Elsa.Primitives.Models.LostUpdateMode.Default,
+                new VariableWriter(VariableWriteSource.Alteration, executableNodeId: null, invocationId: $"alteration:{context.Job.JobId}")).Frame;
         }
         catch (InvalidOperationException)
         {

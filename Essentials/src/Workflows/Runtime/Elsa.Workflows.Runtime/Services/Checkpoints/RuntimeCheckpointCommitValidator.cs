@@ -197,7 +197,17 @@ public static class RuntimeCheckpointCommitValidator
             .Concat(FrameEnvelopes($"{subject} variable", state.VariableFrame))
             .Concat(FrameEnvelopes($"{subject} iteration variable", state.IterationVariableFrame))
             .Concat((state.IterationFrameRequest?.Values ?? new Dictionary<string, ValueEnvelope>())
-                .Select(value => ($"{subject} iteration variable request '{value.Key}'", value.Value)));
+                .Select(value => ($"{subject} iteration variable request '{value.Key}'", value.Value)))
+            // Spec 1221 write history: the value a lost-update warning overwrote and the write a Fault refused.
+            .Concat((state.VariableWrites ?? []).SelectMany(record => WriteRecordEnvelopes(subject, record)));
+    }
+
+    private static IEnumerable<(string Location, ValueEnvelope Value)> WriteRecordEnvelopes(string subject, VariableWriteRecord record)
+    {
+        if (record.OverwrittenValue is { } overwritten)
+            yield return ($"{subject} overwritten variable '{record.VariableKey}'", overwritten);
+        if (record.RejectedValue is { } rejected)
+            yield return ($"{subject} rejected variable write '{record.VariableKey}'", rejected);
     }
 
     private static IEnumerable<(string Location, ValueEnvelope Value)> FrameEnvelopes(string location, VariableFrameState? frame) =>

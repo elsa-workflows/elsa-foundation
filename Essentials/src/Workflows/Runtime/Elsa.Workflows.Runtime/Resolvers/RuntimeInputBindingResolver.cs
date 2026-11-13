@@ -72,6 +72,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var address = new RuntimeVariableValueAddress(reference.DeclaringScopeId, reference.VariableKey);
         if (context.VariableEnvelopes.TryGetValue(address, out var envelope))
         {
+            context.VariableReadRecorder?.Record(envelope);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
                 Envelope = Retype(RequireReadable(envelope, binding), binding.ConversionPlan?.SourceType ?? binding.TargetType)

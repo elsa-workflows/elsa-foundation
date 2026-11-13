@@ -60,6 +60,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** an activity author must apply it to every input whose value the activity copies into its own persisted state (`PersistedByActivity`), that a publish-time reader needs as a literal (`FixedAtPublish`), or that the activity returns in its result, writes out of the workflow (for example to the console or an HTTP response) or copies into a fault (`EchoedToOutput`). Publication refuses a secret reference on such an input with `VF-ACT-012`, naming the node, the input and the reason. The marker is read by reflection over the activity's CLR type at publish and is never written into the activity catalog, so adding it changes no catalog hash.
 - **Related runtime seam:** `SecretBindingDiagnostics` in `Elsa.Workflows.Runtime.Core` owns the `VF-ACT-012` message for each `SecretBindingRefusalReason`.
 
+### `ActivityLostUpdateModeAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Declaration surface (activity author contract).
+- **Signature:** `[ActivityLostUpdateMode(LostUpdateMode.Fault)]` on an activity class (inherited). `LostUpdateMode` lives in `Elsa.Primitives.Models`. The author's per-node setting is `ActivityNode.LostUpdateMode` in `Elsa.Workflows.Design.Core`.
+- **Usage:** opts the activity in to strict read-modify-write (spec 1221). By default, a variable write built on a stale base applies with a lost-update warning in the write history. With `Fault`, a write whose value really changed since the read faults the step through the incident path (sub-status `VariableLostUpdate`). Publication pins `runtime.lostUpdateMode = fault` on the executable node when the type declares it or the node sets it. A node setting never downgrades a type's declaration. See [variable lifecycle](../../../../../docs/runtime-variable-lifecycle.md).
+- **Related runtime seam:** `LostUpdateModes.Of(ExecutableNode)` and `VariableFrameState.Commit` in `Elsa.Workflows.Runtime.Core`.
+
 ### `ActivityInputAttribute.Tier` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
 - **Signature:** `[ActivityInput(Tier = InputTier.Essential | Optional | Setting)]` on an activity input property. The three values are the only legal tiers. The property is a non-nullable enum (attribute parameters cannot be `InputTier?`); its CLR default `0` is not a defined member and means unset.

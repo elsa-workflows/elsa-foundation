@@ -580,18 +580,33 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
                 closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken));
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
-        // completion (#972), mirroring how the Set intrinsic commits its changed frame.
-        var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
+        // completion (#972), mirroring how the Set intrinsic commits its changed frame. A resumed step keeps the input
+        // snapshot and read set it committed before it suspended (spec 1221 FR-022): its captures meet the commit rule
+        // against those bases, so a variable it only read never produces a lost update.
+        var captureCommit = await RuntimeWorkflowVariableCaptureWriteBack.CommitCapturesAsync(
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
             workItem.WorkflowExecutionId,
-            executableNode.ExecutableNodeId,
+            executableNode,
+            completedState,
             captureProjection.WorkflowVariableWrites,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason
             },
+            VariableWriteSource.Capture,
+            _timeProvider.GetUtcNow(),
             cancellationToken);
+        if (captureCommit.LostUpdateFault is { } lostUpdate)
+        {
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload,
+                executionState.WithVariableWrites(captureCommit.Records), new VariableLostUpdateException(lostUpdate),
+                VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+            return;
+        }
+
+        completedState = completedState.WithVariableWrites(captureCommit.Records);
+        var workflowVariableWriteBack = captureCommit.Change;
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(
                 workItem,
