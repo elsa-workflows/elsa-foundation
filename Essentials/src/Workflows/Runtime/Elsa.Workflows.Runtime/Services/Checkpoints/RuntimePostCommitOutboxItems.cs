@@ -39,7 +39,7 @@ public static class RuntimePostCommitOutboxItems
         var materialized = contributions.ToArray();
         ValidateContributions(materialized);
         var contribution = materialized.FirstOrDefault(item => item.IntentKind == intent.Kind);
-        var required = contribution?.RequiresDurableSource == true;
+        var required = intent.HistoryCausation is not null || contribution?.RequiresDurableSource == true;
         if (required && sourceScope is null)
             throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
                 new InvalidOperationException("A required-source write needs authoritative persistence scope."), false);

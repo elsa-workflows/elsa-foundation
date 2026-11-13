@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Claims;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.History;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -34,6 +35,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly FencedClaimLease<RuntimePostCommitOutboxClaim>? _claimLease;
     private readonly string _claimOwnerId = $"runtime-outbox-{Guid.NewGuid():N}";
     private static readonly TimeSpan ClaimVisibilityTimeout = RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout;
+    internal Func<(IRuntimeHistoryObservationWriter? Writer, IRuntimeHistoryStore? Reader)>? HistoryProvidersResolver { get; init; }
 
     public RuntimePostCommitOutboxProcessor(
         IRuntimePostCommitOutboxStore outboxStore,
@@ -145,7 +147,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     }
 
     private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
-        item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
+        item.Intent.HistoryCausation is not null || item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
         _requiredSourceKinds.Contains(item.Intent.Kind) || _intentDispatcher.RequiresDurableSource(item.Intent.Kind);
 
     public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
@@ -265,7 +267,11 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             {
                 using var charge = _loadSignal is { HasAmbientCharge: false } ? _loadSignal.OpenCharge() : null;
                 if (RequiresDurableSource(item))
-                    await _intentDispatcher.DispatchAsync(await OpenDurableSourceAsync(claim, dispatchCancellationToken), dispatchCancellationToken);
+                {
+                    var source = await OpenDurableSourceAsync(claim, dispatchCancellationToken);
+                    if (item.Intent.HistoryCausation is not null) RequireHistoryDispatcher(source.Claim.Item, dispatchCancellationToken);
+                    await _intentDispatcher.DispatchAsync(source, dispatchCancellationToken);
+                }
                 else
                     await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
                 return true;
@@ -314,6 +320,31 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 run.Exception is { } failure ? EffectiveFailureStatus(item, failure) : RuntimePostCommitOutboxStatus.Delivered,
                 FailureMessage: null,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
+        }
+    }
+
+    private void RequireHistoryDispatcher(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (writer, reader) = HistoryProvidersResolver?.Invoke() ?? default;
+            if (writer is null || reader is null || !writer.CanRecordHistory(reader) || !_intentDispatcher.CanRecordHistory(item.Intent.Kind, writer, reader))
+                throw new NotSupportedException("The selected dispatcher cannot preserve the committed source's history responsibility.");
+        }
+        catch (OperationCanceledException failure) when (cancellationToken.IsCancellationRequested && failure.CancellationToken == cancellationToken) { throw; }
+        catch (RuntimePostCommitSourceBoundaryException failure)
+        {
+            if (cancellationToken.IsCancellationRequested && failure.IsUnavailable)
+                for (Exception? cause = failure.InnerException; cause is not null; cause = cause.InnerException)
+                    if (cause is OperationCanceledException cancellation && cancellation.CancellationToken == cancellationToken)
+                        ExceptionDispatchInfo.Capture(cancellation).Throw();
+            if (failure.SourceOutboxItemId == item.OutboxItemId) throw;
+            throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.Intent.Kind, failure, failure.IsUnavailable);
+        }
+        catch (Exception failure)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.Intent.Kind, failure, RuntimeHistoryReadFailures.IsUnavailable(failure));
         }
     }
 

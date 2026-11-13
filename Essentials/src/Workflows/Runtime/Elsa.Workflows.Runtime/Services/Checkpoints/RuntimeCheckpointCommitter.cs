@@ -314,7 +314,7 @@ public sealed class RuntimeCheckpointCommitter
 
     private PersistenceScope? RequiredSourceScope(RuntimeCheckpointCommit commit)
     {
-        var required = commit.PostCommitIntents.FirstOrDefault(intent => _intentHandlerContributions.Any(contribution =>
+        var required = commit.PostCommitIntents.FirstOrDefault(intent => intent.HistoryCausation is not null || _intentHandlerContributions.Any(contribution =>
             contribution.RequiresDurableSource && contribution.IntentKind == intent.Kind));
         if (required is null) return null;
         try

@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.History;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -30,7 +31,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         ArgumentNullException.ThrowIfNull(intent);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (RequiresDurableSource(intent.Kind))
+        if (intent.HistoryCausation is not null || RequiresDurableSource(intent.Kind))
             throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
                 new InvalidOperationException("The contributed handler requires durable source context."), false);
 
@@ -50,15 +51,65 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         return _requiredSourceKinds.Contains(intentKind);
     }
 
+    public bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind);
+        ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
+        try
+        {
+            return IsSelectedPair(writer, reader) &&
+                _handlerTypes.TryGetValue(intentKind, out var type) &&
+                _serviceProvider.GetService(type) is IRuntimePostCommitDurableSourceIntentHandler owner && owner.CanRecordHistory(writer, reader);
+        }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (Exception failure)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(null, intentKind, failure, RuntimeHistoryReadFailures.IsUnavailable(failure));
+        }
+    }
+
     public ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
+        if (source.Intent.HistoryCausation is not null)
+            return RequireHistorySource(source, cancellationToken).HandleAsync(source, cancellationToken);
         if (!RequiresDurableSource(source.Intent.Kind))
             return DispatchAsync(source.Intent, cancellationToken);
         var handler = (IRuntimePostCommitDurableSourceIntentHandler)_serviceProvider
             .GetRequiredService(_handlerTypes[source.Intent.Kind]);
         return handler.HandleAsync(source, cancellationToken);
+    }
+
+    private bool IsSelectedPair(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        ReferenceEquals(writer, _serviceProvider.GetService<IRuntimeHistoryObservationWriter>()) &&
+        ReferenceEquals(reader, _serviceProvider.GetService<IRuntimeHistoryStore>()) && writer.CanRecordHistory(reader);
+
+    private IRuntimePostCommitDurableSourceIntentHandler RequireHistorySource(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var cause = source.Intent.HistoryCausation!;
+            if (cause.WorkflowExecutionId != source.Intent.WorkflowExecutionId || cause.DeliveryId != source.SourceOutboxItemId ||
+                source.Claim.Item.StimulusDeliverySourceScope != source.Scope || string.IsNullOrWhiteSpace(cause.HistoryEventId) ||
+                new[] { cause.HistoryEventId, cause.WorkflowExecutionId, cause.DeliveryId, cause.CommandId, cause.SchedulerWorkItemId }
+                    .Any(value => value is not null && (string.IsNullOrWhiteSpace(value) || value.Length > 1024)))
+                throw new InvalidDataException("The history origin differs from the exact committed source identity or scope.");
+            var writer = _serviceProvider.GetService<IRuntimeHistoryObservationWriter>();
+            var reader = _serviceProvider.GetService<IRuntimeHistoryStore>();
+            if (writer is null || reader is null || !IsSelectedPair(writer, reader) ||
+                !_handlerTypes.TryGetValue(source.Intent.Kind, out var type) ||
+                _serviceProvider.GetService(type) is not IRuntimePostCommitDurableSourceIntentHandler owner || !owner.CanRecordHistory(writer, reader))
+                throw new NotSupportedException("The selected source owner cannot preserve its retained history responsibility.");
+            return owner;
+        }
+        catch (OperationCanceledException failure) when (cancellationToken.IsCancellationRequested && failure.CancellationToken == cancellationToken) { throw; }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (Exception failure)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind, failure,
+                RuntimeHistoryReadFailures.IsUnavailable(failure));
+        }
     }
 
     private static IReadOnlyDictionary<string, Type> BuildHandlerMap(
