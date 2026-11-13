@@ -54,6 +54,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
         services.TryAddSingleton<IPublishStimulusStagingAccessor>(
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
+        services.TryAddScoped<PublishStimulusExecutor>(PublishStimulusExecutor.Create);
         services.AddRuntimePostCommitIntentHandler<PublishStimulusExecutor>(
             PublishStimulusConstants.PublishStimulusIntentKind,
             new RuntimePostCommitRetryPolicy(maxAttempts: 4, delay: TimeSpan.FromSeconds(1)),

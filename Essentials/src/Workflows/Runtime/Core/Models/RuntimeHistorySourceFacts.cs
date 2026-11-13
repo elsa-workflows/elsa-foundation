@@ -3,6 +3,52 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>Policy-aware preservation of immutable owner inputs; never diagnostic read-model authority.</summary>
 public static class RuntimeHistorySourceFacts
 {
+    private const string PublicationAttempt = "StimulusRoutingAttemptObserved";
+    private const string PublicationDisposition = "StimulusRoutingDispositionObserved";
+    private static readonly HashSet<string> PublicationDispositions = new(StringComparer.Ordinal)
+    {
+        "routing-source-unavailable-observed", "routing-source-refused-observed", "routing-failure-observed",
+        "routing-capacity-shed-observed", "saved-cohort-routing-acknowledged-observed"
+    };
+
+    /// <summary>Builds a closed observation of an actual publication-owner invocation; this model grants no native source authority.</summary>
+    public static RuntimeHistoryObservation PublicationObservation(RuntimeHistoryCapturePolicy policy, PostCommitDeliveryContext source,
+        string receiptId, string name, DateTimeOffset occurredAt, string reasonCode)
+    {
+        ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(receiptId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name); ArgumentException.ThrowIfNullOrWhiteSpace(reasonCode);
+        if (receiptId.Length > 1024 || source.Intent.HistoryCausation is not { } origin ||
+            origin.WorkflowExecutionId != source.Intent.WorkflowExecutionId || origin.DeliveryId != source.SourceOutboxItemId ||
+            string.IsNullOrWhiteSpace(origin.HistoryEventId) || source.Claim.Item.StimulusDeliverySourceScope != source.Scope)
+            throw new InvalidOperationException("A publication observation requires the exact bounded original source.");
+        string EventId(string kind) => "source-history:" + RuntimeHistoryIdentity.CreateBinding([source.Intent.WorkflowExecutionId, receiptId, kind]);
+        var cause = name == PublicationDisposition ? origin with { HistoryEventId = EventId(PublicationAttempt) } : origin;
+        var attempt = "outbox-attempt:" + ((long)source.Claim.Item.DeliveryAttemptCount + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            ":fence:" + source.Claim.FencingToken.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var e = new RuntimeHistoryEvent(EventId(name), source.Intent.WorkflowExecutionId, 0, RuntimeHistoryEventCategory.DeliveryObservation,
+            name, occurredAt, source.Intent.ActivityExecutionId, metadata: new Dictionary<string, string> { ["history.reasonCode"] = reasonCode })
+            { Authority = RuntimeHistoryAuthority.DeliveryObservation, Causation = cause, AttemptId = attempt };
+        var observation = new RuntimeHistoryObservation(policy, e);
+        RuntimeHistorySafety.ValidateObservation(observation);
+        return observation;
+    }
+
+    internal static bool IsPublicationObservation(string name) => name is PublicationAttempt or PublicationDisposition;
+    internal static void ValidatePublicationObservation(RuntimeHistoryObservation observation)
+    {
+        var e = observation.Event;
+        var cause = e.Causation;
+        if (!IsFinalProfile(observation.Policy) ||
+            !new[] { "StimulusPublicationCommitted", PublicationAttempt, PublicationDisposition }
+                .All(kind => observation.Policy.SupportedKinds.Contains(kind, StringComparer.Ordinal)) ||
+            e.Metadata.Count != 1 || !e.Metadata.TryGetValue("history.reasonCode", out var reason) ||
+            (e.Name == PublicationAttempt ? reason != "handler-invocation-observed" : !PublicationDispositions.Contains(reason)) ||
+            cause is null || string.IsNullOrWhiteSpace(cause.HistoryEventId) || cause.WorkflowExecutionId != e.WorkflowExecutionId ||
+            string.IsNullOrWhiteSpace(cause.DeliveryId) || string.IsNullOrWhiteSpace(e.AttemptId) || e.BookmarkId is not null)
+            throw new InvalidOperationException("Publication observations require their complete original vocabulary, source and closed reason.");
+    }
+
     /// <summary>Attaches an actual owner's immutable origin before its intent/pending projection is persisted.</summary>
     public static RuntimeCheckpointCommit WithPostCommitCausation(RuntimeCheckpointCommit commit,
         Func<RuntimePostCommitIntent, RuntimeHistoryCausation?> ownerFactory, PersistenceScope scope)
