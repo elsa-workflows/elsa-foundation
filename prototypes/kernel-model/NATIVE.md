@@ -23,7 +23,7 @@ Every claim says how it is known: **run** means a command below produced it; **r
 |---|---|
 | `models/Native` | The authoring surface, the activities, the model (`NativeModel.cs`), the live channel and HTTP host (`Live.cs`) |
 | `models/Native.Run` | Smoke tests of every activity and the HTTP cases, the cost measurement, the in-memory cost |
-| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, five checks, the model's deliberate flaws |
+| `sim/NativeWorkflows.cs`, `sim/NativeSim.cs` | Native instances in the simulation's mix, the native checks N1 to N6 and the graph checks G1 to G5, the model's and the engine's deliberate flaws |
 
 ```
 dotnet build models/Native.Run -c Release
