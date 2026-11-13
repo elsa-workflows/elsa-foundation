@@ -64,3 +64,10 @@ loading a long journal. It is called only after the native owner admits/locks fu
 inspection or prefix purge. Both reject pending history tracker changes and recheck immutable actual
 access before returning; neither commits, acknowledges, authorizes a retention policy or registers a port.
 The normal native deletion and independent retention owner still need their production binding.
+
+Prefix retention requires ReadCommitted or Serializable isolation: an earlier InnoDB repeatable-read
+view may outlive the current native write lock, and a no-op request would otherwise return an old
+boundary without a CAS. The independent owner must choose an admitted isolation explicitly. Full
+set-based deletion retains its caller's existing native deletion transaction; this read-view restriction
+belongs to prefix boundary reporting. The actual MySQL regression establishes the older read view,
+commits retirement from another context, and requires explicit refusal rather than a stale result.

@@ -2,6 +2,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.ActivityExecutionEfSupport;
 using Mapping = Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeHistoryProjectionMapping;
 
@@ -22,6 +23,11 @@ internal static class EfRuntimeHistoryRetention
     {
         if (throughSequence < 0) throw new ArgumentOutOfRangeException(nameof(throughSequence));
         var ensureAccess = RequireBoundary(context, access, scope, run, token);
+        // A pre-existing InnoDB repeatable-read view can remain older than the current native write
+        // lock. A no-op purge has no head CAS to detect that stale database snapshot. The owner must
+        // supply current committed reads or serializable access, not an earlier repeatable/snapshot view.
+        if (context.Database.CurrentTransaction!.GetDbTransaction().IsolationLevel is not (IsolationLevel.ReadCommitted or IsolationLevel.Serializable))
+            throw new NotSupportedException("History prefix retirement requires ReadCommitted or Serializable isolation.");
         // Do not use the affected-row count as existence proof: MySQL can report changed rows.
         await EfWorkflowExecutionStateStore.LockWorkflowExecutionForWriteAsync(context, scope, run, token);
         if (await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(context, scope, run, token))
@@ -113,3 +119,4 @@ internal static class EfRuntimeHistoryRetention
             entry.State = EntityState.Detached;
     }
 }
+using System.Data;
