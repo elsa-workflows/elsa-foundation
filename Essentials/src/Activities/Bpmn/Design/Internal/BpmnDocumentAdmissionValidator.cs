@@ -10,10 +10,9 @@ namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>Content-derived execution findings leave unsupported complete-source drafts saveable.</summary>
 internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStructureHandler> handlers,
-    IEnumerable<IBpmnDocumentDirectAdmission>? directAdmissions = null) : IDraftValidator
+    IBpmnDocumentDirectAdmission? directAdmission = null) : IDraftValidator
 {
     private readonly DefaultActivityStructureService _structures = new(handlers);
-    private readonly IBpmnDocumentDirectAdmission[] _directAdmissions = (directAdmissions ?? []).ToArray();
 
     public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
@@ -21,7 +20,7 @@ internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStruct
         // Whole physical content can qualify for the separately composed direct publisher.
         // This content assessment leaves native compilation and other validators independent.
         if (draft.State.RootActivity?.Structure is { Kind: BpmnActivityIdentities.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion } &&
-            _directAdmissions.Any(admission => admission.CanPromote(draft.State)))
+            directAdmission?.CanPromote(draft.State) == true)
             return ValueTask.FromResult<IEnumerable<ValidationError>>([]);
         var errors = new List<ValidationError>();
         var pending = new Stack<ActivityNode>();

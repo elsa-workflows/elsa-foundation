@@ -1,5 +1,7 @@
 using Elsa.Activities.Bpmn.Interchange.Services;
 using Elsa.Activities.Bpmn.Internal;
+using Elsa.Activities.Bpmn.Design;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Api.Capabilities.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -10,6 +12,65 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 public sealed class BpmnDirectPublishingFeatureTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Optional_assessment_has_zero_or_one_owner_after_repeated_feature_composition(bool enabled)
+    {
+        var services = new ServiceCollection();
+        var design = new ActivitiesBpmnDesignFeature();
+        design.ConfigureServices(services); design.ConfigureServices(services);
+        if (enabled)
+        {
+            var direct = new ActivitiesBpmnDirectPublishingFeature();
+            direct.ConfigureServices(services); direct.ConfigureServices(services);
+        }
+        await Startup(services).ExecuteAsync(default);
+        Assert.Equal(enabled ? 1 : 0, services.Count(descriptor => descriptor.ServiceType == typeof(IBpmnDocumentDirectAdmission)));
+    }
+
+    [Fact]
+    public async Task An_explicit_single_owner_precedes_the_optional_default()
+    {
+        var services = new ServiceCollection(); var replacement = new ReplacementAdmission();
+        services.AddScoped<IBpmnDocumentDirectAdmission>(_ => replacement);
+        new ActivitiesBpmnDesignFeature().ConfigureServices(services);
+        new ActivitiesBpmnDirectPublishingFeature().ConfigureServices(services);
+        await Startup(services).ExecuteAsync(default);
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        Assert.Same(replacement, scope.ServiceProvider.GetRequiredService<IBpmnDocumentDirectAdmission>());
+    }
+
+    [Fact]
+    public async Task Competing_assessors_fail_startup_instead_of_short_circuiting_an_implementation()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesBpmnDesignFeature().ConfigureServices(services);
+        new ActivitiesBpmnDirectPublishingFeature().ConfigureServices(services);
+        services.AddScoped<IBpmnDocumentDirectAdmission, ReplacementAdmission>();
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => Startup(services).ExecuteAsync(default));
+        Assert.Contains("at most one implementation (2 registrations)", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Copied_shell_startup_validates_its_own_final_registration_collection()
+    {
+        var parent = new ServiceCollection();
+        var feature = new ActivitiesBpmnDesignFeature(); feature.ConfigureServices(parent);
+        new ActivitiesBpmnDirectPublishingFeature().ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection(); foreach (var descriptor in parent) child.Add(descriptor);
+        feature.ConfigureServices(child);
+        child.AddScoped<IBpmnDocumentDirectAdmission, ReplacementAdmission>();
+        await Startup(parent).ExecuteAsync(default);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Startup(child).ExecuteAsync(default));
+    }
+
+    private static ValidateBpmnDirectAdmissionReplacementStartupTask Startup(IServiceCollection services) =>
+        Assert.Single(services.Select(descriptor => descriptor.ImplementationInstance).OfType<ValidateBpmnDirectAdmissionReplacementStartupTask>());
+
+    private sealed class ReplacementAdmission : IBpmnDocumentDirectAdmission
+    { public bool CanPromote(WorkflowDefinitionState state) => throw new InvalidOperationException("replacement failure"); }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Xml;
 using System.Xml.Linq;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Design;
@@ -260,7 +261,8 @@ public sealed class BpmnCompleteSourceDirectProjectionTests
         }
         var before = complete.Structure!.Payload.GetRawText();
         var failure = Assert.Throws<BpmnModelValidationException>(() => BpmnAuthoredDirectProjection.Project(Version(complete), null));
-        Assert.IsType<InvalidOperationException>(failure.InnerException?.InnerException);
+        var cause = Assert.IsAssignableFrom<InvalidOperationException>(failure.InnerException?.InnerException);
+        if (invalid == "xml") Assert.IsType<XmlException>(Assert.IsType<BpmnDocumentSourceException>(cause).InnerException);
         Assert.False(new BpmnDirectDocumentAdmission().CanPromote(new([], complete, [], [], null)));
         Assert.Equal(before, complete.Structure.Payload.GetRawText());
     }
@@ -287,7 +289,7 @@ public sealed class BpmnCompleteSourceDirectProjectionTests
     [Fact]
     public void The_direct_admission_port_does_not_hide_implementation_failures()
     {
-        var complete = Complete(Legacy(null)); var validator = new BpmnDocumentAdmissionValidator([new BpmnDocumentStructureHandler()], [new BrokenAdmission()]);
+        var complete = Complete(Legacy(null)); var validator = new BpmnDocumentAdmissionValidator([new BpmnDocumentStructureHandler()], new BrokenAdmission());
         Assert.Throws<InvalidOperationException>(() => validator.Validate(new Draft(new([], complete, [], [], null)), default));
     }
 

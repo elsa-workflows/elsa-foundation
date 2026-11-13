@@ -21,7 +21,7 @@ namespace Elsa.Activities.Bpmn.Interchange;
 [ManifestFeatureCategory("Publishing")]
 [ShellFeature(name: "ActivitiesBpmnDirectPublishing", DisplayName = "Authored direct BPMN publication",
     Description = "Publish supported immutable authored BPMN versions to the direct runtime.",
-    DependsOn = new object[] { "ApiCapabilities", "ActivitiesBpmnHostingApi", "WorkflowsPublishingApi" })]
+    DependsOn = new object[] { "ApiCapabilities", "ActivitiesBpmnDesign", "ActivitiesBpmnHostingApi", "WorkflowsPublishingApi" })]
 public class ActivitiesBpmnDirectPublishingFeature : IWebShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
@@ -29,7 +29,7 @@ public class ActivitiesBpmnDirectPublishingFeature : IWebShellFeature
         services.AddElsaEndpoints();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.TryAddScoped<BpmnAuthoredDirectPublisher>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IBpmnDocumentDirectAdmission, BpmnDirectDocumentAdmission>());
+        services.TryAddScoped<IBpmnDocumentDirectAdmission, BpmnDirectDocumentAdmission>();
         services.TryAddKeyedScoped<IEndpointFaultRenderer, BpmnDirectPublishingFaultRenderer>(BpmnDirectPublishingApi.Owner);
         ApiCapabilityRegistration.Add(services, new ApiCapabilityDeclaration("elsa.api.bpmn-publishing", 1,
             [new("bpmn-authored-publish", "interchange/bpmn/versions/{versionId}/publish-direct", true),

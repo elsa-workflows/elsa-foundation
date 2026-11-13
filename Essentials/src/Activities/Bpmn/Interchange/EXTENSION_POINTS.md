@@ -84,7 +84,7 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
 ## Owned HTTP endpoints
 
 - The optional Direct publishing feature also registers the private BPMN-owned
-  `IBpmnDocumentDirectAdmission` contribution (`BpmnDirectDocumentAdmission`). It assesses the entire
+  optional single-owner `IBpmnDocumentDirectAdmission` replacement (`BpmnDirectDocumentAdmission`). It assesses the entire
   physical workflow through the same strict source projection as publication. Only that content
   assessment can suppress the ordinary document execution diagnostic; native compilation and other
   validators retain their guards, and publication still authorizes the immutable source and every pin.
