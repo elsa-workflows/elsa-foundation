@@ -1,9 +1,10 @@
-import { StudioPageHeader, StudioButton } from "../ui";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useCompactNavigation } from "../navigation/useCompactNavigation";
+import { StudioPageHeader, StudioButton, StudioField } from "../ui";
+import React, { useEffect, useMemo, useRef, useState, useId } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { isStudioThemeLayout, studioNavigationRequestedEvent, studioThemeLayouts, type ElsaStudioModuleApi, type StudioNavigationRequest } from "../../sdk";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
-import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { SkeletonRows, StudioAlert, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   allThemeModes,
   cloneThemeDefinition,
@@ -64,9 +65,12 @@ const builderTabs = [
 ];
 
 export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
+  const viewsBaseId = useId();
+  const modesBaseId = useId();
   const { previewTheme, refreshThemes } = useTheme();
   const [store, setStore] = useState<ThemeStoreResponse | null>(null);
   const [selectedThemeId, setSelectedThemeId] = useState("");
+  const { compact, navigationRef, selectRef, contentRef } = useCompactNavigation();
   const [draft, setDraft] = useState<StudioThemeDefinition | null>(null);
   const [tab, setTab] = useState<BuilderTab>("overview");
   const [mode, setMode] = useState<ThemeMode>("light");
@@ -330,8 +334,13 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
-      <div className="theme-builder-workbench">
-        <aside className="theme-builder-list" aria-label="Themes">
+      <div className={`theme-builder-workbench${compact ? " is-compact" : ""}`}>
+        {compact ? <label className="theme-builder-select">
+          <span>Current theme</span>
+          <select ref={selectRef} value={selectedThemeId} onChange={event => setSelectedThemeId(event.target.value)}>
+            {store.themes.map(theme => <option key={theme.id} value={theme.id}>{theme.name} · {theme.source}</option>)}
+          </select>
+        </label> : <aside ref={navigationRef} className="theme-builder-list" aria-label="Themes">
           {store.themes.map(theme => (
             <button
               key={theme.id}
@@ -350,9 +359,9 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
               </span>
             </button>
           ))}
-        </aside>
+        </aside>}
 
-        <div className="theme-builder-detail">
+        <div ref={contentRef} className="theme-builder-detail">
           <div className="theme-builder-actions">
             <div>
               <h3>{draft.name}</h3>
@@ -367,7 +376,11 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
             </div>
           </div>
 
-          <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} ariaLabel="Theme Builder views" />
+          <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} baseId={viewsBaseId} ariaLabel="Theme Builder views" />
+          {builderTabs.map((item, index) => item.id !== tab ? (
+            <StudioTabPanel key={item.id} baseId={viewsBaseId} index={index} hidden>{null}</StudioTabPanel>
+          ) : null)}
+          <StudioTabPanel baseId={viewsBaseId} index={builderTabs.findIndex(item => item.id === tab)} className="theme-builder-view-panel">
 
           {tab === "overview" ? (
             <OverviewEditor
@@ -383,17 +396,11 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "tokens" ? (
             <div className="theme-token-editor">
               <div className="theme-token-grid">
-                <label className="theme-token-field">
-                  <span>Default workspace treatment</span>
-                  <select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
+                <StudioField className="theme-token-field" label={<><span>Default workspace treatment</span></>}><select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
                     <option value="">Original theme treatment</option>
                     {workspaceStyles.map(style => <option key={style.id} value={style.id}>{style.name}</option>)}
-                  </select>
-                  <small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small>
-                </label>
-                <label className="theme-token-field">
-                  <span>Layout</span>
-                  <select
+                  </select><small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small></StudioField>
+                <StudioField className="theme-token-field" label={<><span>Layout</span></>}><select
                     value={draft.layout ?? "classic"}
                     disabled={isReadOnly}
                     onChange={event => {
@@ -402,22 +409,19 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                     }}
                   >
                     {studioThemeLayouts.map(layout => <option key={layout} value={layout}>{layout}</option>)}
-                  </select>
-                </label>
+                  </select></StudioField>
                 {typographyFields.map(field => (
-                  <label key={field.key} className="theme-token-field">
-                    <span>{field.label}</span>
-                    <input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} />
-                  </label>
+                  <StudioField key={field.key} className="theme-token-field" label={<><span>{field.label}</span></>}><input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} /></StudioField>
                 ))}
                 {shapeFields.map(field => (
-                  <label key={field.key} className="theme-token-field">
-                    <span>{field.label}</span>
-                    <input value={draft.shape?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("shape", field.key, event.target.value)} />
-                  </label>
+                  <StudioField key={field.key} className="theme-token-field" label={<><span>{field.label}</span></>}><input value={draft.shape?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("shape", field.key, event.target.value)} /></StudioField>
                 ))}
               </div>
-              <StudioTabs tabs={modeTabs} activeTab={mode} onSelect={id => setMode(id as ThemeMode)} ariaLabel="Theme mode" />
+              <StudioTabs tabs={modeTabs} activeTab={mode} onSelect={id => setMode(id as ThemeMode)} baseId={modesBaseId} ariaLabel="Theme mode" />
+              {modeTabs.map((item, index) => item.id !== mode ? (
+                <StudioTabPanel key={item.id} baseId={modesBaseId} index={index} hidden>{null}</StudioTabPanel>
+              ) : null)}
+              <StudioTabPanel baseId={modesBaseId} index={modeTabs.findIndex(item => item.id === mode)} className="theme-mode-panel">
               {getThemeModeDefinition(draft, mode) ? (
                 <>
                   {!isReadOnly && optionalMode ? (
@@ -429,10 +433,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                   ) : null}
                   <div className="theme-token-grid">
                     {themeTokenNames.map(token => (
-                      <label key={token} className="theme-token-field">
-                        <span>{token}</span>
-                        <input value={String(getThemeModeDefinition(draft, mode)?.[token] ?? "")} disabled={isReadOnly} onChange={event => patchMode(token, event.target.value)} />
-                      </label>
+                      <StudioField key={token} className="theme-token-field" label={<><span>{token}</span></>}><input value={String(getThemeModeDefinition(draft, mode)?.[token] ?? "")} disabled={isReadOnly} onChange={event => patchMode(token, event.target.value)} /></StudioField>
                     ))}
                   </div>
                 </>
@@ -446,6 +447,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                   )}
                 </StudioAlert>
               )}
+              </StudioTabPanel>
             </div>
           ) : null}
 
@@ -480,6 +482,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "preview" ? (
             <ThemePreview theme={draft} mode={mode} onApply={() => void applyPreview()} validationIssues={validation.issues} />
           ) : null}
+          </StudioTabPanel>
         </div>
       </div>
 
@@ -525,14 +528,8 @@ function OverviewEditor({
 
   return (
     <div className="theme-overview-editor">
-      <label>
-        <span>Name</span>
-        <input value={draft.name} disabled={readOnly} onChange={event => onPatch({ name: event.target.value })} />
-      </label>
-      <label>
-        <span>Description</span>
-        <textarea value={draft.description ?? ""} disabled={readOnly} onChange={event => onPatch({ description: event.target.value })} />
-      </label>
+      <StudioField label={<><span>Name</span></>}><input value={draft.name} disabled={readOnly} onChange={event => onPatch({ name: event.target.value })} /></StudioField>
+      <StudioField label={<><span>Description</span></>}><textarea value={draft.description ?? ""} disabled={readOnly} onChange={event => onPatch({ description: event.target.value })} /></StudioField>
       <div className="theme-toggle-row">
         <label><input type="checkbox" checked={draft.published} disabled={readOnly} onChange={event => onPatch({ published: event.target.checked })} /> Published</label>
         <label title={enabledToggleTitle}>
