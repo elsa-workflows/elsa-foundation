@@ -42,7 +42,7 @@ Without `--native` the simulation runs exactly as before; its seeds replay uncha
 
 ## 1. The authoring surface, as ported
 
-Kept from Elsa 4 (from a survey of the Elsa 4 activity contract in the design session's notes, not in this repository):
+Kept from Elsa 4 (see `docs/reports/elsa-4-activity-contract-parity-2026-07.md`):
 
 - **Leaf activities** derive from `Activity<TResult>` (or `Activity`) and return a closed `Transition`: Complete with a
   typed result and an outcome, Fault, Cancel. One attempt per activation; a fresh object each time.
@@ -150,7 +150,7 @@ Run, with the counting of FINDINGS section 5: PostgreSQL round trips are command
 sends BEGIN with the first command); SQLite counts are calls into the engine (BEGIN, each command, COMMIT), with the
 commands alone in brackets. Instances are started on their owner and handed over in memory; resumes from outside are
 inserts that the owner finds by one poll, and both inserts and polls are counted. Today's figures are
-a count of the current core's commands (11 November; the design session's notes, not in this repository): round trips on PostgreSQL, commands on SQLite.
+the current core's command counts of 11 November, an untracked run of the tool in `Essentials/tests/Activities/Http/CommandCost/Tests/`: round trips on PostgreSQL, commands on SQLite.
 
 PostgreSQL, round trips. Native: the fence as its own statement / the fence as concurrency tokens in the batch.
 
