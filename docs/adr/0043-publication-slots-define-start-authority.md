@@ -7,6 +7,44 @@ the ledger is now Runtime-owned as `IWorkflowActivationAuthority`. Publishing ow
 and publication records and reaches the ledger through `IWorkflowActivationCoordinator`; it does not
 own or persist a parallel publication-slot authority.
 
+Standalone ingress amendment (2026-11-06, #3582). **Status: accepted for scoped implementation after bounded M0 design review under the owner's delivery authorization.**
+The owner authorized standalone trigger delivery on 5 November and selected serving-slot following,
+retained accepted work, configurable async HTTP admission and resource-owned invocation grants in
+the feature's [decision record](../../specs/1217-standalone-triggers/spec.md). This amendment records
+the necessary authority extension; it does not accept the separate October convergence amendment below.
+
+- An independently authored trigger resource may own one normalized HTTP ingress reservation in the
+  same exclusive namespace as embedded publication endpoints. Several downstream subscriptions do
+  not create several endpoint or response owners. Resource activation and embedded publication must
+  reject conflicting reservations in both directions at their protected ownership boundary.
+- That reservation, resource enable state and invocation grant permit intake only. Fresh subscriber
+  starts still require the selected logical definition's serving publication slot. Native and genuine
+  supported model publications use the existing Runtime slot ledger and trusted source provenance;
+  no trigger-specific serving ledger or fake native material grants model start authority.
+- A successful durable intake captures the exact eligible publication/material, normalized declared
+  inputs, subscription/configuration/grant revisions and independent recipient identity while their
+  authority still holds. The normal Runtime delivery/retention composition commits responsibility for
+  those captures before acknowledging acceptance. Workflow-origin Events retain their real checkpoint
+  source; true external ingress has an explicit source family, without an invented publisher workflow.
+- Accepted captures are scoped retained start authority for that exact admitted work. Later slot
+  replacement, unpublication, trigger/subscription pause, deletion or grant revocation stops fresh
+  admission and does not erase that responsibility. Retry cannot reselect another publication or
+  reevaluate inputs. Explicit cancel-pending competes with durable dispatch commitment; commitment
+  is distinguished from actual queue acceptance, execution start/completion and HTTP response delivery.
+- Shared-resource invocation authority continues independently of its creating user's membership.
+  Authorized managers grant/revoke it under ordinary target and tenant policies. Creator attribution
+  is audit history, never a stored user credential or a substitute publication authority.
+
+The extension preserves the existing checkpoint-intent, embedded-trigger, bookmark and publication
+contracts. In particular it does not change the agreed expression/binding/serialization semantics or
+the meaning of existing saved workflow-source authority. Unknown source/model profiles refuse before
+effects, and a composition unable to commit/retain the promised work cannot advertise durable intake.
+Concrete source, recipient, cancellation and model protocols are defined by
+[spec 1217's contracts](../../specs/1217-standalone-triggers/contracts/). Implementation and acceptance
+evidence must be recorded on #3582 and its PR; this design acceptance is not delivery evidence or
+multi-architect ratification of provisional constitution sections. The separate October amendment
+keeps its stated proposed status.
+
 Convergence amendment (2026-10-01, #2193; revised for #2230). **Status: proposed, awaiting owner acceptance.** The
 durable projection intents described under "Projection intent makes cross-store activation durable" were never wired
 into the coordinator-based activation path, and their reconciler was removed. Projections follow the slot through
