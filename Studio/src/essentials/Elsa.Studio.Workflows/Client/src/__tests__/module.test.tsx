@@ -3673,7 +3673,7 @@ describe("workflows module", () => {
       throw new Error(`Unexpected request ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
-    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1?selected=activity-execution-1");
 
     await waitForText(container, "Pinned Runtime executable");
     await waitForText(container, "Open definition");
@@ -3687,25 +3687,25 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Open definition"));
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
-    window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
-    // Timeline is the default instance tab and lists executed activities.
-    expect(container.textContent).toContain("Timeline");
-    expect(container.textContent).toContain("WriteLine");
+    // Return to the same exact activity deep link; Data belongs to that execution's inspector.
+    window.history.replaceState({}, "", "/workflows/instances/wfexec-1?selected=activity-execution-1");
+    // Timeline is the primary workspace. Older hosts report unsupported history without fabricating an activity journal.
+    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
+    await waitForText(container, "This host does not support durable run history");
+    await waitForText(container, "Data");
+    expect(container.querySelector('[role="tablist"][aria-label="Activity execution views"]')).not.toBeNull();
+    await click(buttonByText(container, "Data"));
+    await waitForText(container, "Activity Execution ID");
+    expect(container.textContent).toContain("activity-execution-1");
+    expect(container.textContent).toContain("Current bookmarksUnavailable");
+    expect(container.textContent).toContain("IncidentsUnavailable");
+    await click(buttonByText(container, "Diagram"));
     expect(buttonByLabel(container, "Collapse run details panel")).toBeTruthy();
     expect(buttonByLabel(container, "Maximize run details panel")).toBeTruthy();
     expect(container.querySelector("[aria-label='Resize run details panel']")).toBeTruthy();
     await click(buttonByLabel(container, "Collapse run details panel"));
     expect(buttonByLabel(container, "Expand run details panel")).toBeTruthy();
-    expect(container.textContent).not.toContain("WriteLine");
     await click(buttonByLabel(container, "Expand run details panel"));
-    expect(container.textContent).toContain("WriteLine");
-    await click(container.querySelector(".wf-timeline-entry"));
-    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
-    await waitForText(container, "Activity Execution ID");
-    expect(container.textContent).toContain("Activity Execution ID");
-    expect(container.textContent).toContain("activity-execution-1");
-    expect(container.textContent).toContain("BookmarksUnavailable");
-    expect(container.textContent).toContain("IncidentsUnavailable");
     await click(buttonByLabel(container, "Maximize run details panel"));
     expect(buttonByLabel(container, "Restore run details panel")).toBeTruthy();
     await click(buttonByLabel(container, "Restore run details panel"));
@@ -3768,7 +3768,7 @@ describe("workflows module", () => {
 
     const openTab = async (tab: "Activity" | "Issues" | "Details") => {
       if (tab === "Activity") {
-        await click(container.querySelector(".wf-timeline-entry"));
+        await click(buttonByText(container, "Activity"));
       } else {
         await click(buttonByText(container, tab));
       }
@@ -3890,8 +3890,8 @@ describe("workflows module", () => {
     expect(canvasText()).not.toContain("No workflow activities are available");
     const nodes = container.querySelectorAll(".wf-instance-canvas .react-flow__node");
     expect(nodes).toHaveLength(2);
-    expect(container.textContent).toContain("Flowchart");
-    expect(container.textContent).toContain("WriteLine");
+    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
+    await waitForText(container, "This host does not support durable run history");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
       "https://server.example/runtime/workflows/executables/artifact-1?ref=reference-published"
     );
@@ -4040,9 +4040,9 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Pinned Runtime executable");
-    // Timeline is the default tab and renders the executed activity.
-    expect(container.textContent).toContain("Timeline");
-    expect(container.textContent).toContain("WriteLine");
+    // Timeline reports the original host's history capability explicitly.
+    await waitForText(container, "This host does not support durable run history");
+    expect(container.querySelector("[aria-label='Run timeline']")).toBeTruthy();
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes(encodeURIComponent(draftVersionId)))).toBe(false);
     // Artifact metadata lives under the Details tab.
     await click(buttonByText(container, "Details"));

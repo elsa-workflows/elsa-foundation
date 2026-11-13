@@ -156,12 +156,13 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
   // so a later render never reloads the run for a selection the view itself wrote. Keep the list destination from that
   // same initial URL because the detail view may replace its query while the operator moves between activities.
-  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null; returnTo: string | null } | null>(null);
+  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null; returnTo: string | null; historySearch: string } | null>(null);
   if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
     initialSelection.current = {
       workflowExecutionId,
       activityExecutionId: readRunSelection(routeLocation.search),
-      returnTo: searchParams.get("returnTo")
+      returnTo: searchParams.get("returnTo"),
+      historySearch: routeLocation.search
     };
   }
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
@@ -190,7 +191,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} initialHistorySearch={initialSelection.current.historySearch} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
