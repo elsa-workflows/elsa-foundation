@@ -438,7 +438,7 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
             </select>
           </>
         )}
-        <span className={`structured-logs-status ${state.status}`} aria-label={statusLabel} />
+        <span className={`structured-logs-status ${state.status}`} aria-hidden="true" />
         <span>{statusLabel}</span>
         {state.upstreamDroppedCount > 0 ? <span>{state.upstreamDroppedCount} dropped upstream</span> : null}
         {state.localDiscardedCount > 0 ? <span>{state.localDiscardedCount} discarded locally</span> : null}
@@ -477,18 +477,20 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
   ].filter(Boolean).join(" ");
 
   return (
-    <div className={rowClassName} ref={state.viewportRef}>
+    <div className={rowClassName} ref={state.viewportRef} role="table" aria-label="Structured logs">
       <div className="structured-logs-grid-header" role="row">
-        <span>Time</span>
-        <span>Level</span>
-        <span>Source</span>
-        <span>Category</span>
-        <span>Message</span>
-        <span aria-hidden="true" />
+        <span role="columnheader">Time</span>
+        <span role="columnheader">Level</span>
+        <span role="columnheader">Source</span>
+        <span role="columnheader">Category</span>
+        <span role="columnheader">Message</span>
+        <span role="columnheader" aria-label="Actions" />
       </div>
       {state.rows.length === 0 ? (
-        <div className="structured-logs-empty">
-          {state.status === "live" || state.status === "paused" ? "No structured logs received yet." : state.detail}
+        <div className="structured-logs-empty" role="row">
+          <span role="cell" aria-colspan={6}>
+            {state.status === "live" || state.status === "paused" ? "No structured logs received yet." : state.detail}
+          </span>
         </div>
       ) : null}
       {state.rows.map(row => (
@@ -501,25 +503,27 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
           aria-label={`Select ${row.level} structured log from ${row.category}`}
           key={row.id}
         >
-          <time title={row.timestamp}>{formatLogTime(row.timestamp)}</time>
+          <span role="cell"><time dateTime={row.timestamp} title={row.timestamp}>{formatLogTime(row.timestamp)}</time></span>
           <LevelChip level={row.level} />
-          <span title={row.sourceId ?? undefined}>{row.sourceId ?? "local"}</span>
-          <span title={row.category}>{row.category}</span>
-          <span className="structured-log-message">
+          <span role="cell" title={row.sourceId ?? undefined}>{row.sourceId ?? "local"}</span>
+          <span role="cell" title={row.category}>{row.category}</span>
+          <span role="cell" className="structured-log-message">
             {row.exception ? <strong title={row.exception.message ?? undefined}>Exception</strong> : null}
             {row.message}
           </span>
-          <button
-            type="button"
-            className="structured-log-copy-message"
-            onClick={event => {
-              event.stopPropagation();
-              void state.copyMessage(row);
-            }}
-            aria-label={`Copy structured log message from ${row.category}`}
-            title="Copy message">
-            <span aria-hidden="true" />
-          </button>
+          <span role="cell" className="structured-log-actions">
+            <button
+              type="button"
+              className="structured-log-copy-message"
+              onClick={event => {
+                event.stopPropagation();
+                void state.copyMessage(row);
+              }}
+              aria-label={`Copy structured log message from ${row.category}`}
+              title="Copy message">
+              <span aria-hidden="true" />
+            </button>
+          </span>
         </div>
       ))}
     </div>
@@ -595,10 +599,13 @@ function StructuredLogInspector({ entry, sources, onClose }: { entry: Structured
 }
 
 function LevelChip({ level }: { level: StructuredLogLevel }) {
-  return <span className="structured-log-level" data-level={level.toLowerCase()}>{level}</span>;
+  return <span role="cell" className="structured-log-level" data-level={level.toLowerCase()}>{level}</span>;
 }
 
 function handleStructuredLogRowKeyDown(event: React.KeyboardEvent<HTMLDivElement>, selectRow: () => void) {
+  if (event.target !== event.currentTarget) {
+    return;
+  }
   if (event.key !== "Enter" && event.key !== " ") {
     return;
   }
