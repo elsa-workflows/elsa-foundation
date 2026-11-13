@@ -107,6 +107,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Owns => Epoch != 0;
     public long Evicted { get; private set; }
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
+
+    /// <summary>The reply addresses of the callers this owner holds, for tests of decision 6.</summary>
+    public IEnumerable<string> Callers => _slots.Values.SelectMany(s => s.Replies);
     private long _used;
 
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
@@ -189,10 +192,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
         if (!cancellationToken.IsCancellationRequested && Owns && DbNow >= RenewBy) await BeatAsync(cancellationToken);
         if (!Owns) return null;
+        Evict();
         if (busy) return TimeSpan.Zero;
         var now = Now;
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now).DefaultIfEmpty(long.MaxValue).Min();
-        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(next, RenewBy - DbNow)));     // never zero: zero means there is work
+        var caller = Callers.Select(to => ReplyTo.Parse(to).Deadline - now).DefaultIfEmpty(long.MaxValue).Min();
+        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(caller, Math.Min(next, RenewBy - DbNow))));     // never zero: zero means there is work
     }
 
     /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>
@@ -696,8 +701,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     private bool Evictable(Slot slot) => slot.Loaded && (!slot.Busy || Has(Flaw.EvictBusy)) && slot.Inbox.Count == 0 && slot.Replies.Count == 0;
 
+    /// <summary>
+    /// Decision 6: a caller's reply address expires at its deadline (the route's timeout). The owner then forgets it, so
+    /// it no longer keeps the instance in memory, and sends it nothing more; the caller has had its timeout.
+    /// </summary>
+    private bool Expired(string to) => !Has(Flaw.KeepExpiredCallers) && ReplyTo.Parse(to).Deadline <= Now;
+
+    private void Unpin()
+    {
+        foreach (var slot in _slots.Values) slot.Replies.RemoveWhere(Expired);
+    }
+
     private void Evict()
     {
+        Unpin();
         var idle = _slots.Where(s => Evictable(s.Value)).ToList();
         foreach (var (id, _) in idle.OrderBy(s => s.Value.Used).Take(idle.Count - _options.MaxInstances).ToList())
         {
@@ -714,7 +731,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (unit.Slot is not { } slot) return;
         foreach (var item in unit.Consumed)
-            if (item.Message.ReplyTo is { } to && !unit.Replied.Any(r => r.Message == item.Message.Id)) slot.Replies.Add(to);
+            if (item.Message.ReplyTo is { } to && !Expired(to) && !unit.Replied.Any(r => r.Message == item.Message.Id)) slot.Replies.Add(to);
         var callers = slot.Replies.Where(to => Has(Flaw.EmitBeforeCommit) || ReplyTo.Parse(to).BeforeCommit == early).ToList();
         for (var i = 0; i < unit.Emitted.Count; i++)
             foreach (var to in callers) Send(to, $"{unit.Instance}#{unit.Revision}.{i}", unit.Emitted[i].Channel, unit.Emitted[i].Item);
@@ -725,7 +742,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Send(string to, string key, string? channel, object? item, InstanceStatus? status = null, string? error = null)
     {
-        var (node, request, _) = ReplyTo.Parse(to);
+        if (Expired(to)) return;        // decision 6: past its deadline the reply is dropped
+        var (node, request, _, _) = ReplyTo.Parse(to);
         _options.Transport?.Send(node, new Reply(request, key, channel, item, status, error));
     }
 

@@ -1116,7 +1116,47 @@ These original gate runs predate the subscription change in section 25.2. Their 
 **Not run:** the simulation (it uses the in-memory store, unchanged) and the stress tests (the projector does not run in
 them, section 23).
 
-### 25.9 State size: the benchmark (decision 10, first part). Run
+### 25.3 Reply addresses carry the caller's deadline (decision 6). Run
+
+**What changed.** `ReplyTo.Of(node, request, deadline, beforeCommit)`: the reply address carries an absolute deadline,
+in database milliseconds, computed as request start plus the route's timeout (the native HTTP host passes its request's deadline, 30 s).
+The owner reads it with its own estimate of database time (`Worker.Now`):
+
+- a turn's release adds a caller to its instance only while the caller's deadline has not passed;
+- every send to a caller past its deadline is dropped (`Worker.Send`);
+- after every pass, and before every eviction, the owner forgets expired callers (`Unpin`). A caller pins its
+  instance against eviction while it waits, so an expired one no longer does.
+
+The receiving node already ended the request at its deadline (504); what is new is the owner's side, which before held
+the address until the instance ended, however long that took.
+
+**The check.** The simulation gives one request in four a deadline of 250 ms, shorter than its models' 300 ms timers,
+so callers expire while their instances run on (the others keep 30 s). After every settling pass it checks that no
+owner holds a caller past its deadline (I15). `Flaw.KeepExpiredCallers` (the owner keeps them) is caught at seed 2:
+`I15 actor 14 still holds the reply address node0.2|1040193|q31 past its deadline`.
+
+**Gates** (before: section 24):
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 12 innocent parked | 0 failed, 13 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 409,284 matched; 972 reruns, all told | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told |
+| `$SIM --mutations --seeds 20000` | every flaw as section 24 | every flaw caught as before, two only in combination as before, and `KeepExpiredCallers` at seed 2 |
+| `$SIM --native-mutations --seeds 20000` | 5 of 5 (seeds 1, 6, 1, 12, 1) | the same |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+| `$NAT cost sqlite` | every row ok | identical |
+
+The schedules moved: the short deadlines end requests sooner, and the generator picks among open requests (a
+disconnect), so a seed's actions after the first short request differ. That is why the innocent-parked count and the
+native counts moved, and why some first failing seeds of the mutation check moved: `ProjectorBlindWrite` 25 to 38,
+`NoDeadline` 31 to 1, `SuspendDuringTrial` 2,016 to 3,156, `TurnNewerState` 225 to 1,857 (its 1,000-action runs),
+`RunBeforeMark` at seed 1 with another violation (I21 instead of IDLE), and a few action counts at the same seeds.
+Every flaw is still caught within 20,000 seeds.
+
+**Not done:** the owner on another node still cannot tell a waiting node it was lost (504 at the deadline, as before).
+
+### 25.10 State size: the benchmark (decision 10, first part). Run
 
 **What changed.** The EF cost run (`$EFR x cost`) ends with a state-size table. A new benchmark model (`Blob`, in
 `ef/Kernel.Ef.Run/EngineRun.cs`) holds a state of N kilobytes of lowercase letters from a fixed seed. Compression
@@ -1492,3 +1532,14 @@ with the graph engine (section 26), so they differ from the table above:
 The runtime suite on PostgreSQL, SQL Server, MySQL and MongoDB (it takes any store provider; it ran on the in-memory
 store); a leave in membership (R5); a lock in `TrialGate` (R6); the store contract change for R3; backing off a
 declined activation (R7); a way for layer 2 to ask for a pass (R12); a delay after a failed read (R13).
+
+**Reply-deadline integration correction (25.3).** Every completed owner pass now applies eviction after expiring reply
+addresses, including an otherwise idle pass. With `MaxInstances = 0`, a waiting instance stays pinned before its
+deadline and is evicted at equality; the committed running row and its subscription remain intact. The targeted
+`Native.Run deadlines` witness failed before this correction (address expired but instance remained cached) and
+passed after it. Native smoke and the short simulation are recorded separately in the integration receipt.
+
+The next idle wake also includes the earliest held caller deadline. The witness follows the returned delays (100 ms
+initially, then 1 ms at time 99), rather than forcing an externally scheduled deadline pass; this scheduling control
+failed before the wake calculation changed. Existing Admission.Run callers now supply their request-start clock plus
+30 seconds, and its schedule/control suite is included in the affected-build check.
