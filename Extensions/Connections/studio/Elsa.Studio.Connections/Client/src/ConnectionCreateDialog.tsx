@@ -1,7 +1,7 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useDialogFocus, describeApiError, tryExtractValidationErrors, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { AdvancedSection } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioField } from "@elsa-workflows/studio-ui";
 import { createConnection } from "./connectionsApi";
 import type {
   AuthSchemeDescriptor,
@@ -24,7 +24,7 @@ export function ConnectionCreateDialog({
   context: StudioEndpointContext;
   descriptors: ConnectionDescriptorsResponse;
   onCancel(): void;
-  onCreated(connection: ConnectionMetadata): void;
+  onCreated(connection: ConnectionMetadata, canNotify: boolean): void;
 }) {
   const [name, setName] = useState("");
   const [typeName, setTypeName] = useState(() => initialTypeName(descriptors));
@@ -39,7 +39,8 @@ export function ConnectionCreateDialog({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const dialogRef = useRef<HTMLElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
-  const currentContextRef = useRef(context);
+  const operationScope = useMemo(() => ({ context, active: false, generation: 0 }), [context]);
+  const currentScopeRef = useRef(operationScope);
   const submittingRef = useRef(false);
   const dialogTitleId = useId();
   const nameId = useId();
@@ -49,7 +50,15 @@ export function ConnectionCreateDialog({
   const authenticationTitleId = useId();
   const addressGuidanceId = useId();
   const placementErrorId = useId();
-  currentContextRef.current = context;
+  currentScopeRef.current = operationScope;
+
+  useLayoutEffect(() => {
+    operationScope.active = true;
+    return () => {
+      operationScope.active = false;
+      operationScope.generation++;
+    };
+  }, [operationScope]);
 
   const contextIsCurrent = boundContext === context;
   const visibleTypeName = contextIsCurrent ? typeName : initialTypeName(descriptors);
@@ -191,15 +200,19 @@ export function ConnectionCreateDialog({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (submittingRef.current || !contextIsCurrent || !canSubmit) return;
+    if (!operationScope.active || submittingRef.current || !contextIsCurrent || !canSubmit) return;
 
     submittingRef.current = true;
     setSubmitting(true);
     clearErrors();
     const operationContext = context;
+    const operationGeneration = operationScope.generation;
+    const isCurrent = () => operationScope.active
+      && currentScopeRef.current === operationScope
+      && operationScope.generation === operationGeneration;
     let closed = false;
     try {
-      if (currentContextRef.current !== operationContext) return;
+      if (!isCurrent()) return;
 
       const secretFields: CreateConnectionRequest["secretFields"] = {};
       for (const field of sensitiveFields) {
@@ -218,17 +231,17 @@ export function ConnectionCreateDialog({
         secretFields: secretFields!
       };
       const created = await createConnection(operationContext, request);
-      if (currentContextRef.current !== operationContext) return;
+      if (currentScopeRef.current !== operationScope) return;
 
       closed = true;
       submittingRef.current = false;
       setSubmitting(false);
-      onCreated(created);
-      onCancel();
+      onCreated(created, isCurrent());
+      if (isCurrent()) onCancel();
     } catch (cause) {
       const message = await describeApiError(cause);
       const validation = await tryExtractValidationErrors(cause);
-      if (currentContextRef.current === operationContext) {
+      if (currentScopeRef.current === operationScope) {
         const knownKeys = ["name", ...typeSettings.map(field => `settings.${field.name}`),
           ...nonSensitiveSchemeFields.map(field => `settings.${field.name}`),
           ...sensitiveFields.map(field => `secretFields.${field.name}`)];
@@ -243,7 +256,7 @@ export function ConnectionCreateDialog({
         setError(message || "The connection could not be created.");
       }
     } finally {
-      if (!closed && currentContextRef.current === operationContext) {
+      if (!closed && currentScopeRef.current === operationScope) {
         submittingRef.current = false;
         setSubmitting(false);
       }
@@ -264,8 +277,7 @@ export function ConnectionCreateDialog({
     const message = fieldError(key, field.required && !isSettingPresent(field, visibleSettings[field.name]) ? `${field.displayName} is required.` : undefined);
 
     return (
-      <div className="connection-setting-field" key={field.name}>
-        <label htmlFor={id}>{field.displayName}{field.required ? " (required)" : ""}</label>
+      <ConnectionSettingField key={field.name} id={id} checkbox={isCheckbox} label={<>{field.displayName}{field.required ? " (required)" : ""}</>}>
         <input
           id={id}
           type={isCheckbox ? "checkbox" : "text"}
@@ -291,7 +303,7 @@ export function ConnectionCreateDialog({
           }}
         />
         {message ? <span id={`${id}-error`} className="connections-create-field-error">{message}</span> : null}
-      </div>
+      </ConnectionSettingField>
     );
   }
 
@@ -305,8 +317,8 @@ export function ConnectionCreateDialog({
       ? "Authorization"
       : field.name === apiKeyFields?.queryName.name ? "api_key" : undefined;
     return (
-      <div className="connection-setting-field" key={field.name}>
-        <label htmlFor={id}>{field.displayName}{field.required ? " (required)" : ""}</label>
+      <div className="connection-setting-field" key={field.name}><StudioField controlId={id} label={<>{field.displayName}{field.required ? " (required)" : ""}</>}>
+
         <input
           id={id}
           value={visibleSettings[field.name] ?? ""}
@@ -323,7 +335,7 @@ export function ConnectionCreateDialog({
           }}
         />
         {message ? <span id={`${id}-error`} className="connections-create-field-error">{message}</span> : null}
-      </div>
+      </StudioField></div>
     );
   }
 
@@ -333,8 +345,8 @@ export function ConnectionCreateDialog({
     const key = `settings.${field.name}`;
     const message = fieldError(key) || (invalidPlacement ? "Choose Header or Query for this connection." : undefined);
     return (
-      <div className="connection-setting-field" key={field.name}>
-        <label htmlFor={id}>{field.displayName}{field.required ? " (required)" : ""}</label>
+      <div className="connection-setting-field" key={field.name}><StudioField controlId={id} label={<>{field.displayName}{field.required ? " (required)" : ""}</>}>
+
         <select
           id={id}
           required={field.required}
@@ -352,7 +364,7 @@ export function ConnectionCreateDialog({
           <option value="query">Query</option>
         </select>
         {message ? <span className="connections-create-field-error" id={placementErrorId}>{message}</span> : null}
-      </div>
+      </StudioField></div>
     );
   }
 
@@ -440,8 +452,8 @@ export function ConnectionCreateDialog({
           <div className="connections-create-content">
             {error ? <p ref={errorRef} className="connections-create-error" role="alert" tabIndex={-1}>{error}</p> : null}
             <div className="connections-create-fields">
-              <div className="connections-create-field connections-create-name">
-                <label htmlFor={nameId}>Name</label>
+              <div className="connections-create-field connections-create-name"><StudioField controlId={nameId} label="Name">
+
                 <input
                   id={nameId}
                   data-dialog-initial-focus
@@ -459,9 +471,9 @@ export function ConnectionCreateDialog({
                 />
                 <small id={`${nameId}-help`}>Use letters, numbers, dots, dashes or underscores. Maximum 128 characters.</small>
                 {visibleNameError ? <span id={`${nameId}-error`} className="connections-create-field-error">{visibleNameError}</span> : null}
-              </div>
-              <div className="connections-create-field">
-                <label htmlFor={typeId}>Type</label>
+              </StudioField></div>
+              <div className="connections-create-field"><StudioField controlId={typeId} label="Type">
+
                 <select
                   id={typeId}
                   required
@@ -471,9 +483,9 @@ export function ConnectionCreateDialog({
                 >
                   {descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName}</option>)}
                 </select>
-              </div>
-              <div className="connections-create-field">
-                <label htmlFor={schemeId}>Auth scheme</label>
+              </StudioField></div>
+              <div className="connections-create-field"><StudioField controlId={schemeId} label="Auth scheme">
+
                 <select
                   id={schemeId}
                   required
@@ -483,7 +495,7 @@ export function ConnectionCreateDialog({
                 >
                   {availableSchemes.map(scheme => <option key={scheme.name} value={scheme.name}>{scheme.displayName}</option>)}
                 </select>
-              </div>
+              </StudioField></div>
             </div>
 
             {apiKeyFields ? <>{authenticationSection}{serviceSettingsSection}</> : <>{serviceSettingsSection}{authenticationSection}</>}
@@ -585,4 +597,9 @@ function validateName(value: string) {
 
 function safeId(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function ConnectionSettingField({ id, checkbox, label, children }: { id: string; checkbox: boolean; label: React.ReactNode; children: React.ReactNode }) {
+  return checkbox ? <div className="connection-setting-field"><label htmlFor={id}>{label}</label>{children}</div>
+    : <StudioField className="connection-setting-field" controlId={id} label={label}>{children}</StudioField>;
 }

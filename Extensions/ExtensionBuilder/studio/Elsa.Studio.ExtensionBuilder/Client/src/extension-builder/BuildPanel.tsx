@@ -1,5 +1,5 @@
 import { Loader2, PackageCheck, Play } from "lucide-react";
-import { StatusChip } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioField } from "@elsa-workflows/studio-ui";
 import type { BuildArtifact, BuildDiagnostic, BuildResult, ExtensionBuilderCapabilities, RepositoryBuildCommand } from "../extensionBuilderApi";
 import { buildTone, diagnosticTone, formatArtifactSize, formatDate, formatDiagnosticLocation } from "./helpers";
 
@@ -45,19 +45,13 @@ export function BuildPanel({
       <h4>Run</h4>
       {advanced ? (
         <>
-          <label>
-            <span>Command</span>
-            <select aria-label="Build command" value={buildCommand} disabled={busy || !capabilities.canBuild} onChange={event => onBuildCommandChange(event.target.value as RepositoryBuildCommand)}>
+          <StudioField label={<><span>Command</span></>}><select aria-label="Build command" value={buildCommand} disabled={busy || !capabilities.canBuild} onChange={event => onBuildCommandChange(event.target.value as RepositoryBuildCommand)}>
               <option value="Restore">Restore</option>
               <option value="Build">Build</option>
               <option value="Test">Test</option>
               <option value="Pack">Pack</option>
-            </select>
-          </label>
-          <label>
-            <span>Target path</span>
-            <input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} />
-          </label>
+            </select></StudioField>
+          <StudioField label={<><span>Target path</span></>}><input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} /></StudioField>
           <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : buildInProgress ? `${buildCommand} in progress` : undefined} onClick={() => onSubmitBuild()}>
             {buildInProgress ? <Loader2 size={15} className="is-spinning" aria-hidden="true" /> : <Play size={15} />}
             {buildInProgress ? "Running…" : "Run command"}

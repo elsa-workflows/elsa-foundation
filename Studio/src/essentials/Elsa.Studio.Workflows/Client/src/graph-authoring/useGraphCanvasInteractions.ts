@@ -51,6 +51,10 @@ import { choosePalettePlacement, estimatedNodeHeight, placementReserve, type Pal
 import { defaultNodeWidth } from "./nodeWidth";
 
 type PaletteDragItem = { kind: "activity"; activity: ActivityCatalogItem } | { kind: "element"; element: GraphPaletteElement };
+/** Selection and React Flow's own measurements; a resize sets attributes and so edits the canvas. */
+const isReadOnlyNodeChange = (change: NodeChange<Node<WorkflowNodeData>>) =>
+  change.type === "select" || (change.type === "dimensions" && !change.resizing && !change.setAttributes);
+
 const paletteDragKey = (item: PaletteDragItem) => item.kind === "activity" ? item.activity.activityVersionId : `element:${item.element.id}`;
 
 /**
@@ -678,7 +682,9 @@ export function useGraphCanvasInteractions({
   };
 
   const onNodesChange = (changes: NodeChange<Node<WorkflowNodeData>>[]) => {
-    const allowedChanges = isUnsupported ? changes.filter(change => change.type === "select") : changes;
+    // A read-only canvas still keeps React Flow's measurements. Without them every new node object hides the
+    // node until it is measured again, and a click in that frame reaches the pane and clears the selection.
+    const allowedChanges = isUnsupported ? changes.filter(isReadOnlyNodeChange) : changes;
     if (allowedChanges.length === 0) return;
     setNodes(current => applyNodeChanges(allowedChanges, current));
     const selectionChanges = allowedChanges.filter(change => change.type === "select");

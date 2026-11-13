@@ -6,6 +6,7 @@ import type { ActivityExecutionStateSummary } from "../workflowTypes";
 import { formatDate, formatDuration } from "../workflowFormatting";
 import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { useExecutionFocusRequest, requestExecutionFocus, continueExecutionFocus, clearExecutionFocus, type ExecutionFocusRequest, type ExecutionFocusIntent, type ExecutionFocusOperation } from "./executionFocus";
 import "./activityExecutionBrowser.css";
 
 export type ExecutionPageState = { key: string; status: "loading" | "ready" | "unsupported" | "denied" | "failed"; page: ActivityExecutionBrowsePage | null };
@@ -97,11 +98,12 @@ function occurrenceLabel(entry: ActivityExecutionBrowseEntry) {
 }
 
 export function ActivityExecutionNavigator({ context, workflowExecutionId, executableNodeId, ancestorActivityExecutionId,
-  selectedActivityExecutionId, parentActivityExecutionId, refreshKey, onResolve, onSelect, onIncident, collapseOnSelect = false, requireExplicitSelection = false, initialPage, contextLabel, hideSingleton = false, restoreChoiceFocus }: {
+  selectedActivityExecutionId, parentActivityExecutionId, refreshKey, onResolve, onSelect, onIncident, collapseOnSelect = false, requireExplicitSelection = false, initialPage, contextLabel, hideSingleton = false, restoreChoiceFocus, captureFocusOperation }: {
   initialPage?: ActivityExecutionBrowsePage;
   contextLabel?: string;
   hideSingleton?: boolean;
-  restoreChoiceFocus?: { request: { current: string | null }; ready: boolean };
+  restoreChoiceFocus?: { request: ExecutionFocusRequest; ready: boolean };
+  captureFocusOperation?(): ExecutionFocusOperation;
   context: StudioEndpointContext; workflowExecutionId: string; executableNodeId: string;
   ancestorActivityExecutionId?: string; selectedActivityExecutionId?: string; refreshKey: number;
   parentActivityExecutionId?: string;
@@ -117,6 +119,23 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   const queryIdentity = JSON.stringify([executableNodeId, ancestorActivityExecutionId, parentActivityExecutionId, selectedActivityExecutionId, requireExplicitSelection]);
   const listId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const previousRef = useRef<HTMLButtonElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
+  const focusIdentity = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, executableNodeId]);
+  const focusScope = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, executableNodeId, ancestorActivityExecutionId, parentActivityExecutionId]);
+  const requestFocus = (id: string | null | undefined, direction?: "previous" | "next") => {
+    if (!restoreChoiceFocus) return;
+    requestExecutionFocus(restoreChoiceFocus.request, id, { direction, scope: focusScope, identity: focusIdentity,
+      from: selected?.execution.activityExecutionId,
+      origin: direction === "previous" ? previousRef.current : direction === "next" ? nextRef.current : triggerRef.current }, captureFocusOperation?.());
+  };
+  const selectWithFocus = (execution: ActivityExecutionStateSummary, expected?: ExecutionFocusIntent) => {
+    const request = restoreChoiceFocus?.request;
+    const bind = request && expected && expected.targetId === execution.activityExecutionId && request.intent === expected ? continueExecutionFocus(request) : (_operation?: ExecutionFocusOperation) => {};
+    try { onSelect(execution); }
+    catch (error) { if (request && expected) clearExecutionFocus(request, expected); throw error; }
+    bind(captureFocusOperation?.());
+  };
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (expanded) listRef.current?.querySelector<HTMLButtonElement>('[aria-current="true"]')?.focus();
@@ -145,33 +164,66 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   const navigate = async (id: string | null | undefined) => {
     if (!id) return;
     const available = page?.items.find(item => item.execution.activityExecutionId === id);
-    if (available) onSelect(available.execution);
+    if (available) selectWithFocus(available.execution, restoreChoiceFocus?.request.intent);
     else {
       // Selecting a neighbor beyond the loaded page uses an exact anchor, never a wider run download.
-      setNeighbor({ id, source: queryIdentity });
+      setNeighbor({ id, source: queryIdentity, focusIntent: restoreChoiceFocus?.request.intent });
     }
   };
-  const [neighbor, setNeighbor] = useState<{ id: string; source: string } | null>(null);
+  const [neighbor, setNeighbor] = useState<{ id: string; source: string; focusIntent?: ExecutionFocusIntent } | null>(null);
   const neighborState = useExecutionPage(context, workflowExecutionId, { executableNodeId,
     ...(parentActivityExecutionId ? { parentActivityExecutionId } : {}),
     ...(ancestorActivityExecutionId ? { ancestorActivityExecutionId } : {}), anchorActivityExecutionId: neighbor?.id, limit: 1 }, Boolean(neighbor && neighbor.source === queryIdentity), refreshKey);
-  const selectRef = useRef(onSelect); selectRef.current = onSelect;
+  const selectRef = useRef(selectWithFocus); selectRef.current = selectWithFocus;
   useEffect(() => {
     if (neighbor && neighbor.source !== queryIdentity) { setNeighbor(null); return; }
     if (neighbor && neighborState.status === "denied") { resolved.current(null); setNeighbor(null); return; }
     if (neighbor && neighborState.status === "ready") {
       const entry = neighborState.page?.items.find(item => item.execution.activityExecutionId === neighbor.id);
-      if (entry) selectRef.current(entry.execution);
+      if (entry) selectRef.current(entry.execution, neighbor.focusIntent);
+      else if (restoreChoiceFocus && neighbor.focusIntent) clearExecutionFocus(restoreChoiceFocus.request, neighbor.focusIntent);
       setNeighbor(null);
     }
-  }, [neighbor, neighborState.page, neighborState.status, queryIdentity]);
+  }, [neighbor, neighborState.page, neighborState.status, queryIdentity, restoreChoiceFocus]);
   useEffect(() => {
-    if (restoreChoiceFocus?.ready && restoreChoiceFocus.request.current && restoreChoiceFocus.request.current === selected?.execution.activityExecutionId && pageState.status === "ready" && triggerRef.current) {
-      // A later user focus choice takes precedence over this asynchronous restoration.
-      if (document.activeElement === document.body || document.activeElement === triggerRef.current) triggerRef.current.focus();
-      restoreChoiceFocus.request.current = null;
+    const request = restoreChoiceFocus?.request;
+    const controls = [previousRef.current, nextRef.current, triggerRef.current];
+    return () => {
+      const intent = request?.intent;
+      if (request && intent && !intent.selectionStarted && controls.includes(intent.origin as HTMLButtonElement | null)) clearExecutionFocus(request, intent);
+    };
+  }, [focusIdentity, restoreChoiceFocus?.request]);
+  useEffect(() => {
+    const request = restoreChoiceFocus?.request;
+    if (!request?.current) return;
+    const intent = request.intent;
+    if (intent && (!intent.isCurrent() || intent.identity !== focusIdentity || intent.targetId !== request.current
+      || (!intent.ownerBound && intent.scope !== focusScope))) {
+      clearExecutionFocus(request, intent);
+      return;
     }
-  }, [pageState.status, restoreChoiceFocus, selected]);
+    const errors = ["denied", "failed", "unsupported"];
+    // A terminal neighbor read failed before owner selection started; it cannot retain a future focus claim.
+    if (intent && neighbor && neighbor.focusIntent === intent && errors.includes(neighborState.status)) {
+      clearExecutionFocus(request, intent);
+      return;
+    }
+    // An owning prepare may transiently change ancestor filters before its exact destination commits.
+    if (intent && (!intent.selectionStarted || !intent.isReady())) return;
+    const rejected = selectedActivityExecutionId === request.current && errors.includes(pageState.status);
+    const replaced = Boolean(intent?.from && selectedActivityExecutionId && selectedActivityExecutionId !== intent.from && selectedActivityExecutionId !== request.current);
+    const unavailable = pageState.status === "ready" && selectedActivityExecutionId === request.current && !selected;
+    if (rejected || replaced || unavailable) {
+      clearExecutionFocus(request, intent);
+      return;
+    }
+    if (!restoreChoiceFocus?.ready || neighbor || request.current !== selected?.execution.activityExecutionId || pageState.status !== "ready") return;
+    const origin = intent?.direction === "previous" ? previousRef.current : intent?.direction === "next" ? nextRef.current : triggerRef.current;
+    const target = origin?.disabled ? triggerRef.current : origin;
+    // Recover only the initiating control or native focus loss; later owner-observed focus wins.
+    if (target && (document.activeElement === document.body || document.activeElement === origin)) target.focus();
+    clearExecutionFocus(request, intent);
+  }, [focusIdentity, focusScope, neighbor, neighborState.status, pageState.status, queryIdentity, restoreChoiceFocus, selected, selectedActivityExecutionId]);
   // Keep all reads and resolution effects active: a singleton can become unavailable or gain another occurrence.
   if (hideSingleton && pageState.status === "ready" && page?.totalCount === 1 && selected && !neighbor
     && !page.previousCursor && !page.nextCursor) return null;
@@ -179,7 +231,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   const iteration = selected && Boolean(selected.execution.iterationId && selected.iterationPosition && !selected.attempt);
   return <section className="wf-execution-browser" aria-label={contextLabel ? `${contextLabel} occurrences` : "Activity executions"}>
     <div className="wf-execution-navigator">
-      <button type="button" aria-label={contextLabel ? `Previous occurrence of ${contextLabel}` : "Previous activity execution"} disabled={!selected?.previousActivityExecutionId || Boolean(neighbor)} onClick={() => void navigate(selected?.previousActivityExecutionId)}><ChevronLeft size={16} /></button>
+      <button ref={previousRef} type="button" aria-label={contextLabel ? `Previous occurrence of ${contextLabel}` : "Previous activity execution"} disabled={!selected?.previousActivityExecutionId || Boolean(neighbor)} onClick={() => { requestFocus(selected?.previousActivityExecutionId, "previous"); void navigate(selected?.previousActivityExecutionId); }}><ChevronLeft size={16} /></button>
       <button ref={triggerRef} className="wf-execution-choice" type="button" aria-label={contextLabel ? `Choose occurrence of ${contextLabel}: ${currentLabel}${selected && page ? `, recorded execution ${selected.position} of ${page.totalCount}` : ""}` : undefined} aria-expanded={expanded} aria-controls={listId} onClick={() => {
         if (collapseOnSelect) setPopupHeight(Math.max(120, Math.min(360, window.innerHeight - (triggerRef.current?.getBoundingClientRect().bottom ?? 0) - 20)));
         setExpanded(value => !value);
@@ -187,7 +239,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
         <span className="wf-execution-choice-copy">{contextLabel ? <span className="wf-execution-context" title={contextLabel}>{contextLabel}</span> : null}<span>{currentLabel}{selected && !iteration && page ? ` of ${page.totalCount}` : null}</span></span>
         {selected && iteration && page ? <span className="wf-execution-position" aria-label={`Recorded execution ${selected.position} of ${page.totalCount}`}>{selected.position} / {page.totalCount}</span> : null}<ChevronDown size={14} />
       </button>
-      <button type="button" aria-label={contextLabel ? `Next occurrence of ${contextLabel}` : "Next activity execution"} disabled={!selected?.nextActivityExecutionId || Boolean(neighbor)} onClick={() => void navigate(selected?.nextActivityExecutionId)}><ChevronRight size={16} /></button>
+      <button ref={nextRef} type="button" aria-label={contextLabel ? `Next occurrence of ${contextLabel}` : "Next activity execution"} disabled={!selected?.nextActivityExecutionId || Boolean(neighbor)} onClick={() => { requestFocus(selected?.nextActivityExecutionId, "next"); void navigate(selected?.nextActivityExecutionId); }}><ChevronRight size={16} /></button>
     </div>
     <PageFeedback state={pageState} />
     {neighbor ? <PageFeedback state={neighborState} /> : null}
@@ -200,10 +252,10 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
           setCursor(null);
           if (collapseOnSelect) {
             setExpanded(false); triggerRef.current?.focus();
-            // Resolution can remount the navigator. Arrow navigation keeps focus on its own button.
-            if (restoreChoiceFocus) restoreChoiceFocus.request.current = entry.execution.activityExecutionId;
+            // Resolution can remount the navigator; retain the intended chooser in this scope.
+            requestFocus(entry.execution.activityExecutionId);
           }
-          onSelect(entry.execution);
+          selectWithFocus(entry.execution, restoreChoiceFocus?.request.intent);
         }} onIncident={onIncident} />)}</ol>
       <PageNavigation page={page} onPage={value => setCursor({ query: queryIdentity, value })} />
       <p className="wf-execution-note">Recorded evidence · counts reflect this read</p>
@@ -248,8 +300,9 @@ function ChildExecutionGroup({ context, execution, node, label, refreshKey, onEn
 }
 
 export function ActivityExecutionInspectionPanel({ context, workflowExecutionId, nodeId, nodeLabel, exactId, seed, ancestorId,
-  refreshKey, labelFor, onSelect, onEnter, onIncident, renderDetails, requireExplicitSelection = false, confirmedExecution, onUnavailable, initialPage, choiceFocus }: {
-  choiceFocus?: { current: string | null };
+  refreshKey, labelFor, onSelect, onEnter, onIncident, renderDetails, requireExplicitSelection = false, confirmedExecution, onUnavailable, initialPage, choiceFocus, captureFocusOperation }: {
+  choiceFocus?: ExecutionFocusRequest;
+  captureFocusOperation?(): ExecutionFocusOperation;
   initialPage?: ActivityExecutionBrowsePage;
   confirmedExecution?: ActivityExecutionStateSummary | null;
   onUnavailable?(): void;
@@ -265,7 +318,7 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
   const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${nodeId}:${ancestorId ?? ""}:${exactId ?? ""}`;
   const [resolved, setResolved] = useState<{ key: string; execution: ActivityExecutionStateSummary | null } | null>(null);
   const [supported, setSupported] = useState<{ context: StudioEndpointContext; value: boolean } | null>(null);
-  const localChoiceFocus = useRef<string | null>(null);
+  const localChoiceFocus = useExecutionFocusRequest();
   const restoreChoiceFocus = choiceFocus ?? localChoiceFocus;
   useEffect(() => {
     let active = true;
@@ -277,7 +330,7 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
     : supported?.context === context && !supported.value ? seed : null;
   const navigation = <ActivityExecutionNavigator context={context} workflowExecutionId={workflowExecutionId} executableNodeId={nodeId}
     ancestorActivityExecutionId={ancestorId} selectedActivityExecutionId={exactId} refreshKey={refreshKey} requireExplicitSelection={requireExplicitSelection} initialPage={initialPage} hideSingleton collapseOnSelect
-    restoreChoiceFocus={{ request: restoreChoiceFocus, ready: Boolean(execution) }}
+    restoreChoiceFocus={{ request: restoreChoiceFocus, ready: Boolean(execution) }} captureFocusOperation={captureFocusOperation}
     onResolve={value => { setResolved({ key, execution: value }); if (!value && confirmedExecution) onUnavailable?.(); if (value && !exactId) onSelect(value); }} onSelect={onSelect} onIncident={onIncident} />;
   const children = execution ? <ChildExecutionBrowser key={execution.activityExecutionId} context={context} execution={execution} refreshKey={refreshKey} labelFor={labelFor} onEnter={onEnter} onIncident={onIncident} /> : null;
   return execution ? renderDetails(execution, navigation, children) : <>
@@ -288,20 +341,23 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
 
 export { useScopedCanvasActivities } from "./scopedExecutionEvidence";
 
-export function ExecutionScopeNavigator({ context, execution, label, refreshKey, onSelect, onUnavailable, onIncident, initialPage }: {
+export function ExecutionScopeNavigator({ context, execution, label, refreshKey, onSelect, onUnavailable, onIncident, initialPage, choiceFocus, captureFocusOperation }: {
   initialPage?: ActivityExecutionBrowsePage;
+  choiceFocus?: ExecutionFocusRequest;
+  captureFocusOperation?(): ExecutionFocusOperation;
   label: string;
   context: StudioEndpointContext; execution: ActivityExecutionStateSummary; refreshKey: number;
   onSelect(execution: ActivityExecutionStateSummary): void; onUnavailable(): void;
   onIncident(execution: ActivityExecutionStateSummary): void;
 }) {
-  const choiceFocus = useRef<string | null>(null);
+  const localChoiceFocus = useExecutionFocusRequest();
+  const focusRequest = choiceFocus ?? localChoiceFocus;
   return <div className="wf-execution-scope-occurrence">
     <ActivityExecutionNavigator context={context} workflowExecutionId={execution.workflowExecutionId}
       executableNodeId={execution.executableNodeId} parentActivityExecutionId={execution.parentActivityExecutionId ?? undefined}
       selectedActivityExecutionId={execution.activityExecutionId} refreshKey={refreshKey}
       collapseOnSelect hideSingleton contextLabel={label} initialPage={initialPage}
-      restoreChoiceFocus={{ request: choiceFocus, ready: true }}
+      restoreChoiceFocus={{ request: focusRequest, ready: true }} captureFocusOperation={captureFocusOperation}
       onResolve={value => { if (!value) onUnavailable(); }} onSelect={onSelect} onIncident={onIncident} />
   </div>;
 }

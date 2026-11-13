@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useId } from "react";
 import { argumentNameKeys, isPlainRecord, readArgumentType, readStringField } from "./workflowProperties";
 import { getLiteralEditorValue, readWrappedInput, withExpression, writeInputValue } from "./activityProperties";
@@ -119,13 +120,12 @@ function WorkflowOutputPicker({ input, outputs, value, disabled, onSelect }: {
     item && typeof item === "object" && readStringField(item, argumentNameKeys).trim() ? [readStringField(item, argumentNameKeys)] : []))];
   const selected = typeof value === "string" ? value : "";
   const missing = Boolean(selected && !names.includes(selected));
-  return <div className="wf-property-row">
-    <div className="wf-property-row-header"><label htmlFor={id}>{input.displayName || "Output Name"}</label></div>
+  return <StudioField className="wf-property-row" controlId={id} label={input.displayName || "Output Name"}>
     <select id={id} className="studio-input" disabled={disabled || !names.length} value={selected} aria-invalid={missing} aria-describedby={`${id}-help`} onChange={event => onSelect(event.target.value)}>
       <option value="">Select an output</option>
       {missing && <option value={selected} disabled>{selected} (renamed or removed)</option>}
       {names.map(name => <option key={name} value={name}>{name}</option>)}
     </select>
     <p id={`${id}-help`} className={missing ? "wf-property-row-error" : undefined} role={missing ? "alert" : undefined}>{missing ? "This output is no longer defined. " : ""}{!names.length ? "Add a workflow output in the editor's Outputs tab, then select it here." : missing ? "Select its current name." : "Assign a value to an output declared in this draft."}</p>
-  </div>;
+  </StudioField>;
 }
