@@ -42,6 +42,15 @@ All append owners, including independent observations, must stage their new even
 prefix remains coherent. A lagging or unsupported projection must not be advertised as an empty playable run.
 The normal Runtime model still registers none of these history/occurrence tables.
 
+`EfRuntimeHistoryObservation` is a private independent-observation staging helper. The eventual owner
+authorizes the source, owns its transaction/final save and acknowledgement reconciliation, and normalizes
+provider failures. The staged result is not a durable acknowledgement. The helper requires a retained
+captured head and matching native policy, uses the same head reservation and occurrence prefix, and preserves
+the last covered native checkpoint/time. Receipt replay is immutable; acknowledged purge can return a receipt
+without recreating content. Its purpose-separated semantic fingerprint remains64 hex characters for every
+provider. No bookmark lifecycle or occurrence is inferred from a delivery observation, and no provider port is
+registered by this helper.
+
 The isolated schema/mapping/checkpoint tests cover private projections and relational staging without changing
 normal Runtime migration targets. Actual native entry-point/marker integration and family binding, scoped readers,
 observation append, occurrence projection, retention/deletion, generated migrations and production qualification
