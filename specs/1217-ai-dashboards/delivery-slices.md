@@ -15,8 +15,8 @@ Each PR is based on its predecessor until that predecessor lands. Split an overs
 | 3 | T008–T009/T024: resource service, authority, SQLite definitions/CAS/revisions | Ready [#4235](https://github.com/elsa-workflows/elsa-foundation/pull/4235), `d5690d870b`; resource38/query55/Architecture621 pass; independent review clean |
 | 4 | T024/T033: bounded collection/reuse and relational providers | Ready [#4242](https://github.com/elsa-workflows/elsa-foundation/pull/4242), `069b6433a4`; resource40, actual required providers3/3 and Architecture621 pass; independent review clean |
 | 5 | T010/T016/T023/T026/T030–T031: native APIs and current identity | [#4247](https://github.com/elsa-workflows/elsa-foundation/pull/4247), `27057e3f9f`; resource/HTTP/real CShell70 and Architecture621 pass; independent review clean |
-| 6 | T013–T015/T021: reusable runtime inspection and Workflow query source | Prepared;39 numerical/authority/drill cases pass; review/graph in progress |
-| 7 | T017/T025/T027/T035/T037: native Studio transport, editor, collections and renderers; split component and page integration as needed | Preserved; not reintegrated |
+| 6 | T013–T015/T021: reusable runtime inspection and Workflow query source | Ready [#4261](https://github.com/elsa-workflows/elsa-foundation/pull/4261), `fd791cd495`; Workflow42/Runtime API310/Architecture621 pass; independent review clean |
+| 7 | T017/T025/T027/T035/T037: native Studio transport, editor, collections and renderers; split component and page integration as needed | Prepared native Studio routes/controls/transport/renderers and optional Weaver UI;182 component cases pass, composed UX acceptance incomplete |
 | 8 | T019/T026/T032/T039: Studio sharing/history/recovery, accessibility and Home preservation tests | Preserved; not reintegrated |
 | 9 | T018/T020: Weaver authoring and existing Copilot adapter boundary; reconcile current Weaver names and test independently | Preserved; not reintegrated |
 | 10 | T040–T042: independently packaged Acme business dataset and package-only consumer qualification | Preserved; not reintegrated |
