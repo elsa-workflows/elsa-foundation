@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -92,6 +93,67 @@ public sealed class RuntimeHistoryValueOwnerTests
         Assert.Equal("checkpoint-B", reprojection.CheckpointValueCapture.CheckpointId);
     }
 
+    [Fact]
+    public async Task Same_evaluation_at_another_checkpoint_has_no_dangling_delta_reference()
+    {
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(Workflow(Policy));
+        var inspections = new InMemoryActivityExecutionInspectionStore();
+        var values = new RuntimeActivityExecutionInspectionAccumulator(inspections, executions, new RuntimeHistoryOptions());
+        var raw = Snapshot("original") with { InputKey = "input" };
+        var first = await values.BuildProjectionWithSourceAsync(State(), "checkpoint-A", At,
+            () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [raw]);
+        await inspections.SaveAsync(first);
+        var second = await values.BuildProjectionWithSourceAsync(State(), "checkpoint-B", At.AddMinutes(1),
+            () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [raw]);
+        Assert.Equal(first.CheckpointValueCapture!.EvidenceIds, second.CheckpointValueCapture!.EvidenceIds);
+        Assert.Equal("checkpoint-B", second.CheckpointValueCapture.CheckpointId);
+        Assert.Equal(1L, Assert.Single(second.ValueSnapshots).Sequence);
+        Assert.All(second.CheckpointValueCapture.EvidenceIds, id => Assert.Single(second.ValueSnapshots, value => value.EvidenceId == id));
+    }
+
+    [Theory]
+    [InlineData("payload")]
+    [InlineData("phase")]
+    [InlineData("disposition")]
+    [InlineData("evaluation-identity")]
+    public async Task Existing_evidence_or_evaluation_cannot_silently_hide_a_conflicting_observation(string conflict)
+    {
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(Workflow(Policy));
+        var inspections = new InMemoryActivityExecutionInspectionStore();
+        var values = new RuntimeActivityExecutionInspectionAccumulator(inspections, executions, new RuntimeHistoryOptions());
+        var raw = Snapshot("original");
+        var first = await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+            () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [raw]);
+        await inspections.SaveAsync(first);
+        var changed = conflict switch
+        {
+            "payload" => raw with { Payload = JsonSerializer.SerializeToElement("changed") },
+            "phase" => raw with { Phase = "Resume" },
+            "disposition" => raw with { CaptureReason = "withheld", IsSensitive = true },
+            _ => raw with { EvaluationId = Assert.Single(first.ValueSnapshots).EvaluationId, EvidenceId = "different-evidence" }
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+            () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [changed]));
+        Assert.Equal("original", Assert.Single((await inspections.FindAsync("run", "activity"))!.ValueSnapshots).Payload!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Duplicate_raw_identity_is_deduplicated_only_when_its_content_agrees()
+    {
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(Workflow(Policy));
+        var values = new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore(), executions, new RuntimeHistoryOptions());
+        var raw = Snapshot("original");
+        var equivalent = await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+            () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [raw, Snapshot("original")]);
+        Assert.Single(equivalent.ValueSnapshots);
+        Assert.Single(equivalent.CheckpointValueCapture!.EvidenceIds);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+            () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [raw, Snapshot("changed")]));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -149,6 +211,50 @@ public sealed class RuntimeHistoryValueOwnerTests
         Assert.Same(cause, failure.InnerException);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Normalized_policy_and_inspection_outages_preserve_the_whole_provider_chain(bool inspection, bool providerTimeout)
+    {
+        Exception provider = providerTimeout ? new OperationCanceledException("provider timeout") : new TestDbException();
+        var normalized = new InvalidOperationException("contextual persistence failure", provider);
+        var values = await FailingOwner(inspection, normalized);
+        var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () =>
+            await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+                () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [Snapshot("value")]));
+        Assert.Same(normalized, failure.InnerException);
+        Assert.Same(provider, failure.InnerException!.InnerException);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Wrapped_malformed_evidence_stays_hard_even_inside_an_IO_boundary(bool inspection)
+    {
+        var normalized = new IOException("boundary", new InvalidDataException("malformed"));
+        var values = await FailingOwner(inspection, normalized);
+        var failure = await Assert.ThrowsAsync<RuntimeHistoryIntegrityException>(async () =>
+            await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+                () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [Snapshot("value")]));
+        Assert.Same(normalized, failure.InnerException);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cancellation_during_a_read_is_not_reclassified_as_provider_unavailability(bool inspection)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var normalized = new InvalidOperationException("cancelled boundary", new OperationCanceledException(cancellation.Token));
+        var values = await FailingOwner(inspection, normalized, cancellation.Cancel);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+                () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [Snapshot("value")], cancellationToken: cancellation.Token));
+        Assert.Same(normalized, failure);
+    }
+
     [Fact]
     public void Default_runtime_composition_resolves_the_owner_without_history_or_an_execution_scope()
     {
@@ -172,9 +278,33 @@ public sealed class RuntimeHistoryValueOwnerTests
     private static ActivityExecutionInspectionValueSnapshot Snapshot(string value) => new("input", ActivityExecutionInspectionValueSubject.ActivityInput,
         default, null, At, JsonSerializer.SerializeToElement(value), "test", false, new Dictionary<string, string>());
 
-    private sealed class FailingPolicyStore(Exception failure) : IWorkflowExecutionStateStore
+    private static async Task<RuntimeActivityExecutionInspectionAccumulator> FailingOwner(bool inspection, Exception failure, Action? beforeFailure = null)
     {
-        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw failure;
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(Workflow(Policy));
+        return new(inspection ? new FailingInspectionStore(failure, beforeFailure) : new InMemoryActivityExecutionInspectionStore(),
+            inspection ? executions : new FailingPolicyStore(failure, beforeFailure), new RuntimeHistoryOptions());
+    }
+
+    private sealed class TestDbException() : DbException("provider unavailable") { }
+
+    private sealed class FailingInspectionStore(Exception failure, Action? beforeFailure) : IActivityExecutionInspectionStore
+    {
+        public ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
+        {
+            beforeFailure?.Invoke();
+            throw failure;
+        }
+        public ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(ActivityExecutionInspectionSummaryPageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class FailingPolicyStore(Exception failure, Action? beforeFailure = null) : IWorkflowExecutionStateStore
+    {
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            beforeFailure?.Invoke();
+            throw failure;
+        }
         public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
