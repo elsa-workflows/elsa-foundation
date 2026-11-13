@@ -1170,7 +1170,7 @@ plan's aims at it), so that it bites is not shown.
 - **Three new required cases.**
   - One instance's rows past a position.
   - The tail read when a round commits between the cursor read and the rest. Without the merge's rule the instance
-    would show 4 commits instead of 3.
+    would show 4 commits instead of 3 (reasoned from the case, not run).
   - Catch-up requests coalesced, and the projection current afterwards.
 - **Where they pass:** in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB.
 - **The simulation** (I6 for the viewer). After every action, while the journal has at most 3,000 rows, the tail read
