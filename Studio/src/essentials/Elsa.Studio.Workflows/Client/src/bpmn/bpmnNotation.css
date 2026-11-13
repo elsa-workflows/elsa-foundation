@@ -1,0 +1,77 @@
+.wf-bpmn-notation {
+  display: block;
+  flex: none;
+  overflow: visible;
+  color: var(--studio-text);
+}
+
+.wf-bpmn-notation-outline {
+  fill: var(--wf-bpmn-fill, var(--studio-surface));
+}
+
+.wf-bpmn-notation .wf-bpmn-symbol-inverse {
+  stroke: var(--wf-bpmn-fill, var(--studio-surface));
+}
+
+.wf-bpmn-notation-label {
+  font-family: var(--studio-font-ui);
+  font-size: 12px;
+  fill: var(--wf-bpmn-label-color, var(--studio-text));
+}
+
+.wf-bpmn-notation-group {
+  fill: none;
+}
+
+.wf-bpmn-notation-node {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.wf-bpmn-notation-node .wf-bpmn-notation-content {
+  position: absolute;
+  inset: 26px 8px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--studio-text);
+  font-size: 12px;
+  text-align: center;
+}
+
+.wf-bpmn-notation-node > .wf-bpmn-notation-binding {
+  position: absolute;
+  inset: 8px 8px auto auto;
+}
+
+.wf-bpmn-notation-content strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.wf-bpmn-notation-node > .wf-bpmn-caption {
+  position: absolute;
+  top: 100%;
+  margin-top: 4px;
+  max-width: 180px;
+}
+
+.wf-bpmn-notation-selection {
+  fill: none;
+  stroke: var(--studio-accent);
+  stroke-width: 2;
+}
+
+.wf-bpmn-notation-fault {
+  fill: none;
+  stroke: var(--studio-danger);
+  stroke-width: 3;
+  stroke-dasharray: 5 3;
+}

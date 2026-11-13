@@ -2,6 +2,7 @@ import type { ActivityNode, VariableDefinition } from "../workflowTypes";
 import { getChildSlots } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
 import { serializeBpmnXml } from "./bpmnDocumentXml";
+import { readBpmnBooleanAttribute } from "./bpmnXmlBoolean";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
 export const bpmnDocumentSchemaVersion = "2.0.0";
@@ -756,10 +757,6 @@ function labelBounds(element: Element): BpmnBounds | undefined {
   const bounds = label && children(label, bpmnNamespaces.bounds, "Bounds")[0];
   return bounds ? readBounds(bounds, true) : undefined;
 }
-function readBoolean(element: Element, name: string): boolean | undefined {
-  const value = element.getAttribute(name);
-  return value === "true" || value === "1" ? true : value === "false" || value === "0" ? false : undefined;
-}
 function connectionReferences(parsed: ParsedBpmnDocument, element: Element, name: "sourceRef" | "targetRef"): string[] {
   const references = element.hasAttribute(name) ? [{ context: element, value: element.getAttribute(name)! }]
     : children(element, bpmnNamespaces.model, name).map(child => ({ context: child, value: child.textContent?.trim() ?? "" }));
@@ -784,7 +781,7 @@ export function projectBpmnDocumentScene(owner: ActivityNode, diagramId: string)
     if (is(di, bpmnNamespaces.diagram, "BPMNShape")) {
       scene.shapes.push({ shapeId: requiredText(di.getAttribute("id"), "shape identity"), elementId, elementType: element.localName, element,
         bounds: readBounds(uniqueChild(di, bpmnNamespaces.bounds, "Bounds")), labelBounds: labelBounds(di),
-        isExpanded: readBoolean(di, "isExpanded"), isHorizontal: readBoolean(di, "isHorizontal"), isMarkerVisible: readBoolean(di, "isMarkerVisible") });
+        isExpanded: readBpmnBooleanAttribute(di, "isExpanded"), isHorizontal: readBpmnBooleanAttribute(di, "isHorizontal"), isMarkerVisible: readBpmnBooleanAttribute(di, "isMarkerVisible") });
     } else if (is(di, bpmnNamespaces.diagram, "BPMNEdge")) {
       const sourceRefs = connectionReferences(parsed, element, "sourceRef");
       const targetRefs = connectionReferences(parsed, element, "targetRef");
