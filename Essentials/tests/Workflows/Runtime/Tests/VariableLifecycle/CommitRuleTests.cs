@@ -106,14 +106,14 @@ public sealed class CommitRuleTests
         var a = ValueEnvelope.Inline(new ValueTypeDescriptor("Object"), JsonDocument.Parse("""{"b":1.0,"a":"x"}""").RootElement, ValueProtectionPolicy.InstanceInline);
         var b = ValueEnvelope.Inline(new ValueTypeDescriptor("Object"), JsonDocument.Parse("""{"a":"x","b":1}""").RootElement, ValueProtectionPolicy.InstanceInline);
 
-        Assert.Equal(VariableValueDigest.Compute(a), VariableValueDigest.Compute(b));
-        Assert.NotEqual(VariableValueDigest.Compute(a), VariableValueDigest.Compute(Int(1)));
+        Assert.Equal(Digest(a), Digest(b));
+        Assert.NotEqual(Digest(a), Digest(Int(1)));
 
         // Escaped and plain strings, and numbers with and without an exponent, digest by meaning.
         var escaped = Parse("{\"a\":\"\\u0078\",\"n\":[1.50,100,-0.0,0.001]}");
         var plain = Parse("{\"a\":\"x\",\"n\":[15e-1,1E2,0,1e-3]}");
-        Assert.Equal(VariableValueDigest.Compute(escaped), VariableValueDigest.Compute(plain));
-        Assert.NotEqual(VariableValueDigest.Compute(plain), VariableValueDigest.Compute(Parse("{\"a\":\"x\",\"n\":[15e-1,1E2,0,1e-2]}")));
+        Assert.Equal(Digest(escaped), Digest(plain));
+        Assert.NotEqual(Digest(plain), Digest(Parse("{\"a\":\"x\",\"n\":[15e-1,1E2,0,1e-2]}")));
     }
 
     [Fact]
@@ -134,6 +134,11 @@ public sealed class CommitRuleTests
     private static VariableFrameState Frame(int count) =>
         new("frame:root", "workflow", "wfexec-1", null, VariableFrameKind.Root,
             new Dictionary<string, ValueEnvelope> { [Key] = Int(count) });
+
+    // The digest a version-0 variable gets: what a frame computes once for the stored value.
+    private static string Digest(ValueEnvelope value) =>
+        new VariableFrameState("frame:digest", "workflow", "wfexec-digest", null, VariableFrameKind.Root,
+            new Dictionary<string, ValueEnvelope> { ["value"] = value }).CurrentDigestOf("value");
 
     private static ValueEnvelope Int(int value) =>
         ValueEnvelope.Inline(Int32Type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);

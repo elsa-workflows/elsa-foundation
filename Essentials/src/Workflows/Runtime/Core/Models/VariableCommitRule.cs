@@ -48,7 +48,7 @@ public sealed record VariableCommitDecision(
 /// </list>
 /// Once a write applies, a new value whose digest equals the current digest applies nothing and keeps the version.
 /// </summary>
-public static class VariableCommitRule
+internal static class VariableCommitRule
 {
     public static VariableCommitDecision Evaluate(
         VariableWriteBase? writeBase,

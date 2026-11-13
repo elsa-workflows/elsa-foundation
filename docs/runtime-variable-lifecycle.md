@@ -12,7 +12,7 @@ without a record. This page describes how the runtime does that. The decisions a
 | Word | Meaning |
 |---|---|
 | Version | A per-variable counter. Every applied write that changes the value adds one. A variable nobody has written yet is at version 0. |
-| Digest | A hash of the value's canonical JSON form, stored with the version when a write applies. Reads never hash. |
+| Digest | A hash of the value's canonical JSON form, stored with the version when a write applies. A default-mode read never hashes; a `Fault` node that reads a variable nobody has written yet hashes its stored value once. A value stored outside the document is digested by its reference, so the same value at two references counts as different. |
 | Input read set | The variables a step's input bindings and expressions actually read, with the version each one had. Committed with the step's input snapshot. |
 | Base | The version a write was built on: the read-set entry for that variable. A write to a variable the step never read has no base and is a *blind* write. |
 | Lost update | A write whose base is no longer the current version: someone else wrote the variable after this step read it. |
@@ -21,7 +21,9 @@ without a record. This page describes how the runtime does that. The decisions a
 ## The commit rule
 
 Every write site applies the same rule: an output capture (on completion or on resume), a `Set`/`Merge`/`Reduce`
-intrinsic, and a `ModifyVariable` alteration.
+intrinsic, and a `ModifyVariable` alteration. An intrinsic reads its value and commits it in one dispatch, so its write
+is blind (nothing can move the variable in between), and a `ModifyVariable` is checked against its captured version
+before it commits (see below); both are versioned like any other write.
 
 | Case | What happens |
 |---|---|
@@ -79,7 +81,11 @@ warning and keeps the operator's value.
 ## What is not covered yet
 
 - Read sets cover Elsa's instrumented read paths: variable-read bindings, declared expression parameters and the
-  ambient variables an expression references. Arbitrary host access is not tracked.
+  ambient variables an expression references. An expression with computed access (`variables[x]`, `getVariable(x)`)
+  is handed every visible variable, so all of them enter its read set: the conservative direction, which can raise a
+  warning (or, under `Fault`, a fault) for a variable it did not use. Arbitrary host access is not tracked.
+- A `ModifyVariable` leaves no write-history record of its own; its version carries an `Alteration` writer, and the
+  alteration job keeps its own outcome.
 - Variables of a closed scope (graph rows) are read and written outside the root frame; their writes are blind.
 - The operator retry / re-execute / accept-recorded-completion split and the background admission refresh are
   delivered separately (see the spec's tasks).

@@ -229,8 +229,9 @@ public readonly record struct VariableWriteBase(long Version, string? Digest);
 
 /// <summary>
 /// The input read set of an invocation (spec 1221 FR-002): the reads its input materialization made, committed with the
-/// input snapshot. Its entries are the invocation's bases for a later capture; they are immutable for the invocation,
-/// except that the invocation's own applied write advances its own base for that variable (FR-007).
+/// input snapshot. Its entries are the invocation's bases for a later capture and are immutable for the invocation.
+/// An invocation writes each captured variable once, at its completion; advancing its own base after an earlier write
+/// of its own (FR-007) arrives with the variable session's writes.
 /// </summary>
 public sealed record VariableInputReadSet
 {
@@ -269,17 +270,5 @@ public sealed record VariableInputReadSet
         }
 
         return null;
-    }
-
-    /// <summary>The invocation's own applied write advances its base for that variable (FR-007).</summary>
-    public VariableInputReadSet AdvanceOwnWrite(string scopeId, string variableKey, VariableVersion written)
-    {
-        ArgumentNullException.ThrowIfNull(written);
-        var entries = Entries
-            .Select(entry => StringComparer.Ordinal.Equals(entry.ScopeId, scopeId) && StringComparer.Ordinal.Equals(entry.VariableKey, variableKey)
-                ? new VariableReadSetEntry(scopeId, variableKey, written.Version, Mode == LostUpdateMode.Fault ? written.Digest : null)
-                : entry)
-            .ToArray();
-        return new VariableInputReadSet(entries, Mode);
     }
 }

@@ -785,9 +785,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 faultMasking,
                 workItem,
                 payload,
-                currentParentState,
+                // A Fault-mode lost update on a composite's capture keeps its own sub-status and its refused write (spec 1221).
+                exception is VariableLostUpdateException lostUpdate ? currentParentState.WithVariableWrites([lostUpdate.Record]) : currentParentState,
                 exception,
-                "ParentCompletionFaulted",
+                exception is VariableLostUpdateException ? VariableLostUpdateException.SubStatus : "ParentCompletionFaulted",
                 valueSnapshots,
                 cancellationToken);
             return;

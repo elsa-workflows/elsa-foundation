@@ -171,7 +171,11 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
             {
                 var record = VariableWriteRecord.From(frame, write, variableKey, writer, occurredAt);
                 if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
-                    return new RuntimeWorkflowVariableCaptureCommit(null, null, [.. records, record with { RejectedValue = envelope }], record with { RejectedValue = envelope });
+                {
+                    // Nothing in the batch applies, so only the refused write is recorded, not the captures before it.
+                    var refused = record with { RejectedValue = envelope };
+                    return new RuntimeWorkflowVariableCaptureCommit(null, null, [refused], refused);
+                }
                 records.Add(record);
             }
 

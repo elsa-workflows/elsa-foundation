@@ -95,7 +95,9 @@ internal static class VariableLifecycleTestGraph
     public static ExecutableNode Increment(string nodeId, Type incrementActivity, LostUpdateMode mode = LostUpdateMode.Default, bool readsCount = true, string captureKey = CountKey)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(incrementActivity);
-        var projection = Assert.Single(contract.Result.Projections).Key;
+        var projection = contract.Result.Projections.Count == 1
+            ? Assert.Single(contract.Result.Projections).Key
+            : contract.Result.Projections.Keys.Single(key => key.EndsWith(nameof(Incremented.Value), StringComparison.Ordinal));
         var read = new RuntimeInputBinding(
             nameof(IncrementActivity.Count),
             Int32Type,

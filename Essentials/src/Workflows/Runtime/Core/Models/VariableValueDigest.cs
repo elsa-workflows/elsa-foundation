@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// strings re-encoded by the writer. When ADR 0091 lands, this is the one place to align. A value that is not inline
 /// digests its stored form: an external reference by its reference, a withheld value by its marker.
 /// </remarks>
-public static class VariableValueDigest
+internal static class VariableValueDigest
 {
     private const string Prefix = "sha256:";
 

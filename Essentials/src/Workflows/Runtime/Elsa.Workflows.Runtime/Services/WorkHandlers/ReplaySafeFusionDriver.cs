@@ -112,7 +112,10 @@ public sealed class ReplaySafeFusionDriver
         return node.ActivityContract?.SideEffectProfile switch
         {
             SideEffectProfile.ReplaySafe => true,
-            SideEffectProfile.External => node.Structure is null && node.ChildSlots.Count == 0,
+            // Only an inline leaf: a background External leaf is admitted to a worker and must never be re-driven
+            // through Start by a redelivered Schedule (WorkflowScheduleActivitySchedulerWorkHandler's Running branch).
+            SideEffectProfile.External => node.ExecutionPlacement == Elsa.Primitives.Models.ActivityExecutionPlacement.Inline &&
+                                          node.Structure is null && node.ChildSlots.Count == 0,
             _ => false
         };
     }

@@ -27,8 +27,23 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 - **T024a:** spec 266's unordered-writer warning is not implemented on the branch yet; the pointer to the `Fault`
   opt-in goes in with S-5's implementation.
 - **T028, T042:** coordinator steps on #3411; the PoC result is in #4316's description.
-- **T039:** partly done (capture, alteration and buffered-segment records are covered); intrinsic and background-result
-  records, and restoring an overwritten value, are covered with US2/US5.
+- **T003 (partly):** versions and digests are on frames; closed-scope variables (graph rows) are not versioned yet, so
+  their writes stay blind.
+- **T021a (partly):** the warning is recorded in the write history with both writers and the overwritten value; showing
+  it as an instance diagnostic in Studio is S-6's surface. A warning incident was not used: an incident in a commit ends
+  the coalescing session and would re-open the inline gap for later leaves.
+- **T033 (partly):** resume keeps the snapshot and read set and starts with no refresh; advancing own-write bases waits
+  for T016.
+- **T036, T037 (partly):** every applied write and lost update leaves a record on the writer's activity state, with
+  the operational data (overwritten value, refused write), and a `ModifyVariable` stamps its version's writer instead
+  of a record. Inspection-value capture with retention, and telling omitted/redacted/expired apart from `null`, are not
+  built yet.
+- **T038 (partly):** measured; storage chosen (records ride the writer's checkpoint, no extra rows); an SC-005 budget is
+  proposed in #4316 for the coordinator to settle on #3411.
+- **T009:** no document version is bumped. The new members are additive and omitted while empty, so an older frame or
+  snapshot reads back at version 0 with no base, which a test covers.
+- **T039:** partly done (capture, `Fault` and buffered-segment records are covered); intrinsic and background-result
+  records, and restoring an overwritten value, come with US2/US5.
 - **T041:** after the remaining stories.
 
 ## Phase 1: Setup
@@ -40,7 +55,7 @@ carries logic) at the application cadence (§2.21.2). No new CI tier (existing F
 
 **Purpose**: the data model and the commit rule every story depends on.
 
-- [x] T003 Add per-variable `Version` and `Digest` to `VariableFrameState` in `Essentials/src/Workflows/Runtime/Core/Models/VariableFrameState.cs`, beside the frame revision; mirror in the row store.
+- [ ] T003 Add per-variable `Version` and `Digest` to `VariableFrameState` in `Essentials/src/Workflows/Runtime/Core/Models/VariableFrameState.cs`, beside the frame revision; mirror in the row store.
 - [x] T004 [P] Add `ReadSetEntry`, `InputReadSet` and `SessionReads` types in `Essentials/src/Workflows/Runtime/Core/Models/` (per data-model.md).
 - [x] T005 [P] Add the `WriteHistoryRecord` type (mandatory metadata; optional value; conditional operational data) in `Essentials/src/Workflows/Runtime/Core/Models/`.
 - [x] T006 Add the digest computation over ADR 0091 canonical form (one per applied write) in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/VariableFrameFactory.cs`.
@@ -88,7 +103,7 @@ default of FR-011 depends on it (FR-013a).
 
 ## Phase 5: User Story 3 — Opt-in strict read-modify-write (Priority: P2)
 
-- [x] T021a [US1] Default lost-update warning: on a stale base the write applies and an instance diagnostic (Studio) plus a write-history entry is raised, naming the variable, base and current versions and both writers, keeping the overwritten value; versions only, no digest in the read set.
+- [ ] T021a [US1] Default lost-update warning: on a stale base the write applies and an instance diagnostic (Studio) plus a write-history entry is raised, naming the variable, base and current versions and both writers, keeping the overwritten value; versions only, no digest in the read set.
 - [x] T022 [US3] Add the `Fault` opt-in: `LostUpdateMode` per activity type (attribute) and per node (setting) in the runtime policy resolution, pinned in the executable; `Fault` nodes record stored digests in their read sets and use the exact check.
 - [x] T023 [US3] Route a `Fault` lost update through the existing incident path with the diagnostic (variable, versions, writers); record the rejected completion. Reference `docs/runtime-fault-behavior.md`.
 - [x] T024 [P] [US3] Behaviour tests: default warns and applies (incl. `0 → 1 → 0`); `Fault` (type and node) applies `0 → 1 → 0` with a recorded mismatch and faults a real lost update through the incident strategy. In `.../Tests/VariableLifecycle/LostUpdatePolicyTests.cs`.
@@ -116,7 +131,7 @@ default of FR-011 depends on it (FR-013a).
 
 ## Phase 8: User Story 6 — Suspension keeps base (D-11) (Priority: P3)
 
-- [x] T033 [US6] On resume: keep committed snapshot + input read set (own-write bases advanced), fresh session, no auto-refresh; an explicit stale-base write meets the commit rule and the node's mode.
+- [ ] T033 [US6] On resume: keep committed snapshot + input read set (own-write bases advanced), fresh session, no auto-refresh; an explicit stale-base write meets the commit rule and the node's mode.
 - [x] T034 [P] [US6] `ModifyVariableAlterationHandler`: record the variable's version and apply only if unchanged (replace the root-frame revision check); a later stale-base write keeps the operator's value in the warning; a read alone never produces a lost update. In `.../Alterations/Handlers/ModifyVariableAlterationHandler.cs`.
 - [x] T035 [P] [US6] Tests: resume keeps base; read-only change produces no lost update; a stale-base write warns by default and faults under `Fault`. In `.../Tests/VariableLifecycle/SuspensionTests.cs`.
 
@@ -124,9 +139,9 @@ default of FR-011 depends on it (FR-013a).
 
 ## Phase 9: User Story 7 — Write history data (D-13) (Priority: P3) — Open question B
 
-- [x] T036 [US7] Record a `WriteHistoryRecord` at every applied write and lost update (metadata always, with the outcome and both writers; value opt-in + retention; operational data — rejected completion, the value a warning overwrote — retained for recovery and repair).
-- [x] T037 [US7] Preserve every intermediate write incl. `0→1→0` within one buffered segment; distinguish omitted/redacted/expired from `null`.
-- [x] T038 [US7] **Measurement (Open question B)**: benchmark rows vs. derived-from-checkpoint under large payloads / hot loops; choose the physical storage; set the SC-005 overhead threshold. Post the result on #3411 (reviewer Q12).
+- [ ] T036 [US7] Record a `WriteHistoryRecord` at every applied write and lost update (metadata always, with the outcome and both writers; value opt-in + retention; operational data — rejected completion, the value a warning overwrote — retained for recovery and repair).
+- [ ] T037 [US7] Preserve every intermediate write incl. `0→1→0` within one buffered segment; distinguish omitted/redacted/expired from `null`.
+- [ ] T038 [US7] **Measurement (Open question B)**: benchmark rows vs. derived-from-checkpoint under large payloads / hot loops; choose the physical storage; set the SC-005 overhead threshold. Post the result on #3411 (reviewer Q12).
 - [ ] T039 [P] [US7] Tests: required metadata present for each write source; intermediate writes survive folding; operational data (rejected completion, overwritten value) available with inspection values off/expired; an overwritten value can be restored. In `.../Tests/VariableLifecycle/WriteHistoryTests.cs`.
 
 ---

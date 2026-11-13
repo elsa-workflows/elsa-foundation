@@ -450,9 +450,13 @@ internal static class StructuralCallbackEvaluation
         }
         catch (Exception exception)
         {
+            // A Fault-mode lost update on a composite's capture keeps its own sub-status and its refused write (spec 1221).
+            var lostUpdate = exception as VariableLostUpdateException;
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, currentParentState, exception, definition.FaultSubStatus, valueSnapshots, cancellationToken);
+                workItem, payload, definition,
+                lostUpdate is null ? currentParentState : currentParentState.WithVariableWrites([lostUpdate.Record]),
+                exception, lostUpdate is null ? definition.FaultSubStatus : VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
             return;
         }
 

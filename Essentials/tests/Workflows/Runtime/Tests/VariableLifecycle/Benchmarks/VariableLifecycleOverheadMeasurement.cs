@@ -27,11 +27,11 @@ public sealed class VariableLifecycleOverheadMeasurement(ITestOutputHelper outpu
         foreach (var size in new[] { 1_024, 64 * 1_024, 1_024 * 1_024 })
         {
             var envelope = Payload(size, 0);
-            VariableValueDigest.Compute(envelope);
+            Digest(envelope);
             var digestRuns = Enabled ? Math.Max(5, 50_000_000 / size) : 2;
             var watch = Stopwatch.StartNew();
             for (var i = 0; i < digestRuns; i++)
-                VariableValueDigest.Compute(envelope);
+                Digest(envelope);
             watch.Stop();
             // Baseline: hashing the stored JSON as it is, with no canonical form, to show what canonicalization costs.
             var raw = Stopwatch.StartNew();
@@ -79,6 +79,11 @@ public sealed class VariableLifecycleOverheadMeasurement(ITestOutputHelper outpu
 
     private static VariableFrameState Frame(ValueEnvelope value) =>
         new("frame:root", "workflow", "wfexec-1", null, VariableFrameKind.Root, new Dictionary<string, ValueEnvelope> { [Key] = value });
+
+    // The digest a version-0 variable gets: what a frame computes once for the stored value.
+    private static string Digest(ValueEnvelope value) =>
+        new VariableFrameState("frame:digest", "workflow", "wfexec-digest", null, VariableFrameKind.Root,
+            new Dictionary<string, ValueEnvelope> { ["value"] = value }).CurrentDigestOf("value");
 
     private static ValueEnvelope Int(int value) =>
         ValueEnvelope.Inline(new ValueTypeDescriptor("Int32"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);

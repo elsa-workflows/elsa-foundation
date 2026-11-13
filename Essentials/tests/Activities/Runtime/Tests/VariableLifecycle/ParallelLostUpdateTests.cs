@@ -118,6 +118,67 @@ public sealed class ParallelLostUpdateTests
         Assert.Contains("Lost update on variable 'var-count'", incident.Message, StringComparison.Ordinal);
         Assert.Contains("node-left", incident.Message, StringComparison.Ordinal);
     }
+
+    // A refused completion applies none of its captures, so the history holds only the refusal: not the blind capture
+    // the batch evaluated before it, which never applied.
+    [Fact]
+    public async Task Fault_mode_refusal_records_only_the_refused_write_and_applies_no_capture()
+    {
+        await using var harness = VariableLifecycleTestGraph.NewStaleBaseHarness(Ids);
+        var root = VariableLifecycleTestGraph.Parallel(
+            VariableLifecycleTestGraph.Increment("node-left", typeof(IncrementActivity)),
+            WithCapture(VariableLifecycleTestGraph.Increment("node-right", typeof(PairIncrementActivity), LostUpdateMode.Fault), nameof(IncrementedPair.Other), OtherKey));
+        var executable = Elsa.Activities.Testing.WorkflowExecutionHarness.NewExecutable(
+            root,
+            VariableLifecycleTestGraph.CountDeclaration(),
+            new RuntimeVariableDeclaration(OtherKey, "other", VariableLifecycleTestGraph.Int32Type, ValueProtectionPolicy.InstanceInline));
+
+        var run = await harness.RunAsync(executable, allowPendingWorkOnTerminalCompletion: true, allowAcceptedButFaulted: true);
+
+        var right = run.State("node-right");
+        Assert.Equal(ActivityExecutionStatus.Faulted, right.Status);
+        var refused = Assert.Single(right.VariableWrites!);
+        Assert.Equal(VariableLifecycleTestGraph.CountKey, refused.VariableKey);
+        Assert.Equal(VariableCommitOutcome.LostUpdateFault, refused.Outcome);
+        Assert.Equal(0, run.WorkflowState!.RootVariableFrame!.VersionOf(OtherKey).Version);
+    }
+
+    private const string OtherKey = "var-a-other";
+
+    // Adds a capture of the given result projection into another workflow variable.
+    private static ExecutableNode WithCapture(ExecutableNode node, string projection, string variableKey)
+    {
+        var template = node.OutputCaptures.Values.First();
+        var captures = node.OutputCaptures.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        captures[projection] = new RuntimeOutputCapture(
+            projection,
+            $"{Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowStateSeed.VariableValueIdPrefix}other",
+            template.Type,
+            template.Lifecycle,
+            template.Storage,
+            captureOnSuccessfulCompletion: true,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.TargetVariableReferenceKey] = variableKey,
+                [RuntimeMetadataKeys.VariableName] = "other"
+            });
+        return new ExecutableNode(
+            node.ExecutableNodeId, node.AuthoredActivityId, node.ActivityType, node.ActivityTypeVersion, node.DescriptorType,
+            node.DescriptorPayload, node.InputBindings, node.Metadata, activityContract: node.ActivityContract, outputCaptures: captures);
+    }
+}
+
+/// <summary>Two captured projections: the increment and a second value.</summary>
+public sealed record IncrementedPair([property: Output] int Value, [property: Output] int Other);
+
+/// <summary>An External leaf returning <c>Count + 1</c> and a second value.</summary>
+public sealed class PairIncrementActivity : Activity<IncrementedPair>
+{
+    [ActivityInput]
+    public int Count { get; set; }
+
+    protected override ValueTask<ActivityTransition<IncrementedPair>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new IncrementedPair(Count + 1, 7), ActivityOutcomes.Done));
 }
 
 /// <summary>An External leaf whose right-hand instance adds 2, so a stale-base write changes the value.</summary>

@@ -10388,7 +10388,6 @@ Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome.Current = 1 -> Elsa.Wor
 Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome.LostUpdateFault = 4 -> Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome
 Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome.LostUpdateWarning = 2 -> Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome
 Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome.ReturnedValue = 3 -> Elsa.Workflows.Runtime.Core.Models.VariableCommitOutcome
-Elsa.Workflows.Runtime.Core.Models.VariableCommitRule
 Elsa.Workflows.Runtime.Core.Models.VariableFrameState.CurrentDigestOf(string! variableKey) -> string!
 Elsa.Workflows.Runtime.Core.Models.VariableFrameState.VariableFrameState(string! frameId, string! scopeId, string! activationId, string? parentFrameId, Elsa.Workflows.Runtime.Core.Models.VariableFrameKind kind, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>! values, long revision = 0, Elsa.Workflows.Runtime.Core.Models.VariableFrameStatus status = Elsa.Workflows.Runtime.Core.Models.VariableFrameStatus.Active, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.VariableVersion!>? versions = null) -> void
 Elsa.Workflows.Runtime.Core.Models.VariableFrameState.VersionOf(string! variableKey) -> Elsa.Workflows.Runtime.Core.Models.VariableVersion!
@@ -10406,7 +10405,6 @@ Elsa.Workflows.Runtime.Core.Models.VariableFrameWrite.OverwrittenValue.init -> v
 Elsa.Workflows.Runtime.Core.Models.VariableFrameWrite.VariableFrameWrite(Elsa.Workflows.Runtime.Core.Models.VariableFrameState! Frame, Elsa.Workflows.Runtime.Core.Models.VariableCommitDecision! Decision, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope? OverwrittenValue) -> void
 Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet
 Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet!
-Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet.AdvanceOwnWrite(string! scopeId, string! variableKey, Elsa.Workflows.Runtime.Core.Models.VariableVersion! written) -> Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet!
 Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet.BaseFor(string! scopeId, string! variableKey) -> Elsa.Workflows.Runtime.Core.Models.VariableWriteBase?
 Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet.Entries.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry!>!
 Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet.Equals(Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet? other) -> bool
@@ -10419,7 +10417,6 @@ Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry.ToBase() -> Elsa.Workflo
 Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry.VariableKey.get -> string!
 Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry.VariableReadSetEntry(string! scopeId, string! variableKey, long version, string? digest = null) -> void
 Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry.Version.get -> long
-Elsa.Workflows.Runtime.Core.Models.VariableValueDigest
 Elsa.Workflows.Runtime.Core.Models.VariableVersion
 Elsa.Workflows.Runtime.Core.Models.VariableVersion.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.VariableVersion!
 Elsa.Workflows.Runtime.Core.Models.VariableVersion.Digest.get -> string?
@@ -10459,7 +10456,6 @@ static Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet.operator !=(Elsa.
 static Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet? left, Elsa.Workflows.Runtime.Core.Models.VariableInputReadSet? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry.operator !=(Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry? left, Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry? left, Elsa.Workflows.Runtime.Core.Models.VariableReadSetEntry? right) -> bool
-static Elsa.Workflows.Runtime.Core.Models.VariableValueDigest.Compute(Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! envelope) -> string!
 static Elsa.Workflows.Runtime.Core.Models.VariableVersion.Initial.get -> Elsa.Workflows.Runtime.Core.Models.VariableVersion!
 static Elsa.Workflows.Runtime.Core.Models.VariableVersion.operator !=(Elsa.Workflows.Runtime.Core.Models.VariableVersion? left, Elsa.Workflows.Runtime.Core.Models.VariableVersion? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableVersion.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableVersion? left, Elsa.Workflows.Runtime.Core.Models.VariableVersion? right) -> bool
@@ -10526,7 +10522,6 @@ override Elsa.Workflows.Runtime.Core.Models.VariableWriter.Equals(object? obj) -
 override Elsa.Workflows.Runtime.Core.Models.VariableWriter.GetHashCode() -> int
 override Elsa.Workflows.Runtime.Core.Models.VariableWriter.ToString() -> string!
 static Elsa.Workflows.Runtime.Core.Models.LostUpdateModes.Of(Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node) -> Elsa.Primitives.Models.LostUpdateMode
-static Elsa.Workflows.Runtime.Core.Models.VariableCommitRule.Evaluate(Elsa.Workflows.Runtime.Core.Models.VariableWriteBase? writeBase, Elsa.Workflows.Runtime.Core.Models.VariableVersion! current, string! newDigest, Elsa.Primitives.Models.LostUpdateMode mode) -> Elsa.Workflows.Runtime.Core.Models.VariableCommitDecision!
 static Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.From(Elsa.Workflows.Runtime.Core.Models.VariableFrameState! before, Elsa.Workflows.Runtime.Core.Models.VariableFrameWrite! write, string! variableKey, Elsa.Workflows.Runtime.Core.Models.VariableWriter! writer, System.DateTimeOffset occurredAt) -> Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord!
 static Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.operator !=(Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord? left, Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord.operator ==(Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord? left, Elsa.Workflows.Runtime.Core.Models.VariableWriteRecord? right) -> bool
