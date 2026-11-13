@@ -1001,3 +1001,44 @@ holds, 0 deadlocks, 1,143 resets (all fenced), takeovers 572 and 571, settled 21
 is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds, one take deadlock); with
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
+
+### 25.2 Subscribing twice and removing what is absent (M6). Run
+
+**What the contract says now.** `TurnCommit.Subscribed` and `Unsubscribed` are idempotent: a wait that is there
+already stays one wait, and removing one that is not there changes nothing; neither is a count that does not match.
+Within a turn its subscribes apply before its unsubscribes, as the in-memory store always did. The conformance
+suite's two reference cases of M6 are required, and a third case covers a commit that names a wait twice and one that
+subscribes and unsubscribes the same wait.
+
+**How each store meets it.** In memory: a set, as before. MongoDB: an upsert and a delete without a count, as before
+(it passed both cases already). EF: the change tracker writes a subscription as a row, so a wait that is there is a key
+violation (definite, which parked the instance) and an absent one removed is a count that does not match (not landed,
+which reset the partition). The EF store now:
+
+- writes each wait a batch names once, with what the batch leaves of it (`Waits`), so a batch never tracks the same
+  row twice;
+- when the batch fails with a count that does not match on a subscription, or with a definite error while it
+  subscribes something and the fence still holds, rolls back and sends the batch once more with its waits as
+  statements of their own after the `SaveChanges`: `INSERT ... ON CONFLICT DO NOTHING` (PostgreSQL, SQLite), `INSERT
+  ... WHERE NOT EXISTS` (SQL Server), `INSERT IGNORE` (MySQL), and a plain `DELETE` by key. Only the partition's
+  owner writes its instances' waits, under the fence, so nothing races the check.
+
+The common path costs nothing more: the waits are still in the one batch. The second attempt costs a commit's round
+trips plus one per wait, and only a batch that re-subscribes or removes what is absent pays it; the kernel's own
+turns do neither (M6), so a model has to.
+
+**Gates.**
+
+| Store | Fence | Before (section 24, and 25.1) | After |
+|---|---|---|---|
+| In memory | – | 56 passed, 1 skipped | 57 passed, 1 skipped |
+| SQLite | checked, batch | 54 passed, 2 reference differ (the two of M6), 1 skipped | 57 passed, 0 reference differ, 1 skipped |
+| PostgreSQL 17 | checked, batch | 54 passed, 3 reference differ | 57 passed, 1 reference differ (F8) |
+| SQL Server 2022 (RCSI) | checked, batch | 53 passed, 3 reference differ, 1 skipped | 56 passed, 1 reference differ (F8), 1 skipped |
+| MySQL 8.4 (REPEATABLE READ) | batch, checked | (ENGINES.md) | 56 passed, 1 reference differ (F8), 1 skipped |
+| MongoDB 8.0 | checked | (MONGO.md) | 58 passed |
+
+EF cost runs, SQLite and PostgreSQL (`proxy=1`), each fence: every counted and sent round trip the same as before; the
+TCP-read column of the PostgreSQL rows of 100 and 1,000 instances moved by up to three reads, the noise README
+describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (no subscription
+there is subscribed twice or removed while absent, so they do not reach the new path).
