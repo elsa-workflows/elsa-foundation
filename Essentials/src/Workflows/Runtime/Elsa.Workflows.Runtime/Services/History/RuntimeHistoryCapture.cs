@@ -359,6 +359,27 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         }
     }
 
-    private static string SourceFingerprint(RuntimeCheckpointCommit commit) => RuntimeCheckpointCommitFingerprint.Compute(
-        commit with { HistoryBatches = null });
+    private static string SourceFingerprint(RuntimeCheckpointCommit commit)
+    {
+        var native = RuntimeCheckpointCommitFingerprint.Compute(commit with { HistoryBatches = null });
+        if (commit.StateChanges.ActivityScopeCleanups.Count == 0) return native;
+        // Capture's proof must not depend on the sidecar it is proving. Bind every original cleanup
+        // inventory even when summaries/source facts are absent and legacy marker branches omit it.
+        var fields = new List<string?> { "runtime-history-cleanup-source-v1", native,
+            commit.StateChanges.ActivityScopeCleanups.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) };
+        foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups.OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+                     .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal))
+        {
+            fields.Add(cleanup.WorkflowExecutionId);
+            fields.Add(cleanup.ExecutionScopeId);
+            Add(cleanup.ActivityExecutionIds); Add(cleanup.BookmarkIds); Add(cleanup.TimerIds); Add(cleanup.SchedulerWorkItemIds);
+        }
+        return RuntimeHistoryIdentity.CreateBinding(fields);
+
+        void Add(IReadOnlyCollection<string> values)
+        {
+            fields.Add(values.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            fields.AddRange(values);
+        }
+    }
 }

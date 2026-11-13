@@ -197,19 +197,28 @@ public sealed class RuntimeHistoryCandidateTests
     }
 
     [Theory]
-    [InlineData("timers")]
-    [InlineData("work")]
-    public async Task Original_known_empty_cleanup_binds_native_resources_even_without_bookmark_candidates(string resource)
+    [InlineData("timers", "known-empty")]
+    [InlineData("work", "known-empty")]
+    [InlineData("timers", "metadata-only")]
+    [InlineData("work", "metadata-only")]
+    [InlineData("timers", "explicit-delete")]
+    [InlineData("work", "explicit-delete")]
+    public async Task Original_cleanup_binds_native_resources_for_every_accepted_summary_shape(string resource, string shape)
     {
-        using var fixture = await Fixture.Create(Policy("BookmarkRemoved"));
-        var cleanup = new ActivityScopeCleanupRequest("run", "activity", ["activity"], [], ["timer"], ["work"])
-            { HistoryBookmarks = [] };
-        var raw = Commit("empty-cleanup", "test") with
-        { StateChanges = new(null, null, [], [], [], [], [], activityScopeCleanups: [cleanup]) };
+        using var fixture = await Fixture.Create(Policy(shape == "metadata-only" ? "ActivityCancelled" : "BookmarkRemoved"));
+        var explicitDelete = shape == "explicit-delete";
+        var cleanup = new ActivityScopeCleanupRequest("run", "activity", ["activity"], explicitDelete ? ["bookmark"] : [], ["timer"], ["work"])
+            { HistoryBookmarks = shape == "known-empty" ? [] : null };
+        var bookmark = new BookmarkState("bookmark", "run", "activity", "node", "resume", "task", "hash", null, new Dictionary<string, string>(), At, null);
+        RuntimeStateChange<BookmarkState>[] changes = explicitDelete
+            ? [new("bookmark", RuntimeStateChangeOperation.Delete, bookmark, new Dictionary<string, string>())] : [];
+        var raw = Commit("cleanup-proof", "test") with
+        { StateChanges = new(null, null, [], changes, [], [], [], activityScopeCleanups: [cleanup]) };
         var captured = await fixture.Capture.EnrichAsync(raw);
-        Assert.Empty(Assert.Single(captured.HistoryBatches!).Candidates);
+        if (explicitDelete) Assert.Single(Assert.Single(captured.HistoryBatches!).Candidates);
+        else Assert.Empty(Assert.Single(captured.HistoryBatches!).Candidates);
         var altered = resource == "timers" ? cleanup with { TimerIds = ["different"] } : cleanup with { SchedulerWorkItemIds = ["different"] };
-        var changed = captured with { StateChanges = new(null, null, [], [], [], [], [], activityScopeCleanups: [altered]) };
+        var changed = captured with { StateChanges = new(null, null, [], changes, [], [], [], activityScopeCleanups: [altered]) };
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(captured), RuntimeCheckpointCommitFingerprint.Compute(changed));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(changed));
     }
