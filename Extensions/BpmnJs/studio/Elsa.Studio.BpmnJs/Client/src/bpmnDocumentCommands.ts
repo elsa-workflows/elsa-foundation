@@ -2,7 +2,7 @@ import type { BpmnBounds, BpmnDocumentAuthoring, BpmnDocumentCommand, BpmnPoint 
 import type { BpmnNativeBaseline } from "./bpmnDocumentProjection";
 import { nativeChildren, nativeGeometrySignature, nativeIndex, nativeNumber, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
 import { guardBpmnNativeCopies } from "./bpmnDocumentCopyGuard";
-import { diffBpmnNativeCommandGroup } from "./bpmnDocumentDiff";
+import { assertBpmnNativePlaneFrames, diffBpmnNativeCommandGroup } from "./bpmnDocumentDiff";
 import { nativeDiAliases, normalizeNativeDiIds } from "./bpmnDocumentDiAliases";
 import { contextualizeNativeNamespacePair, type NativeNamespaceOrigin, type NativeNamespaceSnapshot } from "./bpmnDocumentNamespaceContext";
 import { captureNativePropertyIntents, type NativePropertyIntent } from "./bpmnDocumentIntent";
@@ -190,6 +190,7 @@ export function mapBpmnNativeCommandPlan(authoring: BpmnDocumentAuthoring, basel
     ...(action.properties ? { properties: properties(action) } : {}),
     ...(action.diId ? { diId: diAliases.get(action.diId) ?? oldAliases.get(action.diId) ?? action.diId } : {}),
     ...(action.diIds ? { diIds: action.diIds.map(id => diAliases.get(id) ?? oldAliases.get(id) ?? id) } : {}) })) };
+  assertBpmnNativePlaneFrames(authoring, normalized, contextual.next);
   return { commands: mapNormalizedBpmnNativeCommandGroup(authoring, normalized, normalizedGroup,
     contextual.next), diAliases };
 }

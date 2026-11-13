@@ -108,8 +108,9 @@ describe("unenabled full-source modeled command differ", () => {
     expect(result.commands).toContainEqual(expect.objectContaining({ kind: "reparent", target: { elementId: "inner" }, before: { elementId: "gateway" } }));
   });
 
-  it("creates collaboration, participant, lane membership and participant DI around the existing process", async () => {
-    const result = await change([{ command: "canvas.updateRoot", oldElementId: "process", newElementId: "collaboration" },
+  it("defers the exact collaboration/participant/lane plane-retargeting fixture to S10c", async () => {
+    const source = owner(), original = structuredClone(source);
+    await expect(change([{ command: "canvas.updateRoot", oldElementId: "process", newElementId: "collaboration" },
       { command: "shape.create", elementId: "participant", diId: "participant-di" }, { command: "shape.create", elementId: "lane", diId: "lane-di" },
       { command: "lane.updateRefs", elementIds: ["work", "lane"] }], (document, byId) => {
       append(document.documentElement, '<b:collaboration id="collaboration"><b:participant id="participant" processRef="process"/></b:collaboration>');
@@ -118,10 +119,8 @@ describe("unenabled full-source modeled command differ", () => {
       byId.get("plane")!.setAttribute("bpmnElement", "collaboration");
       append(byId.get("plane")!, '<bpmndi:BPMNShape id="participant-di" bpmnElement="participant" isHorizontal="true"><dc:Bounds x="30" y="30" width="900" height="500"/></bpmndi:BPMNShape>');
       append(byId.get("plane")!, '<bpmndi:BPMNShape id="lane-di" bpmnElement="lane" isHorizontal="true"><dc:Bounds x="60" y="30" width="870" height="500"/></bpmndi:BPMNShape>');
-    });
-    expect(result.parsed.byId.get("participant")?.getAttribute("processRef")).toBe("process");
-    expect(result.parsed.byId.get("lane")?.textContent).toBe("work");
-    expect(result.parsed.payload.bindings).toEqual(result.baseline.projection.owner.structure!.payload.bindings);
+    }, source)).rejects.toThrow(/S10c/);
+    expect(source).toEqual(original);
   });
 
   it("creates data references/associations, text annotations, groups and category globals", async () => {

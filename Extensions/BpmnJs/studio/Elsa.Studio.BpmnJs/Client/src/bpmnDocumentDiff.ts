@@ -43,12 +43,47 @@ function propertyMatch(name: string, property: Element) {
     || ({ label: "BPMNLabel", labelStyle: "BPMNLabelStyle", font: "Font", bounds: "Bounds" } as Record<string, string>)[name] === property.localName;
 }
 
+function nativePlaneSources(baseline: BpmnNativeBaseline, plane: Element): Set<string> {
+  const sources = new Set([...baseline.di.values()].filter(value => value.nativePlaneScopeId === plane.getAttribute("bpmnElement")).map(value => value.sourcePlaneId));
+  if (!sources.size) for (const [id, container] of baseline.projection.di)
+    if (baseline.projection.scopeDiIds.has(id) && container.elementId === plane.getAttribute("bpmnElement")) sources.add(container.sourcePlaneId);
+  return sources;
+}
+
+/** Inert S10b boundary; S10c owns destination frames and complete generated-plane provenance. */
+export function assertBpmnNativePlaneFrames(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, nextXml: string, fullDiff = false): void {
+  const ns = authoring.bpmnNamespaces, before = nativeXml(baseline.xml), next = nativeXml(nextXml), oldIndex = nativeIndex(before);
+  const planes = [...before.getElementsByTagNameNS(ns.diagram, "BPMNPlane")];
+  const key = (plane: Element) => `${plane.getAttribute("id") ? `id:${plane.getAttribute("id")}` : `diagram:${plane.parentElement?.getAttribute("id") ?? ""}`}|scope:${plane.getAttribute("bpmnElement")}`;
+  const authored = new Set([...nativeXml(baseline.projection.xml).getElementsByTagNameNS(ns.diagram, "BPMNPlane")].filter(plane => plane.hasAttribute("id")).map(key));
+  for (const plane of [...next.getElementsByTagNameNS(ns.diagram, "BPMNPlane")]) {
+    const old = oldIndex.get(plane.getAttribute("id") ?? "");
+    if (old?.namespaceURI === ns.diagram && old.localName === "BPMNPlane" && key(old) !== key(plane))
+      nativeRefuse("S10c is required before a native plane identity/scope can change");
+  }
+  for (const entry of [...next.getElementsByTagNameNS(ns.diagram, "BPMNShape"), ...next.getElementsByTagNameNS(ns.diagram, "BPMNEdge")]) {
+    const destination = entry.parentElement;
+    if (destination?.namespaceURI !== ns.diagram || destination.localName !== "BPMNPlane") nativeRefuse("S10c is required for an unestablished native plane");
+    const old = oldIndex.get(entry.getAttribute("id") ?? "");
+    if (old) {
+      if (!old.parentElement || key(old.parentElement) !== key(destination)) nativeRefuse("S10c is required before native DI can change planes");
+    } else if (!authored.has(key(destination))) {
+      const previous = planes.filter(plane => key(plane) === key(destination));
+      if (previous.length !== 1 || ![...previous[0].children].some(child => baseline.di.has(child.getAttribute("id") ?? "")))
+        nativeRefuse("S10c is required for an empty or unestablished generated destination frame");
+    }
+  }
+  if (fullDiff) for (const plane of planes) if (!authored.has(key(plane)) && nativePlaneSources(baseline, plane).size !== 1)
+    nativeRefuse("S10c is required for unresolved generated-plane provenance");
+}
+
 /**
  * Reconcile modeled changes through granular source operations. B and N are transient native trees;
  * the retained raw tree supplies every existing node, namespace context and omitted property.
  */
 export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, baseline: BpmnNativeBaseline, group: NativeCommandGroup, nextXml: string,
   geometry: (group: NativeCommandGroup, xml: string) => readonly BpmnDocumentCommand[]): readonly BpmnDocumentCommand[] {
+  assertBpmnNativePlaneFrames(authoring, baseline, nextXml, true);
   const ns = authoring.bpmnNamespaces, standard = new Set<string>(Object.values(ns));
   const before = nativeXml(baseline.xml), next = nativeXml(nextXml), oldIndex = nativeIndex(before), newIndex = nativeIndex(next);
   if (!group.actions.length || group.actions.some(action => !nativeModelingCommands.has(action.command))) nativeRefuse("unmapped native command family");
@@ -260,9 +295,7 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
     let source = id ? rawIndex.get(id) : undefined;
     if (element === modeled.documentElement) source = raw.documentElement;
     if (!source && element.namespaceURI === ns.diagram && element.localName === "BPMNPlane") {
-      const candidates = new Set([...baseline.di.values()].filter(value => value.nativePlaneScopeId === element.getAttribute("bpmnElement")).map(value => value.sourcePlaneId));
-      if (!candidates.size) for (const [id, container] of baseline.projection.di)
-        if (baseline.projection.scopeDiIds.has(id) && container.elementId === element.getAttribute("bpmnElement")) candidates.add(container.sourcePlaneId);
+      const candidates = nativePlaneSources(baseline, element);
       if (candidates.size > 1) nativeRefuse("generated native plane has ambiguous canonical provenance");
       if (candidates.size === 1) source = rawIndex.get([...candidates][0]);
     }
