@@ -1,5 +1,7 @@
 # Findings
 
+Commit hashes cited below are in the prototype's history, kept at the tag `prototype/kernel-model-history`.
+
 **Names.** Sections 1 to 23 use the names the code had when they were written: an instance's *step* (`IStep`,
 `StepAsync`, `Step.cs`, a step commit) is a **turn** (`ITurn`, `TurnAsync`), and off-step work, a *run* (`IRun`,
 `Run`, `CancelRun`, `RunFinished`, `kernel.run`, the `runs` column), is a **background job** (`IJob`, `StartJob`,
@@ -858,7 +860,7 @@ boundary and before its flush, as the loop's `Dying` checks did before. During f
 pieces of a pass (poll, load, turn, flush, beat, meet) as separate seeded actions. The EF, MongoDB, conformance and
 native hosts activate through `DurableHost` and drain with `RunAsync` where they called the pieces by hand.
 
-Size: `src/Kernel` was 1,758 lines; the three projects are 279, 1,675 and 281 (2,235). The difference is the seam's
+Size: `src/Kernel` was 1,758 lines; the three projects are 279, 1,680 and 281 (2,240). The difference is the seam's
 interfaces, `PartitionRuntime`, `DurableTurn` and their comments.
 
 ### Checked against the brief (by reading)
@@ -919,7 +921,7 @@ differences are the renamed words ("step" to "turn", "off-step work" to "a backg
 | Native smoke | `$NAT smoke` | 31 of 31 ok | the same |
 | Native cost, SQLite | `$NAT cost sqlite` | every row ok; 26 instances, nothing left | the same, row for row |
 | Native cost, PostgreSQL | `$NAT cost postgres "$PG;Database=kernel_native"` | every row ok | the same, row for row |
-| EF cost, SQLite | `$EFR x cost sqlite "Data Source=.out/cost.db"`, and with `fence=batch` | DESIGN.md's SQLite column | identical output |
+| EF cost, SQLite | `mkdir -p .out`, then `$EFR x cost sqlite "Data Source=.out/cost.db"`, and with `fence=batch` | DESIGN.md's SQLite column | identical output |
 | EF cost, PostgreSQL | `$EFR x cost postgres "$PG;Database=kernel_cost" proxy=1`, and with `fence=batch` | DESIGN.md's PostgreSQL column, counted and sent | the same counted and sent, every row; see below for one TCP count |
 
 **One cell moved, and it is noise.** In the first runs, "1,000 balanced instances started at once" with the fence in
