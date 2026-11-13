@@ -1,6 +1,7 @@
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, redirect_stdout
 import copy
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -187,6 +188,31 @@ class VerdictTests(unittest.TestCase):
             with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('live process')), \
                  patch.object(acceptance.subprocess, 'check_output', return_value=f'{os.getuid()} 44 S\n'):
                 with self.assertRaises(PermissionError): acceptance.stop_group(process)
+
+    def test_command_progress_retains_exit_status_without_private_arguments(self):
+        for exit_code in (0, 7):
+            with self.subTest(exit_code=exit_code), \
+                 patch.object(acceptance.subprocess, 'Popen') as popen, \
+                 patch.object(acceptance, 'stop_group') as stop:
+                popen.return_value.wait.return_value = exit_code
+                captured = io.StringIO()
+                args = ['runner', '--password', 'private-argument-marker']
+                with redirect_stdout(captured):
+                    if exit_code:
+                        with self.assertRaises(subprocess.CalledProcessError) as failure:
+                            acceptance.command(args, self.root / 'stage.log', env={'TOKEN': 'private-env-marker'})
+                        self.assertEqual(exit_code, failure.exception.returncode)
+                    else:
+                        acceptance.command(args, self.root / 'stage.log', env={'TOKEN': 'private-env-marker'})
+                events = [json.loads(line) for line in captured.getvalue().splitlines()]
+                self.assertEqual(2, len(events))
+                self.assertEqual({'event': 'ux-command-started', 'log': 'stage.log'}, events[0])
+                self.assertEqual('ux-command-finished', events[1]['event'])
+                self.assertEqual(exit_code, events[1]['exitCode'])
+                self.assertGreaterEqual(events[1]['elapsedSeconds'], 0)
+                self.assertNotIn('private-', captured.getvalue())
+                self.assertNotIn(str(self.root), captured.getvalue())
+                stop.assert_called_once_with(popen.return_value)
 
     def test_command_interrupt_stops_its_entire_group(self):
         with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.os, 'killpg') as kill:

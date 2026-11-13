@@ -156,10 +156,16 @@ def stop_group(process, *, graceful_timeout=15):
 
 
 def command(args, log, *, cwd=ROOT, env=None):
+    # Keep stage timing in the Actions log even if the outer job is interrupted.
+    # Emit only the log basename: arguments/environment may contain private fixture values.
+    started = time.monotonic()
+    print(json.dumps({'event': 'ux-command-started', 'log': log.name}), flush=True)
     with log.open('w') as output:
         process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             result = process.wait()
+            print(json.dumps({'event': 'ux-command-finished', 'log': log.name,
+                              'exitCode': result, 'elapsedSeconds': round(time.monotonic() - started, 3)}), flush=True)
             if result:
                 raise subprocess.CalledProcessError(result, args)
         finally:
