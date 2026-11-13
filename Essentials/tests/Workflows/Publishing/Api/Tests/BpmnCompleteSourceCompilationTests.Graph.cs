@@ -316,7 +316,8 @@ public sealed partial class BpmnCompleteSourceCompilationTests
         private readonly ActivityTemplatePlacer _placer;
         private readonly ActivityDefinition _definition = new() { Id = "graph-definition", ActivityTypeKey = "Test.CompleteSource", Category = "BPMN" };
 
-        internal GraphFixture(bool graphClaimingProcess = false, bool badDescriptorSchema = false, IExecutableStructureNormalizer? normalizer = null)
+        internal GraphFixture(bool graphClaimingProcess = false, bool badDescriptorSchema = false, IExecutableStructureNormalizer? normalizer = null,
+            bool memberReads = false)
         {
             var registry = TestWellKnownTypeRegistry.Create();
             registry.RegisterType(typeof(BpmnProcess), TypeAliasConvention.CanonicalAlias(typeof(BpmnProcess)));
@@ -369,37 +370,39 @@ public sealed partial class BpmnCompleteSourceCompilationTests
                 new ActivityTemplateProviderCompilerRegistry([provider]), new ActivityTemplateDependencyDiscovererRegistry([provider]),
                 publicationStore, versions, templateReader,
                 new AcceptAllActivityTemplateAdmissionPolicy(), TimeProvider.System, [provider],
-                TestCompiler.SourceAuthority(versions, structures), structures,
+                TestCompiler.SourceAuthority(versions, structures, memberReads), structures,
                 _scope.ServiceProvider.GetRequiredService<IExecutableStructureNormalizer>());
             _placer = new(publicationStore, templateReader, new SourceReferences(publications.Select(Reference).ToArray()),
                 new Sha256ActivityPlacementHasher(), structures, inputs, outputs);
         }
 
-        internal ValueTask<ActivityTemplateCompilerResult> Compile(Elsa.Workflows.Design.Core.Models.ActivityNode root)
+        internal ValueTask<ActivityTemplateCompilerResult> Compile(Elsa.Workflows.Design.Core.Models.ActivityNode root,
+            IReadOnlyList<ActivityInputContract>? boundaryInputs = null)
         {
             var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
             {
                 rootActivity = root, variables = Array.Empty<object>(), outputMappings = Array.Empty<object>()
             }, Web));
             var candidate = new ActivityTemplateCandidate("ActivityDraft", "graph-draft", 1,
-                new("1", [], [], [new("done", "Done", true)]), manifest);
+                new("1", boundaryInputs ?? [], [], [new("done", "Done", true)]), manifest);
             return _compiler.CompileAsync(new(_definition, candidate, "graph-version", "1.0.0", 0));
         }
 
-        internal ValueTask<ActivityTemplatePlacement> Place(ExecutableActivityTemplate template)
+        internal ValueTask<ActivityTemplatePlacement> Place(ExecutableActivityTemplate template,
+            IReadOnlyList<ActivityInputContract>? boundaryInputs = null, IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null)
         {
             var publication = new ActivityDefinitionVersionPublication
             {
                 DefinitionId = _definition.Id, DefinitionVersionId = "graph-version", Version = "1.0.0", ActivityTypeKey = _definition.ActivityTypeKey,
                 TemplateId = template.TemplateId, TemplateHash = template.TemplateHash, SourceReferenceId = "source:graph-version",
-                Contract = new("1", [], [], [new("done", "Done", true)]),
+                Contract = new("1", boundaryInputs ?? [], [], [new("done", "Done", true)]),
                 Provider = new(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new { }, Web)),
                 ProviderFingerprint = "graph-fixture", RuntimeRequirements = [], PublishedAt = DateTimeOffset.UnixEpoch,
                 Lifecycle = ActivityDefinitionVersionLifecycle.Active
             };
             return _placer.PlaceAsync(new(publication, template, Reference(publication),
                 new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]), publication.ActivityTypeKey,
-                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
+                inputBindings ?? new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>()));
         }
         public void Dispose() { _scope.Dispose(); _services.Dispose(); }
     }

@@ -11,6 +11,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Attributes;
@@ -64,7 +65,8 @@ public sealed class ExecutableNodeCompiler(
             activityRows,
             placedActivities ?? new Dictionary<string, ExecutableNode>(),
             workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
-            workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? []);
+            // A fresh copy per compile: the declared-input index is cached against this exact collection.
+            workflowInputs?.ToArray() ?? []);
 
     internal ExecutableNode CompileRoot(
         ActivityNode rootActivity,
@@ -75,13 +77,15 @@ public sealed class ExecutableNodeCompiler(
         IEnumerable<InputDefinition>? workflowInputs,
         ActivityStructureCompilationContext context)
     {
+        // Match the public entry point: one declared-input snapshot/index for this compile and all its children.
+        var declaredInputs = workflowInputs?.ToArray() ?? [];
         // Validate complete authored content before a placed reusable can replace its node.
         // The cache also keeps each activity-owned lowering to one invocation.
         var structures = projection.Nodes.ToDictionary(node => node.NodeId,
             node => activityStructureService.CompileExecutableStructure(node, context), StringComparer.Ordinal);
         return CompileNode(rootActivity, projection, activityRows, placedActivities,
             workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
-            workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? [],
+            declaredInputs,
             compiledStructures: structures);
     }
 
@@ -372,13 +376,17 @@ public sealed class ExecutableNodeCompiler(
 
     // A workflow's request is keyed by each declared input's name, so an authored Input read of a declared input's
     // reference key is the request read of that input's name. Anything else is left for the analysis to refuse.
-    private static ArgumentState[] LowerWorkflowInputReads(ArgumentState[] states, IReadOnlyCollection<InputDefinition> workflowInputs) =>
-        workflowInputs.Count == 0
-            ? states
-            : states.Select(state => InputReadLowering.Lower(state, referenceKey =>
-                workflowInputs.Where(input => StringComparer.Ordinal.Equals(input.ReferenceKey, referenceKey)).Take(2).ToArray() is [var input]
-                    ? input.Name
-                    : null)).ToArray();
+    // The index is the data selection analysis's own, built once for the declared inputs of the one compile they belong to.
+    private static ArgumentState[] LowerWorkflowInputReads(ArgumentState[] states, IReadOnlyCollection<InputDefinition> workflowInputs)
+    {
+        if (workflowInputs.Count == 0)
+            return states;
+        var index = DeclaredInputIndexes.GetValue(workflowInputs, inputs => new DeclaredInputIndex(inputs));
+        return states.Select(state => InputReadLowering.Lower(state, referenceKey =>
+            index.TryFind(referenceKey, out var input) ? input.Name : null)).ToArray();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyCollection<InputDefinition>, DeclaredInputIndex> DeclaredInputIndexes = new();
 
     private ExecutableNode CompileIntrinsicNode(
         ActivityNode activity,
@@ -508,7 +516,7 @@ public sealed class ExecutableNodeCompiler(
     {
         // A member read has no static source contract here (a result member's is planned by the linker, a variable
         // member's is never known): the intrinsic validates the selected member against its destination when it reads it.
-        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember)
+        if (binding.Source is RuntimeInputBindingSource.ActivityResultMember or RuntimeInputBindingSource.VariableMember or RuntimeInputBindingSource.WorkflowRequestMember)
             return binding;
         if (binding.Selection is not null)
             throw PublishedMemberReadDiagnostics.Unsupported(nodeId, binding);

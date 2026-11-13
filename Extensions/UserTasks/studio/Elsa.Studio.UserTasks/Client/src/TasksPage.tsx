@@ -6,7 +6,7 @@ import { SkeletonRows, StudioButton, StudioCollectionFooter, StudioCollectionToo
 import { FormsPage } from "./FormsPage";
 import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
-import { useTaskPeople } from "./taskPeople";
+import { taskAssignment } from "./taskPeople";
 import { readTaskBrowseLocation, replaceTaskBrowseLocation, taskDetailPath } from "./taskNavigation";
 
 export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigate?(path: string): void }) {
@@ -15,7 +15,6 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
   const [identity, setIdentity] = useState<TaskActor>(); const [page, setPage] = useState<TaskPage>();
   const [error, setError] = useState(""); const [loading, setLoading] = useState(true);
   const [, renderLocation] = useState(0); const focusHandled = useRef<string | null>(null);
-  const person = useTaskPeople(api, identity);
   const sequence = useRef(0); const root = useRef<HTMLDivElement>(null);
   useEffect(() => { const update = () => renderLocation(value => value + 1); window.addEventListener("popstate", update); return () => window.removeEventListener("popstate", update); }, []);
   const browse = { view, search, cursor };
@@ -72,7 +71,7 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
                   replaceTaskBrowseLocation(browse, task.id);
                   if (navigate) { event.preventDefault(); navigate(path); }
                 }}>{task.title}</a></td>
-                <td data-label="Status"><TaskStatus status={task.status} /></td><td data-label="Assignment">{person(task.claimantId ?? task.assigneeId ?? task.groupId) || "Unassigned"}</td>
+                <td data-label="Status"><TaskStatus status={task.status} /></td><td data-label="Assignment">{taskAssignment(identity, task) || "Unassigned"}</td>
               </tr>)}</tbody></table> : null}
         </StudioTableContainer>
         {!loading && !error && !denied && page && <StudioCollectionFooter>

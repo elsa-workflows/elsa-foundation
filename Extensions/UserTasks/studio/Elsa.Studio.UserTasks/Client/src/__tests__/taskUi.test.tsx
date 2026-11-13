@@ -636,21 +636,24 @@ it("withdraws the response view when tab-return access revalidation denies readi
 
 describe("inbox and form polish (#4068)", () => {
   const manager: TaskActor = { ...identity, canManage: true };
-  const people = { users: [{ id: "bob", name: "Bob Builder" }], groups: [{ id: "finance", name: "Finance team" }], moreUsers: false, moreGroups: false };
-  it("names assignees instead of showing user IDs, and labels each cell for the stacked narrow layout", async () => {
-    const items = [{ ...task(), id: "a", title: "Mine" }, { ...task(), id: "b", title: "Bob's", assigneeId: "bob" }, { ...task(), id: "c", title: "Queue", assigneeId: undefined, groupId: "finance" }, { ...task(), id: "d", title: "Stranger", assigneeId: "carol" }];
-    const get = vi.fn(async (path: string) => path.includes("identity") ? manager : path.includes("targets") ? people : { items });
+  const readsDirectory = (get: ReturnType<typeof vi.fn>) => get.mock.calls.some(([path]) => String(path).includes("targets"));
+  it("names assignees from the task response for a reader who cannot read the directory, and labels each cell for the stacked narrow layout (#4198)", async () => {
+    const items = [{ ...task(), id: "a", title: "Mine", assigneeName: "Alice" }, { ...task(), id: "b", title: "Bob's", assigneeId: "bob", assigneeName: "Bob Builder" },
+      { ...task(), id: "c", title: "Queue", assigneeId: undefined, groupId: "finance", groupName: "Finance team" }, { ...task(), id: "d", title: "Claimed", assigneeId: undefined, groupId: "finance", groupName: "Finance team", claimantId: "dana", claimantName: "Dana" },
+      { ...task(), id: "e", title: "Stranger", assigneeId: "carol", assigneeName: null }];
+    const get = vi.fn(async (path: string) => path.includes("identity") ? identity : { items });
     await act(async () => root.render(<TasksPage api={api(get)} />));
     await vi.waitFor(() => expect(container.textContent).toContain("Bob Builder"));
     const assignments = [...container.querySelectorAll("td[data-label='Assignment']")].map(cell => cell.textContent);
-    expect(assignments).toEqual(["You", "Bob Builder", "Finance team", "carol"]);
+    expect(assignments).toEqual(["You", "Bob Builder", "Finance team", "Dana", "carol"]);
     expect([...container.querySelector("tbody tr")!.querySelectorAll("td")].map(cell => cell.dataset.label)).toEqual(["Task", "Status", "Assignment"]);
+    expect(readsDirectory(get)).toBe(false);
   });
-  it("keeps IDs readable without reading the manager-only directory", async () => {
-    const get = vi.fn(async (path: string) => path.includes("identity") ? identity : { items: [{ ...task(), assigneeId: "bob" }] });
+  it("keeps IDs readable without reading the directory, even for a manager", async () => {
+    const get = vi.fn(async (path: string) => path.includes("identity") ? manager : { items: [{ ...task(), assigneeId: "bob" }] });
     await act(async () => root.render(<TasksPage api={api(get)} />));
     await vi.waitFor(() => expect(container.querySelector("td[data-label='Assignment']")?.textContent).toBe("bob"));
-    expect(get.mock.calls.some(([path]) => String(path).includes("targets"))).toBe(false);
+    expect(readsDirectory(get)).toBe(false);
   });
   it("offers Clear search once: beside results, or in the empty state but not both", async () => {
     window.history.replaceState(null, "", "/user-tasks?search=nothing");
@@ -667,9 +670,9 @@ describe("inbox and form polish (#4068)", () => {
   it("shows a finished response as a record with names in its history", async () => {
     const completed: TaskItem = { ...task(), status: "Completed", form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "multiline", required: true, readOnly: false, help: "" }] },
       decision: { response: { action: "Approve", data: { Note: "Done" } }, actorId: "alice" },
-      history: [{ operation: "created", actorId: "workflow", at: "2026-11-02T12:00:00Z" }, { operation: "completed", action: "Approve", actorId: "alice", at: "2026-11-02T12:01:00Z" }, { operation: "reassigned", actorId: "bob", at: "2026-11-02T12:02:00Z" }] };
-    const get = vi.fn(async (path: string) => path.includes("targets") ? people : completed);
-    await act(async () => root.render(<TaskDetail api={api(get)} id="task" identity={manager} />));
+      history: [{ operation: "created", actorId: "workflow", at: "2026-11-02T12:00:00Z" }, { operation: "completed", action: "Approve", actorId: "alice", actorName: "Alice", at: "2026-11-02T12:01:00Z" }, { operation: "reassigned", actorId: "bob", actorName: "Bob Builder", at: "2026-11-02T12:02:00Z" }, { operation: "released", actorId: "erin", actorName: null, at: "2026-11-02T12:03:00Z" }] };
+    const get = vi.fn().mockResolvedValue(completed);
+    await act(async () => root.render(<TaskDetail api={api(get)} id="task" identity={identity} />));
     await vi.waitFor(() => expect(container.textContent).toContain("Bob Builder"));
     const note = container.querySelector("textarea")!;
     expect(note.disabled).toBe(true); expect(note.value).toBe("Done");
@@ -677,7 +680,8 @@ describe("inbox and form polish (#4068)", () => {
     expect(container.querySelector(`label[for="${note.id}"]`)!.textContent).toBe("Note");
     expect(note.hasAttribute("aria-describedby")).toBe(false);
     expect(container.querySelector(".user-task-actions")).toBeNull();
-    expect([...container.querySelectorAll("details li")].map(item => item.textContent!.split(" · ").slice(0, -1).join(" · "))).toEqual(["created · workflow", "completed · Approve · You", "reassigned · Bob Builder"]);
+    expect([...container.querySelectorAll("details li")].map(item => item.textContent!.split(" · ").slice(0, -1).join(" · "))).toEqual(["created · workflow", "completed · Approve · You", "reassigned · Bob Builder", "released · erin"]);
+    expect(readsDirectory(get)).toBe(false);
   });
   it("keeps the required marker while the response can still be filled in", async () => {
     const open: TaskItem = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "multiline", required: true, readOnly: false }] } };
