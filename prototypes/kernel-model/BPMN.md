@@ -186,7 +186,7 @@ Results (run, at the final head):
 | Run | Seeds | Result |
 |---|---|---|
 | `--bpmn`, 300 actions | 200,000 | 0 failed; 1,383,541 finished instances matched a run without faults |
-| `--bpmn`, 1,000 actions | 20,000 | 0 failed; 450,431 matched; 9 innocent instances parked at the threshold (the kernel's rule 3; the checks skip them) |
+| `--bpmn`, 1,000 actions | 20,000 | 0 failed; 450,431 matched; 9 innocent instances parked at the threshold (the kernel's rule 3; the checks skip rows the kernel parked) |
 | `--bpmn --native`, 1,000 actions | 20,000 | 0 failed; 273,118 BPMN and 410,025 native instances matched; 12 parked; one BPMN job parked by the kernel |
 
 Messages for a catch were published before it subscribed 559,386 times in the first run and to a waiting catch
@@ -244,7 +244,8 @@ Frictions, none of them a contract change; whether any becomes one is the owner'
 - **F-B5. A terminate from outside leaves the model's state as it was.** The workflow instance handles
   `kernel.terminate` without the model: the jobs are cancelled, the waits deleted, the children terminated, and the row
   is Cancelled, but its state still shows tokens waiting at their tasks and units in the ledger, and a pending timer's
-  message still arrives and is dropped (a poll and a commit, as F-N4 reasoned for native). A viewer reading the
+  message still arrives and is dropped (reasoned: one commit; a timer to self comes from memory, and dropping a message at
+  an ended instance cost one commit and no poll in the call-terminate trace of section 4). A viewer reading the
   tokens would show a cancelled instance as waiting. Traced; the cost is reasoned; the simulation's G5 checks what the
   kernel cancels.
 - **F-B6. Signals to the parent are the model's own messages.** An escalation from a called child goes to the parent
@@ -269,8 +270,8 @@ nothing was built. Traced in both engines' code (BPMN paths under the library's 
 | The token | `BpmnToken`: id, element, arrival flow, parent, status, work handle, iteration key, stopped handle | `ExecutionPath` and a separate `FlowchartArrival`, with a scope id and the last outcomes | Same idea, different shape |
 | Status | Active, AwaitingChild, WaitingAtJoin, Consumed, Canceled | Path: Active, Waiting, Completed, Canceled, Faulted; arrival: Arrived, Consumed, Dead | Different |
 | Which nodes join | Parallel and inclusive gateways with more than one inbound flow; any other node merges exclusively | Any node with more than one inbound connection but a Merge | Different |
-| Parallel readiness | Every inbound flow id has an arrival (`BpmnTokenCoordinator.IsJoinReady`) | Dead-path join (the default): every inbound source has answered, live or dead, and one is live | Different rules |
-| Inclusive readiness | Wait while a live token of the same iteration can reach an un-arrived flow's source, over the whole graph, loop-back flows included (`AnyLivePositionCanReach`, `BpmnGraph.CanReach`) | Reachability join: wait while an active child in the same scope can reach an un-arrived source, forward only (loop-closing edges skipped); stuck joins are released once nothing is active | Same idea, different rules |
+| Parallel readiness | Every inbound flow id has an arrival (`BpmnTokenCoordinator.IsJoinReady`) | One configured policy decides every implicit join, whatever its kind (`FlowchartOptions.JoinPolicyKind`). The default, the dead-path join, waits until every inbound source has answered, live or dead, with no graph walk | Different rules |
+| Inclusive readiness | Wait while a live token of the same iteration can reach an un-arrived flow's source, over the whole graph, loop-back flows included (`AnyLivePositionCanReach`, `BpmnGraph.CanReach`) | The same configured policy: by default dead arrivals, no search. The older reachability join, kept for the conformance corpus and as a fallback setting, waits while an active child in the same scope can reach an un-arrived source, forward only (loop-closing edges skipped). Under either, stuck joins are released once nothing is active | BPMN's rule matches Elsa's non-default policy in idea, not in rules |
 | Join key, rounds | (element, iteration key); the key is minted on a loop-back flow | (node, scope, iteration key); the key comes from a loop-iteration scope | Same idea, different source |
 | Surplus arrivals | One arrival per flow per firing; the rest wait for the next firing | All pending arrivals are consumed | Different |
 | Loop-closing edges | Depth-first back-edge set by flow id (`BpmnGraph`) | The same algorithm by node pair; `FlowchartGraph` says it mirrors `BpmnGraph.ComputeBackwardFlowIds` | The same thing |
@@ -286,9 +287,10 @@ finishes (run: `smoke` runs both). The fault needs only the flow back to exist: 
 the join still deadlocks (run, in a probe outside the repository: the same process with the flow back conditioned on
 `count < 0`), since the search reads the graph, not the flows taken. Reasoned, from the specification's wording: BPMN
 2.0's rule for the inclusive join leaves out a path that passes a node with a path to an arrived flow (here the
-inclusive split), so the join should fire. Elsa's Flowchart asks the same question forward only, within the iteration
-(`FlowchartGraph`, `CanReachForward`), which leaves out the path round the loop; whether it fires on this exact process
-was not run. `smoke` expects the fault, so an upgrade that fixes it shows. An
+inclusive split), so the join should fire. Elsa's Flowchart decides differently (reasoned, not run on this process):
+its default dead-path join searches nothing and would see the untaken branch's dead arrival; its older reachability
+join searches forward only within the iteration (`FlowchartGraph.CanReachForward`), leaving out the path round the
+loop. `smoke` expects the fault, so an upgrade that fixes it shows. An
 upstream issue in valence-works/bpmn would be the way to report it; none was filed.
 
 **Verdict: a neutral token package is not real enough to extract.** What is truly the same is generic graph and id
