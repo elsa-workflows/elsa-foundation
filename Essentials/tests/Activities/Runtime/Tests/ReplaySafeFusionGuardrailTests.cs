@@ -151,9 +151,11 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.Equal(0, disabled.FusedSpans);
     }
 
-    // Shape (e): an External (unmarked) hot loop. Fusion must NOT engage; the two runs are trivially identical.
+    // Shape (e): an External (unmarked) hot loop. Since spec 1221 (ADR 0092 decision 10) an External leaf fuses its
+    // Schedule → Start → Invoke stages too, so no other branch runs between its input read and its commit. Its
+    // attempt claim still flushes immediately inside the span, so the committed documents stay byte-identical.
     [Fact]
-    public async Task ExternalHotLoop_EnabledVersusDisabled_IsByteIdentical_AndNeverFuses()
+    public async Task ExternalHotLoop_EnabledVersusDisabled_IsByteIdentical_AndLeavesFuse()
     {
         var enabled = await DriveAsync(BuildExternalHotLoop, fusionEnabled: true);
         var disabled = await DriveAsync(BuildExternalHotLoop, fusionEnabled: false);
@@ -163,11 +165,8 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.Equal(disabled.CommitFingerprint, enabled.CommitFingerprint);
         Assert.Equal(disabled.StateFingerprint, enabled.StateFingerprint);
 
-        // External is the fail-safe default: none of the External leaves fuse (at most the ReplaySafe Flowchart
-        // composite that hosts them does — its child-scheduling continuation still flows via the overlay). If any
-        // External leaf had fused, the count would reach the loop length; it must stay strictly below it.
-        Assert.True(enabled.FusedSpans < HotLoopLength,
-            $"External leaves must not fuse, but saw {enabled.FusedSpans} fused spans for {HotLoopLength} leaves.");
+        Assert.True(enabled.FusedSpans >= HotLoopLength,
+            $"Expected every External leaf to fuse, saw {enabled.FusedSpans} fused spans for {HotLoopLength} leaves.");
         Assert.Equal(0, disabled.FusedSpans);
     }
 
