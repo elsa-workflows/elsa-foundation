@@ -367,7 +367,7 @@ ol.stmts code { font-size: 12.5px; }
       <dt>Not</dt><dd>Persistence, placement.</dd>
       <dt>Swap</dt><dd>Extended by adding actor types and execution models.</dd></dl></div>
     <div class="card st" data-pick-card="st"><h4>Persistence provider</h4>
-      <dl><dt>Owns</dt><dd>Nine guarantees: atomic commit, a fence inside it, conditional take, create-only inserts, an order key, reads in key order, reads by key, its own clock, failures told apart.</dd>
+      <dl><dt>Owns</dt><dd>Nine core guarantees: atomic commit, a fence inside it, conditional take, create-only inserts, an order key, reads in key order, reads by key, its own clock, failures told apart. The prototype's store also carries the node heartbeat, start subscriptions, held messages, delete and the projector's rows, each tested by the conformance suite.</dd>
       <dt>Not</dt><dd>Any SQL in the kernel.</dd>
       <dt>Swap</dt><dd>Any store that passes the conformance suite.</dd></dl></div>
   </div>
@@ -447,10 +447,10 @@ ol.stmts code { font-size: 12.5px; }
       <rect class="b2" x="36" y="142" width="406" height="36" rx="6"/>
       <text x="239" y="165" text-anchor="middle">One committer: many instances, one transaction</text>
       <path class="edge" d="M239,178 L239,248"/>
-      <text class="el" x="250" y="212">1 fence · 1 poll · 2–3 round trips per flush</text>
+      <text class="el" x="250" y="212">1 fence · 1 poll · 2–3 round trips per flush (PostgreSQL)</text>
       <rect class="bs" x="20" y="250" width="440" height="62" rx="8"/>
       <text class="tt" x="36" y="274">partition 17: epoch 8 · position 1,204</text>
-      <text class="ts" x="36" y="294">100 instance commits cost the same round trips as one</text>
+      <text class="ts" x="36" y="294">Server engines: 100 commits cost the round trips of one</text>
 
       <text class="tt" x="500" y="24">Dropped 12 November: one grain per instance</text>
       <rect class="frame" x="500" y="40" width="440" height="180" rx="9"/>
@@ -562,7 +562,7 @@ ol.stmts code { font-size: 12.5px; }
     <li data-on="e-poll poll t-msg"><b>Poll.</b><p>A plain read: rows of the partition not seen at this epoch, not done, due within the horizon, in <code>seq</code> order. No locks and no watermark, so a row whose insert commits late is found next time.</p></li>
     <li data-on="commit e-commit t-part t-msg"><b>Mark it seen.</b><p>A message that came by poll is not acted on until a fenced commit marks it <code>seen = 8</code>. If this node dies, the next owner knows exactly which messages it was holding. Messages sent inside a partition are written as seen and skip this.</p></li>
     <li data-on="e-step inst"><b>Run the turn.</b><p>The execution model gets the state from memory and the inbox in order. It changes state, sends, subscribes, starts jobs, records journal entries and emits live output. Nothing is read from the database.</p></li>
-    <li data-on="e-tocommit commit e-commit t-part t-msg t-inst t-jour"><b>Commit.</b><p>The committer takes every finished turn of the partition: fence, instance rows, consumed messages deleted, sent messages inserted, journal rows. One transaction, 2 to 3 round trips, however many instances are in it.</p></li>
+    <li data-on="e-tocommit commit e-commit t-part t-msg t-inst t-jour"><b>Commit.</b><p>The committer takes every finished turn of the partition: fence, instance rows, consumed messages deleted, sent messages inserted, journal rows. One transaction, 2 to 3 round trips on PostgreSQL however many instances are in it; SQLite's calls grow with the rows.</p></li>
     <li data-on="e-hand hand e-emit emit e-reply caller"><b>Hand over and release.</b><p>Only after the commit lands: a message to an instance in the same partition goes over in memory, and a held HTTP response is released to the caller. A caller never sees a response for work that was then lost.</p></li>
     <li data-on="e-proj proj t-jour"><b>Project.</b><p>Later, the projector reads journal rows in position order per partition and writes the viewer's tables. The hot path never waits for it. The run view stays current by reading the journal tail past the projector (decided, not built); lists over projected rows lag it slightly.</p></li>
   </ol>
@@ -838,7 +838,7 @@ ol.stmts code { font-size: 12.5px; }
   <ol class="steps" data-set="b" hidden>
     <li data-on="client h-req route na"><b>The request arrives.</b><p>Same as before: the route table is in memory.</p></li>
     <li data-on="h-run ia na"><b>It runs inline.</b><p>The instance is placed locally and runs in the request.</p></li>
-    <li data-on="ia h-commitA db"><b>The turn commits.</b><p>The response is held until the commit of the turn that wrote it lands: 2 to 3 round trips of latency. A caller never sees a response for work that was then lost.</p></li>
+    <li data-on="ia h-commitA db"><b>The turn commits.</b><p>The response is held until the commit of the turn that wrote it lands: 2 to 3 round trips of latency on PostgreSQL. A caller never sees a response for work that was then lost.</p></li>
     <li data-on="ia h-resp client"><b>The response is released.</b><p>Writing the response does not end the workflow; the request returns and the workflow goes on. A route can opt out and respond before the commit.</p></li>
   </ol>
   <ol class="steps" data-set="c" hidden>
@@ -986,7 +986,7 @@ ol.stmts code { font-size: 12.5px; }
       <tr><td class="n">13</td><td>Persistence is abstracted: any store</td><td>No provider shortcuts in the kernel; each provider needs tuning; MongoDB needs a replica set</td><td>Store conformance suite</td></tr>
       <tr><td class="n">14</td><td>The actor runtime can be swapped</td><td>Runtimes host partitions only; one grain per instance is deferred</td><td>Ship one runtime; adapters on demand</td></tr>
       <tr><td class="n">15</td><td>A poison message cannot walk the cluster</td><td>Suspects are retried one at a time after a takeover; an innocent one is rarely parked</td><td>Threshold; trial group size</td></tr>
-      <tr><td class="n">16</td><td>No HTTP response for lost work</td><td>The response waits 2–3 round trips for its commit; a resume on another node pays a hop</td><td>Release before commit, per route</td></tr>
+      <tr><td class="n">16</td><td>No HTTP response for lost work</td><td>The response waits 2–3 round trips on PostgreSQL for its commit; a resume on another node pays a hop</td><td>Release before commit, per route</td></tr>
       <tr><td class="n">17</td><td>A clean break: the smallest, fastest design</td><td>No migration of existing runs; the native interpreter is rewritten as a model; two cores until the switch</td><td>None: accepted 11 and 12 November</td></tr>
     </tbody>
   </table></div>
@@ -1002,7 +1002,7 @@ ol.stmts code { font-size: 12.5px; }
         <li>The three layers as separate code and the <code>IActorRuntime</code> seam</li>
         <li>The Orleans reference adapter and the runtime conformance suite</li>
         <li>Deployment profiles as code; inline execution on every profile</li>
-        <li>The graph engine extracted from the Flowchart; a BPMN spike on Bpmn.Semantics; a StateMachine spike; an agent spike; a standalone jobs spike (Elsa.Jobs as a job actor type)</li>
+        <li>The graph engine extracted from the Flowchart; spikes for BPMN on Bpmn.Semantics, StateMachine, agents, standalone jobs (Elsa.Jobs as a job actor type, with the worker protocol) and ETL's fan-out pattern</li>
         <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
         <li>Streaming HTTP responses; a route mapping a client's disconnect to a cancel</li>
       </ul></div>
@@ -1064,7 +1064,7 @@ ol.stmts code { font-size: 12.5px; }
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Next: finish the three-layer restructuring, build the card decisions and the Orleans adapter, extract the graph engine, run the BPMN, StateMachine, agent and standalone-jobs spikes, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Next, before the design proposal: finish the three-layer restructuring; build the card decisions and the Orleans adapter with a runtime conformance suite; extract the graph engine; run the BPMN, StateMachine, agent, standalone-jobs (with the worker protocol) and ETL fan-out spikes; measure write volume. Then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
 </section>
 </main>
 </div>

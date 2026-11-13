@@ -234,7 +234,7 @@
   <ol class="steps" data-set="b" hidden>
     <li data-on="client h-req route na"><b>The request arrives.</b><p>Same as before: the route table is in memory.</p></li>
     <li data-on="h-run ia na"><b>It runs inline.</b><p>The instance is placed locally and runs in the request.</p></li>
-    <li data-on="ia h-commitA db"><b>The turn commits.</b><p>The response is held until the commit of the turn that wrote it lands: 2 to 3 round trips of latency. A caller never sees a response for work that was then lost.</p></li>
+    <li data-on="ia h-commitA db"><b>The turn commits.</b><p>The response is held until the commit of the turn that wrote it lands: 2 to 3 round trips of latency on PostgreSQL. A caller never sees a response for work that was then lost.</p></li>
     <li data-on="ia h-resp client"><b>The response is released.</b><p>Writing the response does not end the workflow; the request returns and the workflow goes on. A route can opt out and respond before the commit.</p></li>
   </ol>
   <ol class="steps" data-set="c" hidden>

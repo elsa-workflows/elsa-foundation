@@ -122,7 +122,7 @@
       <tr><td class="n">13</td><td>Persistence is abstracted: any store</td><td>No provider shortcuts in the kernel; each provider needs tuning; MongoDB needs a replica set</td><td>Store conformance suite</td></tr>
       <tr><td class="n">14</td><td>The actor runtime can be swapped</td><td>Runtimes host partitions only; one grain per instance is deferred</td><td>Ship one runtime; adapters on demand</td></tr>
       <tr><td class="n">15</td><td>A poison message cannot walk the cluster</td><td>Suspects are retried one at a time after a takeover; an innocent one is rarely parked</td><td>Threshold; trial group size</td></tr>
-      <tr><td class="n">16</td><td>No HTTP response for lost work</td><td>The response waits 2–3 round trips for its commit; a resume on another node pays a hop</td><td>Release before commit, per route</td></tr>
+      <tr><td class="n">16</td><td>No HTTP response for lost work</td><td>The response waits 2–3 round trips on PostgreSQL for its commit; a resume on another node pays a hop</td><td>Release before commit, per route</td></tr>
       <tr><td class="n">17</td><td>A clean break: the smallest, fastest design</td><td>No migration of existing runs; the native interpreter is rewritten as a model; two cores until the switch</td><td>None: accepted 11 and 12 November</td></tr>
     </tbody>
   </table></div>
@@ -138,7 +138,7 @@
         <li>The three layers as separate code and the <code>IActorRuntime</code> seam</li>
         <li>The Orleans reference adapter and the runtime conformance suite</li>
         <li>Deployment profiles as code; inline execution on every profile</li>
-        <li>The graph engine extracted from the Flowchart; a BPMN spike on Bpmn.Semantics; a StateMachine spike; an agent spike; a standalone jobs spike (Elsa.Jobs as a job actor type)</li>
+        <li>The graph engine extracted from the Flowchart; spikes for BPMN on Bpmn.Semantics, StateMachine, agents, standalone jobs (Elsa.Jobs as a job actor type, with the worker protocol) and ETL's fan-out pattern</li>
         <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
         <li>Streaming HTTP responses; a route mapping a client's disconnect to a cancel</li>
       </ul></div>
@@ -200,7 +200,7 @@
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Next: finish the three-layer restructuring, build the card decisions and the Orleans adapter, extract the graph engine, run the BPMN, StateMachine, agent and standalone-jobs spikes, then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Next, before the design proposal: finish the three-layer restructuring; build the card decisions and the Orleans adapter with a runtime conformance suite; extract the graph engine; run the BPMN, StateMachine, agent, standalone-jobs (with the worker protocol) and ETL fan-out spikes; measure write volume. Then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
 </section>
 </main>
 </div>
