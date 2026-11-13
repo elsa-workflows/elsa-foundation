@@ -1,9 +1,9 @@
-import { StudioPageHeader, StudioButton } from "../ui";
-import React, { useEffect, useRef, useState } from "react";
+import { StudioPageHeader, StudioButton, StudioField } from "../ui";
+import React, { useEffect, useRef, useState, useId } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
 import { defaultStudioHostId, useDialogFocus } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { SkeletonRows, StudioAlert, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   addFeed,
   defaultRetentionPolicy,
@@ -32,6 +32,7 @@ interface FeedDraft {
 }
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
+  const hostTabsBaseId = useId();
   const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
@@ -66,7 +67,11 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
           </StudioToolbarGroup>
         </StudioToolbar></>} />
 
-      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
+      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} baseId={hostTabsBaseId} ariaLabel="Hosts" />
+      {hostTabs.map((item, index) => item.id !== activeHostId ? (
+        <StudioTabPanel key={item.id} baseId={hostTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={hostTabsBaseId} index={hostTabs.findIndex(item => item.id === activeHostId)} className="modules-tab-panel">
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
       {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
@@ -95,6 +100,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       ) : (
         <SkeletonRows rows={6} label={`Loading ${activeHost.label} package feeds`} />
       )}
+      </StudioTabPanel>
     </section>
   );
 }
@@ -238,15 +244,12 @@ function PackageFeedsWorkbench({
             ) : null}
             <p>Manual cleanup only. Leave the count blank to retain every install. Active and protected versions remain retained.</p>
             <div className="modules-form">
-              <label>
-                <span>Inactive versions to keep per package</span>
-                <input
+              <StudioField label={<><span>Inactive versions to keep per package</span></>}><input
                   type="number" min="0" step="1"
                   disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy}
                   value={retentionDraft.keepNewestInactiveVersionsPerPackage ?? ""}
                   onChange={event => setRetentionDraft({ ...retentionDraft, keepNewestInactiveVersionsPerPackage: numberOrNull(event.target.value) })}
-                />
-              </label>
+                /></StudioField>
               <button type="button" className="studio-button"
                 disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy || !retentionDirty || !validRetention(retentionDraft)}
                 onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
@@ -345,22 +348,10 @@ function FeedDialog({
         </div>
 
         <form id="package-feed-form" className="modules-form" onSubmit={submit}>
-          <label>
-            <span>Name</span>
-            <input data-dialog-initial-focus aria-label="Feed name" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
-          </label>
-          <label>
-            <span>Service index</span>
-            <input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} />
-          </label>
-          <label>
-            <span>Directory path</span>
-            <input aria-label="Directory path" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} />
-          </label>
-          <label>
-            <span>Include patterns</span>
-            <textarea aria-label="Include patterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} />
-          </label>
+          <StudioField label={<><span>Name</span></>}><input data-dialog-initial-focus aria-label="Feed name" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} /></StudioField>
+          <StudioField label={<><span>Service index</span></>}><input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} /></StudioField>
+          <StudioField label={<><span>Directory path</span></>}><input aria-label="Directory path" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} /></StudioField>
+          <StudioField label={<><span>Include patterns</span></>}><textarea aria-label="Include patterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
           <label className="modules-checkbox">
             <input
               type="checkbox"
