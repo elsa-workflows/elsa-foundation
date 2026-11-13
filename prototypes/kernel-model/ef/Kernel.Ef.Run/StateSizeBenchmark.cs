@@ -12,7 +12,7 @@ internal static class StateSizeBenchmark
         catch (OverflowException) { throw new ArgumentException("a sizes value overflows its byte count"); }
     }).ToArray();
 
-    public static async Task TrialAsync(Worker owner, Tally store, Message start, int bytes,
+    public static async Task<int> TrialAsync(Worker owner, Tally store, Message start, int bytes,
         Func<Task> drain, Action measured)
     {
         var commits = store.Sum("commit landed");
@@ -34,5 +34,6 @@ internal static class StateSizeBenchmark
             if (!journal.SequenceEqual(Enumerable.Range(1, Turns).Select(i => (long)i)))
                 throw new InvalidOperationException($"size trial {row.Id}: persisted journal does not contain revisions 1 through {Turns}");
         }
+        return row.State.Length;      // the measured payload includes any configured Leveled pad
     }
 }

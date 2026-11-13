@@ -432,20 +432,20 @@ static class EngineRun
         Console.WriteLine($"{"state",10} {"chars per commit",17} {"counted per commit",19} {"ms per commit, median of 3",27}");
         foreach (var bytes in sizes)
         {
-            var (times, counted) = (new List<double>(), 0L);
+            var (times, counted, chars) = (new List<double>(), 0L, 0);
             for (var run = 0; run < 3; run++)
             {
                 counter.Reset();
                 var clock = Stopwatch.StartNew();
                 var start = new Message($"m{++n}", InstanceRef.In(0, $"blob{n}"), Kinds.Start, Start: Blob.Spec(bytes, StateSizeBenchmark.Turns));
-                await StateSizeBenchmark.TrialAsync(owner, tally, start, bytes, () => Drain(owner, poll: false), () =>
+                chars = await StateSizeBenchmark.TrialAsync(owner, tally, start, bytes, () => Drain(owner, poll: false), () =>
                 {
                     clock.Stop();
                     counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
                 });
                 times.Add(clock.Elapsed.TotalMilliseconds / StateSizeBenchmark.Turns);
             }
-            Console.WriteLine($"{bytes / 1024 + " KB",10} {Json.Write(new BlobState { Data = Blob.Letters(bytes, 0) }).Length,17} {counted / (double)StateSizeBenchmark.Turns,19:F1} {times.Order().ElementAt(1),27:F1}");
+            Console.WriteLine($"{bytes / 1024 + " KB",10} {chars,17} {counted / (double)StateSizeBenchmark.Turns,19:F1} {times.Order().ElementAt(1),27:F1}");
         }
 
         await using var check = create();

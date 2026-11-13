@@ -1098,12 +1098,14 @@ turn with a message to itself, so each of its ten commits rewrites the whole sta
 per turn).
 
 For N = 1, 10, 100 and 1,000 (`sizes=` to choose) the table prints:
-- the characters per commit (the state's JSON; on SQL Server's `nvarchar` that is two bytes each);
+- the characters per commit, from the verified persisted state's JSON, including any configured `pad=` (on SQL
+  Server's `nvarchar` that is two bytes each);
 - the counted round trips per commit, counted as the rest of the run counts them;
 - the median of three runs of the milliseconds per commit.
 
-The earlier rows of the cost run are unchanged. Its `check` line counts the twelve Blob instances (four sizes, three
-runs each) and their journal rows, which all finish.
+The final `check` line reports total instances across the cost run, unfinished instances, pending messages and the
+partition position. Each Blob trial separately verifies its persisted final row and landed commits; Full and State
+history also require the exact journal revision sequence, as described below.
 
 **Historical measurements before the per-trial acceptance checks below.** The reported round trips stayed flat as
 state grew. These tables are retained as historical evidence. The milliseconds come from one session on a machine
@@ -1135,13 +1137,16 @@ of printing a successful per-commit number. `sizes=` is validated for positive i
 multiplication before constructing the target, starting a proxy or resetting the database. This is CLI input
 validation, not a kernel state-size limit.
 
-`$EFR x size-check` runs the real in-memory Worker: ten-commit Full and Minimal positives; owner-declined start,
-accepted start with commits omitted, nine commits, and a missing persisted journal revision as negative controls;
+`$EFR x size-check` runs the real in-memory Worker: ten-commit Full and Minimal positives, including padded states;
+owner-declined start, accepted start with commits omitted, nine commits, and a missing persisted journal revision as negative controls;
 and invalid size inputs. The extracted original trial accepted all four incomplete outcomes in the red baseline.
-After the checks, all seven groups pass. Fresh SQLite cost runs at 1/10/100/1,000 KB pass with both fences (three
+After the checks, all nine groups pass. Fresh SQLite cost runs at 1/10/100/1,000 KB pass with both fences (three
 trials per size, ten commits each); their counted work remains 7.7 per commit. A Minimal-history 1 KB run also
 passes. Zero, negative, overflow and mixed invalid CLI inputs exit 2 while an existing database sentinel remains
-unchanged. Other engines were not rerun for this validation-only integration.
+unchanged. A follow-up `sizes=1 pad=1024` run originally printed 1,044 characters while SQLite held 2,077; the
+size column now uses the existing post-measurement verification read. Padded Full and Minimal runs with both
+SQLite fences report the actual 2,077-character state. Other engines were not rerun for this validation-only
+integration.
 
 **Not done in this benchmark:** values by reference (the second part of decision 10). This benchmark does not choose
 an inline threshold, retention policy or host default; "segments only if measurements show the need".

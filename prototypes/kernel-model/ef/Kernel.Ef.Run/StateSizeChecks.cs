@@ -15,11 +15,12 @@ internal static class StateSizeChecks
         {
             if (!condition) throw new InvalidOperationException(why);
         }
-        async Task Trial(bool activate, int turns, bool drain, bool rejected, History history = History.Full, bool removeJournal = false)
+        async Task Trial(bool activate, int turns, bool drain, bool rejected, History history = History.Full, bool removeJournal = false, int pad = 0)
         {
             var memory = new InMemoryStore(1, () => 0);
             var store = new Tally(memory);
-            var owner = new Worker("size-check", 0, store, new WorkflowInstance([new Blob()]));
+            var type = new Leveled(null, pad).Over(new WorkflowInstance([new Blob()]));
+            var owner = new Worker("size-check", 0, store, type);
             if (activate)
             {
                 await new DurableHost([owner]).ActivateAsync(0);
@@ -35,9 +36,10 @@ internal static class StateSizeChecks
                     for (var idle = 0; idle < 2;) idle = await owner.RunAsync() == TimeSpan.Zero ? 0 : idle + 1;
             }
             var refused = false;
+            var chars = 0;
             try
             {
-                await StateSizeBenchmark.TrialAsync(owner, store, start, 1024, Drain, () =>
+                chars = await StateSizeBenchmark.TrialAsync(owner, store, start, 1024, Drain, () =>
                 {
                     measured = true;
                     if (removeJournal) memory.Journal.Remove((0, 1));
@@ -48,6 +50,8 @@ internal static class StateSizeChecks
             if (!activate) Require(!drained && !measured, "a declined Post reached the measured body");
             if (activate && rejected) Require(measured, "the persisted-outcome negative control never reached verification");
             if (!rejected) Require(measured && memory.Instances["0/blob"].Revision == 10, $"ten real commits were not measured: revision {memory.Instances.GetValueOrDefault("0/blob")?.Revision}, landed {store.Sum("commit landed")}");
+            if (!rejected) Require(chars == memory.Instances["0/blob"].State.Length,
+                $"reported {chars} chars differ from the persisted state length {memory.Instances["0/blob"].State.Length}");
         }
         await Check("positive trial: ten persisted commits", () => Trial(true, 10, true, false));
         await Check("negative control: owner declines Post", () => Trial(false, 10, true, true));
@@ -55,6 +59,8 @@ internal static class StateSizeChecks
         await Check("negative control: only nine commits", () => Trial(true, 9, true, true));
         await Check("negative control: missing persisted journal revision", () => Trial(true, 10, true, true, removeJournal: true));
         await Check("positive trial: Minimal history still proves ten commits", () => Trial(true, 10, true, false, History.Minimal));
+        await Check("positive trial: persisted padded state size", () => Trial(true, 10, true, false, pad: 1024));
+        await Check("positive trial: Minimal padded state size", () => Trial(true, 10, true, false, History.Minimal, pad: 1024));
         await Check("CLI sizes: positive kilobytes, checked bytes", () =>
         {
             Require(StateSizeBenchmark.ParseSizes("1,10,100,1000").SequenceEqual(new[] { 1024, 10240, 102400, 1024000 }), "valid sizes changed");
@@ -67,7 +73,7 @@ internal static class StateSizeChecks
             }
             return Task.CompletedTask;
         });
-        Console.WriteLine($"size checks: {7 - failures} passed, {failures} failed");
+        Console.WriteLine($"size checks: {9 - failures} passed, {failures} failed");
         return failures == 0 ? 0 : 1;
     }
 }
