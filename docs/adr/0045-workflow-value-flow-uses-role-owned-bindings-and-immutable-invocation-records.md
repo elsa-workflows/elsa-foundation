@@ -766,7 +766,8 @@ crash/redelivery tests and provider proofs appropriate to each path:
 The implementing specs must audit expression/inline evaluation sites and the input boundary; align evaluation
 transactions, dependencies, retry/refresh and retained-completion resolution; and align admission/claim visibility
 and provider precedence. Concrete record layouts, operation-key API, finite dispatch bound and checkpoint integration
-belong to those specs. Return gaps to this ADR. All specs are defined before implementation starts.
+belong to those specs. Return gaps to this ADR. Each implementing spec is implemented on the initiative branch
+once it is approved and every ADR and decision it applies is agreed (decision D-18).
 
 How a registered function is classified follows D-6 (section 3). Route-by-return follows §6, and the variable lifecycle
 and background eligibility follow ADR 0092 and ADR 0093. No new constitutional gate or exception is proposed.
