@@ -520,7 +520,8 @@ public static class Semantics
             Context.Equal(s3, (await c.S.FindSubscriptionsAsync("k2")).Single(), "k2");
             Context.Equal(0, (await c.S.FindSubscriptionsAsync("k3")).Count, "a key nobody waits for");
         }),
-        new("subscriptions: subscribing twice keeps one", Level.Reference, async c =>
+        // FINDINGS 25.2 (M6): required since round 4; they were reference cases where the contract was silent.
+        new("subscriptions: subscribing twice keeps one", Level.Required, async c =>
         {
             var lease = await c.Take(0);
             SubscriptionRow s = new("k", "0/a", "w");
@@ -528,10 +529,19 @@ public static class Semantics
             await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1, subscribed: [s])]));
             Context.Equal(1, (await c.S.FindSubscriptionsAsync("k")).Count, "subscriptions after subscribing twice");
         }),
-        new("subscriptions: unsubscribing what is not there changes nothing", Level.Reference, async c =>
+        new("subscriptions: unsubscribing what is not there changes nothing", Level.Required, async c =>
         {
             var lease = await c.Take(0);
             await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", Make.Row("0/a", 1), unsubscribed: [new("k", "0/a", "w")])]));
+        }),
+        new("subscriptions: a commit that names a wait twice, or subscribes and unsubscribes it, lands once", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            SubscriptionRow s = new("k", "0/a", "w"), t = new("k", "0/a", "v");
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", Make.Row("0/a", 1), subscribed: [s, s, t], unsubscribed: [t])]));
+            Context.Equal(s, (await c.S.FindSubscriptionsAsync("k")).Single(), "the wait named twice, once; the one also unsubscribed, gone");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1, subscribed: [s], unsubscribed: [t, t])]));
+            Context.Equal(s, (await c.S.FindSubscriptionsAsync("k")).Single(), "after subscribing it again and unsubscribing what is gone");
         }),
         new("events: publish is create-only, find honours keep_until", Level.Required, async c =>
         {

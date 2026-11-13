@@ -6,10 +6,11 @@ break it all. It tests the design before product code exists. It shares nothing 
 repository: the folder has its own `Directory.Build.*`, `Directory.Packages.props`, `NuGet.config`, `global.json` and
 `.editorconfig`.
 
-What was found is in [FINDINGS.md](FINDINGS.md) (section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names; section 23: the
-merge of the four branches and its gates); what each database engine does to the EF store is in
-[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), and native workflows as an execution model in
-[NATIVE.md](NATIVE.md).
+What was found is in [FINDINGS.md](FINDINGS.md) (section 27: the runtime conformance suite and the Orleans adapter;
+section 26: the graph engine; section 25: round 4's decided items; section 24: the three layers and the round 4 names;
+section 23: the merge of the four branches and its gates); what each database engine does to the EF store is in
+[ENGINES.md](ENGINES.md), MongoDB in [MONGO.md](MONGO.md), native workflows as an execution model in
+[NATIVE.md](NATIVE.md), and write volume and bloat on PostgreSQL in [WRITES.md](WRITES.md).
 
 ## Layout
 
@@ -28,6 +29,11 @@ merge of the four branches and its gates); what each database engine does to the
 | `ef/Kernel.Ef.Conformance` | The conformance suite against the EF store, every engine |
 | `conformance/Kernel.Store.Conformance` | The store conformance suite: semantic cases, the stress test, the cost runs, for any provider |
 | `conformance/Kernel.Store.Conformance.Run` | The suite against the in-memory store |
+| `conformance/Kernel.Runtime.Conformance` | The runtime conformance suite: semantic cases, the fence broken on purpose, the stress test, for any actor runtime |
+| `conformance/Kernel.Runtime.Conformance.Run` | The runtime suite against the built-in runtime |
+| `runtime/Kernel.Runtime.Hosting` | `RuntimeNode`: the built-in runtime of one node on a clock |
+| `runtime/Kernel.Runtime.Orleans` | The Orleans adapter: each partition a grain |
+| `runtime/Kernel.Runtime.Orleans.Conformance` | The runtime suite against the Orleans adapter, on Orleans' in-process test cluster |
 | `mongo/Kernel.Mongo` | The storage interface on MongoDB |
 | `mongo/Kernel.Mongo.Run` | The suite against MongoDB, its connection killer, probes |
 
@@ -36,7 +42,7 @@ merge of the four branches and its gates); what each database engine does to the
 One project at a time (they share `obj/` folders through project references):
 
 ```
-for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run; do dotnet build $p -c Release; done
+for p in sim models/Native.Run ef/Kernel.Ef.Run ef/Kernel.Ef.Conformance conformance/Kernel.Store.Conformance.Run mongo/Kernel.Mongo.Run conformance/Kernel.Runtime.Conformance.Run runtime/Kernel.Runtime.Orleans.Conformance; do dotnet build $p -c Release; done
 dotnet test models/Graph.Tests -c Release      # the graph engine's corpus
 ```
 
@@ -81,6 +87,21 @@ MO="mongodb://localhost:<mongo>/?directConnection=true"
 SQL Server runs under amd64 emulation on arm64: slow, but the counts are not affected. Stop every container afterwards
 (`docker stop km-pg km-mssql km-mysql km-mongo`).
 
+## The runtime conformance suite
+
+On the in-memory store, the built-in runtime and the Orleans adapter (Orleans' in-process test cluster on its in-memory
+transport: no socket, no cloud). Each command's exit code says whether the runtime conforms; the `-broken` forms break
+the store's fence on purpose and must fail on it.
+
+```
+RTC="dotnet conformance/Kernel.Runtime.Conformance.Run/bin/Release/net10.0/Kernel.Runtime.Conformance.Run.dll"
+ORC="dotnet runtime/Kernel.Runtime.Orleans.Conformance/bin/Release/net10.0/Kernel.Runtime.Orleans.Conformance.dll"
+$RTC semantic [filter]; $RTC semantic-broken
+$RTC stress 20 2000; $RTC stress-broken 10 1000
+$ORC semantic [filter]; $ORC semantic-broken
+$ORC stress 20 2000; $ORC stress-broken 10 1000
+```
+
 ## The store conformance suite
 
 ```
@@ -111,6 +132,7 @@ $EFR x stress sqlite "Data Source=.out/stress.db" seconds=40 messages=5000 [fenc
 $EFR x stress <engine> "<same>" seconds=15 messages=1500 unfenced=1 fence=<as recorded>   # the fence broken on purpose: must fail (ENGINES.md: batch on PostgreSQL, checked elsewhere)
 $EFR x cost <engine> "<connection;Database=kernel_cost>" proxy=1 [fence=checked|batch]       # round trips on the TCP stream
 $EFR x probe|block|definite|deadlock <engine> "<connection>"                         # ENGINES.md
+$EFR x stress|cost postgres "<connection>" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]   # WRITES.md; the container needs -c wal_keep_size=4GB
 ```
 
 Without a fence option the EF store takes the engine's default: the fence in the batch, but the checked fence on SQL
