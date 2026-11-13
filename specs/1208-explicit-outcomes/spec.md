@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Status**: Draft — the ADR it applies is agreed and merged; approval waits on the approvers' agreement to this text, including the script form (Q1).
+**Status**: Approved — agreed 2026-11-13 (@j03y-nxxbz; the script form `complete(result, outcomes)` included), applying ADR 0045 §6 as merged (`70399f75f`, `a5d22a454`). The approvers verify after the merge.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-3**,
 decision **D-4**.
