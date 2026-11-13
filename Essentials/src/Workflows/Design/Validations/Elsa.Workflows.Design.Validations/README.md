@@ -51,8 +51,10 @@ portable-parameter failures are not collapsed by a blanket path/type deduplicati
 - `MemberReads` — default `false`. Whether a binding may read one member of an activity result
   (`ActivityResultMember`), a variable (`VariableMember`), a workflow request member (`WorkflowRequestMember`)
   or a declared input (`InputMember`, which publication lowers to the request member read of that input). While
-  it is off the shared analyzer neither offers nor admits any of them (`ActivityData/UnsupportedMemberBinding`),
-  so no publication, test run, template compilation, BPMN publication or import can produce an executable that
+  it is off the shared analyzer neither offers nor admits any of them (`ActivityData/UnsupportedMemberBinding`,
+  also for a focused query with a member path, which then returns no source rather than the whole read), and
+  every analysis reports the setting as `MemberReadsEnabled` so a client offers member selection only when it is
+  on. So no publication, test run, template compilation, BPMN publication or import can produce an executable that
   carries one. With it on, a read inside a reusable activity's body is published untyped and its member is
   checked when the run reads it. A variable member read names its variable's declaring scope explicitly. Variable,
   request and input member reads are always published untyped (any writer or caller can supply the value), so an

@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import type { EtlColumn, EtlConnectorBindingSummary, EtlRabbitMqSource, EtlSourceV2, EtlSqlSource } from "../etlTypes";
 import { EtlJsonFieldsEditor } from "./EtlJsonFieldsEditor";
@@ -63,8 +64,8 @@ export function EtlConnectorSourceEditor({
         </div>
       </div>
       <div className="etl-editor-binding-grid">
-        <div className="etl-editor-field">
-          <label htmlFor={`${headingId}-kind`}>Source kind</label>
+        <div className="etl-editor-field"><StudioField controlId={`${headingId}-kind`} label="Source kind">
+
           <select id={`${headingId}-kind`} value={source.kind} disabled={disabled} onChange={event => changeKind(event.currentTarget.value as EtlSourceV2["kind"])}>
             <option value="httpJson">HTTP JSON</option>
             <option value="csv">CSV file</option>
@@ -73,7 +74,7 @@ export function EtlConnectorSourceEditor({
             <option value="rabbitmq">RabbitMQ queue</option>
           </select>
           <small>The source kind determines which approved connector aliases and field declaration are available.</small>
-        </div>
+        </StudioField></div>
         <PipelineBindingSelect
           label={source.kind === "csv" ? "Source CSV binding" : source.kind === "jsonl" ? "Source file binding" : source.kind === "sql" ? "Source SQL binding" : source.kind === "rabbitmq" ? "Source RabbitMQ binding" : "Source HTTP binding"}
           role="Source"
@@ -121,20 +122,20 @@ function RabbitMqQueueFields({ source, disabled, onChange }: {
   const id = useId();
   return (
     <div className="etl-editor-binding-grid">
-      <div className="etl-editor-field">
-        <label htmlFor={`${id}-queue`}>Source queue</label>
+      <div className="etl-editor-field"><StudioField controlId={`${id}-queue`} label="Source queue">
+
         <input id={`${id}-queue`} value={source.queue} disabled={disabled} aria-describedby={`${id}-queue-help`}
           onChange={event => onChange({ ...source, queue: event.currentTarget.value })} />
         <small id={`${id}-queue-help`}>The host binding must allow this queue. Messages are acknowledged only once the run has recorded them.</small>
-      </div>
-      <div className="etl-editor-field">
-        <label htmlFor={`${id}-max`}>Messages per run</label>
+      </StudioField></div>
+      <div className="etl-editor-field"><StudioField controlId={`${id}-max`} label="Messages per run">
+
         <input id={`${id}-max`} type="number" min={1} max={100000} value={source.maxMessages} disabled={disabled}
           aria-describedby={`${id}-max-help`}
           // A cleared or fractional value becomes a whole number, so the compiler judges it instead of the request failing.
           onChange={event => onChange({ ...source, maxMessages: Math.trunc(Number(event.currentTarget.value)) || 0 })} />
         <small id={`${id}-max-help`}>A run takes at most this many messages, 1 to 100,000; the rest stay queued for the next run.</small>
-      </div>
+      </StudioField></div>
     </div>
   );
 }
@@ -151,12 +152,12 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
   const watermarks = source.columns.filter(column => column.required && column.type === "int64" && column.name).map(column => column.name);
   return (
     <>
-      <div className="etl-editor-field">
-        <label htmlFor={`${id}-table`}>Source table</label>
+      <div className="etl-editor-field"><StudioField controlId={`${id}-table`} label="Source table">
+
         <input id={`${id}-table`} value={source.table} disabled={disabled} placeholder="schema.table" aria-describedby={`${id}-table-help`}
           onChange={event => onChange({ ...source, table: event.currentTarget.value })} />
         <small id={`${id}-table-help`}>The host binding must allow this table. The run reads it once, as of one point in time, when it is prepared.</small>
-      </div>
+      </StudioField></div>
       <SchemaEditor
         title="Source table columns"
         description="Column names must match the table's columns. Floating-point columns are not supported."
@@ -193,8 +194,8 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
           </label>
         ))}
       </fieldset>
-      <div className="etl-editor-field">
-        <label htmlFor={`${id}-watermark`}>Watermark column</label>
+      <div className="etl-editor-field"><StudioField controlId={`${id}-watermark`} label="Watermark column">
+
         <select id={`${id}-watermark`} value={source.watermark ?? ""} disabled={disabled} aria-describedby={`${id}-watermark-help`}
           onChange={event => {
             const { watermark: _, ...rest } = source;
@@ -204,7 +205,7 @@ function SqlSourceFields({ source, maxFields, disabled, onChange }: {
           {watermarks.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
         <small id={`${id}-watermark-help`}>A required 64-bit integer column whose values become visible in increasing order, such as one stamped by a single writer. Each run then reads only rows above the last completed run's highest value; a sequence, identity or per-row version can skip rows.</small>
-      </div>
+      </StudioField></div>
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
@@ -167,6 +167,12 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
   const [wrapMessages, setWrapMessages] = useState(getInitialBoolean(wrapStorageKey, true));
   const [compact, setCompact] = useState(getInitialBoolean(compactStorageKey, !includeInspector));
   const viewportRef = useRef<HTMLDivElement>(null);
+  const categoryInputRef = useRef<HTMLInputElement>(null);
+  const levelSelectRef = useRef<HTMLSelectElement>(null);
+  const resetFilters = useCallback(() => {
+    setFilters(defaultFilters);
+    (categoryInputRef.current ?? levelSelectRef.current)?.focus();
+  }, []);
   const pausedRef = useRef(paused);
 
   useEffect(() => {
@@ -376,6 +382,9 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
   return {
     filters,
     setFilters,
+    resetFilters,
+    categoryInputRef,
+    levelSelectRef,
     sources,
     rows,
     selectedEntryId,
@@ -407,10 +416,10 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
   const statusLabel = getConnectionStatusLabel(state.status);
   const selectedRows = state.selectedEntryId ? state.rows.filter(row => row.id === state.selectedEntryId) : [];
   const levelSelect = (
-    <select aria-label="Minimum log level" value={state.filters.minLevel} onChange={event => state.setFilters({ ...state.filters, minLevel: event.target.value as StructuredLogFilters["minLevel"] })}>
+    <StudioField label="Minimum log level"><select ref={state.levelSelectRef} aria-label="Minimum log level" value={state.filters.minLevel} onChange={event => state.setFilters({ ...state.filters, minLevel: event.target.value as StructuredLogFilters["minLevel"] })}>
       <option value="">All levels</option>
       {levelOrder.map(level => <option value={level} key={level}>{level}</option>)}
-    </select>
+    </select></StudioField>
   );
 
   return (
@@ -418,11 +427,12 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
         {!compactControls ? (
           <>
             {levelSelect}
-            <select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
+            <StudioField label="Structured log source"><select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
               <option value="">All sources</option>
               {state.sources.map(source => <option value={source.id} key={source.id}>{formatStructuredLogSourceLabel(source)}</option>)}
-            </select>
+            </select></StudioField>
             <input
+              ref={state.categoryInputRef}
               aria-label="Filter by category"
               placeholder="Category"
               value={state.filters.category}
@@ -432,10 +442,10 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
         ) : (
           <>
             {levelSelect}
-            <select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
+            <StudioField label="Structured log source"><select aria-label="Structured log source" value={state.filters.sourceId} onChange={event => state.setFilters({ ...state.filters, sourceId: event.target.value })}>
               <option value="">All sources</option>
               {state.sources.map(source => <option value={source.id} key={source.id}>{formatStructuredLogSourceLabel(source)}</option>)}
-            </select>
+            </select></StudioField>
           </>
         )}
         <span className={`structured-logs-status ${state.status}`} aria-hidden="true" />
@@ -469,6 +479,9 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
 }
 
 function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogsState; panelMode?: boolean }) {
+  const ready = state.status === "live" || state.status === "paused";
+  const hasActiveFilters = Boolean(state.filters.sourceId || state.filters.category.trim() || (state.filters.minLevel && state.filters.minLevel !== defaultFilters.minLevel));
+  const noMatches = ready && hasActiveFilters;
   const rowClassName = [
     "structured-logs-rows",
     state.wrapMessages ? "wrap" : "",
@@ -488,8 +501,9 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
       </div>
       {state.rows.length === 0 ? (
         <div className="structured-logs-empty" role="row">
-          <span role="cell" aria-colspan={6}>
-            {state.status === "live" || state.status === "paused" ? "No structured logs received yet." : state.detail}
+          <span role="cell" aria-colspan={6} className="structured-logs-empty-content">
+            <span>{ready ? noMatches ? "No logs match these filters." : "No structured logs received yet." : state.detail}</span>
+            {noMatches ? <StudioButton type="button" onClick={state.resetFilters}>Reset filters</StudioButton> : null}
           </span>
         </div>
       ) : null}
@@ -505,9 +519,9 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
         >
           <span role="cell"><time dateTime={row.timestamp} title={row.timestamp}>{formatLogTime(row.timestamp)}</time></span>
           <LevelChip level={row.level} />
-          <span role="cell" title={row.sourceId ?? undefined}>{row.sourceId ?? "local"}</span>
-          <span role="cell" title={row.category}>{row.category}</span>
-          <span role="cell" className="structured-log-message">
+          <span role="cell" className="structured-log-source" title={row.sourceId ?? undefined}><span className="structured-log-metadata-label" aria-hidden="true">Source:</span>{row.sourceId ?? "local"}</span>
+          <span role="cell" className="structured-log-category" title={row.category}><span className="structured-log-metadata-label" aria-hidden="true">Category:</span>{row.category}</span>
+          <span className="structured-log-message" role="cell" title={state.wrapMessages ? undefined : row.message}>
             {row.exception ? <strong title={row.exception.message ?? undefined}>Exception</strong> : null}
             {row.message}
           </span>
@@ -538,7 +552,7 @@ function StructuredLogInspector({ entry, sources, onClose }: { entry: Structured
       <header>
         <div>
           <span>{entry.level} · {formatLogTime(entry.timestamp)}</span>
-          <h3>{entry.category}</h3>
+          <h3 title={entry.category}>{entry.category}</h3>
         </div>
         <button type="button" onClick={onClose} aria-label="Close structured log details">Close</button>
       </header>
@@ -555,6 +569,8 @@ function StructuredLogInspector({ entry, sources, onClose }: { entry: Structured
           <DetailRow name="Sequence" value={String(entry.sequence)} />
           <DetailRow name="Timestamp" value={entry.timestamp} />
           <DetailRow name="Source" value={source ? formatStructuredLogSourceLabel(source) : entry.sourceId} />
+          <DetailRow name="Source ID" value={entry.sourceId} />
+          <DetailRow name="Category" value={entry.category} />
           <DetailRow name="Event ID" value={entry.eventId == null ? null : String(entry.eventId)} />
           <DetailRow name="Event name" value={entry.eventName} />
         </dl>

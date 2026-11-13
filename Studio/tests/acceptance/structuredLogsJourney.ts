@@ -28,7 +28,7 @@ export async function structuredLogsJourney(page: Page, info: TestInfo, capture:
   await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
 
   await page.getByRole("textbox", { name: "Filter by category", exact: true }).fill("no-match-structured-log-acceptance");
-  const empty = table.getByRole("row").filter({ hasText: "No structured logs received yet." });
+  const empty = table.getByRole("row").filter({ hasText: "No logs match these filters." });
   await expect(empty.getByRole("cell")).toHaveAttribute("aria-colspan", "6");
   await capture(page, info, "logs-empty");
   await page.addScriptTag({ content: axe.source });

@@ -161,3 +161,28 @@ class VerdictTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class FieldGalleryVerdictTests(unittest.TestCase):
+    def test_gallery_requires_complete_single_passes_and_images(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            screenshot = root / 'states.png'
+            screenshot.write_bytes(b'png-witness')
+            test = {'expectedStatus': 'passed', 'status': 'expected', 'results': [{'status': 'passed', 'attachments': [
+                {'contentType': 'image/png', 'path': str(screenshot)}]}]}
+            report = {'config': {'metadata': {'outlinedCases': 1}}, 'suites': [{'specs': [{'title': 'Theme states', 'tests': [test]}]}]}
+            self.assertEqual(1, acceptance.field_gallery_verdict(report, root))
+            for change in ('empty', 'missing', 'duplicate', 'skip', 'retry', 'no-image', 'inline-only', 'external-image'):
+                with self.subTest(change=change):
+                    broken = copy.deepcopy(report)
+                    row = broken['suites'][0]['specs'][0]['tests'][0]
+                    if change == 'empty': broken['suites'] = []
+                    if change == 'missing': broken['config']['metadata']['outlinedCases'] = 2
+                    if change == 'duplicate': broken['suites'][0]['specs'].append(copy.deepcopy(broken['suites'][0]['specs'][0]))
+                    if change == 'skip': row['results'][0]['status'] = 'skipped'
+                    if change == 'retry': row['results'].append(copy.deepcopy(row['results'][0]))
+                    if change == 'no-image': row['results'][0]['attachments'] = []
+                    if change == 'inline-only': row['results'][0]['attachments'] = [{'contentType': 'image/png', 'body': 'inline-only'}]
+                    if change == 'external-image': row['results'][0]['attachments'][0]['path'] = str(root.parent / 'outside.png')
+                    with self.assertRaises(ValueError): acceptance.field_gallery_verdict(broken, root)

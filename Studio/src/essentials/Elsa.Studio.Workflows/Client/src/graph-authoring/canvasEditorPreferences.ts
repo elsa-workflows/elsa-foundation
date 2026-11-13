@@ -1,6 +1,17 @@
 import type { ElsaStudioModuleApi, StudioCanvasEditorPreferenceStore } from "@elsa-workflows/studio-sdk";
 
 const namespace = "workflow-authoring";
+// Stores recreated for the same device scope must finish older responses before refreshing its cache.
+const pendingOperations = new Map<string, Promise<void>>();
+function enqueue<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const result = (pendingOperations.get(key) ?? Promise.resolve()).then(operation);
+  const tail = result.then(() => undefined, () => undefined);
+  pendingOperations.set(key, tail);
+  void tail.then(() => {
+    if (pendingOperations.get(key) === tail) pendingOperations.delete(key);
+  });
+  return result;
+}
 const validId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(id);
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 function readDocument(value: unknown, server = false) {
@@ -22,7 +33,6 @@ export function createCanvasEditorPreferences(api: Pick<ElsaStudioModuleApi, "ba
   const headers = { "X-Elsa-Studio-Host-Id": scope.studioHostId };
   const path = `/_elsa/studio/preferences/${namespace}`;
   let revision: string | undefined;
-  let writes = Promise.resolve();
   const localLoad = () => {
     try { return readDocument(JSON.parse(localStorage.getItem(key) ?? "null"))?.editorId ?? null; }
     catch { return null; }
@@ -33,7 +43,7 @@ export function createCanvasEditorPreferences(api: Pick<ElsaStudioModuleApi, "ba
   };
   return {
     async load() {
-      const result = writes.then(async () => {
+      return enqueue(key, async () => {
         if (scope.subjectId === "anonymous") return localLoad();
         try {
           const document = readDocument(await api.backend.http.getJson<unknown>(path, { headers }), true);
@@ -45,9 +55,6 @@ export function createCanvasEditorPreferences(api: Pick<ElsaStudioModuleApi, "ba
           return localLoad();
         }
       });
-      // Reads share the write queue so a delayed GET cannot restore an older revision.
-      writes = result.then(() => undefined);
-      return result;
     },
     save(editorId) {
       if (!validId(editorId)) return Promise.reject(new Error("Invalid canvas editor preference."));
@@ -68,9 +75,7 @@ export function createCanvasEditorPreferences(api: Pick<ElsaStudioModuleApi, "ba
         revision = saved.revision;
         localSave(saved.editorId);
       };
-      const result = writes.then(save);
-      writes = result.catch(() => undefined);
-      return result;
+      return enqueue(key, save);
     }
   };
 }

@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -372,17 +373,13 @@ function FilterSelect({ label, value, options, helpText, description, onChange }
   const helpId = helpText ? `${id}-help` : undefined;
   const descriptionId = description ? `${id}-description` : undefined;
   return (
-    <div className="secrets-filter">
-      <div className="secrets-filter-heading">
-        <label htmlFor={id}>{label}</label>
-        {helpText ? <small className="secrets-filter-hint" id={helpId}>{helpText}</small> : null}
-      </div>
+    <StudioField className="secrets-filter" controlId={id} label={label} meta={helpText ? <small className="secrets-filter-hint" id={helpId}>{helpText}</small> : null}>
       <select id={id} value={value} aria-describedby={[helpId, descriptionId].filter(Boolean).join(" ") || undefined} onChange={event => onChange(event.target.value)}>
         <option value="">All</option>
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
       {description ? <span className="secrets-visually-hidden" id={descriptionId}>{description}</span> : null}
-    </div>
+    </StudioField>
   );
 }
 

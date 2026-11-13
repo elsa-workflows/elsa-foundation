@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityExecutionInspectionPanel, ActivityExecutionNavigator, ChildExecutionBrowser, useScopedCanvasActivities } from "../workflow-editor/ActivityExecutionBrowser";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry, type ActivityExecutionBrowsePage } from "../api/runtime";
+import { useExecutionFocusRequest } from "../workflow-editor/executionFocus";
 import { latestActivityExecution } from "../runtimeActivityOrder";
 import type { ActivityExecutionStateSummary } from "../workflowTypes";
 vi.mock("../api/runtime", () => ({ browseActivityExecutions: vi.fn(), supportsActivityExecutionBrowsing: vi.fn() }));
@@ -204,7 +205,7 @@ it("does not hide missing explicit selections or singleton read failures", async
   vi.mocked(browseActivityExecutions).mockResolvedValue({ items: [entry(4)], totalCount: 1, previousCursor: null, nextCursor: null });
   navigator({ selectedActivityExecutionId: "missing", hideSingleton: true });
   await vi.waitFor(() => expect(container.textContent).toContain("This execution is not available in this scope"));
-  expect(onResolve).toHaveBeenLastCalledWith(null);
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(null));
   vi.mocked(browseActivityExecutions).mockRejectedValue(new Error("offline"));
   navigator({ selectedActivityExecutionId: "missing", hideSingleton: true, refreshKey: 1 });
   await vi.waitFor(() => expect(container.textContent).toContain("could not be loaded"));
@@ -292,4 +293,224 @@ it("does not steal focus after a delayed choice when user moved away", async () 
   const actual=document.activeElement;
   outside.remove();
   expect(actual).toBe(outside);
+});
+
+// Unit controls use the real stable owner hook. Actual Chrome disabled-button transitions
+// remain a separate normal-host native acceptance gate.
+type FocusOptions = Partial<React.ComponentProps<typeof ActivityExecutionNavigator>>;
+function FocusOwnerHarness({ id, mount, shown, options }: { id: number | undefined; mount: string; shown: boolean; options: FocusOptions }) {
+  const request = useExecutionFocusRequest();
+  return shown ? <ActivityExecutionNavigator key={mount} context={context} workflowExecutionId="run" executableNodeId="ordinary-node"
+    refreshKey={0} onResolve={onResolve} onSelect={onSelect} onIncident={vi.fn()} {...options}
+    selectedActivityExecutionId={id === undefined ? undefined : `execution-${id}`} restoreChoiceFocus={{ request, ready: true }} /> : null;
+}
+function focusNavigator(id: number | undefined, mount: string, options: FocusOptions = {}, shown = true) {
+  flushSync(() => root.render(<FocusOwnerHarness id={id} mount={mount} shown={shown} options={options} />));
+}
+function deferredNeighbor() {
+  let resolve!: (value: ActivityExecutionBrowsePage) => void;
+  let reject!: (reason: unknown) => void;
+  const pending = new Promise<ActivityExecutionBrowsePage>((accept, refuse) => { resolve = accept; reject = refuse; });
+  vi.mocked(browseActivityExecutions).mockImplementation(async (_context, run, request) => {
+    if (request?.anchorActivityExecutionId === "execution-9" && request.limit === 1) return pending;
+    const result = entry(request?.anchorActivityExecutionId === "execution-9" ? 9 : 8);
+    return page([{ ...result, execution: { ...result.execution, workflowExecutionId: run,
+      executableNodeId: request?.executableNodeId ?? "ordinary-node", parentActivityExecutionId: request?.parentActivityExecutionId ?? null } }]);
+  });
+  return { resolve, reject };
+}
+async function beginDeferredArrow(options: FocusOptions = {}) {
+  focusNavigator(8, "before", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 8 of 10"));
+  button("Next activity execution").focus(); click("Next activity execution");
+  await vi.waitFor(() => expect(button("Next activity execution").disabled).toBe(true));
+}
+function ownedFocusOperation() {
+  let generation = 0;
+  let controller = new AbortController();
+  let ready: AbortController | null = controller;
+  return {
+    captureFocusOperation: () => {
+      const revision = generation, current = controller;
+      return { token: current, signal: current.signal, isReady: () => ready === current, isCurrent: () => generation === revision && controller === current };
+    },
+    select: (value: ActivityExecutionStateSummary) => { generation++; controller = new AbortController(); onSelect(value); },
+    commit: () => { ready = controller; },
+    cancel: () => controller.abort(),
+    replaceWithoutAbort: () => { generation++; }
+  };
+}
+
+it.each([false, true])("recovers the enabled initiating arrow after deferred resolution and remount (owner bound: %s)", async owned => {
+  const owner = ownedFocusOperation();
+  const options = owned ? { captureFocusOperation: owner.captureFocusOperation, onSelect: owner.select } : {};
+  const pending = deferredNeighbor();
+  await beginDeferredArrow(options);
+  const original = button("Next activity execution");
+  pending.resolve(page([entry(9)]));
+  await vi.waitFor(() => expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" })));
+  owner.commit();
+  focusNavigator(9, "after", options);
+  expect(original.isConnected).toBe(false);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  expect(button("Next activity execution").disabled).toBe(false);
+  await vi.waitFor(() => expect(document.activeElement).toBe(button("Next activity execution")));
+});
+it.each([false, true].flatMap(owned => [{ from: 2, to: 1, direction: "Previous", owned }, { from: 9, to: 10, direction: "Next", owned }]))(
+  "recovers the chooser at the native-disabled $direction boundary (owner bound: $owned)", async ({ from, to, direction, owned }) => {
+    const owner = ownedFocusOperation();
+    const options = owned ? { captureFocusOperation: owner.captureFocusOperation, onSelect: owner.select } : {};
+    vi.mocked(browseActivityExecutions).mockResolvedValue(page([entry(from), entry(to)]));
+    focusNavigator(from, "before", options);
+    await vi.waitFor(() => expect(container.textContent).toContain(`Execution ${from} of 10`));
+    button(`${direction} activity execution`).focus(); click(`${direction} activity execution`);
+    expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: `execution-${to}` }));
+    owner.commit();
+    focusNavigator(to, "after", options);
+    await vi.waitFor(() => expect(container.textContent).toContain(`Execution ${to} of 10`));
+    expect(button(`${direction} activity execution`).disabled).toBe(true);
+    await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector(".wf-execution-choice")));
+  });
+it("does not reclaim focus after a later outside control is removed before delayed resolution", async () => {
+  const pending = deferredNeighbor(); await beginDeferredArrow();
+  const outside = document.createElement("button"); document.body.append(outside); outside.focus();
+  expect(document.activeElement).toBe(outside); outside.remove();
+  pending.resolve(page([entry(9)]));
+  await vi.waitFor(() => expect(onSelect).toHaveBeenCalled());
+  focusNavigator(9, "after");
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.contains(document.activeElement)).toBe(false);
+});
+const replacementFocusScopes = [
+  { name: "backend", options: { context: { ...context, baseUrl: "http://other-backend", http: {} } as StudioEndpointContext } },
+  { name: "run", options: { workflowExecutionId: "other-run" } },
+  { name: "node", options: { executableNodeId: "other-node" } },
+  { name: "parent", options: { parentActivityExecutionId: "other-parent" } },
+  { name: "ancestor", options: { ancestorActivityExecutionId: "other-ancestor" } }
+];
+it.each(replacementFocusScopes)("does not focus an old arrow request in the replacement $name scope", async ({ options }) => {
+  const pending = deferredNeighbor(); await beginDeferredArrow();
+  focusNavigator(9, "other-scope", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  pending.resolve(page([entry(9)])); await new Promise(resolve => setTimeout(resolve, 0));
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(container.contains(document.activeElement)).toBe(false);
+});
+it.each(replacementFocusScopes)("does not restore committed navigation into a replacement $name scope with the same execution ID", async ({ options }) => {
+  const pending = deferredNeighbor(); await beginDeferredArrow();
+  pending.resolve(page([entry(9)]));
+  await vi.waitFor(() => expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" })));
+  // The old selection started successfully, but its ID can also exist in another backend/run/scope.
+  focusNavigator(9, "new-context-after-selection", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.contains(document.activeElement)).toBe(false);
+});
+it.each(["denied", "failed"])("does not carry a %s neighbor's intent into a later remount", async mode => {
+  const pending = deferredNeighbor(); await beginDeferredArrow();
+  pending.reject(mode === "denied" ? { status: 403 } : new Error("offline"));
+  if (mode === "denied") await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(null));
+  else await vi.waitFor(() => expect(container.textContent).toContain("could not be loaded"));
+  focusNavigator(9, "later-selection");
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(onSelect).not.toHaveBeenCalled(); expect(container.contains(document.activeElement)).toBe(false);
+});
+it("disarms a ready neighbor response that does not contain its requested execution", async () => {
+  const pending = deferredNeighbor(); await beginDeferredArrow();
+  pending.resolve(page([]));
+  await vi.waitFor(() => expect(button("Next activity execution").disabled).toBe(false));
+  expect(onSelect).not.toHaveBeenCalled();
+  focusNavigator(9, "unrelated-selection");
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.contains(document.activeElement)).toBe(false);
+});
+it.each(["abort", "clear-selection"])("cannot restore an old target after the owning operation's %s", async mode => {
+  const owner = ownedFocusOperation();
+  const options = { captureFocusOperation: owner.captureFocusOperation, onSelect: owner.select };
+  vi.mocked(browseActivityExecutions).mockResolvedValue(page([entry(8), entry(9), entry(10)]));
+  focusNavigator(8, "before", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 8 of 10"));
+  button("Next activity execution").focus(); click("Next activity execution");
+  expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" }));
+  owner.commit(); // Ready target stays absent until the cancellation has been observed.
+  if (mode === "abort") owner.cancel();
+  else { owner.replaceWithoutAbort(); focusNavigator(undefined, "selection-cleared", options); }
+  focusNavigator(9, "later-unrelated-target", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.contains(document.activeElement)).toBe(false);
+});
+it("observes outside focus during the child navigator's deliberate unmounted gap", async () => {
+  const owner = ownedFocusOperation();
+  const options = { captureFocusOperation: owner.captureFocusOperation, onSelect: owner.select };
+  vi.mocked(browseActivityExecutions).mockResolvedValue(page([entry(8), entry(9), entry(10)]));
+  focusNavigator(8, "before", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 8 of 10"));
+  button("Next activity execution").focus(); click("Next activity execution");
+  expect(onSelect).toHaveBeenCalled();
+  focusNavigator(8, "before", options, false);
+  expect(container.querySelector("button")).toBeNull();
+  const outside = document.createElement("button"); document.body.append(outside); outside.focus();
+  expect(document.activeElement).toBe(outside); outside.remove();
+  owner.commit(); // Readiness cannot mask the outside-focus cancellation.
+  focusNavigator(9, "after-gap", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.contains(document.activeElement)).toBe(false);
+});
+
+it("hands an already-aborted previous controller to the new successful owner operation", async () => {
+  const owner = ownedFocusOperation(); owner.cancel();
+  const options = { captureFocusOperation: owner.captureFocusOperation, onSelect: owner.select };
+  vi.mocked(browseActivityExecutions).mockResolvedValue(page([entry(8), entry(9)]));
+  focusNavigator(8, "before", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 8 of 10"));
+  button("Next activity execution").focus(); click("Next activity execution");
+  expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" }));
+  owner.commit(); focusNavigator(9, "after", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await vi.waitFor(() => expect(document.activeElement).toBe(button("Next activity execution")));
+});
+it.each([false, true])("retains only a live owned selection across its interim ancestor filter (cancel: %s)", async cancel => {
+  const owner = ownedFocusOperation();
+  const options = { captureFocusOperation: owner.captureFocusOperation, onSelect: owner.select, ancestorActivityExecutionId: "parent-P" };
+  vi.mocked(browseActivityExecutions).mockImplementation(async (_context, _run, request) =>
+    request?.ancestorActivityExecutionId === "scope-A" ? page([]) : page([entry(8), entry(9)]));
+  focusNavigator(8, "before", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 8 of 10"));
+  button("Next activity execution").focus(); click("Next activity execution");
+  expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" }));
+  // Exact selected destination changes before its asynchronously prepared scope chain commits.
+  focusNavigator(9, "interim", { ...options, ancestorActivityExecutionId: "scope-A" });
+  await vi.waitFor(() => expect(container.textContent).toContain("This execution is not available in this scope."));
+  expect(container.contains(document.activeElement)).toBe(false);
+  owner.commit();
+  if (cancel) owner.cancel();
+  focusNavigator(9, "committed", options);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  if (cancel) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(container.contains(document.activeElement)).toBe(false);
+  } else await vi.waitFor(() => expect(document.activeElement).toBe(button("Next activity execution")));
+});
+
+it.each([false, true])("does not revive a failed neighbor focus claim when the same navigator reloads it (owner bound: %s)", async owned => {
+  const owner = ownedFocusOperation();
+  const options = owned ? { captureFocusOperation: owner.captureFocusOperation, onSelect: owner.select } : {};
+  const pending = deferredNeighbor(); await beginDeferredArrow(options);
+  pending.reject(new Error("offline"));
+  await vi.waitFor(() => expect(container.textContent).toContain("could not be loaded"));
+  expect(onSelect).not.toHaveBeenCalled();
+  // A normal refresh may recover data in place; its old failed read must not recover a focus claim.
+  vi.mocked(browseActivityExecutions).mockResolvedValue(page([entry(8), entry(9)]));
+  const refreshed = { ...options, refreshKey: 1 };
+  focusNavigator(8, "before", refreshed);
+  await vi.waitFor(() => expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" })));
+  owner.commit(); focusNavigator(9, "recovered", refreshed);
+  await vi.waitFor(() => expect(container.textContent).toContain("Execution 9 of 10"));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(container.contains(document.activeElement)).toBe(false);
 });

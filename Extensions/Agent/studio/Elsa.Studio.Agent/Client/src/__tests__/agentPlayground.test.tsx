@@ -146,7 +146,7 @@ describe("agent playground", () => {
     const container = await render(fakeContext({ draft: draft({ provider: { providerKey: "elsa.agent", schemaVersion: "1", payload: {} },
       contract: { inputs: [{ referenceKey: "brief-key", name: "Brief", type: { alias: "String" }, isRequired: true, isNullable: false }] } }) }).context);
 
-    expect(container.querySelector("fieldset")).toBeNull();
+    expect(container.querySelector("fieldset:not([role=presentation])")).toBeNull();
   });
 
   it("refuses an empty required input without starting a run", async () => {

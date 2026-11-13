@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { tabElementIds, useTablistKeyboard } from "@elsa-workflows/studio-ui";
+import { tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
 import { AlertTriangle, ArrowLeft, CheckCircle2, CopyPlus, Play, RefreshCw } from "lucide-react";
 import {
   studioNavigationRequestedEvent,
@@ -654,7 +654,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
                 <div><dt>Provider schema</dt><dd>{draft.provider.schemaVersion}</dd></div>
                 <div><dt>Saved revision</dt><dd>{draft.revision}</dd></div>
               </dl>
-              <label className="ad-draft-label"><span>Draft label <small>Optional · need not be unique</small></span><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={!draftIsActive || publicationPending || status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small></label>
+              <StudioField className="ad-draft-label" label={<><span>Draft label </span></>}><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={!draftIsActive || publicationPending || status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small><small>Optional · need not be unique</small></StudioField>
               {advancedSaveStatus}
               <div className="ad-authoring-advanced-actions">
                 <button type="button" onClick={async event => { setActiveView("code"); event.currentTarget.closest("details")?.removeAttribute("open"); await waitForAuthoringView(); document.getElementById(tabElementIds(authoringTabsId, authoringViewTabIndices.code).tabId)?.focus(); }} disabled={!contractLocallyValid}>Edit code</button>
