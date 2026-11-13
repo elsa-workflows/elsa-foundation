@@ -255,7 +255,8 @@ public static class BpmnSwitch
     /// <summary>
     /// The check that must catch each flaw: the first word of the violation. ReuseHandles is the kernel's (two units, one job
     /// id). ResurrectArrivals leaves arrivals at a join that can never fire again (a loop's next round has another iteration
-    /// key), so G4 sees a finished instance with live tokens; no host flaw here makes a join fire twice (G2) or on the wrong
+    /// key). The interpreter faults with bpmn.join.deadlock; G4's unexpected-fault clause catches it. No host flaw here
+    /// makes a join fire twice (G2) or on the wrong
     /// flows (G3) without breaking the interpreter, which this spike does not mutate.
     /// </summary>
     public static readonly Dictionary<BpmnFlaw, string[]> Catches = new()
