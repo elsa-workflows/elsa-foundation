@@ -267,7 +267,7 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
 ### E9. SQL Server, fence in the batch, merged kernel: the take deadlocks with a stale commit. Run; fixed in round 4 (the checked fence is SQL Server's default)
 
 - **Graph (`.out/f-mssql-deadlock-graphs.xml`):** a stale owner's SaveChanges holds X on a `PK_Messages` key (a seen
-  or trial mark) and waits for U on `PK_Partitions` (its fence comes last in EF's order); the take holds X on
+  or trial mark) and waits for U on `PK_Partitions` (its fence follows the message write); the take holds X on
   `PK_Partitions` and waits for U on that message key, in the attempts update of E8. 127 in one run, victims all
   takes; one on MySQL. Waits up to 3 s.
 - **Harm:** a take that loses is "not taken" and is tried again; nothing wrong lands (end state holds). It costs

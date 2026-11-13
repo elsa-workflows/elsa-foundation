@@ -165,7 +165,7 @@ is which operation is authorized to write which records. An outside insert canno
 Clock-bearing writes add the optional metadata validation/stamping described above to the same in-memory commit;
 there is no separate clock writer or transaction. EF/Mongo refuse those writes rather than silently omit the facts.
 
-The commit's fence is either checked before its writes or included in the same batch, followed by commit.
+The separate checked fence runs before the data writes. The batch path includes the partition update among the writes. In the PostgreSQL trace, the subscription insert followed the fence. Both paths check the affected-row count before COMMIT.
 SQL Server defaults to a checked fence; PostgreSQL, SQLite and MySQL default to the batch fence.
 MongoDB supports both; its batch path uses the partition clock remembered from its own take and falls back to
 checked fencing when that local knowledge is absent. A stale fence cannot authorize partial checkpoint writes.
