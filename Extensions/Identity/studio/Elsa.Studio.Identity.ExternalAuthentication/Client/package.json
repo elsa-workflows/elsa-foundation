@@ -9,7 +9,8 @@
   "scripts": {
     "build": "vite build && tsc -p tsconfig.sdk.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "node scripts/browser.mjs"
   },
   "dependencies": {
     "@elsa-workflows/studio-sdk": "workspace:*",

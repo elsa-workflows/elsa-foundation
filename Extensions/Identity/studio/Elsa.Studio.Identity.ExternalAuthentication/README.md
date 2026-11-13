@@ -38,8 +38,9 @@ then inspect current-source composed Studio/backend journeys across module, perm
 loading/error, theme and narrow-layout states. Retain downloadable exact-head visual evidence and independent
 UX acceptance under [Studio UX acceptance](../../../../docs/contributing/studio-ux-acceptance.md).
 
-The owned Probe and its browser helper modules are introduced by the next source slice. This prefix deliberately
-has no `test:browser` script pointing to those absent files. It has not installed dependencies, built, typechecked,
+The owned [Probe and shared controls](../../../../tools/identity/ExternalAuthentication.Probe/README.md) and its
+browser helper modules are now source-staged. The `test:browser` entry points to those present dependencies;
+invoking it would start owned processes and is still outside the current source-only authorization. It has not installed dependencies, built, typechecked,
 executed tests, opened a browser/provider or established product/visual acceptance. Historical
 records on the [closed carrier PR3806](https://github.com/elsa-workflows/elsa-foundation/pull/3806) remain bound
 to their recorded source.
