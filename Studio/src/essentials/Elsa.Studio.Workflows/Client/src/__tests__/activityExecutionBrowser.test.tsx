@@ -40,7 +40,7 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
 it("selects latest and exact neighbors for an arbitrary activity", async () => {
   navigator({ selectedActivityExecutionId: undefined });
   await vi.waitFor(() => expect(container.textContent).toContain("Execution 10 of 10"));
-  expect(onResolve).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-10" }));
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-10" })));
   click("Previous activity execution");
   expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ activityExecutionId: "execution-9" }));
   expect(button("Next activity execution").disabled).toBe(true);
@@ -64,7 +64,7 @@ it("anchors a neighbor beyond the loaded page", async () => {
 it("does not substitute latest for a missing explicit execution", async () => {
   vi.mocked(browseActivityExecutions).mockResolvedValue(page([])); navigator({ selectedActivityExecutionId: "missing" });
   await vi.waitFor(() => expect(container.textContent).toContain("This execution is not available in this scope"));
-  expect(onResolve).toHaveBeenLastCalledWith(null); expect(onSelect).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(onResolve).toHaveBeenLastCalledWith(null)); expect(onSelect).not.toHaveBeenCalled();
 });
 it("aborts an old scope and ignores its late result", async () => {
   let release!: (value: ActivityExecutionBrowsePage) => void;

@@ -1049,6 +1049,33 @@ TCP-read column of the PostgreSQL rows of 100 and 1,000 instances moved by up to
 describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (not run for this
 item; whether their models ever reach the second attempt was not checked).
 
+### 25.9 Park removes active subscriptions (owner decision, 13 November). Run
+
+The owner decided that Park removes active event subscriptions in the same fenced commit that faults a workflow
+instance. Its last committed state, fault details and configured history remain; its parent still receives the
+faulted-child notice. A previously routed delivery can still arrive and is dropped by the faulted instance. A future
+explicit recovery operation must restore waits; events in the gap require kept-event semantics. Suspension retains
+active subscriptions. This does not add a recovery operation or preserve consumed deliveries in a dead-letter queue.
+
+`WorkflowInstance.Park` now sets the existing all-subscriptions removal on its `TurnOutcome`. No new storage operation
+or transaction is introduced. I8 no longer exempts parked instances with active subscriptions: faulted rows must have
+none, while their preserved checkpoint may still describe inactive waits.
+
+`$NAT park` runs the actual worker/store path. On the prior implementation five cases failed at subscription cleanup:
+an exception at Full, State and Minimal history, a definite storage refusal, and a lost owner on trial reaching the
+poison threshold. The suspension control passed. With the change all six pass, also checking retained state and
+configured history, the parent's fault notice, no routing from later publishes, and dropping an already-routed event.
+The native smoke suite passes. A native simulation of 2,000 seeds × 1,000 actions passes: 38,800 completed instances
+match fault-free execution; this sweep parks no innocent instance, so the deterministic trial case supplies that path.
+Provider conformance and cost evidence for the unchanged unsubscribe operation remains separate; no new all-provider
+or round-trip execution result is claimed here.
+
+Independent review found a combined path the initial six cases omitted: a refused Resume parks the previous
+suspended checkpoint. Withholding that faulted row indefinitely prevented already-routed events from reaching the
+drop path. Withholding now applies only to running instances; faulted instances consume late deliveries without
+deserializing their inactive checkpoint. Two additional real-worker cases failed before this correction, including
+an older owner holding a newer-version checkpoint. All eight cases now pass while preserving state and version.
+
 ### 25.7 Set-based projector rounds (decision 8). Run
 
 **What changed.** `EfStore.ProjectAsync` writes a round's view rows set-based. It first works out, in memory, what the
@@ -1181,8 +1208,9 @@ plan's aims at it), so that it bites is not shown.
 
 ### Open, and for the owner
 
-- **Should Park remove a parked instance's subscriptions?** The kernel keeps them (a parked instance is faulted, not
-  deleted; recovery might want its waits). The simulation now accepts that; a kernel decision, not made here.
+- **Park subscriptions, resolved 13 November:** this round initially kept them and exempted parked instances in I8.
+  The owner subsequently chose atomic removal of active subscriptions while retaining the checkpoint and fault
+  evidence. Section 25.9 records the new behavior and checks; the old exemption is removed.
 - **Main's engine, possibly:** a decision with both outcomes connected to one node schedules that node on the live
   arrival and then carries the dead arrival from the same source through it as well, which could fire a later join
   twice. Found by reading (a reviewer), not run; it is main's behaviour and no workflow in the mix has that shape. A

@@ -32,13 +32,27 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
     public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(this IServiceCollection services,
         string intentKind, RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion)
         where THandler : class, IRuntimePostCommitIntentHandler
+        => Register(services, new(intentKind, typeof(THandler), retryPolicy, requiresDurableSource, stimulusDeliveryProtocolVersion));
+
+    /// <summary>Declares both ordinary and independently managed recipient protocols on one real workflow source.</summary>
+    public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(this IServiceCollection services,
+        string intentKind, RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion,
+        int? subscriptionDeliveryProtocolVersion) where THandler : class, IRuntimePostCommitIntentHandler =>
+        Register(services, new(intentKind, typeof(THandler), retryPolicy, requiresDurableSource, stimulusDeliveryProtocolVersion,
+            RuntimeDeliverySourceKind.WorkflowCheckpoint, subscriptionDeliveryProtocolVersion));
+
+    /// <summary>Uses the same exact-kind registry for a true standalone source; no workflow publisher is fabricated.</summary>
+    public static IServiceCollection AddRuntimeDeliverySourceExecutor<THandler>(this IServiceCollection services,
+        string intentKind, RuntimePostCommitRetryPolicy retryPolicy)
+        where THandler : class, IRuntimeDeliverySourceExecutor =>
+        Register(services, new(intentKind, typeof(THandler), retryPolicy, true, null,
+            RuntimeDeliverySourceKind.StandaloneIngress, RuntimeSubscriptionDelivery.CurrentVersion));
+
+    private static IServiceCollection Register(IServiceCollection services, RuntimePostCommitIntentHandlerContribution proposed)
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentException.ThrowIfNullOrWhiteSpace(intentKind);
-        ArgumentNullException.ThrowIfNull(retryPolicy);
-
-        var handlerType = typeof(THandler);
-        var proposed = new RuntimePostCommitIntentHandlerContribution(intentKind, handlerType, retryPolicy, requiresDurableSource, stimulusDeliveryProtocolVersion);
+        var intentKind = proposed.IntentKind;
+        var handlerType = proposed.HandlerType;
         var matchingKind = services
             .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
             .Select(descriptor => descriptor.ImplementationInstance)
@@ -48,7 +62,9 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
 
         if (matchingKind.Any(contribution =>
                 contribution.HandlerType != handlerType ||
-                !contribution.RetryPolicy.IsEquivalentTo(retryPolicy) || contribution.RequiresDurableSource != requiresDurableSource || contribution.StimulusDeliveryProtocolVersion != stimulusDeliveryProtocolVersion))
+                !contribution.RetryPolicy.IsEquivalentTo(proposed.RetryPolicy) || contribution.RequiresDurableSource != proposed.RequiresDurableSource ||
+                contribution.StimulusDeliveryProtocolVersion != proposed.StimulusDeliveryProtocolVersion || contribution.SourceKind != proposed.SourceKind ||
+                contribution.SubscriptionDeliveryProtocolVersion != proposed.SubscriptionDeliveryProtocolVersion))
         {
             var contributionIdentities = matchingKind
                 .Select(ContributionIdentity)
@@ -59,7 +75,7 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
                 $"Runtime post-commit intent kind '{intentKind}' has conflicting handler or retry-policy contributions: {string.Join(", ", contributionIdentities)}.");
         }
 
-        services.TryAddScoped<THandler>();
+        services.TryAddScoped(handlerType);
         if (matchingKind.Length == 0)
             services.AddSingleton(proposed);
 
@@ -71,5 +87,5 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
     private static string ContributionIdentity(RuntimePostCommitIntentHandlerContribution contribution) =>
         $"{HandlerIdentity(contribution.HandlerType)} " +
         $"[maxAttempts={contribution.RetryPolicy.MaxAttempts}, delay={contribution.RetryPolicy.Delay}, " +
-        $"retryUntilAcknowledged={contribution.RetryPolicy.RetryUntilAcknowledged}, requiresDurableSource={contribution.RequiresDurableSource}, stimulusDeliveryProtocolVersion={contribution.StimulusDeliveryProtocolVersion}]";
+        $"retryUntilAcknowledged={contribution.RetryPolicy.RetryUntilAcknowledged}, requiresDurableSource={contribution.RequiresDurableSource}, stimulusDeliveryProtocolVersion={contribution.StimulusDeliveryProtocolVersion}, sourceKind={contribution.SourceKind}, subscriptionDeliveryProtocolVersion={contribution.SubscriptionDeliveryProtocolVersion}]";
 }
