@@ -18,6 +18,11 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
 
     public int Stalls { get; private set; }
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, long> _releases = new();
+
+    /// <summary>When the node last began to give the partition up (Environment.TickCount64), if it ever did.</summary>
+    public long? ReleaseBegan(int partition) => _releases.TryGetValue(partition, out var at) ? at : null;
+
     /// <summary>The node's commits answered "not landed".</summary>
     public int Refused => Volatile.Read(ref _refused);
 
@@ -137,7 +142,11 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     }
 
     public ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) => Call(() => inner.TakeAsync(partition, node, lease, cancellationToken));
-    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => Call(() => inner.ReleaseAsync(partition, epoch, cancellationToken));
+    public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
+    {
+        _releases[partition] = Environment.TickCount64;
+        return Call(() => inner.ReleaseAsync(partition, epoch, cancellationToken));
+    }
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => Call(() => inner.AddAsync(message, cancellationToken));
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call(() => inner.LoadAsync(ids, cancellationToken));

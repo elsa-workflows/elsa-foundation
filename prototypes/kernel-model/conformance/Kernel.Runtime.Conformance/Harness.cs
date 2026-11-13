@@ -155,6 +155,7 @@ public sealed class Harness : IAsyncDisposable
         if (_stopped) return;
         _stopped = true;
         foreach (var node in Alive) await StopAsync(node);
+        Watcher.TearingDown();
         await _cluster.DisposeAsync();
         // A killed node's calls still stalled execute when their stall ends: wait for them, so the checks see them.
         var idleSince = long.MaxValue;     // idle on samples spanning 100 ms: a pass between two calls is not idle
