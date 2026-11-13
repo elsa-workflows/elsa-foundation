@@ -1,0 +1,31 @@
+# Native metadata admission probe
+
+Non-packable M0 research runner; see the [reviewed plan](../../../../specs/1210-state-machine/native-admission-plan.md).
+It does not implement StateMachine or approve kernel/product placement.
+
+From the repository root, through the normal build-slot wrapper on PATH:
+
+```sh
+dotnet build prototypes/kernel-model/models/Admission.Run -c Release --nologo -m:1 -nr:false -p:UseSharedCompilation=false
+dotnet prototypes/kernel-model/models/Admission.Run/bin/Release/net10.0/Kernel.Admission.Run.dll
+```
+
+Bound one focused build to 600 seconds including queue time and one runner to 60 seconds. No retry or wider
+build is implicit in a failure. Record actual source, command, exit, discovered/executed schedule/control counts
+and any failure before another run. No host, provider, Docker, cloud resource or old Azure grant is used.
+
+The planned 24 schedules cross root/nested Sequence placement, Balanced/Durable modes and five commit/owner
+cuts, plus four ordinary-child-fault blockage cases. Each simulation action invokes the actual kernel invariants;
+the witness reads committed native metadata and captured transport replies. Four deliberately broken modes must
+fail their named assertions for authored hydration, lost sender-ID deduplication, capacity and pre-commit reply.
+
+The probe's invocation inbox policy is captured on normal activation. Control-only turns do not construct that
+activity, bind its inputs or drain work. Request-correlated replies do not enroll a workflow observer and stay
+post-commit even if the request opted into early ordinary output. The exact-string fingerprint is versioned and
+bounded; it is not the final public JSON canonicalization contract. Receipts have a separate capacity but no
+expiry policy here. Completed-invocation cleanup and terminal query/duplicate retention are deliberately unproved.
+
+The fault variant only records a blockage through a normal composite callback. It does not implement or prove an
+operator retry. Model reload/takeover is not a real process/host/provider restart. Causal trigger cohorts, the full
+statechart, production authorization/API, retention/deletion, compensation and Studio acceptance remain open.
+No result is asserted by this README until an exact-source run is recorded on its PR.
