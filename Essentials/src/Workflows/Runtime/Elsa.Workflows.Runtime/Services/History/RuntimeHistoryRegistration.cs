@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Services.History;
 
-/// <summary>Internal composition boundary; the production feature/host is installed after owner/provider qualification.</summary>
+/// <summary>Internal implementation of production history enrollment; admission qualifies the actual selected owner/provider chain.</summary>
 internal static class RuntimeHistoryRegistration
 {
     private static readonly Func<IServiceProvider, object> ObservationFactory = provider => new InMemoryRuntimeHistoryObservationWriter(
