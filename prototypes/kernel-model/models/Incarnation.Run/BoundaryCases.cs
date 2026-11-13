@@ -1,6 +1,7 @@
 using Kernel.Durable;
 using Kernel.Native;
 using Kernel.Runtime;
+using Kernel.Sim;
 using Kernel.Workflows;
 
 internal static class BoundaryCases
