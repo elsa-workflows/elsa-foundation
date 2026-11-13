@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 import { SecretFormField } from "./SecretFormField";
 import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
@@ -190,7 +190,7 @@ export function RotateSecretDialog({
         ) : (
           <SecretValueField label="New value" value={value} typeName={secret.typeName} editorHint={type?.editorHint ?? null} onChange={setValue} />
         )}
-        <label>Expires<input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
+        <StudioField label="Expires"><input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></StudioField>
         <StudioDialogFooter
           className="secrets-dialog-actions"
           onCancel={onCancel}
@@ -223,10 +223,7 @@ function Field({
   onChange(value: string): void;
 }) {
   return (
-    <label>
-      {label}
-      <input data-secret-field={field} data-dialog-initial-focus={field === "name" || undefined} type={type} value={value} placeholder={placeholder} autoComplete={autoComplete} onBlur={onBlur} onChange={event => onChange(event.target.value)} />
-    </label>
+    <StudioField label={<>{label}</>}><input data-secret-field={field} data-dialog-initial-focus={field === "name" || undefined} type={type} value={value} placeholder={placeholder} autoComplete={autoComplete} onBlur={onBlur} onChange={event => onChange(event.target.value)} /></StudioField>
   );
 }
 
@@ -238,38 +235,21 @@ function CompactTextField({ label, value, onChange, hint, disabled, autoComplete
   </SecretFormField>;
 }
 
-function SecretValueField({ label, value, typeName, editorHint, onChange, compact = false, disabled, hint, error }: {
+function SecretValueField({ label, value, typeName, editorHint, onChange, disabled, hint, error }: {
   label: string; value: string; typeName: string; editorHint?: string | null; onChange(value: string): void;
   compact?: boolean; disabled?: boolean; hint?: React.ReactNode; error?: React.ReactNode;
 }) {
   const inputId = useId();
   const [visible, setVisible] = useState(false);
   const multiline = editorHint === "multiline" || typeName === "rsa-key" || typeName === "x509-certificate";
-  if (compact) {
-    const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} title={visible ? "Hide value" : "Show value"} onClick={() => setVisible(current => !current)}>
-      {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-    </button>;
-    return <SecretFormField label={label} controlId={inputId} hint={hint} error={error} disabled={disabled} trailing={toggle}>
-      {attributes => multiline
-        ? <textarea {...attributes} data-secret-field="value" value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
-        : <input {...attributes} data-secret-field="value" type={visible ? "text" : "password"} value={value} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />}
-    </SecretFormField>;
-  }
-  return (
-    <div className="secrets-value-field">
-      <label htmlFor={inputId}>{label}</label>
-      {multiline ? (
-        <textarea data-secret-field="value" id={inputId} value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
-      ) : (
-        <div className="secrets-value-input">
-          <input data-secret-field="value" id={inputId} type={visible ? "text" : "password"} value={value} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
-          <button type="button" className="secrets-value-toggle" aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} title={visible ? "Hide value" : "Show value"} onClick={() => setVisible(current => !current)}>
-            {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} title={visible ? "Hide value" : "Show value"} onClick={() => setVisible(current => !current)}>
+    {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+  </button>;
+  return <SecretFormField label={label} controlId={inputId} hint={hint} error={error} disabled={disabled} trailing={toggle}>
+    {attributes => multiline
+      ? <textarea {...attributes} data-secret-field="value" value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
+      : <input {...attributes} data-secret-field="value" type={visible ? "text" : "password"} value={value} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />}
+  </SecretFormField>;
 }
 
 function storesForType(descriptors: SecretDescriptorsResponse, typeName: string) {

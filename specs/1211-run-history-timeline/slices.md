@@ -1,0 +1,67 @@
+# Delivery slices and resumption ledger
+
+Parent: [#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849). Status: **In progress**. This ledger records implementation units; it does not reduce the [specification](spec.md) or turn supporting slices into delivery acceptance.
+
+## Owner decisions
+
+- [5 November](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6645438505): end-to-end delivery, including qualification, review, merge and resulting-main verification.
+- [9 November](https://github.com/elsa-workflows/elsa-foundation/pull/3850#issuecomment-6739905865): close the approximately 40k-line #3850 without prejudice; preserve its branch/evidence and resubmit roughly 3k-line stacked PRs, one spec slice per PR in task order.
+- [11 November](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6794241516): Inputs lands first; Timeline's Data tab and history API build on #4108 rather than the closed #3881 branch.
+- [12 November](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6837576668): resume remaining work after reconciling what landed.
+
+These decisions authorize multiple PRs for this one feature, superseding the old single-PR plan. Use `Part of #3849` without an automatic closing keyword on every slice, including the final delivery PR. Explicitly close the parent only after resulting-main verification. The original valid claim remains on #3849. No new program, deployment or release is authorized.
+
+## Verified baseline
+
+Current main at resumption is `dff7c490d0e5501b22d4ba89beb389c956d4f423`. #3850 is **closed, not merged**. Spec1211 and its new production history types are absent from that main. The old implementation and local corrections remain preserved separately at `a3417044b0c476dceb6488c5deb6032ef1a82c99`; they are donor material, not a branch to merge wholesale.
+
+| Landed work | How the remaining slices use it |
+|---|---|
+| Compact Inputs: [#4108](https://github.com/elsa-workflows/elsa-foundation/pull/4108), `cf517c54db`; composed 320px follow-up [#4174](https://github.com/elsa-workflows/elsa-foundation/pull/4174), `85f83c5691` | Preserve the value-first rows, Technical details action, accessible interactions and tests. Add the activity Data tab around this implementation. |
+| Run-canvas first-view visibility: [#4187](https://github.com/elsa-workflows/elsa-foundation/pull/4187), `dd34ebec95`, and [#4197](https://github.com/elsa-workflows/elsa-foundation/pull/4197), `cb0978d6c4` | Keep the delivered canvas/MiniMap behavior when integrating Timeline/Diagram selection. |
+| Decisions composition inventory: [#3947](https://github.com/elsa-workflows/elsa-foundation/pull/3947), `f588376231` | Reuse the current inventory; do not replay the prototype's former missing-entry fix. |
+| Plain checkpoint marker reads: [#4166](https://github.com/elsa-workflows/elsa-foundation/pull/4166), `ae248a69a6` | Preserve the normal successful-write path; history-free commits must not regain unconditional marker reads. |
+| New-run activity lookup probes: [#4030](https://github.com/elsa-workflows/elsa-foundation/pull/4030), `1769c5b5a8` | Preserve current read-selection/cache ownership and bounded work when adding history queries. |
+
+The resumption check found an open historical `main is red: CI` tracker, #4177, and a still-running required shard on current main. That is not a claim of a healthy base. Recheck actual required results before depending on them or merging; do not count unrelated skips as passes.
+
+## Task-ordered review units
+
+Each row names a coherent boundary, not permission to include every donor file matching a prefix. Keep handwritten changes and their behavior tests together, aim for roughly 3k changed lines per PR, and split further when needed. Read the current source before porting; preserve unrelated landed changes. The API/Studio supporting slices may precede durable providers in task order, but must disclose unsupported recording and may not enable an incomplete production path.
+
+| Slice | Tasks | Review boundary and required proof | Status |
+|---|---|---|---|
+| S01 | T001–T003 | Adopt the selected spec/reference, design contracts and this delivery map. Validate documentation and independent boundary review; no runtime/Studio implementation is enabled. | Preparing |
+| S02 | T004 | Immutable history envelope, policy/batch/head/bookmark/query contracts and API tracking. Constructor/identity/safety behavior and compatibility tests. | Not started |
+| S03 | T005, T007 | Optional checkpoint write sidecar, fingerprint/fold preservation and writer-reader capability contract. History-free replay and unchanged continuation separation controls. | Not started |
+| S04 | T006, T008 | Actual capture-policy admission, deterministic capture and atomic in-memory participant. Split capture and storage if needed; qualify rollback/replay/no-record and scoped registration before enabling. | Not started |
+| S05 | T009–T010 | Authorized bounded run/event read APIs and honest coverage/capability results, with real handler/authorization and unknown-kind tests. | Not started |
+| S06 | T011–T014 | Primary Timeline/Diagram workspace, stable observation/filter/selection and affected Workflows/browser behavior. Preserve delivered run-canvas changes. | Not started |
+| S07 | T015–T018 | Exact execution journal and Journal/Bookmarks/Data navigation over compact Inputs; preserve occurrence/attempt/descendant identity and exact links. | Not started |
+| S08 | T019–T022 | Actual bookmark creation/consumption/retirement, bounded inventory and lifecycle UI. Real claim/rearm/cancel/expiry controls; passive expiry is not a recorded transition. | Not started |
+| S09 | T023–T024 | Independently authorized delivery observations and actual bookmark ingress/disposition. Duplicate/unmatched/faulting delivery controls without false continuation. | Not started |
+| S10 | T025–T027 | Other actual semantic owners and causal navigation. Split by timer/child/publication/recovery/compensation/value owner as needed, keeping each owner's source and tests together. | Not started |
+| S11 | T028–T029 | EF projections and atomic checkpoint participant/query implementation. Real scope, rollback, ambiguous acknowledgement, fence and replay controls. | Not started |
+| S12 | T031–T033 | Current generated migrations and fresh/upgrade/provider qualification. Choose provider-sized sub-slices only where each intermediate model/target/store remains consistent and its checks pass. | Not started |
+| S13 | T030, T034 | Run deletion/retention, capture changes, legacy markers and all persistence modes/cadences with real replay/no-record proof. | Not started |
+| S14 | T035–T040 | Coverage, bounded long-history queries/cursors, live context, independent value access and tenant/scope denial. Keep server and client changes in independently testable sub-slices. | Not started |
+| S15 | T041–T050 | Current-source composed restart/diagnostic journeys, inspected visuals, independent acceptance, final catalogs/review/checks and resulting-main closeout. | Not started |
+
+Some task dependencies cross rows: foundational contract/registration work precedes every consumer; durable model/migration/reader/writer support must be qualified together before production admission; final integration depends on every story. The detailed [task dependencies](tasks.md#dependencies-and-parallel-work) still apply. A row is complete only when all of its sub-slices and required proof are recorded.
+
+The donor has approximately18k generated migration lines. Regenerate against the current schema rather than copy obsolete target models. Record generated and handwritten counts separately when selecting S12 boundaries. Do not cut a coherent schema transition merely to meet a line count, silently waive the owner's review-size direction, or land a known failing intermediate target; resolve an incompatible boundary before opening that slice.
+
+## Evidence and review discipline
+
+- Each replacement PR records its exact base/head, imported versus adapted source, applicable tasks/requirements, actual commands/results and unverified states. References to old evidence retain their original source.
+- The [closed prototype's four review rounds](https://github.com/elsa-workflows/elsa-foundation/blob/6cb9fc70f8fb8129c79c9151342f4e237b1a8d5e/specs/1211-run-history-timeline/evidence/review-round-4.md) remain historical. Carry each relevant finding into its replacement slice and record the slice's own numbered independent review; do not present the old review as approval of new code.
+- R4's runtime wide-value boundary and three narrow exact-target visual captures need their applicable current-source proof. The later prototype native positives and composed42 pass do not close those findings for a new head by themselves.
+- The prototype's separate retained-generation `UnknownAuthority` failure is not declared fixed by a later green summary. Use the current suite/tracker evidence; do not reproduce or patch unrelated ownership code speculatively.
+- Code, generated artifacts and registration changes receive meaningful behavior/whole-project checks as applicable. S01 adds no product behavior and needs no extra local .NET/browser campaign; let the actual CI selector apply every required check, including any checks selected by contract paths.
+- Use current hosted CI routing and required checks. The expired November6 Azure grants and the old Mac-heavy-work restriction are not new resource authorization. No Azure worker is restarted by this plan.
+- Visible changes require the existing composed-host downloadable evidence and independent actual image inspection. Reference images, old screenshots and machine test success are distinct from visual acceptance.
+- Keep the parent spec In progress through partial slices. Set it to Implemented in the final qualified delivery PR; keep #3849 and the delivery goal open until resulting-main/post-merge verification also passes.
+
+## Slice receipts
+
+Add concise receipts here as work lands: PR, exact merge/head, tasks covered, current proof and remaining limitations. Keep full raw artifacts and detailed review discussion on the owning PR; do not import the prototype's execution diary into each slice.

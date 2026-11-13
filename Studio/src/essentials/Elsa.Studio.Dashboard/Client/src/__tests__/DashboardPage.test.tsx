@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnonymousAuthProvider } from "@elsa-workflows/studio-sdk";
+import { registerBuiltInSettingEditors } from "@elsa-workflows/studio-ui";
 import { HomePage } from "../HomePage";
 import { homeLayoutLocalStoragePrefix } from "../homeLayout";
 import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
@@ -200,9 +201,10 @@ describe("HomePage", () => {
     flushSync(() => root.unmount());
   });
 
-  it("contains focus and preserves an invalid widget settings draft until it is dismissed", async () => {
+  it.each(["legacy", "outlined"])("contains focus and preserves an invalid widget settings draft until it is dismissed (%s)", async presentation => {
     const api = stubApi();
-    api.settingEditors.add({
+    if (presentation === "outlined") registerBuiltInSettingEditors(api);
+    else api.settingEditors.add({
       id: "test-text",
       supports: () => true,
       component: ({ setting, value, onChange }) => <input aria-label={setting.displayName} value={String(value ?? "")} onChange={event => onChange(event.target.value)} />
@@ -230,8 +232,11 @@ describe("HomePage", () => {
     opener.focus();
     flushSync(() => opener.click());
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const input = dialog.querySelector<HTMLInputElement>('input[aria-label="Message"]')!;
+    const input = dialog.querySelector<HTMLInputElement>('input')!;
     expect(document.activeElement).toBe(input);
+    expect(input.labels).toHaveLength(1);
+    expect(input.labels?.[0].textContent).toBe("Message");
+    expect(dialog.querySelectorAll("label label")).toHaveLength(0);
 
     const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
     flushSync(() => {
@@ -241,7 +246,7 @@ describe("HomePage", () => {
     clickText(dialog, "Save");
 
     expect(dialog.querySelector("[role='alert']")?.textContent).toBe("Review the settings and try again.");
-    expect(dialog.querySelector<HTMLInputElement>('input[aria-label="Message"]')?.value).toBe("draft to keep");
+    expect(dialog.querySelector<HTMLInputElement>('input')?.value).toBe("draft to keep");
     expect(validate).toHaveBeenCalledOnce();
     expect(api.backend.http.putJson).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(input);

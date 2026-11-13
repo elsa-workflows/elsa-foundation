@@ -33,8 +33,8 @@ its existing argument-level location. New names are reserved reference kinds, no
 
 | Authored kind | Identity payload | Additional authored read data | Compiled source |
 |---|---|---|---|
-| `InputMember` | `referenceKey` identifying the owning document's input declaration | `memberPath` | `WorkflowRequestMember`, after declaration/closed-scope lowering |
-| `WorkflowRequestMember` | `memberKey` identifying an admitted request member | `memberPath` | `WorkflowRequestMember` |
+| `InputMember` | `referenceKey` identifying the owning document's input declaration | `memberPath` | `WorkflowRequestMember`, lowered at publication: `memberKey` is the input's name at a workflow boundary and its reference key in a reusable body |
+| `WorkflowRequestMember` | `memberKey` identifying an admitted request member, open requests included; no legacy `path` | `memberPath` | `WorkflowRequestMember` |
 | `VariableMember` | `referenceKey`, `declaringScopeId` using existing lexical identity rules | `memberPath` | `VariableMember` |
 | `ActivityResultMember` | `producerNodeId`, `projectionKey`, existing `isOptional` producer-occurrence flag; no `producerScopeId` ([admission](contracts/binding-contract.md#1-authored-wire)) | `memberPath` | `ActivityResultMember` |
 
