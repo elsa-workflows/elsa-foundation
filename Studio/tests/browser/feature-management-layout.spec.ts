@@ -180,16 +180,25 @@ for (const mode of ["light", "dark"] as const) {
             });
           });
           const labelsContained = labelsFit();
-          // Revert the old flex sizing in the wide scrollable rail: the vertical guard
-          // must detect compressed multiline labels, then pass with production sizing.
-          let revertedLabelsContained: boolean | null = null;
+          // Prove this guard rejects clipped text without assuming that a flex-shrink
+          // change alone produces clipping. Restore styles and scrolling before captures.
+          let clippedLabelsContained: boolean | null = null;
           if (element.parentElement!.getBoundingClientRect().width >= 960) {
-            const previous = categoryButtons.map(button => button.style.flexShrink);
+            const button = categoryButtons[0];
+            if (!button) throw new Error("The category containment guard needs a category button.");
+            const previousStyle = button.getAttribute("style");
+            const options = button.parentElement!;
+            const previousScrollTop = options.scrollTop;
             try {
-              categoryButtons.forEach(button => { button.style.flexShrink = "1"; });
-              revertedLabelsContained = labelsFit();
+              button.style.height = "1px";
+              button.style.minHeight = "0";
+              button.style.paddingBlock = "0";
+              button.style.overflow = "hidden";
+              clippedLabelsContained = labelsFit();
             } finally {
-              categoryButtons.forEach((button, index) => { button.style.flexShrink = previous[index]; });
+              if (previousStyle === null) button.removeAttribute("style");
+              else button.setAttribute("style", previousStyle);
+              options.scrollTop = previousScrollTop;
             }
           }
           return {
@@ -197,7 +206,7 @@ for (const mode of ["light", "dark"] as const) {
             beside: rect.right <= list.left,
             above: rect.bottom <= list.top,
             labelsContained,
-            revertedLabelsContained,
+            clippedLabelsContained,
             controlsFit: Array.from(element.querySelectorAll("button,input")).every(control => {
               const box = control.getBoundingClientRect();
               return box.left >= rect.left && box.right <= rect.right + 1 && control.scrollWidth <= control.clientWidth;
@@ -207,7 +216,7 @@ for (const mode of ["light", "dark"] as const) {
         });
         expect(geometry.controlsFit).toBe(true);
         expect(geometry.labelsContained).toBe(true);
-        if (geometry.width >= 960) expect(geometry.revertedLabelsContained).toBe(false);
+        if (geometry.width >= 960) expect(geometry.clippedLabelsContained).toBe(false);
         expect(geometry.overflow).toBeLessThanOrEqual(1);
         expect(geometry.width >= 960 ? geometry.beside : geometry.above).toBe(true);
         await longCategory.scrollIntoViewIfNeeded();
