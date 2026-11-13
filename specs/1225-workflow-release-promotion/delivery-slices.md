@@ -22,6 +22,10 @@ commands remain historical gaps. Refresh them when their owning source is brough
 The open [main-CI incident #4177](https://github.com/elsa-workflows/elsa-foundation/issues/4177) is tracked separately.
 Do not infer a healthy base from this source inspection, or bypass a red required gate when merging.
 
+13 November refresh: current base is `0903e51653`; the original baseline above remains historical.
+Spec 1225 replaces the initial resubmission's 1224 after #4225 brought another 1224 spec onto main.
+Every later slice restates its own exact base; the program choices and acceptance remain unchanged.
+
 ## Dependency order
 
 These are review boundaries, not new issues or a waiver of the complete-delivery criteria. Estimated sizes
@@ -31,7 +35,7 @@ checks off an entire task.
 
 | Slice | Task subset | Concrete deliverable | Required proof before acceptance |
 |---|---|---|---|
-| 1. Contracts and delivery plan | T001–T004 refresh | Restore reviewed product choices, contracts, task list and goal page; reserve unique spec 1224; distinguish historical implementation from main | Relative links, requirements consistency and independent design/standards review; no runtime claim |
+| 1. Contracts and delivery plan | T001–T004 refresh | Restore reviewed product choices, contracts, task list and goal page; reserve unique spec 1225; distinguish historical implementation from main | Relative links, requirements consistency and independent design/standards review; no runtime claim |
 | 2. Immutable transport | T005–T008 transport subset | Runtime-safe bundle contracts, bounded canonical codec, exact blob preservation, optional composition and packed consumer | Whole transport project, malicious/oversized input controls, meaningful digest mutation, clean packed consumer, structural registration |
 | 3. Owner semantic verification | T009/T013 shared prerequisite | Compare owner-discovered facts, complete edges, selected root roles and scoped requirements with the frozen manifest | Whole semantic suite and root/edge/fact mutations; no permissive default owner |
 | 4. Archive | T009 durable-storage prerequisite | Scoped immutable archive contracts and SQLite implementation with consumer-owned context | Raw byte integrity/bounds, atomic retry, pooled concurrent readers/writers, killed writer/reopen; split contracts/store and provider tests if necessary |

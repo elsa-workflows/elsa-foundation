@@ -11,9 +11,9 @@ Every behavioral delivery needs a meaningful red/green mutation or before/after 
 ## Phase 1 — Setup and source-grounded design
 
 - [x] T001 Claim #3590, isolate branch, inspect live protocol/Initiative boundary/current scope and record authorization on the canonical issue; files: `AGENTS.md`, `docs/program-goals/workflow-release-promotion.md`.
-- [x] T002 Inspect native/reusable/BPMN/ETL identity, owner/store/start/resource seams and record actual limitations in `specs/1224-workflow-release-promotion/research.md` and `contracts/model-artifacts.md`.
-- [x] T003 Resolve consequential scope/activation/mapping/recovery/direct-BPMN compatibility choices and record them in `specs/1224-workflow-release-promotion/spec.md` and #3590.
-- [x] T004 Independently review requirements and draft contracts; fix subset evidence, root roles, trusted partition, owner compensation, scoping and Runtime-only split in `specs/1224-workflow-release-promotion/contracts/` and `plan.md`.
+- [x] T002 Inspect native/reusable/BPMN/ETL identity, owner/store/start/resource seams and record actual limitations in `specs/1225-workflow-release-promotion/research.md` and `contracts/model-artifacts.md`.
+- [x] T003 Resolve consequential scope/activation/mapping/recovery/direct-BPMN compatibility choices and record them in `specs/1225-workflow-release-promotion/spec.md` and #3590.
+- [x] T004 Independently review requirements and draft contracts; fix subset evidence, root roles, trusted partition, owner compensation, scoping and Runtime-only split in `specs/1225-workflow-release-promotion/contracts/` and `plan.md`.
 
 ## Phase 2 — Shared foundations
 
@@ -76,7 +76,7 @@ Independent test: complete Studio and packaged CLI operate the same retained rel
 
 ## Phase 7 — Documentation, gates and closeout
 
-- [ ] T035 Replace planned commands in `specs/1224-workflow-release-promotion/quickstart.md` with executable owned-environment examples under `tools/releases/` and user/integrator docs under `website/docs/`; explain direct-BPMN adoption, evidence limits and recovery.
+- [ ] T035 Replace planned commands in `specs/1225-workflow-release-promotion/quickstart.md` with executable owned-environment examples under `tools/releases/` and user/integrator docs under `website/docs/`; explain direct-BPMN adoption, evidence limits and recovery.
 - [ ] T036 Run affected domain/provider/consumer/architecture/maps/CI-tier gates, meaningful bite controls and current-head review; record exact commands/counts/outcomes on the PR and #3590.
 - [ ] T037 Merge only after all required current-head checks and UX acceptance pass under current rules; qualify resulting main, update spec lifecycle/program milestones and close #3590 only after all agreed criteria are complete.
 

@@ -5,7 +5,7 @@
 - **Steward:** Sipke. One active implementation slice at a time.
 - **Canonical request/program:** [#3590](https://github.com/elsa-workflows/elsa-foundation/issues/3590).
 - **Authorization:** [owner receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6671598586), recorded in [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus).
-- **Specification:** [spec 1224](../../specs/1224-workflow-release-promotion/spec.md).
+- **Specification:** [spec 1225](../../specs/1225-workflow-release-promotion/spec.md).
 
 ## Purpose and scope
 
@@ -65,9 +65,11 @@ migration and reversal of external business effects remain outside this delivery
 
 PR #3911 closed without merge on 9 November because the feature exceeded reviewable size. Its work and evidence
 remain retained. Main includes the active authorization/registry row, but no release product implementation.
-The [resubmission sequence](../../specs/1224-workflow-release-promotion/delivery-slices.md) starts with contracts
+The [resubmission sequence](../../specs/1225-workflow-release-promotion/delivery-slices.md) starts with contracts
 and then restores and qualifies each foundation before owner integration and user journeys. All M0–M4 completion
 gates remain open. Historical passing suites and the four-case claim fix are not current-main acceptance.
 
-The original spec allocation 1216 collided with another reservation. This resubmission uses 1224, reserved on
+The original spec allocation 1216 collided with another reservation. The initial resubmission reserved 1224 on
 [#3590](https://github.com/elsa-workflows/elsa-foundation/issues/3590#issuecomment-6837417950).
+Main subsequently acquired `1224-optional-bpmn-js-editor` through #4225. This PR uses 1225 to remove the collision;
+this is a numbering correction only and leaves the BPMN program unchanged.
