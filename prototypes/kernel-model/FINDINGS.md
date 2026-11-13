@@ -1024,8 +1024,8 @@ which reset the partition). The EF store now:
   owner writes its instances' waits, under the fence, so nothing races the check.
 
 The common path costs nothing more: the waits are still in the one batch. The second attempt costs a commit's round
-trips plus one per wait, and only a batch that re-subscribes or removes what is absent pays it; the kernel's own
-turns do neither (M6), so a model has to.
+trips plus one per wait, and only a batch that re-subscribes or removes what is absent pays it. M6 reasoned that the
+kernel's own turns do neither, so only a model that does it pays.
 
 **Gates.**
 
@@ -1040,5 +1040,5 @@ turns do neither (M6), so a model has to.
 
 EF cost runs, SQLite and PostgreSQL (`proxy=1`), each fence: every counted and sent round trip the same as before; the
 TCP-read column of the PostgreSQL rows of 100 and 1,000 instances moved by up to three reads, the noise README
-describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (no subscription
-there is subscribed twice or removed while absent, so they do not reach the new path).
+describes. Not run: the simulation (it uses the in-memory store, unchanged) and the stress tests (not run for this
+item; whether their models ever reach the second attempt was not checked).
