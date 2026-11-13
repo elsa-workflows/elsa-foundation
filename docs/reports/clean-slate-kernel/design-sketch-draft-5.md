@@ -135,7 +135,7 @@ What a provider has to give:
 - **An order key per partition** for messages, such that a later send from the same sender gets a larger key.
 - **A read of a partition's messages** in key order, which sees every committed row eventually and no uncommitted one.
 - **Reads by key:** instances, subscriptions, events, journal rows after a position.
-- **Its own time,** in milliseconds, for due times and for checking leases at a take. With the fence in the batch (the default) the owner writes `lease_until` from its own clock, so clock skew costs availability, never safety.
+- **Its own time,** in milliseconds, for due times and for checking leases at a take. With the fence in the batch on EF (the default) the owner writes `lease_until` from its own clock (the prototype's MongoDB store still takes the database's time), so clock skew costs availability, never safety.
 - **Failures told apart:** unknown outcome, transient (try again as it is), definite.
 
 The prototype's `IKernelStore` also carries the node heartbeat (for fair share), start subscriptions, held messages, delete and unsubscribing all in a commit, the sweep of expired commands and events, the projector's own row and the view rows; the conformance suite tests each of them on every store.
@@ -157,7 +157,7 @@ The tables below are the relational shape. A document provider stores the same r
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
 
-This is the proposed shape, and the interfaces in this sketch are the proposed contract. The prototype already uses turn, job and pass; where its schema and contract still differ (a few columns not added yet, a few it keeps, some signatures), its DESIGN.md says so in "Where the code and draft 5 differ".
+This is the proposed shape, and the interfaces in this sketch are the proposed contract. The prototype already uses turn, job and pass; where its schema and contract still differ (a few columns not added yet, a few it keeps, some signatures), its DESIGN.md gives its schema in "Data" and most other differences in "Where the code and draft 5 differ".
 
 The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
 
@@ -273,7 +273,7 @@ public interface ITurn
 - **The kernel owns** suspend and resume (it stops delivering all but resume), forced termination of a tree, tenant checks on sends, and trace headers on messages.
 - Replay-style authoring (Temporal, Durable Task) and journaled awaits (Restate) fit as models on this contract; the kernel does not impose either.
 
-How the known models sit on it:
+How the known models sit on it (only Native is built, as a spike; the others are the planned fit):
 
 - **Native:** state is the live activity frames, variables and scheduled work; slow activities are jobs. Each container brings its own semantics (see "Containers and their semantics" below): structured containers built in, Flowchart on the graph engine, StateMachine on the statechart engine.
 - **BPMN:** hosted on the `Bpmn.Semantics` interpreter (see below); state is the tokens and scopes; a task is a job, so an interrupting boundary event can cancel it; a call activity is a start; a message that arrives early waits in `event`.
@@ -337,7 +337,7 @@ Each step has a gate. Nothing reaches product code before the design is approved
 
 ## Standalone jobs: Elsa.Jobs on the kernel (owner decision, 12 November)
 
-There is one job concept. A workflow's background job and a standalone job are the same thing on the kernel, and Elsa.Jobs is rebuilt on it rather than kept as a second durable authority.
+There is one job concept. A workflow's background job and a standalone job are the same thing on the kernel, and Elsa.Jobs is to be rebuilt on it rather than kept as a second durable authority. Not built yet: a spike comes first.
 
 The reference is the `Elsa.Jobs` domain on `agent/codex/3586-background-jobs` (source `a786c52f`, about 40,000 added lines under `Extensions/Jobs`, about 30,000 of them C#; draft PR #3909, closed; ADR 0096, not on main). It is a standalone runner whose own store owns execution authority, bridged to native workflows and BPMN through checkpoint/outbox sources, a pending-admission address, delivery responsibility and exact consumption proofs. That bridge is the cross-store handshake this kernel removes: on the kernel, starting a job is one commit (a ticket in the instance's inbox) and the result is a message applied once.
 
@@ -408,7 +408,7 @@ On PostgreSQL the native model on the kernel needs no database call for a reques
 
 ## What the tests show
 
-A deterministic simulation drives several nodes against one store with crashes, paused owners, lost answers, retried commands and skewed clocks, and checks every invariant after every action; it passes at 200,000 runs of 300 actions and 20,000 runs of 1,000, also with native instances in the mix. Mutation checks break the kernel one rule at a time, and each is caught. The store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; where engines differ, the contract is silent and has to be defined. A stress test with killed connections and stalls holds on all five engines, and fails on every one with the fence broken on purpose. The figures, the seeds, and what each round found are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, E9 among them, are in ENGINES.md.
+A deterministic simulation drives several nodes against one store with crashes, paused owners, lost answers, retried commands and skewed clocks, and checks every invariant after every action; it passes at 200,000 runs of 300 actions and 20,000 runs of 1,000, also with native instances in the mix. Mutation checks break the kernel one rule at a time, and each is caught, except two rules that another rule covers (the position in the fence, the count on deletes), which are caught when that rule is broken too. The store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; where engines differ, the contract is silent and has to be defined. A stress test with killed connections and stalls holds on all five engines, and fails on every one with the fence broken on purpose. The figures, the seeds, and what each round found are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, E9 among them, are in ENGINES.md.
 
 - **Not built yet:** the runtime conformance suite and the Orleans adapter; the graph engine and the BPMN, StateMachine, agent, standalone-jobs and ETL fan-out spikes; short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set; the projector's set-based rounds; reply-address deadlines and the owner's signal to the receiving node; the recreate rule per kind of id; values by reference; the viewer's tail read and catch-up; `Describe`, the journal envelope, tenant checks and trace headers; streaming responses and a route mapping a client's disconnect to a cancel; SQL Server's checked fence as its default.
 - **Done in round 4 stage A:** the three layers as separate projects and the turn/job/pass renames.

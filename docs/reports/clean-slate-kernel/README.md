@@ -8,4 +8,4 @@ Status: a proposed design, not approved. No product code exists for it. It super
 
 The interactive walkthrough of the same design is published at https://vowful-mustard-pd8t.here.now/.
 
-The standalone model that tested the design (`prototypes/kernel-model/`) is on local branches and is not published yet; it lands on main in later PRs of program #4229.
+The standalone model that tested the design (`prototypes/kernel-model/`) is in stacked PRs #4250 to #4260 (not yet on main); the commit hashes its documents cite are kept at the tag `prototype/kernel-model-history`.
