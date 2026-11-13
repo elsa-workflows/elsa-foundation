@@ -34,6 +34,14 @@ public interface IActivityStructureHandler
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
+    /// Projects physical ownership for authoring-metadata retention, without widening lexical children.
+    /// The default preserves existing handlers' child projection; document owners can include native
+    /// roots outside the selected lexical scope and compact header identities without activity bodies.
+    /// </summary>
+    ActivityOwnershipProjection ProjectOwnership(ActivityNode activity) =>
+        new(ProjectChildren(activity).SelectMany(slot => slot.Activities).ToArray(), []);
+
+    /// <summary>
     /// Projects public-contract members referenced by structure-owned relationships such as
     /// Flowchart outcome ports. Values and expressions must never be included.
     /// </summary>
@@ -65,6 +73,13 @@ public interface IActivityStructureHandler
     }
 
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
+
+    /// <summary>
+    /// Compiles with exact server-resolved invocation facts and the original source/projection.
+    /// Existing handlers retain their ordinary compilation behavior by default.
+    /// </summary>
+    ActivityNodeStructure CompileExecutableStructure(ActivityNode activity, ActivityStructureCompilationContext context) =>
+        CompileExecutableStructure(activity);
 
     /// <summary>
     /// Rewrites the semantic child-node references in an already compiled structure after its

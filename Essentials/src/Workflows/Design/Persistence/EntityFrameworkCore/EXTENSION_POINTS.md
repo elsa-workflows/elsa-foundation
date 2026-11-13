@@ -20,6 +20,11 @@ The registration supplies the EF replacements for the workflow-design persistenc
 `AddWorkflowsDesignEntityFrameworkCore` rejects a different already-selected backend. Provider
 switching is intentionally not implicit; a host must expose an explicitly named replacement flow.
 
+`EfUpdateDraftCommand` prunes per-node presentation using the Design Core
+[`ProjectOwnership` contribution](../../Api/EXTENSION_POINTS.md#iactivitystructurehandler-core--elsaworkflowsdesigncore),
+including owned native roots and compact-header identities outside a selected lexical scope. Removed
+ownership still prunes its metadata. This persistence traversal does not widen lexical/data-selection children.
+
 ## Feature and provider binding
 
 `WorkflowsDesignEntityFrameworkCoreFeature` is an opt-in shell feature. Its provider, connection

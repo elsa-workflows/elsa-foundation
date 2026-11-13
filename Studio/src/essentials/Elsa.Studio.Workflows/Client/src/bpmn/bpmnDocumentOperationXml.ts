@@ -3,17 +3,11 @@ import { bpmnNamespaces as ns, projectBpmnDocumentScene, readBpmnDocument, resol
   type BpmnDocumentCommand, type BpmnDocumentScene, type BpmnScopeAddress, type BpmnXmlAddress, type ParsedBpmnDocument } from "./bpmnDocument";
 import { bpmnOwningProcess, isBpmnModelElement } from "./bpmnDocumentPolicy";
 import { serializeBpmnXml } from "./bpmnDocumentXml";
+import { isBpmnOwnedSyntax } from "./bpmnDocumentSyntaxOwnership";
+export { isBpmnOwnedSyntax };
 
 export function refuseBpmnOperation(reason: string): never { throw new Error(`Cannot author BPMN source: ${reason}.`); }
 
-/** Namespace resemblance inside an extension or text payload is not standard construct ownership. */
-export function isBpmnOwnedSyntax(element: Element): boolean {
-  for (let current: Element | null = element; current; current = current.parentElement) {
-    if (!(Object.values(ns) as readonly string[]).includes(current.namespaceURI ?? "")
-      || current.namespaceURI === ns.model && ["extensionElements", "documentation", "script"].includes(current.localName)) return false;
-  }
-  return true;
-}
 export interface BpmnOperationContext {
   owner: ActivityNode;
   scope: BpmnScopeAddress;
@@ -60,6 +54,24 @@ export function bpmnSourceAddress(element: Element, parsed: ParsedBpmnDocument):
   return refuseBpmnOperation("the XML property does not belong to this source");
 }
 
+/** Read-only correspondence uses retained idless ordinals, independent of moved identified siblings. */
+export function bpmnSourceCounterpart(element: Element, before: ParsedBpmnDocument, after: ParsedBpmnDocument): Element | undefined {
+  const steps: { namespaceURI: string | null; localName: string; index: number }[] = [];
+  let anchor = element;
+  const identified = (value: Element, parsed: ParsedBpmnDocument) => parsed.byId.get(value.getAttribute("id") ?? "") === value;
+  while (anchor !== after.document.documentElement && !identified(anchor, after)) {
+    const parent: Element | null = anchor.parentElement;
+    if (!parent) return undefined;
+    const siblings = [...parent.children].filter(child => child.namespaceURI === anchor.namespaceURI && child.localName === anchor.localName && !identified(child, after));
+    steps.unshift({ namespaceURI: anchor.namespaceURI, localName: anchor.localName, index: siblings.indexOf(anchor) });
+    anchor = parent;
+  }
+  let found = anchor === after.document.documentElement ? before.document.documentElement : before.byId.get(anchor.getAttribute("id")!);
+  for (const step of steps) found = found && [...found.children]
+    .filter(child => child.namespaceURI === step.namespaceURI && child.localName === step.localName && !identified(child, before))[step.index];
+  return found && (found.namespaceURI ?? "") === (element.namespaceURI ?? "") && found.localName === element.localName ? found : undefined;
+}
+
 export function bpmnFragment(context: BpmnOperationContext, localName: string, attributes: Readonly<Record<string, string>> = {}, namespace: string = ns.model): Element {
   const root = context.parsed.document.documentElement;
   // Reuse source namespace context. Fresh prefixes are local to a new fragment, never rebound globally.
@@ -99,7 +111,7 @@ export function bpmnIdentity(element: Element) { return element.getAttribute("id
 /** Declare narrowly, avoiding both bound prefixes and retained, currently unresolved QName-looking content. */
 export function bpmnAttributePrefix(context: BpmnOperationContext, target: Element, namespaceURI: string, preferred: string, commands: BpmnDocumentCommand[]): string {
   const existing = target.lookupPrefix(namespaceURI);
-  if (existing) return existing;
+  if (existing && target.lookupNamespaceURI(existing) === namespaceURI) return existing;
   let prefix = preferred, index = 1;
   const mentioned = (candidate: string) => [target, ...target.getElementsByTagName("*")].some(element => !element.lookupNamespaceURI(candidate)
     && ([...element.attributes].some(attribute => attribute.value.includes(`${candidate}:`))
@@ -114,7 +126,7 @@ export function resolveBpmnOperationAddress(context: BpmnOperationContext, addre
   let element = address.documentRoot === true ? context.parsed.document.documentElement : context.parsed.byId.get(address.elementId);
   if (!element) refuseBpmnOperation("the XML address is stale");
   for (const step of address.path ?? []) {
-    const candidates: Element[] = [...element.children].filter(child => child.namespaceURI === step.namespaceURI && child.localName === step.localName);
+    const candidates: Element[] = [...element.children].filter(child => (child.namespaceURI ?? "") === step.namespaceURI && child.localName === step.localName);
     if (step.index === undefined && candidates.length !== 1) refuseBpmnOperation("the XML property address is ambiguous");
     element = candidates[step.index ?? 0];
     if (!element) refuseBpmnOperation("the XML property address is stale");
@@ -137,7 +149,7 @@ const flow = new Set(["task", "userTask", "serviceTask", "manualTask", "scriptTa
   "startEvent", "endEvent", "intermediateCatchEvent", "intermediateThrowEvent", "boundaryEvent", "exclusiveGateway", "inclusiveGateway", "parallelGateway", "eventBasedGateway", "complexGateway", "sequenceFlow", "dataObject", "dataObjectReference", "dataStoreReference"]);
 const artifacts = new Set(["textAnnotation", "association", "group"]);
 function rank(parent: Element, child: Element) {
-  const name = child.localName;
+  const name = ["performer", "humanPerformer", "potentialOwner"].includes(child.localName) ? "resourceRole" : child.localName;
   if (name === "documentation") return 0;
   if (name === "extensionElements") return 1;
   if (parent.localName === "definitions") return child.namespaceURI === ns.diagram ? 4 : name === "import" ? 2 : name === "relationship" ? 5 : 3;
@@ -150,12 +162,17 @@ function rank(parent: Element, child: Element) {
     dataInputAssociation: 10, dataOutputAssociation: 10.5, inputSet: 11, outputSet: 11, resourceRole: 11, standardLoopCharacteristics: 12, multiInstanceLoopCharacteristics: 12,
     laneSet: 13, completionCondition: 16 } as Record<string, number>)[name] ?? (flow.has(name) ? 14 : artifacts.has(name) ? 15 : name.endsWith("EventDefinition") || name === "eventDefinitionRef" ? 12 : undefined);
 }
-/** Inserts only the new member at its schema position, retaining every existing sibling and its order. */
-export function insertBpmnFragment(context: BpmnOperationContext, parent: Element, element: Element): BpmnDocumentCommand {
+/** Shared creation/reparent position; existing sibling order and source identities stay untouched. */
+export function bpmnInsertionBefore(context: BpmnOperationContext, parent: Element, element: Element): BpmnXmlAddress | undefined {
   const order = rank(parent, element);
   const before = order === undefined ? undefined : [...parent.children].find(child => child.namespaceURI === ns.model || child.namespaceURI === ns.diagram
     ? (rank(parent, child) ?? -1) > order : false);
-  return { kind: "insert", parent: bpmnSourceAddress(parent, context.parsed), xml: bpmnXml(element), ...(before ? { before: bpmnSourceAddress(before, context.parsed) } : {}) };
+  return before ? bpmnSourceAddress(before, context.parsed) : undefined;
+}
+/** Inserts only the new member at its schema position, retaining every existing sibling and its order. */
+export function insertBpmnFragment(context: BpmnOperationContext, parent: Element, element: Element): BpmnDocumentCommand {
+  const before = bpmnInsertionBefore(context, parent, element);
+  return { kind: "insert", parent: bpmnSourceAddress(parent, context.parsed), xml: bpmnXml(element), ...(before ? { before } : {}) };
 }
 
 export function requireBpmnFlowScope(context: BpmnOperationContext, elementId?: string): Element {

@@ -14,7 +14,37 @@
   analysis and mandatory headless publication consume these facts. Other task families, branches, multiple entries, events/listeners, loops,
   compensation, transactions and subprocess/call boundaries remain unknown; no generic admission
   rule or runtime occurrence semantics are relaxed.
-- Repeated feature composition retains one implementation. Runtime-only feature registration supplies no handler.
+- Repeated feature composition retains one implementation per exact kind/schema. Runtime-only feature registration supplies no handler.
+
+## Complete-document retention and source validation
+
+- Owning contracts: Workflows Design Core `IActivityStructureHandler` and Validations Core `IDraftValidator`.
+- Contributors: internal singleton `BpmnDocumentStructureHandler` for `elsa.bpmn.structure@2.0.0`,
+  internal singleton `BpmnDocumentScopeViewHandler` for transient `elsa.bpmn.scope-view@1.0.0`, and
+  scoped enumerable `BpmnScopeViewSourceValidator` / `BpmnDocumentAdmissionValidator`, registered by `ActivitiesBpmnDesignFeature`.
+- Classification: cross-domain projection and validation through existing owning contracts. XML is retained
+  once on the physical source alongside its disjoint native forest and compact scope headers. Views are pure,
+  scope-addressed query projections; replacement folds only owned native configuration back into the physical source.
+- The source validator rejects physically authored derived views and validates complete-document ownership
+  before generic traversal. Opaque literal JSON is not treated as activity source. The admission validator
+  reports content-derived execution errors without preventing draft retention through ordinary create/update commands.
+- Exact kind/schema matching exposes the document retention payload; the scope-view handler has no authorable
+  payload type. Context-free compilation remains closed. Explicit-context compilation admits complete source before lowering
+  and requires exact resolved native roles. Raw-source chain facts remain conservative outside the proven subset;
+  schema 1 is unchanged and no shared Publishing/Graph admission authority is replaced.
+
+## Optional complete-source Direct assessment
+
+- Private BPMN-owned optional replacement contract: `IBpmnDocumentDirectAdmission.CanPromote(WorkflowDefinitionState)`.
+- Consumer: `BpmnDocumentAdmissionValidator`; the optional Interchange Direct publishing feature
+  registers one scoped `BpmnDirectDocumentAdmission` with `TryAddScoped`. Ordinary composition has none.
+- `ValidateBpmnDirectAdmissionReplacementStartupTask` checks the shell's final service descriptors at startup
+  and rejects more than one owner before validation. Register a replacement before the default or use
+  `services.Replace(...)`; there is no ordered contributor selection or short-circuit aggregation.
+- It assesses the entire physical closed workflow using the same strict projection as Direct publication.
+  This content assessment suppresses only that validator's document execution diagnostic. Native
+  compilation, other validators, source authorization and immutable pin authorization remain independent.
+- Profiles remain the existing human formats 1/6 and service format 3; unsupported mixed content refuses.
 
 ## Published model references
 
@@ -27,3 +57,11 @@
   runtime readers share the private Core codec and frozen key. The runtime hosting feature supplies no publisher contribution.
 
 See [authoring migration](README.md) and the [runtime responsibilities](../Elsa.Activities.Bpmn/EXTENSION_POINTS.md).
+
+## Complete-source compilation verification
+
+- `BpmnDocumentCompilationSource` is a scoped `IExecutableCompilationSource` contribution registered by
+  `ActivitiesBpmnDesignFeature`. It checks exact process/Decision roles and the complete admitted scope
+  semantics against the final executable using exactly one canonical `IExecutableStructureNormalizer`.
+- A provider label, source marker or reusable boundary cannot authorize a native process role. Physical
+  source ownership, exact invocation/header configuration and inline placement are checked before reduction.

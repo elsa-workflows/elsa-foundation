@@ -24,6 +24,14 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public ActivityOwnershipProjection ProjectOwnership(ActivityNode activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ProjectOwnership(activity)
+            : new([], []);
+    }
+
     public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity)
     {
         ArgumentNullException.ThrowIfNull(activity);
@@ -85,6 +93,17 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
         return TryGetHandler(activity.Structure, out var handler)
             ? handler.CompileExecutableStructure(activity)
             : new ActivityNodeStructure(activity.Structure.Kind, activity.Structure.SchemaVersion, activity.Structure.Payload);
+    }
+
+    public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity, ActivityStructureCompilationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentNullException.ThrowIfNull(context);
+        if (activity.Structure is null) return null;
+        if (TryGetHandler(activity.Structure, out var handler)) return handler.CompileExecutableStructure(activity, context);
+        if (_handlers.Keys.Any(key => key.Kind == activity.Structure.Kind))
+            throw new NotSupportedException($"Activity structure '{activity.Structure.Kind}@{activity.Structure.SchemaVersion}' has no handler for this schema version.");
+        return new ActivityNodeStructure(activity.Structure.Kind, activity.Structure.SchemaVersion, activity.Structure.Payload);
     }
 
     public ActivityNodeStructure RemapExecutableStructure(

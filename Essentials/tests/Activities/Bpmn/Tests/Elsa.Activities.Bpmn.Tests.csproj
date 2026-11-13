@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
+    <ProjectReference Include="../../../../src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="../../../../src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj" />
     <ProjectReference Include="../../../../src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />

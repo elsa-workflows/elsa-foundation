@@ -1,8 +1,9 @@
 import type { ActivityNode } from "../workflowTypes";
-import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, resolveBpmnDocumentReference, type BpmnDocumentCommand, type BpmnDocumentConfigurationChange, type BpmnDocumentSelection, type BpmnScopeAddress } from "./bpmnDocument";
+import { applyBpmnDocumentTransaction, bpmnNamespaces as ns, readBpmnDocument, resolveBpmnDocumentReference, type BpmnDocumentCommand, type BpmnDocumentConfigurationChange, type BpmnDocumentSelection, type BpmnScopeAddress } from "./bpmnDocument";
+import { verifyBpmnEventContexts } from "./bpmnDocumentEventContext";
 import { assessBpmnDocumentConnection, bpmnBoolean, bpmnEventDefinitions, bpmnFlowScope, isBpmnModelElement } from "./bpmnDocumentPolicy";
 import { isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType } from "./bpmnNotationTypes";
-import { planBpmnCreateConnection, type BpmnCreateConnectionIntent, type BpmnDocumentOperationPlan } from "./bpmnDocumentCreateOperations";
+import { prepareBpmnConnectionSyntax, type BpmnCreateConnectionIntent, type BpmnDocumentOperationPlan } from "./bpmnDocumentCreateOperations";
 import { bpmnDocumentToolboxShapes } from "./bpmnDocumentToolbox";
 import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, bpmnXml, isBpmnOwnedSyntax, refuseBpmnOperation, requireBpmnVisibleElement, resolveBpmnOperationAddress } from "./bpmnDocumentOperationXml";
 
@@ -48,7 +49,11 @@ export function planBpmnReplace(owner: ActivityNode, scope: BpmnScopeAddress, se
   if (entry.expanded !== undefined && selection.diId) commands.push({ kind: "attribute", target: { elementId: selection.diId }, name: "isExpanded", value: String(entry.expanded) });
   const plan = { transaction: { commands }, selection };
   const next = applyBpmnDocumentTransaction(owner, plan.transaction), parsed = bpmnOperationContext(next, scope).parsed;
-  for (const flow of parsed.byId.values()) if (["sequenceFlow", "messageFlow"].includes(flow.localName)) {
+  verifyBpmnEventContexts(context.parsed, parsed, [selection.elementId]);
+  const replaced = parsed.byId.get(selection.elementId)!;
+  const role = (value: Element) => [value.localName, bpmnEventDefinitions(value), bpmnBoolean(value, "triggeredByEvent"), bpmnBoolean(value, "isForCompensation")];
+  if (JSON.stringify(role(element)) === JSON.stringify(role(replaced))) return plan;
+  for (const flow of parsed.document.getElementsByTagNameNS(ns.model, "*")) if (isBpmnOwnedSyntax(flow) && ["sequenceFlow", "messageFlow"].includes(flow.localName)) {
     const source = resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("sourceRef")), target = resolveBpmnDocumentReference(parsed, flow, flow.getAttribute("targetRef"));
     if (source?.id !== selection.elementId && target?.id !== selection.elementId) continue;
     const policy = assessBpmnDocumentConnection(parsed, flow.localName as "sequenceFlow" | "messageFlow", source?.id ?? "", target?.id ?? "");
@@ -65,7 +70,7 @@ export function planBpmnReconnect(owner: ActivityNode, scope: BpmnScopeAddress, 
   const edge = context.scene.edges.find(candidate => candidate.edgeId === intent.diId && candidate.elementId === intent.elementId);
   const expectedType = intent.kind === "compensationAssociation" ? "association" : intent.kind;
   if (!edge || element.localName !== expectedType) refuseBpmnOperation("reconnect needs the actual relationship and DI instance of the same kind");
-  const candidate = planBpmnCreateConnection(owner, scope, intent), commands: BpmnDocumentCommand[] = [];
+  const candidate = prepareBpmnConnectionSyntax(owner, scope, intent), commands: BpmnDocumentCommand[] = [];
   // The candidate is a pure, unpublished plan. Its standard I/O members are reused; its fresh relationship/DI never enter source.
   let replacement: Element | undefined;
   for (const command of candidate.transaction.commands ?? []) {
@@ -94,7 +99,8 @@ export function planBpmnReconnect(owner: ActivityNode, scope: BpmnScopeAddress, 
   const actualDi = context.parsed.byId.get(intent.diId)!;
   for (const [attribute, endpoint] of [["sourceElement", intent.sourceId], ["targetElement", intent.targetId]]) if (actualDi.hasAttribute(attribute)) commands.push({ kind: "attribute", target: { elementId: intent.diId }, name: attribute, value: context.scene.shapes.find(shape => shape.elementId === endpoint)!.shapeId });
   const plan = { transaction: { commands }, selection: { elementId: intent.elementId, diId: intent.diId } };
-  applyBpmnDocumentTransaction(owner, plan.transaction);
+  const next = applyBpmnDocumentTransaction(owner, plan.transaction);
+  if (intent.kind === "sequenceFlow") verifyBpmnEventContexts(context.parsed, readBpmnDocument(next), [intent.sourceId, intent.targetId]);
   return plan;
 }
 
@@ -118,11 +124,14 @@ export function prepareBpmnDeleteCore(owner: ActivityNode, scope: BpmnScopeAddre
     if (element.localName === "participant" && !allowParticipants) refuseBpmnOperation("pool deletion uses its explicit process-retention preparation");
     removed.add(element);
   }
-  const ids = () => new Set([...removed].flatMap(element => [element, ...element.getElementsByTagName("*")]).map(element => element.getAttribute("id")).filter((id): id is string => Boolean(id)));
+  const ids = () => new Set([...removed].flatMap(element => [element, ...element.getElementsByTagName("*")]).flatMap(element => {
+    const id = element.getAttribute("id");
+    return id && context.parsed.byId.get(id) === element ? [id] : [];
+  }));
   let changed: boolean;
   do {
     changed = false; const deleted = ids();
-    for (const element of context.parsed.byId.values()) {
+    for (const element of context.parsed.document.getElementsByTagNameNS(ns.model, "*")) {
       if (!isBpmnModelElement(element) || !standardContext(element) || removed.has(element)) continue;
       const reference = (value: string | null, at = element) => { const target = resolveBpmnDocumentReference(context.parsed, at, value); return target && deleted.has(bpmnIdentity(target)); };
       if (["sequenceFlow", "messageFlow", "association"].includes(element.localName) && ["sourceRef", "targetRef"].some(name => reference(element.getAttribute(name)))
@@ -154,7 +163,8 @@ export function prepareBpmnDeleteCore(owner: ActivityNode, scope: BpmnScopeAddre
   }
   // Reverse document order retains exact idless sibling addresses while preceding members are removed.
   for (const element of [...new Set(removeMembers)].reverse().filter(element => !removeMembers.some(parent => parent !== element && parent.contains(element)))) commands.push({ kind: "remove", target: bpmnSourceAddress(element, context.parsed) });
-  for (const element of roots.reverse()) commands.push({ kind: "remove", target: bpmnSourceAddress(element, context.parsed) });
+  const documentOrder = [...context.parsed.document.getElementsByTagName("*")];
+  for (const element of roots.sort((a, b) => documentOrder.indexOf(b) - documentOrder.indexOf(a))) commands.push({ kind: "remove", target: bpmnSourceAddress(element, context.parsed) });
   if ((bindings.length || headers.length) && !configuration) return { kind: "requiresNativeCleanup", commands, reason: "The host must resolve native ownership and references in the same transaction.", cleanup: { bindingElementIds: bindings.map(binding => binding.elementId), activityRootIds: bindings.flatMap(binding => [binding.childNodeId, binding.listenerNodeId]).filter((id): id is string => typeof id === "string"), headerScopeIds: headers.map(header => header.scopeElementId) } };
   const plan: BpmnDocumentOperationPlan = { transaction: { commands, ...(configuration ? { configuration } : {}) }, selection: null };
   applyBpmnDocumentTransaction(owner, plan.transaction); // Unhandled standard dependencies refuse before any host state changes.

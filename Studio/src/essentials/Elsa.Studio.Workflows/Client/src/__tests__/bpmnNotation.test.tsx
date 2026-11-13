@@ -154,6 +154,18 @@ describe("BPMN integrated SVG notation", () => {
 });
 
 describe("notation descriptors from complete standard XML", () => {
+  it.each([" false ", " 0 "])("preserves non-interrupting notation for XML boolean %s", value => {
+    const source = `<b:process id="p"><b:subProcess id="sub" triggeredByEvent=" true "/><b:boundaryEvent id="event" cancelActivity="${value}" isInterrupting="${value}"/></b:process>`;
+    expect(bpmnNotationFromElement(xml(source, "event"))).toMatchObject({ cancelActivity: false, interrupting: false });
+    expect(bpmnNotationFromElement(xml(source, "sub")).eventSubProcess).toBe(true);
+  });
+
+  it("collapses XML whitespace for data-object IDREFs without interpreting a QName", () => {
+    const source = '<b:process id="p"><b:dataObject id="data" isCollection=" true "/><b:dataObjectReference id="ref" dataObjectRef=" data "/></b:process>';
+    expect(bpmnNotationFromElement(xml(source, "ref")).collection).toBe(true);
+    expect(bpmnNotationFromElement(xml(source.replace('dataObjectRef=" data "', 'dataObjectRef="tns:data"'), "ref")).collection).toBeUndefined();
+  });
+
   it("resolves QName group labels without treating data-object IDREFs as QNames", () => {
     const source = '<b:category id="category"><b:categoryValue id="value" value="Shared responsibilities"/></b:category><b:process id="p"><b:group id="group" categoryValueRef="tns:value"/><b:dataObject id="data" isCollection="true"/><b:dataObjectReference id="ref" dataObjectRef="tns:data"/></b:process>';
     expect(bpmnNotationFromElement(xml(source, "group")).name).toBe("Shared responsibilities");

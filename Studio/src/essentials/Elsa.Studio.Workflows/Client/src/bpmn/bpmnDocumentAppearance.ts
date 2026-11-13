@@ -1,3 +1,6 @@
+import { readBpmnBooleanAttribute } from "./bpmnXmlBoolean";
+import { resolveBpmnNotationReference } from "./bpmnNotationTypes";
+
 /** Namespace-aware presentation facts. Reading never normalizes or writes the source document. */
 export const bpmnAppearanceNamespaces = {
   diagram: "http://www.omg.org/spec/BPMN/20100524/DI",
@@ -66,15 +69,13 @@ export function readBpmnDocumentAppearance(di: Element): BpmnDocumentAppearance 
   const reference = source(label, null, "labelStyle");
   if (!reference?.value.trim()) return result;
   result.sources.labelStyle = reference;
-  // BPMNLabel.labelStyle is an IDREF. Do not guess QName/URI semantics for malformed draft references.
-  const styles = [...di.ownerDocument.getElementsByTagNameNS(bpmnAppearanceNamespaces.diagram, "BPMNLabelStyle")]
-    .filter(style => style.getAttribute("id") === reference.value.trim()
-      && style.parentElement?.namespaceURI === bpmnAppearanceNamespaces.diagram && style.parentElement.localName === "BPMNDiagram");
-  if (styles.length !== 1) {
+  const style = resolveBpmnNotationReference(label, reference.value, bpmnAppearanceNamespaces.diagram);
+  if (style?.localName !== "BPMNLabelStyle" || style.parentElement?.namespaceURI !== bpmnAppearanceNamespaces.diagram
+    || style.parentElement.localName !== "BPMNDiagram") {
     result.issues.push({ source: reference, reason: "Label style reference is missing or ambiguous; retained in source." });
     return result;
   }
-  const fonts = [...styles[0].children].filter(element => element.namespaceURI === bpmnAppearanceNamespaces.bounds && element.localName === "Font");
+  const fonts = [...style.children].filter(element => element.namespaceURI === bpmnAppearanceNamespaces.bounds && element.localName === "Font");
   if (fonts.length !== 1) {
     result.issues.push({ source: reference, reason: "Label style needs exactly one standard font; retained in source." });
     return result;
@@ -95,7 +96,8 @@ export function readBpmnDocumentAppearance(di: Element): BpmnDocumentAppearance 
   for (const [attribute, property] of [["isBold", "bold"], ["isItalic", "italic"], ["isUnderline", "underline"], ["isStrikeThrough", "strikeThrough"]] as const) {
     const value = source(font, null, attribute);
     if (!value) continue;
-    if (["true", "1", "false", "0"].includes(value.value.trim())) values[property] = ["true", "1"].includes(value.value.trim());
+    const boolean = readBpmnBooleanAttribute(font, attribute);
+    if (boolean !== undefined) values[property] = boolean;
     else result.issues.push({ source: value, reason: "Invalid font flag; retained in source." });
   }
   if (Object.keys(values).length) result.labelFont = values;

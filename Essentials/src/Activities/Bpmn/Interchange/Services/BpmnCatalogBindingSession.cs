@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Models;
+using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Models;
@@ -130,6 +131,7 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
             throw new BpmnInterchangeException($"BPMN binding node '{node.NodeId}' has unsupported authoring schema '{node.Structure.SchemaVersion}'.");
         try
         {
+            BpmnLegacyStructureGuard.RejectCompleteSourceFields(node.Structure.Payload);
             return node.Structure.Payload.Deserialize<BpmnAuthoredStructure>(Web)
                 ?? throw new BpmnInterchangeException($"BPMN binding node '{node.NodeId}' has a null authored structure.");
         }

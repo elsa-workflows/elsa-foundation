@@ -82,6 +82,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 **Known implementations (shipped — cross-domain IStartupTask consumers):**
 - `Elsa.Serialization` — `JsonPayloadConvertersInitializingStartupTask` *(cross-domain — initialises JSON converters)*
 - `Elsa.Activities.Runtime` — `RegisterActivityTypesStartupTask` *(seeds the well-known-type registry with activity and I/O aliases)*
+- `Elsa.Activities.Bpmn.Design` — `ValidateBpmnDirectAdmissionReplacementStartupTask` *(cross-domain; `[Order(-100)]`, validates final shell service descriptors for at most one optional Direct assessor before draft validation; descriptor-only, resolves no scoped service and performs no publication or runtime work; repeated/copied shell composition binds the check to its own collection)*
 - `Elsa.Activities.Design.Reconciliation` — `ActivityVersionReconcilerStartupTask` *(cross-domain; runs on every node at once, no lock, because its inputs are node-local and concurrent passes converge, #2189)*
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
 - `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*

@@ -2,6 +2,7 @@ import type { ActivityNode, VariableDefinition } from "../workflowTypes";
 import { getChildSlots } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
 import { serializeBpmnXml } from "./bpmnDocumentXml";
+import { readBpmnBooleanAttribute } from "./bpmnXmlBoolean";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
 export const bpmnDocumentSchemaVersion = "2.0.0";
@@ -115,7 +116,7 @@ function requiredText(value: unknown, name: string): string {
   return value;
 }
 function is(element: Element, namespaceURI: string, localName: string) {
-  return element.namespaceURI === namespaceURI && element.localName === localName;
+  return (element.namespaceURI ?? "") === namespaceURI && element.localName === localName;
 }
 function children(element: Element, namespaceURI: string, localName: string): Element[] {
   return [...element.children].filter(child => is(child, namespaceURI, localName));
@@ -527,7 +528,10 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
     case "remove": {
       const target = resolve(parsed, command.target);
       if (target === parsed.process || target === parsed.document.documentElement) fail("selected process cannot be removed");
-      const containedIds = new Set([target, ...target.getElementsByTagName("*")].map(element => element.getAttribute("id")).filter(Boolean));
+      const containedIds = new Set([target, ...target.getElementsByTagName("*")].flatMap(element => {
+        const id = element.getAttribute("id");
+        return id && parsed.byId.get(id) === element ? [id] : [];
+      }));
       if (parsed.payload.bindings.some(binding => containedIds.has(binding.elementId)))
         fail("deletion needs an explicit native-binding transformation");
       target.remove();
@@ -756,10 +760,6 @@ function labelBounds(element: Element): BpmnBounds | undefined {
   const bounds = label && children(label, bpmnNamespaces.bounds, "Bounds")[0];
   return bounds ? readBounds(bounds, true) : undefined;
 }
-function readBoolean(element: Element, name: string): boolean | undefined {
-  const value = element.getAttribute(name);
-  return value === "true" || value === "1" ? true : value === "false" || value === "0" ? false : undefined;
-}
 function connectionReferences(parsed: ParsedBpmnDocument, element: Element, name: "sourceRef" | "targetRef"): string[] {
   const references = element.hasAttribute(name) ? [{ context: element, value: element.getAttribute(name)! }]
     : children(element, bpmnNamespaces.model, name).map(child => ({ context: child, value: child.textContent?.trim() ?? "" }));
@@ -784,7 +784,7 @@ export function projectBpmnDocumentScene(owner: ActivityNode, diagramId: string)
     if (is(di, bpmnNamespaces.diagram, "BPMNShape")) {
       scene.shapes.push({ shapeId: requiredText(di.getAttribute("id"), "shape identity"), elementId, elementType: element.localName, element,
         bounds: readBounds(uniqueChild(di, bpmnNamespaces.bounds, "Bounds")), labelBounds: labelBounds(di),
-        isExpanded: readBoolean(di, "isExpanded"), isHorizontal: readBoolean(di, "isHorizontal"), isMarkerVisible: readBoolean(di, "isMarkerVisible") });
+        isExpanded: readBpmnBooleanAttribute(di, "isExpanded"), isHorizontal: readBpmnBooleanAttribute(di, "isHorizontal"), isMarkerVisible: readBpmnBooleanAttribute(di, "isMarkerVisible") });
     } else if (is(di, bpmnNamespaces.diagram, "BPMNEdge")) {
       const sourceRefs = connectionReferences(parsed, element, "sourceRef");
       const targetRefs = connectionReferences(parsed, element, "targetRef");
