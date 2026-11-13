@@ -36,3 +36,18 @@ Its concurrent lazy entries never reuse values by digest across readers and conf
 inspectors are trusted verification code: typed legacy model views are read-only inputs and inspectors must not mutate
 nested collections. Original captured bytes remain immutable; deep mutation isolation of legacy typed views is not claimed.
 There are no events, startup tasks, recurring tasks, store lookups, imports or activation hooks in this feature.
+
+## Original activity publication evidence and portable catalog inspection
+
+Activity-version codec profile2 retains original contract/provider JSON text, original publication projection
+metadata and an explicitly known nullable owner tenant. Profile1 remains readable and encodes without an added
+null evidence field. The member codec version must agree with the actual evidence profile; a manifest cannot
+hide or invent evidence by relabeling its version. Source namespace and owner-tenant facts grant no target visibility.
+
+| Strategy | Contract / layer / default | Supported sites and signature | Replacement guidance and callers |
+|---|---|---|---|
+| `RuntimeCatalogReleaseInspector` | `IReleaseOccurrenceInspector` in Releases.Core; registered by the optional Runtime profile | Public-contract `elsa.activity-contract/1` and provider `elsa.clr-activity/1`; `ValueTask<ReleaseOccurrenceFacts> InspectAsync(ReleaseSemanticSite site, IReleaseContentReader content, CancellationToken cancellationToken = default)` | Compares captured public contracts, exact template/provider association, the existing producer fingerprint recipe, original projection fragments, counts and requirements. Unknown fields/schema/provider profiles refuse; it loads no CLR type and invokes no compiler. The shared semantic verifier and builder dispatch it for captured catalog sites. |
+
+This partial native verification capability grants no root action, source publication authority, import or
+activation. Placement metadata and individual activity-module semantics remain mandatory separate owner sites.
+The production package dependency closure is unchanged; Runtime-only consumers require no Design/compiler/source package.
