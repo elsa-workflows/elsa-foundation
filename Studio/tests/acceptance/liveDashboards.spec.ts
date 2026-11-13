@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { nativeDashboardEdgesJourney } from "./nativeDashboardEdgesJourney";
 import { liveAcmeDashboardJourney, liveWorkflowDashboardJourney, restartWorkflowDashboardJourney } from "./liveDashboardsJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
@@ -34,7 +35,9 @@ test.beforeEach(async ({ page }, info) => {
 
 test.afterEach(async ({ page }) => { expect(errors.get(page), "Uncaught browser errors").toEqual([]); });
 
-if (process.env.UX_DASHBOARD_RESTART === "1") {
+if (process.env.UX_DASHBOARD_NATIVE_EDGES === "1") {
+  test("native Dashboard module repair and edge states", async ({ page }, info) => nativeDashboardEdgesJourney(page, info, capture));
+} else if (process.env.UX_DASHBOARD_RESTART === "1") {
   test("live authored dashboard survives real host restart with provider disabled", async ({ page }, info) => restartWorkflowDashboardJourney(page, info, capture));
 } else {
   test("live Workflow question clarification refinement and native refresh", async ({ page }, info) => liveWorkflowDashboardJourney(page, info, capture));
