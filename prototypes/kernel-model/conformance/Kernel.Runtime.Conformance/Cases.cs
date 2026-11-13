@@ -158,14 +158,19 @@ public static class Cases
         {
             var a = await h.StartAsync();
             await Settle(h);
-            h.StoreOf(a.Name).Stall(h.Lease * 2);       // the node pauses; its lease on partition 0 runs out meanwhile
-            await Task.Delay(h.Lease + TimeSpan.FromMilliseconds(200));
-            var thief = await h.Outside.TakeAsync(0, "thief", h.Lease);      // another process takes it, then dies without releasing it
-            That(thief is not null, "the stalled node's lease on partition 0 did not run out");
-            // The stalled node must try to write after its scope was taken (its renewal beat at the latest); only then is
-            // the store's answer the fence's.
             var store = h.StoreOf(a.Name);
-            var (commits, refused) = (store.Commits, store.Refused);
+            store.Stall(System.Threading.Timeout.InfiniteTimeSpan);      // the node pauses until the thief has its lease, however slow the store
+            int commits, refused;
+            try
+            {
+                await Task.Delay(h.Lease + TimeSpan.FromMilliseconds(200));
+                var thief = await h.Outside.TakeAsync(0, "thief", h.Lease);      // another process takes it, then dies without releasing it
+                That(thief is not null, "the stalled node's lease on partition 0 did not run out");
+                // The stalled node must try to write after its scope was taken (its renewal beat at the latest); only
+                // then is the store's answer the fence's.
+                (commits, refused) = (store.Commits, store.Refused);
+            }
+            finally { store.Resume(); }
             That(await h.WaitAsync(() => store.Commits > commits, h.Lease * 3), "the stalled node made no commit after its scope was taken: the case did not test the fence");
             if (!await h.WaitAsync(() => store.Refused > refused, h.Lease))
                 throw new FenceException("the store did not refuse the stalled node's commit: it did not learn that it lost partition 0");
