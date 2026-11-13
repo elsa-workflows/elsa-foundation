@@ -104,6 +104,7 @@ class Exporter:
         self.forms=sorted(forms,key=len,reverse=True)
         self.prefix=re.compile("|".join(re.escape(prefix) for prefix in sorted({form[:4] for form in self.forms}))) if self.forms else None
         self.byte_secrets=[form.encode() for form in self.forms]
+        self.byte_prefix=re.compile(b"|".join(re.escape(prefix) for prefix in sorted({form[:4] for form in self.byte_secrets}))) if self.byte_secrets else None
 
     def discover(self, value, key=''):
         if isinstance(value, dict):
@@ -172,6 +173,12 @@ class Exporter:
         if isinstance(value,dict): return {self.text(k): self.clean(v) for k,v in value.items() if not SENSITIVE.search(k)}
         return value
 
+    def has_secret_bytes(self,data):
+        # A full byte form can occur only where its first four bytes occur. Preserve the
+        # same final rejection while avoiding a complete rescan for every image/token pair.
+        if self.byte_prefix is None or not self.byte_prefix.search(data):return False
+        return any(secret in data for secret in self.byte_secrets)
+
     def css(self,text):
         text_for_policy=re.sub(r'\\\r?\n','',re.sub(r'/\*.*?\*/','',text,flags=re.S))
         decoded=re.sub(r'\\([0-9a-fA-F]{1,6})\s?',lambda match:chr(int(match[1],16)) if int(match[1],16)<=0x10ffff else '',text_for_policy)
@@ -182,7 +189,7 @@ class Exporter:
             if url.startswith('data:font/woff2;base64,'):
                 try:font=base64.b64decode(url.partition(',')[2],validate=True)
                 except ValueError:return None
-                if not self.font_format(font) or any(secret in font for secret in self.byte_secrets):return None
+                if not self.font_format(font) or self.has_secret_bytes(font):return None
             elif normalized_url(url)!=url:return None
         without_fonts=re.sub(r'url\(\s*[\'\"]?data:font/woff2;base64,[A-Za-z0-9+/=]+[\'\"]?\s*\)','',decoded,flags=re.I)
         if re.search(r'data\s*:',without_fonts,re.I):return None
@@ -237,7 +244,7 @@ class Exporter:
         if not image and digest not in self.static_hashes:return False
         path='resources/'+digest;data=self.entries.get(path)
         if data is None:raise UnsafeTrace('Missing referenced rendering resource')
-        if any(secret in data for secret in self.byte_secrets):return False
+        if self.has_secret_bytes(data):return False
         mime=self.mime.get(digest,'')
         if image or mime.startswith('image/'):
             if not self.image_format(data):return False
@@ -362,10 +369,10 @@ class Exporter:
         if not self.counts['actions'] or not self.counts['snapshots']:raise UnsafeTrace('Trace has no usable browser experience')
         output.update(self.resources)
         for name,data in output.items():
-            if any(secret in data for secret in self.byte_secrets):raise UnsafeTrace('Secret remains in exported resource')
+            if self.has_secret_bytes(data):raise UnsafeTrace('Secret remains in exported resource')
             try:text=data.decode('utf-8')
             except UnicodeError:continue
-            if TOKEN.search(text) or any(secret in text for secret in self.secrets):raise UnsafeTrace('Secret remains in exported evidence')
+            if self.text(text)!=text:raise UnsafeTrace('Secret remains in exported evidence')
         self.counts['contexts']=len(self.contexts);self.counts['renderingResources']=len(self.resources)
         return output
 
