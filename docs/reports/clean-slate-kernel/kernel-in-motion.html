@@ -154,7 +154,7 @@ marker path.n { fill: var(--muted); }
 .scene .lit > .pf { stroke: var(--accent); stroke-width: 2.6; }
 .scene .lit > text.tt { fill: var(--accent); }
 .scene.focusing [data-part]:not(.hl):not(.hl-in) { opacity: .13; }
-.scene.focusing [data-part].gone { opacity: 0; }
+.scene.focusing [data-part].gone { opacity: 0; visibility: hidden; }   /* the dimming rule outranks .gone */
 .scene .hl:not(.gone) { opacity: 1 !important; }
 .scene .hl > .pf { stroke: var(--hot); stroke-width: 3; }
 .scene .layer { transition: transform calc(.8s * var(--k)) cubic-bezier(.4, 0, .2, 1); }
@@ -259,6 +259,43 @@ marker path.n { fill: var(--muted); }
 .lanes .crashmark rect { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 1.6; }
 .lanes .crashmark text { fill: var(--hot); }
 .lanes .notesbox.bad { stroke: var(--hot); }
+/* the fence lab */
+.lab text.big { font: 600 24px var(--mono); }
+.lab text.mem { font: 600 12.5px var(--mono); }
+.lab text.l2 { font: 600 10.5px var(--mono); fill: var(--muted); }
+.lab text.st-res { fill: var(--ink); font-weight: 700; }
+.lab .cellbox { fill: none; stroke: none; }
+.lab .slot { fill: none; stroke: var(--line-strong); stroke-dasharray: 5 4; }
+.lab .lock path, .lab .lock > rect:not(.slot) { fill: none; stroke: var(--muted); stroke-width: 2.2; }
+.lab .lock.held path, .lab .lock.held > rect:not(.slot) { stroke: var(--hot); }
+.lab .lock.held path.open, .lab .lock:not(.held) path.shut { display: none; }
+.lab .prow.pend text.big { fill: var(--accent); font-style: italic; }
+.lab .prow.whatif text.big { fill: var(--muted); font-style: italic; }
+.lab .prow.whatif > rect.pf { stroke-dasharray: 6 4; }
+.lab .tok > rect.pf { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.lab .tok.take > rect.pf { stroke: var(--l1); stroke-width: 2; }
+.lab .tok.ok text.l2 { fill: var(--l3); }
+.lab .tok.bad > rect.pf { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 2.4; }
+.lab .tok.bad text.l2 { fill: var(--hot); }
+.lab .tok.ghost > rect.pf { stroke-dasharray: 5 4; }
+.lab .tok.ghost text { opacity: .75; }
+.lab #lab-callg > rect { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+.lab #lab-callg.sent > rect { stroke: var(--l3); stroke-width: 2; } .lab #lab-callg.sent text.tt { fill: var(--l3); }
+.lab #lab-callg.lost > rect { stroke: var(--hot); stroke-width: 2; stroke-dasharray: 4 3; } .lab #lab-callg.lost text.tt { fill: var(--hot); }
+.lab .tbl .row.pend text { fill: var(--accent); font-style: italic; }
+.lab .tbl .row.rolled text { fill: var(--hot); text-decoration: line-through; }
+.lab .tbl .row text.tag { text-decoration: none; font-style: normal; }
+.lab .veil { fill: var(--accent-soft); opacity: .6; }
+.lab .ovlabel rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.lab .leasefill.out { fill: var(--hot); }
+.lab .banner rect { fill: var(--l3-soft); stroke: var(--l3); stroke-width: 1.6; }
+.lab .banner text { font: 600 14.5px var(--sans); fill: var(--l3); }
+.lab .banner.bad rect { fill: var(--hot-soft); stroke: var(--hot); } .lab .banner.bad text { fill: var(--hot); }
+.lab .banner.info rect { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: 6 4; } .lab .banner.info text { fill: var(--accent); }
+.whatif .seg button[disabled] { opacity: .45; }
+.lab.animate .tbl .row.in { animation: rowin calc(.7s * var(--k)) var(--fd, 0ms) both; }
+.lab .tbl .row.chgrow text { fill: var(--accent); font-weight: 600; }
+.labfoot { margin-top: 18px; }
 
 @media (max-width: 900px) {
   .page { padding: 22px 14px 80px; }
@@ -278,7 +315,7 @@ marker path.n { fill: var(--muted); }
 <header class="top">
   <div class="eyebrow">Companion to the kernel walkthrough · design draft 5 · prototypes/kernel-model</div>
   <h1>The kernel in motion</h1>
-  <p class="lede">One order workflow, followed through every part of the proposed kernel; then the three persistence modes side by side, and what the kernel does when things go wrong.</p>
+  <p class="lede">One order workflow, followed through every part of the proposed kernel; then the three persistence modes side by side, what the kernel does when things go wrong, and a lab where you try to beat the fence.</p>
   <div class="chips">
     <span class="chip warn">Proposed design, not approved</span>
     <span class="chip ok">Prototype on main: prototypes/kernel-model</span>
@@ -546,11 +583,92 @@ marker path.n { fill: var(--muted); }
   </div>
 </section>
 
-<!-- 04 · the visual glossary ─────────────────────────────────── -->
-<section class="part" id="glossary">
+<!-- 04 · the fence lab ─────────────────────────────────────────── -->
+<section class="part" id="fence-lab">
   <div class="num">04</div>
+  <h2>The fence lab: try to make two owners both write</h2>
+  <p>Act two showed one paused owner bounced by the fence. Here you choose the order of events. Node A owns partition 17 at epoch 8 and has a batch to commit; Node B would take the partition if it could. Whatever you choose, at most one of them writes, and a commit lands at most once. The lease is the decided 10 s; times and positions are illustrative.</p>
+  <div class="whatif">
+    <span class="lbl" id="lp-label">Node A pauses:</span>
+    <span class="seg" role="group" aria-labelledby="lp-label">
+      <button data-lp="0" aria-pressed="true">No pause</button>
+      <button data-lp="2" aria-pressed="false">2 s</button>
+      <button data-lp="15" aria-pressed="false">15 s</button>
+    </span>
+  </div>
+  <div class="whatif">
+    <span class="lbl" id="lo-label">Who reaches the row first:</span>
+    <span class="seg" role="group" aria-labelledby="lo-label">
+      <button data-lo="early" aria-pressed="true">B's take, while A sleeps</button>
+      <button data-lo="A" aria-pressed="false">Together: A's commit</button>
+      <button data-lo="B" aria-pressed="false">Together: B's take</button>
+    </span>
+    <span class="note" id="lo-note"></span>
+  </div>
+  <div class="whatif">
+    <span class="lbl" id="ll-label">The answer to A's commit is lost:</span>
+    <span class="seg" role="group" aria-labelledby="ll-label">
+      <button data-ll="off" aria-pressed="true">Off</button>
+      <button data-ll="on" aria-pressed="false">On</button>
+    </span>
+    <span class="note" id="ll-note"></span>
+  </div>
+  <div class="controls" role="group" aria-label="Controls for the fence lab"></div>
+  <div class="dots" role="group" aria-label="Go to a step of the fence lab"></div>
+  <div class="scenebox" id="labbox">
+  <svg id="lab" class="dg scene lab" viewBox="0 0 1200 412" role="img" aria-labelledby="lab-title lab-desc">
+    <title id="lab-title">The fence lab: Node A, the partition row and Node B</title>
+    <desc id="lab-desc">On the left Node A, the owner, with what its HTTP caller sees, its memory, the turns in its batch and its commit envelope. On the right Node B with its take. In the middle the database: the statement at the partition row, the row lock with its holder and its queue, the row itself (owner, epoch, lease_until, position), the lease against the database clock, and the instance, message and journal tables. A banner at the bottom gives the result. The narration under the picture says what each step shows.</desc>
+    <g data-part="labA"><rect class="b1 pf" x="10" y="6" width="298" height="346" rx="10"/><text class="tt" x="22" y="26">Node A · owns partition 17</text></g>
+    <g data-part="labCall" id="lab-callg"><rect class="pf" x="22" y="36" width="274" height="26" rx="6"/><text class="ts" x="30" y="53">caller sees:</text><text class="tt" id="lab-call" x="100" y="53"></text></g>
+    <g data-part="labMemA"><rect class="b2 pf" x="22" y="70" width="274" height="52" rx="6"/><text class="ts" x="30" y="85">memory</text><text class="mem" id="lab-memA0" x="30" y="102"></text><text class="ts" id="lab-memA1" x="30" y="116"></text></g>
+    <g data-part="labTurn"><rect class="b3 pf" x="22" y="130" width="274" height="72" rx="6"/><text class="tt" x="30" y="147">turns in this batch</text><g class="badge"><rect x="192" y="136" width="98" height="17" rx="8"/><text id="lab-badge" x="241" y="148" text-anchor="middle"></text></g><text class="ts" id="lab-turn0" x="30" y="165"></text><text class="ts" id="lab-turn1" x="30" y="180"></text><text class="ts" id="lab-turn2" x="30" y="195"></text></g>
+    <g data-part="labB"><rect class="b1 pf" x="892" y="6" width="298" height="346" rx="10"/><text class="tt" x="904" y="26">Node B · would take partition 17</text></g>
+    <g data-part="labMemB"><rect class="b2 pf" x="904" y="70" width="274" height="52" rx="6"/><text class="ts" x="912" y="85">memory</text><text class="mem" id="lab-memB0" x="912" y="102"></text><text class="ts" id="lab-memB1" x="912" y="116"></text></g>
+    <text class="ts" x="904" y="150">Its take is a conditional update too: it</text><text class="ts" x="904" y="165">lands only on a partition nobody owns, one</text><text class="ts" x="904" y="180">whose lease ran out by the database's</text><text class="ts" x="904" y="195">clock, or one Node B already owns.</text>
+    <g data-part="labDb"><rect class="bs pf" x="322" y="6" width="556" height="346" rx="10"/><text class="tt st" x="334" y="25">Database</text><text class="ts" x="398" y="25">the partition row and the payload tables</text><text class="ts" x="790" y="25" text-anchor="end">db clock</text><text class="tt" id="lab-clock" x="866" y="25" text-anchor="end">t = 0.0 s</text></g>
+    <g data-part="labStmt"><rect class="box pf" x="334" y="32" width="532" height="46" rx="6"/><text class="tm" id="lab-st0" x="342" y="46"></text><text class="tm" id="lab-st1" x="342" y="59"></text><text class="tm st-res" id="lab-st2" x="342" y="72"></text></g>
+    <g data-part="labLock" id="lab-lock" class="lock">
+      <path class="shut" d="M341,110 v-6 a7,7 0 0 1 14,0 v6"/><path class="open" d="M341,110 v-6 a7,7 0 0 1 14,0 v-3"/><rect x="336" y="110" width="24" height="18" rx="3"/>
+      <text class="tm" x="368" y="89">holds the row lock</text><rect class="slot" x="368" y="93" width="220" height="40" rx="5"/><text class="ts" x="478" y="117" text-anchor="middle">free</text>
+      <text class="tm" x="640" y="89">waits in the lock queue</text><rect class="slot" x="640" y="93" width="220" height="40" rx="5"/><text class="ts" x="750" y="117" text-anchor="middle">empty</text>
+    </g>
+    <g data-part="labRow" id="lab-row" class="prow">
+      <rect class="box pf" x="334" y="139" width="532" height="64" rx="6"/>
+      <text class="tm" x="346" y="153">id</text><text class="big" x="346" y="181">17</text>
+      <g data-part="labOwner"><rect class="pf cellbox" x="394" y="142" width="84" height="46" rx="4"/><text class="tm" x="400" y="153">owner</text><text class="big" id="lab-c0" x="400" y="181"></text></g>
+      <g data-part="labEpoch"><rect class="pf cellbox" x="480" y="142" width="84" height="46" rx="4"/><text class="tm" x="486" y="153">epoch</text><text class="big" id="lab-c1" x="486" y="181"></text></g>
+      <g data-part="labLeaseUntil"><rect class="pf cellbox" x="566" y="142" width="162" height="46" rx="4"/><text class="tm" x="572" y="153">lease_until</text><text class="big" id="lab-c2" x="572" y="181"></text></g>
+      <g data-part="labPos"><rect class="pf cellbox" x="730" y="142" width="130" height="46" rx="4"/><text class="tm" x="736" y="153">position</text><text class="big" id="lab-c3" x="736" y="181"></text></g>
+      <text class="ts" id="lab-rowcap" x="346" y="198"></text>
+    </g>
+    <g data-part="labLease">
+      <text class="ts" x="334" y="223">lease</text><rect class="box" x="380" y="213" width="480" height="11" rx="3"/><rect class="leasefill" id="lab-lf" x="380" y="213" width="480" height="11" rx="3"/>
+      <text class="tm" x="380" y="237">0 s</text><text class="tm" x="540" y="237" text-anchor="middle">10 s</text><text class="tm" x="700" y="237" text-anchor="middle">20 s</text><text class="tm" x="860" y="237" text-anchor="end">30 s</text>
+      <g id="lab-now"><path d="M380,207 v23" style="stroke:var(--ink);stroke-width:2"/><path d="M375,203 h10 l-5,6 z" style="fill:var(--ink)"/></g>
+      <text class="ts" id="lab-lcap" x="334" y="251"></text>
+    </g>
+    <g data-part="labInstance" id="lab-t0"></g><g data-part="labMessage" id="lab-t1"></g><g data-part="labJournal" id="lab-t2"></g>
+    <g id="lab-pause" class="gone"><rect class="veil" x="10" y="6" width="298" height="346" rx="10"/><g class="ovlabel"><rect x="34" y="272" width="250" height="44" rx="6"/><text class="tt" id="lab-pause0" x="159" y="290" text-anchor="middle"></text><text class="ts" x="159" y="307" text-anchor="middle">a GC pause or a suspended VM: not dead</text></g></g>
+    <g data-part="labEnv" id="lab-envA" class="tok env gone"><rect class="pf" width="220" height="40" rx="5"/><path class="flap" d="M0,0 L110,11 L220,0"/><text class="tt" x="8" y="18" style="font-size:11.5px">A's commit · one transaction</text><text class="l2" id="lab-envA2" x="8" y="33"></text></g>
+    <g data-part="labTakeB" id="lab-takeB" class="tok take gone"><rect class="pf" width="220" height="40" rx="5"/><text class="tt" x="8" y="18" style="font-size:11.5px">B's take · a conditional update</text><text class="l2" id="lab-takeB2" x="8" y="33"></text></g>
+    <g data-part="labTakeA" id="lab-takeA" class="tok take gone"><rect class="pf" width="220" height="40" rx="5"/><text class="tt" x="8" y="18" style="font-size:11.5px">A's take · after its reset</text><text class="l2" id="lab-takeA2" x="8" y="33"></text></g>
+    <g id="lab-banner" class="banner gone"><rect x="10" y="362" width="1180" height="42" rx="8"/><text id="lab-bt" x="600" y="388" text-anchor="middle"></text></g>
+  </svg>
+  </div>
+  <div class="below">
+    <div class="narration" aria-live="polite"><h3 class="ntitle"></h3><div class="ntext"></div><p class="layerline nlayer"></p></div>
+    <aside class="wf" aria-label="This case"><h3 id="lab-case"></h3><div id="lab-aside"></div></aside>
+  </div>
+  <p class="note labfoot"><b>Why the check is its own round trip.</b> Sent in one packet, a fence that matched nothing does not stop what follows it: a COMMIT in the same packet would still land. So the owner must see "1 row" before it sends COMMIT, which makes 2 round trips on PostgreSQL. The fence travels one of two ways: in the batch, as EF concurrency tokens on the epoch and the position (the default: 2 round trips, the lease time from the owner's clock), or as its own statement first (3 round trips, the lease time from the database's), which is SQL Server's default since finding E9. <b>Leases decide who should write. The fence decides who can.</b> The invariant: after a take at epoch e + 1, nothing prepared under e commits, and the new owner sees everything that did commit.</p>
+  <p class="note"><b>Built and measured in the prototype:</b> both ways of sending the fence and their round trips; the take; the reset after an unknown outcome or a fence that matched nothing; a simulation that injects paused owners and lost answers and checks the invariant after every action; and a mutation check showing that the position decides only when a reset is missing (FINDINGS.md, section 3). <b>Decided:</b> the 10 s lease, the fence in the batch by default, a response released only after its commit; the fence as its own statement on SQL Server is decided but not applied in the prototype yet. <b>Illustrative:</b> the times and positions, and the moment Node B tries. The lab draws only the partition row's lock, with the fence apart from the payload as when it is its own statement; in the batch EF orders the statements, and on SQL Server the fence comes last, which is how E9 deadlocks.</p>
+</section>
+
+<!-- 05 · the visual glossary ─────────────────────────────────── -->
+<section class="part" id="glossary">
+  <div class="num">05</div>
   <h2>Dissect the kernel</h2>
-  <p>Each word below is a part of the machine above. Select a card to light that part and dim the rest; select it again to clear. Most light act one's scene; the words act two needs (take, reset, suspect and trial, parked) open their scenario and light act two's. The exploded view pulls act one's three layers apart.</p>
+  <p>Each word below is a part of the machine above. Select a card to light that part and dim the rest; select it again to clear. Most light act one's scene; the words act two needs (take, reset, suspect and trial, parked) open their scenario and light act two's; fence, epoch and position light the fence lab. The exploded view pulls act one's three layers apart.</p>
   <div class="gtools">
     <button id="explode" aria-pressed="false">Exploded view</button>
     <span class="note">Layer 3 lifts off, layer 1 drops away, layer 2 stays where every guarantee is made.</span>
@@ -1454,7 +1572,7 @@ function laneSteps(v, crash) {
         `What survives is only what committed: ${MODES.map((m, j) => `${m.name} ${atCrash[j].commits ? plural(atCrash[j].commits, 'commit') : 'nothing'}`).join(', ')}.`] },
     { title: 'After the crash.', layer: 'Layer: 2, takeover and redelivery', v, rows, row: -1, lanes: after,
       text: [after.map(a => a.say).join(' '),
-        'No caller got a response: each connection died with Node A. A response is handed over only when the turn that wrote it ends, and held until that turn's commit lands if it writes one; Ephemeral releases it at once only because its turn writes nothing. A retry is a new run, so code that already ran runs again: activity code runs at least once, its effect on workflow state once, and side effects outside Elsa may repeat.',
+        'No caller got a response: each connection died with Node A. A response is handed over only when the turn that wrote it ends, and held until that turn\'s commit lands if it writes one; Ephemeral releases it at once only because its turn writes nothing. A retry is a new run, so code that already ran runs again: activity code runs at least once, its effect on workflow state once, and side effects outside Elsa may repeat.',
         'Durable narrows the window, but no mode prevents a repeat after a crash between an effect and its commit: effects that must not repeat need idempotency keys (decision 1).'] });
 }
 
@@ -1640,9 +1758,292 @@ $('explode').addEventListener('click', () => {
   $('scenebox').scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'center' });
 });
 
-// ==== 04 · the visual glossary ==========================================================================================
+// ==== 04 · the fence lab ================================================================================================
+// One partition row between two nodes. The controls pick a case; a case is a list of states, each a patch over the
+// lasting fields of the state before it (as in the acts), and drawLab draws state N from itself alone.
+//   row: owner, epoch, lease_until, position as the database holds them; rowSt 'pend' is uncommitted, 'whatif' a counterfactual.
+//   envA, takeB, takeA: a token at 'home' (its node), 'hold' (it holds the row lock) or 'queue' (it waits for it), or null.
+//   pay: Node A's batch in the payload tables: none, pending (its open transaction), landed, once or rolled.
+//   call: what Node A's HTTP caller sees. stmt: the statement at the row and its result. banner: the outcome. t: db clock.
+const LAB = $('lab'), LE = id => $('lab-' + id);
+const LV = { renders: 0, el: LE };                                   // what tick() needs to run the db clock
+const LSLOT = { hold: [368, 93], queue: [640, 93] }, LHOME = { envA: [44, 214], takeA: [44, 214], takeB: [930, 214] };
+const LBASE = {
+  t: 0, row: ['A', '8', '10.0', '1204'], rowSt: '', rowcap: '', envA: null, takeB: null, takeA: null, pay: 'none', call: 'held',
+  paused: '', memA: ['I own 17 · epoch 8 · position 1204', 'my last commit renewed the lease to 10.0 s'],
+  memB: ['holds nothing of partition 17', 'it owns partitions of its own'], badge: 'turns ended',
+  turn: ['order #1: Save order, Respond 202, then waits', 'order #7: its timer fired, and it finished', 'one commit for both: position 1204 → 1206'],
+};
+const LTRANS = { stmt: null, banner: null, lit: [] };
+// the payload tables: [name, x, rows before Node A's batch, the batch's rows (ins, upd or del)]; act one's first commit
+const LPAY = [
+  ['instance', 334, [['order #7', 'Running']], [['order #7', 'Finished', 'upd'], ['order #1', 'Running', 'ins']]],
+  ['message', 514, [['timer → order #7', 'due']], [['timer → order #7', 'consumed', 'del'], ['timer → order #1', 'in 5 s', 'ins']]],
+  ['journal', 694, [['1204', 'order #7']], [['1205', 'order #1', 'ins'], ['1206', 'order #7', 'ins']]],
+];
+const FENCE = (res, ep = '8') => [`A's fence · UPDATE partition SET position = 1206, lease_until = now + 10 s`, `WHERE id = 17 AND epoch = ${ep} AND position = 1204`, res];
+const TAKESQL = (who, res) => [`${who}'s take · UPDATE partition SET owner = ${who}, epoch = epoch + 1, lease_until = …`, `WHERE id = 17 AND (owner IS NULL OR lease_until < db now OR owner = ${who})`, res];
+const L_COMMIT = 'Layer 2 · IKernelStore.CommitAsync · built; 2 round trips measured on PostgreSQL';
+const L_TAKE = 'Layer 2 · the take (IKernelStore.TakeAsync) · built';
+const L_WHEN = 'Layer 2 · built · the moment both arrive is illustrative';
+const DROPPED = { badge: 'dropped', turn: ['dropped by the reset', 'what landed is in the rows; the rest is gone', ''] };
+
+// The steps of one case. w: when Node A, awake, sends its commit; the fence sets lease_until from Node A's clock.
+function labCase(pause, order, lost) {
+  const w = pause === 2 ? 2.1 : 0.1, lu = (w + 10).toFixed(1);
+  const S = [{ title: 'The start: Node A has a batch to commit.', layer: 'Layer 2 · the owner, its commit and the partition row',
+    text: ['Node A owns partition 17 at epoch 8, and the last position it wrote is 1204. Its last commit renewed the lease to 10.0 s on the database clock; it is 0.0 s now.',
+      'Two turns have just ended in one pass: order #1 ran "Save order" and "Respond 202" and now waits 5 s; order #7 finished. Their commit is act one\'s first. The 202 is written but held: it goes out only after this commit lands.',
+      'Node B would take partition 17 if it could. It can only if its take finds no live lease.'],
+    lit: ['labMemA', 'labTurn', 'labRow'] }];
+  if (pause === 2) S.push({ title: 'Node A pauses for 2 s.', layer: 'Layer 1 · a process that does not run · the 10 s lease is decided',
+    text: ['A garbage-collection pause stops Node A for 2 s, between the end of its turns and its commit. It is not dead; it just does not run, and renews nothing.',
+      'Its lease runs to 10.0 s and it runs again at 2.1 s: the pause is shorter than the time left on the lease, so nobody may take the partition meanwhile.'],
+    t: 2.1, paused: '❚❚ Node A: paused for 2 s', badge: 'paused', lit: ['labLease'] });
+  if (pause === 15) S.push({ title: 'Node A pauses for 15 s.', layer: 'Layer 1 · a process that does not run',
+    text: ['Just as its turns end, before its commit goes out, Node A stops: a long garbage-collection pause, or its VM is suspended. It is not dead, and it still believes it owns partition 17 at epoch 8.',
+      'Its lease runs to 10.0 s, and 15 s is longer than that. While it does not run it renews nothing.'],
+    t: 0.1, paused: '❚❚ Node A: paused for 15 s', badge: 'paused', lit: ['labMemA'] },
+  { title: 'The lease runs out, and nobody has taken the partition yet.', layer: 'Layer 2 · the 10 s lease is decided · when Node B tries is illustrative',
+    text: ['At 10.0 s the lease runs out. The row does not change by itself: it still says owner A, epoch 8, position 1204. Only a take changes the owner and the epoch.',
+      order === 'early' ? 'Node B\'s next try comes soon after.'
+        : 'Note what the fence does not check: lease_until. Until somebody takes the partition, a commit from Node A would still land, because the epoch and the position it fences on have not changed. Say Node B\'s next try comes at 15.0 s, just as Node A wakes.'],
+    t: 10, lit: ['labLease', 'labLeaseUntil'] });
+
+  // Node A's commit, within its lease: round trip 1 (the batch with the fence, checked), then round trip 2 (COMMIT)
+  const send = { title: 'Node A sends its commit: round trip 1.', layer: L_COMMIT,
+    text: ['The batch goes to the database in one transaction, with the fence: a conditional update of the partition row on the epoch and the position Node A believes in. The same update renews the lease.',
+      'Node A holds the row lock while its transaction is open. The fence changed 1 row, and Node A sees that count before it sends anything more. The payload rows are written too, but nobody else can see them yet.'],
+    t: w, paused: '', badge: 'committing', envA: { at: 'hold', l2: 'epoch 8 · position 1204 → 1206' }, pay: 'pending',
+    row: ['A', '8', lu, '1206'], rowSt: 'pend', rowcap: 'uncommitted: only Node A\'s transaction sees this',
+    stmt: FENCE('→ 1 row: the check passes · round trip 1 of 2 (PostgreSQL)'), lit: ['labEnv', 'labStmt', 'labLock', 'labRow'] };
+  const landed = { row: ['A', '8', lu, '1206'], rowSt: '', rowcap: '', pay: 'landed', envA: null };
+
+  if (pause < 15 && !lost) return { title: 'Case 1: Node A commits within its lease.',
+    aside: [`Node A ${pause ? 'pauses for 2 s, less than the time left on its lease' : 'does not pause'}, so its fence finds the row as it left it.`, 'Watch: the count the fence returns, and that COMMIT goes only after it; then the renewed lease against Node B\'s take.', 'Source: the sketch\'s "The commit" and "Ownership".'],
+    steps: [...S, send,
+      { title: '1 row, so Node A sends COMMIT: round trip 2.', layer: L_COMMIT,
+        text: ['The check passed, so COMMIT goes out and everything lands at once: order #1\'s new row, order #7 finished, order #7\'s timer consumed, order #1\'s timer sent, and the journal rows at 1205 and 1206.',
+          `The fence also renewed the lease, to ${lu} s. A busy partition needs no heartbeat: every commit is one.`],
+        ...landed, badge: 'committed', memA: ['I own 17 · epoch 8 · position 1206', `the fence renewed the lease to ${lu} s`], stmt: ['COMMIT', '', '→ committed · round trip 2 of 2'], lit: ['labRow', 'labInstance', 'labMessage', 'labJournal', 'labLease'] },
+      { title: 'The 202 goes out.', layer: 'Layer 2 · live output waits for its commit · decided and built',
+        text: ['The commit landed, so Node A releases the held response: the HTTP client gets 202 Accepted.', 'A caller never gets a response for work that was then lost: a response waits for the commit of the turn that wrote it (the owner\'s default of 12 November; a route may opt out).'],
+        call: 'sent', lit: ['labCall'] },
+      { title: 'Node B tries to take partition 17, and is refused.', layer: L_TAKE + ' · the moment is illustrative',
+        text: ['Suppose Node B tries to take partition 17 now. Its take is a conditional update too: it lands only if nobody owns the partition, the lease has run out by the database\'s clock, or Node B already owns it.',
+          `Node A owns it and the lease runs to ${lu} s, so the take changes 0 rows and Node B leaves the partition alone.`],
+        t: w + 0.2, takeB: { at: 'hold', bad: true, l2: 'refused: 0 rows' }, stmt: TAKESQL('B', `→ 0 rows: owner A, lease_until ${lu} s, db now ${(w + 0.2).toFixed(1)} s`),
+        banner: ['ok', 'A\'s commit landed: 1 row, then COMMIT. B\'s take found a live lease and changed 0 rows.'], lit: ['labTakeB', 'labStmt', 'labLease'] }] };
+
+  if (pause < 15) return { title: 'Case 5: the answer to Node A\'s commit is lost.',
+    aside: ['The commit lands, but the connection breaks before Node A hears back.', 'Watch: Node A resets instead of retrying, and its take reads the true position. The last step is a what-if, not what the kernel does.', 'Source: the sketch\'s "What a failed commit means" and "Ownership"; FINDINGS.md section 3 for the position.'],
+    steps: [...S, send,
+      { title: 'COMMIT lands, but the answer is lost.', layer: 'Layer 2 · a lost answer is one of the faults the simulation injects',
+        text: ['Node A sends COMMIT and the database commits: the row now says position 1206, and every payload row has landed.', 'Then the connection breaks before the answer reaches Node A. Node A cannot tell whether its commit landed: the outcome is unknown.'],
+        ...landed, envA: { at: 'hold', ghost: true, bad: true, l2: 'answer lost: outcome unknown' }, badge: 'outcome unknown',
+        memA: ['epoch 8 · position 1204 → 1206 ?', 'no answer came back: it cannot know'], stmt: ['COMMIT', '', '→ committed, but the answer never reaches Node A'], lit: ['labEnv', 'labRow', 'labMemA'] },
+      { title: 'Unknown outcome: Node A resets. It does not retry.', layer: 'Layer 2 · the reset · built',
+        text: ['The rule for an unknown outcome is reset, not retry. Node A drops everything it holds in memory for partition 17: its turns, its timers, its belief about the position.',
+          'The reset tells every caller waiting on that memory that the work is lost: the HTTP client gets an error (503 by default), never the 202, although this time the commit did land.'],
+        t: w + 0.1, envA: null, call: 'lost', ...DROPPED, memA: ['memory empty: reset', 'it holds nothing for partition 17'], lit: ['labMemA', 'labTurn', 'labCall'] },
+      { title: 'Node A takes partition 17 again: epoch 9, position 1206.', layer: L_TAKE,
+        text: ['Recovery after a doubt is the same path as start-up: a take. Node A still owns the row, so the take\'s "owner = A" lets it land although the lease is live.',
+          'Every take bumps the epoch, now 9, and returns the position: 1206, the true one. Node A starts from empty memory; what landed is in the rows, so the next poll finds order #1\'s timer and the workflow goes on.'],
+        t: w + 0.2, takeA: { at: 'hold', ok: true, l2: '1 row: epoch 9, position 1206' }, row: ['A', '9', (w + 10.2).toFixed(1), '1206'],
+        stmt: TAKESQL('A', 'RETURNING epoch, position → 1 row: epoch 9, position 1206'), memA: ['I own 17 · epoch 9 · position 1206', 'taken again, from empty memory'],
+        banner: ['ok', 'A\'s commit landed once. A never heard back, so it reset and took the partition again: epoch 9, the true position 1206.'], lit: ['labTakeA', 'labEpoch', 'labPos', 'labMemA'] },
+      { title: 'What if Node A had re-sent the commit instead? Not what the kernel does.', layer: 'A counterfactual · the position check is built; the mutation check is in FINDINGS.md section 3',
+        text: ['Suppose Node A had skipped the reset and re-sent the same batch at once. No take had happened, so the epoch still matched: 8. But its fence also says position = 1204, and the row says 1206: the fence matches 0 rows, and the batch does not land a second time.',
+          'That is the position\'s job. With every doubt answered by a reset and every take bumping the epoch, the position decides only when a reset is missing; the prototype\'s mutation check found exactly that. It makes a wrong guess harmless, and a commit can never apply twice.'],
+        takeA: null, envA: { at: 'hold', ghost: true, bad: true, l2: 'what if: re-sent · 0 rows' }, row: ['A', '8', lu, '1206'], rowSt: 'whatif', rowcap: 'what if: the row right after the lost answer, before any take',
+        t: w + 0.1, pay: 'once', call: 'held', badge: 'what if', turn: LBASE.turn, memA: ['what if: "epoch 8 · position 1204"', 'no reset: it guesses the commit failed'],
+        stmt: FENCE('→ 0 rows: epoch 8 matches, but the position is 1206, not 1204'),
+        banner: ['info', 'What if: a re-sent commit matches 0 rows, because the position moved. The kernel resets instead; this step is a counterfactual.'], lit: ['labPos', 'labStmt', 'labEnv'] }] };
+
+  // a long pause: Node A's lease runs out. The fence fails (B first) or lands (A first, before any take).
+  const wake = { paused: '', badge: 'committing', envA: { at: 'hold', l2: 'epoch 8 · position 1204 → 1206' }, pay: 'pending' };
+  const tail = lease => [
+    { title: '0 rows: Node A rolls back. Nothing from its batch lands.', layer: 'Layer 2 · built and tested in the prototype',
+      text: ['Node A checks the count before it sends COMMIT. 0 rows, so it rolls back: no instance row, no message and no journal row from its batch lands, and Node B never sees any of it.',
+        'This is why the check must come first: sent in one packet with a fence that matched nothing, a COMMIT would still land.'],
+      t: 15.2, envA: { at: 'home', bad: true, l2: 'REJECTED: the fence changed 0 rows' }, pay: 'rolled', badge: 'rolled back',
+      banner: ['bad', 'A\'s commit bounced: 0 rows; nothing from it landed. Node B owns partition 17 at epoch 9.'], lit: ['labEnv', 'labInstance', 'labMessage', 'labJournal'] },
+    { title: 'Node A resets and stands down.', layer: 'Layer 2 · the reset and the take · built',
+      text: ['A fence that matched nothing means reset: Node A drops everything it holds for partition 17 and tries to take it again, the same path as start-up.',
+        `Node B holds a live lease to ${lease} s, so Node A's take changes 0 rows and Node A stands down. The HTTP client gets an error (503 by default), never the 202: a caller never gets a response for work that was then lost.`],
+      t: 15.3, envA: null, pay: 'none', takeA: { at: 'hold', bad: true, l2: 'refused: 0 rows' }, call: 'lost', ...DROPPED,
+      memA: ['not the owner: stood down', 'Node B owns 17 at epoch 9'], stmt: TAKESQL('A', `→ 0 rows: owner B, lease_until ${lease} s, db now 15.3 s`),
+      banner: ['bad', 'A\'s commit bounced: 0 rows, nothing from it landed. A reset, its take was refused, and it stood down.'], lit: ['labTakeA', 'labMemA', 'labCall'] }];
+  const tookB = lease => ({ row: ['B', '9', lease, '1204'], memB: ['I own 17 · epoch 9 · position 1204', 'from empty memory: it will poll the rows'] });
+
+  if (order === 'early') return { title: 'Case 2: a long pause; Node B takes while Node A sleeps.',
+    aside: ['Node A pauses for longer than its lease. Node B\'s take comes well before Node A wakes, so they never meet at the row lock.', 'Watch: the epoch in the row, and the stamp on Node A\'s envelope.', 'Source: the sketch\'s "Ownership", "The commit" and "What a failed commit means".'],
+    steps: [...S,
+      { title: 'Node B takes partition 17: epoch 9.', layer: L_TAKE,
+        text: ['Node B\'s take finds the lease run out by the database\'s clock, so it lands: owner B, epoch 9, a lease to 20.2 s. It returns the position, 1204; no commit was in flight, so that is the true one.',
+          'Node B starts from empty memory. Every take bumps the epoch, so nothing Node A prepared under epoch 8 can commit any more.'],
+        t: 10.2, takeB: { at: 'hold', ok: true, l2: '1 row: epoch 9, position 1204' }, ...tookB('20.2'),
+        stmt: TAKESQL('B', 'RETURNING epoch, position → 1 row: epoch 9, position 1204'), lit: ['labTakeB', 'labEpoch', 'labMemB'] },
+      { title: 'Node A wakes and sends its commit.', layer: L_COMMIT,
+        text: ['At 15.0 s Node A runs again, unaware. Its turns are done, so it sends the batch it prepared, fenced on what it believes: epoch 8, position 1204.', 'The row says epoch 9. The fence matches nothing: 0 rows.'],
+        t: 15, takeB: null, ...wake, stmt: FENCE('→ 0 rows: the row says epoch 9, not 8'), lit: ['labEnv', 'labStmt', 'labEpoch'] },
+      ...tail('20.2')] };
+
+  if (order === 'A') return { title: 'Case 3: they overlap; Node A\'s commit reaches the row first.',
+    aside: ['Node A\'s lease has run out, but nobody has taken the partition. Node A\'s commit and Node B\'s take arrive together, and the row lock lets Node A\'s fence in first.', 'Watch: the fence lands although the lease ran out, because it checks the epoch and the position, not lease_until; then the take reads the row as the commit left it.', 'Source: the sketch\'s "The commit" and "Ownership" ("The take waits behind a commit that is still in flight, so it reads the true position").'],
+    steps: [...S,
+      { title: 'Both arrive together, and Node A\'s fence gets the row first.', layer: L_WHEN,
+        text: ['At 15.0 s Node A runs again and sends its batch; at the same moment Node B tries to take partition 17. Both need the partition row\'s lock. Node A\'s fence reaches it first, and Node B\'s take waits in the lock queue.',
+          'The fence checks the epoch and the position, not lease_until. Both still match, because nobody has taken the partition, so it changes 1 row although Node A\'s lease ran out 5 s ago. Leases decide who should write; the fence decides who can.'],
+        t: 15, ...wake, takeB: { at: 'queue', l2: 'waits for the row lock' }, row: ['A', '8', '25.0', '1206'], rowSt: 'pend', rowcap: 'uncommitted: only Node A\'s transaction sees this',
+        stmt: FENCE('→ 1 row: lease_until 10.0 s is past, but the fence does not check it'), lit: ['labEnv', 'labTakeB', 'labLock', 'labStmt'] },
+      { title: '1 row, so COMMIT: Node A\'s commit lands.', layer: L_COMMIT,
+        text: ['Node A sends COMMIT and the whole batch lands. It was a legitimate write: Node A still held epoch 8 when it wrote, and no take had happened.',
+          'The fence renewed the lease, to 25.0 s, and the held 202 goes out. The row lock is free again, and Node B\'s take is next.'],
+        t: 15.1, ...landed, row: ['A', '8', '25.0', '1206'], badge: 'committed', call: 'sent', memA: ['I own 17 · epoch 8 · position 1206', 'the fence renewed the lease to 25.0 s'],
+        stmt: ['COMMIT', '', '→ committed · round trip 2 of 2'], lit: ['labRow', 'labInstance', 'labMessage', 'labJournal', 'labCall'] },
+      { title: 'Node B\'s take runs behind the commit, and is refused.', layer: L_TAKE,
+        text: ['The take waited behind a commit that was still in flight, so it meets the row as that commit left it: position 1206, never 1204, and never half a commit.',
+          'The commit renewed the lease, so the take\'s condition fails: owner A, a live lease to 25.0 s. 0 rows, and Node B leaves the partition alone. Had Node B\'s take reached the row first, the other "Together" choice shows what happens.'],
+        t: 15.2, takeB: { at: 'hold', bad: true, l2: 'refused: 0 rows' }, stmt: TAKESQL('B', '→ 0 rows: owner A, lease_until 25.0 s, db now 15.2 s'),
+        banner: ['ok', 'A\'s commit landed; B\'s take waited, then met the renewed lease and position 1206: 0 rows, refused.'], lit: ['labTakeB', 'labStmt', 'labLeaseUntil', 'labPos'] }] };
+
+  return { title: 'Case 4: they overlap; Node B\'s take reaches the row first.',
+    aside: ['Node A\'s lease has run out. Node A\'s commit and Node B\'s take arrive together, and the row lock lets the take in first.', 'Watch: the epoch the waiting fence meets when it finally gets the row.',
+      'On SQL Server with the fence in the batch, this overlap can deadlock instead (finding E9): the take is the victim and is tried again, and nothing wrong lands. So SQL Server\'s default is the fence as its own statement (decided 13 November; not applied in the prototype yet).', 'Source: the sketch\'s "The commit" and "Ownership"; ENGINES.md, E9.'],
+    steps: [...S,
+      { title: 'Both arrive together, and Node B\'s take gets the row first.', layer: L_WHEN,
+        text: ['At 15.0 s Node A runs again and sends its batch; at the same moment Node B tries to take partition 17. This time Node B\'s take reaches the row lock first, and Node A\'s fence waits in the lock queue.',
+          'The lease ran out at 10.0 s by the database\'s clock, so the take\'s condition holds: 1 row, owner B, epoch 9, a lease to 25.0 s. It returns position 1204, the true one: Node A\'s commit has not landed.'],
+        t: 15, ...wake, envA: { at: 'queue', l2: 'epoch 8 · position 1204 → 1206' }, takeB: { at: 'hold', ok: true, l2: '1 row: epoch 9, position 1204' },
+        row: ['B', '9', '25.0', '1204'], rowSt: 'pend', rowcap: 'uncommitted: only Node B\'s take sees this',
+        stmt: TAKESQL('B', 'RETURNING epoch, position → 1 row: epoch 9, position 1204'), lit: ['labTakeB', 'labEnv', 'labLock', 'labStmt'] },
+      { title: 'Node B\'s take commits; then Node A\'s fence gets the row: 0 rows.', layer: L_COMMIT,
+        text: ['Node B\'s take commits: Node B owns partition 17 at epoch 9, and starts from empty memory.', 'Node A\'s fence, next in the queue, now meets the committed row: epoch 9, not 8. It changes 0 rows.'],
+        t: 15.1, takeB: null, envA: wake.envA, ...tookB('25.0'), rowSt: '', rowcap: '', stmt: FENCE('→ 0 rows: the row now says epoch 9'), lit: ['labEnv', 'labEpoch', 'labMemB'] },
+      ...tail('25.0')] };
+}
+
+function labTable([name, x, before, batch], j, pay, anew) {
+  const g = LE('t' + j);
+  g.textContent = '';
+  g.classList.add('tbl');
+  const tag = { none: '', pending: 'uncommitted', landed: 'landed', once: 'landed once', rolled: 'rolled back' }[pay];
+  g.append(svg('rect', { class: 'box pf', x, y: 258, width: 172, height: 86, rx: 6 }), svg('text', { class: 'tt', x: x + 8, y: 274, style: 'font-size:11.5px' }, name),
+           svg('text', { class: 'tm', x: x + 164, y: 274, 'text-anchor': 'end' }, tag));
+  const done = pay === 'landed' || pay === 'once';
+  const rows = done ? [...before.filter(r => !batch.some(b => b[0] === r[0])).map(r => [r, '']), ...batch.filter(b => b[2] !== 'del').map(b => [b, anew ? (b[2] === 'ins' ? 'fresh' : 'chgrow') : ''])]
+                    : [...before.map(r => [r, '']), ...(pay === 'none' ? [] : batch.map(b => [b, (pay === 'pending' ? 'pend' : 'rolled') + (anew ? ' in' : '')]))];
+  rows.forEach(([r, cls], i) => {
+    const y = 280 + i * 15, row = svg('g', { class: 'row ' + cls });
+    const second = done || !r[2] ? r[1] : { ins: 'insert', upd: '→ ' + r[1], del: 'delete' }[r[2]];
+    row.append(svg('rect', { x: x + 2, y, width: 168, height: 15, rx: 2 }), svg('text', { x: x + 8, y: y + 11 }, r[0]), svg('text', { x: x + 164, y: y + 11, 'text-anchor': 'end' }, second));
+    g.append(row);
+  });
+}
+
+function drawLab(s, p, anim, kk) {
+  LV.renders++;
+  LAB.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  LAB.querySelectorAll('.labcopy').forEach(e => e.remove());
+  LAB.classList.toggle('animate', anim);
+  LAB.querySelectorAll('[data-part]').forEach(e => e.classList.toggle('lit', s.lit.includes(e.dataset.part)));
+  // the db clock runs first when time passes; the lease bar's "now" marker moves with it
+  const run = anim && s.t - p.t >= 1 ? 1500 * kk : 0;
+  LE('clock').textContent = `t = ${s.t.toFixed(1)} s`;
+  if (run) tick(LV, p.t, s.t, run);
+  at(LE('now'), [Math.min(s.t, 30) * 16, 0]);
+  if (anim && s.t !== p.t) LE('now').animate([{ transform: tr([Math.min(p.t, 30) * 16, 0]) }, { transform: tr([Math.min(s.t, 30) * 16, 0]) }], { duration: run || 500 * kk, easing: 'linear' });
+  const lu = parseFloat(s.row[2]), left = lu - s.t;
+  LE('lf').style.transform = `scaleX(${Math.min(1, lu / 30)})`;
+  LE('lf').classList.toggle('out', left <= 0);
+  LE('lcap').textContent = `▲ db now ${s.t.toFixed(1)} s · lease_until ${s.row[2]} s: ` + (left > 0 ? `${left.toFixed(1)} s left for Node ${s.row[0]}`
+    : `ran out ${(-left).toFixed(1)} s ago; until a take lands, the row still says owner ${s.row[0]}, epoch ${s.row[1]}`) + (s.rowSt === 'pend' ? ' (uncommitted)' : s.rowSt === 'whatif' ? ' (what if)' : '');
+
+  // the tokens fly between their node, the row lock and its queue
+  let fly = run;
+  ['envA', 'takeB', 'takeA'].forEach(n => {
+    const g = LE(n), c = s[n], o = p[n], pos = x => x.at === 'home' ? LHOME[n] : LSLOT[x.at];
+    if (!c && o && anim) {                  // a token that leaves fades out as a copy, so the part itself stays clean
+      const copy = g.cloneNode(true);
+      copy.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+      copy.removeAttribute('id'); copy.removeAttribute('data-part'); copy.classList.add('labcopy');
+      LAB.append(copy);
+      copy.animate([{ opacity: 1, transform: tr(pos(o)) }, { opacity: 0, transform: tr(pos(o)) }], { duration: 600 * kk, delay: run, fill: 'both' }).onfinish = () => copy.remove();
+    }
+    g.classList.toggle('gone', !c);
+    ['bad', 'ok', 'ghost'].forEach(k => g.classList.toggle(k, !!(c && c[k])));
+    LE(n + '2').textContent = c ? c.l2 : '';
+    if (!c) { g.style.transform = ''; return; }
+    const to = pos(c);
+    at(g, to);
+    if (!anim || (o && o.at === c.at)) return;
+    const from = o ? pos(o) : c.at === 'home' ? to : LHOME[n];
+    g.animate([{ transform: tr(from), opacity: o || c.at !== 'home' ? 1 : 0 }, { transform: tr(to), opacity: 1 }], { duration: 900 * kk, delay: run, easing: EASE, fill: 'backwards' });
+    fly = Math.max(fly, run + 900 * kk);
+  });
+  LE('lock').classList.toggle('held', ['envA', 'takeB', 'takeA'].some(n => s[n] && s[n].at === 'hold'));
+
+  // the statement at the row, then its result, then what changed
+  const st = s.stmt || ['', 'no statement at the row', ''], said = fly + 500 * kk, changed = JSON.stringify(s.stmt) !== JSON.stringify(p.stmt);
+  st.forEach((line, i) => {
+    LE('st' + i).textContent = line;
+    if (anim && changed) LE('st' + i).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 * kk, delay: i === 2 ? said : fly, fill: 'backwards' });
+  });
+  LE('row').classList.toggle('pend', s.rowSt === 'pend');
+  LE('row').classList.toggle('whatif', s.rowSt === 'whatif');
+  LE('rowcap').textContent = s.rowcap;
+  s.row.forEach((val, i) => {
+    LE('c' + i).textContent = val;
+    if (anim && val !== p.row[i]) LE('c' + i).animate([{ opacity: 0 }, { opacity: 0, offset: .3 }, { opacity: 1 }], { duration: 900 * kk, delay: said, fill: 'backwards' });
+  });
+  LAB.style.setProperty('--fd', said + 'ms');
+  const kept = x => x === 'once' ? 'landed' : x;                         // "landed once" is the same rows, seen again
+  LPAY.forEach((t, j) => labTable(t, j, s.pay, kept(s.pay) !== kept(p.pay)));   // rows marked new come from the states, not the motion
+
+  // Node A, Node B, the caller and the outcome
+  LE('pause').classList.toggle('gone', !s.paused);
+  LE('pause0').textContent = s.paused;
+  ['memA0', 'memA1', 'memB0', 'memB1'].forEach(id => { LE(id).textContent = s[id.slice(0, 4)][+id[4]]; });
+  LE('badge').textContent = s.badge;
+  s.turn.forEach((line, i) => { LE('turn' + i).textContent = line; });
+  LE('callg').classList.toggle('sent', s.call === 'sent');
+  LE('callg').classList.toggle('lost', s.call === 'lost');
+  LE('call').textContent = { held: '202 held for the commit', sent: '202 Accepted ✓', lost: '503 "lost" · never the 202' }[s.call];
+  LE('banner').classList.toggle('gone', !s.banner);
+  ['ok', 'bad', 'info'].forEach(k => LE('banner').classList.toggle(k, !!s.banner && s.banner[0] === k));
+  LE('bt').textContent = s.banner ? s.banner[1] : '';
+  if (s.banner) {
+    if (anim && JSON.stringify(s.banner) !== JSON.stringify(p.banner)) LE('banner').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500 * kk, delay: said + 400 * kk, fill: 'backwards' });
+  }
+  return said + 900 * kk;
+}
+
+const lab = makePlayer($('fence-lab'), { svg: LAB, seams: false, render: drawLab, onReset: () => setLab(0, 'early', false) });
+let labPause = 0, labOrder = 'early', labLost = false;
+function setLab(pause, order, lost) {
+  if (pause === 15) lost = false;                    // a lost answer is shown on top of case 1 only
+  labPause = pause; labOrder = order; labLost = lost;
+  document.querySelectorAll('[data-lp]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.lp === pause)));
+  document.querySelectorAll('[data-lo]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.lo === order)); b.disabled = pause !== 15; });
+  document.querySelectorAll('[data-ll]').forEach(b => { b.setAttribute('aria-pressed', String((b.dataset.ll === 'on') === lost)); b.disabled = pause === 15; });
+  $('lo-note').textContent = pause === 15 ? '' : 'Matters only once the lease has run out: choose a 15 s pause.';
+  $('ll-note').textContent = pause === 15 ? 'Shown on top of case 1: choose no pause or 2 s.' : '';
+  const c = labCase(pause, order, lost);
+  $('lab-case').textContent = c.title;
+  $('lab-aside').textContent = '';
+  c.aside.forEach(t => { const para = document.createElement('p'); para.textContent = t; $('lab-aside').append(para); });
+  const states = [];
+  c.steps.reduce((prev, patch) => { const st = { ...prev, ...LTRANS, ...patch }; states.push(st); return st; }, { ...LBASE, ...LTRANS });
+  lab.setSteps(states, states[0], 0, false);
+}
+document.querySelectorAll('[data-lp]').forEach(b => b.addEventListener('click', () => setLab(+b.dataset.lp, labOrder, labLost)));
+document.querySelectorAll('[data-lo]').forEach(b => b.addEventListener('click', () => setLab(labPause, b.dataset.lo, labLost)));
+document.querySelectorAll('[data-ll]').forEach(b => b.addEventListener('click', () => setLab(labPause, labOrder, b.dataset.ll === 'on')));
+
+// ==== 05 · the visual glossary ==========================================================================================
 // Each term: its icon (drawn like the scene's part), one sentence, and the scene parts it lights. A term with "go" opens
-// that act two scenario at that step and lights the part in act two's scene.
+// act one at that step, or that act two scenario at that step and lights act two's scene, or ('lab') lights the fence lab.
 const ICON = {
   node: '<rect x="7" y="3" width="18" height="26" rx="2"/><line x1="10" y1="24" x2="22" y2="24"/>',
   partition: '<rect x="7" y="8" width="8" height="12" rx="1"/><rect x="17" y="8" width="8" height="12" rx="1"/><rect class="f" x="4" y="22" width="24" height="4"/>',
@@ -1687,9 +2088,9 @@ const TERMS = [
     ['message', 'Inbox and message', 'A message is a row in the inbox table (target, kind, payload, an order key, optionally a due time and a start spec); the outbox is the recipient\'s inbox.', ['tray1', 'tray7', 'tray3', 't-message']],
     ['turn', 'Turn', 'An instance\'s turn to run: it takes the messages in its inbox, runs as many activities as its persistence mode allows, changes its state and sends messages; one turn is not one activity.', ['card1', 'model1', 'lane'], null, ['a1', 3]],
     ['commit', 'Commit (batch)', 'One transaction that writes everything the turns changed (state, consumed and sent messages, journal rows), for many instances at once.', ['envelope', 'lane', 'vault'], null, ['a1', 6]],
-    ['fence', 'Fence', 'The conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.', ['fence17', 'fence42', 'envelope', 't-partition']],
-    ['epoch', 'Epoch', 'A counter on the partition row, raised every time a node takes the partition; work started under an older epoch is thrown away.', ['fence17', 'fence42', 'shelf17', 'shelf42', 't-partition']],
-    ['position', 'Position', 'How many journal rows a partition has written; the commit checks it, so two commits can never land at the same position.', ['fence17', 't-partition', 't-journal']],
+    ['fence', 'Fence', 'The conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.', ['labStmt', 'labEnv', 'labEpoch', 'labPos'], null, ['lab']],
+    ['epoch', 'Epoch', 'A counter on the partition row, raised every time a node takes the partition; work started under an older epoch is thrown away.', ['labEpoch', 'labMemA', 'labMemB'], null, ['lab']],
+    ['position', 'Position', 'How many journal rows a partition has written; the commit checks it, so two commits can never land at the same position.', ['labPos', 'labJournal', 'labMemA'], null, ['lab']],
     ['timer', 'Timer', 'A message with a future due time: the owner holds it in memory on a monotonic clock, a new owner finds it by polling, and deleting the message cancels it.', ['t-message', 'tray1', 'clock']],
     ['job', 'Background job (ticket, result)', 'Slow work a turn starts: its ticket is committed as a message to the instance, the kernel runs it outside the turn, and the ticket becomes the job-finished result, applied once.', ['job', 'smtp', 'tray1', 't-message'], null, ['a1', 11]],
     ['journal', 'Journal', 'One compact row per instance commit, written in the commit: the record of what happened, from which the viewer\'s tables are built.', ['t-journal']],
@@ -1719,10 +2120,10 @@ TERMS.forEach(([layer, heading, terms]) => {
     const b = document.createElement('button'), level = lv || 'Layer ' + layer.slice(1);
     b.className = 'term';
     b.setAttribute('aria-pressed', 'false');
-    const two = !!go && go[0] !== 'a1';
-    b.setAttribute('aria-label', `${name}. ${sentence} ${level}. Lights it in ${two ? 'act two\'s' : 'the'} scene.`);
+    const scene = !go || go[0] === 'a1' ? 'a' : go[0] === 'lab' ? 'lab' : 'b';
+    b.setAttribute('aria-label', `${name}. ${sentence} ${level}. Lights it in ${{ a: 'the', b: 'act two\'s', lab: 'the fence lab\'s' }[scene]} scene.`);
     b.dataset.parts = parts.join(' ');
-    b.dataset.scene = two ? 'b' : 'a';
+    b.dataset.scene = scene;
     b.innerHTML = `<svg viewBox="0 0 32 32" aria-hidden="true">${ICON[id]}</svg><b></b><span></span><span class="lv"></span>`;
     b.querySelector('b').textContent = name;
     b.querySelector('span').textContent = sentence;
@@ -1733,10 +2134,10 @@ TERMS.forEach(([layer, heading, terms]) => {
     b.addEventListener('blur', () => { if (preview === b) setFocus(pinned, null); });
     b.addEventListener('click', () => {
       if (pinned === b) { setFocus(null, null); return; }
-      if (two) selectScenario(go[0], go[1], false);
-      else if (go) { act1.stop(); act1.go(go[1], false); }      // these parts show only at some steps: open one that shows them
+      if (scene === 'b') selectScenario(go[0], go[1], false);
+      else if (go && scene === 'a') { act1.stop(); act1.go(go[1], false); }      // these parts show only at some steps: open one that shows them
       setFocus(b, null);
-      $(two ? 'scenebox2' : 'scenebox').scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'center' });
+      $({ a: 'scenebox', b: 'scenebox2', lab: 'labbox' }[scene]).scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'center' });
     });
     termButtons.push(b);
     group.querySelector('.ggrid').append(b);
@@ -1747,12 +2148,12 @@ function setFocus(pin, prev) {
   pinned = pin; preview = prev;
   const active = preview || pinned;
   termButtons.forEach(b => { b.setAttribute('aria-pressed', String(b === pinned)); b.classList.toggle('preview', b === preview && b !== pinned); });
-  [A1.svg, A2.svg].forEach(sc => {
+  [A1.svg, A2.svg, LAB].forEach(sc => {
     sc.querySelectorAll('.hl, .hl-in').forEach(e => e.classList.remove('hl', 'hl-in'));
     sc.classList.remove('focusing');
   });
   if (!active) return;
-  const sc = active.dataset.scene === 'b' ? A2.svg : A1.svg;
+  const sc = { a: A1.svg, b: A2.svg, lab: LAB }[active.dataset.scene];
   sc.classList.add('focusing');
   for (const part of active.dataset.parts.split(' ')) {
     sc.querySelectorAll(`[data-part="${part}"]`).forEach(e => {
@@ -1773,7 +2174,8 @@ function setFocus(pin, prev) {
 act1.setSteps(STATES, { ...BASE, ...TRANSIENT, db: DB0, tray7: [] }, 0, true);
 setWhatIf('plain', 'none');
 selectScenario('b1', 0, false);
-reduced.addEventListener('change', () => { act1.go(act1.n, false); modes.go(modes.n, false); act2.go(act2.n, false); });
+setLab(0, 'early', false);
+reduced.addEventListener('change', () => { act1.go(act1.n, false); modes.go(modes.n, false); act2.go(act2.n, false); lab.go(lab.n, false); });
 })();
 </script>
 </body>
