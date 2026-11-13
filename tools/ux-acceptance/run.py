@@ -97,12 +97,12 @@ def signal_owned_group(process, signal_number):
             raise
 
 
-def stop_group(process):
+def stop_group(process, *, graceful_timeout=15):
     # The leader can exit before Chromium/workers, including a worker that ignores TERM.
     # Drain the group even after its leader exited, then kill any remaining owned members.
     signal_owned_group(process, signal.SIGTERM)
     try:
-        process.wait(timeout=15)
+        process.wait(timeout=graceful_timeout)
     except subprocess.TimeoutExpired:
         pass
     finally:
@@ -246,7 +246,10 @@ def host(directory, dll, url, ready_path, log, env):
             yield process
         finally:
             # The group was created here and cannot be confused with an unrelated port listener.
-            stop_group(process)
+            # .NET's normal host shutdown window is 30 seconds. Leave bounded scheduling
+            # room on the shared machine before killing descendants; callers still require
+            # an actual zero exit code, so a forced kill never qualifies a host restart.
+            stop_group(process, graceful_timeout=45)
 
 
 def prepare_host(project, destination):

@@ -169,6 +169,27 @@ class VerdictTests(unittest.TestCase):
             self.assertEqual([(43, acceptance.signal.SIGTERM), (43, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
             self.assertEqual(3, process.wait.call_count)
 
+    def test_owned_host_gets_the_normal_dotnet_shutdown_window_before_forced_kill(self):
+        from unittest.mock import Mock
+        process = Mock(pid=44); process.returncode = None
+        process.poll.side_effect = lambda: process.returncode
+        def wait(timeout=None):
+            if process.returncode is not None: return process.returncode
+            if timeout is not None and timeout >= 30:
+                process.returncode = 0
+                return 0
+            raise acceptance.subprocess.TimeoutExpired('owned-dotnet-host', timeout)
+        process.wait.side_effect = wait
+        def signal_group(_pid, signal):
+            if signal == acceptance.signal.SIGKILL and process.returncode is None: process.returncode = -9
+        def launch(*_args, **options):
+            options['stdout'].write('Now listening on: http://localhost:1\n'); options['stdout'].flush()
+            return process
+        with patch.object(acceptance.subprocess, 'Popen', side_effect=launch), patch.object(acceptance.os, 'killpg', side_effect=signal_group), patch.object(acceptance.urllib.request, 'urlopen') as request:
+            request.return_value.__enter__.return_value.status = 200
+            with acceptance.host(self.root, 'owned.dll', 'http://localhost:1', '/', self.root / 'shutdown.log', {}): pass
+        self.assertEqual(0, process.returncode, 'A host stopping within .NET normal grace must not be reported as killed')
+
     def test_unrelated_healthy_listener_is_not_a_readiness_answer(self):
         with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.urllib.request, 'urlopen') as request, patch.object(acceptance.time, 'sleep'), patch.object(acceptance.os, 'killpg'):
             popen.return_value.poll.side_effect = [None, 1]
