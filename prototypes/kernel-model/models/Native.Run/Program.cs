@@ -53,8 +53,9 @@ static class Cost
         var store = new Sizing(ef);
         var registry = Reference.Registry();
         var network = new Network();
-        var owner = new Owner("A", 0, store, registry, network);
-        var other = new Owner("B", 1, store, registry, network);
+        // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
+        var owner = new Owner("A", 0, store, registry, network, lease: TimeSpan.FromHours(1));
+        var other = new Owner("B", 1, store, registry, network, lease: TimeSpan.FromHours(1));
         await owner.StartAsync();
         await other.StartAsync();
         var failures = 0;
