@@ -1,8 +1,8 @@
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 /// <summary>
-/// Internal table identities for the history projection under construction. This declares no EF
-/// module/family and registers no Runtime model: those join the generated migrations before use.
+/// Internal table identities for the journal projections. The separately declared owner chain and
+/// Runtime model cover these together with the three derived occurrence shapes.
 /// </summary>
 internal static class RuntimeHistoryProjectionSchema
 {

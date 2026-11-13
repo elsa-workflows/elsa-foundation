@@ -6,9 +6,10 @@
 [history inspection contract](../../../../../../specs/1211-run-history-timeline/contracts/history-inspection.md).
 
 `RuntimeHistoryEntityConfiguration` and the five internal history entity types define the private
-head, event receipt/content, bookmark, bookmark-count and known-parent projections. They are not
-an extension API, are not registered in `RuntimeDbContext` and do not advertise history support.
-`RuntimeHistoryProjectionSchema` carries only table names; it declares no module/schema family.
+head, event receipt/content, bookmark, bookmark-count and known-parent projections. With the three
+derived occurrence shapes they join `RuntimeDbContext` and the single declared `RuntimeHistoryEfModule`
+owner chain. They are not an extension API and do not advertise capture support.
+`RuntimeHistoryProjectionSchema` carries table names; assembly declarations own the family/content set.
 
 Indexes use bounded scope/run/resource hashes and committed positions; complete lossless identities
 and content must be checked by the following provider mapping. Head revisions are concurrency tokens.
@@ -40,7 +41,8 @@ unknown-baseline/semantics evidence and receipts through prefix content retentio
 `StageDeleteAsync` joins full run retirement; the actual native deletion adapter still needs that binding.
 All append owners, including independent observations, must stage their new events so the projection's covered
 prefix remains coherent. A lagging or unsupported projection must not be advertised as an empty playable run.
-The normal Runtime model still registers none of these history/occurrence tables.
+All eight shapes join the shared Runtime model and additive migration chain; actual selected-provider
+registration and native write/observation/deletion binding remain separate qualification steps.
 
 `EfRuntimeHistoryObservation` is a private independent-observation staging helper. The eventual owner
 authorizes the source, owns its transaction/final save and acknowledgement reconciliation, and normalizes
@@ -51,8 +53,8 @@ without recreating content. Its purpose-separated semantic fingerprint remains64
 provider. No bookmark lifecycle or occurrence is inferred from a delivery observation, and no provider port is
 registered by this helper.
 
-The isolated schema/mapping/checkpoint tests cover private projections and relational staging without changing
-normal Runtime migration targets. Actual native entry-point/marker integration and family binding, scoped readers,
+The isolated schema/mapping/checkpoint tests cover private projections and relational staging without enabling a selected history provider. The model/migration unit adds normal Runtime targets;
+actual native entry-point/marker integration, scoped readers,
 observation append, occurrence projection, retention/deletion, generated migrations and production qualification
 remain open.
 
@@ -71,3 +73,12 @@ boundary without a CAS. The independent owner must choose an admitted isolation 
 set-based deletion retains its caller's existing native deletion transaction; this read-view restriction
 belongs to prefix boundary reporting. The actual MySQL regression establishes the older read view,
 commits retirement from another context, and requires explicit refusal rather than a stale result.
+
+The schema-binding unit registers all eight shapes in `RuntimeDbContext`, the one assembly-declared
+`RuntimeHistory` family at1.0.0 and its eight whole ContentJson columns. All four provider models retain
+bounded indexed hashes/keys and map complete unbounded identities/content to their large text type.
+Official additive `RunHistoryTimeline` migrations must accompany these authored source changes before
+merge or deployment; this intermediate source boundary is not a migration-ready release. The saved-legacy
+upgrade control preserves every original table digest/history ID and requires empty new history storage,
+so schema installation cannot fabricate capture or activity occurrence evidence. No capture feature or
+provider capability is enabled by the schema declaration alone.

@@ -69,12 +69,13 @@ internal static class RuntimeModelMigrationProviderSmoke
             {
                 Assert.False(context.Database.HasPendingModelChanges());
                 var migrations = context.Database.GetMigrations().ToArray();
-                Assert.Equal(5, migrations.Length);
+                Assert.Equal(6, migrations.Length);
                 Assert.EndsWith("_Initial", migrations[0]);
                 Assert.EndsWith("_ModelExecutionState", migrations[1]);
                 Assert.EndsWith("_ModelMaterialKind", migrations[2]);
                 Assert.EndsWith("_UserTasks", migrations[3]);
                 Assert.EndsWith("_OutboxClaimDeliveredAt", migrations[4]);
+                Assert.EndsWith("_RunHistoryTimeline", migrations[5]);
                 string? before = null;
                 if (retained)
                 {
@@ -88,6 +89,14 @@ internal static class RuntimeModelMigrationProviderSmoke
                 Assert.Empty(await context.Database.GetPendingMigrationsAsync());
                 Assert.Empty(await context.Set<Entities.RuntimeModelExecutionEntity>().ToArrayAsync());
                 Assert.Empty(await context.Set<Entities.RuntimeModelInputEntity>().ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryHeadEntity>().Take(1).ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryEventEntity>().Take(1).ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryBookmarkEntity>().Take(1).ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryBookmarkCountEntity>().Take(1).ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryActivityEntity>().Take(1).ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryOccurrenceEntity>().Take(1).ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryOccurrenceMembershipEntity>().Take(1).ToArrayAsync());
+                Assert.Empty(await context.Set<Entities.RuntimeHistoryOccurrenceCounterEntity>().Take(1).ToArrayAsync());
                 if (retained)
                 {
                     Assert.Equal(before, await RowsAsync(context));
