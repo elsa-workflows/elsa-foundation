@@ -1,7 +1,15 @@
 import { getViewportForBounds, type Node } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
-import { getReadableFitViewport, pickReadOnlyFocusNode, READ_ONLY_READABLE_ZOOM, readableMinimapEdgeMargin } from "../workflow-editor/readableFitViewport";
-import { readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
+import { getReadableFitViewport, pickReadOnlyFocusNode, READ_ONLY_READABLE_ZOOM, readableEdgeMargin, readableMinimapEdgeMargin } from "../workflow-editor/readableFitViewport";
+import {
+  getReadOnlyFitViewOptions,
+  READ_ONLY_CONTROLS_BUTTON_SIZE,
+  READ_ONLY_MINIMAP_OUTER_HEIGHT,
+  READ_ONLY_MINIMAP_OUTER_WIDTH,
+  READ_ONLY_PANEL_CLEARANCE,
+  READ_ONLY_PANEL_OFFSET,
+  readOnlyMinimapFitViewOptions
+} from "../workflow-editor/readOnlyMinimap";
 
 const padding = { top: "24px", right: "112px", bottom: "32px", left: "32px" } as const;
 // A User Task (Approve/Reject/Unmatched) followed by Set Output, as the composed journey lays it out.
@@ -38,7 +46,7 @@ describe("getReadableFitViewport", () => {
     const view = getReadableFitViewport({ graph, focus: task, width: 340, height: 600, padding, minZoom: 0.1, maxZoom: 2, readableZoom: 1 });
     const top = graph.y * view.zoom + view.y;
     const bottom = (graph.y + graph.height) * view.zoom + view.y;
-    expect(Math.abs((top - 24) - (600 - 32 - bottom))).toBeLessThan(1);
+    expect(Math.abs((top - 24) - (600 - readableEdgeMargin.bottom - bottom))).toBeLessThan(1);
   });
 
   it("does not scroll past the graph's far edge when the focus activity is the last one", () => {
@@ -58,8 +66,9 @@ describe("getReadableFitViewport", () => {
     const width = 360, height = 245;
     const input = { graph: graph3, focus: first, width, height, padding: readOnlyMinimapFitViewOptions.padding,
       minZoom: 0.1, maxZoom: 2, readableZoom: 1 };
-    // The 120x80 MiniMap (1px border) sits 15px from the bottom-right corner.
-    const minimapLeft = width - 15 - 122, minimapTop = height - 15 - 82;
+    // The MiniMap's rendered box sits its panel offset from the bottom-right corner.
+    const minimapLeft = width - READ_ONLY_PANEL_OFFSET - READ_ONLY_MINIMAP_OUTER_WIDTH;
+    const minimapTop = height - READ_ONLY_PANEL_OFFSET - READ_ONLY_MINIMAP_OUTER_HEIGHT;
     const underMinimap = (view: { x: number; y: number }) =>
       first.x + first.width + 90 + view.x > minimapLeft && first.y + first.height + view.y > minimapTop;
     expect(underMinimap(getReadableFitViewport(input))).toBe(true);
@@ -90,4 +99,21 @@ it("keeps the start of a focus activity wider than the pane in view", () => {
   const wide = { x: 0, y: 0, width: 300, height: 96 };
   const view = getReadableFitViewport({ graph: { x: 0, y: 0, width: 720, height: 96 }, focus: wide, width: 320, height: 600, padding, minZoom: 0.1, maxZoom: 2, readableZoom: 1 });
   expect(wide.x * view.zoom + view.x).toBe(8);
+});
+
+describe("readable first view on a short phone pane (#4196)", () => {
+  // The zoom controls are one 26px row, 15px above the pane's bottom-left corner.
+  const width = 360, height = 245;
+  const controlsTop = height - READ_ONLY_PANEL_OFFSET - READ_ONLY_CONTROLS_BUTTON_SIZE;
+
+  it.each([
+    ["without the MiniMap", 2, readableEdgeMargin],
+    ["with the MiniMap", 3, readableMinimapEdgeMargin]
+  ] as const)("keeps the graph above the controls row %s", (_name, nodeCount, margin) => {
+    const view = getReadableFitViewport({ graph, focus: task, width, height, padding: getReadOnlyFitViewOptions(nodeCount).padding,
+      minZoom: 0.1, maxZoom: 2, readableZoom: 1, margin });
+    expect(view.zoom).toBe(1);
+    expect(graph.y * view.zoom + view.y).toBeGreaterThanOrEqual(0);
+    expect((graph.y + graph.height) * view.zoom + view.y).toBeLessThanOrEqual(controlsTop - READ_ONLY_PANEL_CLEARANCE);
+  });
 });

@@ -13,7 +13,7 @@ import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
 import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
+import { ReactFlow, Background, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
@@ -74,6 +74,7 @@ import {
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
+import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
@@ -2173,7 +2174,7 @@ function ReadOnlyWorkflowFlow({
       <Background />
       <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} minReadableZoom={READ_ONLY_READABLE_ZOOM} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-      <Controls fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
+      <ReadOnlyFlowControls nodeCount={flowNodes.length} />
       <RetainFlowViewport />
     </ReactFlow>
   );
