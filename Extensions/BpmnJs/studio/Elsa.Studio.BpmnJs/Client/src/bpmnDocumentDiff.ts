@@ -259,6 +259,9 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
     if (element === modeled.documentElement) source = raw.documentElement;
     if (!source && element.namespaceURI === ns.diagram && element.localName === "BPMNPlane") {
       const candidates = new Set([...baseline.di.values()].filter(value => value.nativePlaneScopeId === element.getAttribute("bpmnElement")).map(value => value.sourcePlaneId));
+      if (!candidates.size) for (const [id, container] of baseline.projection.di)
+        if (baseline.projection.scopeDiIds.has(id) && container.elementId === element.getAttribute("bpmnElement")) candidates.add(container.sourcePlaneId);
+      if (candidates.size > 1) nativeRefuse("generated native plane has ambiguous canonical provenance");
       if (candidates.size === 1) source = rawIndex.get([...candidates][0]);
     }
     if (!source && element.parentElement) {

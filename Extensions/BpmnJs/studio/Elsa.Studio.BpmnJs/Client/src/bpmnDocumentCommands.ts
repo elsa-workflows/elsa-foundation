@@ -1,6 +1,6 @@
 import type { BpmnBounds, BpmnDocumentAuthoring, BpmnDocumentCommand, BpmnPoint } from "@elsa-workflows/studio-workflows";
 import type { BpmnNativeBaseline } from "./bpmnDocumentProjection";
-import { nativeChildren, nativeIndex, nativeNumber, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
+import { nativeChildren, nativeGeometrySignature, nativeIndex, nativeNumber, nativeRefuse, nativeSignature, nativeXml } from "./bpmnDocumentXml";
 import { guardBpmnNativeCopies } from "./bpmnDocumentCopyGuard";
 import { diffBpmnNativeCommandGroup } from "./bpmnDocumentDiff";
 import { nativeDiAliases, normalizeNativeDiIds } from "./bpmnDocumentDiAliases";
@@ -362,6 +362,6 @@ function mapBoundedBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, base
       default: nativeRefuse(`unmapped native command '${action.command}'`);
     }
   }
-  if (nativeSignature(expected.documentElement) !== nativeSignature(next.documentElement)) nativeRefuse("the complete native command group contains unaccounted XML/DI changes");
+  if (nativeGeometrySignature(expected.documentElement) !== nativeGeometrySignature(next.documentElement)) nativeRefuse("the complete native command group contains unaccounted XML/DI changes");
   return Object.freeze(commands);
 }

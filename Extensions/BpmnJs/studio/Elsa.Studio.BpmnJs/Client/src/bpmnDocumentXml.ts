@@ -63,6 +63,16 @@ export function nativeSignature(element: Element): string {
   return JSON.stringify([element.namespaceURI, element.localName, attributes, children, opaqueTextContext(element)]);
 }
 
+/** Only declared zero-coordinate omissions vary in geometry commands; other native content stays strict. */
+export function nativeGeometrySignature(element: Element): string {
+  const view = element.cloneNode(true) as Element;
+  for (const member of [view, ...view.getElementsByTagName("*")]) for (const name of ["x", "y"]) {
+    const value = member.getAttribute(name);
+    if (nativeAttributeDefault(member, name) === 0 && (value === null || nativeNumericValue(member, name, value) === 0)) member.setAttribute(name, "0");
+  }
+  return nativeSignature(view);
+}
+
 // Attribute defaults (including inheritance) from pinned bpmn-moddle10.3.1 bpmn.json.
 // This is an explicit import-normalization policy, not permission to omit other semantic fields.
 const semanticDefaults = new Map<string, Readonly<Record<string, string | number | boolean>>>();
@@ -116,6 +126,7 @@ export function nativePrimitiveMatches(element: Element, name: string, value: un
   return actual === (value == null ? null : String(value));
 }
 function nativeAttributeDefault(element: Element, name: string): string | number | boolean | undefined {
+  if (element.namespaceURI === diagramNamespace && element.localName === "BPMNEdge" && name === "messageVisibleKind") return "initiating";
   if (element.namespaceURI === modelNamespace) return semanticDefaults.get(nativeModelKind(element))?.[name];
   return (element.namespaceURI === boundsNamespace && ["Point", "Bounds"].includes(element.localName)
     || element.namespaceURI === "http://www.omg.org/spec/DD/20100524/DI" && element.localName === "waypoint") && ["x", "y"].includes(name) ? 0 : undefined;

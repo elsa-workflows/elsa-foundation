@@ -45,11 +45,13 @@ export function guardBpmnNativeCopies(authoring: BpmnDocumentAuthoring, projecti
       nativeRefuse("copy requires canonical XML/configuration ownership before native admission");
     if (nextXml) {
       nextIndex ??= nativeIndex(nativeXml(nextXml));
-      const lostAttributes = (source: Element, copied: Element | undefined): boolean => [...source.attributes].some(attribute => attribute.namespaceURI !== xmlns
+      const lostContent = (source: Element, copied: Element | undefined): boolean => !copied
+        || (!source.children.length && (source.textContent ?? "").trim() !== "" && source.textContent !== copied.textContent)
+        || [...source.attributes].some(attribute => attribute.namespaceURI !== xmlns
         && !(attribute.localName === "id" && !attribute.namespaceURI) && !copied?.hasAttributeNS(attribute.namespaceURI, attribute.localName))
-        || [...source.children].some(child => lostAttributes(child, copied && [...copied.children].filter(value => value.namespaceURI === child.namespaceURI
+        || [...source.children].some(child => lostContent(child, copied && [...copied.children].filter(value => value.namespaceURI === child.namespaceURI
           && value.localName === child.localName)[[...source.children].filter(value => value.namespaceURI === child.namespaceURI && value.localName === child.localName).indexOf(child)]));
-      if (lostAttributes(snapshot, nextIndex.get(origin.elementId))) nativeRefuse("copy requires canonical XML/configuration ownership for retained source attributes");
+      if (lostContent(snapshot, nextIndex.get(origin.elementId))) nativeRefuse("copy requires canonical XML/configuration ownership for retained source content");
     }
   }
 }
