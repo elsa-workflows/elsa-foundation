@@ -1,5 +1,5 @@
 import { FilePlus2, GitBranch, PackageCheck, Pencil, RefreshCcw, Trash2 } from "lucide-react";
-import { StatusChip } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioField } from "@elsa-workflows/studio-ui";
 import type {
   ExtensionBuilderCapabilities,
   ExtensionProject,
@@ -114,17 +114,14 @@ export function SolutionExplorer({
         </div>
 
         {solutions.length > 1 ? (
-          <label className="extension-builder-solution-picker">
-            <span>Solution</span>
-            <select aria-label="Solution" value={selectedSolutionPath} disabled={busy} onChange={event => onSelectSolution(event.target.value)}>
+          <StudioField className="extension-builder-solution-picker" label={<><span>Solution</span></>}><select aria-label="Solution" value={selectedSolutionPath} disabled={busy} onChange={event => onSelectSolution(event.target.value)}>
               <option value="">Select solution</option>
               {solutions.map(solution => <option key={solution.path} value={solution.path}>{solution.name}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
         ) : null}
 
         <div className="extension-builder-file-create">
-          <input aria-label="New file path" placeholder="Activities/MyActivity.cs" value={newFilePath} disabled={busy || !canEdit} onChange={event => onNewFilePathChange(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && newFilePath.trim()) onCreateFile(); }} />
+          <StudioField label="New file path"><input aria-label="New file path" placeholder="Activities/MyActivity.cs" value={newFilePath} disabled={busy || !canEdit} onChange={event => onNewFilePathChange(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && newFilePath.trim()) onCreateFile(); }} /></StudioField>
           <button type="button" className="studio-icon-button" disabled={busy || !canEdit || !newFilePath.trim()} title={canEdit ? "Create file" : "Requires canEditFiles"} aria-label="Create file" onClick={onCreateFile}>
             <FilePlus2 size={14} />
           </button>
@@ -155,29 +152,20 @@ export function SolutionExplorer({
         {availableTemplates.length > 0 ? (
           <details className="extension-builder-explorer-details">
             <summary>{advanced ? "Apply template" : "New file from template"}</summary>
-            <label>
-              <span>Template</span>
-              <select aria-label="Repository template" value={selectedTemplate?.id ?? ""} disabled={busy || !canEdit} onChange={event => {
+            <StudioField label={<><span>Template</span></>}><select aria-label="Repository template" value={selectedTemplate?.id ?? ""} disabled={busy || !canEdit} onChange={event => {
                 const template = availableTemplates.find(item => item.id === event.target.value);
                 if (template) onTemplateDraftChange(createTemplateApplicationDraft(template, templateDraft));
               }}>
                 {availableTemplates.map(template => <option key={template.id} value={template.id}>{advanced ? `${template.name} · ${template.scope}` : template.name}</option>)}
-              </select>
-            </label>
+              </select></StudioField>
             {advanced ? (
-              <label>
-                <span>Target path</span>
-                <input aria-label="Template target path" placeholder={defaultTemplateTargetPath(selectedTemplate)} value={templateDraft.targetPath} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({ ...templateDraft, targetPath: event.target.value })} />
-              </label>
+              <StudioField label={<><span>Target path</span></>}><input aria-label="Template target path" placeholder={defaultTemplateTargetPath(selectedTemplate)} value={templateDraft.targetPath} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({ ...templateDraft, targetPath: event.target.value })} /></StudioField>
             ) : null}
             {selectedTemplate?.parameters.map(parameter => (
-              <label key={parameter.name}>
-                <span>{parameter.displayName}</span>
-                <input aria-label={`Template parameter ${parameter.displayName}`} value={templateDraft.parameters[parameter.name] ?? parameter.defaultValue ?? ""} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({
+              <StudioField key={parameter.name} label={<><span>{parameter.displayName}</span></>}><input aria-label={`Template parameter ${parameter.displayName}`} value={templateDraft.parameters[parameter.name] ?? parameter.defaultValue ?? ""} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({
                   ...templateDraft,
                   parameters: { ...templateDraft.parameters, [parameter.name]: event.target.value }
-                })} />
-              </label>
+                })} /></StudioField>
             ))}
             <button type="button" className="studio-button" disabled={busy || !canEdit || !selectedTemplate} title={canEdit ? "Apply template" : "Requires canEditFiles"} onClick={onApplyTemplate}>
               <FilePlus2 size={15} />
@@ -189,10 +177,7 @@ export function SolutionExplorer({
         {advanced ? (
           <details className="extension-builder-explorer-details">
             <summary>Working copy</summary>
-            <label>
-              <span>Working branch</span>
-              <input aria-label="Working branch" value={workingBranchName} disabled={busy || !canEdit} onChange={event => onWorkingBranchNameChange(event.target.value)} />
-            </label>
+            <StudioField label={<><span>Working branch</span></>}><input aria-label="Working branch" value={workingBranchName} disabled={busy || !canEdit} onChange={event => onWorkingBranchNameChange(event.target.value)} /></StudioField>
             <label className="extension-builder-checkbox">
               <input type="checkbox" aria-label="Allow default branch editing" checked={allowProtectedBranchEdit} disabled={busy || !canEdit} onChange={event => onAllowProtectedBranchEditChange(event.target.checked)} />
               <span>Allow default branch editing</span>
@@ -208,24 +193,12 @@ export function SolutionExplorer({
           <details className="extension-builder-explorer-details" open={projects.length === 0}>
             <summary>Add project</summary>
             {projects.length === 0 ? <p className="extension-builder-muted">A project is the build target. Add one to pack this solution into a NuGet package.</p> : null}
-            <label>
-              <span>Template</span>
-              <select aria-label="Project template" value={projectDraft.templateId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange(applyTemplateDefaults({ ...projectDraft, templateId: event.target.value }, templates.find(template => template.id === event.target.value)))}>
+            <StudioField label={<><span>Template</span></>}><select aria-label="Project template" value={projectDraft.templateId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange(applyTemplateDefaults({ ...projectDraft, templateId: event.target.value }, templates.find(template => template.id === event.target.value)))}>
                 {templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Project name</span>
-              <input aria-label="Project name" value={projectDraft.name} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, name: event.target.value })} />
-            </label>
-            <label>
-              <span>Package id</span>
-              <input aria-label="Package id" value={projectDraft.packageId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, packageId: event.target.value })} />
-            </label>
-            <label>
-              <span>Initial version</span>
-              <input aria-label="Initial version" value={projectDraft.packageVersion} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, packageVersion: event.target.value })} />
-            </label>
+              </select></StudioField>
+            <StudioField label={<><span>Project name</span></>}><input aria-label="Project name" value={projectDraft.name} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, name: event.target.value })} /></StudioField>
+            <StudioField label={<><span>Package id</span></>}><input aria-label="Package id" value={projectDraft.packageId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, packageId: event.target.value })} /></StudioField>
+            <StudioField label={<><span>Initial version</span></>}><input aria-label="Initial version" value={projectDraft.packageVersion} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, packageVersion: event.target.value })} /></StudioField>
             <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create project" : "Requires canCreateWorkspace"} onClick={onCreateProject}>
               <PackageCheck size={15} />
               Create project

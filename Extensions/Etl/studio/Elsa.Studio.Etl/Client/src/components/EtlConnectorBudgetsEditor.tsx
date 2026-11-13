@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import { formatEtlJsonNumber, parseEtlJsonNumber } from "../etlTypes";
 import type { EtlConnectorLimits, EtlHttpPolicy, EtlJsonNumber } from "../etlTypes";
@@ -93,8 +94,8 @@ function BudgetSection<T extends NumericBudgetObject<T>>({ headingId, title, des
           const usesDefault = raw === undefined && field.fallback !== undefined;
           const effective: number | EtlJsonNumber = raw ?? field.fallback ?? 0;
           return (
-            <div className="etl-editor-field" key={String(field.key)}>
-              <label htmlFor={id}>{field.label}</label>
+            <div className="etl-editor-field" key={String(field.key)}><StudioField controlId={id} label={<>{field.label}</>}>
+
               <input
                 id={id}
                 type="text"
@@ -110,7 +111,7 @@ function BudgetSection<T extends NumericBudgetObject<T>>({ headingId, title, des
                 }}
               />
               <small id={`${id}-help`}>{field.help}{usesDefault ? ` The current server default is ${field.fallback} until this field is changed.` : ""}</small>
-            </div>
+            </StudioField></div>
           );
         })}
       </div>
