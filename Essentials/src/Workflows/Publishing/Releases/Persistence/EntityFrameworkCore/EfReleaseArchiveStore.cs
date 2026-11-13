@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore;
 
 internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IReleaseBundleCodec codec, SourceScope scope,
-    IPersistenceAccessContextAccessor access, ReleaseBundleLimits limits, bool requireDurable)
+    IPersistenceAccessContextAccessor access, ReleaseBundleLimits limits, bool requireDurable, TimeProvider? timeProvider = null)
     : IReleaseArchiveReader, IReleaseArchiveWriter, IReleaseArchiveStoreCapabilities where TContext : DbContext
 {
     private const string ArchiveKind = "workflow-release-archive";
@@ -178,7 +178,7 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
         foreach (var entry in rows)
         {
             RequireIdentity(identity, entry.Authority, entry.Partition, entry.TenantId, entry.Kind, entry.CaptureId);
-            var name = EfRelationalIdentity.Decode(entry.Name);
+            var name = DecodeStoredName(entry.Name);
             if (entry.SchemaVersion != ReleaseArchiveModelBuilderExtensions.SchemaVersion ||
                 entry.Key != EntryKey(identity, entry.EntryKind, name) || entry.EntryKind is not (BlobKind or AttachmentKind) ||
                 !names.Add((entry.EntryKind, name)))
@@ -216,7 +216,7 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
                 AttachmentKind => attachments,
                 _ => throw new ReleaseArchiveStoreException("archive_stored_content_invalid")
             };
-            collection.Add(EfRelationalIdentity.Decode(entry.Name), bytes);
+            collection.Add(DecodeStoredName(entry.Name), bytes);
         }
         IReleaseBundleTransport transport;
         try { transport = codec.ValidateParts(manifest, blobs, attachments, limits); }
@@ -310,14 +310,14 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
             throw new ReleaseArchiveStoreException("archive_scope_identity_mismatch");
     }
 
-    private static ReleaseArchiveRow Header(ArchiveIdentity identity, IReleaseBundleTransport transport)
+    private ReleaseArchiveRow Header(ArchiveIdentity identity, IReleaseBundleTransport transport)
     {
         var manifest = transport.GetManifestBytes();
         return new ReleaseArchiveRow
         {
             Key = identity.ArchiveKey, ScopeKey = identity.ScopeKey, Authority = identity.Authority, Partition = identity.Partition,
             TenantId = identity.Tenant, Kind = identity.Kind, CaptureId = identity.EncodedCaptureId, ReleaseDigest = transport.Digest,
-            CreatedAt = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture), Manifest = manifest,
+            CreatedAt = (timeProvider ?? TimeProvider.System).GetUtcNow().ToString("O", CultureInfo.InvariantCulture), Manifest = manifest,
             ManifestDigest = Hash(manifest), ManifestByteLength = manifest.LongLength,
             BlobCount = transport.Members.Select(x => x.PayloadDigest).Distinct(StringComparer.Ordinal).Count(), AttachmentCount = transport.AttachmentPaths.Count
         };
@@ -343,6 +343,12 @@ internal sealed class EfReleaseArchiveStore<TContext>(TContext configured, IRele
         EfRelationalIdentity.HashLengthFramed(identity.ArchiveKey, kind.ToString(CultureInfo.InvariantCulture), name);
 
     private static ReleaseArchiveStoreException Failure(Exception cause) => new("archive_storage_unavailable", cause);
+
+    private static string DecodeStoredName(string name)
+    {
+        try { return EfRelationalIdentity.Decode(name); }
+        catch (InvalidOperationException exception) { throw new ReleaseArchiveStoreException("archive_stored_content_invalid", exception); }
+    }
 
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 

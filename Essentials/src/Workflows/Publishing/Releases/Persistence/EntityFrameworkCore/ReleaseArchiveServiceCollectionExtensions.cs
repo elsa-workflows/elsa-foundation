@@ -34,7 +34,8 @@ public static class ReleaseArchiveServiceCollectionExtensions
             selection.EnsureOwnsPorts();
             _ = provider.GetRequiredService<IOptions<ReleaseArchiveBackendOptions>>().Value;
             return new(provider.GetRequiredService<TContext>(), provider.GetRequiredService<IReleaseBundleCodec>(),
-                scopeFactory(provider), provider.GetRequiredService<IPersistenceAccessContextAccessor>(), limits ?? new ReleaseBundleLimits(), requireDurable);
+                scopeFactory(provider), provider.GetRequiredService<IPersistenceAccessContextAccessor>(), limits ?? new ReleaseBundleLimits(), requireDurable,
+                provider.GetService<TimeProvider>());
         });
         ServiceDescriptor[] ports = [
             ServiceDescriptor.Scoped<IReleaseArchiveReader>(provider => provider.GetRequiredService<EfReleaseArchiveStore<TContext>>()),

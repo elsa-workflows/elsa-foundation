@@ -68,10 +68,12 @@ internal sealed class ArchiveFixture
     }
 
     internal static ServiceProvider Services(string connectionString, SourceScope? sourceScope = null,
-        MutableAccess? access = null, IInterceptor? interceptor = null, ReleaseBundleLimits? limits = null, bool requireDurable = true)
+        MutableAccess? access = null, IInterceptor? interceptor = null, ReleaseBundleLimits? limits = null, bool requireDurable = true,
+        TimeProvider? timeProvider = null)
     {
         var selected = sourceScope ?? DefaultScope;
         var services = new ServiceCollection();
+        if (timeProvider is not null) services.AddSingleton(timeProvider);
         new WorkflowReleaseTransportFeature().ConfigureServices(services);
         services.AddSingleton<IPersistenceAccessContextAccessor>(access ?? new MutableAccess(PersistenceAccessContext.Scoped(new PersistenceScope(selected.Partition))));
         services.AddDbContext<ConsumerContext>(options =>
