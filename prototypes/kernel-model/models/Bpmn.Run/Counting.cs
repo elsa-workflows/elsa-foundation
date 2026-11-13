@@ -3,7 +3,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Kernel.Bpmn.Run;
 
-// Copied from models/Native.Run/Hosting.cs, so the two models count the same way and neither project depends on the other.
+// Copied from models/Native.Run/Hosting.cs, so the two models count the same way and neither project depends on the other;
+// the trace here names each statement of a batched command.
 
 /// <summary>Counts what Entity Framework sends: commands, and the begin and end of transactions.</summary>
 public sealed class Counting : DbCommandInterceptor
@@ -23,7 +24,13 @@ public sealed class Counting : DbCommandInterceptor
     public int Commands;
 
     public List<string>? Trace;
-    private void Seen(DbCommand command) { Commands++; Trace?.Add(command.CommandText.ReplaceLineEndings(" ")[..Math.Min(140, command.CommandText.Length)]); }
+    // The trace lists each statement of a command by verb and table: EF batches several into one command.
+    private static readonly System.Text.RegularExpressions.Regex Statement = new(@"(INSERT INTO|UPDATE|DELETE FROM|SELECT\b.*?\bFROM)\s+\(?\s*(SELECT \* FROM\s+)?""?(\w+)""?", System.Text.RegularExpressions.RegexOptions.Singleline);
+    private void Seen(DbCommand command)
+    {
+        Commands++;
+        Trace?.Add(string.Join("; ", Statement.Matches(command.CommandText).Select(m => (m.Groups[1].Value.StartsWith("SELECT", StringComparison.Ordinal) ? "SELECT FROM" : m.Groups[1].Value) + " " + m.Groups[3].Value)));
+    }
     public void Reset() => (Commands, Transactions.Begun, Transactions.Ended) = (0, 0, 0);
 
     public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) { Seen(command); return new(result); }

@@ -175,7 +175,8 @@ public static class CaseSmoke
             var never = InstanceRef.In(0, $"b-inclusive-never-{++_n}");
             owner.Worker.Post(new Message($"m{_n}", never, Kinds.Start, Start: BpmnModel.Spec("b-inclusive-never")), fresh: true);
             await owner.PumpAsync(() => owner.Status(never.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
-            Check(owner.Status(never.Id) == InstanceStatus.Faulted, $"with the flow back on a condition that never holds, it still faults: {owner.Status(never.Id)}");
+            var last = store.Journal.Values.Where(j => j.Instance == never.Id).OrderBy(j => j.Position).SelectMany(j => Json.Read<List<string>>(j.Entries)).LastOrDefault();
+            Check(owner.Status(never.Id) == InstanceStatus.Faulted && last == "fault bpmn.join.deadlock", $"with the flow back on a condition that never holds, it still deadlocks: {owner.Status(never.Id)}, {last}");
         }
 
         Check(store.Messages.Values.All(m => m.Done) && store.Subscriptions.Count == 0, "no message and no subscription left");
