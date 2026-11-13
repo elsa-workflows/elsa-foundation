@@ -215,3 +215,24 @@ for (const bound of ["start", "end"] as const) it(`uses the outer scrollport whe
   expect(document.activeElement).toBe(f.field);
   expect([f.field.value, f.field.selectionStart, f.field.selectionEnd]).toEqual(["Retained token", 2, 7]);
 });
+
+it("reveals the associated label through the inner clip when the composite frame cannot fit", async () => {
+  const f = await mount("start"); f.setFieldHeight(350);
+  const label = container.querySelector<HTMLElement>(".studio-field-label")!;
+  // Model the browser's nearest native scroll through the actual inner port, including clamping.
+  const nativeNearest = (element: HTMLElement) => {
+    const bounds = element.getBoundingClientRect(), clip = f.inner!.getBoundingClientRect();
+    if (bounds.top < clip.top) f.inner!.scrollTop += bounds.top - clip.top;
+    else if (bounds.bottom > clip.bottom) f.inner!.scrollTop += bounds.bottom - clip.bottom;
+  };
+  label.scrollIntoView = () => nativeNearest(label);
+  f.field.scrollIntoView = () => nativeNearest(f.field);
+  f.inner!.scrollTop = 30;
+  expect(f.field.getBoundingClientRect().top).toBeGreaterThanOrEqual(f.inner!.getBoundingClientRect().top);
+  expect(label.getBoundingClientRect().top).toBeLessThan(f.inner!.getBoundingClientRect().top);
+  await update(() => window.dispatchEvent(new Event("resize")));
+  expect(label.getBoundingClientRect().top).toBeGreaterThanOrEqual(f.inner!.getBoundingClientRect().top);
+  expect(f.field.getBoundingClientRect().bottom).toBeLessThanOrEqual(f.inner!.getBoundingClientRect().bottom);
+  expect(document.activeElement).toBe(f.field);
+  expect([f.field.value, f.field.selectionStart, f.field.selectionEnd]).toEqual(["Retained token", 2, 7]);
+});

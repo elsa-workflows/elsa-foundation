@@ -66,11 +66,15 @@ function createFocusObserver(document: Document) {
     return { port, visible, innerHeight };
   };
 
-  const controlBounds = (focused: HTMLElement): Bounds => {
-    const control = focused.getBoundingClientRect();
+  const controlLabels = (focused: HTMLElement): HTMLElement[] => {
     const labels = Array.from((focused as HTMLInputElement).labels ?? []);
     const named = (focused.getAttribute("aria-labelledby") ?? "").split(/\s+/).map(id => document.getElementById(id)).filter((element): element is HTMLElement => element !== null);
-    const bounds = [...labels, ...named].map(label => label.getBoundingClientRect());
+    return [...new Set<HTMLElement>([...labels, ...named])];
+  };
+
+  const controlBounds = (focused: HTMLElement): Bounds => {
+    const control = focused.getBoundingClientRect();
+    const bounds = controlLabels(focused).map(label => label.getBoundingClientRect());
     return {
       left: Math.min(control.left, ...bounds.map(label => label.left)), right: Math.max(control.right, ...bounds.map(label => label.right)),
       top: Math.min(control.top, ...bounds.map(label => label.top)), bottom: Math.max(control.bottom, ...bounds.map(label => label.bottom))
@@ -113,7 +117,16 @@ function createFocusObserver(document: Document) {
       target = fieldBounds(field);
       availableHeight = Math.max(0, Math.min(visible.bottom - visible.top - gap * 2, innerHeight));
     }
-    if (target.bottom - target.top > availableHeight) { boundedControl = true; target = controlBounds(focused); }
+    if (target.bottom - target.top > availableHeight) {
+      boundedControl = true;
+      // A tall composite cannot be revealed as a whole. Its label still needs native inner scrolling.
+      for (const label of controlLabels(focused)) label.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
+      focused.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
+      ({ port, visible, innerHeight } = geometry(field));
+      if (!port) { release(); return; }
+      target = controlBounds(focused);
+      availableHeight = Math.max(0, Math.min(visible.bottom - visible.top - gap * 2, innerHeight));
+    }
     // An unfittable native editor retains its normal caret/scroll behavior; never hide a notice.
     if (target.bottom - target.top > availableHeight) { release(); return; }
     const ownerBounds = port.getBoundingClientRect();

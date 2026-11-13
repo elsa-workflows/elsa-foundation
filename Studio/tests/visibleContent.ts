@@ -1,5 +1,5 @@
 /** Browser-evaluated geometry: ARIA focus and viewport intersection do not detect overlays. */
-export function isFieldUnobscured(control: Element): boolean {
+export function isFieldUnobscured(control: Element, includeFrame: boolean | void = true): boolean {
   const document = control.ownerDocument;
   const view = document.defaultView;
   if (!view) return false;
@@ -17,7 +17,7 @@ export function isFieldUnobscured(control: Element): boolean {
       right = Math.min(right, bounds.left + parent.clientLeft + parent.clientWidth);
     }
   }
-  for (const element of [frame, control, ...(label ? [label] : [])]) {
+  for (const element of [...(includeFrame ? [frame] : []), control, ...(label ? [label] : [])]) {
     const bounds = element.getBoundingClientRect();
     if (!bounds.width || !bounds.height || bounds.top < top - 1 || bounds.bottom > bottom + 1
       || bounds.left < left - 1 || bounds.right > right + 1) return false;

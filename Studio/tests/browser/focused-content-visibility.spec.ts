@@ -73,3 +73,40 @@ for (const appearance of ["light", "dark"]) for (const bound of ["start", "end"]
     await expect(field).toHaveValue("Nested retained value");
   });
 }
+
+for (const appearance of ["light", "dark"]) {
+  test(`reveals a large composite field's active input and label through the inner clip (${appearance})`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 600 });
+    await page.goto(`/settings/appearance?mode=settings&appearance=${appearance}&focus-notices&nested-focus&large-frame`);
+    await page.evaluate(() => document.fonts.ready);
+    const field = page.getByRole("textbox", { name: "Setting 1", exact: true });
+    await field.fill("Large composite retained value");
+    await expect.poll(() => field.evaluate(isFieldUnobscured, false)).toBe(true);
+    const clipped = await field.evaluate(element => {
+      const input = element as HTMLInputElement;
+      const inner = input.closest<HTMLElement>("[data-nested-focus-port]")!;
+      const label = input.labels![0];
+      const top = inner.getBoundingClientRect().top + inner.clientTop;
+      inner.scrollTop += label.getBoundingClientRect().top - top + 4;
+      const control = input.getBoundingClientRect();
+      return { nativeVisible: control.top >= top && control.bottom <= top + inner.clientHeight,
+        labelClipped: label.getBoundingClientRect().top < top,
+        frameTooTall: input.closest<HTMLElement>(".studio-form-control")!.getBoundingClientRect().height > inner.clientHeight };
+    });
+    expect(clipped).toEqual({ nativeVisible: true, labelClipped: true, frameTooTall: true });
+    await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+    await expect.poll(() => field.evaluate(isFieldUnobscured, false)).toBe(true);
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue("Large composite retained value");
+    await page.getByRole("button", { name: "Show focus notice", exact: true }).click();
+    await expect.poll(() => field.evaluate(isFieldUnobscured, false)).toBe(true);
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue("Large composite retained value");
+    const dismiss = page.getByRole("button", { name: "Dismiss notification", exact: true });
+    await dismiss.focus();
+    await expect(dismiss).toBeInViewport();
+    await expect(dismiss).toBeFocused();
+    await dismiss.press("Enter");
+    await expect(page.locator(".studio-toast")).toHaveCount(0);
+  });
+}

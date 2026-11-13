@@ -15,12 +15,14 @@ const appearance = (searchParams.get("appearance") ?? "light") as ThemeModePrefe
 const requestedPath = window.location.pathname.startsWith("/settings") ? window.location.pathname : "/settings/appearance";
 const focusNotices = searchParams.has("focus-notices");
 const nestedFocus = searchParams.has("nested-focus");
+const largeFrame = searchParams.has("large-frame");
 
 /** Isolated layout contract using the real shell, nested content hooks and notification controller. */
 function FocusedSettingsFields({ controller }: { controller: StudioNotificationController }) {
   const { contentRef } = useCompactNavigation();
   const fields = Array.from({ length: 12 }, (_, index) => <StudioField key={index} label={`Setting ${index + 1}`}>
-    <input defaultValue={`Draft ${index + 1}`} />
+    {largeFrame && index === 0 ? <div style={{ minHeight: 350 }}><input defaultValue={`Draft ${index + 1}`} /></div>
+      : <input defaultValue={`Draft ${index + 1}`} />}
   </StudioField>);
   return <div ref={contentRef}>
     <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => controller.api.notify({
