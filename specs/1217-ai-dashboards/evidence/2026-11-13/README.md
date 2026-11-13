@@ -1,6 +1,6 @@
 # Dashboard delivery evidence — 13 November 2026
 
-Status: native, Home, comparison and live Copilot qualification and independent visual reviews passed. Ordered merges and resulting-main verification remain in progress.
+Status: the executed native, Home, comparison and live Copilot journeys and their independent visual reviews passed. Full acceptance is incomplete: actual model query refinement/weekly-rate meaning, same-artifact host restart, explicit saved incompatibility repair, remaining edge states and safe downloadable traces are being added. Ordered qualification merges and resulting-main verification remain open.
 
 The screenshots below are unmodified originals from owned, disposable composed hosts using synthetic qualification data. An independent acceptance subagent actually opened all 94 retained originals. [The manifest](screenshots.json) records their exact tested source, original run filename and SHA-256. These retained files provide downloadable evidence while Actions is delayed. Raw traces, browser storage, fixture tokens and backend/provider logs stay private.
 

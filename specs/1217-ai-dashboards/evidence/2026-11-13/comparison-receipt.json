@@ -2,6 +2,10 @@
   "status": "passed",
   "stage": "complete",
   "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+  "studioSourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+  "headSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+  "dirty": false,
+  "studioDirty": false,
   "startedAt": "2026-11-13T16:51:15Z",
   "finishedAt": "2026-11-13T16:53:43Z",
   "browserStats": {
