@@ -268,3 +268,5 @@ not automatic constitution violations.
 - [Workflow Dashboard source](Essentials/src/Workflows/Dashboard/Queries/EXTENSION_POINTS.md)
 
 - [Studio Dashboard routes and Weaver contributions](Studio/src/essentials/Elsa.Studio.Dashboard/EXTENSION_POINTS.md)
+
+- [Weaver Dashboard authoring](Extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md)

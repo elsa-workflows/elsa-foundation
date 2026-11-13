@@ -3,6 +3,7 @@
   <Folder Name="/Extensions/Agent/" />
   <Folder Name="/Extensions/Weaver/" />
   <Folder Name="/Extensions/Weaver/src/">
+    <Project Path="Extensions/Weaver/src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
     <Project Path="Extensions/Weaver/src/Elsa.Weaver/Elsa.Weaver.csproj" />
     <Project Path="Extensions/Weaver/src/Anthropic/Elsa.Weaver.Anthropic.csproj" />
     <Project Path="Extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj" />
@@ -36,6 +37,9 @@
   <Folder Name="/Extensions/Weaver/src/Workflows/">
     <Project Path="Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/Elsa.Weaver.Workflows.csproj" />
     <Project Path="Extensions/Weaver/src/Workflows/Runtime/Elsa.Weaver.Workflows.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Weaver/tests/Dashboard/">
+    <Project Path="Extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Weaver/tests/">
     <Project Path="Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj" />

@@ -239,4 +239,7 @@
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Weaver/src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
+  </ItemGroup>
 </Project>
