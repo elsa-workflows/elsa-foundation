@@ -128,15 +128,19 @@ public static class Cases
             });
             That(await Harness.WaitAsync(async () => (await h.RowAsync(id)) is { } row && Json.Read<CounterState>(row.State).Tokens.Count >= 3, Slack),
                 $"{a.Name} handled none of partition 0's messages before the crash");
+            var killing = Stopwatch.StartNew();
             await h.KillAsync(a);
-            // A crash gives nothing up: right after the kill every scope the node held still has its lease (a take is
-            // refused). The lease is 3 s here, so it cannot have run out yet.
+            // A crash gives nothing up: right after the kill every scope the node held still has its lease, so a take is
+            // refused. The node renewed it within a third of a lease before the kill, so two thirds are left at least;
+            // the check counts only if the kill took less than that, with half a second to spare.
+            var bound = h.Lease * 2 / 3 - TimeSpan.FromMilliseconds(500);
+            That(killing.Elapsed < bound, $"the kill took {killing.ElapsedMilliseconds} ms: the check that a crash gives nothing up needs it under {bound.TotalMilliseconds} ms");
             foreach (var p in held)
                 That(await h.Outside.TakeAsync(p, "probe", h.Lease) is null, $"the killed node gave partition {p} up: a crash gives nothing up");
             await adding;
             await Settle(h, "every scope taken over");
             await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
-        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(3) } }),
+        }, Default with { Timing = Default.Timing with { Lease = TimeSpan.FromSeconds(6) } }),
 
         new("stop: a stopped node's scopes are taken over before its lease would have run out", Level.Reference, async h =>
         {
