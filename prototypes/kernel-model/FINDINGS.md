@@ -1044,6 +1044,54 @@ The reference cases that differ are those of M6 (not on main yet) and F8.
 **Not run:** the simulation (it uses the in-memory store, unchanged) and the stress tests (the projector does not run in
 them, section 23).
 
+### 25.8 The viewer's tail read and catch-up on request (decision 11). Run
+
+**What changed.**
+- **The tail read** (`Viewer.ReadAsync`, layer 2). It reads the projector's cursor, then the instance's view, then
+  the instance's journal rows past the cursor, and merges them (`Viewer.Merge`).
+  - A round that commits between the reads leaves rows in both the view and the tail. The merge counts a tail row only
+    past the view's revision. For one instance the revision grows with the journal position, so this is the position
+    test the sketch describes, without a position column on the view.
+  - A delete in the tail removes the view.
+  - Three reads, no write.
+- **A new store read.** `IKernelStore.ReadJournalOfAsync(partition, instance, after)` gives one instance's journal rows
+  past a position. The EF and MongoDB stores answer it from their (partition, instance) index; the in-memory store
+  scans its rows. The other implementations (wrappers, the simulation's wire) take the interface's default, which
+  pages through the partition's journal.
+- **Catch-up on request** (`Projector.CatchUpAsync`). It completes once the projection reaches the partition's
+  position as the first round started after the request read it: a full page, or a write another projector beat, is
+  followed by another round. Requests are coalesced: all that arrive before such a round starts are served by it.
+  A round already under way when a request arrives does not serve it. A failed round, or a projection that three
+  rounds in a row leave where it was (by this projector or another), fails the request. A caller's token cancels only its own wait. The timer's `RoundAsync` is unchanged.
+
+**Not built:** live watching, Studio's push stream of committed entries.
+
+**The checks.**
+- **Three new required cases.**
+  - One instance's rows past a position.
+  - The tail read when a round commits between the cursor read and the rest. Without the merge's rule the instance
+    would show 4 commits instead of 3 (reasoned from the case, not run).
+  - Catch-up requests coalesced, and the projection current afterwards across three pages (250 rows, 100 a round).
+- **Where they pass:** in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB.
+- **The simulation** (I6 for the viewer). After every action the tail read of every instance (the cursor, its view, its
+  rows past the cursor, merged) equals what its whole journal says, whatever the projectors have done. It runs on the
+  in-memory rows directly, in one pass over the journal; it checks the merge against every state the projectors leave,
+  not an interleaving of the reads (the conformance case does that).
+
+**Gates.**
+
+| Gate | Before (25.7) | After |
+|---|---|---|
+| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped (on a store that answers at once the catch-up case cannot overlap rounds, so it checks the outcome and the rounds, not the coalescing) |
+| SQLite, PostgreSQL (default fence) | 55 passed, 2 or 3 reference differ | 58 passed, the same reference cases differ |
+| SQL Server, MySQL (default) | 54 passed, 3 reference differ, 1 skipped | 57 passed, the same |
+| MongoDB | 58 passed | 61 passed |
+| `$SIM --seeds 20000` | 0 failed | 0 failed, with the new check (16.8 s on this machine) |
+| `$SIM --seeds 4000 --flaw ProjectorBlindWrite` | caught | caught, at the same seed (25) |
+
+**Not run:** the full simulation gates, because the kernel's turns, commits and schedules are unchanged. The check
+reads only, and the generator is unchanged. Also not run: the EF cost runs, because the viewer is not in the cost runs.
+
 ## 26. Round 4: the graph engine. Run
 
 The owner's decision of 12 November (design sketch draft 5, "Containers and their semantics"): the native model stays
@@ -1146,51 +1194,3 @@ plan's aims at it), so that it bites is not shown.
 - **Not covered by the mix:** merges, inclusive gateways, a race inside a loop, a trigger inside a Flowchart under
   the faults (smoke covers the trigger entry). The BPMN spike (its own session) does not use this engine; comparing
   the two join codes is the sketch's next step.
-
-### 25.8 The viewer's tail read and catch-up on request (decision 11). Run
-
-**What changed.**
-- **The tail read** (`Viewer.ReadAsync`, layer 2). It reads the projector's cursor, then the instance's view, then
-  the instance's journal rows past the cursor, and merges them (`Viewer.Merge`).
-  - A round that commits between the reads leaves rows in both the view and the tail. The merge counts a tail row only
-    past the view's revision. For one instance the revision grows with the journal position, so this is the position
-    test the sketch describes, without a position column on the view.
-  - A delete in the tail removes the view.
-  - Three reads, no write.
-- **A new store read.** `IKernelStore.ReadJournalOfAsync(partition, instance, after)` gives one instance's journal rows
-  past a position. The EF and MongoDB stores answer it from their (partition, instance) index; the in-memory store
-  scans its rows. The other implementations (wrappers, the simulation's wire) take the interface's default, which
-  pages through the partition's journal.
-- **Catch-up on request** (`Projector.CatchUpAsync`). It completes once the projection reaches the partition's
-  position as the first round started after the request read it: a full page, or a write another projector beat, is
-  followed by another round. Requests are coalesced: all that arrive before such a round starts are served by it.
-  A round already under way when a request arrives does not serve it. A failed round, or a projection that three
-  rounds in a row leave where it was (by this projector or another), fails the request. A caller's token cancels only its own wait. The timer's `RoundAsync` is unchanged.
-
-**Not built:** live watching, Studio's push stream of committed entries.
-
-**The checks.**
-- **Three new required cases.**
-  - One instance's rows past a position.
-  - The tail read when a round commits between the cursor read and the rest. Without the merge's rule the instance
-    would show 4 commits instead of 3 (reasoned from the case, not run).
-  - Catch-up requests coalesced, and the projection current afterwards across three pages (250 rows, 100 a round).
-- **Where they pass:** in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB.
-- **The simulation** (I6 for the viewer). After every action the tail read of every instance (the cursor, its view, its
-  rows past the cursor, merged) equals what its whole journal says, whatever the projectors have done. It runs on the
-  in-memory rows directly, in one pass over the journal; it checks the merge against every state the projectors leave,
-  not an interleaving of the reads (the conformance case does that).
-
-**Gates.**
-
-| Gate | Before (25.7) | After |
-|---|---|---|
-| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped (on a store that answers at once the catch-up case cannot overlap rounds, so it checks the outcome and the rounds, not the coalescing) |
-| SQLite, PostgreSQL (default fence) | 55 passed, 2 or 3 reference differ | 58 passed, the same reference cases differ |
-| SQL Server, MySQL (default) | 54 passed, 3 reference differ, 1 skipped | 57 passed, the same |
-| MongoDB | 58 passed | 61 passed |
-| `$SIM --seeds 20000` | 0 failed | 0 failed, with the new check (16.8 s on this machine) |
-| `$SIM --seeds 4000 --flaw ProjectorBlindWrite` | caught | caught, at the same seed (25) |
-
-**Not run:** the full simulation gates, because the kernel's turns, commits and schedules are unchanged. The check
-reads only, and the generator is unchanged. Also not run: the EF cost runs, because the viewer is not in the cost runs.
