@@ -6,9 +6,8 @@ public static class WorkflowCommitClock
     public const string Terminal = "workflow:end";
     internal static InstanceRow End(InstanceRow row)
     {
-        if (row.CommitTimes is null) return row;
-        var times = new Dictionary<string, long?>(row.CommitTimes, StringComparer.Ordinal);
+        if (CommitClockFacts.Read(row) is not { } times) return row;
         times.TryAdd(Terminal, null);
-        return row with { CommitTimes = times };
+        return row with { CommitTimes = Json.Write(times) };
     }
 }

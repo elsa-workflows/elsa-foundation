@@ -17,6 +17,7 @@ sealed class ClockWitness(string scenario)
     private int _owner, _serial;
     private Actor Actor => _world.Of(_owner, 0);
     private InstanceRow Row => _world.Store.Instances[_target.Id];
+    private Dictionary<string, long?> Times => CommitClockFacts.Read(Row) ?? [];
     private ClockState State => Json.Read<ClockState>(Row.State);
     private static void Require(bool ok, string assertion, string detail)
     { if (!ok) throw new InvalidOperationException(assertion + ": " + detail); }
@@ -84,22 +85,28 @@ sealed class ClockWitness(string scenario)
         else { Apply(new("flush", Actor.Id)); Drain(); }
         if (scenario == "future-pending-end")
         {
-            Require(Row.CommitTimes is { Count: 0 }, "C5", "pending-only activation did not persist opt-in");
+            Require(Row.CommitTimes is not null && Times.Count == 0, "C5", "pending-only activation did not persist opt-in");
             var opaque = Row.State; Takeover(); Send(Kinds.Terminate); Prepare(); Apply(new("tick", 2000)); Apply(new("flush", Actor.Id)); Drain();
             Require(Row.Status == InstanceStatus.Cancelled && Row.State == opaque && Row.StateVersion == 2 &&
-                Row.CommitTimes?.GetValueOrDefault(WorkflowCommitClock.Terminal) == _world.Time, "C5", "older model lost opaque-state terminal anchor");
-            var ended = Row.CommitTimes![WorkflowCommitClock.Terminal];
+                Times.GetValueOrDefault(WorkflowCommitClock.Terminal) == _world.Time, "C5", "older model lost opaque-state terminal anchor");
+            var ended = Times[WorkflowCommitClock.Terminal];
             Apply(new("tick", 50)); Send(Kinds.Terminate); Drain();
-            Require(Row.CommitTimes[WorkflowCommitClock.Terminal] == ended, "C3", "repeat termination restamped end");
+            Require(Times[WorkflowCommitClock.Terminal] == ended, "C3", "repeat termination restamped end");
             Console.WriteLine("PASS clock:" + scenario); return;
         }
         // A lost acknowledgement can leave the row cold with no outstanding work; the read loads it normally.
         if (scenario == "lost-ack") { Send("read"); Drain(); }
         var first = State.First;
-        Require(first is not null && first == State.Alias && Row.CommitTimes?.GetValueOrDefault(first) is { }, "C2", "committed shared fact missing");
-        var stamp = Row.CommitTimes![first!];
+        Require(first is not null && first == State.Alias && Times.GetValueOrDefault(first) is { }, "C2", "committed shared fact missing");
+        var stamp = Times[first!];
         Require(stamp == (scenario == "lost-ack" ? _world.Time - 20_000 : _world.Time), "C1", "fact used staged time rather than atomic application");
-        if (scenario == "reload") { Takeover(); Send("read"); Drain(); }
+        Send("read"); Drain();
+        Require(State.ObservedFirst == stamp && State.AbsentWasNull, "C7", "model could not resolve committed/missing fact");
+        if (scenario == "reload")
+        {
+            Takeover(); Send("read"); Drain();
+            Require(State.ObservedFirst == stamp && State.AbsentWasNull, "C7", "cold model lookup lost retained fact");
+        }
         if (scenario == "stale-commit")
         {
             var old = Actor; Send("write"); Prepare(); _world.Auto = false;
@@ -111,22 +118,47 @@ sealed class ClockWitness(string scenario)
                 "C2", "stale clock commit changed authoritative facts");
         }
         Apply(new("tick", 100)); Send("write"); Prepare(); Apply(new("tick", 2000)); Apply(new("flush", Actor.Id)); Drain();
-        Require(Row.CommitTimes[first!] == stamp && Row.CommitTimes[State.Second!] == _world.Time, "C3", "later commit restamped earlier fact");
+        Require(Times[first!] == stamp && Times[State.Second!] == _world.Time, "C3", "later commit restamped earlier fact");
         var cache = Actor.Worker.Instances.Single(x => x.Id == _target.Id).Row;
         Require(Json.Write(cache?.CommitTimes) == Json.Write(Row.CommitTimes), "C2", "worker cache differs from committed facts");
         Send("release"); Drain();
-        Require(!Row.CommitTimes.ContainsKey(first!) && Row.CommitTimes.ContainsKey(State.Second!) && !Row.CommitTimes.ContainsKey("absent"),
+        Require(!Times.ContainsKey(first!) && Times.ContainsKey(State.Second!) && !Times.ContainsKey("absent"),
             "C2", "release/resolve changed another fact or created a missing one");
         Apply(new("tick", 50)); Send("end"); Prepare(); Apply(new("tick", 2000)); Apply(new("flush", Actor.Id)); Drain();
-        Require(Row.Status == InstanceStatus.Finished && Row.CommitTimes.GetValueOrDefault(WorkflowCommitClock.Terminal) == _world.Time,
+        Require(Row.Status == InstanceStatus.Finished && Times.GetValueOrDefault(WorkflowCommitClock.Terminal) == _world.Time,
             "C5", "normal end lacks committed workflow-owned fact");
+        if (scenario == "normal") RejectForgedFacts();
         Console.WriteLine("PASS clock:" + scenario);
+    }
+    private void RejectForgedFacts()
+    {
+        var facts = Times;
+        var altered = new Dictionary<string, long?>(facts);
+        altered[State.Second!] = facts[State.Second!] + 1;
+        var removed = new Dictionary<string, long?>(facts); removed.Remove(WorkflowCommitClock.Terminal);
+        var forged = new InstanceRow("0/forged-clock", "clock-probe", "probe", InstanceStatus.Running, "{}", 1, null,
+            CommitTimes: Json.Write(new Dictionary<string, long?> { ["turn:1"] = _world.Time }));
+        foreach (var candidate in new[] { forged, Row with { Revision = Row.Revision + 1, CommitTimes = Json.Write(altered) },
+            Row with { Revision = Row.Revision + 1, CommitTimes = Json.Write(removed) } })
+        {
+            var position = _world.Store.Partitions[0].Position;
+            var original = Row.CommitTimes;
+            var change = new TurnCommit(candidate.Id, candidate, candidate.Id == _target.Id ? Row.Revision : null, [], [], [], [], [], "[]");
+            try
+            {
+                _world.Store.CommitAsync(new(0, Actor.Worker.Epoch, position, TimeSpan.FromSeconds(10), false, [change], [], [])).GetAwaiter().GetResult();
+                throw new InvalidOperationException("C6: forged, altered or released actor fact was accepted");
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { }
+            Require(_world.Store.Partitions[0].Position == position && Row.CommitTimes == original &&
+                !_world.Store.Instances.ContainsKey(forged.Id), "C6", "invalid clock protocol batch partially wrote");
+        }
     }
     private void Unsupported()
     {
         _world.Store.CommitClockAvailable = false;
         var before = _world.Store.Partitions[0].Position;
-        var row = new InstanceRow("0/direct", "clock-probe", "probe", InstanceStatus.Running, "{}", 1, null, CommitTimes: []);
+        var row = new InstanceRow("0/direct", "clock-probe", "probe", InstanceStatus.Running, "{}", 1, null, CommitTimes: "{}");
         var turn = new TurnCommit(row.Id, row, null, [], [], [], [], [], "[]");
         try
         {
@@ -155,6 +187,8 @@ public sealed class ClockState
     public string? First { get; set; }
     public string? Alias { get; set; }
     public string? Second { get; set; }
+    public long? ObservedFirst { get; set; }
+    public bool AbsentWasNull { get; set; }
     public string FutureCanary { get; set; } = "opaque-future-state";
 }
 public sealed class ClockProbe(int version) : IExecutionModel
@@ -178,7 +212,8 @@ public sealed class ClockProbe(int version) : IExecutionModel
                     if (message.Start?.Input != "pending") { state.First = turn.Clock.Capture(); state.Alias = turn.Clock.Capture(); }
                     break;
                 case "write": state.Second = turn.Clock.Capture(); break;
-                case "read": _ = turn.Clock.Resolve(state.First ?? "absent"); break;
+                case "read": state.ObservedFirst = turn.Clock.Resolve(state.First ?? "absent");
+                    state.AbsentWasNull = turn.Clock.Resolve("absent") is null; break;
                 case "release":
                     _ = turn.Clock.Resolve("absent");
                     try { turn.Clock.Release(WorkflowCommitClock.Terminal); throw new InvalidOperationException("C5: model released workflow fact"); }

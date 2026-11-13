@@ -18,13 +18,28 @@ public static class CommitClockFacts
             throw new StoreException(Failure.Definite, "store has no qualified commit clock");
     }
 
-    internal static InstanceRow Stamp(InstanceRow row, long now) => row.CommitTimes is null ? row : row with
-    { CommitTimes = row.CommitTimes.ToDictionary(p => p.Key, p => p.Value ?? now, StringComparer.Ordinal) };
+    public static Dictionary<string, long?>? Read(InstanceRow row) => row.CommitTimes is { } json
+        ? Json.Read<Dictionary<string, long?>>(json) : null;
+
+    internal static void Validate(InstanceRow row, InstanceRow? before)
+    {
+        var next = Read(row);
+        var old = before is null ? null : Read(before);
+        if (old is not null && next is null) throw new StoreException(Failure.Definite, "commit clock opt-in cannot be removed");
+        foreach (var (key, value) in next ?? [])
+            if (old is not null && old.TryGetValue(key, out var kept) ? value != kept : value is not null)
+                throw new StoreException(Failure.Definite, "commit clock fact must be new/unstamped or retained unchanged");
+        if (old?.Keys.Any(key => !key.StartsWith("turn:", StringComparison.Ordinal) && next?.ContainsKey(key) != true) == true)
+            throw new StoreException(Failure.Definite, "actor-owned commit clock fact cannot be released");
+    }
+
+    internal static InstanceRow Stamp(InstanceRow row, long now) => Read(row) is not { } times ? row : row with
+    { CommitTimes = Json.Write(times.ToDictionary(p => p.Key, p => p.Value ?? now, StringComparer.Ordinal)) };
 }
 
 internal sealed class TurnClock(InstanceRow? row, long revision, ITurnServices services) : ICommitClock
 {
-    private Dictionary<string, long?>? _times = row?.CommitTimes is { } times ? new(times, StringComparer.Ordinal) : null;
+    private Dictionary<string, long?>? _times = row is null ? null : CommitClockFacts.Read(row);
     public bool Available => services.CommitClockAvailable;
     public void Require()
     {
@@ -46,5 +61,5 @@ internal sealed class TurnClock(InstanceRow? row, long revision, ITurnServices s
             throw new ArgumentException("Only model-owned clock facts can be released.", nameof(reference));
         _times!.Remove(reference);
     }
-    internal Dictionary<string, long?>? Snapshot() => _times is null ? null : new(_times, StringComparer.Ordinal);
+    internal string? Snapshot() => _times is null ? null : Json.Write(_times);
 }
