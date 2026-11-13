@@ -235,6 +235,24 @@ catalog/member choice but exposed long canonical type labels squeezing source na
 wrapped type notes address that observed issue. That exploratory run is not accepted proof; final composed proof
 must use the corrected committed head. No task completion or runtime success is claimed from these source fixes.
 
+#4309 S4 recoverable checkpoint (partial; T024 remains unchecked): the opt-in backend REST journey and
+single-object Customer test fixture live in `e2e-tests/activity-data-selection/`. Ordinary Workbench builds
+and MemberReads defaults are unchanged. Exploratory runs against merged S3 base `06d61975` plus uncommitted
+proof files observed canonical save/reopen/publication and committed consumer inputs for typed activity
+result, nearest container variable, explicit outer workflow variable with a different sentinel, and declared
+workflow request with name differing from reference key. The result producer completed once. Restart was
+after save/publication and before execution; this is not producer-to-consumer persistent recovery.
+Actual Customer object→String publication returned `VF-COER-001`; positive scoped read-only SQLite
+fingerprints of artifacts, source references, publications and activation slots stayed unchanged.
+Open-request binding discovery/save/publication succeeds, but actual REST execution refuses the undeclared
+request name under the compiler's closed v1 input contract. Owner policy is pending; the unresolved runtime
+assertion and full-receipt refusal remain in place. Four exploratory attempts (including driver failures),
+private source/config/binary fingerprints and guard controls are retained; they are not exact-head qualification
+of this checkpoint commit. This lane explicitly requires PowerShell 7.3+ and Python 3, with no Windows 5.1
+or Windows-run success claim. All owned hosts are stopped. Final source/head qualification, independent
+review, S5 composed acceptance and the broader source/recovery/editor tasks remain pending. No T024, P1
+or program-completion box is closed here.
+
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.
 
