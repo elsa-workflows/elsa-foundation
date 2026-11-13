@@ -61,6 +61,7 @@ public static partial class ExternalAuthenticationApi
                 context => Run(context, Preview), name: "ExternalAuthenticationPreviewResult", containFailures: false)
             .RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
         MapManagement(endpoints);
+        MapIdentityAdministration(endpoints);
     }
 
     private static async Task Run(HttpContext context, Func<HttpContext, Task> handler, int maximumBody = 16384)

@@ -40,7 +40,7 @@ public static class ExternalAuthenticationApiRegistration
 [ManifestFeatureCategory("Security")]
 [ManifestFeatureCategory("API")]
 [ShellFeature(name: "FoundationIdentityExternalAuthenticationApi", DisplayName = "External authentication API",
-    Description = "Backend-owned authentication, connection administration and administrator-only preview.",
+    Description = "Backend-owned authentication, connection/link/session administration and administrator-only preview.",
     DependsOn = new object[] { "ApiCapabilities" })]
 public class ExternalAuthenticationApiFeature : IWebShellFeature
 {
