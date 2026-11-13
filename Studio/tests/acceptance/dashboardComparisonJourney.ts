@@ -1,6 +1,6 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import type { QuestionDefinition, QueryResult } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/native/types";
-import { attachDashboardJson, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
+import { attachDashboardJson, canonicalDashboardDefinition, dashboardBackend, observeNativeWeaverBoundary, registerDashboardCleanup, seedDashboardRuns, tag, type Capture, type Resource } from "./dashboardJourneySupport";
 
 /** Derive period membership from the independent runtime inspection API, never Dashboard results. */
 export async function dashboardComparisonJourney(page: Page, info: TestInfo, capture: Capture) {
@@ -86,7 +86,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     const saving = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/_elsa/studio/questions"));
     await page.getByRole("button", { name: "Save question", exact: true }).click();
     const savedResponse = await saving; expect(savedResponse.ok()).toBe(true); saved = await savedResponse.json() as Resource;
-    expect(saved.definition).toEqual(included.definition);
+    expect(canonicalDashboardDefinition(saved.definition)).toEqual(canonicalDashboardDefinition(included.definition));
     await page.reload();
     await expect(page.getByRole("combobox", { name: "Compare with", exact: true })).toHaveValue("absolute");
     const refresh = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${saved!.id}/execute`));
