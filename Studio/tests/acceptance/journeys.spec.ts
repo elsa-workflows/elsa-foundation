@@ -8,6 +8,7 @@ import { expect, test, type APIRequestContext, type Page, type TestInfo } from "
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
+import { settingsTabsJourney } from "./settingsTabsJourney";
 import { structuredLogsJourney } from "./structuredLogsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 
@@ -44,6 +45,7 @@ test("user task authoring and workflow result", async ({ page }, info) => {
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
+test("settings tabs and preserved edits", async ({ page }, info) => settingsTabsJourney(page, info, capture));
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
