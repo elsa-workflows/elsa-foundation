@@ -9,6 +9,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IStimulusRouter
 {
+    /// <summary>Qualifies the selected native source, causal transport and recipient observation chain for this kind.</summary>
+    bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>Route only the immutable persisted source's accepted recipient cohort; legacy routers refuse.</summary>
     /// <exception cref="Exceptions.StimulusDeliveryBoundaryException">Source, adapter or selected-provider support is
     /// unavailable/contradictory; no fallback to per-attempt matching is permitted.</exception>

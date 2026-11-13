@@ -55,8 +55,11 @@ capture at phase2000. It contributes safe publication inputs through Core's opti
 `IRuntimeHistorySourceExtension` before native capture. It stamps the logical intent and supplied pending
 projection only when the original final profile promises `StimulusPublicationCommitted`,
 `StimulusRoutingAttemptObserved` and `StimulusRoutingDispositionObserved`. Earlier vocabularies retain
-their original unstamped replay identity. This contribution does not advertise recording support or enable
-a production history module; actual capture/provider/handler qualification follows separately. See the
+their original unstamped replay identity. Its source-kind declaration is idempotent; it advertises those
+kinds only when the actual committer input owner, native source/provider pair, handler, router and both
+recipient transports qualify. The existing enricher's default-false `CanSupplyHistorySource` checks the
+selected source extension; the committer checks its actual frozen input-owner set. A declaration alone
+cannot activate recording. No production history module is enabled. See the
 [Runtime extension catalog](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the shared source boundary.
 
 The same feature constructs its scoped `PublishStimulusExecutor` with the actual selected source, native

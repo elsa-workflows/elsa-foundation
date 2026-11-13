@@ -37,8 +37,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
             if (!policy.SupportedKinds.Contains("DeliveryReceived", StringComparer.Ordinal) || !sourceAvailability.DeliveryInputs()) return false;
             available.UnionWith(RuntimeHistoryDeliveryObservations.Kinds);
         }
-        // Post-commit and timer owners are qualified in their own source/writer slices.
-        available.UnionWith(sourceSupport.Where(owner => owner.SourceIntentKind is null).SelectMany(owner => owner.Kinds).Select(RuntimeHistorySourceFacts.EventName));
+        foreach (var owner in sourceSupport)
+        {
+            var kinds = RuntimeHistoryCaptureCapabilities.Kinds(owner).ToArray();
+            if (policy.SupportedKinds.Intersect(kinds, StringComparer.Ordinal).Any() && sourceAvailability.SourceOwner(owner))
+                available.UnionWith(kinds);
+        }
         return policy.SupportedKinds.All(available.Contains);
     }
 

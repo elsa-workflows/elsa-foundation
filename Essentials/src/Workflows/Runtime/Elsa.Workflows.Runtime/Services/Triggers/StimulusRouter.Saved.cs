@@ -6,6 +6,13 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 
 public sealed partial class StimulusRouter
 {
+    bool IStimulusRouter.CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        _delivery is { } delivery && delivery.CanRecordHistory(intentKind, writer, reader) &&
+        _startDispatcher.CanDispatchSavedStimulus(delivery.Sources, delivery.Material, delivery.Executions) &&
+        _startDispatcher.CanPreserveHistoryCausation(intentKind, writer, reader) &&
+        _resumeDispatcher.CanDispatchSavedStimulus(delivery.Sources, delivery.Material, delivery.Executions) &&
+        _resumeDispatcher.CanRecordHistory(writer, reader);
+
     async ValueTask<StimulusRoutingResult> IStimulusRouter.RouteSourceAsync(PostCommitDeliveryContext supplied, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(supplied); cancellationToken.ThrowIfCancellationRequested();

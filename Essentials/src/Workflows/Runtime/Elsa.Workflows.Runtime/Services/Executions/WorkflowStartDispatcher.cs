@@ -10,9 +10,13 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
-    // The optional composition qualifies the selected capture/writer/reader chain at actual admission.
-    // No resolver is installed until that complete production path is available.
+    // Lazy composition qualifies selected capture/providers at admission; these resolvers do not enable history themselves.
     internal Func<string, (RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
+    internal Func<(IRuntimeHistoryObservationWriter? Writer, IRuntimeHistoryStore? Reader)>? HistoryProvidersResolver { get; init; }
+
+    bool IWorkflowStartDispatcher.CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        HistoryAdmission is not null && _stimulusRequests.Owns(intentKind) && HistoryProvidersResolver?.Invoke() is { } selected &&
+        ReferenceEquals(writer, selected.Writer) && ReferenceEquals(reader, selected.Reader) && writer.CanRecordHistory(reader);
 
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&

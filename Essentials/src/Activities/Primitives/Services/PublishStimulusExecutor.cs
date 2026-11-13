@@ -45,7 +45,8 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitDurableSourceInt
             return ReferenceEquals(writer, services.GetService<IRuntimeHistoryObservationWriter>()) &&
                 ReferenceEquals(reader, services.GetService<IRuntimeHistoryStore>()) && writer.CanRecordHistory(reader) &&
                 ReferenceEquals(_clock, services.GetService<TimeProvider>()) && ReferenceEquals(_stimulusRouter, services.GetService<IStimulusRouter>()) &&
-                services.GetService<IStimulusDeliveryStore>() is not null && services.GetService<IWorkflowExecutionStateStore>() is not null;
+                services.GetService<IStimulusDeliveryStore>() is not null && services.GetService<IWorkflowExecutionStateStore>() is not null &&
+                _stimulusRouter.CanRecordHistory(PublishStimulusConstants.PublishStimulusIntentKind, writer, reader);
         }
         catch (Exception failure)
         {

@@ -16,6 +16,9 @@ public sealed class RuntimeCheckpointCommitter
     internal Func<IRuntimeHistoryStore?>? HistoryStoreResolver { get; init; }
     internal Func<IRuntimeHistorySourceExtension?>? HistorySourceResolver { get; init; }
 
+    internal bool CanSupplyHistorySource(string intentKind, IRuntimeHistorySourceExtension source) =>
+        ReferenceEquals(source, HistorySourceResolver?.Invoke()) && _enrichers.Any(owner => owner.CanSupplyHistorySource(intentKind, source));
+
     /// <summary>Preserves actual owner facts before capture/coalescing. Without the optional source module,
     /// returns the same commit and never invokes the factory.</summary>
     public ValueTask<RuntimeCheckpointCommit> AddHistorySourceFactsAsync(RuntimeCheckpointCommit commit,

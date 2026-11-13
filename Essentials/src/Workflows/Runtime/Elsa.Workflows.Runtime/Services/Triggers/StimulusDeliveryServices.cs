@@ -31,14 +31,25 @@ internal sealed class StimulusDeliveryServices(
 
     internal void RequireBoundary(PostCommitDeliveryContext source)
     {
+        (access?.Current ?? throw new NotSupportedException("Source-owned stimulus delivery requires explicit persistence access.")).EnsureScope(source.Scope);
+        if (!SupportsBoundary())
+            throw new NotSupportedException("Source-owned stimulus delivery requires coherent physical source, retention and exact resume stores.");
+    }
+
+    internal bool CanRecordHistory(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
+    {
+        _ = (access?.Current ?? throw new NotSupportedException("Source-owned stimulus history requires explicit persistence access.")).RequireScope();
+        return _requests.Owns(intentKind) && writer.CanRecordHistory(reader) && checkpoints.CanCommitHistory(reader) && SupportsBoundary();
+    }
+
+    private bool SupportsBoundary()
+    {
         var rawExecutions = executions.GetType() == typeof(CoalescingWorkflowExecutionStateStore) ? physicalExecutions?.Value : executions;
         var rawActivities = activities.GetType() == typeof(CoalescingActivityExecutionStateStore) ? physicalActivities?.Value : activities;
         var rawOutbox = outbox.GetType() == typeof(CoalescingRuntimePostCommitOutboxStore) ? physicalOutbox?.Value : outbox;
-        (access?.Current ?? throw new NotSupportedException("Source-owned stimulus delivery requires explicit persistence access.")).EnsureScope(source.Scope);
-        if (rawExecutions is null || rawActivities is null || rawOutbox is null ||
-            !sources.CanRetainExecutables(rawOutbox, material, references, rawExecutions) ||
-            !checkpoints.CanCommitExactBookmarkResume(bookmarks, rawExecutions, rawActivities))
-            throw new NotSupportedException("Source-owned stimulus delivery requires coherent physical source, retention and exact resume stores.");
+        return rawExecutions is not null && rawActivities is not null && rawOutbox is not null &&
+            sources.CanRetainExecutables(rawOutbox, material, references, rawExecutions) &&
+            checkpoints.CanCommitExactBookmarkResume(bookmarks, rawExecutions, rawActivities);
     }
 
     internal StimulusDispatchRequest Request(PostCommitDeliveryContext source) => _requests.Read(source);

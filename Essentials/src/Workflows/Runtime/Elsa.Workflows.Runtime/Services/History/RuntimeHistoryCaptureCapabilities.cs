@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,4 +15,14 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
     internal bool DeliveryInputs() => services.GetService<IRuntimeHistoryObservationWriter>() is { } writer &&
         services.GetService<IRuntimeHistoryStore>() is { } reader && writer.CanRecordHistory(reader) &&
         services.GetService<IBookmarkResumeDispatcher>()?.CanRecordHistory(writer, reader) == true;
+
+    internal bool SourceOwner(RuntimeHistorySourceSupport owner) => owner.SourceIntentKind is not { } kind ||
+        services.GetService<IRuntimeHistorySourceExtension>() is { } source &&
+        services.GetService<RuntimeCheckpointCommitter>()?.CanSupplyHistorySource(kind, source) == true &&
+        services.GetService<IRuntimeHistoryObservationWriter>() is { } writer && services.GetService<IRuntimeHistoryStore>() is { } reader &&
+        writer.CanRecordHistory(reader) && services.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(kind, writer, reader) == true;
+
+    internal static IEnumerable<string> Kinds(RuntimeHistorySourceSupport owner) => owner.Kinds.Select(RuntimeHistorySourceFacts.EventName)
+        .Concat(owner.SourceIntentKind is not null && owner.Kinds.Contains(RuntimeHistorySourceFactKind.StimulusPublicationCommitted)
+            ? RuntimeHistorySourceFacts.PublicationObservationKinds : []);
 }

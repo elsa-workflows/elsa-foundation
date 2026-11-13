@@ -5,11 +5,13 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Primitives.Services;
 
-/// <summary>Actual publication owner inputs; supported recording/handler qualification is composed separately.</summary>
+/// <summary>Actual publication owner inputs, qualified against the selected source before profile admission.</summary>
 internal sealed class PublishStimulusHistoryEnricher(IPersistenceAccessContextAccessor access,
     IRuntimeHistorySourceExtension? source = null) : IRuntimeCheckpointCommitEnricher
 {
     public int Order => 1900;
+    public bool CanSupplyHistorySource(string intentKind, IRuntimeHistorySourceExtension selectedSource) =>
+        intentKind == PublishStimulusConstants.PublishStimulusIntentKind && source is not null && ReferenceEquals(source, selectedSource);
     public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit); cancellationToken.ThrowIfCancellationRequested();

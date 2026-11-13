@@ -10871,3 +10871,8 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.HistoryC
 
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.HistoryCausation.init -> void
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitEnricher.CanSupplyHistorySource(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistorySourceExtension! source) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IStimulusRouter.CanRecordHistory(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher.CanPreserveHistoryCausation(string! intentKind, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFacts.PublicationObservationKinds.get -> System.Collections.Generic.IReadOnlyList<string!>!
