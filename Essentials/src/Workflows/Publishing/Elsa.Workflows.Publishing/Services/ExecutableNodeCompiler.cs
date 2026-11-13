@@ -156,6 +156,9 @@ public sealed class ExecutableNodeCompiler(
         if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
             ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
 
+        EnsureConnectedOutcomesDeclared(activity, childSlots);
+        EnsureOutcomeSelectionGuaranteed(activity, clrActivityType, activityType, activityContract, outcomeProjection);
+
         var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
 
         return new ExecutableNode(
@@ -607,6 +610,62 @@ public sealed class ExecutableNodeCompiler(
             ResolveSideEffectProfile(activityType),
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
             allowsMultipleOutcomes: outcomeSet.AllowsMultiple || outcomeProjection?.AllowsMultipleOutcomes == true);
+    }
+
+    /// <summary>
+    /// <c>VF-AUTH-011</c> (spec 1208 FR-019): every connection a structure owns must leave its source child on a port in
+    /// that child's pinned outcome set. A connection on an undeclared port would publish and never be followed.
+    /// Children without a pinned contract (intrinsics, structural activities without a result) are not checked here.
+    /// </summary>
+    private void EnsureConnectedOutcomesDeclared(ActivityNode activity, IEnumerable<ExecutableChildSlot> childSlots)
+    {
+        var usages = activityStructureService.ProjectChildContractMemberUsage(activity);
+        if (usages.Count == 0)
+            return;
+
+        var children = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
+        foreach (var child in childSlots.SelectMany(slot => slot.Activities))
+            children.TryAdd(child.ExecutableNodeId, child);
+
+        foreach (var usage in usages)
+        {
+            if (!children.TryGetValue(usage.NodeId, out var child) || child.ActivityContract is not { } contract)
+                continue;
+
+            foreach (var port in usage.MemberUsage.Where(member => member.MemberKind == "Outcome").Select(member => member.ReferenceKey))
+            {
+                if (!contract.Outcomes.Contains(port, StringComparer.Ordinal))
+                    throw new ArgumentException(
+                        $"VF-AUTH-011: A connection in activity node '{activity.NodeId}' leaves '{usage.NodeId}' on port '{port}', which is not in its " +
+                        $"outcome set [{string.Join(", ", contract.Outcomes.Select(name => $"'{name}'"))}]. Connect it from a declared outcome, or remove it.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>VF-AUTH-013</c> (spec 1208 FR-002b): a node whose pinned outcome set has no <c>Done</c> must belong to an activity
+    /// that selects an outcome on every successful completion, or an unspecified completion would fault at run time.
+    /// </summary>
+    private static void EnsureOutcomeSelectionGuaranteed(
+        ActivityNode activity,
+        Type? clrActivityType,
+        string activityTypeKey,
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? contract,
+        ActivityChildOutcomeProjection? outcomeProjection)
+    {
+        if (contract is null || clrActivityType is null || contract.Outcomes.Contains(ActivityOutcomes.Done, StringComparer.Ordinal))
+            return;
+        if (clrActivityType.IsDefined(typeof(SelectsOutcomeOnEveryCompletionAttribute), inherit: true))
+            return;
+        if (clrActivityType.GetCustomAttribute<ActivityValueOutcomesAttribute>(inherit: true) is { SelectsOnEveryCompletion: true })
+            return;
+        if (outcomeProjection is not null && StringComparer.Ordinal.Equals(outcomeProjection.ActivityTypeKey, activityTypeKey))
+            return;
+
+        throw new ArgumentException(
+            $"VF-AUTH-013: Activity node '{activity.NodeId}' ({activityTypeKey}) has no 'Done' outcome, and its activity does not guarantee that every " +
+            "successful completion selects one of its outcomes, so a completion without a selection would fault. Declare 'Done' on the activity, " +
+            "or select an outcome on every path and mark it [SelectsOutcomeOnEveryCompletion].");
     }
 
     // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).

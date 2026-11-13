@@ -170,6 +170,7 @@
       "elsa.workflows.design.validations": {
         "type": "Project",
         "dependencies": {
+          "Acornima": "[1.6.1, )",
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
@@ -299,6 +300,12 @@
       },
       "elsa3.models": {
         "type": "Project"
+      },
+      "Acornima": {
+        "type": "CentralTransitive",
+        "requested": "[1.6.1, )",
+        "resolved": "1.6.1",
+        "contentHash": "EB2vFgpNar8DrC+KLJv8MG6YIU2xqNyrq8GpL69vectPCXoaq6XyZGb/VHbfPVYul7dscO1Mw30eblrxs05RHg=="
       },
       "Cronos": {
         "type": "CentralTransitive",

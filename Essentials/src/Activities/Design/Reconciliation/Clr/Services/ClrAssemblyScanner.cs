@@ -50,6 +50,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
     private static readonly string AllowsMultipleOutcomesAttributeFullName = typeof(AllowsMultipleOutcomesAttribute).FullName!;
+    private static readonly string ActivityScriptOutcomesAttributeFullName = typeof(ActivityScriptOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
     private static readonly string ReplacesActivityTypeAttributeFullName = typeof(ReplacesActivityTypeAttribute).FullName!;
@@ -355,6 +356,7 @@ public sealed class ClrAssemblyScanner(
         var seen = new HashSet<string>(StringComparer.Ordinal);
         CustomAttributeData? valueOutcomes = null;
         CustomAttributeData? allowsMultiple = null;
+        string? scriptInput = null;
 
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
@@ -372,6 +374,12 @@ public sealed class ClrAssemblyScanner(
                     continue;
                 }
 
+                if (attribute.AttributeType.FullName == ActivityScriptOutcomesAttributeFullName)
+                {
+                    scriptInput ??= attribute.ConstructorArguments is [{ Value: string key }] ? key : null;
+                    continue;
+                }
+
                 if (attribute.AttributeType.FullName != ActivityOutcomeAttributeFullName)
                     continue;
 
@@ -382,7 +390,7 @@ public sealed class ClrAssemblyScanner(
 
         var dynamicOutcomes = BuildDynamicOutcomesDescriptor(valueOutcomes);
         var multipleOutcomes = BuildMultipleOutcomesDescriptor(allowsMultiple);
-        if (outcomes.Count == 0 && dynamicOutcomes is null && multipleOutcomes is null)
+        if (outcomes.Count == 0 && dynamicOutcomes is null && multipleOutcomes is null && scriptInput is null)
             return null;
 
         var ports = outcomes.Select(name => new { name, type = "outcome" }).ToArray();
@@ -393,6 +401,9 @@ public sealed class ClrAssemblyScanner(
         // same rule the publish compiler pins (static, or when an input equals a value).
         if (multipleOutcomes is not null)
             payload["multipleOutcomes"] = multipleOutcomes;
+        // The input whose script selects with complete(result, outcomes); draft validation checks its literal names.
+        if (!string.IsNullOrWhiteSpace(scriptInput))
+            payload["scriptInput"] = scriptInput;
         return new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 

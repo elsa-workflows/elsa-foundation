@@ -35,6 +35,7 @@ namespace Elsa.Activities.Scripting.Activities;
 /// </remarks>
 [ActivityValueOutcomes(RunJavaScript.PossibleOutcomesInputKey, UnmatchedOutcome = null, SelectsOnEveryCompletion = false)]
 [AllowsMultipleOutcomes]
+[ActivityScriptOutcomes("script")]
 public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activity<RunJavaScriptResult>
 {
     /// <summary>
