@@ -153,8 +153,9 @@ Balanced, 15 / 11 round trips, 4 commits) waits for events, not jobs.
 
 ## 5. The simulation
 
-BPMN instances join the mix with `--bpmn` (40 % of outside actions): the seven processes of section 3 and `b-fault`
-(a fork whose one branch fails with no boundary), with random inputs, started from outside (retried) or handed to an
+BPMN instances join the mix with `--bpmn` (40 % of outside actions): the seven processes of section 3, `b-fault`
+(a fork whose one branch fails with no boundary) and `b-race` (an event-based gateway between a message catch and a
+timer catch, so the loser's subscription or timer is stopped), with random inputs, started from outside (retried) or handed to an
 owner in memory; messages for `b-early`'s catch, now and then twice, before or while it waits; terminates from outside,
 to root instances. The kernel's faults are the simulation's, unchanged (crashes, takeovers, lost answers, zombies,
 pauses, clock jumps, suspend and resume). Jobs complete when the simulation says, so boundary timers race them on the
@@ -168,7 +169,7 @@ rows after every action and at the end (`sim/BpmnSim.cs`):
 | G1 | Path conservation: every path created is completed, discarded as dead, or still live | Token conservation: the interpreter's work in flight (`ActiveWork`), the host's ledger and the kernel's work (row jobs, pending timer messages, subscriptions, child rows or their starts) are one set, both ways; a running child of a BPMN instance is its parent's live call, or a terminate is on its way |
 | G2 | A join fires at most once per round | No arrival token is consumed by two firings, no firing is journalled twice; at the end the joins fired equal a run without faults (the loop's join three times) |
 | G3 | An All join fires once every inbound flow of its round has arrived | A parallel join fires on exactly one arrival per inbound flow; an inclusive join on distinct inbound flows |
-| G4 | A graph completes exactly when it has no live path | A Finished row has no live token, no ledger entry and no interpreter work; at idle every instance started has ended as it should (Finished; Faulted for `b-fault`; Cancelled if terminated) |
+| G4 | A graph completes exactly when it has no live path | A Finished row has no live token, no ledger entry and no interpreter work; at idle every instance started has ended as it should (Finished; Faulted for `b-fault`; Cancelled if terminated); any other fault is reported with its code |
 | G5 | No path outlives its cancelled scope | No cancelled token keeps a stopped handle; a row the model ended keeps no job, subscription or timer; a terminated row keeps no job or subscription; a cancelled child was stopped by its parent's call or its parent was terminated |
 | G6 | (added) | A finished root's variables equal a run alone without faults (the timer-first run when a boundary timer won) |
 
@@ -180,29 +181,28 @@ Results (run, at the final head):
 
 | Run | Seeds | Result |
 |---|---|---|
-| `--bpmn`, 300 actions | 200,000 | 0 failed; 1,362,891 finished instances matched a run without faults |
-| `--bpmn`, 1,000 actions | 20,000 | 0 failed; 444,548 matched; 9 innocent instances parked at the threshold (the kernel's rule 3; the checks skip them) |
-| `--bpmn --native`, 1,000 actions | 20,000 | 0 failed; 269,711 BPMN and 410,057 native instances matched; 12 parked; one BPMN job parked by the kernel |
+| `--bpmn`, 300 actions | 200,000 | 0 failed; 1,383,541 finished instances matched a run without faults |
+| `--bpmn`, 1,000 actions | 20,000 | 0 failed; 450,431 matched; 9 innocent instances parked at the threshold (the kernel's rule 3; the checks skip them) |
+| `--bpmn --native`, 1,000 actions | 20,000 | 0 failed; 273,118 BPMN and 410,025 native instances matched; 12 parked; one BPMN job parked by the kernel |
 
-Messages for `b-early` were published before their catch 121,302 times in the first run and to a waiting catch 380
-times: a catch waits only between its job's result and its message, so the idle round's publish covers most of the
-second path. The bystander rule ran once (seed 6706 of the run with native): its job-error branch is run, its caller
+Messages for a catch were published before it subscribed 142,035 times in the first run and to a waiting catch
+12,602 times. The bystander rule ran once (seed 6706 of the run with native): its job-error branch is run, its caller
 branch and the recognition of a kernel-parked row by its fault text are traced.
 
 The host broken on purpose (`--bpmn-mutations --seeds 20000`, each flaw alone; a catch by another check than the one
-named counts as a miss):
+named counts as a miss; a flaw may name two checks when either is a right catch):
 
 | Flaw | What it breaks | Caught |
 |---|---|---|
-| `KeepStoppedWork` | a stopped unit's job, timer, subscription or child is left running | G1, seed 1: `G1 child 1/b73~1.0 runs and its parent 1/b73 (Finished) has no call for it, and no terminate is on its way` |
-| `NoLateReport` | a stopped unit is never reported to the interpreter | G5, seed 1: `G5 1/b73: cancelled token token:4 at call still holds stopped handle h1` |
-| `KeepSubscription` | a message catch that fired keeps its subscription | G5, seed 1: `G5 1/b30 ended Finished and keeps jobs, subscriptions or timers` |
-| `StaleTokens` | each message of a turn is evaluated against the turn's first token state | G1, seed 1: `G1 1/b40: the interpreter waits on tokens [token:12]; the ledger holds []` |
-| `ReuseHandles` | a new unit can take a live unit's handle | I9, seed 1: `I9 sent message 1/b40!h1 exists already` |
-| `ResurrectArrivals` | the stored state keeps the arrivals a join consumed | G4, seed 1: `G4 0/b19 finished with live tokens [join] or work []` |
+| `KeepStoppedWork` | a stopped unit's job, timer, subscription or child is left running | G1, seed 1: `G1 0/b18: subscription msg:paid:b18/h1 and the ledger has no catch for it` |
+| `NoLateReport` | a stopped unit is never reported to the interpreter | G5, seed 1: `G5 0/b18: cancelled token token:7 at reply still holds stopped handle h1` |
+| `KeepSubscription` | a message catch that fired keeps its subscription | G5, seed 2: `G5 1/b52 ended Finished and keeps jobs, subscriptions or timers` |
+| `StaleTokens` | each message of a turn is evaluated against the turn's first token state | G5, seed 1: `G5 0/b18 ended Faulted and keeps jobs, subscriptions or timers` |
+| `ReuseHandles` | a new unit can take a live unit's handle | I9, seed 1: `I9 sent message 0/b81!h2 exists already` |
+| `ResurrectArrivals` | the stored state keeps the arrivals a join consumed | G4, seed 1: `G4 0/b81 (b-loop) faulted: fault bpmn.join.deadlock` |
 | `NeverEnd` | the host misses the interpreter's Complete | G4, seed 1: `G4 BPMN instance 0/b3 (b-exclusive) ended as Running` |
-| `LoseChildOutput` | a call's child output does not reach the state | G6, seed 10: `G6 0/b40 (b-call) ended with order="b40"; without faults it ends with child-out="child of b40", order="b40"` |
-| `KeepChild` | a stopped call's child is not terminated | G1, seed 1: `G1 child 1/b73~1.0 runs and its parent 1/b73 (Finished) has no call for it, and no terminate is on its way` |
+| `LoseChildOutput` | a call's child output does not reach the state | G6, seed 5: `G6 1/b26 (b-call) ended with order="b26"; without faults it ends with child-out="child of b26", order="b26"` |
+| `KeepChild` | a stopped call's child is not terminated | G1, seed 1: `G1 child 1/b29~1.0 runs and its parent 1/b29 (Finished) has no call for it, and no terminate is on its way` |
 
 No host flaw makes a join fire twice (G2) or on the wrong flows (G3) without breaking the interpreter, which the spike
 runs unchanged; those two checks guard the interpreter and the journal. Without `--bpmn` the simulation's output is
