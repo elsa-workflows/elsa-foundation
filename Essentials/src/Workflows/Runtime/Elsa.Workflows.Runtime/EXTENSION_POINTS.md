@@ -1288,3 +1288,9 @@ First-fault owners mark an admission boundary only from the matching readable st
 The selected scope-cleanup port must declare exact original bookmark inventory support for Required removal/supersession history. The default owner supplies typed summaries (including known empty), never payloads, before native apply. History-aware cleanup inventory binds original native timer/work IDs into conditional replay identity; legacy markers retain their prior bytes. Cancellation owners supply actual control/suppression decisions and work provenance without claiming callback execution.
 
 The optional `IRuntimeHistoryDetailsStore` returns an exact event/bookmark with its coverage head in one committed read snapshot. API consumers must use that composite shape for exact details rather than combine independent reads. The memory reader captures one scope and one read lock, without taking its writer gate; base history readers remain compatible.
+
+### Post-commit origin identity (#3849, S10a)
+
+`RuntimePostCommitIntent.HistoryCausation` carries an optional immutable diagnostic origin and remains absent on legacy wire shapes. Its presence participates in intent equivalence and conditional replay identity: intent digest v2 and a versioned checkpoint wrapper bind the original causal/source fields with exact opaque UTF-16 units, including both logical intents and pending projections. Absent origins keep the historical identity format. Existing structural validation refuses an intent/pending-origin mismatch.
+
+This carrier does not install a semantic producer/handler, select a new capture policy, create a history head, grant source protocol/scope/cohort authority or change persistence cadence. Actual publication/child/timer/other owner stamping, scoped qualification and original event links remain their following implementation/qualification boundaries. Native in-memory/JSON controls are written and NOT RUN; no durable restart/provider proof is implied.

@@ -4294,6 +4294,8 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.MaterializedScheduler
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.NotBefore.get -> System.DateTimeOffset?
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.Payload.get -> System.Text.Json.JsonElement?
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.HistoryCausation.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.RecordedAt.get -> System.DateTimeOffset
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.RuntimePostCommitIntent(string! intentId, string! workflowExecutionId, string! kind, System.DateTimeOffset recordedAt, string? activityExecutionId, string? idempotencyKey, System.Text.Json.JsonElement? payload, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata = null, string? dependsOnWaitRegistrationId = null, Elsa.Workflows.Runtime.Core.Models.RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null, System.DateTimeOffset? notBefore = null) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent.WaitFailurePolicy.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeWaitDependentIntentFailurePolicy?
