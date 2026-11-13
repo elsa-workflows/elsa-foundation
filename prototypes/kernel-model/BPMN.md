@@ -214,8 +214,10 @@ identical to main's, times aside, at both sizes, with `--native`, and in both mu
 no file under `src/`). Everything the interpreter asks for maps onto calls that exist: `StartJob` and `CancelJob`,
 `Send` with a delay and `Recall`, `Subscribe` with `keep` and `Unsubscribe`, `Start` and a `kernel.terminate`
 message, `Send` for a signal to the parent, `SetStatus`, `Record`, and `Events.Delivered` to read which wait an event
-is for. NATIVE.md section 8 expected two needs of BPMN, and both were there: a turn can take back a timer (`Recall`,
-from the merge), and a wait can ask for kept events (`keep`).
+is for. NATIVE.md section 8 listed four needs of BPMN. Two were there and the spike used them: a turn can take back a timer
+(`Recall`, from the merge), and a wait can ask for kept events (`keep`). Two the spike did not reach, and they stay open:
+subscriptions of kind start, for message and signal start events (not built in the kernel), and placement other than
+with the parent, for multi-instance over many items. The verdict covers what the spike used.
 
 Frictions, none of them a contract change; whether any becomes one is the owner's question:
 
@@ -273,9 +275,11 @@ nothing was built. Traced in both engines' code (BPMN paths under the library's 
 **The difference shows in a run.** An inclusive join inside a loop, with a parallel sibling branch that waits at a
 parallel join downstream, faults in `Bpmn.Semantics` 0.5.0 with `bpmn.join.deadlock`: the sibling's token can reach the
 untaken branch only round the loop, and the whole-graph search counts that path. The same process without the loop
-finishes. BPMN 2.0's rule for the inclusive join leaves out a path that passes a node with a path to an arrived flow
+finishes (run: `smoke` runs both). The fault needs only the flow back to exist: with a loop condition that never holds,
+the join still deadlocks (run, in a probe outside the repository), since the search reads the graph, not the flows
+taken. BPMN 2.0's rule for the inclusive join leaves out a path that passes a node with a path to an arrived flow
 (here the inclusive split), so the join should fire; Elsa's forward-only search exists for this case
-(`FlowchartGraph`'s comment on it). Run (`smoke`: the case expects the fault, so an upgrade that fixes it shows). An
+(`FlowchartGraph`'s comment on it). `smoke` expects the fault, so an upgrade that fixes it shows. An
 upstream issue in valence-works/bpmn would be the way to report it; none was filed.
 
 **Verdict: a neutral token package is not real enough to extract.** What is truly the same is generic graph and id

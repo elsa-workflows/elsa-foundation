@@ -168,6 +168,10 @@ public static class CaseSmoke
             var journal = store.Journal.Values.Where(j => j.Instance == id.Id).OrderBy(j => j.Position).SelectMany(j => Json.Read<List<string>>(j.Entries)).ToList();
             Check(owner.Status(id.Id) == InstanceStatus.Faulted && journal[^1] == "fault bpmn.join.deadlock",
                 $"still faults with bpmn.join.deadlock (an upgrade that fires the join should update BPMN.md): {owner.Status(id.Id)}, {journal[^1]}");
+            var plain = InstanceRef.In(0, $"b-inclusive-noloop-{++_n}");
+            owner.Worker.Post(new Message($"m{_n}", plain, Kinds.Start, Start: BpmnModel.Spec("b-inclusive-noloop")), fresh: true);
+            await owner.PumpAsync(() => owner.Status(plain.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
+            Check(owner.Status(plain.Id) == InstanceStatus.Finished, $"the same process without the flow back finishes: {owner.Status(plain.Id)}");
         }
 
         Check(store.Messages.Values.All(m => m.Done) && store.Subscriptions.Count == 0, "no message and no subscription left");
