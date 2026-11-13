@@ -48,6 +48,22 @@ describe("reading sources page by page", () => {
     expect(result).toMatchObject({ state: "stale", code: "activity-data.revision-changed", sources: [], target: null });
   });
 
+  it.each([
+    { baseRevision: "other" }, { snapshotHash: "other" }, { resourceId: "other" },
+    { contractRevision: "other" }, { memberReadsEnabled: true }
+  ])("withholds pages whose authority facts change (%j)", async changed => {
+    const result = await collectSourcePages(async skip => ({ ...page("supported", [String(skip)], skip === 0),
+      ...(skip > 0 ? changed : {}) }), new AbortController().signal);
+    expect(result).toMatchObject({ state: "stale", sources: [], memberReadsEnabled: false });
+  });
+
+  it("does not compare query-specific context revisions across pages or claim a common context", async () => {
+    const result = await collectSourcePages(async skip => ({ ...page("supported", [String(skip)], skip === 0),
+      contextRevision: `context-for-page-${skip}`, memberReadsEnabled: true }), new AbortController().signal);
+    expect(result).toMatchObject({ state: "supported", contextRevision: null, memberReadsEnabled: true });
+    expect(result.sources).toHaveLength(2);
+  });
+
   it("returns the first refusal and stops when cancelled", async () => {
     const refusal = await collectSourcePages(async skip => skip === 0 ? page("supported", ["a"], true) : page("stale", [], false),
       new AbortController().signal);
@@ -195,7 +211,7 @@ describe("activity data source client", () => {
   });
 
   it("sends an Activity Definition request with exactly the fields its endpoint declares", async () => {
-    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }) => supportedResponse(body.documentRevision));
+    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }) => ({ ...supportedResponse(body.documentRevision), resourceKind: "ActivityDefinition", resourceId: "ad draft/1", baseRevision: "4" }));
     const snapshot = { provider: { providerKey: "graph" }, contract: {} };
     await requestActivityDefinitionActivityData(context(postJson), {
       draftId: "ad draft/1",
@@ -259,4 +275,138 @@ describe("a chosen activity output on the wire", () => {
     expect(putJson.mock.calls[0]![1].state).toEqual(wire);
     expect(saved.authoringRevision).toBe("base-2");
   });
+});
+
+
+describe("member metadata and focused queries", () => {
+  const memberPath = ["billing.address", "", "a/b", 'quoted"key'];
+  const memberBinding = { expressionType: "ActivityResultMember", value: { ...binding.value, memberPath } };
+  const shape = {
+    state: "known", kind: "object", type: { alias: "Customer", collectionKind: "Single" },
+    sourceContractRevision: "source-1", profileRevision: "json-1", metadataRevision: "metadata-1",
+    isNullable: true, presence: "optional", representation: "StructuredValue", isSensitive: false, isCredential: null,
+    members: [{ serializedName: "billing.address", displayName: "Billing address", shape: {
+      state: "truncated", kind: "map", type: { alias: "String", collectionKind: "Dictionary" },
+      presence: "unknown", isNullable: null, reasonCode: "activity.shape.member-limit", members: [],
+      mapValue: { state: "unknown", kind: "scalar", presence: "optional", type: { alias: "String", collectionKind: "Single" } }
+    } }]
+  };
+
+  function memberResponse(revision: string) {
+    const response = supportedResponse(revision);
+    return { ...response, analysis: { ...response.analysis, memberReadsEnabled: true,
+      sources: [{ ...response.analysis.sources[0]!, binding: memberBinding, shape }] } };
+  }
+
+  it("keeps bounded serialized names, uncertainty, protection and target type without reading business values", () => {
+    const result = readActivityDataContextResult(memberResponse("rev-1"), "rev-1");
+    expect(result.memberReadsEnabled).toBe(true);
+    expect(result).toMatchObject({ resourceKind: "WorkflowDefinition", resourceId: "draft-1", snapshotHash: "hash", contextRevision: "context", contractRevision: "contract" });
+    expect(result.target).toMatchObject({ type: { alias: "String" }, isNullable: false, isRequired: true });
+    expect(result.sources[0]!.shape).toMatchObject(shape);
+    expect(result.sources[0]!.shape!.members[0]!.serializedName).toBe("billing.address");
+    expect(result.sources[0]!.shape!.members[0]!.shape.mapValue!.isNullable).toBeNull();
+  });
+
+  it.each([undefined, false, "true", 1, null])("requires literal true for member capability (%s)", advertised => {
+    const response = memberResponse("rev-1");
+    const result = readActivityDataContextResult({ ...response, analysis: { ...response.analysis, memberReadsEnabled: advertised } }, "rev-1");
+    expect(result.memberReadsEnabled).toBe(false);
+  });
+
+  it.each(["invalid", "denied", "stale", "unavailable"])("does not learn capability or offer sources from %s analysis", state => {
+    const result = readActivityDataContextResult({ ...memberResponse("rev-1"), state }, "rev-1");
+    expect(result.memberReadsEnabled).toBe(false);
+    expect(result.sources).toEqual([]);
+    expect(result.target).toBeNull();
+  });
+
+  it("sends focused literal paths and bounded shape budgets to both owners, preserving the canonical offer", async () => {
+    const postJson = vi.fn(async (_path: string, body: { documentRevision: string }) => memberResponse(body.documentRevision));
+    const request = { definitionId: "definition-1", draftId: "draft-1", expectedBaseRevision: "base-1", documentRevision: "rev-1",
+      target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: binding, memberPath } };
+    const result = await requestWorkflowActivityData(context(postJson), request);
+    expect(postJson.mock.calls[0]![1]).toMatchObject({ query: { source: binding, memberPath,
+      shapeLimits: { maximumDepth: 4, maximumMembers: 128 } } });
+    expect(result.sources[0]!.binding).toEqual(memberBinding);
+
+    const adPost = vi.fn(async (_path: string, body: { documentRevision: string }) => ({ ...memberResponse(body.documentRevision), resourceKind: "ActivityDefinition", baseRevision: "2" }));
+    await requestActivityDefinitionActivityData(context(adPost), { draftId: "draft-1", expectedBaseRevision: 2, documentRevision: "rev-1",
+      target: request.target, currentSnapshot: {}, query: request.query });
+    expect(adPost.mock.calls[0]![1]).toMatchObject({ query: { source: binding, memberPath } });
+  });
+
+  it.each([
+    ["whole fallback", { ...binding }],
+    ["different path", { ...memberBinding, value: { ...memberBinding.value, memberPath: ["other"] } }],
+    ["different producer", { ...memberBinding, value: { ...memberBinding.value, producerNodeId: "other" } }]
+  ])("withholds a focused answer carrying a %s", async (_name, offered) => {
+    const postJson = vi.fn(async () => { const response = memberResponse("rev-1"); return { ...response,
+      analysis: { ...response.analysis, sources: [{ ...response.analysis.sources[0]!, binding: offered }] } }; });
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: binding, memberPath } });
+    expect(result).toMatchObject({ state: "incompatible", sources: [], memberReadsEnabled: false });
+  });
+
+  it("withholds focused bindings when member capability is off", async () => {
+    const postJson = vi.fn(async () => { const response = memberResponse("rev-1"); return { ...response,
+      analysis: { ...response.analysis, memberReadsEnabled: false } }; });
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: binding, memberPath } });
+    expect(result.sources).toEqual([]);
+  });
+
+  it("bounds the entire returned member tree and marks the unread suffix truncated", () => {
+    const response = memberResponse("rev-1");
+    const members = Array.from({ length: 140 }, (_, i) => ({ serializedName: String(i), displayName: String(i), shape: { state: "known", kind: "scalar" } }));
+    const result = readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      sources: [{ ...response.analysis.sources[0]!, shape: { ...shape, members } }] } }, "rev-1");
+    expect(result.sources[0]!.shape!.members).toHaveLength(128);
+    expect(result.sources[0]!.shape!.state).toBe("truncated");
+  });
+
+  it.each([
+    ["Variable", { referenceKey: "customer", declaringScopeId: "root" }, "VariableMember"],
+    ["WorkflowRequest", { memberKey: "Customer", path: null }, "WorkflowRequestMember"],
+    ["Input", { referenceKey: "customer" }, "InputMember"]
+  ])("retains the canonical focused %s member offer", async (expressionType, value, memberType) => {
+    const whole = { expressionType, value };
+    const offered = { expressionType: memberType, value: { ...value, memberPath } };
+    const postJson = vi.fn(async () => { const response = memberResponse("rev-1"); return { ...response,
+      analysis: { ...response.analysis, sources: [{ ...response.analysis.sources[0]!, binding: offered }] } }; });
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state,
+      query: { source: whole, memberPath } });
+    expect(result.sources[0]!.binding).toEqual(offered);
+  });
+
+  it.each([
+    { resourceId: "another-draft" }, { resourceKind: "ActivityDefinition" }, { baseRevision: "base-2" },
+    { analysis: { ...memberResponse("rev-1").analysis, target: { target: { nodeId: "other", inputKey: "customerId" } } } }
+  ])("withholds an answer for another owner, base or target (%j)", async changed => {
+    const postJson = vi.fn(async () => ({ ...memberResponse("rev-1"), ...changed }));
+    const result = await requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state });
+    expect(result).toMatchObject({ state: "incompatible", sources: [], target: null });
+  });
+
+  it("cancels even if an HTTP implementation ignores the signal", async () => {
+    const controller = new AbortController();
+    const postJson = vi.fn(async () => { controller.abort(); return memberResponse("rev-1"); });
+    await expect(requestWorkflowActivityData(context(postJson), { definitionId: "definition-1", draftId: "draft-1",
+      expectedBaseRevision: "base-1", documentRevision: "rev-1", target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: state }, controller.signal))
+      .rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("retains safe invalid findings while withholding sources and capability", () => {
+    const response = memberResponse("rev-1");
+    const result = readActivityDataContextResult({ ...response, state: "invalid", analysis: { ...response.analysis,
+      findings: [{ path: "consumer/inputs/customerId", type: "ActivityData/UnsupportedMemberBinding", message: "Unavailable." }] } }, "rev-1");
+    expect(result.findings).toEqual([{ path: "consumer/inputs/customerId", type: "ActivityData/UnsupportedMemberBinding", message: "Unavailable." }]);
+    expect(result).toMatchObject({ sources: [], target: null, memberReadsEnabled: false });
+  });
+
 });

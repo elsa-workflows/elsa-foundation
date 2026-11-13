@@ -182,6 +182,19 @@ Not covered: nested members, optional conditional reads, other source families, 
 the `e2e-tests/` source-family/type-fit proof of T024 and independent review. Optional reads of conditional
 producers and other source families (T022) remain open. Evidence is on the delivering PR.
 
+#4309 S1 source receipt (not task completion): the existing whole-output query remains unchanged. The language-neutral
+client and workflow host accept an optional focused whole-source/literal-path query and a bounded member-shape query;
+they retain server shape, target, capability and envelope identity facts. Only a current supported/empty analysis can
+enable member reads; invalid findings remain explainable without offering its candidates or learning its flag. A nested
+answer must carry the requested member role/path/source identity. The workflow host withholds late results after
+edits, base changes, disablement or context changes, without saving. Page aggregation checks shared identity and
+capability facts but does not equate query-specific context revisions. Existing wire code needs no change: canonical
+result/variable/request/input member bindings and unknown future kinds retain structured values through Code Apply
+and reopen. Source tests are supporting evidence, not a substitute for S4/S5 real persistence/runtime/UI qualification.
+The S0 generic `InvalidSource` wording nit is explicitly deferred; its safe stable code is unchanged and both S0 client
+safety notes are handled here. S2 picker model, S3 UI, S4 real runtime proof and S5 composed acceptance remain pending;
+no T018–T025 box is closed from this bounded client/wire slice.
+
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.
 
