@@ -94,9 +94,12 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Send("a", "name", ""); Drain();
         Require(Replies[^1].Result == "Conflict" && Inbox.Pending.Count == 2, "A2: pending capacity hid an ID conflict");
         for (var i = 0; i < 5; i++) { Send("c", "name", "third"); Drain(); }
-        foreach (var group in _world.Deliveries.GroupBy(x => x.Reply.Request))
+        // Reset may send a "lost" end before a later owner's committed replay response. It is uncertainty, not a receipt.
+        foreach (var group in _world.Deliveries.Where(x => x.Reply.Channel == Request.Response).GroupBy(x => x.Reply.Request))
             Require(group.Count() == 1 && group.Single().Reply.Item is Admission receipt && receipt.Id == _requests[group.Key],
                 "A5: callers received another request's output");
+        Require(_world.Deliveries.Where(x => x.Reply.Channel is null).All(x => x.Reply.Error == "lost" && x.Reply.Item is null),
+            "A5: uncertain reset was reported as a semantic admission outcome");
         if (blocked)
         {
             Require(State.Frames[_frame].State!.Deserialize<ProbeState>()!.Phase == "AwaitingRecovery" &&
