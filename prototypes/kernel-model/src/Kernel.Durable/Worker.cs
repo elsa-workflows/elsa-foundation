@@ -50,6 +50,12 @@ public sealed record WorkerOptions
 
     /// <summary>Called when a turn starts, with the worker's idea of database time. For tests.</summary>
     public Action<InstanceRef, IReadOnlyList<Message>, long>? OnTurn { get; init; }
+    /// <summary>Original stored metadata when a newly polled delivery is held; for the simulation's history oracle.</summary>
+    public Action<Stored>? OnObservedDelivery { get; init; }
+    /// <summary>A job dispatch or result observed an expired local window; for deterministic witnesses.</summary>
+    public Action? OnExpiredJob { get; init; }
+    /// <summary>Called inside the scheduler just before the job's generation/deadline check; for deterministic witnesses.</summary>
+    public Action? BeforeScheduledJobCheck { get; init; }
 }
 
 /// <summary>
@@ -79,6 +85,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local;
     private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
+    private long _safeUntil;    // local monotonic deadline, measured from the start of a successful take or commit
+    private long _expiredGeneration = -1; // monotonically latched by an off-turn callback; only the owner resets state
     private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp, _woken;
     private string _refusal = "";
     private readonly HashSet<Delivery> _trial = [];     // the suspects being tried now, with nothing else in flight (finding F2)
@@ -175,12 +183,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
     {
-        if (!Owns) return null;
+        if (!LeaseUsable()) return null;
         if (_woken)
         {
             _woken = false;
             await PollAsync(cancellationToken);
         }
+        if (!LeaseUsable()) return null;
         var busy = NeedsLoad || NeedsMeet || NeedsFlush || Ready.Any();
         await LoadAsync(cancellationToken);
         await MeetAsync(cancellationToken);
@@ -203,12 +212,48 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>
     private long RenewBy => _renewed + (long)(_options.Lease.TotalMilliseconds / 3);
 
+    // A successful response can arrive arbitrarily late. The lease was renewed no earlier than when its request began;
+    // stop at that conservative local deadline, even if the actual database lease has more time. No read is needed.
+    private bool CanStartWork => CanStartGeneration(Volatile.Read(ref _generation));
+
+    private bool CanStartGeneration(long generation)
+    {
+        if ((!Has(Flaw.IgnoreJobGeneration) && generation != Volatile.Read(ref _generation)) || !Owns) return false;
+        if (Has(Flaw.IgnoreLeaseDeadline)) return true;
+        if (Volatile.Read(ref _expiredGeneration) == generation) return false;
+        var now = _options.Monotonic();
+        var deadline = Volatile.Read(ref _safeUntil);
+        // Clock callbacks and scheduler delays can overlap a reset and retake of this same Worker. Never combine
+        // an old generation with a deadline read from the replacement lease.
+        if ((!Has(Flaw.IgnoreJobGeneration) && generation != Volatile.Read(ref _generation)) || !Owns ||
+            Volatile.Read(ref _expiredGeneration) == generation) return false;
+        if (now < deadline) return true;
+        // A delayed renewal acknowledgement must not revive a generation whose job was already discarded. Off-turn
+        // callbacks only latch a number; the worker's own loop performs Reset. Never overwrite a newer generation.
+        long seen;
+        do
+        {
+            seen = Volatile.Read(ref _expiredGeneration);
+            if (seen >= generation) break;
+        } while (Interlocked.CompareExchange(ref _expiredGeneration, generation, seen) != seen);
+        return false;
+    }
+
+    private bool LeaseUsable()
+    {
+        if (!Owns) return false;
+        if (CanStartWork) return true;
+        Reset();
+        return false;
+    }
+
     // ---- ownership ---------------------------------------------------------------------------------------------
 
     internal async Task TakeAsync(CancellationToken cancellationToken = default)
     {
         if (_taking) return;
         _taking = true;
+        var started = _options.Monotonic();
         Lease? lease = null;
         try { lease = await _store.TakeAsync(Partition, Node, _options.Lease, cancellationToken); }
         catch (Exception) { /* not taken, or taken without knowing: the next take bumps the epoch again */ }
@@ -218,8 +263,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Observe(lease.Now);
         _renewed = lease.Now;
         Epoch = lease.Epoch;
+        Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         Position = lease.Position;
         _mine.Add(lease.Epoch);
+        LeaseUsable(); // an answer delayed past the safe deadline cannot authorize work
     }
 
     /// <summary>Stand down: drop what is in memory and give the partition up. Whoever takes it next finds no death.</summary>
@@ -235,7 +282,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>Recovery after any doubt is the same path as start-up: drop everything; the host takes the partition again.</summary>
     private void Reset()
     {
-        _generation++;
+        Interlocked.Increment(ref _generation);
         Epoch = 0;
         _polling = _loading = _flushing = _meeting = false;
         foreach (var item in _items.Values.ToList()) item.Cancel?.Cancel();
@@ -260,7 +307,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     public async Task PollAsync(CancellationToken cancellationToken = default)
     {
-        if (_polling || !Owns) return;
+        if (_polling || !LeaseUsable()) return;
         var generation = _generation;
         _polling = true;
         _consumed.Clear();
@@ -274,8 +321,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (generation != _generation) return;
         _polling = false;
         Observe(polled.Now);    // anchored when the answer arrives, so the estimate never runs ahead of the database
+        if (!LeaseUsable()) return;
         foreach (var row in polled.Messages)
+        {
+            if (!_items.ContainsKey(row.Message.Id) && !_consumed.Contains(row.Message.Id)) _options.OnObservedDelivery?.Invoke(row);
             Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts, suspect: Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0);
+            if (!LeaseUsable()) return;
+        }
         // Finding F1: caught up when a poll comes back short and every row this owner wrote meanwhile has come back with it.
         if (polled.Messages.Count < _options.PollLimit && _behind.Count == 0) _caughtUp = true;
     }
@@ -286,8 +338,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     public bool Post(Message message, bool fresh = false, object? ambient = null)
     {
-        if (!Owns || message.Target.Partition != Partition) return false;
+        if (!LeaseUsable() || message.Target.Partition != Partition) return false;
         Hold(message, long.MaxValue / 2 + ++_local, durable: false, marked: true, fresh: fresh);
+        if (!LeaseUsable()) return false;
         if (_slots.TryGetValue(message.Target.Id, out var slot)) slot.Ambient = ambient;     // lives with the instance in this memory, nowhere else
         return true;
     }
@@ -445,7 +498,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// </summary>
     public void RunTurn(string instance)
     {
-        if (!Owns || !_slots.TryGetValue(instance, out var slot) || !slot.Loaded || slot.Busy) return;
+        if (!LeaseUsable() || !_slots.TryGetValue(instance, out var slot) || !slot.Loaded || slot.Busy) return;
         if (Blocked || (_trial.Count > 0 && !OnTrial(instance))) return;
         var due = Deliverable(instance, slot);
         if (due.Count == 0) return;
@@ -491,9 +544,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void StartJob(Delivery ticket)
     {
-        if (ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
+        // Callers finish their current collection operation before standing down, so a refused ticket is never stranded.
+        if (!CanStartWork || ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
         _ = DriveJob(ticket, ticket.Message.Read<JobTicket>());
+    }
+
+    private bool JobMayRun(long generation)
+    {
+        if (CanStartGeneration(generation)) return true;
+        if (generation == Volatile.Read(ref _generation) && Volatile.Read(ref _expiredGeneration) == generation)
+            _options.OnExpiredJob?.Invoke();
+        return false;
     }
 
     private async Task DriveJob(Delivery ticket, JobTicket job)
@@ -504,11 +566,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
         try
         {
             result = Json.Write(_options.JobScheduler is { } scheduler
-                ? await Task.Factory.StartNew(() => _type.ExecuteJobAsync(job.Model, context, token).AsTask(), token, TaskCreationOptions.DenyChildAttach, scheduler).Unwrap()
+                ? await Task.Factory.StartNew(() =>
+                {
+                    _options.BeforeScheduledJobCheck?.Invoke();
+                    return JobMayRun(generation) ? _type.ExecuteJobAsync(job.Model, context, token).AsTask()
+                        : Task.FromCanceled<object?>(new CancellationToken(true));
+                }, token, TaskCreationOptions.DenyChildAttach, scheduler).Unwrap()
                 : await _type.ExecuteJobAsync(job.Model, context, token));
         }
         catch (Exception e) { error = e.Message; }
-        if (generation != _generation || ticket.Taken) return;      // reset, or cancelled beside completion
+        if (ticket.Taken || !JobMayRun(generation)) return; // next pass stands down if the deadline passed
         // The ticket becomes the result: same id, so it is consumed once, by the turn that handles it.
         ticket.Message = ticket.Message with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) };
         ticket.Ticket = false;
@@ -614,7 +681,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // the database's time (Now 0). The EF store with the fence in the batch writes the lease from the node's
             // own clock instead (ENGINES.md); a beat at a third of the lease then tolerates up to two thirds of a lease
             // of skew between the node's clock and the database's.
+            if (!LeaseUsable()) return Outcome.Lost;
             var sending = DbNow;
+            var started = _options.Monotonic();
             Committed result;
             try { result = await _store.CommitAsync(batch, cancellationToken); }
             catch (StoreException e) when (e.Failure != Failure.Unknown)
@@ -638,13 +707,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Position += batch.Positions;
             Observe(result.Now);
             _renewed = Math.Max(_renewed, sending);      // a commit that lands renews the lease
+            Volatile.Write(ref _safeUntil, Math.Max(Volatile.Read(ref _safeUntil), started + (long)_options.Lease.TotalMilliseconds));
+            if (!LeaseUsable()) return Outcome.Lost; // a late acknowledgement cannot revive the old local deadline
             foreach (var item in marks.Concat(trial))
                 if (item.Suspect && !trial.Contains(item)) item.Shelved = true;
                 else item.Marked = true;
             var seqs = new Queue<long>(result.Seqs);
-            foreach (var unit in units) Apply(unit, seqs, handOver);
+            foreach (var unit in units)
+            {
+                Apply(unit, seqs, handOver);
+                if (!LeaseUsable()) return Outcome.Lost;
+            }
             foreach (var item in marks.Concat(trial))
                 if (item.Key is not null && _items.ContainsKey(item.Message.Id)) StartJob(item);
+            if (!LeaseUsable()) return Outcome.Lost;
             return Outcome.Landed;
         }
     }

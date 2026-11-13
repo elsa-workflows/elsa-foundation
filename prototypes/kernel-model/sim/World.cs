@@ -83,6 +83,8 @@ public sealed class Actor(int id, int node, int partition)
     public int Version;
     public readonly List<Call> Calls = [];
     public readonly Dictionary<string, TaskCompletionSource<object?>> Jobs = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, bool> ObservedHistory = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, bool> TurnHistoryHint = new(StringComparer.Ordinal);
 }
 
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
@@ -272,8 +274,10 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
+            OnObservedDelivery = row => actor.ObservedHistory[row.Message.Id] = row.Seen > 0 || row.Trial > 0,
             OnTurn = (instance, inbox, _) =>
             {
+                actor.TurnHistoryHint[instance.Id] = inbox.Any(m => actor.ObservedHistory.GetValueOrDefault(m.Id));
                 Log?.Invoke($"        actor {actor.Id} turns {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
                 Alone(actor, instance.Id, "a turn of " + instance);
                 // I16: while its committed row says suspended, the current owner gives an instance nothing.
