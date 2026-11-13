@@ -1,0 +1,139 @@
+using System.Collections.Concurrent;
+using System.Text.Json.Nodes;
+using Bpmn.Model.State;
+
+namespace Kernel.Bpmn.Run;
+
+/// <summary>Every case of <see cref="BpmnCases"/> on the in-memory store, one owner (BPMN.md, section 3).</summary>
+public static class CaseSmoke
+{
+    private static int _failures;
+    private static int _n;
+
+    private static void Check(bool ok, string what)
+    {
+        Console.WriteLine($"  {(ok ? "ok  " : "FAIL")} {what}");
+        if (!ok) _failures++;
+    }
+
+    /// <summary>Jobs of these services wait until released; every other job runs at once.</summary>
+    private sealed class Gates
+    {
+        public readonly ConcurrentDictionary<string, TaskCompletionSource> Held = new(StringComparer.Ordinal);
+        public readonly HashSet<string> Services = new(StringComparer.Ordinal);
+
+        public async ValueTask Gate(IJob job, CancellationToken cancel)
+        {
+            var service = Json.Read<JobArgs>(job.Arguments!).Service;
+            if (!Services.Contains(service)) return;
+            await Held.GetOrAdd(service, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(cancel);
+        }
+    }
+
+    public static async Task<int> RunAsync()
+    {
+        var gates = new Gates();
+        var store = new InMemoryStore(1, () => Environment.TickCount64);
+        var owner = new Owner("n1", 0, store, BpmnCases.Registry(), options: new BpmnOptions { Gate = gates.Gate });
+        await owner.StartAsync();
+
+        async Task<(BpmnState State, List<string> Journal, InstanceRef Id)> Run(string process, JsonObject? variables = null, Func<InstanceRef, Task>? meanwhile = null)
+        {
+            var id = InstanceRef.In(0, $"{process}-{++_n}");
+            owner.Worker.Post(new Message($"m{_n}", id, Kinds.Start, Start: BpmnModel.Spec(process, variables)), fresh: true);
+            if (meanwhile is not null) await meanwhile(id);
+            await owner.PumpAsync(() => owner.Status(id.Id) is InstanceStatus.Finished or InstanceStatus.Faulted && store.Messages.Values.All(m => m.Done));
+            var journal = store.Journal.Values.Where(j => j.Instance == id.Id).OrderBy(j => j.Position).SelectMany(j => Json.Read<List<string>>(j.Entries)).ToList();
+            var state = owner.State(id.Id)!;
+            Check(owner.Status(id.Id) == InstanceStatus.Finished, $"{id.Id} finished ({owner.Status(id.Id)}); journal: {string.Join(" ", journal)}");
+            Check(state.Live.Count == 0 && state.Tokens.Tokens.All(t => t.Status == BpmnTokenStatus.Consumed && t.StoppedHandle is null), "no live work, no live or cancelled token left");
+            return (state, journal, id);
+        }
+        static string? Var(BpmnState s, string name) => s.Variables.GetValueOrDefault(name)?.ToJsonString();
+        static List<string> Joins(List<string> journal, string element) => journal.Where(e => e.StartsWith($"j {element} ", StringComparison.Ordinal)).ToList();
+
+        Console.WriteLine("parallel: a fork into two service tasks (jobs) and a join");
+        {
+            var (s, journal, _) = await Run("b-parallel");
+            Check(Var(s, "a") == "\"A\"" && Var(s, "b") == "\"B\"", "both jobs' results are variables");
+            Check(journal.Count(e => e.StartsWith("w ", StringComparison.Ordinal) && e.Contains(" job ", StringComparison.Ordinal)) == 2, "two jobs started");
+            Check(Joins(journal, "join") is [var j] && j.Split(' ')[3].Split(',').Length == 2, $"the join fired once with two arrivals: {string.Join(" ", Joins(journal, "join"))}");
+        }
+
+        Console.WriteLine("exclusive: amount > 100, else the default");
+        foreach (var (amount, size) in new[] { (150, "big"), (50, "small") })
+        {
+            var (s, _, _) = await Run("b-exclusive", new JsonObject { ["amount"] = amount });
+            Check(Var(s, "size") == $"\"{size}\"", $"amount {amount}: size {Var(s, "size")}");
+        }
+
+        Console.WriteLine("inclusive: every flow that holds, else the default; the join waits for what can still arrive");
+        foreach (var (express, insured, done) in new[] { (true, false, "express"), (true, true, "express insured"), (false, false, "standard") })
+        {
+            var (s, journal, _) = await Run("b-inclusive", new JsonObject { ["express"] = express, ["insured"] = insured });
+            var ran = string.Join(" ", new[] { "express", "insured", "standard" }.Where(n => Var(s, n + "-done") == "true"));
+            Check(ran == done, $"express={express} insured={insured}: ran {ran}");
+            Check(Joins(journal, "or-join") is [var j] && j.Split(' ')[3].Split(',').Length == done.Split(' ').Length, $"the inclusive join fired once: {string.Join(" ", Joins(journal, "or-join"))}");
+        }
+
+        Console.WriteLine("an interrupting boundary timer cancels the service task's job");
+        {
+            gates.Services.Add("slow");
+            var (s, journal, id) = await Run("b-boundary");
+            Check(Var(s, "escalated") == "true" && Var(s, "slow-done") is null, "the timer fired first: the timeout path ran, the task did not complete");
+            Check(journal.Any(e => e == "x h1 slow"), "the job was stopped");
+            Check(store.Instances[id.Id].Jobs is null, "no job left on the row");
+            gates.Held["slow"].SetResult();     // the cancelled job's work ends now; its result is nobody's
+            gates.Held.Clear();
+            await owner.PumpAsync(() => true);
+            Check(owner.State(id.Id)!.Variables.GetValueOrDefault("slow-done") is null && owner.Status(id.Id) == InstanceStatus.Finished, "the job's late result changed nothing");
+            gates.Services.Clear();
+            (s, journal, _) = await Run("b-boundary");
+            Check(Var(s, "slow-done") == "true" && Var(s, "escalated") is null, "the job finished first: the timer was recalled");
+            Check(journal.Any(e => e == "x h2 deadline"), "the timer was stopped");
+        }
+
+        Console.WriteLine("a message published before its catch subscribes is kept and still counts");
+        {
+            var order = $"o{++_n}";
+            await Events.PublishAsync(store, new EventRow(BpmnModel.MessageKey("paid", order), $"paid-{order}", "{\"paid\":true}", Environment.TickCount64 + 60_000));
+            var (s, journal, _) = await Run("b-early", new JsonObject { ["order"] = order });
+            Check(Var(s, "paid") == "true" && Var(s, "prepared") == $"\"{order}\"", "the catch got the message published before it");
+            Check(journal.Any(e => e == "w h2 paid message " + BpmnModel.MessageKey("paid", order)), "the catch was a kept subscription");
+            Check(store.Subscriptions.Count == 0, "no subscription left");
+        }
+
+        Console.WriteLine("a call activity is a child start");
+        {
+            var (s, journal, id) = await Run("b-call", new JsonObject { ["order"] = "c1" });
+            var child = journal.First(e => e.StartsWith("r ", StringComparison.Ordinal)).Split(' ')[2];
+            Check(Var(s, "child-out") == "\"child of c1\"", $"the child's variables came back: {Var(s, "child-out")}");
+            Check(store.Instances[child] is { Status: InstanceStatus.Finished, Definition: "b-child" } c && c.Parent == id.Id, $"child {child} finished, its parent is {id.Id}");
+        }
+        Console.WriteLine("a boundary timer on the call activity terminates the child");
+        {
+            gates.Services.Add("child");
+            var (s, journal, id) = await Run("b-call", new JsonObject { ["order"] = "c2" });
+            var child = journal.First(e => e.StartsWith("w ", StringComparison.Ordinal) && e.Contains(" call ", StringComparison.Ordinal)).Split(' ')[4];
+            await owner.PumpAsync(() => owner.Status(child) == InstanceStatus.Cancelled);
+            Check(Var(s, "child-out") is null && journal.Contains("x h1 call"), "the timer fired first and stopped the call");
+            Check(store.Instances[child].Status == InstanceStatus.Cancelled && store.Instances[child].Jobs is null, $"child {child} was terminated, its job cancelled");
+            gates.Services.Clear();
+            gates.Held["child"].SetResult();
+            gates.Held.Clear();
+        }
+
+        Console.WriteLine("a loop whose body forks and joins");
+        {
+            var (s, journal, _) = await Run("b-loop");
+            Check(Var(s, "count") == $"{BpmnCases.Rounds}" && Var(s, "notes") == $"{BpmnCases.Rounds}", $"count {Var(s, "count")}, notes {Var(s, "notes")}");
+            var joins = Joins(journal, "join");
+            var arrivals = joins.SelectMany(j => j.Split(' ')[3].Split(',')).ToList();
+            Check(joins.Count == BpmnCases.Rounds && arrivals.Count == 2 * BpmnCases.Rounds && arrivals.Distinct().Count() == arrivals.Count, $"the join fired once per round, each arrival once: {string.Join(" ", joins)}");
+        }
+
+        Check(store.Messages.Values.All(m => m.Done) && store.Subscriptions.Count == 0, "no message and no subscription left");
+        Console.WriteLine(_failures == 0 ? "cases: all passed" : $"cases: {_failures} FAILED");
+        return _failures;
+    }
+}
