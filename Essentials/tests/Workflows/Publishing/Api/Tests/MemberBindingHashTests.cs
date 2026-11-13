@@ -131,17 +131,18 @@ public sealed class MemberBindingHashTests
     }
 
     /// <summary>
-    /// The conversion linker plans result member reads only; a request member read, which publication does not
-    /// compile, is refused rather than passed through unplanned.
+    /// The conversion linker plans result member reads only; a request member read is never typed at publication, so
+    /// it is passed through unplanned and checked when the run reads it.
     /// </summary>
     [Fact]
-    public void The_conversion_linker_refuses_a_request_member_read()
+    public void The_conversion_linker_passes_a_request_member_read_through_unplanned()
     {
-        var exception = Assert.Throws<NotSupportedException>(() =>
-            new Elsa.Workflows.Publishing.Services.ActivityResultConversionPlanLinker(new Elsa.Workflows.Publishing.Services.ValueConversionPlanResolver())
-                .Link(Node(Request())));
+        var root = Node(Request(selection: Selection(mode: RuntimeReadSelectionMode.DeferredFit, representation: null, profile: null)));
 
-        Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
+        var linked = new Elsa.Workflows.Publishing.Services.ActivityResultConversionPlanLinker(new Elsa.Workflows.Publishing.Services.ValueConversionPlanResolver())
+            .Link(root);
+
+        Assert.Same(root.InputBindings["text"], linked.InputBindings["text"]);
     }
 
     private static void Set(object target, string property, object value) =>
