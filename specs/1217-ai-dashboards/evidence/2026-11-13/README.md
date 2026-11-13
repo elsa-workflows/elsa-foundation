@@ -1,16 +1,17 @@
 # Dashboard delivery evidence — 13 November 2026
 
-Status: local Home and live Copilot qualification and independent visual review passed. Final native/comparison, ordered merges and resulting-main verification remain in progress.
+Status: local Home and live Copilot qualification and independent visual review passed. Final comparison visual review, ordered merges and resulting-main verification remain in progress.
 
-The screenshots below are unmodified originals from owned, disposable composed hosts using synthetic qualification data. An independent acceptance subagent actually opened all 40. [The manifest](screenshots.json) records their exact tested source, original run filename and SHA-256. These retained files provide downloadable evidence while Actions is delayed. Raw traces, browser storage, fixture tokens and backend/provider logs stay private.
+The screenshots below are unmodified originals from owned, disposable composed hosts using synthetic qualification data. An independent acceptance subagent actually opened all 70 retained originals. [The manifest](screenshots.json) records their exact tested source, original run filename and SHA-256. These retained files provide downloadable evidence while Actions is delayed. Raw traces, browser storage, fixture tokens and backend/provider logs stay private.
 
 | Witness | Tested source | Result |
 | --- | --- | --- |
 | Existing Home widgets/layout/defaults | `6f7db4b23dd22891edb2523eb08b0912ead90ad5` | 4/4 browser profiles, 59/59 field gallery; 20 actual PNGs independently inspected |
 | Actual Copilot authoring over Weaver | `c56b64e365bffc775ba2034655f290f985a1c2cc` | 2/2 real Workflow/Acme journeys; 20 actual PNGs independently inspected |
+| Native Dashboard questions/sharing | `9d65c70a3a1095a29462f81cbdf97bc22762c373` | 4/4 browser profiles, 59/59 field gallery; 30 actual PNGs independently inspected |
 | Independent local package contribution | `11c48db71b17972771507f5f1b4da2238975a0e0` | 20 archives, 19/19 native cases, offline package-only restore, no frontend calls |
 
-[Home receipt](home-receipt.json), [live receipt](live-receipt.json), [allowlisted package receipt](package-witness.json).
+[Native receipt](native-receipt.json), [Home receipt](home-receipt.json), [live receipt](live-receipt.json), [allowlisted package receipt](package-witness.json).
 
 Live qualification uses the existing GitHub Copilot SDK adapter (SDK 1.0.4, explicitly selected `gpt-6.1-sol`) through model-agnostic Weaver Dashboard authoring. Actual SDK sends are Workflow 0→2→3→3 and Acme 3→5→6→6. All native phases have zero additional sends; privacy-failure counters remain zero. Acme independently recomputes reader Retail 60000 versus owner 120000, with Enterprise 300000 unchanged. After permission removal and ordinary sign-in, the new reader principal receives 403 and no query/result disclosure. This does not qualify invalidation of outstanding signed tokens.
 
@@ -41,6 +42,22 @@ The later integration changes add only the Architecture project lock entries and
 ### live-acme
 
 [live-clarification](screenshots/live-acme--live-clarification.png) | [live-proposal-preview-values](screenshots/live-acme--live-proposal-preview-values.png) | [live-refined-preview-values](screenshots/live-acme--live-refined-preview-values.png) | [live-saved-light-desktop-values](screenshots/live-acme--live-saved-light-desktop-values.png) | [live-saved-dark-desktop-values](screenshots/live-acme--live-saved-dark-desktop-values.png) | [live-saved-light-narrow-values](screenshots/live-acme--live-saved-light-narrow-values.png) | [live-saved-dark-narrow-values-end](screenshots/live-acme--live-saved-dark-narrow-values-end.png) | [live-shared-reader-values](screenshots/live-acme--live-shared-reader-values.png) | [live-reader-no-category](screenshots/live-acme--live-reader-no-category.png) | [live-applied-draft](screenshots/live-acme--live-applied-draft.png) | [live-share](screenshots/live-acme--live-share.png)
+
+### native-desktop-light
+
+[questions-collection-appearance-1](screenshots/native-desktop-light--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-desktop-light--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-desktop-light--question-share.png) | [dashboard-share-dependency-review](screenshots/native-desktop-light--dashboard-share-dependency-review.png) | [question-preview-exact-values](screenshots/native-desktop-light--question-preview-exact-values.png) | [dashboard-multi-tile](screenshots/native-desktop-light--dashboard-multi-tile.png) | [question-history](screenshots/native-desktop-light--question-history.png)
+
+### native-desktop-dark
+
+[questions-collection-appearance-1](screenshots/native-desktop-dark--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-desktop-dark--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-desktop-dark--question-share.png) | [dashboard-share-dependency-review](screenshots/native-desktop-dark--dashboard-share-dependency-review.png) | [dashboard-list-values](screenshots/native-desktop-dark--dashboard-list-values.png) | [dashboard-metric-values](screenshots/native-desktop-dark--dashboard-metric-values.png) | [question-conflict-recovered](screenshots/native-desktop-dark--question-conflict-recovered.png)
+
+### native-narrow-light
+
+[questions-collection-appearance-1](screenshots/native-narrow-light--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-narrow-light--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-narrow-light--question-share.png) | [dashboard-share-dependency-review](screenshots/native-narrow-light--dashboard-share-dependency-review.png) | [question-preview-exact-values-end](screenshots/native-narrow-light--question-preview-exact-values-end.png) | [dashboard-and-dependency-dialogs-appearance-2-copy-review](screenshots/native-narrow-light--dashboard-and-dependency-dialogs-appearance-2-copy-review.png) | [dashboard-unavailable-tiles](screenshots/native-narrow-light--dashboard-unavailable-tiles.png) | [question-preview-exact-values](screenshots/native-narrow-light--question-preview-exact-values.png)
+
+### native-narrow-dark
+
+[questions-collection-appearance-1](screenshots/native-narrow-dark--questions-collection-appearance-1.png) | [dashboards-collection-appearance-1](screenshots/native-narrow-dark--dashboards-collection-appearance-1.png) | [question-share](screenshots/native-narrow-dark--question-share.png) | [dashboard-share-dependency-review](screenshots/native-narrow-dark--dashboard-share-dependency-review.png) | [dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1](screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1.png) | [question-access-lost](screenshots/native-narrow-dark--question-access-lost.png) | [dashboard-copy-independent-question](screenshots/native-narrow-dark--dashboard-copy-independent-question.png) | [dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end](screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end.png)
 
 ## Failed and superseded evidence
 

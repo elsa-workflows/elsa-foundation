@@ -318,5 +318,245 @@
     "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-share.png",
     "sha256": "d6ed6f4089e2b4ac6c5ea54b64d6eee28c8eac1d16e0671c193466fd12fd17ec",
     "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-light--questions-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-light/questions-collection-appearance-1.png",
+    "sha256": "bd045aacf5eacbf0d9ccc6ceb6e69a32f06e47a2c9617424c8a2907ce9868a9d",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-light--dashboards-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-light/dashboards-collection-appearance-1.png",
+    "sha256": "547160a44472dae242267b1166b2440a1c090cf17419a63981ffcfc35c837641",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-light--question-share.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-light/question-share.png",
+    "sha256": "28141ebd89bcc92f22948f2027696c98cbd431deee2e71331cec8ba2b282e63f",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-light--dashboard-share-dependency-review.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-light/dashboard-share-dependency-review.png",
+    "sha256": "5d18f6da890e4d83a5c8628acfa42db58d92080ef519b9bfe12fa45498a24302",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-light--question-preview-exact-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-light/question-preview-exact-values.png",
+    "sha256": "ad36a8b2010d3a4a6f5c1d1526e204447dc1a4e302e3de4e5ce6f5503dc9b38f",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-light--dashboard-multi-tile.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-light/dashboard-multi-tile.png",
+    "sha256": "b69b735a9b3022de91a7b7f59369333b3c706056ef86f4339881654e71dedf94",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-light--question-history.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-light/question-history.png",
+    "sha256": "00ad5117d7758aebb9986043803e76ef69c85332eeab28233d4d7e5053fd9605",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-dark--questions-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-dark/questions-collection-appearance-1.png",
+    "sha256": "25cab543e315d117f7b700e34961155b0e74161ca5ae40b578eefa9a1ab754a4",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-dark--dashboards-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-dark/dashboards-collection-appearance-1.png",
+    "sha256": "1c5b4c93096b0a2ffdae2f76f50b1f2e3eac538d5de56d044c65140467366c4c",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-dark--question-share.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-dark/question-share.png",
+    "sha256": "ed84f3bad2ac26558c688b92bd7e8f7207f7a941f6ab4e574fe50f9c9408965d",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-dark--dashboard-share-dependency-review.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-dark/dashboard-share-dependency-review.png",
+    "sha256": "f7ce91cc6e6a6782028f494c96072ea7297dcf5986707e40bd96f74a1572ea91",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-dark--dashboard-list-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-dark/dashboard-list-values.png",
+    "sha256": "02d526e62b40da814376a4ea3c5a46a2e288bd0c9c768b28eadc1ef089179781",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-dark--dashboard-metric-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-dark/dashboard-metric-values.png",
+    "sha256": "a4b2b14750a06d3ea6802e5c735cab201252ae98f47988ffef1f25c54c63e967",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-desktop-dark--question-conflict-recovered.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-desktop-dark/question-conflict-recovered.png",
+    "sha256": "3cd35584a1908c71ed83f90c6b42a48e169dbeeea857bd3257543fe6b8898d44",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--questions-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/questions-collection-appearance-1.png",
+    "sha256": "4ce9103d74b8f8d474d97534eecf7fe116a5ed398d629bf861c9f08bbb57bb82",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--dashboards-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/dashboards-collection-appearance-1.png",
+    "sha256": "321dacd518dffa9ba859340285c825994e03db6a944282ccb7fa0836bcc5179f",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--question-share.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/question-share.png",
+    "sha256": "0f85634b47974f741aab8155b7ee0e4198e6174aada91644df22e7f1cdcbf414",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--dashboard-share-dependency-review.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/dashboard-share-dependency-review.png",
+    "sha256": "d4204db2984527fa107ba0538fa99073e77164000191b17b85578dae76548593",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--question-preview-exact-values-end.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/question-preview-exact-values-end.png",
+    "sha256": "450ef43464e5cc124d79d3a1b6826b72c45e749061ac7298dbc451d3339ecaa4",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--dashboard-and-dependency-dialogs-appearance-2-copy-review.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/dashboard-and-dependency-dialogs-appearance-2-copy-review.png",
+    "sha256": "0434cb7273a6f1f1a11948375dc4e3a936b4d7b7dfe724b771e11c83b54189f6",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--dashboard-unavailable-tiles.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/dashboard-unavailable-tiles.png",
+    "sha256": "7c1055b56ee7918f44770e34c2c5e458d54e8010bff7a3563fcb677d046f54d1",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-light--question-preview-exact-values.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-light/question-preview-exact-values.png",
+    "sha256": "224c0e13291f7fa055b1f2e6e6645073c6621a407f77c63843010be3d9fa7429",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--questions-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/questions-collection-appearance-1.png",
+    "sha256": "718f120454d1324b58232532c6dcbc03042c8e338821f844482d45756d41c616",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--dashboards-collection-appearance-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/dashboards-collection-appearance-1.png",
+    "sha256": "3eaa37f91628935978b2bf13e15cfb6fbdd8f968e3dd66709f1987127bdb67f3",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--question-share.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/question-share.png",
+    "sha256": "2831888cdcb3781b602c857cad3c3b918f903f3df2d089c69e9daba1c325aa36",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--dashboard-share-dependency-review.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/dashboard-share-dependency-review.png",
+    "sha256": "adba4f7de3e1737498070520d919b6d885599658d58936938da18ac008c429f3",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/dashboard-and-dependency-dialogs-appearance-2-tile-3-series-1.png",
+    "sha256": "5db29008a1d90bdda90fff0e1bea0b08f14072e3dd96c2b18d9d948676a07f8e",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--question-access-lost.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/question-access-lost.png",
+    "sha256": "3ddf5eefde355119e12e2ca5b80bc33655dd1a0e8e584bb12979333bfb4ae506",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--dashboard-copy-independent-question.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/dashboard-copy-independent-question.png",
+    "sha256": "e5248b150902ee791fd91a74c378fe10c9824393a957d4ced55bd79d13a5c9ed",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/native-narrow-dark--dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end.png",
+    "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+    "run": "3604-native-main-final-20261113",
+    "original": "results/journeys-native-dashboard-questions-and-sharing-narrow-dark/dashboard-and-dependency-dialogs-appearance-2-tile-3-exact-values-end.png",
+    "sha256": "2d7aa0dce81798042f21d13774c89e7ad869294b4818c192810b01fb1b955e9e",
+    "independentlyInspected": true
   }
 ]

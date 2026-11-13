@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "stage": "complete",
+  "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+  "startedAt": "2026-11-13T16:44:35Z",
+  "finishedAt": "2026-11-13T16:51:15Z",
+  "browserStats": {
+    "startTime": "2026-11-13T16:47:35.733Z",
+    "duration": 218133.67,
+    "expected": 4,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
