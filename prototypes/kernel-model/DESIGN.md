@@ -443,7 +443,7 @@ numbers.
 
 - **Simulation:** 200,000 runs of 300 actions and 20,000 of 1,000 pass, without and with native instances; 12 and 15
   innocent messages parked at the threshold in the 1,000-action runs, which invariant 14 allows.
-- **Mutation check:** 39 kernel flaws at 20,000 runs: all caught but the two that another rule covers, at the first
+- **Mutation check:** 39 mutations at 20,000 runs (37 kernel flaws alone and two in combination): all caught but the two that another rule covers, at the first
   failing seeds round 3 recorded; the five native flaws are caught too.
 - **Store conformance suite:** 57 semantic cases pass (required) on in-memory, SQLite, PostgreSQL, SQL Server, MySQL
   and MongoDB, with either fence; the reference cases differ where the contract is silent (M6, F8).
