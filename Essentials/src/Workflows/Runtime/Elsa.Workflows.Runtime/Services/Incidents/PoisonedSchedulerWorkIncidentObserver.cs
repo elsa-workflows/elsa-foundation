@@ -290,10 +290,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 var inputFailure = BuildInputFailureSnapshot(incident, occurredAt);
                 var projection = _inspectionAccumulator is null
                     ? null
-                    : await _inspectionAccumulator.BuildProjectionAsync(
+                    : await _inspectionAccumulator.BuildProjectionWithSourceAsync(
                         associatedState,
                         checkpointId,
                         occurredAt,
+                        () => new ActivityValueCaptureOrigin(workflowExecutionId, record.WorkItemId, ActivityValueCapturePhase.Unknown),
                         incidents: [ActivityExecutionIncidentSummary.From(incident)],
                         valueSnapshots: inputFailure is null ? [] : [inputFailure],
                         metadata: metadata,
@@ -506,10 +507,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         var repairedAt = incident.CreatedAt;
         var projection = !needsInspectionRepair
             ? null
-            : await _inspectionAccumulator!.BuildProjectionAsync(
+            : await _inspectionAccumulator!.BuildProjectionWithSourceAsync(
                 associatedState,
                 checkpointId,
                 repairedAt,
+                () => new ActivityValueCaptureOrigin(incident.WorkflowExecutionId, workItemId, ActivityValueCapturePhase.Unknown),
                 incidents: [ActivityExecutionIncidentSummary.From(reconciledIncident)],
                 valueSnapshots: inputFailure is null ? [] : [inputFailure],
                 metadata: reconciledIncident.Metadata,

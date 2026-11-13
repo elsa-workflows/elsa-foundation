@@ -55,10 +55,11 @@ internal static class ActivityCancellationCheckpointService
         var checkpointId = $"checkpoint:{sourceWorkItem.WorkItemId}:activity-cancelled:{state.InvocationId}";
         var inspection = inspectionAccumulator is null
             ? null
-            : await inspectionAccumulator.BuildProjectionAsync(
+            : await inspectionAccumulator.BuildProjectionWithSourceAsync(
                 cancelledState,
                 checkpointId,
                 occurredAt,
+                () => ActivityValueCaptureOrigin.FromWorkItem(sourceWorkItem),
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
