@@ -32,6 +32,7 @@ public sealed record TriggerMutationReceipt(string RequestId, string RequestFing
     string TriggerId, long Revision, DateTimeOffset CommittedAt);
 
 /// <summary>Replacement contract: one scoped resource provider, selected coherently with the runtime admission backend.</summary>
+/// <remarks>Provider infrastructure failures are reported as <see cref="TriggerOperationException"/> with the original cause and scoped identifiers.</remarks>
 public interface IStandaloneTriggerStore
 {
     ValueTask<TriggerAggregate?> FindAsync(TriggerScope scope, string triggerId, CancellationToken cancellationToken = default);
