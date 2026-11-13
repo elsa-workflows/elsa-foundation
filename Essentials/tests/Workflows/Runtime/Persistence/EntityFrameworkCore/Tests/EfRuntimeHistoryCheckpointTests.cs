@@ -80,10 +80,11 @@ public sealed class EfRuntimeHistoryCheckpointTests
         await AssertRowsAsync(database, 0);
     }
 
-    [Fact]
-    public async Task An_unchanged_legacy_choice_keeps_plain_checkpoint_state_without_creating_history()
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task An_unchanged_legacy_choice_keeps_plain_checkpoint_state_without_creating_history(bool legacyMarker)
     {
-        await using var database = await Database.CreateAsync(explicitLegacy: true);
+        await using var database = await Database.CreateAsync(explicitLegacy: true, legacyMarker: legacyMarker);
         string content; long revision;
         await using (var before = database.Open())
         {
@@ -120,6 +121,33 @@ public sealed class EfRuntimeHistoryCheckpointTests
         await using var context = database.Open(); await using var transaction = await context.Database.BeginTransactionAsync();
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => Stage(context, Commit("physical", null, changes)));
         Assert.Contains("retain the native", failure.Message, StringComparison.Ordinal);
+        await transaction.RollbackAsync(); await AssertRowsAsync(database, 0);
+    }
+
+    [Theory]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
+    public async Task Same_policy_cannot_retrofit_or_erase_the_nullable_admission_marker(int scenario)
+    {
+        var captured = scenario >= 2;
+        var originalMarker = scenario is 0 or 3 ? (bool?)null : captured;
+        var incomingMarker = scenario is 1 or 2 ? (bool?)null : captured;
+        await using var database = await Database.CreateAsync(captured ? Policy : null, explicitLegacy: !captured, legacyMarker: originalMarker is null);
+        var incoming = Workflow(captured ? Policy : null) with { HistoryCaptureEnabledAtAdmission = incomingMarker };
+        var changes = new RuntimeCheckpointStateChangeSet(new(Run, RuntimeStateChangeOperation.Upsert, incoming, new Dictionary<string, string>()), null, [], [], [], [], []);
+        await using var context = database.Open(); await using var transaction = await context.Database.BeginTransactionAsync();
+        var commit = Commit("physical", captured ? [Batch("logical", Candidate("logical", "event", 0))] : null, changes);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => Stage(context, commit));
+        Assert.Contains("retain the native", failure.Message, StringComparison.Ordinal);
+        await transaction.RollbackAsync(); await AssertRowsAsync(database, 0);
+    }
+
+    [Fact]
+    public async Task Self_parent_ancestry_cannot_commit_a_projection_that_its_reader_refuses()
+    {
+        await using var database = await Database.CreateAsync(); await using var context = database.Open();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Stage(context,
+            Commit("physical", [Batch("logical", Candidate("logical", "event", 0, parent: "activity"))])));
         await transaction.RollbackAsync(); await AssertRowsAsync(database, 0);
     }
 
@@ -240,13 +268,14 @@ public sealed class EfRuntimeHistoryCheckpointTests
     }
 
     private static RuntimeHistoryCandidate Candidate(string checkpoint, string id, int ordinal, RuntimeHistoryBookmarkMutation? mutation = null,
-        string name = "ActivityStarted", bool knownTime = false)
+        string name = "ActivityStarted", bool knownTime = false, string? parent = null)
     {
         if (mutation is not null) name = mutation.Status switch { RuntimeHistoryBookmarkStatus.Active => "BookmarkCreated",
             RuntimeHistoryBookmarkStatus.Consumed => "BookmarkConsumed", _ => "BookmarkRemoved" };
         return new(new(id, Run, 0, mutation is null ? RuntimeHistoryEventCategory.ActivityLifecycle : RuntimeHistoryEventCategory.BookmarkLifecycle,
             name, Now, "activity", checkpointId: checkpoint) { Authority = RuntimeHistoryAuthority.CommittedTransition,
-            BookmarkId = mutation?.Bookmark.Identity.BookmarkId, OccurredAtKnown = knownTime, ActivityAncestryKnown = true }, ordinal, mutation);
+            BookmarkId = mutation?.Bookmark.Identity.BookmarkId, OccurredAtKnown = knownTime, ActivityAncestryKnown = true,
+            ParentActivityExecutionId = parent }, ordinal, mutation);
     }
     private static RuntimeHistoryBatch Batch(string checkpoint, params RuntimeHistoryCandidate[] candidates) => new(Policy, checkpoint, Now, true, candidates);
     private static RuntimeCheckpointCommit Commit(string id, IReadOnlyList<RuntimeHistoryBatch>? batches, RuntimeCheckpointStateChangeSet? changes = null) =>
@@ -265,7 +294,11 @@ public sealed class EfRuntimeHistoryCheckpointTests
     private static async Task AssertRowsAsync(Database database, int count)
     {
         await using var context = database.Open(); Assert.Equal(count, await context.Set<RuntimeHistoryEventEntity>().CountAsync());
-        if (count == 0) { Assert.Empty(await context.Set<RuntimeHistoryHeadEntity>().ToArrayAsync()); Assert.Empty(await context.Set<RuntimeHistoryBookmarkEntity>().ToArrayAsync()); }
+        if (count == 0)
+        {
+            Assert.Empty(await context.Set<RuntimeHistoryHeadEntity>().ToArrayAsync()); Assert.Empty(await context.Set<RuntimeHistoryBookmarkEntity>().ToArrayAsync());
+            Assert.Empty(await context.Set<RuntimeHistoryActivityEntity>().ToArrayAsync()); Assert.Empty(await context.Set<RuntimeHistoryBookmarkCountEntity>().ToArrayAsync());
+        }
         else Assert.Equal(count, (await context.Set<RuntimeHistoryHeadEntity>().SingleAsync()).LastSequence);
     }
     private sealed class Accessor : IPersistenceAccessContextAccessor
@@ -287,10 +320,11 @@ public sealed class EfRuntimeHistoryCheckpointTests
     }
     private sealed class Database(SqliteConnection keeper) : IAsyncDisposable
     {
-        internal static async Task<Database> CreateAsync(RuntimeHistoryCapturePolicy? policy = null, bool explicitLegacy = false)
+        internal static async Task<Database> CreateAsync(RuntimeHistoryCapturePolicy? policy = null, bool explicitLegacy = false, bool legacyMarker = false)
         {
             var keeper = new SqliteConnection("Data Source=:memory:"); await keeper.OpenAsync(); var database = new Database(keeper);
             await using var context = database.Open(); await context.Database.EnsureCreatedAsync(); var state = Workflow(explicitLegacy ? null : policy ?? Policy);
+            if (legacyMarker) state = state with { HistoryCaptureEnabledAtAdmission = null };
             context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, Scope, EfWorkflowExecutionStateStore.CreateId(Scope, Run), 1));
             await context.SaveChangesAsync(); return database;
         }

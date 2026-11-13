@@ -50,7 +50,8 @@ internal static class EfRuntimeHistoryCheckpoint
         if (incoming is not null) accessSnapshot.EnsureTenantScope(incoming.TenantId);
         var policy = native is null ? incoming?.HistoryCapturePolicy : native.HistoryCapturePolicy;
         if (native is not null && (native.HistoryCaptureEnabledAtAdmission is { } retainedEnabled && retainedEnabled != (policy is not null) ||
-            incoming is not null && !(policy?.IsEquivalentTo(incoming.HistoryCapturePolicy) ?? incoming.HistoryCapturePolicy is null)))
+            incoming is not null && (native.HistoryCaptureEnabledAtAdmission != incoming.HistoryCaptureEnabledAtAdmission ||
+                !(policy?.IsEquivalentTo(incoming.HistoryCapturePolicy) ?? incoming.HistoryCapturePolicy is null))))
             throw new InvalidOperationException("History must retain the native execution's admitted policy, including legacy absence.");
         var mapping = new Mapping(chain);
         var headId = Mapping.Id("head", scope, run);
@@ -188,6 +189,8 @@ internal static class EfRuntimeHistoryCheckpoint
         foreach (var item in events)
         {
             if (item.ActivityExecutionId is not { } activity || item.ActivityAncestryKnown != true && item.ParentActivityExecutionId is null) continue;
+            if (item.ParentActivityExecutionId == activity)
+                throw new InvalidOperationException("An exact execution cannot be its own known parent.");
             if (parents.TryGetValue(activity, out var existing) && existing != item.ParentActivityExecutionId)
                 throw new InvalidOperationException("One exact execution cannot have conflicting known ancestry.");
             parents[activity] = item.ParentActivityExecutionId;
