@@ -1092,9 +1092,9 @@ them, section 23).
 ### 25.9 State size: the benchmark (decision 10, first part). Run
 
 **What changed.** The EF cost run (`$EFR x cost`) ends with a state-size table. A new benchmark model (`Blob`, in
-`ef/Kernel.Ef.Run/EngineRun.cs`) holds a state of N kilobytes of random letters from a fixed seed. Random letters are
-text a database cannot compress much. The instance changes its state at each turn and ends each turn with a message to
-itself, so each of its ten commits rewrites the whole state (the Durable shape of the cost run's other rows, a commit
+`ef/Kernel.Ef.Run/EngineRun.cs`) holds a state of N kilobytes of lowercase letters from a fixed seed. Compression
+has not been measured; this alphabet is compressible. The instance changes its state at each turn and ends each
+turn with a message to itself, so each of its ten commits rewrites the whole state (the Durable shape of the cost run's other rows, a commit
 per turn).
 
 For N = 1, 10, 100 and 1,000 (`sizes=` to choose) the table prints:
@@ -1105,7 +1105,8 @@ For N = 1, 10, 100 and 1,000 (`sizes=` to choose) the table prints:
 The earlier rows of the cost run are unchanged. Its `check` line counts the twelve Blob instances (four sizes, three
 runs each) and their journal rows, which all finish.
 
-**What it shows.** The round trips stay flat as the state grows. The milliseconds come from one session on a machine
+**Historical measurements before the per-trial acceptance checks below.** The reported round trips stayed flat as
+state grew. These tables are retained as historical evidence. The milliseconds come from one session on a machine
 shared with other sessions' runs, with SQL Server under amd64 emulation, so they are only indicative:
 
 | Engine, fence | Counted per commit | ms per commit at 1 / 10 / 100 / 1,000 KB |
@@ -1125,8 +1126,25 @@ An earlier run with a state of one repeated letter, which PostgreSQL compresses,
 figures (8.3 to 8.7 ms at 1 MB). In that run MySQL's 100 KB median (32.8 ms) was above its 1 MB median (18.9 ms),
 which is unexplained, and it did not recur here.
 
-**Not done here:** values by reference (the second part of decision 10). This benchmark is the measurement the
-decision asks for first; "segments only if measurements show the need".
+**Per-trial acceptance checks (13 November integration).** Each of the three trials must have its start accepted,
+land exactly ten commits writing ten instance rows, and persist a Finished row at revision 10 with `Left=0` and the
+requested payload length. At Full or State history its persisted journal must also contain exactly revisions 1–10;
+Minimal omits those rows by contract and is checked by the landed commits plus the persisted final row. The clock
+and command counts are captured before the verification reads. A refused or incomplete trial fails the run instead
+of printing a successful per-commit number. `sizes=` is validated for positive integer kilobytes and checked byte
+multiplication before constructing the target, starting a proxy or resetting the database. This is CLI input
+validation, not a kernel state-size limit.
+
+`$EFR x size-check` runs the real in-memory Worker: ten-commit Full and Minimal positives; owner-declined start,
+accepted start with commits omitted, nine commits, and a missing persisted journal revision as negative controls;
+and invalid size inputs. The extracted original trial accepted all four incomplete outcomes in the red baseline.
+After the checks, all seven groups pass. Fresh SQLite cost runs at 1/10/100/1,000 KB pass with both fences (three
+trials per size, ten commits each); their counted work remains 7.7 per commit. A Minimal-history 1 KB run also
+passes. Zero, negative, overflow and mixed invalid CLI inputs exit 2 while an existing database sentinel remains
+unchanged. Other engines were not rerun for this validation-only integration.
+
+**Not done in this benchmark:** values by reference (the second part of decision 10). This benchmark does not choose
+an inline threshold, retention policy or host default; "segments only if measurements show the need".
 
 ## 26. Round 4: the graph engine. Run
 
