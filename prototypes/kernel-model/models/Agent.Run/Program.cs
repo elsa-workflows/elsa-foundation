@@ -33,17 +33,31 @@ static class Scenarios
         long time = 100;
         var store = new InMemoryStore(1, () => time);
         var firstCompletion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        int effects = 0;
+        int effects = 0, oldBodyReturned = 0;
+        var lateGuardObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         async ValueTask<object?> Tool(IJob job, CancellationToken token)
         {
             var call = Interlocked.Increment(ref effects); // a non-idempotent outside effect
-            if (call == 1) return await firstCompletion.Task; // crash after effect, before ticket becomes a result
+            if (call == 1)
+            {
+                var answer = await firstCompletion.Task; // crash after effect, before ticket becomes a result
+                Volatile.Write(ref oldBodyReturned, 1);
+                return answer;
+            }
             return "facts";
         }
         var live = new Capture();
         int staleResultTurns = 0;
         Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new AgentModel(Tool, duplicateResult: args.Contains("--mutate-result"), persistLive: args.Contains("--mutate-live"))]),
-            new WorkerOptions { Monotonic = () => time, Transport = live, OnTurn = (_, inbox, _) => { if (node == "first" && inbox.Any(m => m.Kind == Kinds.JobFinished)) staleResultTurns++; } });
+            new WorkerOptions { Monotonic = () =>
+            {
+                if (node == "first" && Volatile.Read(ref oldBodyReturned) != 0)
+                {
+                    RequireOwner();
+                    lateGuardObserved.TrySetResult(); // the completed old body reached the worker's post-job lease check
+                }
+                return time;
+            }, Transport = live, OnTurn = (_, inbox, _) => { if (node == "first" && inbox.Any(m => m.Kind == Kinds.JobFinished)) staleResultTurns++; } });
         async Task Start(Worker worker) { await new DurableHost([worker]).ActivateAsync(0); await worker.PollAsync(); }
         async Task Pump(Worker worker, Func<bool> done, bool poll = false)
         {
@@ -62,7 +76,7 @@ static class Scenarios
         var first = Owner("first");
         await Start(first);
         first.Post(new Message("start", InstanceRef.In(0, "lead"), Kinds.Start,
-            Start: new StartSpec(AgentModel.ModelKey, "coordinator"), ReplyTo: ReplyTo.Of("caller", "stream")), fresh: true);
+            Start: new StartSpec(AgentModel.ModelKey, "coordinator"), ReplyTo: ReplyTo.Of("caller", "stream", time + 60_000)), fresh: true);
         await Pump(first, () => effects == 1 && store.Instances.TryGetValue("0/lead", out var r) && Json.Read<Conversation>(r.State).Stage == "tool");
         Check(State("0/lead").Transcript.SequenceEqual(["user: prepare a proposal"]), "checkpoint persisted before the tool result");
         Check(live.Items.Any(r => r.Channel == "tokens" && Equals(r.Item, "Preparing proposal")), "tokens observed live");
@@ -85,12 +99,16 @@ static class Scenarios
         Check(State("0/lead").Approved && store.Subscriptions.Count == 0, "approval resumes and finishes after takeover");
         Check(live.Items.Count(r => r.Channel == "tokens") == liveBefore, "processing the recovered instance and approval did not replay live tokens");
         var selected = store.Instances["0/lead"];
+        var selectedJournal = store.Journal.Values.ToArray();
+        var selectedPosition = store.Partitions[0].Position;
         firstCompletion.SetResult("late");
-        for (var i = 0; i < 3000 && !first.Ready.Contains("0/lead"); i++) await Task.Delay(1);
-        Check(first.Ready.Contains("0/lead"), "old tool result reached the old owner's inbox");
+        await lateGuardObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.Yield();
+        Check(!first.Ready.Contains("0/lead"), "completed old tool reached the expired owner check and was not queued for a model turn");
         await first.RunAsync();
-        Check(staleResultTurns == 1 && !first.Owns && store.Instances["0/lead"] == selected,
-            "old result turn lost its fence and preserved the complete selected row");
+        Check(staleResultTurns == 0 && !first.Owns && store.Instances["0/lead"] == selected
+            && store.Partitions[0].Position == selectedPosition && store.Journal.Values.SequenceEqual(selectedJournal),
+            "expired old owner stood down before the late result turn and preserved row, journal and position");
 
         // Both decisions arrive before the peer's reply; the first decision is final.
         var decisionStore = new InMemoryStore(1, () => time);
