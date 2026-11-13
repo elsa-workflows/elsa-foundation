@@ -130,9 +130,9 @@ The independent acceptance/spec reviewer receives the user goal, references, thi
 | UX acceptance | **Accepted — exact resulting-main qualification passed; final evidence publication recorded by PR #4444** |
 | Reviewed PR head / tested source SHA | Exact heads and source-specific receipts in [delivery evidence](evidence/2026-11-13/README.md); none relabeled as later-head proof |
 | Actions run and downloadable artifacts | Actions queued/cancelled states remain explicit. Original PNG/ARIA pairs in the linked manifest, ten accepted safe traces and allowlisted exact-source reports and allowlisted reports are retained in the evidence ledger. |
-| Actual provider qualification | Passed: real Copilot SDK1.0.4 through Weaver; weekly Workflow/Acme gpt-6.1-sol and separate unsupported gpt-5.6-sol witnesses |
+| Actual provider qualification | Passed: real Copilot SDK 1.0.4 through Weaver; current full keyboard and resulting-main witnesses explicitly use `gpt-5.6-sol`. Historical weekly `gpt-6.1-sol` and separate unsupported `gpt-5.6-sol` receipts retain their own identities. |
 | Independent numerical/metric verification | Passed: weekly62.5/50/+12.5 →75/25/+50 →80/25/+55; Acme owner 120000/reader 60000 and Enterprise 300000; comparison4/3/+1 |
-| Independent UX reviewer / inspected captures | Independent acceptance reviewer opened all 190 retained originals and all six safe traces in actual TraceViewer; correctness/standards verified hashes and zero credential matches |
+| Independent UX reviewer / inspected captures | Independent acceptance opened all 198 retained originals across their exact-source witnesses and all ten safe archives in actual TraceViewer; correctness/standards verified hashes, provenance and zero credential matches. |
 | Open design assumptions | Owner navigation and one model-agnostic Weaver author confirmed; native contract/design reviews clean |
 | Unverified coverage | None for the agreed profile. Actions states remain separately recorded under the owner's delayed-CI merge exception; outstanding signed-token invalidation, complete source-history coverage and physical model HTTP counts are not claimed. |
 
