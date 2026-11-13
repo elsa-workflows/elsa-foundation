@@ -1,10 +1,10 @@
 # Execution kernel: clean-slate design sketch (draft 5, 12 November 2026)
 
-Status: **proposed, not approved; no product code exists.** The owner decisions recorded below are inputs to the design proposal and its review; they bind the build once the design is approved. History: draft 1 had two first-principles reviews (protocol and model contract); both said "right shape, needs changes". Draft 2 was built as a standalone model and attacked by a deterministic simulation and a PostgreSQL stress test, which found eight more faults. Three more rounds and a merge of four branches have since run it on five database engines; the current evidence is in "What the tests did and did not show". It replaces the journal-first approach proposed as ADR 0098 in open PR #4176 (not merged).
+Status: **proposed, not approved; no product code exists.** The owner decisions recorded below are inputs to the design proposal and its review; they bind the build once the design is approved. History: draft 1 had two first-principles reviews (protocol and model contract); both said "right shape, needs changes". Draft 2 was built as a standalone model and attacked by a deterministic simulation and a PostgreSQL stress test, which found eight more faults. Three more rounds and a merge of four branches ran it on five database engines, and round 4 split it into the three layers. The evidence is the prototype itself and its own documents (DESIGN, FINDINGS, NATIVE, ENGINES, MONGO); this sketch summarises it in "What it costs" and "What the tests show". It replaces the journal-first approach proposed as ADR 0098 in open PR #4176 (not merged).
 
-Draft 4 separates three layers, at the owner's decision of 12 November: an actor runtime, a durable layer, and workflow instances as one actor type. Every runtime hosts partitions, so the sections that describe partitions hold for any runtime. The model's code is being restructured into the three layers (round 4). Draft 5 renames step to turn and run (off-step work) to job, at the owner's decision of 12 November; the runtime's call into a partition is a pass. It also adds the containers' semantics: Flowchart on a graph engine extracted from today's Flowchart, StateMachine on its own statechart engine, and BPMN hosted on the Bpmn.Semantics interpreter (valence-works/bpmn).
+Draft 4 separates three layers, at the owner's decision of 12 November: an actor runtime, a durable layer, and workflow instances as one actor type. Every runtime hosts partitions, so the sections that describe partitions hold for any runtime. The prototype's code was split into the three layers in round 4 stage A, with every gate unchanged. Draft 5 renames step to turn and run (off-step work) to job, at the owner's decision of 12 November; the runtime's call into a partition is a pass. It also adds the containers' semantics: Flowchart on a graph engine extracted from today's Flowchart, StateMachine on its own statechart engine, and BPMN hosted on the Bpmn.Semantics interpreter (valence-works/bpmn).
 
-The model (`prototypes/kernel-model/`), its findings and how to replay each failing seed are on local branches, not yet published: the four branches merged at `baba05a78c` (`agent/claude/kernel-model-merged`), with round 4 on top. The model lands on main in later PRs of program #4229.
+The prototype is `prototypes/kernel-model/`, in stacked PRs #4250 to #4260 (not yet on main). The commit hashes its documents cite are kept at the tag `prototype/kernel-model-history`.
 
 ## Requirements (the owner's, 12 November)
 
@@ -33,18 +33,18 @@ Owner decisions on this proposal. They become binding when the design is approve
 
 **Walkthrough decisions:**
 1. **Orleans:** hosts each partition as a grain. One grain per instance, the per-actor fence and the sweep are dropped (see "The seam").
-2. **Commit fence:** in the batch by default, using EF concurrency tokens: 2 round trips on PostgreSQL, the lease time from the node clock. The fence as its own statement stays an option.
+2. **Commit fence:** in the batch by default, using EF concurrency tokens: 2 round trips on PostgreSQL, the lease time from the node clock. The fence as its own statement stays an option. **SQL Server (13 November):** the fence as its own statement is SQL Server's default, because the fence in the batch deadlocks takes there (E9, below).
 3. **Wake-ups between nodes:** a pluggable wake signal over the runtime's transport; polling remains the guarantee.
 4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls. Not built yet.
 5. **Events:** the subscription and event tables stay the kernel's one mechanism; a correlation instance per key remains a sample model.
 6. **Reply addresses:** expire at the route's timeout, carried as an absolute deadline; after it the owner drops the reply and unpins the instance.
 7. **Recreate after delete:** a rule per kind of id. A generated id never comes back (the start is dropped and journalled). A caller key refuses a repeat within `keep_until` and may start a fresh run after it.
-8. **Projector:** off the hot path in its own transaction, each round batched into set-based writes (about 2 to 3 round trips per round).
+8. **Projector:** off the hot path in its own transaction, each round batched into set-based writes (about 2 to 3 round trips per round on PostgreSQL).
 9. **Job poison:** jobs are counted like messages. A job goes on trial alone, and a take after a lost owner adds an attempt to its ticket; past the threshold the job is parked and its instance faulted.
 10. **State size:** large values are stored by reference, and a size benchmark goes into the cost runs; segments only if measurements show the need.
 11. **Viewer read path:** the API shows a run from its projected rows plus the journal tail past the projector's cursor, expanded in memory, so the view is always current. Studio may ask for a projector catch-up for the partition; rounds are coalesced. Studio never forces an owner commit or shows uncommitted state. Live watching is a push stream of committed journal entries.
 
-**Built so far (the prototype at `baba05a78c`):** decision 2 (both fence modes are built and measured), 5 (the tables) and part of 9 (job tickets are counted like messages; a job on trial at the threshold becomes an error result). Not built yet: 3 (an added message is found by the owner's next poll; round 4 adds the wake-signal interface with an in-process implementation), 1 (the Orleans adapter), 4 (short waits in memory), 6 (reply addresses carry no deadline), 7 (a start after a delete creates a new instance with the same id), 8 (the projector writes one statement per instance in its page), the rest of 9 (parking the job and faulting the instance), 10 and 11.
+**Built in the prototype so far:** decision 2 (both fence modes), 5 (the tables) and part of 9 (job tickets are counted like messages; parking the job and faulting the instance is not built). Decision 3 in part: round 4 added the wake-signal interface with an in-process implementation. The rest is not built.
 
 ## Three layers
 
@@ -138,9 +138,9 @@ What a provider has to give:
 - **Its own time,** in milliseconds, for due times and for checking leases at a take. With the fence in the batch (the default) the owner writes `lease_until` from its own clock, so clock skew costs availability, never safety.
 - **Failures told apart:** unknown outcome, transient (try again as it is), definite.
 
-The prototype's `IKernelStore` also carries the node heartbeat (for fair share), releasing a partition, start subscriptions, held messages, delete, the projector's own row and the view rows; the conformance suite tests each of them on every store.
+The prototype's `IKernelStore` also carries the node heartbeat (for fair share), start subscriptions, held messages, delete and unsubscribing all in a commit, the sweep of expired commands and events, the projector's own row and the view rows; the conformance suite tests each of them on every store.
 
-A relational database meets these with one transaction, a conditional update of the partition row and an identity column. A document store such as MongoDB meets them with a multi-document transaction (which needs a replica set), a conditional update of the partition document, and an order key the owner assigns. Whether that holds, and at what cost, is to be shown by building it.
+A relational database meets these with one transaction, a conditional update of the partition row and an identity column. A document store such as MongoDB meets them with a multi-document transaction (which needs a replica set), a conditional update of the partition document, and an order key the store assigns (in the fenced update for sends, from a per-partition clock for outside adds). The prototype's MongoDB store meets them; MONGO.md has what it cost.
 
 The tables below are the relational shape. A document provider stores the same records as documents.
 
@@ -157,7 +157,7 @@ The tables below are the relational shape. A document provider stores the same r
 | `journal` | partition, position, instance, entries | One row per instance-commit: what happened, as one compact value. The truth about the past. Feeds the viewer's tables. Written according to the history level |
 | `projection` | partition, position | How far the projector has got. Its own row, so the projector never touches the fence row |
 
-This is the proposed shape, and the interfaces in this sketch are the proposed contract: at the evidence commit the prototype still says step and run (`IStep`, `StepAsync`, `IRun`) and has no `Describe`; its `UpgradeState` takes the stored string, it declares a `StateType`, and its `Ambient` is a plain `object?`. Not in the prototype yet: the instance's `sub_status`, `root`, `correlation`, `tenant`, `created` and `updated`, the message's `headers`, and the subscription's `kind` (the prototype tells a start subscription by the start spec on its row). The prototype also keeps `fault`, `history`, `suspended` and `children` on the instance row, a `revision` on each journal row and a `died` flag on the partition row; at the evidence commit `jobs` is still called `runs`.
+This is the proposed shape, and the interfaces in this sketch are the proposed contract. The prototype already uses turn, job and pass; where its schema and contract still differ (a few columns not added yet, a few it keeps, some signatures), its DESIGN.md says so in "Where the code and draft 5 differ".
 
 The viewer's tables are projections of the journal. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker, dispatch record or timer table.
 
@@ -177,7 +177,7 @@ The owner of partition `p` at epoch `e`, which believes the position is `n`, com
 
 Statement 1 is the fence. With the fence as its own statement, the row lock on the partition row orders the commit against a takeover; with the fence in the batch EF chooses the order, see E9 below. The check in step 2 is why a commit is **two round trips, not one**: a commit sent in the same packet as a fence that matched nothing would still land. There are two ways to do it, both measured: `epoch` and `position` as EF concurrency tokens in the one `SaveChanges`, which checks before it sends the commit (2 round trips on PostgreSQL, lease time from the node's clock); or the fence as its own statement first (3 round trips, lease time from the database). The fence also renews the lease, so a busy partition needs no heartbeat. An idle owner sends an empty fenced commit as its heartbeat, which is also how a stale one finds out. **Default (12 November): the fence in the batch; the fence as its own statement stays an option.**
 
-On SQL Server the fence in the batch has a known problem (finding E9 of the prototype): a stale owner's commit holds a message lock and waits for the partition row, because EF sends the fence last, while a take holds the partition row and waits for that message. In one stress run that made 127 deadlocks, every victim a take. Nothing wrong landed; it costs availability during takeovers. The suggested fix, the checked fence on SQL Server, is not applied; whether SQL Server's default becomes the checked fence is an open owner question.
+On SQL Server the fence in the batch has a known problem (finding E9 of the prototype): a stale owner's commit holds a message lock and waits for the partition row, because EF sends the fence last, while a take holds the partition row and waits for that message. In one stress run that made 127 deadlocks, every victim a take. Nothing wrong landed; it costs availability during takeovers. The fence as its own statement had no take deadlocks there, so it is SQL Server's default (decided 13 November); the prototype does not apply it yet.
 
 The ordinal in a derived message id has a fixed width. EF sends the inserts of one commit in key order, so without it the eleventh message of a turn overtook the third (found on PostgreSQL).
 
@@ -361,7 +361,7 @@ A workflow handles a request and writes the response itself. The response is liv
 
 - **A request that starts a workflow.** The receiving node finds the workflow by route in an in-memory route table (built when definitions are published, so routing reads nothing), places the new instance in a partition it owns, and runs it in-process with the request as `Ambient`. The request observes the instance and returns when the workflow writes its response. A workflow that responds and finishes without waiting commits nothing in Ephemeral mode: zero database calls.
 - **A response before the end.** Writing the response does not end the workflow. The request returns and the workflow goes on.
-- **When the response is released.** If the turn that writes the response commits, the response is held until that commit lands, so a caller never sees a response for work that was then lost. A turn that does not commit releases it at once. A workflow can opt out and respond before its commit.
+- **When the response is released.** If the turn that writes the response commits, the response is held until that commit lands, so a caller never sees a response for work that was then lost. A turn that does not commit releases it at once. A route can opt out and respond before its commit.
 - **A workflow that waits before it responds** (a background job, a short timer). The instance stays in memory on the receiving node and the request keeps waiting, up to the route's timeout.
 - **A request that resumes a waiting workflow.** The instance may be owned by another node. The receiving node adds a resume message that carries a reply address (its node and the request's id), and keeps the request open. The owner runs the turn and sends the emitted response to that address over the runtime's transport between nodes, which is not durable. With the built-in runtime and one node this is in-process; across nodes it uses the same transport as wake-ups.
 - **The owner lost while a request waits.** The request ends with a clear error (503 by default), never a hang, and never two responses. In the prototype only a reset on the receiving node answers 503; an owner lost on another node is noticed at the deadline (504), because the signal from owner to receiving node is not built. The workflow resumes under its new owner as usual; its later output is not sent to a caller that is gone.
@@ -374,7 +374,7 @@ Large request and response bodies stay out of the instance's state; the workflow
 
 The journal row is the durable hand-off the owner decided on 11 November: one compact row per commit, in the commit. Each entry has a common envelope (node, parent node, kind, time) and the model's own payload, so one viewer works across models. A projector expands journal rows into the viewer's tables afterwards, in position order per partition. Positions are assigned by the one writer under the lock it holds to commit, so a cursor cannot skip a row. The history level (Full, State only, Minimal) decides what is recorded; at Minimal no journal row is written.
 
-The projector runs as a background worker, off the hot path, in its own transaction, nudged after commits and on a timer. The target is a few set-based statements per round (decision 8); the prototype still issues one statement per instance in its page (about 17 round trips for a dozen instances). Its cursor is its own row, guarded by a conditional update, so any node may project any partition.
+The projector runs as a background worker, off the hot path, in its own transaction, nudged after commits and on a timer. The target is a few set-based statements per round (decision 8); the prototype still issues one statement per instance in its page (about 17 round trips for a dozen instances in the prototype's cost run). Its cursor is its own row, guarded by a conditional update, so any node may project any partition.
 
 **The viewer's read path** (owner decision, 12 November):
 
@@ -402,43 +402,17 @@ The projector runs as a background worker, off the hot path, in its own transact
 
 Faults to inject: a crash before, during and after a commit and before the in-memory hand-over; a commit whose outcome is unknown; a paused owner that wakes after a takeover; two nodes that both believe they own a partition; a message inserted while a poll runs; an outside command retried after it was handled; a turn that always throws; clocks that disagree.
 
-## What it costs (measured on the model)
+## What it costs (the prototype's measurements)
 
-PostgreSQL round trips for the native model on the kernel (NATIVE.md's runs; the fork-join row as re-measured on the merged kernel, DESIGN.md and FINDINGS section 23), against today's core counted on 11 November. The kernel figures are fence as its own statement / fence in the batch (the default). The model's history is one journal row per commit; the projector's writes come on top, and today's figures include its viewer rows.
+On PostgreSQL the native model on the kernel needs no database call for a request-response workflow run inline in Ephemeral mode, 3 round trips for a Balanced run (2 with the fence in the batch) where today's core needs 48 to 80, and 33 (22) for ten Durable WriteLines where today's core needs 230. On the server engines a commit of 100 instances costs the round trips of one. A Balanced run costs 3 (2) on PostgreSQL, 4 (3) on SQL Server, 7 (6) on MySQL and 3 (2) on MongoDB; SQLite takes 5 calls into the engine, growing with the rows. The full tables, with every run and both fence modes, are in the prototype's NATIVE.md, DESIGN.md ("What it costs"), ENGINES.md and MONGO.md.
 
-| Run | Today | Kernel |
-|---|---:|---:|
-| HTTP reference workflow, Ephemeral, inline | 80 | 0 |
-| HTTP reference workflow, Balanced | 80 | 3 / 2 |
-| HTTP reference workflow, Durable | 153 | 12 / 8 |
-| WriteLine sequence of 5 to 40, Balanced | 48 | 3 / 2 |
-| Ten WriteLines, Durable | 230 | 33 / 22 |
-| Forty WriteLines, Durable | 680 | 123 / 82 |
-| Fork and join with a direct resume, Balanced | 142 | 11 / 8 |
+## What the tests show
 
-A Balanced run on the owner, per engine (EF store; fence as its own statement, in brackets in the batch): PostgreSQL 3 (2), SQL Server 4 (3, needs read-committed snapshot isolation), MySQL 7 (6), MongoDB 3 (2, needs a replica set). SQLite takes 5 calls into the engine, where EF sends one command per row. On the server engines a commit costs the same round trips for 1 or 100 instances, because they share the transaction; SQLite's engine calls grow with the rows (203 for 100 instances).
+A deterministic simulation drives several nodes against one store with crashes, paused owners, lost answers, retried commands and skewed clocks, and checks every invariant after every action; it passes at 200,000 runs of 300 actions and 20,000 runs of 1,000, also with native instances in the mix. Mutation checks break the kernel one rule at a time, and each is caught. The store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; where engines differ, the contract is silent and has to be defined. A stress test with killed connections and stalls holds on all five engines, and fails on every one with the fence broken on purpose. The figures, the seeds, and what each round found are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, E9 among them, are in ENGINES.md.
 
-These figures come from the prototype's own cost runs, reported in its findings; they were not re-measured for this record.
-
-## What the tests did and did not show
-
-| Test | Result | Checked by |
-|---|---|---|
-| Simulation after the merge: 200,000 runs of 300 actions | 0 failed, 0 innocent instances parked | Re-run on 12 November |
-| Simulation: 20,000 runs of 1,000 actions | 0 failed; 12 innocent instances parked (see poison counting) | Re-run on 12 November |
-| The same with native instances in the mix | 0 failed; 15 innocent instances parked; 409,284 instances matched | Re-run on 12 November |
-| Mutation check: the kernel broken one rule at a time | 37 single breakages, 35 caught alone; the other two (the position in the fence, the count on deletes) are caught in the two combined runs with the rule that covers each (the prototype counts this as 37 of 39 runs) | Re-run on 12 November |
-| Mutation check of the native model | 5 of 5 caught | Re-run on 12 November |
-| Store conformance, 57 semantic cases: in memory | 56 pass, 1 skipped | Re-run on 12 November |
-| Store conformance: SQLite, either fence | 54 pass, 1 skipped; 2 reference cases differ (subscribing twice, removing what is absent), where the contract is silent and must be defined | Re-run on 12 November |
-| Store conformance: PostgreSQL, SQL Server, MySQL, MongoDB, either fence | PostgreSQL 54 pass, 3 differ; SQL Server and MySQL 53 pass, 3 differ, 1 skipped; MongoDB 57 pass. The differing cases are where the contract is silent | Reported by the merge run; not re-run |
-| Stress: 40 s, 5,000 messages, killed connections and stalls | Every property holds on all five engines; 0 deadlocks on PostgreSQL, SQL Server (checked fence) and MySQL. SQL Server with the fence in the batch: 127 deadlocks on takes in one run on the engines branch (ENGINES.md E9; one on MySQL), safety held; not re-run after the merge | Reported by the merge run; not re-run |
-| Stress with the fence broken on purpose | Violations on every engine: PostgreSQL 228, SQL Server 26, MySQL 611, SQLite 238, MongoDB 390 | Reported by the merge run; not re-run |
-
-- **Built since draft 2:** suspend, resume, terminate, rebind and delete; events that start instances; the projector; reply addresses for live output across nodes; the native model with HTTP routes; the store on SQL Server, MySQL and MongoDB.
-- **Not built yet:** the three layers as separate code (round 4, in progress); the runtime conformance suite; the Orleans adapter; the graph engine and the BPMN, StateMachine and standalone-jobs spikes; short timers and jobs of an Ephemeral instance kept in memory (decision 4); the stress test with native instances; a three-node MongoDB replica set. Also not built: the projector's set-based rounds, the reply-address deadline and the owner's signal to the receiving node, the recreate rule per kind of id, values by reference, the viewer's tail read and catch-up, `Describe`, the journal envelope, tenant checks and trace headers on messages; streaming responses and a route mapping a client's disconnect to a cancel.
-- **Next, before the design proposal (program #4229, step 2):** the card decisions; the Orleans adapter with a runtime conformance suite; the graph engine; spikes for BPMN, StateMachine, agents, standalone jobs with the worker protocol, and ETL's fan-out pattern; and the write-volume measurement.
-- **Not measured yet:** bytes written per commit and PostgreSQL bloat (design-now question 7).
+- **Not built yet:** the runtime conformance suite and the Orleans adapter; the graph engine and the BPMN, StateMachine, agent, standalone-jobs and ETL fan-out spikes; short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set; the projector's set-based rounds; reply-address deadlines and the owner's signal to the receiving node; the recreate rule per kind of id; values by reference; the viewer's tail read and catch-up; `Describe`, the journal envelope, tenant checks and trace headers; streaming responses and a route mapping a client's disconnect to a cancel; SQL Server's checked fence as its default.
+- **Done in round 4 stage A:** the three layers as separate projects and the turn/job/pass renames.
+- **Next, before the design proposal (program #4229, step 2):** the card decisions with SQL Server's checked fence; the Orleans adapter with a runtime conformance suite; the graph engine; spikes for BPMN, StateMachine, agents, standalone jobs with the worker protocol, and ETL's fan-out pattern; and the write-volume measurement.
 
 ## Trade-offs
 
@@ -480,7 +454,7 @@ These are cheap to design in now and expensive to retrofit. The proposal must an
 
 ### Architecture documentation (owner decision, 12 November)
 
-The design gets a reference section in `docs/architecture/` (the engineering documentation, read on GitHub), not the GitHub wiki. Correction: GitBook publishes `website/docs/`, not `docs/`; whether the section also gets a published summary in `website/docs/` is an open owner question. The section has a README with the overview, a reading order, the walkthrough link and each page's status, then one page per topic, landed one page per PR beside the design proposal. Terms are defined once in the glossary; decisions stay in ADRs. Pages carry a "Proposed" banner until the design is approved and "Current" from the switch. At the switch, the pages that describe the old core (the architecture tour, how a workflow executes, durable resumption, durable timers, bookmark expiration, runtime fault behaviour) are rewritten or retired, after the owner sees the list.
+The design gets a reference section in `docs/architecture/` (the engineering documentation, read on GitHub), not the GitHub wiki. Decided 13 November: the proposed pages go there now, and at the switch a shorter user-facing architecture section goes into `website/docs/`, which GitBook publishes. The section has a README with the overview, a reading order, the walkthrough link and each page's status, then one page per topic, landed one page per PR beside the design proposal. Terms are defined once in the glossary; decisions stay in ADRs. Pages carry a "Proposed" banner until the design is approved and "Current" from the switch. At the switch, the pages that describe the old core (the architecture tour, how a workflow executes, durable resumption, durable timers, bookmark expiration, runtime fault behaviour) are rewritten or retired, after the owner sees the list.
 
 ### Release 1 scope (owner decision, 12 November)
 
@@ -495,10 +469,10 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 - **Standalone jobs:** Elsa.Jobs rebuilt on the kernel as a job actor type; a spike now, release placement in the proposal.
 - **After, with a spike now:** BPMN, the Orleans adapter, ETL (its fan-out pattern), a dedicated agent model. The out-of-process job worker protocol follows in 1.x; its contract is designed now so jobs are built right.
 
-### Open owner questions
+### Decided 13 November
 
-- **Where the architecture section lives.** GitBook publishes `website/docs/`, not `docs/`. Recommended: the proposed pages in `docs/architecture/` now, and a shorter published section in `website/docs/` at the switch.
-- **SQL Server's default fence (E9).** The fence in the batch deadlocks takes with stale commits on SQL Server; the fix (the checked fence there) is not applied. Open for the owner: the checked fence as SQL Server's default.
+- **Where the architecture section lives:** `docs/architecture/` now, a published section in `website/docs/` at the switch (see "Architecture documentation").
+- **SQL Server's default fence (E9):** the fence as its own statement. With the fence in the batch EF sends the fence last, so on SQL Server a take can deadlock with a stale commit (127 deadlocks on takes in one stress run, safety held); the fence as its own statement had none. Other engines keep the fence in the batch.
 
 ### Earlier open questions
 
