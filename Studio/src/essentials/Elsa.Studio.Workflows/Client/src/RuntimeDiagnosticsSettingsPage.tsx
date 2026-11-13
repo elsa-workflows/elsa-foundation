@@ -1,4 +1,5 @@
 import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
 import { Info, DatabaseZap, Save, ShieldCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -30,6 +31,7 @@ interface RuntimeDiagnosticsDraft {
 }
 
 export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEndpointContext }) {
+  const captureNotificationGuard = useNotificationGuard(context);
   const settingsQuery = useRuntimeDiagnosticsSettings(context);
   const saveMutation = useSaveRuntimeDiagnosticsSettings(context);
   const settings = settingsQuery.data ?? null;
@@ -37,7 +39,6 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
   const saving = saveMutation.isPending;
   const canManage = settings?.permissions.canManage ?? false;
   const [draft, setDraft] = useState<RuntimeDiagnosticsDraft>(() => createDraft(settings));
-  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setDraft(createDraft(settings));
@@ -52,11 +53,9 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
   const allowedLevels = useMemo(() => levels.filter(level => isLevelSelectable(level, settings)), [settings]);
   const updateDefaultLevel = (defaultLevel: RuntimeDiagnosticsEvidenceLevel) => {
-    setStatus(null);
     setDraft(current => ({ ...current, defaultLevel }));
   };
   const updateSubjectLevel = (subject: RuntimeDiagnosticsSubject, value: string) => {
-    setStatus(null);
     setDraft(current => {
       const subjectOverrides = { ...current.subjectOverrides };
       if (value === "inherit") delete subjectOverrides[subject];
@@ -66,14 +65,14 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
   };
 
   const save = () => {
-    setStatus(null);
+    const canNotify = captureNotificationGuard();
     saveMutation.mutate(
       {
         scope: settings?.requested.scope ?? "host-default",
         defaultLevel: draft.defaultLevel,
         subjectOverrides: draft.subjectOverrides
       },
-      { onSuccess: saved => setStatus(`Saved. New capture events now use ${formatLevel(saved.effective.defaultLevel)}.`) }
+      { onSuccess: saved => canNotify() && getNotifications().notify({ level: "success", title: `Saved. New capture events now use ${formatLevel(saved.effective.defaultLevel)}.` }) }
     );
   };
 
@@ -88,7 +87,6 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
       <div className="runtime-diagnostics-body">
         {errorMessage && <div className="runtime-diagnostics-banner error">{errorMessage}</div>}
-        {status && !errorMessage && <div className="runtime-diagnostics-banner success">{status}</div>}
 
         <section className="runtime-diagnostics-section">
           <div className="runtime-diagnostics-section-head">

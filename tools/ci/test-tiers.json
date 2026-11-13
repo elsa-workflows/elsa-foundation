@@ -448,6 +448,22 @@
       "medianMinutes": 0.01
     },
     {
+      "project": "Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "tier": "integration",
+      "medianMinutes": null,
+      "trait": "testcontainers"
+    },
+    {
+      "project": "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tier": "integration",
       "trait": "testcontainers",
@@ -506,6 +522,11 @@
       "medianMinutes": 0.01
     },
     {
+      "project": "Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
       "project": "Essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.18
@@ -556,6 +577,17 @@
     {
       "project": "Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj",
       "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj",
+      "tier": "pr",
+      "trait": "child-process",
       "medianMinutes": null
     },
     {
@@ -765,6 +797,16 @@
       "project": "Extensions/Decisions/tests/Workflows/Api/Tests/Elsa.Decisions.Workflows.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": null
+    },
+    {
+      "project": "Extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.03
+    },
+    {
+      "project": "Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.03
     }
   ],
   "splits": {
@@ -867,6 +909,8 @@
           "Essentials/tests/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj",
           "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
           "Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj",
+          "Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj",
+          "Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj",
           "Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj",
           "Essentials/tests/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj",
           "Essentials/tests/Secrets/Tests/Elsa.Secrets.Tests.csproj",
@@ -948,6 +992,11 @@
           "Essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
           "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
           "Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
+          "Essentials/tests/Studio/Dashboard/QueryTests/Elsa.Studio.Dashboard.QueryTests.csproj",
+          "Essentials/tests/Workflows/Dashboard/QueryTests/Elsa.Workflows.Dashboard.QueryTests.csproj",
+          "Extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj",
+          "Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj",
+          "Essentials/tests/Studio/Dashboard/ResourceTests/Elsa.Studio.Dashboard.ResourceTests.csproj",
           "Essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
           "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
           "Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
@@ -1051,6 +1100,7 @@
           "cli-acceptance",
           "compensation",
           "dashboard",
+          "studio-dashboard",
           "data-protection",
           "elsa3-import",
           "locking-database",
@@ -1065,6 +1115,11 @@
     ]
   },
   "containerSuites": [
+    {
+      "suite": "studio-dashboard",
+      "project": "Essentials/tests/Studio/Dashboard/Persistence/ProviderTests/Elsa.Studio.Dashboard.Persistence.ProviderTests.csproj",
+      "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
+    },
     {
       "suite": "migrations",
       "project": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",

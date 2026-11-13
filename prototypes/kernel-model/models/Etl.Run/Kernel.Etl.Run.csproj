@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><RootNamespace>Kernel.Etl.Run</RootNamespace></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Etl/Kernel.Etl.csproj" /></ItemGroup>
+</Project>
