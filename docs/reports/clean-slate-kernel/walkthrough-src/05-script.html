@@ -1,0 +1,173 @@
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (name, attrs, text) => {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  };
+
+  /* chapter rail */
+  const links = [...document.querySelectorAll("nav.rail a")];
+  const byId = new Map(links.map(a => [a.getAttribute("href").slice(1), a]));
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        if (en.isIntersecting) {
+          links.forEach(a => a.classList.remove("on"));
+          const a = byId.get(en.target.id);
+          if (a) { a.classList.add("on"); if (window.innerWidth <= 900) a.scrollIntoView({ block: "nearest", inline: "center" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -65% 0px" });
+    document.querySelectorAll("section.ch").forEach(s => io.observe(s));
+  }
+
+  /* pickers: click a shape or a card, both light up */
+  document.querySelectorAll(".picker").forEach(root => {
+    const shapes = [...root.querySelectorAll("[data-pick]")];
+    const cards = [...root.querySelectorAll("[data-pick-card]")];
+    const select = key => {
+      shapes.forEach(s => s.classList.toggle("picked", s.dataset.pick === key));
+      cards.forEach(c => c.classList.toggle("picked", c.dataset.pickCard === key));
+    };
+    shapes.forEach(s => {
+      s.addEventListener("click", () => select(s.dataset.pick));
+      s.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(s.dataset.pick); } });
+    });
+    cards.forEach(c => c.addEventListener("click", () => select(c.dataset.pickCard)));
+    select(root.dataset.default);
+  });
+
+  /* steppers */
+  document.querySelectorAll(".stepper").forEach(root => {
+    const svg = root.querySelector("svg");
+    const parts = [...svg.querySelectorAll("[data-k]")];
+    const prev = root.querySelector("[data-prev]");
+    const next = root.querySelector("[data-next]");
+    const count = root.querySelector("[data-count]");
+    const tabs = [...root.querySelectorAll("[data-tab]")];
+    let list, items, i = 0;
+    const pick = () => {
+      list = [...root.querySelectorAll("ol.steps")].find(o => !o.hidden);
+      items = [...list.children];
+      items.forEach((li, n) => { li.onclick = () => { i = n; render(); }; });
+    };
+    const render = () => {
+      const on = new Set(items[i].dataset.on.split(/\s+/));
+      parts.forEach(p => {
+        const lit = on.has(p.dataset.k);
+        p.classList.toggle("lit", lit);
+        p.classList.toggle("dim", !lit);
+      });
+      items.forEach((li, n) => li.classList.toggle("on", n === i));
+      count.textContent = "Step " + (i + 1) + " of " + items.length;
+      prev.disabled = i === 0;
+      next.disabled = i === items.length - 1;
+    };
+    prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
+    next.addEventListener("click", () => { if (i < items.length - 1) { i++; render(); } });
+    tabs.forEach(t => t.addEventListener("click", () => {
+      tabs.forEach(x => x.setAttribute("aria-selected", x === t ? "true" : "false"));
+      root.querySelectorAll("ol.steps").forEach(o => { o.hidden = o.dataset.set !== t.dataset.tab; });
+      i = 0; pick(); render();
+    }));
+    pick(); render();
+  });
+
+  /* commit: two ways to send the fence */
+  const stmts = document.getElementById("stmts");
+  const note = document.getElementById("commit-note");
+  const notes = {
+    tok: "EF Core sends the writes and the fence in one batch, the fence last because EF orders the statements by table; on SQL Server this lets a take deadlock with a stale commit (E9), which the checked fence avoids. It uses epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
+    first: "The fence goes alone and returns the database's time. Only when its count checks out are the writes sent. 3 round trips on PostgreSQL; the lease time comes from the database."
+  };
+  const setMode = mode => {
+    [...stmts.children].forEach(li => {
+      li.style.order = li.dataset["o" + (mode === "tok" ? "Tok" : "First")];
+      li.querySelector(".rt").textContent = li.dataset["rt" + (mode === "tok" ? "Tok" : "First")];
+    });
+    document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"));
+    note.textContent = notes[mode];
+  };
+  document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  setMode("tok");
+
+  /* persistence modes strip */
+  const ms = document.getElementById("modes-svg");
+  const rows = [
+    { name: "Ephemeral", a: "no commit", b: "0 round trips", commits: () => false },
+    { name: "Balanced", a: "one commit, at the end", b: "3 round trips (2)", commits: n => n === 9 },
+    { name: "Durable", a: "a commit per activity, 11 in all: the ten WriteLines and their Sequence", b: "33 round trips (22)", commits: () => true }
+  ];
+  rows.forEach((r, ri) => {
+    const y = 26 + ri * 78;
+    ms.appendChild(el("text", { class: "tt", x: 20, y: y + 10 }, r.name));
+    ms.appendChild(el("text", { class: "ts", x: 20, y: y + 28 }, r.a));
+    ms.appendChild(el("text", { class: "ts", x: 20, y: y + 44 }, r.b));
+    for (let n = 0; n < 10; n++) {
+      const x = 210 + n * 72;
+      ms.appendChild(el("rect", { class: "box", x, y: y - 6, width: 56, height: 34, rx: 5 }));
+      ms.appendChild(el("text", { x: x + 28, y: y + 16, "text-anchor": "middle" }, "A" + (n + 1)));
+      if (r.commits(n)) ms.appendChild(el("rect", { class: "b2", x: x + 59, y: y - 10, width: 8, height: 42, rx: 2 }));
+    }
+  });
+  ms.appendChild(el("text", { class: "ts", x: 210, y: 246 }, "Blue bars are commits. Native model, ten WriteLines, PostgreSQL; in brackets with the fence in the batch."));
+
+  /* cost chart */
+  const tip = document.getElementById("tip");
+  const showTip = (e, text) => { tip.textContent = text; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; tip.style.opacity = 1; };
+  const hideTip = () => { tip.style.opacity = 0; };
+  const cs = document.getElementById("cost-svg");
+  const data = [
+    ["HTTP request to response, Ephemeral", 80, 0],
+    ["HTTP request to response, Balanced", 80, 3],
+    ["HTTP request to response, Durable", 153, 12],
+    ["WriteLine sequence, Balanced", 48, 3],
+    ["Ten WriteLines, Durable", 230, 33],
+    ["Fork, wait, resume, join, Balanced", 142, 11],
+    ["Forty WriteLines, Durable", 680, 123]
+  ];
+  const x0 = 320, k = 0.8, top = 20, rh = 52;
+  for (let v = 0; v <= 700; v += 100) {
+    const x = x0 + v * k;
+    cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + data.length * rh }));
+    cs.appendChild(el("text", { class: "ts", x, y: top + data.length * rh + 18, "text-anchor": "middle" }, String(v)));
+  }
+  cs.appendChild(el("text", { class: "ts", x: x0 + 280, y: top + data.length * rh + 36, "text-anchor": "middle" }, "PostgreSQL round trips per run"));
+  data.forEach(([label, today, model], n) => {
+    const y = top + n * rh;
+    cs.appendChild(el("text", { x: x0 - 14, y: y + 30, "text-anchor": "end" }, label));
+    const tw = Math.max(today * k, 2), mw = Math.max(model * k, 2);
+    const t = el("rect", { x: x0, y: y + 10, width: tw, height: 14, rx: 3 }); t.style.fill = "var(--hot)";
+    const m = el("rect", { x: x0, y: y + 27, width: mw, height: 14, rx: 3 }); m.style.fill = "var(--accent)";
+    cs.appendChild(t); cs.appendChild(m);
+    cs.appendChild(el("text", { class: "ts", x: x0 + tw + 6, y: y + 22 }, String(today)));
+    cs.appendChild(el("text", { class: "ts", x: x0 + mw + 6, y: y + 39 }, String(model)));
+    const hit = el("rect", { x: 0, y: y + 4, width: 960, height: rh - 4, fill: "transparent" });
+    const msg = label + ": today " + today + ", new kernel " + model + " round trips";
+    hit.addEventListener("mousemove", e => showTip(e, msg));
+    hit.addEventListener("mouseleave", hideTip);
+    cs.appendChild(hit);
+  });
+
+  /* deployment profiles */
+  const pnotes = {
+    embedded: "Embedded: one node, no transport between nodes. For a Windows service, a desktop app or a single API. Any provider; SQLite is typical.",
+    cluster: "Cluster: partitions shared fairly over the nodes, which count each other by heartbeat. For scaling out on a server database.",
+    orleans: "Orleans: an adapter for hosts that already run Orleans, written by the integrator; Elsa keeps one in its tests. Any provider. Each partition is a grain, so commits still batch.",
+    log: "Log, later: partitions as replicated-log groups on a Zeebe-like provider, for very high throughput. Synchronous HTTP still works, as Zeebe's create-instance-with-result shows."
+  };
+  const setProfile = p => {
+    document.querySelectorAll("#profile-seg [data-profile]").forEach(b => b.setAttribute("aria-pressed", b.dataset.profile === p ? "true" : "false"));
+    document.querySelectorAll(".opt[data-in]").forEach(o => o.classList.toggle("on", o.dataset.in.split(" ").includes(p)));
+    document.getElementById("profile-note").textContent = pnotes[p];
+  };
+  document.querySelectorAll("#profile-seg [data-profile]").forEach(b => b.addEventListener("click", () => setProfile(b.dataset.profile)));
+  setProfile("cluster");
+})();
+</script>
+</body>
+</html>

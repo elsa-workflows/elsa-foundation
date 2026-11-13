@@ -65,6 +65,14 @@ and does not close the remaining import or production objectives.
 
 ## Active objectives
 
+- [#3597](https://github.com/elsa-workflows/elsa-foundation/issues/3597): complete optional bpmn-js authoring
+  with seamless editing of the same process in both full-toolbox canvases and the shared Elsa inspector.
+  The representative prototype is qualified only on its recorded schema1 source. Production remains
+  unmerged and unqualified. After the owner closed aggregate PR #3950, the
+  [spec1224 delivery sequence](../../specs/1224-optional-bpmn-js-editor/delivery-slices.md) resubmits
+  coherent reviewable slices while preserving complete native configuration, identities, history and DI.
+  Current execution admission remains separate from full-spec execution-model delivery; this feature
+  does not resume any other owner's paused stream or introduce a replacement engine.
 - [#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736): refuse to import or publish BPMN whose
   meaning changed on import.
 - Library follow-ups: [valence-works/bpmn#27](https://github.com/valence-works/bpmn/issues/27) (cycles that
