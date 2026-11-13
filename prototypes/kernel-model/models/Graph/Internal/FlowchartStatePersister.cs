@@ -159,6 +159,11 @@ public sealed class FlowchartStatePersister
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(state);
 
+        // Main's runtime refuses a terminal decision that also schedules children
+        // (WorkflowInvokeActivitySchedulerWorkHandler, StructuralCallbackEvaluation); the host here would otherwise run them.
+        if (kind != FlowchartStepKind.Defer && run.Scheduled.Count > 0)
+            throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same execution.");
+
         return new FlowchartStep(kind, PruneForPersistence(state), run.Scheduled.ToArray(), outcome, fault);
     }
 

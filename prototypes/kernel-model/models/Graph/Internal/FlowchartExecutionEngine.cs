@@ -44,7 +44,8 @@ public sealed class FlowchartExecutionEngine(
 
         if (startNode is null)
         {
-            return new FlowchartStep(FlowchartStepKind.Complete, FlowchartStatePersister.CreateInitialState(null), []);
+            // Main completes here (outcome Done) and stages no state; the initial state is returned so State is never null.
+            return new FlowchartStep(FlowchartStepKind.Complete, FlowchartStatePersister.CreateInitialState(null), [], FlowchartOutcomes.Done);
         }
 
         state ??= FlowchartStatePersister.CreateInitialState(startNode.NodeId);

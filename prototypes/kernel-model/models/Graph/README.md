@@ -15,15 +15,21 @@ verbatim copy). Main's product Flowchart is unchanged.
 |---|---|---|
 | `IRuntimeActivityExecutionContext`: the container's execution id, trigger, `ScheduleChildActivity` with command metadata and provenance | `FlowchartRun`: the container's execution id, the trigger, and the list of `FlowchartScheduledNode` the engine asked for | The engine decides; the host schedules |
 | `ActivityChildCompletedContext` plus the work item's command metadata (path id, scope id) | `FlowchartChildCompletion`, which carries the path and scope ids the host was given | The same facts, handed back by the host |
-| `RuntimeStructuralContinuation` (Defer, Complete, Faulted) with the private state staged on it | `FlowchartStep`: kind, the state main stages (pruned for persistence, #382), the scheduled nodes, outcome or fault | A pure step: `(graph, state, one callback) -> (state, schedules, continuation)` |
+| `RuntimeStructuralContinuation` (Defer, Complete, Faulted) with the private state staged on it | `FlowchartStep`: kind, the state main stages (pruned for persistence, #382), the scheduled nodes, outcome or fault. An empty graph completes with Done and returns the initial state (main stages nothing there) | A pure step: `(graph, state, one callback) -> (state, schedules, continuation)` |
+| Main's runtime refuses a terminal decision (complete, fault) that also schedules children | `FlowchartStatePersister.StageState` throws the same `InvalidOperationException` | A host would otherwise run them |
+| `FlowchartScheduler` passes command metadata and `ActivitySchedulingProvenance` (branch, iteration, workflow execution) to the runtime | The same facts as one `FlowchartScheduledNode`; branch and workflow ids are the host's | No runtime |
+| `FlowchartStatePersister.LoadState` reads the private-state envelope | Not taken; the host passes the state back | No envelope |
 | `StartAsync`, `OnChildCompletedAsync`, `OnChildFaultedAsync` read the graph from the executable node and load the state from the private state | `Start`, `OnChildCompleted`, `OnChildFaulted` take the graph and the state | The host holds both |
-| `FlowchartGraph.From(ExecutableNode)` reads the activities slot and the structure payload | `FlowchartGraph.From(children, FlowchartStructure)`; `FlowchartNode` is an id and a trigger flag | No executable node |
+| `FlowchartGraph.From(ExecutableNode)` reads the activities slot and the structure payload, and checks its kind and schema version | `FlowchartGraph.From(children, FlowchartStructure)`; `FlowchartNode` is an id and a trigger flag; no slot, kind or version to check | No executable node |
 | `ActivityOutcomes.Done`, `ActivityOutcomes.Break` | `FlowchartOutcomes` | No Elsa constants |
-| `FlowchartStructure.Variables`, `FlowchartAuthoredStructure`, the structure handler, start-entry provider, replay-safe routing probe, child-result analysis | Not taken | Design time and Elsa runtime plumbing, not the engine |
+| `FlowchartStructure.Variables` (removed from the copied record), `FlowchartAuthoredStructure`, the structure handler, start-entry provider, replay-safe routing probe, child-result analysis | Not taken | Design time and Elsa runtime plumbing, not the engine |
 | `ActivitiesFlowchartFeature` (DI) | `FlowchartEngines.Create(options, extraPolicies)` | The same collaborators and built-in policies, without a container |
 
-Everything else (the join coordinator, policy applier, scope resolver, state mutator, diagnostics, pruning, the
-policies and the models) is main's code with its namespace changed.
+Beyond the table, the files that take main's runtime context (the join coordinator, policy applier, scheduler and
+engine) take `FlowchartRun` instead, with `context.ContainerExecutionId` where main reads the activity execution id;
+the rest (scope resolver, state mutator, diagnostics, pruning, the policies and the models) is main's code with its
+namespace changed. Main's metadata-key and state-type constants on the engine are kept, unused, so that the file
+still reads as main's.
 
 ## The corpus
 
@@ -36,3 +42,12 @@ to main's, so the extracted engine makes the same state mutations in the same or
 ```
 dotnet test models/Graph.Tests -c Release
 ```
+
+What the port does not assert, because it belongs to Elsa's runtime: incident ids and activity execution statuses
+(main's fault-join and implicit-join tests), and the flowchart's fault count (main's ambiguous-loopback test; here
+the fault message and that nothing ran). The execution-id pools are main's, so each test still bounds how many
+children may run. Not ported: main's `FlowchartExecutionEngineTests`, `FlowchartTriggerStartTests`,
+`FlowchartExecutionStateGoldenTests`, `FlowchartStateGrowthTests`, `FlowchartRoutingTableDifferentialTests`,
+`FlowchartPolicyContractTests`, `FlowchartIterationKeyDerivationTests` and the activity, structure-conversion,
+scoped-variable and harness tests. Trigger starts and start-entry selection are covered only by the code being
+main's.
