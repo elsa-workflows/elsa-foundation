@@ -751,7 +751,7 @@ public static class Semantics
         {
             var lease = await c.Take(0);
             var ids = Enumerable.Range(0, 850).Select(i => $"0/v{i:D3}").ToList();
-            // In commits of 170 and 200 (the kernel flushes at most 500 rows per commit; MySQL's provider failed one commit of 850).
+            // In commits of 170 and 200: MySQL's provider fails one commit of about 420 or more of these (issue #4358).
             for (var at = 0; at < 850; at += 170)
             {
                 var (from, chunk) = (at, ids.Skip(at).Take(170).Select(id => Make.New(id)).ToList());
