@@ -11,21 +11,30 @@ internal static class TerminalReceipts
         var modes = new[] { Modes.Balanced, Modes.Durable };
         var endings = new[] { "completed", "cancelled-queued", "cancelled-selected" };
         var controls = new[] { (AdmissionFlaw.DropMetadata, "T1"), (AdmissionFlaw.IgnoreRetention, "T2"),
-            (AdmissionFlaw.KeepPayload, "T3"), (AdmissionFlaw.Restamp, "T4") };
+            (AdmissionFlaw.KeepPayload, "T3"), (AdmissionFlaw.Restamp, "T4"),
+            (AdmissionFlaw.UnsafeNull, "T5"), (AdmissionFlaw.ReleaseClockEarly, "T6") };
         foreach (var mode in modes)
         foreach (var nested in new[] { false, true })
         foreach (var ending in endings)
             if (list) Console.WriteLine($"terminal:{mode},nested={nested},ending={ending}");
             else RunCase(mode, nested, ending);
+        if (list)
+        { Console.WriteLine("terminal:null-state"); Console.WriteLine("terminal:shared-clock"); }
+        else { TerminalEdges.NullState(); TerminalEdges.SharedClock(); }
         foreach (var (defect, assertion) in controls)
         {
             if (list) { Console.WriteLine("terminal-control:" + defect); continue; }
-            try { RunCase(Modes.Balanced, false, "completed", defect); }
+            try
+            {
+                if (defect == AdmissionFlaw.UnsafeNull) TerminalEdges.NullState(defect);
+                else if (defect == AdmissionFlaw.ReleaseClockEarly) TerminalEdges.SharedClock(defect);
+                else RunCase(Modes.Balanced, false, "completed", defect);
+            }
             catch (InvalidOperationException error) when (error.Message.StartsWith(assertion + ":", StringComparison.Ordinal))
             { Console.WriteLine($"Detected {defect}: {error.Message}"); continue; }
             throw new InvalidOperationException($"Control {defect} missed named assertion {assertion}");
         }
-        if (!list) Console.WriteLine("12/12 terminal schedules passed;4/4 named controls detected. Compatible-state in-memory model only.");
+        if (!list) Console.WriteLine("14/14 terminal schedules passed;6/6 named controls detected. Compatible-state in-memory model only.");
     }
 
     private static void RunCase(string mode, bool nested, string ending, AdmissionFlaw defect = AdmissionFlaw.None)
@@ -109,15 +118,17 @@ internal static class TerminalReceipts
         Require(inbox.Receipts["b"].Status == "NotProcessed", "T0", "queued input not finalized");
         var expected = ending switch { "completed" => "Completed", "cancelled-selected" => "Interrupted", _ => "NotProcessed" };
         Require(inbox.Receipts["a"].Status == expected, "T0", "selected/queued disposition conflated");
-        var until = inbox.Receipts["a"].ValidUntil;
-        Require(until == world.Time + 1000 && inbox.Receipts["a"].FinalizedAt == world.Time,
+        var clocks = CommitClockFacts.Read(world.Store.Instances[target.Id])!;
+        var finalized = clocks.GetValueOrDefault(inbox.Receipts["a"].Clock!);
+        var until = finalized + inbox.Receipts["a"].Retention;
+        Require(until == world.Time + 1000 && finalized == world.Time,
             "T4", "long pending input lost its full final retention window");
         if (ending == "completed" && nested)
             Require(State().Variables["returned"]!.GetValue<bool>(), "T0", "ordinary caller did not continue");
         TerminalReceiver.Forbidden = true;
         NativeWorkflows.Registry.Remove(workflow.Id);
         var found = Request(ReceiptQuery.Kind, new ReceiptQuery(frame, "a"));
-        Require(found.Result == "Found" && found.Actor == target.Id && found.Frame == frame && found.Status == expected && found.ValidUntil == until,
+        Require(found.Result == "Found" && found.Actor == target.Id && found.Frame == frame && found.Status == expected && found.ValidUntil == until && found.FinalizedAt == finalized,
             "T1", "cold terminal query lost exact identity/outcome");
         Apply(new("tick", 400)); Apply(new("skew", 0, 100_000));
         found = Request(ReceiptQuery.Kind, new ReceiptQuery(frame, "a"));

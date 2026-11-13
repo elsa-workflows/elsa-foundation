@@ -40,9 +40,9 @@ public interface IExecutionModel
 public interface IModelMetadata
 {
     bool HandlesMetadata(Message message);
-    ValueTask MetadataAsync(ITurn turn, CancellationToken cancellationToken);
-    void TerminateMetadata(object state, long now);
-    bool ProtectsDeletion(object state, long now);
+    ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken);
+    void TerminateMetadata(object state);
+    bool ProtectsDeletion(object state, long now, ICommitClock clock);
 }
 
 public interface ITurn

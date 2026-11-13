@@ -23,31 +23,46 @@ internal static class InvocationLifetime
         return ValueTask.CompletedTask;
     }
 
-    internal static InputReceipt Final(InputReceipt receipt, string status, string outcome, long now) =>
-        receipt with { Status = status, Outcome = outcome, FinalizedAt = now,
-            ValidUntil = receipt.Retention is { } duration ? checked(now + duration) : null };
+    internal static InputReceipt Final(InputReceipt receipt, string status, string outcome, string? reference) =>
+        receipt with { Status = status, Outcome = outcome, Clock = reference };
 
-    internal static void Close(NativeState state, string frame, string reason, long now, bool keepPayload = false)
+    internal static void Close(NativeState state, string frame, string reason, string? reference, bool keepPayload = false)
     {
         if (state.Inboxes?.GetValueOrDefault(frame) is not { Closed: null } inbox) return;
         inbox.Closed = reason;
         foreach (var (id, receipt) in inbox.Receipts.ToArray())
             if (receipt.Status is "Queued" or "Selected")
-                inbox.Receipts[id] = Final(receipt, receipt.Status == "Selected" ? "Interrupted" : "NotProcessed", reason, now);
-        if (!keepPayload) inbox.Pending.Clear(); // only the receipt-owned payload area; ordinary activity state is owned elsewhere
+                inbox.Receipts[id] = Final(receipt, receipt.Status == "Selected" ? "Interrupted" : "NotProcessed", reason, reference);
+        if (!keepPayload) inbox.Pending.Clear();
     }
 
-    internal static void Terminate(NativeState state, long now, bool keepPayload = false)
+    internal static void Terminate(NativeState state, string reference, string reason, bool keepPayload = false)
     {
-        foreach (var frame in state.Inboxes?.Keys.ToArray() ?? []) Close(state, frame, "cancelled", now, keepPayload);
+        foreach (var frame in state.Inboxes?.Keys.ToArray() ?? []) Close(state, frame, reason, reference, keepPayload);
     }
 
-    internal static bool Protected(NativeState state, long now) => state.Inboxes?.Values.Any(inbox =>
-        inbox.Receipts.Values.Any(r => r.ValidUntil is null || now < r.ValidUntil)) == true;
-
-    internal static void Clean(InvocationInbox inbox, long now)
+    internal static long? Deadline(InputReceipt receipt, ICommitClock clock)
     {
+        if (receipt.Clock is not { } reference || receipt.Retention is not { } duration || clock.Resolve(reference) is not { } time)
+            return null;
+        try { return checked(time + duration); }
+        catch (OverflowException) { return null; } // unavailable time cannot authorize expiry
+    }
+
+    internal static bool Protected(NativeState state, long now, ICommitClock clock) => state.Inboxes?.Values.Any(inbox =>
+        inbox.Receipts.Values.Any(r => Deadline(r, clock) is not { } until || now < until)) == true;
+
+    internal static void Clean(NativeState state, InvocationInbox inbox, long now, ICommitClock clock, bool releaseEarly = false)
+    {
+        var removed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (id, receipt) in inbox.Receipts.ToArray())
-            if (receipt.ValidUntil is { } until && now >= until) inbox.Receipts.Remove(id);
+            if (Deadline(receipt, clock) is { } until && now >= until)
+            {
+                inbox.Receipts.Remove(id);
+                if (receipt.Clock is { } reference) removed.Add(reference);
+            }
+        var retained = state.Inboxes!.Values.SelectMany(x => x.Receipts.Values).Select(r => r.Clock).ToHashSet(StringComparer.Ordinal);
+        foreach (var reference in removed)
+            if (reference.StartsWith("turn:", StringComparison.Ordinal) && (releaseEarly || !retained.Contains(reference))) clock.Release(reference);
     }
 }

@@ -17,7 +17,9 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     /// would read the newer state wrongly and write it back older).
     /// </summary>
     public bool Withholds(InstanceRow row, ITurnServices services) =>
-        row.Status == InstanceStatus.Running && ((row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) || (row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState)));
+        (row.Status == InstanceStatus.Running && row.Suspended && !services.Has(Flaw.DeliverWhileSuspended)) ||
+        ((row.Status == InstanceStatus.Running || _models[row.Model] is IModelMetadata) &&
+         row.StateVersion > _models[row.Model].StateVersion && !services.Has(Flaw.TurnNewerState));
 
     public TurnOutcome? Command(TurnInput input)
     {
@@ -37,7 +39,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         turn.State = input.State ?? (input.Row is { } row ? ReadState(row, model, input.Services) : model.CreateState(input.Spec!));
         input.Started(turn.Inbox);
         if (input.Row is { Status: not InstanceStatus.Running } && model is IModelMetadata metadata)
-            await metadata.MetadataAsync(turn, CancellationToken.None);
+            await metadata.MetadataAsync(turn, input.Row!.Status, CancellationToken.None);
         else await model.TurnAsync(turn, CancellationToken.None);
         return turn.Seal(model.StateVersion);
     }
@@ -68,7 +70,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         if (item.Message.Kind == Kinds.Delete)
             // Only an ended instance is deleted. What arrives for it afterwards is dropped as for a missing target.
             return row.Status == InstanceStatus.Running || row.StateVersion > _models[row.Model].StateVersion ||
-                (_models[row.Model] is IModelMetadata metadata && metadata.ProtectsDeletion(ReadState(row, _models[row.Model], input.Services), input.Services.Now)) ? new TurnOutcome(instance) { Consumed = [item], State = input.State, Status = row.Status }
+                (_models[row.Model] is IModelMetadata metadata && metadata.ProtectsDeletion(ReadState(row, _models[row.Model], input.Services), input.Services.Now, new DurableTurn(input).Clock)) ? new TurnOutcome(instance) { Consumed = [item], State = input.State, Status = row.Status }
                 : new TurnOutcome(instance) { Delete = true, Expected = row.Revision, Consumed = [item], Unsubscribe = true, Status = row.Status, Journal = Json.Write(new[] { "deleted" }) };
         var suspended = item.Message.Kind == Kinds.Suspend;
         if (row.Status != InstanceStatus.Running) return new TurnOutcome(instance) { Consumed = [item], Status = row.Status };
@@ -90,7 +92,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         if (running && row.StateVersion <= _models[row.Model].StateVersion && _models[row.Model] is IModelMetadata metadata)
         {
             var state = ReadState(row, _models[row.Model], input.Services);
-            metadata.TerminateMetadata(state, input.Services.Now);
+            metadata.TerminateMetadata(state);
             next = next with { State = Json.Write(state), StateVersion = _models[row.Model].StateVersion };
         }
         if (running) next = WorkflowCommitClock.End(next);

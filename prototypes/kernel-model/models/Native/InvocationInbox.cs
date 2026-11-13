@@ -11,9 +11,9 @@ public sealed record InvocationInput(string Frame, string Id, string Name, strin
 }
 public sealed record ReceiptQuery(string Frame, string Id) { public const string Kind = "native.receipt-query"; }
 public sealed record Admission(string Frame, string Id, string Result, long? Order = null, string? Outcome = null,
-    string? Actor = null, string? Status = null, long? ValidUntil = null);
+    string? Actor = null, string? Status = null, long? ValidUntil = null, long? FinalizedAt = null);
 public sealed record InputReceipt(string Digest, long Order, string Status = "Queued", string? Outcome = null,
-    long? Retention = null, long? FinalizedAt = null, long? ValidUntil = null);
+    long? Retention = null, string? Clock = null);
 public sealed class InvocationInbox
 {
     public int Capacity { get; set; }
@@ -26,7 +26,7 @@ public sealed class InvocationInbox
 }
 
 [Flags]
-public enum AdmissionFlaw { None = 0, Hydrate = 1, ForgetIds = 2, IgnoreCapacity = 4, EarlyReply = 8, BlockedSignal = 16, DropMetadata = 32, IgnoreRetention = 64, KeepPayload = 128, Restamp = 256 }
+public enum AdmissionFlaw { None = 0, Hydrate = 1, ForgetIds = 2, IgnoreCapacity = 4, EarlyReply = 8, BlockedSignal = 16, DropMetadata = 32, IgnoreRetention = 64, KeepPayload = 128, Restamp = 256, UnsafeNull = 512, ReleaseClockEarly = 1024 }
 
 internal sealed partial class Burst
 {
@@ -60,6 +60,9 @@ internal sealed partial class Burst
     internal ValueTask MetadataAsync()
     {
         if (AdmissionHas(AdmissionFlaw.DropMetadata)) return ValueTask.CompletedTask;
+        if (ended is { } status && turn.Clock.Resolve(WorkflowCommitClock.Terminal) is not null)
+            InvocationLifetime.Terminate(_s, WorkflowCommitClock.Terminal, status switch
+            { InstanceStatus.Finished => "completed", InstanceStatus.Cancelled => "cancelled", _ => "faulted" }, AdmissionHas(AdmissionFlaw.KeepPayload));
         foreach (var message in turn.Inbox.Where(model.HandlesMetadata))
         {
             Admission result;
@@ -80,32 +83,38 @@ internal sealed partial class Burst
             return new("", "", "Invalid", Actor: turn.Instance.Ref.Id);
         if (_s.Inboxes?.GetValueOrDefault(query.Frame) is not { } inbox)
             return new(query.Frame, query.Id, "UnknownInvocation", Actor: turn.Instance.Ref.Id);
-        InvocationLifetime.Clean(inbox, turn.Now);
+        InvocationLifetime.Clean(_s, inbox, turn.Now, turn.Clock, AdmissionHas(AdmissionFlaw.ReleaseClockEarly));
         var receipt = inbox.Receipts.GetValueOrDefault(query.Id);
-        if (AdmissionHas(AdmissionFlaw.Restamp) && receipt?.FinalizedAt is not null)
-            inbox.Receipts[query.Id] = receipt = InvocationLifetime.Final(receipt, receipt.Status, receipt.Outcome!, turn.Now);
-        return new(query.Frame, query.Id, ended && inbox.Closed is null ? "TerminalMetadataUnresolved"
-            : receipt is null ? "MissingOrExpired" : "Found", receipt?.Order, receipt?.Outcome,
-            turn.Instance.Ref.Id, receipt?.Status, receipt?.ValidUntil);
+        return Receipt(query.Frame, query.Id, ended is not null && inbox.Closed is null ? "TerminalMetadataUnresolved"
+            : receipt is null ? "MissingOrExpired" : "Found", receipt);
+    }
+
+    private Admission Receipt(string frame, string id, string result, InputReceipt? receipt)
+    {
+        var finalized = receipt?.Clock is { } reference ? turn.Clock.Resolve(reference) : null;
+        var until = receipt is null ? null : InvocationLifetime.Deadline(receipt, turn.Clock);
+        if (AdmissionHas(AdmissionFlaw.Restamp) && finalized is not null && receipt?.Retention is { } duration)
+            until = checked(turn.Now + duration);
+        return new(frame, id, result, receipt?.Order, receipt?.Outcome, turn.Instance.Ref.Id, receipt?.Status, until, finalized);
     }
 
     private Admission Admit(InvocationInput? input)
     {
         if (input is null) return new("", "", "Invalid", Actor: turn.Instance.Ref.Id);
         Admission Result(string result, InputReceipt? receipt = null) =>
-            new(input.Frame, input.Id, result, receipt?.Order, receipt?.Outcome, turn.Instance.Ref.Id, receipt?.Status, receipt?.ValidUntil);
+            Receipt(input.Frame, input.Id, result, receipt);
         if (string.IsNullOrEmpty(input.Frame) || string.IsNullOrEmpty(input.Id) || input.Id.Length > 128 ||
             string.IsNullOrEmpty(input.Name) || input.Name.Length > 128 || input.Value?.Length > 1024)
             return Result("Invalid");
         if (_s.Inboxes?.GetValueOrDefault(input.Frame) is not { } inbox) return Result("UnknownInvocation");
-        if (ended && inbox.Closed is null) return Result("TerminalMetadataUnresolved");
-        InvocationLifetime.Clean(inbox, turn.Now);
+        InvocationLifetime.Clean(_s, inbox, turn.Now, turn.Clock, AdmissionHas(AdmissionFlaw.ReleaseClockEarly));
         if (AdmissionHas(AdmissionFlaw.Hydrate))
             Hydrator.Create(_wf.Nodes[_s.Frames[input.Frame].Node], binding => Evaluate(binding, new FrameScope(this, _s.Frames[input.Frame])));
         var digest = Digest(input);
         if (!AdmissionHas(AdmissionFlaw.ForgetIds) && inbox.Receipts.TryGetValue(input.Id, out var existing))
             return Result(existing.Digest == digest ? "Duplicate" : "Conflict", existing);
-        if (inbox.Closed is not null || ended) return Result("Ended");
+        if (ended is not null && inbox.Closed is null) return Result("TerminalMetadataUnresolved");
+        if (inbox.Closed is not null || ended is not null) return Result("Ended");
         if (!_s.Frames.ContainsKey(input.Frame)) return Result("UnknownInvocation");
         if (inbox.Retention is null) return Result("UnsupportedPolicy");
         if (inbox.Next == long.MaxValue) return Result("OrderExhausted");
@@ -129,11 +138,20 @@ internal sealed partial class Burst
         return "v1:" + Convert.ToHexString(SHA256.HashData(bytes.ToArray()));
     }
 
+    private void CloseInbox(string frame, string reason)
+    {
+        if (_s.Inboxes?.GetValueOrDefault(frame) is not { Closed: null } inbox) return;
+        var reference = inbox.Receipts.Values.Any(r => r.Retention is not null && (r.Status is "Queued" or "Selected"))
+            ? turn.Clock.Capture() : null;
+        InvocationLifetime.Close(_s, frame, reason, reference, AdmissionHas(AdmissionFlaw.KeepPayload));
+    }
+
     internal void RegisterInbox(Frame frame, int capacity, int receipts, TimeSpan? retention)
     {
         if (capacity < 1 || receipts < capacity) throw new ArgumentOutOfRangeException(nameof(capacity));
         var duration = retention is null ? (long?)null : checked((long)Math.Ceiling(retention.Value.TotalMilliseconds));
         if (duration is <= 0) throw new ArgumentOutOfRangeException(nameof(retention));
+        if (duration is not null) turn.Clock.Require(); // opt in before any promised window, even while all inputs are pending
         var inboxes = _s.Inboxes ??= new(StringComparer.Ordinal);
         if (!inboxes.TryAdd(frame.Id, new InvocationInbox { Capacity = capacity, ReceiptCapacity = receipts, Retention = duration }))
             throw new InvalidOperationException("Invocation inbox already registered.");
@@ -153,7 +171,7 @@ internal sealed partial class Burst
         if (!inbox.Receipts.TryGetValue(id, out var receipt) || receipt.Status != "Selected")
             throw new InvalidOperationException("Only a selected input may finish.");
         inbox.Pending.RemoveAll(i => i.Id == id);
-        inbox.Receipts[id] = InvocationLifetime.Final(receipt, "Completed", outcome, turn.Now);
+        inbox.Receipts[id] = InvocationLifetime.Final(receipt, "Completed", outcome, receipt.Retention is not null ? turn.Clock.Capture() : null);
     }
 }
 

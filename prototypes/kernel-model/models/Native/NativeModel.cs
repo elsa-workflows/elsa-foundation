@@ -133,14 +133,16 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken) => new Burst(this, turn, cancellationToken).RunAsync();
 
     public bool HandlesMetadata(Message message) => message.Kind is InvocationInput.Kind or ReceiptQuery.Kind;
-    public ValueTask MetadataAsync(ITurn turn, CancellationToken cancellationToken) => turn.State is NativeState
-        ? new Burst(this, turn, cancellationToken, true).MetadataAsync() : InvocationLifetime.Missing(turn);
-    public void TerminateMetadata(object state, long now)
+    public ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken) => turn.State is NativeState
+        ? new Burst(this, turn, cancellationToken, status).MetadataAsync() : InvocationLifetime.Missing(turn);
+    public void TerminateMetadata(object state)
     {
-        if (state is NativeState native) InvocationLifetime.Terminate(native, now, (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0);
+        if (state is NativeState native) InvocationLifetime.Terminate(native, WorkflowCommitClock.Terminal, "cancelled", (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0);
     }
-    public bool ProtectsDeletion(object state, long now) => (Options.AdmissionFlaws & AdmissionFlaw.IgnoreRetention) == 0 &&
-        state is NativeState native && InvocationLifetime.Protected(native, now);
+    public bool ProtectsDeletion(object state, long now, ICommitClock clock) => (Options.AdmissionFlaws & AdmissionFlaw.IgnoreRetention) == 0 &&
+        ((Options.AdmissionFlaws & AdmissionFlaw.UnsafeNull) != 0
+            ? InvocationLifetime.Protected((NativeState)state, now, clock)
+            : state is NativeState native && InvocationLifetime.Protected(native, now, clock));
 
     /// <summary>A Background leaf, run as a background job: its inputs were materialized in the turn that started it.</summary>
     public async ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
@@ -155,7 +157,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 }
 
 /// <summary>One turn: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
-internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken, bool ended = false)
+internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken, InstanceStatus? ended = null)
 {
     private readonly NativeState _s = (NativeState)turn.State;
     private Workflow _wf => model.Registry.Get(turn.Instance.Definition); // metadata-only turns never resolve authored definitions
@@ -424,7 +426,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     internal void Complete(Frame frame, string outcome, JsonNode? result)
     {
-        InvocationLifetime.Close(_s, frame.Id, "completed", turn.Now, AdmissionHas(AdmissionFlaw.KeepPayload));
+        CloseInbox(frame.Id, "completed");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
         if (result is not null) _s.Results[frame.Node] = result;
@@ -465,7 +467,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     internal void Fail(Frame frame, ActivityFault fault)
     {
-        InvocationLifetime.Close(_s, frame.Id, "faulted", turn.Now, AdmissionHas(AdmissionFlaw.KeepPayload));
+        CloseInbox(frame.Id, "faulted");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
         turn.Record($"f:{frame.Id}:{frame.Node}");
@@ -505,7 +507,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     {
         if (_s.Frames.Remove(frame, out var f))
         {
-            InvocationLifetime.Close(_s, frame, "cancelled", turn.Now, AdmissionHas(AdmissionFlaw.KeepPayload));
+            CloseInbox(frame, "cancelled");
             foreach (var (id, wait) in _s.Waits.Where(w => w.Value.Frame == frame).ToList())
             {
                 _s.Waits.Remove(id);

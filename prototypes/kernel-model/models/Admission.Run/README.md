@@ -44,25 +44,28 @@ assertion must fail and be replaced with a rejection regression. See the [termin
 
 ## Terminal receipt slice
 
-`--list-terminal` inventories twelve compatible-state schedules and four isolated controls; `--terminal` runs
+`--list-terminal` inventories fourteen compatible-state schedules and six isolated controls; `--terminal` runs
 them. The slice adds an optional model-owned metadata contract at the workflow actor, cold receipt queries and
-retries, native normal/forced terminal settlement, the existing database-anchored owner clock and fenced normal
-delete refusal. Pending inputs have no expiry; each final disposition starts the full captured duration.
+retries, native normal/forced terminal settlement, persisted commit-time references and fenced normal delete refusal. Pending inputs have no expiry; each final disposition starts the full captured duration.
 Queries do not restamp it. The fixture removes its definition from the registry and forbids receiver construction.
 The recreation diagnostic now waits out its explicit promise before normal deletion; its identity bug remains.
 
 Native state v3 supports v1/v2 reads. Legacy receipts get no invented retention window and remain protected;
 legacy inboxes without a captured policy refuse new admissions. An older model refuses deleting newer state.
-Forced termination of an unreadable future state preserves its opaque state; its eventual metadata lookup reports
-`TerminalMetadataUnresolved` rather than invent a finalization time. A shared authoritative end anchor for this
-mixed-version case remains unresolved: this slice does NOT qualify that case or close the full terminal plan.
+Forced termination preserves unreadable future private state and captures the workflow-owned end fact. A compatible
+reader can project pending dispositions from that original fact. If the fact is absent, lookup reports
+`TerminalMetadataUnresolved` without inventing a time; existing ID/content conflicts still resolve first. This
+slice does not yet qualify actual future native binaries or close the full terminal plan.
 
-The current twelve schedules do not yet qualify completion/cancellation/query commit uncertainty, actual stale
-delete execution, re-entry, equal frame IDs in different actors, parent-finished notice counts, active receipt
-budget reuse after expiry, or legacy-version fixtures. Shared identity, remaining time/version obligations,
+The current fourteen schedules do not yet qualify completion/cancellation/query commit uncertainty, actual stale
+delete execution, re-entry, equal frame IDs in different actors, parent-finished notice counts, active receipt budget reuse after expiry or legacy-version fixtures. Shared identity, remaining time/version obligations,
 transport/value retention roots, provider/process restart, full business-input adapter and Studio remain open.
 No execution result is asserted until the exact-source packet is recorded. No product schema/default is selected.
 
-Work-in-progress finding: source review found that a pre-commit `turn.Now` is insufficient to promise a full R
-if the finalizing commit is delayed. The terminal fixture now delays that commit by more than R. This source is
-not merge-ready until an authoritative persisted commit anchor is implemented and independently qualified.
+
+The earlier delayed-commit T4 failure remains in its separate raw packet. This source replaces staged absolute
+expiry with an immutable reference to the actual finalizing commit. The fourteen schedules include the delayed
+closing commit, cold definition-free receipt access, a normal failed-start JSONnull lookup/Delete, and different
+invocations sharing a commit fact with different receipt windows. Cleanup must keep the shared fact until the
+last reference expires and must preserve the workflow-owned end fact. The new exact-source packet is still
+required before claiming that the original T4 failure is resolved.
