@@ -98,7 +98,7 @@ public sealed class OrleansProvider : IRuntimeProvider
 
         public async Task KillAsync()
         {
-            await runtime.StopAsync();
+            runtime.Crash();
             await cluster.KillSiloAsync(silo);
         }
     }
