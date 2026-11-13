@@ -49,6 +49,8 @@ public interface ITurn
     /// turn ends instead, so it may see output of a turn whose commit is then lost.
     /// </summary>
     void Emit(string channel, object? item);
+    /// <summary>Reply only to this turn's consumed request, after commit, without observing future workflow output.</summary>
+    void Reply(Message request, string channel, object? item);
 
     /// <summary>Returns the message's id, derived from this instance and its revision: what <see cref="Recall"/> takes.</summary>
     string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);
@@ -78,9 +80,8 @@ public interface ITurn
     void Unsubscribe(string key, string wait);
 
     /// <summary>
-    /// True when this message was held by an owner before this one, so a turn that took it may have run already and
-    /// its result been lost (merge, friction F-N6). A first delivery is false. It may say true for a message whose
-    /// earlier owner never ran it: "may have run", never "did run".
+    /// True when a polled row was already marked seen or on trial when observed. This is a delivery-history hint,
+    /// not proof that a turn executed. False does not prove no other owner ran it, including during takeover races.
     /// </summary>
     bool Redelivered(Message message);
 

@@ -51,7 +51,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Marked;             // its row says seen at this epoch
     internal bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
-    internal bool Again;              // its row was seen at an earlier epoch: a turn may have run with it (DurableTurn.Redelivered)
+    internal bool Again;              // its polled row already had a seen or trial marker (DurableTurn.Redelivered)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal int Attempts;
     internal bool Ticket;             // a kernel message, not (yet) for the model
@@ -114,6 +114,7 @@ public sealed class TurnOutcome(string instance)
     public InstanceStatus? Status = InstanceStatus.Running;     // after this turn; null when the instance does not exist
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
+    public List<RequestReply> Replied = [];
     public List<Delivery> Consumed = [], Held = [];
     public List<string> Cancelled = [];
     public List<Message> Sent = [];
@@ -123,6 +124,9 @@ public sealed class TurnOutcome(string instance)
 
     internal bool Durable => Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id));
 }
+
+/// <summary>A reply to one consumed request, after commit; it does not subscribe a workflow observer.</summary>
+public sealed record RequestReply(string Message, string To, string Channel, object? Item);
 
 /// <summary>
 /// The durable half of one turn: what it sends, holds, recalls, subscribes, publishes and emits, and the background jobs
@@ -135,6 +139,7 @@ public sealed class DurableTurn
     private readonly HashSet<string> _fresh = [], _volatile = [], _started = [], _held = [];
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<(string, object?)> _emitted = [];
+    private readonly List<RequestReply> _replied = [];
     private readonly HashSet<SubscriptionRow> _kept = [];
     private readonly List<string> _jobs, _cancelled = [];
     private int _ordinal;
@@ -167,7 +172,14 @@ public sealed class DurableTurn
 
     public void Emit(string channel, object? item) => _emitted.Add((channel, item));
 
-    public bool Redelivered(Message message) => _input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false;
+    public void Reply(Message request, string channel, object? item)
+    {
+        if (!Inbox.Contains(request) || _held.Contains(request.Id) || _replied.Any(r => r.Message == request.Id))
+            throw new InvalidOperationException("Reply must name one consumed request of this turn, once.");
+        if (request.ReplyTo is { } to) _replied.Add(new(request.Id, to, channel, item));
+    }
+
+    public bool Redelivered(Message message) => !Services.Has(Flaw.HideDeliveryHistory) && (_input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false);
 
     // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
     // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.
@@ -219,6 +231,7 @@ public sealed class DurableTurn
     public void Hold(Message message)
     {
         if (!Inbox.Contains(message)) throw new InvalidOperationException($"Message '{message.Id}' is not in this turn's inbox.");
+        if (_replied.Any(r => r.Message == message.Id)) throw new InvalidOperationException("A replied request cannot be held.");
         _held.Add(message.Id);
     }
 
@@ -255,7 +268,7 @@ public sealed class DurableTurn
     {
         Consumed = _input.Taken.Where(i => !_held.Contains(i.Message.Id)).ToList(),
         Held = _input.Taken.Where(i => _held.Contains(i.Message.Id)).ToList(),
-        Cancelled = _cancelled, Spec = _input.Spec, Status = status, Revision = Revision, Emitted = _emitted,
+        Cancelled = _cancelled, Spec = _input.Spec, Status = status, Revision = Revision, Emitted = _emitted, Replied = _replied,
     };
 
     /// <summary>The turn's end is its commit, and the only one: the row, the journal, and everything it sent.</summary>

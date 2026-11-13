@@ -1,5 +1,5 @@
 import { readActivityInputOptionsProvider, type StudioActivityInputDescriptor, type StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
-import type { ActivityDataContextResult, ActivityDataSourceFacts, ActivityDataTarget } from "./api/activityDataSelection";
+import type { ActivityDataContextResult, ActivityDataSourceFacts, ActivityDataSourceQuery, ActivityDataTarget } from "./api/activityDataSelection";
 import { acceptsOnlySecretReference } from "./activityProperties";
 import { formatArgumentType } from "./workflowReferenceAuthoring";
 import { readArgumentType } from "./workflowProperties";
@@ -62,7 +62,7 @@ export interface ActivityDataSelectionHost {
   /** True while the owner's own save is in flight: a stale answer then means "wait", not "changed elsewhere". */
   saving: boolean;
   /** One page of the sources for the current document, starting at `skip`. */
-  requestSources(target: ActivityDataTarget, signal: AbortSignal, skip: number): Promise<ActivityDataContextResult>;
+  requestSources(target: ActivityDataTarget, signal: AbortSignal, skip: number, query?: ActivityDataSourceQuery): Promise<ActivityDataContextResult>;
   /** Null when the activity is not in the current document. */
   describeActivity(nodeId: string): ActivityDataProducerDescription | null;
   revealActivity?(nodeId: string): void;
@@ -142,13 +142,17 @@ export async function collectSourcePages(
     const result = await requestPage(page * sourcePageSize);
     if (signal.aborted) throw new DOMException("The request was aborted.", "AbortError");
     if (result.state !== "supported" && result.state !== "empty") return result;
-    // Every page must answer the document the first page answered; a later page for an edited document would mix
-    // two documents' facts, so the read reports itself stale and is asked again for the current one.
-    if (combined && result.documentRevision !== combined.documentRevision) {
-      return { ...result, state: "stale", code: "activity-data.revision-changed", target: null, sources: [], hasMoreSources: false };
+    // Pages share document/base/snapshot and capability facts. Context revisions include the query (including skip),
+    // so they may differ legitimately and are never represented as one authority for a combined page set.
+    if (combined && (result.documentRevision !== combined.documentRevision || result.baseRevision !== combined.baseRevision ||
+      result.snapshotHash !== combined.snapshotHash || result.resourceId !== combined.resourceId ||
+      result.resourceKind !== combined.resourceKind || result.target?.target?.nodeId !== combined.target?.target?.nodeId ||
+      result.target?.target?.inputKey !== combined.target?.target?.inputKey || result.contractRevision !== combined.contractRevision ||
+      (result.memberReadsEnabled === true) !== (combined.memberReadsEnabled === true))) {
+      return { ...result, state: "stale", code: "activity-data.revision-changed", memberReadsEnabled: false, target: null, sources: [], hasMoreSources: false };
     }
     combined = combined
-      ? { ...result, target: combined.target ?? result.target, sources: [...combined.sources, ...result.sources] }
+      ? { ...result, contextRevision: null, target: combined.target ?? result.target, sources: [...combined.sources, ...result.sources] }
       : result;
     if (!result.hasMoreSources) break;
   }

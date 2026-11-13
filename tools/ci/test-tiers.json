@@ -580,6 +580,17 @@
       "medianMinutes": null
     },
     {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": null
+    },
+    {
+      "project": "Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj",
+      "tier": "pr",
+      "trait": "child-process",
+      "medianMinutes": null
+    },
+    {
       "project": "Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.37
@@ -898,6 +909,8 @@
           "Essentials/tests/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj",
           "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
           "Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj",
+          "Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj",
+          "Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj",
           "Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj",
           "Essentials/tests/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj",
           "Essentials/tests/Secrets/Tests/Elsa.Secrets.Tests.csproj",
