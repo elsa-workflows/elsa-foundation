@@ -11,7 +11,7 @@ import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDe
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import { getDialogs } from "./dialogs";
-import { getNotifications } from "./notifications";
+import { getNotifications, notifySuccess } from "./notifications";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { CreateWorkflowDraft } from "./editorTypes";
 import { dispatchAiAction, findAiAction, getTotalPages } from "./editorListHelpers";
@@ -519,7 +519,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     if (renderGeneration !== workGenerationRef.current) return;
     navigateBrowseLocation(next, "push", true);
   }, [navigateBrowseLocation, renderGeneration]);
-  const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); getNotifications().notify({ level: "success", title: "Workflow tags updated" }); } };
+  const organizationSaved = () => { if (isCurrentGeneration()) { rebase(true); notifySuccess("Workflow tags updated"); } };
   const closeOrganization = () => {
     if (!isCurrentGeneration()) return;
     setOrganizationTarget(null); setBulkTagTargets(null);
@@ -527,8 +527,9 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     requestAnimationFrame(() => { if (isCurrentGeneration()) refreshButtonRef.current?.focus(); });
   };
   const changeFavorite = async (definition: WorkflowDefinitionSummary) => {
-    try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); if (!isCurrentGeneration()) return; getNotifications().notify({ level: "success", title: definition.favorite ? "Removed from favorites" : "Added to favorites" }); rebase(true); }
-    catch (caught) { if (isCurrentGeneration()) getNotifications().notify({ level: "error", title: caught instanceof Error ? caught.message : "Couldn't change this favorite." }); }
+    setRequestError(null);
+    try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); if (!isCurrentGeneration()) return; notifySuccess(definition.favorite ? "Removed from favorites" : "Added to favorites"); rebase(true); }
+    catch (caught) { if (isCurrentGeneration()) setRequestError({ identity: targetIdentity, message: caught instanceof Error ? caught.message : "Couldn't change this favorite." }); }
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
@@ -639,7 +640,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
       await deleteDefinitionPermanently(context, definition.id);
       if (!isCurrentGeneration()) return;
       toggleDefinitionSelection(definition.id, false);
-      getNotifications().notify({ level: "success", title: `Permanently deleted ${definition.name}` });
+      notifySuccess(`Permanently deleted ${definition.name}`);
       await refreshAfterMutation();
     } catch (e) {
       if (!isCurrentGeneration()) return;

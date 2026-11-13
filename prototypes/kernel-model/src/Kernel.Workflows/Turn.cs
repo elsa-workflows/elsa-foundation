@@ -37,6 +37,7 @@ internal sealed class Turn : ITurn
     private bool Has(Flaw flaw) => _input.Services.Has(flaw);
 
     public void Emit(string channel, object? item) => _durable.Emit(channel, item);
+    public void Reply(Message request, string channel, object? item) => _durable.Reply(request, channel, item);
     public bool Redelivered(Message message) => _durable.Redelivered(message);
     public string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null) => _durable.Send(target, kind, payload, options);
     public void Recall(string message) => _durable.Recall(message);

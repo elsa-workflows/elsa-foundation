@@ -252,7 +252,25 @@ not automatic constitution violations.
 
 ## Studio
 
+- [Dashboard native API](Essentials/src/Studio/Dashboard/Api/EXTENSION_POINTS.md)
+
+- [Dashboard definition persistence](Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
+
+- [Dashboard native management](Essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
+
 - [Dashboard query, resource and authoring contracts](Essentials/src/Studio/Dashboard/Core/EXTENSION_POINTS.md)
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)
+
+- [Workflow inspection authorization](Essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md)
+
+- [Workflow Dashboard source](Essentials/src/Workflows/Dashboard/Queries/EXTENSION_POINTS.md)
+
+- [Studio Dashboard routes and Weaver contributions](Studio/src/essentials/Elsa.Studio.Dashboard/EXTENSION_POINTS.md)
+
+- [Weaver Dashboard authoring](Extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md)
+
+- [Copilot SDK adapter boundary](Extensions/Weaver/src/GitHubCopilot/EXTENSION_POINTS.md)
+
+- [Independent Acme Processing dataset module](Extensions/Examples/src/Acme.Processing/Module/EXTENSION_POINTS.md)
