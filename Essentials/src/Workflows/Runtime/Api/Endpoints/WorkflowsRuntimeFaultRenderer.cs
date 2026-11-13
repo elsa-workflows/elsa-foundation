@@ -55,6 +55,20 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
 
         if (metadata?.GetMetadata<ActivityInspectionProblemShapeMetadata>() is { } inspection)
         {
+            if (inspection.History)
+            {
+                var problem = exception switch
+                {
+                    RuntimeHistoryUnsupportedSignal => (501, "runtime.history.unsupported", "Run history unsupported", "This host cannot provide the requested history detail."),
+                    RuntimeHistoryIntegrityException => (409, "runtime.history.invalid", "Run history invalid", "History integrity could not be established."),
+                    RuntimeHistoryUnavailableException => (503, "runtime.history.unavailable", "Run history unavailable", "Run history is temporarily unavailable. Try again."),
+                    ArgumentException => (400, "runtime.history.request-invalid", "Invalid run history request", "The history query or continuation is invalid."),
+                    _ => (500, "runtime.history.failed", "Run history inspection failed", "The run history inspection operation failed.")
+                };
+                if (problem.Item1 == 500) LogUnexpected(context, exception, inspection.Operation);
+                await ActivityExecutionProblemDetails.HistoryAsync(context, problem.Item1, problem.Item2, problem.Item3, problem.Item4);
+                return true;
+            }
             switch (exception)
             {
                 case ActivityExecutionHierarchyCursorException cursor:

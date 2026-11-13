@@ -97,6 +97,9 @@ internal static class ActivityExecutionProblemDetails
             "The activity execution inspection operation failed.",
             cancellationToken);
 
+    internal static Task HistoryAsync(HttpContext context, int status, string code, string title, string detail) =>
+        WriteAsync(context, status, code, title, detail, context.RequestAborted);
+
     private static async Task WriteAsync(
         HttpContext context,
         int status,

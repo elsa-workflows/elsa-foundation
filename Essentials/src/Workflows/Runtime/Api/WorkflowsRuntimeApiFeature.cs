@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Handlers.Alterations;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Api.Services.Alterations;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Alterations;
@@ -21,6 +22,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using MinimalEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api;
@@ -101,12 +103,29 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         // The exact Executable read for other domains through Workflows Runtime Core (spec 1193 slice F, D4), over the same
         // inspector the executable endpoint uses. One implementation per shell, rejected at configuration and at startup.
         WorkflowExecutableInspectionStartupTask.Validate(services);
-        services.TryAddScoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableInspection, WorkflowExecutableInspection>();
+        services.TryAddScoped<IWorkflowExecutableInspection, WorkflowExecutableInspection>();
         AddExecutableInspectionValidator(services);
         services.TryAddScoped<StimulusDispatchService>();
         services.TryAddScoped<IStimulusDispatchService>(sp => sp.GetRequiredService<StimulusDispatchService>());
         services.TryAddScoped<WorkflowExecutionStartService>();
         services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
+        services.TryAddScoped<RuntimeHistoryInspectionService>(sp => new(
+            sp.GetRequiredService<IWorkflowExecutionStateStore>(),
+            sp.GetRequiredService<IActivityInspectionContextAsync>(), sp.GetRequiredService<TimeProvider>(),
+            sp.GetService<IRuntimeHistoryStore>(),
+            sp.GetService<IBookmarkStateStore>(),
+            sp.GetService<IActivityExecutionStateStore>(),
+            sp.GetService<ILogger<RuntimeHistoryInspectionService>>())
+        {
+            CaptureAvailability = policy =>
+            {
+                var reader = sp.GetService<IRuntimeHistoryStore>();
+                var writer = sp.GetService<IRuntimeCheckpointCommitStore>();
+                return reader is not null && writer is { SupportsHistory: true } && writer.CanCommitHistory(reader) &&
+                    sp.GetServices<IRuntimeCheckpointCommitEnricher>()
+                        .OfType<IRuntimeHistoryCaptureSupport>().Any(source => source.CanCapture(policy));
+            }
+        });
         services.TryAddScoped<ActivityExecutionInspectionService>();
         services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
         services.TryAddScoped<WorkflowInstanceDeletionService>();
@@ -119,7 +138,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         // The exact Run read for other domains through Workflows Runtime Core (spec 1193 slice G, D4), over the services the run
         // endpoints use. One implementation per shell, rejected at configuration and at startup.
         WorkflowRunInspectionStartupTask.Validate(services);
-        services.TryAddScoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowRunInspection, WorkflowRunInspection>();
+        services.TryAddScoped<IWorkflowRunInspection, WorkflowRunInspection>();
         AddRunInspectionValidator(services);
         services.TryAddScoped<WorkflowDispatchInspectionService>();
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
@@ -150,6 +169,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowAlterationRequestContext, HttpContextWorkflowAlterationRequestContext>();
         services.TryAddScoped<IWorkflowAlterationAdmissionGate, AllowWorkflowAlterationAdmissionGate>();
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
+        services.AddApiCapabilitySource<RuntimeHistoryCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeActivityExecutionBrowsingCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();

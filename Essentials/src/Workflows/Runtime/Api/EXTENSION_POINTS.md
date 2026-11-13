@@ -40,6 +40,10 @@ API exposes no handler payload schema endpoint: descriptor-only discovery remain
 
 Canonical ownership and retention rules are defined in the [domain-owned API spec](../../../../../specs/220-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
 
+## Run history inspection
+
+`IRuntimeHistoryStore` supplies bounded pages and bookmark inventory; `IRuntimeHistoryDetailsStore` optionally supplies exact target plus coverage head in one provider snapshot. Their provider-owned scope/snapshot contracts and write pairing live in the [Runtime catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md#runtime-history-provider-ports). `RuntimeHistoryInspectionService` composes these reads with existing `IActivityInspectionContextAsync` structure authorization. It never resolves value payloads. `RuntimeHistoryCapabilitySource` adds optional runtime v1 history relations only for a qualified selected writer/reader; exact relations also require the composite details contract. A missing capture chain does not remove retained evidence. The API feature registers inspection only; it does not enable production capture.
+
 ## User Tasks API
 
 `WorkflowsRuntimeApi` owns User Task routes, source-generated JSON/error DTOs and its five task/form permissions through `WorkflowRuntimePermissionContributor`. `TaskRequestAccess` is the default scoped `IUserTaskAccess` adapter only when the host has not selected another one. It requires normalized canonical user/tenant claims and reloads active users, roles, memberships and current global/resource permissions. Incomplete directories fail task operations closed without making unrelated minimal hosts unstartable.
