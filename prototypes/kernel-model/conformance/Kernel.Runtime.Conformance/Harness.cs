@@ -90,9 +90,9 @@ public sealed class Harness : IAsyncDisposable
 
     public async Task<IRuntimeNode> StartAsync(int side = 0)
     {
-        var before = _names.Keys.ToHashSet();
+        var before = _stores.Keys.ToHashSet();
         var node = await _cluster.StartNodeAsync(side);
-        var asked = _names.Keys.Where(n => !before.Contains(n)).ToList();
+        var asked = _stores.Keys.Where(n => !before.Contains(n)).ToList();
         if (asked is not [var name] || name != node.Name)
             lock (Misnamed) Misnamed.Add($"NAME the node started as {node.Name} asked layer 2 for [{string.Join(", ", asked)}]");
         lock (_nodes) _nodes.Add(node);
@@ -153,6 +153,9 @@ public sealed class Harness : IAsyncDisposable
         _stopped = true;
         foreach (var node in Alive) await StopAsync(node);
         await _cluster.DisposeAsync();
+        // A killed node's calls still stalled execute when their stall ends: wait for them, so the checks see them.
+        if (!await WaitAsync(() => _stores.Values.All(s => s.Idle), Lease * 4 + TimeSpan.FromSeconds(2)))
+            lock (Misnamed) Misnamed.Add("TEARDOWN store calls of stopped or killed nodes were still under way after four leases");
     }
 
     private bool _stopped;
