@@ -9,7 +9,7 @@ import { RunHistoryTimeline } from "../workflow-editor/run-history/RunHistoryTim
 import { defaultHistoryFilters } from "../workflow-editor/run-history/historyLocation";
 import { RunHistorySummary } from "../workflow-editor/run-history/RunHistorySummary";
 import { historyBookmark, historyCoverage, historyEvent, historyPage } from "./runtimeHistoryFixtures";
-import type { RuntimeHistoryBookmarkPage } from "../runtimeHistoryTypes";
+import type { RuntimeHistoryBookmarkPage, RuntimeHistoryEvent } from "../runtimeHistoryTypes";
 import type { ActivityExecutionStateSummary, WorkflowInstanceSummary } from "../workflowTypes";
 const valueApi = vi.hoisted(() => ({ getActivityExecutionInspection: vi.fn(), getActivityExecutionValuePayload: vi.fn() }));
 vi.mock("../api/runtime", async original => ({ ...await original<typeof import("../api/runtime")>(), getActivityExecutionInspection: valueApi.getActivityExecutionInspection }));
@@ -109,6 +109,74 @@ it("discloses omitted outcome text while retaining completion provenance without
   expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled();
   expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
   expect(api.getWorkflowHistoryPage).not.toHaveBeenCalled();
+});
+const skippedResumeCases = [
+  ["receiver-bookmark-missing", "The saved bookmark was no longer present."],
+  ["receiver-bookmark-expired", "The saved bookmark had expired."],
+  ["receiver-wait-no-longer-eligible", "The saved wait was no longer eligible."],
+  ["receiver-admission-superseded", "The saved wait failed its final eligibility check."],
+  ["terminal-resume-ineligible", "The run had already ended."]
+] as const;
+function skippedResume(reason: string, sequence = 1, overrides: Partial<RuntimeHistoryEvent> = {}) {
+  return historyEvent(sequence, { name: "DeliveryUnmatched", category: "DeliveryObservation", authority: "DeliveryObservation",
+    checkpointId: null, checkpointOrdinal: null, physicalCommitId: null,
+    metadata: { "history.reasonCode": reason }, ...overrides });
+}
+it.each([false, true])("explains recorded skipped resumes in the shared list (compact=%s) and selects the exact observation", compact => {
+  const events = skippedResumeCases.map(([code], index) => skippedResume(code, index + 1));
+  const select = vi.fn(); render(<HistoryEventList compact={compact} items={events} onSelect={select} />);
+  expect(container.querySelector("ol")?.getAttribute("aria-label")).toBe(compact ? "Activity journal events" : "Run history events");
+  const rows = [...container.querySelectorAll<HTMLButtonElement>(".wf-history-event")];
+  expect(rows.map(row => row.querySelector("strong")?.textContent)).toEqual(Array(5).fill("Resume skipped"));
+  for (const [index, [code, explanation]] of skippedResumeCases.entries()) {
+    expect(rows[index].textContent).toContain(explanation); expect(rows[index].textContent).not.toContain(code);
+    expect(rows[index].textContent).toContain("Recorded source observation");
+  }
+  flushSync(() => rows[3].click()); expect(select).toHaveBeenCalledWith(events[3]);
+  expect(events[3].metadata["history.reasonCode"]).toBe("receiver-admission-superseded");
+});
+it("explains final eligibility rejection without losing unknown time, raw reason, bookmark or causal inspection", async () => {
+  const code = "receiver-admission-superseded";
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: skippedResume(code, 2,
+    { occurredAtKnown: false, causation: { historyEventId: "receipt", workflowExecutionId: "run" } }), readAt: "now" });
+  const select = vi.fn();
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-2" }} onSelect={select} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.querySelector("h3")?.textContent).toBe("Resume skipped"));
+  expect(container.textContent).toContain("after the first eligibility check"); expect(container.textContent).toContain("This attempt did not start a callback");
+  expect(container.textContent).toContain("OccurredNot recorded");
+  const recorded = [...container.querySelectorAll("details")].find(item => item.querySelector("summary")?.textContent === "Recorded metadata")!;
+  expect(recorded.open).toBe(false); expect(recorded.textContent).toContain(code);
+  expect(recorded.querySelector('[aria-label="Copy reason code"]')).toBeTruthy();
+  click("Inspect bookmark"); expect(select).toHaveBeenLastCalledWith({ kind: "bookmark", id: "bookmark-1" });
+  click("Inspect causal event"); expect(select).toHaveBeenLastCalledWith({ kind: "event", id: "receipt" });
+  expect(valueApi.getActivityExecutionInspection).not.toHaveBeenCalled(); expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  expect(api.getWorkflowHistoryPage).not.toHaveBeenCalled();
+});
+it("describes terminal ineligibility as a cleanup observation without claiming an activity or purge outcome", async () => {
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: skippedResume("terminal-resume-ineligible", 2), readAt: "now" });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-2" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.querySelector("h3")?.textContent).toBe("Resume skipped"));
+  const explanation = [...container.querySelectorAll("p")].find(item => item.textContent?.includes("when the runtime inspected this queued resume during cleanup"));
+  expect(explanation).toBeTruthy();
+  expect(explanation!.textContent).not.toContain("Bookmark consumed"); expect(explanation!.textContent).not.toContain("Continuation completed");
+  expect(explanation!.textContent).not.toContain("work was removed");
+});
+it.each([
+  ["unknown reason", { metadata: { "history.reasonCode": "constructor" } }],
+  ["unknown schema", { schemaVersion: 2 }],
+  ["unknown authority", { authority: "FutureAuthority" }],
+  ["different category", { category: "ActivityLifecycle" }],
+  ["different event kind", { name: "ActivityCompleted" }]
+] satisfies [string, Partial<RuntimeHistoryEvent>][])("keeps generic recorded rendering for %s instead of inferring a skipped callback", async (_shape, overrides) => {
+  const event = skippedResume("receiver-admission-superseded", 2, overrides);
+  render(<HistoryEventList items={[event]} onSelect={vi.fn()} />);
+  expect(container.textContent).not.toContain("Resume skipped"); expect(container.textContent).toContain(event.metadata["history.reasonCode"]);
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event, readAt: "now" });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-2" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.querySelector(".wf-history-technical")).toBeTruthy());
+  expect(container.querySelector("h3")?.textContent).not.toBe("Resume skipped");
+  expect(container.textContent).not.toContain("This attempt did not start a callback");
+  expect(container.textContent).toContain(event.metadata["history.reasonCode"]);
 });
 it("labels committed responsibilities, source observations, settlement and incident decisions as distinct recorded events", () => {
   const labels = [

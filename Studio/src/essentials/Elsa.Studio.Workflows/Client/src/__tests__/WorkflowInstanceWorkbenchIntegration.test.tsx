@@ -290,7 +290,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
     pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
-    expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy();
+    await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
     expect(container.textContent).not.toContain("interrupted");
     expect(container.textContent).not.toContain("Resolving execution scope");
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
