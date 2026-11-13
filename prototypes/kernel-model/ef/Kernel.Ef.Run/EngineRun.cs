@@ -13,7 +13,7 @@ using Npgsql;
 /// <summary>
 /// The runs of ENGINES.md: the stress test, the cost count and the probes of Program.cs, on any of the four engines.
 ///   x stress|cost|probe|block|definite|deadlock postgres|sqlserver|mysql|sqlite "connection" [key=value ...]
-/// Options: fence=checked|batch  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  seconds=40  messages=5000  partitions=2  nodes=3
+/// Options: fence=checked|batch (default: the engine's, so batch but checked on SQL Server, E9)  unfenced=1  m5=1 (E1 off: a definite error beats a fence that missed)  seconds=40  messages=5000  partitions=2  nodes=3
 ///          kill=0 (no sessions killed)   rcsi=0 (locking; default on) readpast=1 xactabort=1 (SQL Server)   isolation=rc takerr=1 (MySQL)   wal=0|1 busy=ms timeout=s (SQLite)
 ///          role=workers name=b signal=path (a second process on the same database)   locks=1 (cost)
 ///          savepoints=1 (leave Entity Framework's savepoint on, SQL Server and MySQL)   batchsize=n (statements per command, SQL Server and MySQL; default 1000)
@@ -568,7 +568,7 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public string Get(string key, string fallback) => options.GetValueOrDefault(key, fallback);
     public int Int(string key, int fallback) => int.Parse(Get(key, fallback.ToString()));
     public bool Has(string key) => Get(key, "0") != "0";
-    public bool FenceInBatch => Get("fence", "checked") == "batch";
+    public bool FenceInBatch => Get("fence", "") switch { "batch" => true, "checked" => false, _ => Dialect()?.FenceInBatchByDefault ?? true };
 
     /// <summary>The engine's code for a deadlock victim (for SQLite: BUSY), as <see cref="Tally.Code"/> writes it.</summary>
     public string DeadlockCode => engine switch { "postgres" => "pg 40P01", "sqlserver" => "mssql 1205", "mysql" => "mysql 1213", _ => "sqlite 5" };
@@ -642,12 +642,14 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     public EfStore Store(Func<KernelDb> create) => new(create, postgres: engine != "sqlite", FenceInBatch)
     {
         Unfenced = Has("unfenced"), DefiniteBeatsFence = Has("m5"),
-        Engine = engine switch
-        {
-            "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints"), ReadCommittedSnapshot = Get("rcsi", "1") == "1" },
-            "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints"), TakeIsolation = Has("takerr") ? null : System.Data.IsolationLevel.ReadCommitted },
-            _ => null,
-        },
+        Engine = Dialect(),
+    };
+
+    private Engine? Dialect() => engine switch
+    {
+        "sqlserver" => new SqlServerEngine { ReadPast = Has("readpast"), Savepoints = Has("savepoints"), ReadCommittedSnapshot = Get("rcsi", "1") == "1" },
+        "mysql" => new MySqlEngine { Isolation = Get("isolation", "") == "rc" ? System.Data.IsolationLevel.ReadCommitted : null, Savepoints = Has("savepoints"), TakeIsolation = Has("takerr") ? null : System.Data.IsolationLevel.ReadCommitted },
+        _ => null,
     };
 
     public async Task ResetAsync(int partitions)
