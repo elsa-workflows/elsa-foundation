@@ -35,7 +35,7 @@ nuget.org on 12 November 2026.
 dotnet build ef/Kernel.Ef.Run -c Release
 dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll x stress|cost|probe|block|definite|deadlock <engine> "<connection>" [key=value ...]
 dotnet build ef/Kernel.Ef.Conformance -c Release
-dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; suite command: semantic, semantic-broken, stress, stress-broken, cost
+dotnet ef/Kernel.Ef.Conformance/bin/Release/net10.0/Kernel.Ef.Conformance.dll sqlite|postgres|sqlserver|mysql ["<server>"] [--fence-in-batch|--checked-fence] [--m5] [--rcsi-off] [--rc] <suite command>   # "<server>" for the server engines only; no fence flag: the engine's default (FINDINGS 25.1); suite command: semantic, semantic-broken, stress, stress-broken, cost
 ```
 
 `EngineRun.cs` lists the options. The stress test is the one of FINDINGS section 4: three nodes, two partitions (four

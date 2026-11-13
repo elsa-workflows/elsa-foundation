@@ -412,7 +412,7 @@ A deterministic simulation drives several nodes against one store with crashes, 
 
 - **Not built yet:** the runtime conformance suite and the Orleans adapter; the graph engine and the BPMN, StateMachine, agent, standalone-jobs and ETL fan-out spikes; short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set; the projector's set-based rounds; reply-address deadlines and the owner's signal to the receiving node; the recreate rule per kind of id; values by reference; the viewer's tail read and catch-up; `Describe`, the journal envelope, tenant checks and trace headers; streaming responses and a route mapping a client's disconnect to a cancel.
 - **Done in round 4 stage A:** the three layers as separate projects and the turn/job/pass renames.
-- **Next, before the design proposal (program #4229, step 2):** the card decisions with SQL Server's checked fence; the Orleans adapter with a runtime conformance suite; the graph engine; spikes for BPMN, StateMachine, agents, standalone jobs with the worker protocol, and ETL's fan-out pattern; and the write-volume measurement.
+- **Next, before the design proposal (program #4229, step 2):** the rest of the card decisions (SQL Server's checked fence is built); the Orleans adapter with a runtime conformance suite; the graph engine; spikes for BPMN, StateMachine, agents, standalone jobs with the worker protocol, and ETL's fan-out pattern; and the write-volume measurement.
 
 ## Trade-offs
 

@@ -951,3 +951,53 @@ No parked count moved, so no schedule changed: stage A kept the order in which a
 The Orleans adapter and the runtime conformance suite; the non-simulation hosts on `PartitionRuntime` (L13); the
 stress tests (not in stage A's gates); SQL Server, MySQL and MongoDB (not in stage A's gates; the store code changed
 only by the `jobs` rename).
+
+## 25. Round 4: the owner's decided items. Run
+
+The items the owner decided on 12 and 13 November (the sketch's "Decisions taken so far"), built one pull request
+each. Each subsection says what changed, what was run, and what it did not change.
+
+### 25.1 SQL Server's default fence (E9, decided 13 November). Run
+
+**What changed.** The EF store's fence mode is the engine's default when it is not told: the fence in the batch on
+PostgreSQL, SQLite and MySQL, the checked fence on SQL Server (`Engine.FenceInBatchByDefault`, false only in
+`SqlServerEngine`; `EfStore.FenceInBatch` resolves it). Before, every EF host defaulted to the checked fence and the
+fence in the batch had to be asked for. The runners take the same default: `fence=checked|batch` in `EngineRun`, and
+`--checked-fence` beside `--fence-in-batch` in the conformance runner. So a run given no fence option is now a
+different run on PostgreSQL, SQLite and MySQL (the fence in the batch) from the one ENGINES.md and section 24 recorded
+under the same command (checked); README's commands name the mode where a recorded result depends on it, and the
+broken-fence stress command pins `fence=checked`. `$EFR x cost` runs one mode per call, the engine's default unless
+told; `$NAT cost` and the old `cost` commands run both modes, as before. The old PostgreSQL `stress` and `probe`
+commands of section 4 keep the checked fence they were recorded with. The MongoDB store keeps its own default
+(checked); the decision is EF's.
+
+**Gate: the SQL Server stress test with the default.** SQL Server 2022 in Docker (amd64 emulation on arm64), RCSI, 40 s
+and 5,000 outside messages, as ENGINES.md:
+
+| Fence | Result | Deadlocks | Resets | Takeovers | Settled |
+|---|---|---|---|---|---|
+| default (checked) | holds | **0** | 1,372 (288 fenced, 1,084 unknown) | 713, 753 | 105 s after the chaos |
+| `fence=batch` | 1,517 violations at the default patience (180 s); see below | 310, all takes | 1,869 | 1,025, 1,028 | not within 180 s |
+| `fence=batch patience=900` | holds | 1,417, all takes | 2,080 (756 fenced, 1,324 unknown) | 1,161, 966 | 858 s after the chaos |
+
+The default reproduces ENGINES.md's checked row: no deadlock of any kind, every property holds. The fence in the batch
+reproduces E9 at a larger count than before (310 against 127; this machine's emulation is slower, commits took a
+median of 21 ms): every victim a take. Its end-state check failed because the run had not drained when the settle
+limit ran out; the 20 violations printed are all work left behind (messages not done, waits not removed, counters
+missing tokens, parents still running), none is a message applied twice, out of order or a wrong journal.
+Run again with a settle limit of 900 s, the fence in the batch held every property, with 1,417 take deadlocks and
+858 s to drain against the checked fence's 105 s: the deadlocks cost availability, as E9 says, and here enough of it
+that the default limit ran out. The checked fence is the right default on SQL Server.
+
+**Also run, unchanged:** the semantic suite on in-memory (56 passed, 1 skipped), SQLite with no flag (now the fence in
+the batch), `--checked-fence` and `--fence-in-batch` (54 passed, 2 reference differ, 1 skipped, each), PostgreSQL with
+no flag and `--checked-fence` (54 passed, 3 reference differ), SQL Server with no flag (now checked; 53 passed, 3
+reference differ, 1 skipped). Not run: the simulation (it uses the in-memory store, which has no fence mode), and
+MongoDB (no code of it changed).
+
+**The new defaults of the other stress commands.** SQLite's default stress run is now the fence in the batch, which no
+stress run had covered (ENGINES.md's SQLite rows are all checked). Run here: WAL, one process, 40 s, 5,000 messages:
+holds, 0 deadlocks, 1,143 resets (all fenced), takeovers 572 and 571, settled 218 s after the start. MySQL's default
+is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds, one take deadlock); with
+`isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
+show the fence option on every engine.
