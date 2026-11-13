@@ -15,12 +15,14 @@ if (args.SequenceEqual(["--parent-race"]))
 { foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).ParentRace(cut); return; }
 if (args.SequenceEqual(["--job-ack"]))
 { foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp); return; }
+if (args.SequenceEqual(["--boundaries"])) { await BoundaryCases.Run(); return; }
 if (args.SequenceEqual(["--list"]))
 {
     foreach (var name in names) Console.WriteLine("creation:" + name);
     foreach (var name in parentNames) Console.WriteLine("creation:parent-race," + name);
     foreach (var name in transportNames) Console.WriteLine("creation:transport-race," + name);
     Console.WriteLine("creation:job-generation-race");
+    foreach (var name in BoundaryCases.Names) Console.WriteLine("creation:" + name);
     foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) Console.WriteLine($"creation:job-ack,qualified={qualified},caughtUp={caughtUp}");
     return;
 }
@@ -29,8 +31,9 @@ foreach (var (mode, nested, cut) in names) new CreationWitness(mode, nested).Run
 foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).ParentRace(cut);
 foreach (var (mode, kind) in transportNames) new CreationWitness(mode, false).TransportRace(kind);
 await JobCreationRace.Run();
+await BoundaryCases.Run();
 foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
-Console.WriteLine("27/27 creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this runner.");
+Console.WriteLine("31/31 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
 
 sealed partial class CreationWitness(string mode, bool nested)
 {
