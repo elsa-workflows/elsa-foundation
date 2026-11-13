@@ -157,8 +157,13 @@ public static class Cases
             await Task.Delay(h.Lease + TimeSpan.FromMilliseconds(200));
             var thief = await h.Outside.TakeAsync(0, "thief", h.Lease);      // another process takes it, then dies without releasing it
             That(thief is not null, "the stalled node's lease on partition 0 did not run out");
-            if (!await Harness.WaitAsync(() => Task.FromResult(h.StoreOf(a.Name).Refused > 0), h.Lease * 3))
-                throw new FenceException("the store never refused a commit of the stalled node: it did not learn that it lost partition 0");
+            // The stalled node must try to write after its scope was taken (its renewal beat at the latest); only then is
+            // the store's answer the fence's.
+            var store = h.StoreOf(a.Name);
+            var (commits, refused) = (store.Commits, store.Refused);
+            That(await h.WaitAsync(() => store.Commits > commits, h.Lease * 3), "the stalled node made no commit after its scope was taken: the case did not test the fence");
+            if (!await h.WaitAsync(() => store.Refused > refused, h.Lease))
+                throw new FenceException("the store did not refuse the stalled node's commit: it did not learn that it lost partition 0");
             await Settle(h, "partition 0 activated again");
             var tokens = Enumerable.Range(0, 5).Select(i => "f" + i).ToList();
             foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
@@ -214,6 +219,7 @@ public static class Cases
                 catch (FenceException e) { (failure, caught) = (e.Message, true); }
                 catch (ConformanceException e) { failure = e.Message; }
                 catch (TimeoutException) { failure = $"the case did not end within {Timeout.TotalSeconds} s"; }
+                catch (Exception e) { failure = $"threw {e.GetType().Name}: {e.Message}"; }      // the teardown and the checks below still run
                 // What the nodes do on their way out is checked too. A stop that hangs fails the case, not the suite.
                 try { await harness.StopAllAsync().WaitAsync(Timeout); }
                 catch (TimeoutException) { failure ??= $"stopping the nodes did not end within {Timeout.TotalSeconds} s"; }

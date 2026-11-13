@@ -72,6 +72,9 @@ public sealed class Harness : IAsyncDisposable
     /// <summary>The node's way to the store, which a case can stall.</summary>
     public NodeStore StoreOf(string node) => _stores[node];
 
+    /// <summary>Held commits that the fence refused, on every node so far.</summary>
+    public int HeldRefused => _stores.Values.Sum(s => s.HeldRefused);
+
     private NodeServices Node(string name)
     {
         var store = new NodeStore(Recorded);
@@ -155,7 +158,13 @@ public sealed class Harness : IAsyncDisposable
         foreach (var node in Alive) await StopAsync(node);
         await _cluster.DisposeAsync();
         // A killed node's calls still stalled execute when their stall ends: wait for them, so the checks see them.
-        if (!await WaitAsync(() => _stores.Values.All(s => s.Idle), Lease * 4 + TimeSpan.FromSeconds(2)))
+        var idleSince = long.MaxValue;     // idle on samples spanning 100 ms: a pass between two calls is not idle
+        if (!await WaitAsync(() =>
+            {
+                if (!_stores.Values.All(s => s.Idle)) idleSince = long.MaxValue;
+                else if (idleSince == long.MaxValue) idleSince = Environment.TickCount64;
+                return Environment.TickCount64 - idleSince >= 100;
+            }, Lease * 4 + TimeSpan.FromSeconds(2)))
             lock (Misnamed) Misnamed.Add("TEARDOWN store calls of stopped or killed nodes were still under way after four leases");
     }
 
