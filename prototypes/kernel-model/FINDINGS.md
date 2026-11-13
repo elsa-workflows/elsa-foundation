@@ -1051,35 +1051,37 @@ item; whether their models ever reach the second attempt was not checked).
 
 ### 25.5 A poisoned job parks its instance (decision 9). Run
 
-**What changed.** A job's ticket was already counted like any message: it goes on trial alone, and a take after a lost
-owner adds an attempt. At the threshold, round 3 turned the ticket into an error result (`JobFinished` with "the job
-was on trial when N owners were lost") and the instance went on. Now `Worker.Hold` neither starts such a job nor
-rewrites its ticket; the ticket is given to a turn as it is, and `RunTurn` parks the instance: faulted with "message
-<ticket> was on trial when N owners were lost", the ticket consumed, as for any poison message. The old rule stays as
-`Flaw.JobPoisonAsError`.
+At the attempt threshold the worker gives the raw job ticket to Park and faults its instance. The job never starts
+again at that threshold. `Flaw.JobPoisonAsError` restores the old behavior of turning the ticket into an error result
+and continuing the workflow.
 
-**The check.** The simulation's oracle now expects an instance whose job kills the process (the fragile model's
-`dierun`) to end faulted, parked by its own job's ticket (`<instance>!<key>`). Any other parking of it still counts as
-innocent, and any other fault of it fails I14. With the old rule the instance ends Running: `--flaw JobPoisonAsError` is
-caught at seed 2, `I14 1/f2 ended as Running`.
+**Failure reproduced on real workers.** The original job-poison change, merged with the Park baseline, consumed
+the poisoned ticket while retaining its key in `InstanceRow.Jobs`. A later terminate of the faulted parent tried
+to cancel that missing ticket. The store refused the entire commit twice, including after takeover. The parent and
+its live child remained unterminated. A turn that threw while consuming a completed job reproduced the same failure.
 
-**Gates.** Before: main at d8eb8c9727 for the native run (measured here); section 24 for the others, which were not
-re-run on that main.
+**Fix.** The fenced Park commit removes the in-flight keys for exactly the job tickets it consumes. A job result
+is the same durable ticket with an in-memory result payload. Other job keys, child references and the serialized
+model checkpoint survive Park. When a remaining job finishes after Park, the drop of its result retires its key in
+the same commit, advancing the revision and recording the selected history. Later termination can cancel live
+siblings and forward to the children. It preserves the parent's fault and checkpoint. The subscription rule is in 25.9.
 
-| Gate | Before | After |
+| Focused gate | Main `84371a23ef` (includes #4400) | With the job-poison fix |
 |---|---|---|
-| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
-| `$SIM --seeds 20000 --actions 1000` | 0 failed, 12 innocent parked | the same |
-| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 14 innocent parked; 386,774 matched; 850 reruns, all told | the same, count for count |
-| `$SIM --mutations --seeds 20000` | every flaw caught but the two caught only in combination | the same, plus `JobPoisonAsError` at seed 2 |
-| `$SIM --native-mutations --seeds 20000` | 9 of 9 (the five native flaws and four graph flaws) | the same |
-| `$NAT smoke` | 31 of 31 | 31 of 31 |
+| Native.Run `park` | 8 pass | 10 pass; the two new cases failed on the merged, unfixed job-poison branch `7ff84f862c` |
+| Native.Run `smoke` | All 34 checks pass | All 34 checks pass |
+| 1,000 seeds × 300 actions | 0 failed, 0 innocent parkings | Same |
+| Native, 200 seeds × 1,000 actions | 0 failed, 0 innocent parkings; 3,805 matched; 14 external reruns, all flagged | Same |
+| `JobPoisonAsError`, 1,000 seeds × 300 actions | Mutation absent | 157 failures, first seed 2, I14 (a killing job's instance remained Running) |
 
-The native counts equal main's (why exactly, given the instances now parked, is not traced). A first version of
-the oracle counted every `dierun` instance as allowed to fault, whatever parked it. A probe over the same 20,000
-native seeds found 6,116 parkings of such instances: 6,114 by their own job's ticket, and two by a message (`0/f2` by
-`x15`, `0/f1` by `x8`, each "on trial when 3 owners were lost"). That version hid those two from the innocent count;
-the oracle now counts them. Not run: the stores (no store or commit code changed).
+The deterministic cases use actual workers and the in-memory store. One loses the owner during an isolated job
+trial, faults the parent without restarting the job, then terminates its live child and cancels a sibling ticket.
+The other loses the model's result-handling turn to an exception, consumes the sibling's late result against the
+faulted row and terminates the child after takeover. Both verify checkpoint retention, jobs, subscriptions and
+ticket removal. The simulation generator on both comparison heads includes `dierun`; the candidate changes its
+oracle to recognize parking by the killing job's own ticket. Its counts therefore describe each version's own
+oracle. The older broad sweeps and full mutation matrices in the original PR ran against earlier bases and were
+not repeated here. This change uses the existing commit contract; no provider-specific persistence run was made.
 
 ### 25.9 Park removes active subscriptions (owner decision, 13 November). Run
 

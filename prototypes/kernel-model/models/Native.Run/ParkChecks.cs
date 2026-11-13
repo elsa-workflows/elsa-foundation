@@ -147,6 +147,8 @@ public static class ParkChecks
             await third.WokenAsync(null);
             await CheckPark(world, third, before, "advance");
         });
+        await Case("poison job, takeover and terminate a live child", () => JobPoisonChecks.RunAsync(resultThrows: false));
+        await Case("throwing job result, late sibling result and terminate after takeover", () => JobPoisonChecks.RunAsync(resultThrows: true));
         await Case("suspension preserves the wait", async () =>
         {
             var world = new World();

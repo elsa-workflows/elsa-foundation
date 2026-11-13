@@ -25,7 +25,19 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         if (row is { } current && Kinds.IsControl(first.Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || first.Message.Kind == Kinds.Delete))
             return Control(input, first);       // a terminate still goes on to the children of a finished instance
         if (row is { Status: not InstanceStatus.Running })
-            return new TurnOutcome(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };    // a finished target: consumed and dropped
+        {
+            var unit = new TurnOutcome(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
+            var jobs = RemainingJobs(row, input.Taken);
+            if (jobs != row.Jobs)
+            {
+                // A sibling job can finish after Park. Consume its ticket and remove its key at the same fence.
+                unit.Row = row with { Jobs = jobs, Revision = row.Revision + 1 };
+                unit.Expected = row.Revision;
+                unit.Revision = unit.Row.Revision;
+                unit.Journal = Journal(row.History, ["job ticket consumed"]);
+            }
+            return unit;
+        }
         return null;
     }
 
@@ -46,12 +58,24 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     /// <summary>Park: retain the committed checkpoint, fault the instance, consume its deliveries and remove its active waits.</summary>
     public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error)
     {
-        var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
+        var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error, Jobs = RemainingJobs(r, taken) }
             : spec is null ? null
             : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History);
         var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
         if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
         return unit;
+    }
+
+    // A raw job ticket and its in-memory result share one durable id. Only remove keys whose own tickets
+    // this commit consumes; Terminate can still cancel any remaining tickets and forward to the children.
+    private static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
+    {
+        if (row.Jobs is null) return null;
+        var consumed = taken.Where(i => i.Message.Kind is Kinds.Job or Kinds.JobFinished).Select(i => i.Message.Id).ToHashSet(StringComparer.Ordinal);
+        if (consumed.Count == 0) return row.Jobs;
+        var jobs = Json.Read<List<string>>(row.Jobs);
+        if (jobs.RemoveAll(key => consumed.Contains(Worker.TicketId(row.Id, key))) == 0) return row.Jobs;
+        return jobs.Count == 0 ? null : Json.Write(jobs);
     }
 
     /// <summary>The instance's own turn: suspend, resume, terminate or delete. A message that changes nothing is consumed and dropped.</summary>

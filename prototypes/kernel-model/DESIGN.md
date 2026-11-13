@@ -261,11 +261,13 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   it may have run and its result been lost (merge, F-N6). "May have run", never "did run".
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
   halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
-  parked and the deliveries consumed. A job at the threshold faults its instance and consumes the ticket (decision 9, FINDINGS 25.5). A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
+  parked and the deliveries consumed. A job at the threshold faults its instance and consumes the ticket (decision 9,
+  FINDINGS 25.5). A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
   is shelved (F12). A turn that throws parks its instance at once.
 - **Park (owner decision, 13 November):** its fenced commit faults the instance, consumes its deliveries and removes
   every active subscription, while retaining the last committed state, fault details and configured history. The
-  parent still receives the faulted-child notice. Later arrivals are dropped. Suspension preserves subscriptions;
+  parent still receives the faulted-child notice. Consuming a job ticket retires its in-flight key at the same fence,
+  including a sibling result arriving after Park. Later arrivals do not execute the model. Suspension preserves subscriptions;
   a future explicit recovery operation must restore waits, with kept-event semantics needed for events in the gap.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
 - **Edge cases:** a message to a missing target without a start spec is dropped and journalled; to an ended instance,
