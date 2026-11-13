@@ -342,6 +342,11 @@ the native model (merge):
   memory, up to the request's deadline.
 - **A request that resumes a waiting workflow** adds a delivery carrying its reply address; the owner, on any node,
   sends what the turn emits, and the end, over the runtime's transport (`IReplyTransport`), which is not durable.
+- **The reply address carries the caller's deadline** (decision 6, FINDINGS 25.3): `ReplyTo.Of(node, request,
+  deadline)`, absolute, in database milliseconds, equal to the route's timeout. Past it the owner drops the address: it
+  sends that caller nothing more, and the caller no longer keeps the instance in memory (a caller pins an instance
+  against eviction while it waits). The simulation checks after every settling pass that no owner holds a caller past
+  its deadline (`Flaw.KeepExpiredCallers` breaks it).
 - **The caller** (`Requests`) takes the first response or end and ignores the rest. A reset tells every caller it knows
   "lost" (503). An owner lost on another node is noticed only by the deadline (504).
 - Disconnect and timeout end the wait and leave the instance alone.
@@ -461,8 +466,8 @@ numbers.
 - **Poison counting** (FINDINGS sections 7, 21): innocent parking is rare but not zero; recovery of a backlog is serial.
 - **Kept events for plain waits:** the publisher still inserts every event with its window, because a kept wait may
   subscribe later; a deployment where no wait keeps could skip the insert. Not built.
-- **Reply addresses** should carry the caller's deadline; an owner on another node cannot tell a waiting node it was
-  lost.
+- **Reply addresses** carry the caller's deadline (round 4); an owner on another node still cannot tell a waiting node
+  it was lost.
 - **Delete and keys:** a start after a delete creates a new instance with the same id.
 - **State size**, **the notifier between nodes**, **one database**: as in draft 5.
 - **MySQL's driver** costs four round trips per commit more than PostgreSQL's (E10).

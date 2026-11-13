@@ -19,22 +19,26 @@ public interface IReplyTransport
 }
 
 /// <summary>
-/// A reply address: the node that holds the request, and the request's id there. It rides on a message as <c>ReplyTo</c>.
-/// <paramref name="beforeCommit"/> is a route's opt-out of the owner's default of 12 November (output is released after
-/// the commit of the turn that wrote it): this caller gets a turn's output when the turn ends.
+/// A reply address: the node that holds the request, the request's deadline, and the request's id there. It rides on a
+/// message as <c>ReplyTo</c>. The deadline is absolute, in database milliseconds, and equal to the route's timeout
+/// (decision 6 of 12 November): after it the owner sends this caller nothing and lets go of the instance, which the
+/// caller no longer pins in memory. <paramref name="beforeCommit"/> is a route's opt-out of the owner's default of 12
+/// November (output is released after the commit of the turn that wrote it): this caller gets a turn's output when the
+/// turn ends.
 /// </summary>
 public static class ReplyTo
 {
     private const string Early = "|early";
 
-    public static string Of(string node, string request, bool beforeCommit = false) => $"{node}|{request}{(beforeCommit ? Early : "")}";
+    public static string Of(string node, string request, long deadline, bool beforeCommit = false) => $"{node}|{deadline}|{request}{(beforeCommit ? Early : "")}";
 
-    public static (string Node, string Request, bool BeforeCommit) Parse(string address)
+    public static (string Node, string Request, long Deadline, bool BeforeCommit) Parse(string address)
     {
         var early = address.EndsWith(Early, StringComparison.Ordinal);
         if (early) address = address[..^Early.Length];
-        var at = address.IndexOf('|');
-        return at < 0 ? default : (address[..at], address[(at + 1)..], early);
+        var (node, rest) = address.IndexOf('|') is var at and >= 0 ? (address[..at], address[(at + 1)..]) : ("", "");
+        var cut = rest.IndexOf('|');
+        return cut < 0 || !long.TryParse(rest[..cut], out var deadline) ? default : (node, rest[(cut + 1)..], deadline, early);
     }
 }
 
