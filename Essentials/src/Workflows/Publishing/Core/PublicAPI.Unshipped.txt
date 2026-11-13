@@ -65,6 +65,8 @@ Elsa.Workflows.Publishing.Core.Contracts.IActivityUpgradePlanMutationStore
 Elsa.Workflows.Publishing.Core.Contracts.IActivityUpgradePlanMutationStore.ApplyAsync(Elsa.Activities.Design.Core.Models.ActivityUpgradePlan! plan, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityUpgradeStep!>! selectedSteps, Elsa.Activities.Design.Core.Models.ActivityUpgradeApplyReceipt! receipt, System.DateTimeOffset appliedAt, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Design.Core.Models.ActivityUpgradeApplyResult!>
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableCompilationSource
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableCompilationSource.GetContributionAsync(Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationContribution!>
+Elsa.Workflows.Publishing.Core.Contracts.IExecutableStructureNormalizer
+Elsa.Workflows.Publishing.Core.Contracts.IExecutableStructureNormalizer.Normalize(string! nodeId, Elsa.Workflows.Design.Core.Models.ActivityNodeStructure? structure) -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityStructure?
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableNodeMetadataEnricher
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableNodeMetadataEnricher.EnrichAsync(Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest! request, Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileSource! source, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! rootActivity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.ExecutableNode!>
 Elsa.Workflows.Publishing.Core.Contracts.IExecutableNodeMetadataEnricher.EnrichCompilationAsync(Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest! request, Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileSource! source, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! rootActivity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.ExecutableCompilationEnrichment!>
@@ -361,6 +363,8 @@ Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.Provide
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.ProviderFingerprint.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.ResolvedDirectDependencies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityResolvedDependency!>!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.ResolvedDirectDependencies.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.ResolvedStructureInvocations.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Design.Core.Models.ResolvedStructureInvocation!>!
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.ResolvedStructureInvocations.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.Revision.get -> long
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.Revision.init -> void
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateCompilationRequest.SubjectKind.get -> string!
@@ -1218,6 +1222,8 @@ static Elsa.Workflows.Publishing.Core.Services.ExecutableActivityTemplateBehavio
 static Elsa.Workflows.Publishing.Core.Services.ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(object! value) -> string!
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.StructureInputs.get -> Elsa.Workflows.Design.Core.Models.ActivityStructureInputProjection?
 Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.StructureInputs.init -> void
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.AuthoredStructure.get -> Elsa.Activities.Design.Core.Models.ActivityStructureContract?
+Elsa.Workflows.Publishing.Core.Models.ActivityTemplateOccurrenceCompilation.AuthoredStructure.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness
 Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness!
 Elsa.Workflows.Publishing.Core.Models.PublicationCapabilityReadiness.Deconstruct(out string! Kind, out string! Key, out string? SchemaVersion, out string! Status, out System.Collections.Generic.IReadOnlyList<string!>! SupportedSchemaVersions) -> void

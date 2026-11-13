@@ -25,6 +25,9 @@
   every task binding is omitted as `catalog-unavailable`. A replacement must keep that fail-closed rule.
 - **Registration:** Scoped; one replacement before the feature, with the same startup exclusivity check.
 - **Override when:** the host replaces export while retaining the authored/runtime compatibility boundary.
+- Complete-source schema 2 returns its canonical XML unchanged. `ExportAsync` reports the disjoint native,
+  scope and process invocation configuration omitted from that XML. Process identity changes require an
+  explicit reference transform. A legacy schema reader refuses complete-source authority fields before deserialization.
 
 ### `IBpmnWorkBinder`
 
@@ -79,6 +82,20 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
   and `DefaultEventActivityVersionId` (`"Elsa.Event"`), which hosts resolve to real catalog rows.
 
 ## Owned HTTP endpoints
+
+- The optional Direct publishing feature also registers the private BPMN-owned
+  optional single-owner `IBpmnDocumentDirectAdmission` replacement (`BpmnDirectDocumentAdmission`). It assesses the entire
+  physical workflow through the same strict source projection as publication. Only that content
+  assessment can suppress the ordinary document execution diagnostic; native compilation and other
+  validators retain their guards, and publication still authorizes the immutable source and every pin.
+  Complete-source Direct support advertises `bpmn-authored-document-publish` on the existing route.
+  Existing human formats 1/6 and service format 3 remain separate profiles; mixed profiles refuse.
+
+- `GET interchange/bpmn/authoring-capabilities` (`Endpoints/Documents/Capabilities`), requiring
+  `bpmn-interchange:read`, reports the exact complete-source kind/schema supported by one uniquely
+  registered `IActivityStructureHandler`. Missing or competing handlers refuse the response. This is
+  draft-retention compatibility, independent of execution admission; schema-2 compilation remains closed
+  until the owning lowering slice is qualified. No extensibility slot or execution permission is added.
 
 - Optional `ActivitiesBpmnDirectPublishing`: `POST interchange/bpmn/versions/{versionId}/publish-direct`, capability `elsa.api.bpmn-publishing` with relations `bpmn-authored-publish`, `bpmn-authored-service-publish` and `bpmn-authored-claim-publish` on the same route. Requires both `bpmn:publish` and existing workflow publication management permission for the actual source version, and `workflows/runtime:read` on each selected service source reference. Its keyed `BpmnDirectPublishingFaultRenderer` is a cross-domain `IEndpointFaultRenderer` contribution. Reads only immutable Design versions; runtime commands use the BPMN Core replacement port and existing store fencing. No event handler, background task or scheduler is added.
 

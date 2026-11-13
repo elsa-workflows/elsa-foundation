@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { readBpmnBooleanAttribute as booleanAttribute } from "./bpmnXmlBoolean";
 import { bpmnElementTypes, bpmnEventDefinitionTypes, bpmnNotationType, isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType, resolveBpmnNotationReference } from "./bpmnNotationTypes";
 import { bpmnAppearanceLabelStyle, type BpmnDocumentAppearance } from "./bpmnDocumentAppearance";
 import "./bpmnNotation.css";
@@ -43,11 +44,6 @@ const dataTypes = new Set(["dataObject", "dataObjectReference", "dataInput", "da
 
 export { bpmnNotationType } from "./bpmnNotationTypes";
 
-function booleanAttribute(element: Element, name: string): boolean | undefined {
-  const value = element.getAttribute(name);
-  return value === "true" || value === "1" ? true : value === "false" || value === "0" ? false : undefined;
-}
-
 function directChildren(element: Element) {
   return [...element.children].filter(child => child.namespaceURI === modelNamespace);
 }
@@ -58,7 +54,7 @@ export function bpmnNotationFromElement(element: Element, diagram: BpmnNotationD
   const loop = children.find(child => child.localName === "standardLoopCharacteristics" || child.localName === "multiInstanceLoopCharacteristics");
   let collection = booleanAttribute(element, "isCollection");
   if (element.localName === "dataObjectReference" && element.hasAttribute("dataObjectRef")) {
-    const reference = element.getAttribute("dataObjectRef");
+    const reference = element.getAttribute("dataObjectRef")?.replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, "");
     const object = [...element.ownerDocument.getElementsByTagNameNS(modelNamespace, "dataObject")].find(candidate => candidate.getAttribute("id") === reference);
     if (object) collection = booleanAttribute(object, "isCollection");
   }

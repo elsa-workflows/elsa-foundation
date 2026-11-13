@@ -21,6 +21,20 @@ function svgFrom(element: Element, di: Element, status = {}) {
 }
 
 describe("authored BPMN DI appearance", () => {
+  it("resolves a label-style QName in its actual namespace context without rewriting source", () => {
+    const { document, di } = fixture("", '<d:BPMNLabel labelStyle="tns:Shared"/>',
+      '<d:BPMNLabelStyle id="Shared"><dc:Font name="Aptos" size="18" isBold=" true "/></d:BPMNLabelStyle>');
+    document.documentElement.setAttribute("targetNamespace", "urn:styles");
+    document.documentElement.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:tns", "urn:styles");
+    const before = document.documentElement.outerHTML;
+    expect(readBpmnDocumentAppearance(di)).toMatchObject({ labelFont: { name: "Aptos", size: 18, bold: true }, issues: [] });
+    expect(document.documentElement.outerHTML).toBe(before);
+    document.documentElement.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:tns", "urn:other");
+    expect(readBpmnDocumentAppearance(di).labelFont).toBeUndefined();
+    document.documentElement.removeAttribute("targetNamespace");
+    expect(readBpmnDocumentAppearance(di).labelFont).toBeUndefined();
+  });
+
   it("uses namespace identity and modern precedence without deleting shadowed attributes or mixed vendor content", () => {
     const { document, di } = fixture('paint:background-color="#123456" old:fill="orange" paint:border-color="rgb(20, 30, 40)" old:stroke="purple" vendor:fill="lime"',
       '<d:BPMNLabel paint:color="#654321" vendor:keep="label"><vendor:mixed>before <vendor:item/> after</vendor:mixed></d:BPMNLabel>');

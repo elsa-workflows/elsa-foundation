@@ -14,6 +14,12 @@ const extra = `<bpmn:startEvent id="Start"/><bpmn:endEvent id="End"/><bpmn:paral
 function parsed(transform: (xml: string) => string = xml => xml) { return readBpmnDocument(documentCanvasOwner(xml => transform(xml.replace('<bpmn:userTask id="O"/>', `<bpmn:userTask id="O"/>${extra}`)))); }
 
 describe("complete standard-source connection policies", () => {
+  it.each([" true ", " 1 "])("keeps event-subprocess restrictions for XML boolean %s", value => {
+    const source = parsed(xml => xml.replace('triggeredByEvent="true"', `triggeredByEvent="${value}"`));
+    expect(assessBpmnDocumentConnection(source, "sequenceFlow", "EventSub", "T").allowed).toBe(false);
+    expect(assessBpmnBoundaryAttachment(source, "B", "EventSub").allowed).toBe(false);
+  });
+
   it.each(["timer", "message", "signal"])("uses referenced %s definitions for event-gateway and message-flow policy", kind => {
     const source = parsed(xml => xml.replace('<bpmn:process id="P">', `<bpmn:${kind}EventDefinition id="Shared"/><bpmn:process id="P">`)
       .replace('<bpmn:intermediateCatchEvent id="Catch"><bpmn:timerEventDefinition/>', '<bpmn:intermediateCatchEvent id="Catch"><bpmn:eventDefinitionRef>tns:Shared</bpmn:eventDefinitionRef>'));

@@ -31,6 +31,7 @@ public static class BpmnInterchangeApi
         api.MapEndpoint<Documents.Analyze.Endpoint>();
         api.MapEndpoint<Documents.Import.Endpoint>();
         api.MapEndpoint<Documents.Export.Endpoint>();
+        api.MapEndpoint<Documents.Capabilities.Endpoint>();
     }
 }
 
@@ -44,6 +45,9 @@ public sealed record ExportBpmnDocumentRequest(ActivityNode ProcessNode, string?
 
 /// <param name="Omissions">Every task binding the document does not carry, each with why.</param>
 public sealed record ExportBpmnDocumentResult(string Xml, IReadOnlyList<BpmnExportOmission>? Omissions = null);
+
+/// <summary>The exact source schema this composed host retains and validates as authored drafts.</summary>
+public sealed record BpmnDocumentAuthoringCapabilities(string StructureKind, string SchemaVersion);
 
 internal sealed record BpmnInterchangeError(
     Dictionary<string, string[]> Errors,

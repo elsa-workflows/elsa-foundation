@@ -36,8 +36,8 @@ export function isGatewayElementType(type: string) {
 
 const modelNamespace = "http://www.omg.org/spec/BPMN/20100524/MODEL";
 
-/** Resolve a standard model QName for standalone notation without allocating or normalizing IDs. */
-export function resolveBpmnNotationReference(context: Element, reference: string | null): Element | undefined {
+/** Resolve a standard QName for standalone notation without allocating or normalizing IDs. */
+export function resolveBpmnNotationReference(context: Element, reference: string | null, namespaceURI = modelNamespace): Element | undefined {
   if (!reference?.trim()) return undefined;
   const parts = reference.trim().split(":");
   if (parts.length > 2 || parts.some(part => !part)) return undefined;
@@ -45,7 +45,7 @@ export function resolveBpmnNotationReference(context: Element, reference: string
     const namespace = context.lookupNamespaceURI(parts[0]);
     if (!namespace || namespace !== context.ownerDocument.documentElement.getAttribute("targetNamespace")) return undefined;
   }
-  const matches = [...context.ownerDocument.getElementsByTagNameNS(modelNamespace, "*")].filter(element => element.getAttribute("id") === parts.at(-1));
+  const matches = [...context.ownerDocument.getElementsByTagNameNS(namespaceURI, "*")].filter(element => element.getAttribute("id") === parts.at(-1));
   return matches.length === 1 ? matches[0] : undefined;
 }
 

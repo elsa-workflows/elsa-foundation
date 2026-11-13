@@ -207,7 +207,17 @@ export function projectBpmnDocumentCanvas(owner: ActivityNode, address: BpmnScop
     const target = endpointShape(edge, "target", endpoints.target, edge.points.at(-1) ?? { x: 0, y: 0 });
     if (!source || !target) {
       unresolvedEdgeIds.push(edge.edgeId);
-      diagnostics.push({ code: "missing-edge-di", elementId: edge.elementId, diId: edge.edgeId, message: "A semantic connection endpoint has no shape in this view; source references are retained." });
+      const dependencies = [edge.element, ...[...endpoints.source.referenceIds, ...endpoints.target.referenceIds,
+        endpoints.source.ownerElementId, endpoints.target.ownerElementId].flatMap(id => id && parsed.byId.has(id) ? [parsed.byId.get(id)!] : [])];
+      for (const element of [...dependencies])
+        if (element.localName === "boundaryEvent") {
+          const host = resolveBpmnDocumentReference(parsed, element, element.getAttribute("attachedToRef"));
+          if (host) dependencies.push(host);
+        }
+      const related = dependencies.flatMap(element => [...containerInstances(element), ...shapes.filter(shape => shape.element === element)]);
+      diagnostics.push({ code: "missing-edge-di", elementId: edge.elementId, diId: edge.edgeId,
+        relatedDiIds: [...new Set(related.map(shape => shape.shapeId))],
+        message: "A semantic connection endpoint has no shape in this view; source references are retained." });
       continue;
     }
     const semanticSource = parsed.byId.get(endpoints.source.referenceIds[0]);
@@ -255,6 +265,8 @@ function geometryCommands(canvas: BpmnDocumentCanvas, next: ReadonlyMap<string, 
   }).map(([id]) => nodes.get(id)!.data.semanticElementId));
   for (const edge of canvas.scene.edges.filter(edge => canvas.unresolvedEdgeIds.includes(edge.edgeId))) {
     const references = [...edge.sourceRefs, ...edge.targetRefs,
+      ...canvas.diagnostics.filter(diagnostic => diagnostic.diId === edge.edgeId).flatMap(diagnostic => diagnostic.relatedDiIds ?? [])
+        .map(id => nodes.get(id)?.data.semanticElementId),
       ...(edge.elementType === "dataInputAssociation" || edge.elementType === "dataOutputAssociation" ? [identity(edge.element.parentElement)] : [])];
     if (references.some(reference => reference && changed.has(reference))) fail(`edge '${edge.edgeId}' needs its missing endpoint DI before this move`);
   }

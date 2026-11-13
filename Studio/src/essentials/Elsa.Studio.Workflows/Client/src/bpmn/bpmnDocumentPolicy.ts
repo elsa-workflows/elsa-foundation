@@ -1,4 +1,5 @@
 import { bpmnNamespaces, resolveBpmnDocumentReference, type BpmnDocumentEdge, type ParsedBpmnDocument } from "./bpmnDocument";
+import { readBpmnBooleanAttribute } from "./bpmnXmlBoolean";
 import { bpmnEventDefinitionTypes as bpmnEventDefinitions, isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType } from "./bpmnNotationTypes";
 
 export { bpmnEventDefinitions };
@@ -17,7 +18,7 @@ export function isBpmnModelElement(element: Element | null | undefined): element
   return element?.namespaceURI === bpmnNamespaces.model;
 }
 export function bpmnBoolean(element: Element, name: string): boolean {
-  return ["true", "1"].includes(element.getAttribute(name) ?? "");
+  return readBpmnBooleanAttribute(element, name) === true;
 }
 export function bpmnFlowScope(element: Element): Element | undefined {
   for (let parent = element.parentElement; parent; parent = parent.parentElement)
