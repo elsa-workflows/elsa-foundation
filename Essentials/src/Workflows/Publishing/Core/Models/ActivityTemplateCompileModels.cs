@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
@@ -22,6 +23,11 @@ public sealed record ActivityTemplateCompilationRequest(
     /// kind of other saved content compiled the same way (such as <c>ActivitySourceVersion</c>, whose id is the version id).
     /// </summary>
     public string SubjectKind { get; init; } = "ActivityDraft";
+
+    /// <summary>Coordinator-resolved runtime facts from the exact loaded templates, before placement stamps boundary labels.</summary>
+    [JsonIgnore]
+    public IReadOnlyDictionary<string, ResolvedStructureInvocation> ResolvedStructureInvocations { get; init; } =
+        new Dictionary<string, ResolvedStructureInvocation>(StringComparer.Ordinal);
 }
 
 public sealed record ActivityTemplateCompilation(
@@ -53,6 +59,10 @@ public sealed record ActivityTemplateOccurrenceCompilation(
 {
     /// <summary>Optional Design-only declaration, lowered to runtime contracts by the publishing coordinator.</summary>
     public ActivityStructureInputProjection? StructureInputs { get; init; }
+
+    /// <summary>Actual provider-owned source identity, used to normalize authored structures inside a translated subtree without changing legacy-only overlays.</summary>
+    [JsonIgnore]
+    public ActivityStructureContract? AuthoredStructure { get; init; }
 }
 
 public sealed record ActivityTemplateDependencyDiscoveryRequest(

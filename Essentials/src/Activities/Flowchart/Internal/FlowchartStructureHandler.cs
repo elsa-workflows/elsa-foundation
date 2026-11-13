@@ -104,23 +104,64 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
         ActivityNodeStructure structure,
         IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
     {
-        var executable = structure.Payload.Deserialize<FlowchartStructure>(SerializerOptions)
-                         ?? throw new InvalidOperationException("Flowchart executable structure payload is invalid.");
-        var remapped = new FlowchartStructure(
-            executable.Connections
-                .Select(connection => new FlowchartConnection(
-                    new FlowchartEndpoint(Remap(connection.Source.NodeId, authoredToExecutableNodeIds)!, connection.Source.Port),
-                    new FlowchartEndpoint(Remap(connection.Target.NodeId, authoredToExecutableNodeIds)!, connection.Target.Port),
-                    connection.Id))
-                .ToArray(),
-            Remap(executable.StartNodeId, authoredToExecutableNodeIds),
-            executable.NodeMetadata.ToDictionary(
-                entry => Remap(entry.Key, authoredToExecutableNodeIds)!,
-                entry => entry.Value,
-                StringComparer.Ordinal),
-            executable.ConnectionMetadata,
-            executable.Variables);
-        return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(remapped, SerializerOptions));
+        var fields = Object(structure.Payload);
+        // Structural placement changes only child references. Retain canonical/legacy variable
+        // JSON and opaque metadata instead of deserializing the complete executable payload.
+        var connectionsKey = Key(fields, "connections");
+        if (connectionsKey is not null && fields[connectionsKey].ValueKind != JsonValueKind.Null)
+        {
+            if (fields[connectionsKey].ValueKind != JsonValueKind.Array)
+                throw new InvalidOperationException("Flowchart executable connections must be an array.");
+            fields[connectionsKey] = Write(fields[connectionsKey].EnumerateArray().Select(value =>
+            {
+                // Keep the existing validation of the declared connection/endpoint contract,
+                // but update its original JSON so unrelated endpoint and connection data survive.
+                var connection = value.Deserialize<FlowchartConnection>(SerializerOptions)
+                    ?? throw new InvalidOperationException("Flowchart executable connection is invalid.");
+                var entry = Object(value);
+                foreach (var (name, endpoint) in new[] { ("source", connection.Source), ("target", connection.Target) })
+                {
+                    var endpointKey = Key(entry, name)!;
+                    var endpointFields = Object(entry[endpointKey]);
+                    var nodeId = Remap(endpoint.NodeId, authoredToExecutableNodeIds);
+                    ArgumentException.ThrowIfNullOrWhiteSpace(nodeId);
+                    endpointFields[Key(endpointFields, "nodeId")!] = Write(nodeId);
+                    entry[endpointKey] = Write(endpointFields);
+                }
+                return Write(entry);
+            }).ToArray());
+        }
+        var startKey = Key(fields, "startNodeId");
+        if (startKey is not null && fields[startKey].ValueKind != JsonValueKind.Null)
+        {
+            if (fields[startKey].ValueKind != JsonValueKind.String)
+                throw new InvalidOperationException("Flowchart executable start identity must be a string.");
+            fields[startKey] = Write(Remap(fields[startKey].GetString(), authoredToExecutableNodeIds));
+        }
+        var metadataKey = Key(fields, "nodeMetadata");
+        if (metadataKey is not null && fields[metadataKey].ValueKind != JsonValueKind.Null)
+            fields[metadataKey] = Write(Object(fields[metadataKey]).ToDictionary(
+                entry => Remap(entry.Key, authoredToExecutableNodeIds)!, entry =>
+                {
+                    _ = entry.Value.Deserialize<FlowchartNodeMetadata>(SerializerOptions);
+                    return entry.Value;
+                }, StringComparer.Ordinal));
+        foreach (var name in new[] { "variables", "connectionMetadata" })
+        {
+            var key = Key(fields, name);
+            var kind = name == "variables" ? JsonValueKind.Array : JsonValueKind.Object;
+            if (key is not null && fields[key].ValueKind != JsonValueKind.Null && fields[key].ValueKind != kind)
+                throw new InvalidOperationException($"Flowchart executable {name} has an invalid shape.");
+            if (name == "connectionMetadata" && key is not null && fields[key].ValueKind == JsonValueKind.Object)
+                foreach (var entry in fields[key].EnumerateObject()) _ = entry.Value.Deserialize<FlowchartConnectionMetadata>(SerializerOptions);
+        }
+        return new ActivityNodeStructure(Kind, SchemaVersion, Write(fields));
+
+        static Dictionary<string, JsonElement> Object(JsonElement value) => value.ValueKind == JsonValueKind.Object
+            ? value.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal)
+            : throw new InvalidOperationException("Flowchart executable structure contains an invalid object.");
+        static string? Key(Dictionary<string, JsonElement> values, string name) => values.Keys.SingleOrDefault(key => StringComparer.OrdinalIgnoreCase.Equals(key, name));
+        static JsonElement Write<T>(T value) => JsonSerializer.SerializeToElement(value, SerializerOptions);
     }
 
     public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>

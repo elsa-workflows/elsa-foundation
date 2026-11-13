@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Xml.Linq;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Interchange.Services;
+using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
@@ -25,6 +27,28 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 public sealed class BpmnAuthoredDirectPublisherTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+
+    [Theory]
+    [InlineData("documentXml")]
+    [InlineData("processId")]
+    [InlineData("bindings")]
+    [InlineData("scopeHeaders")]
+    public async Task Relabelled_complete_source_is_refused_before_direct_runtime_publication(string field)
+    {
+        foreach (var spelling in new[] { field, field.ToUpperInvariant() })
+        {
+            var fixture = new Fixture();
+            var state = JsonSerializer.SerializeToNode(fixture.Version.State, Web)!;
+            state["rootActivity"]!["structure"]!["payload"]![spelling] = "retained source authority";
+            fixture.Version.StateSource = state.ToJsonString();
+            var before = fixture.Version.StateSource;
+            var failure = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+            Assert.Contains(spelling, Assert.IsType<JsonException>(failure.InnerException).Message, StringComparison.Ordinal);
+            Assert.Equal(0, fixture.Publications);
+            Assert.DoesNotContain("publish", fixture.Calls);
+            Assert.Equal(before, fixture.Version.StateSource);
+        }
+    }
 
     [Fact]
     public async Task Publication_uses_the_immutable_version_and_presentation_without_mutating_authoring()
@@ -171,15 +195,18 @@ public sealed class BpmnAuthoredDirectPublisherTests
     }
 
     [Theory]
-    [InlineData("HoldForRetry", 3)]
-    [InlineData("FinalFault", 1)]
-    public async Task Authored_service_retains_its_exact_selected_pin_source_and_fault_policy(string disposition, int attempts)
+    [InlineData("HoldForRetry", 3, false)]
+    [InlineData("FinalFault", 1, false)]
+    [InlineData("HoldForRetry", 3, true)]
+    [InlineData("FinalFault", 1, true)]
+    public async Task Authored_service_retains_its_exact_selected_pin_source_and_fault_policy(string disposition, int attempts, bool completeSource)
     {
         var fixture = new Fixture();
         var metadata = ServiceMetadata();
         metadata["faultPolicy"]!["disposition"] = disposition;
         metadata["faultPolicy"]!["maxAttempts"] = attempts;
         fixture.UseService(metadata.ToJsonString());
+        if (completeSource) fixture.UseCompleteSource();
         var before = fixture.Version.StateSource;
 
         await fixture.Publish();
@@ -201,21 +228,12 @@ public sealed class BpmnAuthoredDirectPublisherTests
     }
 
     [Theory]
-    [InlineData("missing")]
-    [InlineData("foreign")]
-    [InlineData("retired")]
-    [InlineData("expired")]
-    [InlineData("test")]
-    [InlineData("artifact")]
-    [InlineData("definition")]
-    [InlineData("version")]
-    [InlineData("label")]
-    [InlineData("identity")]
-    [InlineData("denied")]
-    public async Task Service_selection_requires_the_exact_live_authorized_published_source(string reason)
+    [MemberData(nameof(ServiceSourceCases))]
+    public async Task Service_selection_requires_the_exact_live_authorized_published_source(string reason, bool completeSource)
     {
         var fixture = new Fixture();
         fixture.UseService(ServiceMetadata().ToJsonString());
+        if (completeSource) fixture.UseCompleteSource();
         var source = fixture.WorkerSource!;
         fixture.WorkerSource = reason switch
         {
@@ -236,6 +254,11 @@ public sealed class BpmnAuthoredDirectPublisherTests
         await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => fixture.Publish());
         Assert.Equal(0, fixture.Publications);
     }
+
+    public static IEnumerable<object[]> ServiceSourceCases() =>
+        from reason in new[] { "missing", "foreign", "retired", "expired", "test", "artifact", "definition", "version", "label", "identity", "denied" }
+        from completeSource in new[] { false, true }
+        select new object[] { reason, completeSource };
 
     [Theory]
     [InlineData("unknown")]
@@ -340,6 +363,17 @@ public sealed class BpmnAuthoredDirectPublisherTests
             task["elementType"] = BpmnElementTypes.ServiceTask;
             task["properties"]!["elsa.direct.binding"] = metadata;
             Version.StateSource = state.ToJsonString();
+        }
+
+        public void UseCompleteSource()
+        {
+            var state = BpmnAuthoredDirectProjection.ReadState(Version)!;
+            var xml = new BpmnDocumentExporter().Export(state.RootActivity!);
+            XNamespace model = BpmnDocumentStructureHandler.ModelNamespace;
+            var processId = XDocument.Parse(xml).Root!.Element(model + "process")!.Attribute("id")!.Value;
+            var root = state.RootActivity! with { Structure = new(Process.StructureKind, BpmnAuthoredDocument.SchemaVersion,
+                JsonSerializer.SerializeToElement(new BpmnAuthoredDocument(xml, processId, [], [], []), Web)) };
+            Version.StateSource = JsonSerializer.Serialize(state with { RootActivity = root }, Web);
         }
 
         Task<WorkflowDefinitionVersion?> IWorkflowDefinitionVersionStore.FindByIdAsync(string id, CancellationToken cancellationToken)

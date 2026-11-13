@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -20,10 +22,69 @@ public sealed class BpmnStructureHandlerTests : IDisposable
         var services = new ServiceCollection();
         new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
-        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>());
+        _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), handler =>
+            handler.Kind == BpmnProcessActivity.StructureKind && handler.SchemaVersion == BpmnProcessActivity.StructureSchemaVersion);
     }
 
     public void Dispose() => _provider.Dispose();
+
+    [Theory]
+    [InlineData("2.0.0")]
+    [InlineData("99.0.0")]
+    public void Legacy_handler_refuses_other_versions_before_typed_deserialization(string schema)
+    {
+        var payload = JsonSerializer.SerializeToElement(new { documentXml = "complete opaque source", processId = "p", activities = Array.Empty<ActivityNode>() });
+        var source = new ActivityNode("process", "bpmn-version", [], [], new(BpmnProcessActivity.StructureKind, schema, payload));
+        Assert.Throws<InvalidOperationException>(() => _handler.ProjectChildren(source));
+        Assert.Throws<InvalidOperationException>(() => _handler.ProjectScopedVariables(source));
+        Assert.Throws<InvalidOperationException>(() => _handler.ReplaceChildren(source, []));
+        Assert.Throws<InvalidOperationException>(() => _handler.CompileExecutableStructure(source));
+        Assert.Throws<InvalidOperationException>(() => _handler.RemapExecutableStructure(source.Structure!, new Dictionary<string, string> { ["child"] = "copy" }));
+        Assert.Equal(payload.GetRawText(), source.Structure!.Payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("documentXml")]
+    [InlineData("processId")]
+    [InlineData("bindings")]
+    [InlineData("scopeHeaders")]
+    public void Legacy_handler_refuses_complete_source_authority_even_when_relabelled_schema1(string field)
+    {
+        foreach (var spelling in new[] { field, field.ToUpperInvariant() })
+        {
+            var payload = JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [spelling] = "retained source authority" });
+            var source = new ActivityNode("process", "bpmn-version", [], [], new(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, payload));
+            var failure = Assert.Throws<BpmnDocumentSourceException>(() => _handler.ProjectChildren(source));
+            Assert.Contains(spelling, failure.Message, StringComparison.Ordinal);
+            Assert.Contains(source.NodeId, failure.Message, StringComparison.Ordinal);
+            Assert.Contains(spelling, Assert.IsType<JsonException>(failure.InnerException).Message, StringComparison.Ordinal);
+            Assert.Throws<BpmnDocumentSourceException>(() => _handler.ProjectScopedVariables(source));
+            Assert.Throws<BpmnDocumentSourceException>(() => _handler.ReplaceChildren(source, []));
+            Assert.Throws<BpmnDocumentSourceException>(() => _handler.CompileExecutableStructure(source));
+            var remapFailure = Assert.Throws<BpmnDocumentSourceException>(() => _handler.RemapExecutableStructure(source.Structure!, new Dictionary<string, string>()));
+            Assert.Contains(source.Structure!.Kind, remapFailure.Message, StringComparison.Ordinal);
+            Assert.Contains(spelling, Assert.IsType<JsonException>(remapFailure.InnerException).Message, StringComparison.Ordinal);
+            Assert.Equal(payload.GetRawText(), source.Structure!.Payload.GetRawText());
+        }
+    }
+
+    [Fact]
+    public void Legacy_guard_does_not_classify_fields_inside_native_literals_or_opaque_diagram_data()
+    {
+        var opaque = JsonSerializer.SerializeToElement(new { documentXml = "literal", PROCESSID = "literal", bindings = new[] { "literal" }, scopeHeaders = new { literal = true } });
+        var child = new ActivityNode("child", "child-version", [new("value", new(opaque, "Literal"), null, null, null, null)], []);
+        var authored = new BpmnAuthoredStructure([child], [new("task", BpmnElementTypes.Task, childNodeId: child.NodeId)], diagram: opaque);
+        var source = new ActivityNode("process", "bpmn-version", [], [], new(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(authored, SerializerOptions)));
+        var slot = Assert.Single(_handler.ProjectChildren(source));
+        var updated = _handler.ReplaceChildren(source, [slot]);
+        var payload = updated.Structure!.Payload;
+        Assert.True(JsonElement.DeepEquals(opaque, payload.GetProperty("diagram")));
+        Assert.True(JsonElement.DeepEquals(opaque, payload.GetProperty("activities")[0].GetProperty("inputs")[0].GetProperty("value").GetProperty("value")));
+        var compiled = _handler.CompileExecutableStructure(updated);
+        var remapped = _handler.RemapExecutableStructure(compiled, new Dictionary<string, string> { ["child"] = "copy" });
+        Assert.Equal("copy", remapped.Payload.GetProperty("elements")[0].GetProperty("childNodeId").GetString());
+    }
 
     [Theory]
     [InlineData("\"set\"", "\"json\"")]
@@ -178,5 +239,62 @@ public sealed class BpmnStructureHandlerTests : IDisposable
         Assert.Equal("node-task", element.ChildNodeId);
         Assert.Equal("node-listener", element.ListenerNodeId);
         Assert.Equal("task-child", element.Properties["externalId"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Remapping_preserves_canonical_or_legacy_variables_and_opaque_fields(bool canonical)
+    {
+        var variables = canonical
+            ? """[{"variableKey":"local","name":"Local","type":{"alias":"Int32"},"policy":{"opaque":"task-child"},"initialBinding":{"literal":{"inlineValue":42}},"future":{"childNodeId":"task-child"}}]"""
+            : """[{"referenceKey":"local","name":"Local","type":{"alias":"Int32"},"storageDriverType":null,"default":{"expressionType":"Literal","value":42},"future":{"childNodeId":"task-child"}}]""";
+        var payload = JsonNode.Parse("""
+            {"elements":[{"elementId":"task-child","elementType":"task","childNodeId":"task-child","listenerNodeId":"listener-child","future":{"childNodeId":"task-child"}}],
+             "sequenceFlows":[{"flowId":"task-child","sourceRef":"task-child","targetRef":"other"}],"isTransaction":true,"opaque":{"childNodeId":"task-child"}}
+            """)!.AsObject();
+        payload["variables"] = JsonNode.Parse(variables);
+        var source = new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(payload, SerializerOptions));
+        var before = source.Payload.GetRawText();
+        var remapped = _handler.RemapExecutableStructure(source, new Dictionary<string, string>
+        { ["task-child"] = "placed-task", ["listener-child"] = "placed-listener" });
+        payload["elements"]![0]!["childNodeId"] = "placed-task";
+        payload["elements"]![0]!["listenerNodeId"] = "placed-listener";
+        Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(payload, SerializerOptions), remapped.Payload));
+        Assert.Equal(before, source.Payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("{\"elements\":42}")]
+    [InlineData("{\"elements\":[null]}")]
+    [InlineData("{\"elements\":[{\"childNodeId\":42}]}")]
+    [InlineData("{\"variables\":{}}")]
+    [InlineData("{\"sequenceFlows\":42}")]
+    [InlineData("{\"isTransaction\":\"yes\"}")]
+    public void Remapping_still_refuses_malformed_child_reference_shapes(string json)
+    {
+        var structure = new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion,
+            JsonSerializer.Deserialize<JsonElement>(json));
+        var failure = Record.Exception(() => _handler.RemapExecutableStructure(structure,
+            new Dictionary<string, string> { ["child"] = "placed-child" }));
+        Assert.True(failure is JsonException or InvalidOperationException, failure?.ToString());
+    }
+
+    [Fact]
+    public void Remapping_retains_existing_normalization_of_owned_references_only()
+    {
+        var payload = JsonSerializer.Deserialize<JsonElement>("""
+            {"elements":[{"elementId":"Task","elementType":"task","childNodeId":" child ","listenerNodeId":" listener ","future":" child "}],
+             "variables":[{"future":" child "}],"future":" child "}
+            """);
+        var structure = new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, payload);
+        var remapped = _handler.RemapExecutableStructure(structure, new Dictionary<string, string> { ["child"] = " placed ", ["listener"] = " " }).Payload;
+        var element = remapped.GetProperty("elements")[0];
+        Assert.Equal("placed", element.GetProperty("childNodeId").GetString());
+        Assert.Equal(JsonValueKind.Null, element.GetProperty("listenerNodeId").ValueKind);
+        Assert.Equal(" child ", element.GetProperty("future").GetString());
+        Assert.True(JsonElement.DeepEquals(payload.GetProperty("variables"), remapped.GetProperty("variables")));
+        Assert.True(JsonElement.DeepEquals(payload.GetProperty("future"), remapped.GetProperty("future")));
     }
 }

@@ -110,6 +110,15 @@ public sealed record ActivityChildProjection(
 }
 
 /// <summary>
+/// Physical ownership for retaining per-node authoring metadata, independent of lexical visibility.
+/// Activities are real native roots whose ownership can be traversed recursively. Additional node IDs
+/// name owned headers without inventing activity bodies. Neither collection establishes execution order.
+/// </summary>
+public sealed record ActivityOwnershipProjection(
+    IReadOnlyCollection<ActivityNode> Activities,
+    IReadOnlyCollection<string> AdditionalNodeIds);
+
+/// <summary>
 /// Additional outcomes owned by a child's structural relationships. Publication applies these only
 /// when the child's resolved activity type matches <see cref="ActivityTypeKey"/>. An optional literal
 /// input can also declare a fixed outcome; expression results remain constrained to the pinned names.

@@ -1,5 +1,7 @@
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Publishing.Core.Models;
+using System.Text.Json;
 
 namespace Elsa.Workflows.Publishing.Services;
 
@@ -10,7 +12,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// identity, this rewrites those references to match.
 /// </summary>
 /// <remarks>
-/// Only the node's own input bindings, output captures and intrinsic variable are touched; its descendants are left
+/// Only the node's own input bindings, canonical variable defaults and intrinsic variable are touched; its descendants are left
 /// alone, because a nested graph's body was already remapped by its own placement frame. An identity that is not in
 /// the map is left unchanged: publication validation refuses such references for closed-scope templates, and a
 /// legacy template keeps failing where it did before (VF-COER-001).
@@ -49,6 +51,9 @@ internal static class PlacedReferenceRemapper
             }
         }
 
+        var structure = RemapVariableDefaults(node.ExecutableNodeId, node.Structure, placedNodeIds, graphScopeId);
+        changed |= !ReferenceEquals(structure, node.Structure);
+
         if (!changed)
             return node;
 
@@ -63,10 +68,44 @@ internal static class PlacedReferenceRemapper
             node.Metadata,
             node.ExecutionPlacement,
             node.ChildSlots,
-            node.Structure,
+            structure,
             node.ActivityContract,
             node.IntrinsicKind,
             intrinsicVariable);
+    }
+
+    private static ExecutableActivityStructure? RemapVariableDefaults(string nodeId, ExecutableActivityStructure? structure,
+        IReadOnlyDictionary<string, string> placedNodeIds, string graphScopeId)
+    {
+        if (structure?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+            !payload.TryGetProperty("variables", out var variables) || variables.ValueKind != JsonValueKind.Array ||
+            variables.EnumerateArray().Any(variable => variable.ValueKind != JsonValueKind.Object || variable.TryGetProperty("referenceKey", out _) ||
+                !variable.TryGetProperty("variableKey", out var key) || key.ValueKind != JsonValueKind.String ||
+                !variable.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String ||
+                !variable.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.Object ||
+                !variable.TryGetProperty("policy", out var policy) || policy.ValueKind != JsonValueKind.Object))
+            return structure; // Authored activity-owned arrays and opaque values retain their existing representation.
+        try
+        {
+            var changed = false;
+            var remapped = variables.EnumerateArray().Select(record =>
+            {
+                var variable = record.Deserialize<RuntimeVariableDeclaration>(DescriptorPayloadSerializer.Options)!;
+                if (variable.InitialBinding is not { } initial) return record.Clone();
+                var next = RemapBinding(initial, placedNodeIds, graphScopeId);
+                if (ReferenceEquals(initial, next)) return record.Clone();
+                changed = true;
+                var properties = record.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+                properties["initialBinding"] = JsonSerializer.SerializeToElement(next, DescriptorPayloadSerializer.Options);
+                return JsonSerializer.SerializeToElement(properties, DescriptorPayloadSerializer.Options);
+            }).ToArray();
+            if (!changed) return structure;
+            var properties = payload.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+            properties["variables"] = JsonSerializer.SerializeToElement(remapped, DescriptorPayloadSerializer.Options);
+            return new(structure.Kind, structure.SchemaVersion, JsonSerializer.SerializeToElement(properties, DescriptorPayloadSerializer.Options));
+        }
+        catch (JsonException exception)
+        { throw new WorkflowExecutableCompilationException(null, null, $"Invalid canonical variable declarations on placed node '{nodeId}'.", exception); }
     }
 
     private static RuntimeInputBinding RemapBinding(
