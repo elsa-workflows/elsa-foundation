@@ -17,7 +17,7 @@ public static class CreationProtocol
         : "v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Json.Write(new { Start = start, Kind = kind, Payload = payload }))));
     public static void RejectUnsupported(CommitBatch batch)
     {
-        if (batch.Turns.Any(t => t.Row is { } row && (row.Creation != 0 || row.Retired || row.StartIntent is not null || row.ParentCreation != 0) ||
+        if (batch.Turns.Any(t => t.Row is { } row && (row.Creation != 0 || row.Retired || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null) ||
             t.Sent.Any(Qualified) || t.Subscribed.Concat(t.Unsubscribed).Any(s => s.Creation != 0 || s.Start?.Creation is not null)))
             throw new StoreException(Failure.Definite, "store has no qualified creation identity");
     }
@@ -28,14 +28,15 @@ public static class CreationProtocol
     public static void RejectUnsupported(SubscriptionRow subscription)
     { if (subscription.Creation != 0 || subscription.Start?.Creation is not null) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
 
-    internal static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload)
+    internal static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload, string message)
     {
         if (start.Creation is not { } creation) return previous?.Creation > 0 ? "IdentityRequired" : null;
         if (creation.Intent is not { Length: > 0 and <= 128 } || creation.Generation < 1 || creation.Previous < 0)
             return "InvalidCreation";
         if (start.Parent is null ? start.ParentCreation != 0 : start.ParentCreation <= 0) return "InvalidParentCreation";
         if (previous is { Retired: false })
-            return previous.Creation == creation.Generation && previous.StartIntent == Fingerprint(start, kind, payload) ? "ExistingCreation" : "StartConflict";
+            return previous.Creation == creation.Generation && previous.StartIntent == Fingerprint(start, kind, payload)
+                ? previous.PendingStart == message ? null : "ExistingCreation" : "StartConflict";
         var high = previous?.Creation ?? 0;
         if (high == long.MaxValue) return "CreationExhausted";
         return creation.Previous == high && creation.Generation == high + 1 ? null : "RetiredOrConflictingCreation";
@@ -68,8 +69,13 @@ public static class CreationProtocol
             RefuseWrite("qualified Delete must retain the lifecycle high-water mark");
         if (turn.Row is not { } row) return;
         if (row.Creation < 0 || row.ParentCreation < 0) RefuseWrite("negative creation identity");
-        if (row.Creation == 0 && (row.Retired || row.StartIntent is not null || row.ParentCreation != 0)) RefuseWrite("legacy row cannot carry a partial creation header");
+        if (row.Creation == 0 && (row.Retired || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.Creation > 0 && (row.Parent is null ? row.ParentCreation != 0 : row.ParentCreation <= 0)) RefuseWrite("incomplete exact parent address");
+        if (row.PendingStart is { } pending && (pending.Length == 0 || row.Status != InstanceStatus.Running ||
+            previous is { Retired: false } && previous.PendingStart != pending ||
+            previous?.PendingStart != pending && turn.Held?.Contains(pending) != true)) RefuseWrite("invalid held start continuation");
+        if (previous?.PendingStart is { } retained && row.PendingStart is null && row.Status == InstanceStatus.Running &&
+            !turn.Consumed.Concat(turn.Done).Contains(retained)) RefuseWrite("held start cleared without consuming its delivery");
         if (row.Retired)
         {
             if (!turn.Delete || previous is not { Creation: > 0, Retired: false } || row.Status == InstanceStatus.Running || row != Retire(previous))

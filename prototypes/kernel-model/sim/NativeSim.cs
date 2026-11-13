@@ -258,8 +258,7 @@ public sealed partial class World
         return null;    // what the journal says is reported through Faults, which Check reads first
     }
 
-    private string NativeCreation(string instance) => Store.Instances.GetValueOrDefault(instance)?.Creation is > 0 and var generation
-        ? $"{instance}@creation{generation}" : instance;
+    private string NativeCreation(string instance) => CreationProtocol.Origin(instance, Store.Instances.GetValueOrDefault(instance)?.Creation ?? 0);
 
     // ---- the end ---------------------------------------------------------------------------------------------------------
 

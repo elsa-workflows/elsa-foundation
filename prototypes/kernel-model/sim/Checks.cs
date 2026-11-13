@@ -144,7 +144,7 @@ public sealed partial class World
             if (row.Retired)
             {
                 if (row.Creation <= 0 || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
-                    row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null)
+                    row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null || row.PendingStart is not null)
                     return $"I22 {row.Id} has an invalid lifecycle tombstone";
                 _gone.Add(row.Id); _versions.Remove(row.Id);
             }

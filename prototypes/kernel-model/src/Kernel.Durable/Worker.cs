@@ -468,11 +468,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (item.Ticket || item.Taken) continue;    // taken here: recalled by a commit in flight
             var control = Kinds.IsControl(item.Message.Kind);
             var identityReply = CreationError(slot, item.Message) is not null;
+            var continuingStart = !identityReply && slot.Row?.PendingStart == item.Message.Id;
             if (suspended && !control && !identityReply) continue;    // identity refusal does not activate suspended authored work
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
             // Keep lifecycle changes/refusals separate. Compatible messages of this creation retain normal batching.
-            if (item.Message.Start?.Creation is not null || CreationProtocol.TargetError(slot.Row, item.Message) is not null ||
-                slot.Row?.Creation > 0 && (item.Message.Start is not null || _type.SingleMessage(item.Message)))
+            if (item.Message.Start?.Creation is not null && !continuingStart || CreationProtocol.TargetError(slot.Row, item.Message) is not null ||
+                slot.Row?.Creation > 0 && (item.Message.Start is not null && !continuingStart || _type.SingleMessage(item.Message)))
             {
                 if (due.TrueForAll(i => i.Held) && (item.Message.Due is not { } dueAt || dueAt <= now)) due = [item];
                 break;
@@ -558,7 +559,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             ? request.Start.Creation is null ? "IdentityRequired"
                 : !CreationIdentityAvailable ? "CreationIdentityUnavailable"
                 : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
-                : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload)
+                : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload, request.Id)
             : CreationProtocol.TargetError(slot.Row, request);
 
     private async Task Drive(TurnInput input)
@@ -581,12 +582,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             if (slot.Row is null or { Retired: true } && slot.Starting is { Start.Creation: { } start } request)
             {
-                unit.Row = row with { Creation = start.Generation, StartIntent = CreationProtocol.Fingerprint(request.Start, request.Kind, request.Payload), ParentCreation = request.Start.ParentCreation };
+                unit.Row = row with { Creation = start.Generation, StartIntent = CreationProtocol.Fingerprint(request.Start, request.Kind, request.Payload), ParentCreation = request.Start.ParentCreation,
+                    PendingStart = row.Status == InstanceStatus.Running && unit.Held.Any(i => i.Message.Id == request.Id) ? request.Id : null };
                 unit.Expected = slot.Row?.Revision;
                 unit.Revision = unit.Row.Revision;
             }
             else if (slot.Row is { Creation: > 0 } previous)
-                unit.Row = row with { Creation = previous.Creation, StartIntent = previous.StartIntent, ParentCreation = previous.ParentCreation };
+                unit.Row = row with { Creation = previous.Creation, StartIntent = previous.StartIntent, ParentCreation = previous.ParentCreation,
+                    PendingStart = row.Status == InstanceStatus.Running && !unit.Consumed.Any(i => i.Message.Id == previous.PendingStart) ? previous.PendingStart : null };
         }
         return unit;
     }
@@ -718,7 +721,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
-                    outcome = await CommitAsync([Bound(_type.Park(slot.CurrentRow, unit.Instance, unit.Consumed, unit.Spec, _refusal), slot)], marks, trial, generation, cancellationToken);
+                    outcome = await CommitAsync([Bound(_type.Park(slot.CurrentRow, unit.Instance,
+                        unit.Consumed.Concat(unit.Held).OrderBy(i => i.Seq).ToArray(), unit.Spec, _refusal), slot)], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Landed) (marks, trial) = ([], []);
             }
             if (outcome == Outcome.Refused && generation == _generation) Reset();   // nothing left to set apart

@@ -14,15 +14,15 @@ sweep to 180 seconds, with one processor. Record commands, source and assembly h
 failures. Mutation copies must be isolated and fail their named assertion, not merely time out or fail to build.
 No service, provider host, Docker, cloud resource or previous Azure grant is used by this runner.
 
-The 51 cases comprise twelve ordinary start/finish/receipt-expiry/Delete/recreate schedules across both modes,
+The 57 cases comprise twelve ordinary start/finish/receipt-expiry/Delete/recreate schedules across both modes,
 root/nested placement and first-creation uncertainty; six parent-cancel-before-child-commit races; four actual
 old event/timer carrier replays; eight inherited stale/missing-identity trials before Resume/Terminate on suspended actors;
 one separately scheduled, non-cooperative old job completion/ticket replay; four
 store/reader boundaries; two semantic-start/mixed-event cases; two visit-isolation cases; four held-prefix/native
 child-cancellation cases; four recreation Park cases (actual exhausted trials/definite commit refusal); and four
-job acknowledgement races. Select subsets with
+job acknowledgement races, four held initial checkpoint/refusal cases, and two mixed legacy/qualified oracle cases. Select subsets with
 `--parent-race`, `--transport-races` (also includes the job race), `--refusal-takeover`, `--held-singleton`,
-`--native-child-cancel`, `--recreation-park`, `--boundaries`, `--visits` or `--job-ack`.
+`--native-child-cancel`, `--recreation-park`, `--held-start`, `--mixed-oracle`, `--boundaries`, `--visits` or `--job-ack`.
 The default run includes every listed case. An assertion failure stops it; subsequent cases are not run.
 
 Normal workflows create the positive lifecycle witnesses. Their delete clears workflow content and ordinary
@@ -32,6 +32,12 @@ command for the replacement. Takeover preserves generation; explicit recreation 
 starts compare an immutable fingerprint of all start contents plus the triggering kind/payload, rather than treating the intent string alone
 as equivalence. Native receipt registration requires this shared identity; existing legacy receipts remain
 readable/protected without fabricated generation or retention metadata.
+
+An initial input can itself be held by an execution model. The durable owner records that exact pending delivery
+on the creation row and clears it when consumed or ended. Only that still-pending original may continue authored
+work; an equivalent start under another transport ID remains a duplicate. Cold reload preserves this boundary.
+Park consumes the failed checkpoint's held and consumed deliveries and binds the staged semantic start envelope;
+it does not assume the consumed subset contains the initial message. Retirement clears this pending-delivery ID.
 
 The boundary cases explicitly distinguish setup from writer evidence: legacy v2 JSON and an exhausted
 high-water mark are reader fixtures; malformed fenced commits are protocol-negative inputs. Neither claims a

@@ -9,7 +9,7 @@ namespace Kernel.Durable;
 /// that have not finished. One row, so one write per commit: a seam leak (FINDINGS section 24). JSON arrays or null.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, string? PendingStart = null);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
