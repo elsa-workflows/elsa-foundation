@@ -25,7 +25,7 @@ internal sealed record ActivityDataReadBinding(
     public ImmutableArray<string> MemberPath { get; init; } = [];
 
     /// <summary>Whether this reads one member of its source rather than the whole value.</summary>
-    public bool IsMemberRead => Role is "ActivityResultMember" or "VariableMember";
+    public bool IsMemberRead => ActivityDataReadRoles.IsMemberRole(Role);
 
     // Match the publication compiler's descriptor payload profile, including case-insensitive
     // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
@@ -41,7 +41,7 @@ internal sealed record ActivityDataReadBinding(
             yield return new("", Error: "InvalidSource");
             yield break;
         }
-        if (IsRole(argument.ExpressionType) || IsMemberRole(argument.ExpressionType))
+        if (IsRole(argument.ExpressionType) || ActivityDataReadRoles.IsMemberRole(argument.ExpressionType))
         {
             yield return Direct(argument.ExpressionType, argument.Value);
             yield break;
@@ -112,11 +112,14 @@ internal sealed record ActivityDataReadBinding(
     {
         if (string.IsNullOrWhiteSpace(role)) return new("", Error: "InvalidSource");
         var json = value is JsonElement element ? element : default;
-        if (role.Equals("ActivityResultMember", StringComparison.OrdinalIgnoreCase))
+        if (role.Equals(ActivityDataReadRoles.ActivityResultMember, StringComparison.OrdinalIgnoreCase))
             return ResultMember(json);
-        if (role.Equals("VariableMember", StringComparison.OrdinalIgnoreCase))
+        if (role.Equals(ActivityDataReadRoles.VariableMember, StringComparison.OrdinalIgnoreCase))
             return VariableMember(json);
-        if (IsMemberRole(role)) return new(role, Error: "UnsupportedMemberBinding");
+        if (role.Equals(ActivityDataReadRoles.WorkflowRequestMember, StringComparison.OrdinalIgnoreCase))
+            return KeyedMember(ActivityDataReadRoles.WorkflowRequestMember, "memberKey", json);
+        if (role.Equals(ActivityDataReadRoles.InputMember, StringComparison.OrdinalIgnoreCase))
+            return KeyedMember(ActivityDataReadRoles.InputMember, "referenceKey", json);
         if (json.ValueKind == JsonValueKind.Object &&
             (json.TryGetProperty("memberPath", out _) ||
              (!role.Equals("WorkflowRequest", StringComparison.OrdinalIgnoreCase) && json.TryGetProperty("path", out _))))
@@ -149,7 +152,7 @@ internal sealed record ActivityDataReadBinding(
     // A member read of an activity result names its producer by lineage alone, so it never declares a scope.
     private static ActivityDataReadBinding ResultMember(JsonElement json)
     {
-        const string role = "ActivityResultMember";
+        const string role = ActivityDataReadRoles.ActivityResultMember;
         if (json.ValueKind != JsonValueKind.Object || json.TryGetProperty("path", out _) ||
             json.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null)
             return new(role, Error: "InvalidSource");
@@ -166,10 +169,24 @@ internal sealed record ActivityDataReadBinding(
         };
     }
 
+    // A member read of a request member or a declared input names it by one key; a legacy dotted path is not a member
+    // path, so it is refused rather than combined with one.
+    private static ActivityDataReadBinding KeyedMember(string role, string keyProperty, JsonElement json)
+    {
+        if (json.ValueKind != JsonValueKind.Object || json.TryGetProperty("path", out _))
+            return new(role, Error: "InvalidSource");
+        var key = String(json, keyProperty);
+        if (string.IsNullOrWhiteSpace(key))
+            return new(role, Error: "InvalidSource");
+        return ActivityDataMemberPath.TryRead(json, out var memberPath)
+            ? new(role, key) { MemberPath = memberPath }
+            : new(role, Error: "InvalidMemberPath");
+    }
+
     // A member read of a variable names its declaring scope explicitly: unlike a whole-value read, it has no default.
     private static ActivityDataReadBinding VariableMember(JsonElement json)
     {
-        const string role = "VariableMember";
+        const string role = ActivityDataReadRoles.VariableMember;
         if (json.ValueKind != JsonValueKind.Object || json.TryGetProperty("path", out _))
             return new(role, Error: "InvalidSource");
         var key = String(json, "referenceKey");
@@ -198,7 +215,4 @@ internal sealed record ActivityDataReadBinding(
 
     private static bool IsRole(string? role) => role is not null &&
         new[] { "Input", "WorkflowRequest", "Variable", "ActivityResult" }.Contains(role, StringComparer.OrdinalIgnoreCase);
-
-    private static bool IsMemberRole(string? role) => role is not null &&
-        new[] { "InputMember", "WorkflowRequestMember", "VariableMember", "ActivityResultMember" }.Contains(role, StringComparer.OrdinalIgnoreCase);
 }
