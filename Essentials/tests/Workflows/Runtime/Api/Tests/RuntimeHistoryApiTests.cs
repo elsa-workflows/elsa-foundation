@@ -548,13 +548,17 @@ public sealed partial class RuntimeHistoryApiTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.TryGetValue("X-History-Test", out var permission)) return Task.FromResult(AuthenticateResult.NoResult());
+            var identityKind = Request.Headers["X-History-Identity"].ToString();
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, "operator"), new(IdentityClaimTypes.TenantId, "tenant-a"),
+                new(ClaimTypes.NameIdentifier, identityKind == "canonical-alias" ? "token-subject" : "operator"), new(IdentityClaimTypes.TenantId, "tenant-a"),
                 new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission),
                 new(IdentityClaimTypes.Normalized, "v1"),
                 new(IdentityClaimTypes.Permission, permission == "read" ? "workflows/runtime:read" : "workflows/runtime:execute")
             };
+            if (identityKind is not ("provider-only" or "no-user")) claims.Add(new(IdentityClaimTypes.UserId, "operator"));
+            if (identityKind == "conflicting-user") claims.Add(new(IdentityClaimTypes.UserId, "another-user"));
+            if (identityKind is "provider-only" or "conflicting-provider") claims.Add(new(IdentityClaimTypes.SubjectProvider, "external-provider"));
             if (Request.Headers.ContainsKey("X-History-Values"))
             {
                 claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission));

@@ -15,13 +15,14 @@ public sealed partial class RuntimeHistoryInspectionService
         CancellationToken token = default)
     {
         var workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
+        var requestBinding = await BindingAsync(token);
         var query = new RuntimeHistoryOccurrenceQuery(request.WorkflowExecutionId, request.Limit, request.SequenceToken,
             request.Position, request.AnchorActivityExecutionId, request.ActivityExecutionId,
-            request.IncludeDescendants, await BindingAsync(token));
+            request.IncludeDescendants, requestBinding);
         if (history is not IRuntimeHistoryOccurrenceStore occurrences)
             return EmptyOccurrences("occurrence-facet-unsupported", await CoverageAsync(workflow, null, token));
         var binding = OccurrenceAccessBinding is { } bind
-            ? await bind(workflow, query.AccessBinding, token) : null;
+            ? await bind(workflow, requestBinding, token) : null;
         if (binding is null) return EmptyOccurrences("current-authorization-unsupported", await CoverageAsync(workflow, null, token));
         query = new(request.WorkflowExecutionId, request.Limit, request.SequenceToken, request.Position,
             request.AnchorActivityExecutionId, request.ActivityExecutionId, request.IncludeDescendants, binding);

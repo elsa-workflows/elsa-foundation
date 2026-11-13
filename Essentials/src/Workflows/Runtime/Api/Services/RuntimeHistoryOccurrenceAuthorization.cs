@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Api.Authorization;
@@ -20,9 +19,10 @@ internal sealed class RuntimeHistoryOccurrenceAuthorization(IHttpContextAccessor
         if (accessor.HttpContext is not { } http || !validator.TryGetNormalizedPrincipal(http.User, out var principal))
             throw new RuntimeResourceMissingSignal();
         var tenants = principal.FindAll(IdentityClaimTypes.TenantId).Select(claim => claim.Value).ToArray();
-        var subjects = principal.FindAll(ClaimTypes.NameIdentifier).Select(claim => claim.Value).ToArray();
-        if (tenants.Length != 1 || subjects.Length != 1 || string.IsNullOrWhiteSpace(tenants[0]) || string.IsNullOrWhiteSpace(subjects[0]))
-            return null; // No unambiguous persisted subject; never substitute global or external IDs.
+        var subjects = principal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
+        if (tenants.Length != 1 || subjects.Length != 1 || principal.HasClaim(claim => claim.Type == IdentityClaimTypes.SubjectProvider) ||
+            string.IsNullOrWhiteSpace(tenants[0]) || string.IsNullOrWhiteSpace(subjects[0]))
+            return null; // NameIdentifier/sub may belong to an external provider; only its owner can assert an Elsa UserId.
         var tenant = tenants[0]; var subject = subjects[0];
         if (workflow.TenantId is not null && workflow.TenantId != tenant) throw new RuntimeResourceMissingSignal();
         var names = new[] { WorkflowRuntimePermissions.WorkflowRuntimeRead,

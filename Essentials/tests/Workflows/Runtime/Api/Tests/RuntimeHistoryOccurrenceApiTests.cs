@@ -232,6 +232,36 @@ public sealed partial class RuntimeHistoryApiTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
 
+    [Theory]
+    [InlineData("provider-only")] [InlineData("no-user")]
+    [InlineData("conflicting-user")] [InlineData("conflicting-provider")]
+    public async Task External_or_ambiguous_subjects_never_borrow_a_matching_local_users_authority(string identityKind)
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        host.Client.DefaultRequestHeaders.Add("X-History-Identity", identityKind);
+        using var response = await host.Client.GetAsync(Path + "/occurrences");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("current-authorization-unsupported", json.RootElement.GetProperty("reason").GetString());
+        Assert.Equal(0, source.Reads); Assert.Empty(current.Requests);
+    }
+
+    [Fact]
+    public async Task Canonical_user_authority_uses_UserId_even_when_the_tokens_audit_subject_differs()
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        host.Client.DefaultRequestHeaders.Add("X-History-Identity", "canonical-alias");
+        using var response = await host.Client.GetAsync(Path + "/occurrences");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("available", json.RootElement.GetProperty("state").GetString());
+        Assert.NotEmpty(current.Requests);
+        Assert.All(current.Requests, request => Assert.Equal("operator", request.SubjectId));
+        Assert.Equal(1, source.Reads);
+    }
+
     private static Task<Host> OccurrenceHost(OccurrenceProjection source, CurrentOccurrencePermissions? permissions = null,
         bool defaultAuthorization = false) => Host.StartAsync(
         services =>
@@ -240,7 +270,7 @@ public sealed partial class RuntimeHistoryApiTests
             services.Replace(ServiceDescriptor.Singleton<ICurrentSubjectPermissionAuthorizer>(permissions ?? new CurrentOccurrencePermissions()));
             services.EnsureReplacementContract<ICurrentSubjectPermissionAuthorizer, CurrentOccurrencePermissions>();
             if (defaultAuthorization)
-                services.AddScoped<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
+                services.Replace(ServiceDescriptor.Scoped<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>());
         }, workflow: Workflow() with { HistoryCapturePolicy = OccurrencePolicy });
 
     private static RuntimeHistoryOccurrencePage OccurrencePage(long sequence = 1)
