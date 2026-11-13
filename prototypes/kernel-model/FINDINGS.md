@@ -1092,7 +1092,7 @@ them, section 23).
 ### 25.3 Reply addresses carry the caller's deadline (decision 6). Run
 
 **What changed.** `ReplyTo.Of(node, request, deadline, beforeCommit)`: the reply address carries an absolute deadline,
-in database milliseconds, equal to the route's timeout (the native HTTP host passes its request's deadline, 30 s).
+in database milliseconds, computed as request start plus the route's timeout (the native HTTP host passes its request's deadline, 30 s).
 The owner reads it with its own estimate of database time (`Worker.Now`):
 
 - a turn's release adds a caller to its instance only while the caller's deadline has not passed;
@@ -1442,3 +1442,9 @@ with the graph engine (section 26), so they differ from the table above:
 The runtime suite on PostgreSQL, SQL Server, MySQL and MongoDB (it takes any store provider; it ran on the in-memory
 store); a leave in membership (R5); a lock in `TrialGate` (R6); the store contract change for R3; backing off a
 declined activation (R7); a way for layer 2 to ask for a pass (R12); a delay after a failed read (R13).
+
+**Reply-deadline integration correction (25.3).** Every completed owner pass now applies eviction after expiring reply
+addresses, including an otherwise idle pass. With `MaxInstances = 0`, a waiting instance stays pinned before its
+deadline and is evicted at equality; the committed running row and its subscription remain intact. The targeted
+`Native.Run deadlines` witness failed before this correction (address expired but instance remained cached) and
+passed after it. Native smoke and the short simulation are recorded separately in the integration receipt.

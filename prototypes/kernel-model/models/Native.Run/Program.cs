@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 //   dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll memory [runs]
 
 WriteLine.Out = null;
+if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
 if (args is ["expr", var text, .. var vars])
 {

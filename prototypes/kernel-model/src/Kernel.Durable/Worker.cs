@@ -192,7 +192,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
         if (!cancellationToken.IsCancellationRequested && Owns && DbNow >= RenewBy) await BeatAsync(cancellationToken);
         if (!Owns) return null;
-        Unpin();
+        Evict();
         if (busy) return TimeSpan.Zero;
         var now = Now;
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now).DefaultIfEmpty(long.MaxValue).Min();

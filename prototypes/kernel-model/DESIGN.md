@@ -375,7 +375,7 @@ the native model (merge):
 - **A request that resumes a waiting workflow** adds a delivery carrying its reply address; the owner, on any node,
   sends what the turn emits, and the end, over the runtime's transport (`IReplyTransport`), which is not durable.
 - **The reply address carries the caller's deadline** (decision 6, FINDINGS 25.3): `ReplyTo.Of(node, request,
-  deadline)`, absolute, in database milliseconds, equal to the route's timeout. Past it the owner drops the address: it
+  deadline)`, absolute, in database milliseconds, computed as request start plus the route's timeout. Past it the owner drops the address: it
   sends that caller nothing more, and the caller no longer keeps the instance in memory (a caller pins an instance
   against eviction while it waits). The simulation checks after every settling pass that no owner holds a caller past
   its deadline (`Flaw.KeepExpiredCallers` breaks it).
