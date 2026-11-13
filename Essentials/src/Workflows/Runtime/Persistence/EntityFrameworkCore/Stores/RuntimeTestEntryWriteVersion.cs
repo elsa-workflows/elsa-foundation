@@ -24,7 +24,7 @@ internal static class RuntimeTestEntryWriteVersion
     private static void RefusePrivateInterpreter(JsonElement? payload)
     {
         if (payload is { ValueKind: JsonValueKind.Object } value && value.EnumerateObject().Any(x =>
-                x.Name.Equals("selectedStartProtocol", StringComparison.OrdinalIgnoreCase) && x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined)))
+                x.Name.Equals(nameof(WorkflowExecutionStartCommandPayload.SelectedStartProtocol), StringComparison.OrdinalIgnoreCase) && x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined)))
             throw new NotSupportedException("Shared persistence has no qualified selected-start interpreter protocol.");
     }
 

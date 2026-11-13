@@ -1,5 +1,4 @@
 using Elsa.Workflows.Runtime.Services.Executions;
-using Microsoft.Extensions.DependencyInjection;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Contracts;
@@ -47,8 +46,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         IWorkflowExecutableReader? executableReader = null)
         : this(null, activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, timeProvider, workflowExecutionStateStore, workflowExecutableStore, sessionAccessor, executableReader) { }
 
-    public WorkflowCheckpointSchedulerWorkHandler(
-        IServiceProvider? services,
+    internal WorkflowCheckpointSchedulerWorkHandler(
+        QueuedSelectedStart? selectedStarts,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
@@ -58,7 +57,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         IRuntimeCoalescingSessionAccessor? sessionAccessor = null,
         IWorkflowExecutableReader? executableReader = null)
     {
-        _selectedStarts = services?.GetService<QueuedSelectedStart>();
+        _selectedStarts = selectedStarts;
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);

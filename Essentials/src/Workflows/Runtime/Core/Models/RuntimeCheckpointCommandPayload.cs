@@ -16,7 +16,6 @@ public sealed class RuntimeCheckpointCommandPayload
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? SelectedStartProtocol => TestEntry is null ? null : 1;
 
-
     public const string WorkflowStartReason = "WorkflowStart";
     public const string ActivityCompletionPropagationReason = "ActivityCompletionPropagation";
 

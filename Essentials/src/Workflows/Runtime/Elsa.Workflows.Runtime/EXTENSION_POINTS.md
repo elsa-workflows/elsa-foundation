@@ -1340,7 +1340,6 @@ These are preflight reads, not the scope store's atomic root-start admission tra
 process-private integration is described below. Lexical consumption and shared predecessor-reader fences
 remain follow-up work; no default authority or public Testing runner is activated.
 
-
 ### Process-private queued selected leaf execution
 
 `WorkflowExecutionStartDispatchRequest.TestEntry` carries an exact trusted entry through the ordinary

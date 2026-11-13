@@ -28,7 +28,8 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
             payload.StartAuthority, payload.DispatchNestingDepth, payload.StimulusInput is not null || payload.TriggerMetadata.Count != 0,
             cancellationToken);
         await RequireSourceAsync(payload, cancellationToken);
-        var target = executable.NodesById[entry.ExecutableNodeId];
+        if (!executable.NodesById.TryGetValue(entry.ExecutableNodeId, out var target))
+            throw Refused("The exact selected target is unavailable in the pinned executable.");
         var profiles = services.GetServices<IRuntimeSelectedStartTargetProfile>().ToArray();
         if (target.ChildSlots.Count != 0 || profiles.Length != 1 ||
             !await profiles[0].CanExecuteAsync(entry, executable, target,
@@ -100,8 +101,10 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
     internal static string PayloadHash(RuntimeSchedulerWorkItem work) => Convert.ToHexString(
         System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(work.Payload!.Value.GetRawText())));
 
+    private const string ProtocolProperty = nameof(WorkflowExecutionStartCommandPayload.SelectedStartProtocol);
+
     internal static bool HasWireProtocol(JsonElement? payload) => payload is { ValueKind: JsonValueKind.Object } value &&
-        value.EnumerateObject().Any(x => x.Name.Equals("selectedStartProtocol", StringComparison.OrdinalIgnoreCase) &&
+        value.EnumerateObject().Any(x => x.Name.Equals(ProtocolProperty, StringComparison.OrdinalIgnoreCase) &&
             x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined));
 
     internal static void ValidateWireEntry(JsonElement? payload, WorkflowTestEntry? entry)
@@ -113,7 +116,7 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
     internal static void RequireWireProtocol(JsonElement? payload)
     {
         var protocol = payload is { ValueKind: JsonValueKind.Object } value
-            ? value.EnumerateObject().FirstOrDefault(x => x.Name.Equals("selectedStartProtocol", StringComparison.OrdinalIgnoreCase)).Value : default;
+            ? value.EnumerateObject().FirstOrDefault(x => x.Name.Equals(ProtocolProperty, StringComparison.OrdinalIgnoreCase)).Value : default;
         if (protocol.ValueKind != JsonValueKind.Number || !protocol.TryGetInt32(out var version) || version != 1)
             throw Refused("The queued selected start has no supported process-private interpreter protocol.");
     }

@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -144,8 +143,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IWorkflowExecutableInputValidator? inputValidator)
         : this(null, executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor, startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore, stimulusIntentAdapters, inputValidator) { }
 
-    public WorkflowStartDispatcher(
-        IServiceProvider? services,
+    internal WorkflowStartDispatcher(
+        QueuedSelectedStart? selectedStarts,
         IWorkflowExecutableStore executableStore,
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
         IWorkflowExecutionActorProvider agentProvider,
@@ -160,7 +159,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters,
         IWorkflowExecutableInputValidator? inputValidator)
     {
-        _selectedStarts = services?.GetService<QueuedSelectedStart>();
+        _selectedStarts = selectedStarts;
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
         ArgumentNullException.ThrowIfNull(agentProvider);

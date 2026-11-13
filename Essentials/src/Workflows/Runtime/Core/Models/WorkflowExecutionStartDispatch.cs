@@ -503,7 +503,6 @@ public sealed class WorkflowExecutionStartCommandPayload
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? SelectedStartProtocol => TestEntry is null ? null : 1;
 
-
     public WorkflowExecutionStartCommandPayload(
         WorkflowExecutableIdentity pinnedExecutable,
         string requestedArtifactId,

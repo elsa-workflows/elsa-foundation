@@ -1,5 +1,4 @@
 using Elsa.Workflows.Runtime.Services.Executions;
-using Microsoft.Extensions.DependencyInjection;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -41,8 +40,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
         : this(null, workflowExecutableStore, schedulerWorkQueue, idGenerator, timeProvider, workflowExecutionStateStore, executableReader, incidentStrategyCatalog, checkpointCommitter, logger) { }
 
-    public WorkflowStartSchedulerWorkHandler(
-        IServiceProvider? services,
+    internal WorkflowStartSchedulerWorkHandler(
+        QueuedSelectedStart? selectedStarts,
         IWorkflowExecutableStore workflowExecutableStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IRuntimeExecutionIdGenerator idGenerator,
@@ -53,7 +52,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         RuntimeCheckpointCommitter? checkpointCommitter = null,
         ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
     {
-        _selectedStarts = services?.GetService<QueuedSelectedStart>();
+        _selectedStarts = selectedStarts;
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(idGenerator);
@@ -96,7 +95,6 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
-        if (startPayload.TestEntry is not null) QueuedSelectedStart.RequireWireProtocol(workItem.Payload);
         if (startPayload.TestEntry is not null)
             await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
                 .PrepareAsync(startPayload, executable, workItem.WorkflowExecutionId, _workflowExecutionStateStore,
