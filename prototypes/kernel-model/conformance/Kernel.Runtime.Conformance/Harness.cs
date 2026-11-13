@@ -14,7 +14,7 @@ public sealed record HarnessSetup(int Partitions, RuntimeTiming Timing, double F
 public sealed class Harness : IAsyncDisposable
 {
     private readonly ProvidedStore _provided;
-    private readonly ConcurrentDictionary<string, bool> _names = new();
+    private readonly ConcurrentDictionary<string, NodeStore> _stores = new();
     private readonly List<IRuntimeNode> _nodes = [];
     private readonly HashSet<string> _gone = [];
     private IRuntimeCluster _cluster = null!;
@@ -69,10 +69,16 @@ public sealed class Harness : IAsyncDisposable
         get { lock (_nodes) return _nodes.Where(n => !_gone.Contains(n.Name)).ToList(); }
     }
 
+    /// <summary>The node's way to the store, which a case can stall.</summary>
+    public NodeStore StoreOf(string node) => _stores[node];
+
+    /// <summary>Held commits that the fence refused, on every node so far.</summary>
+    public int HeldRefused => _stores.Values.Sum(s => s.HeldRefused);
+
     private NodeServices Node(string name)
     {
-        var store = Recorded;
-        if (!_names.TryAdd(name, true)) lock (Reused) Reused.Add(name);
+        var store = new NodeStore(Recorded);
+        if (!_stores.TryAdd(name, store)) lock (Reused) Reused.Add(name);
         var options = new WorkerOptions
         {
             Lease = Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = Partitions,
@@ -87,9 +93,9 @@ public sealed class Harness : IAsyncDisposable
 
     public async Task<IRuntimeNode> StartAsync(int side = 0)
     {
-        var before = _names.Keys.ToHashSet();
+        var before = _stores.Keys.ToHashSet();
         var node = await _cluster.StartNodeAsync(side);
-        var asked = _names.Keys.Where(n => !before.Contains(n)).ToList();
+        var asked = _stores.Keys.Where(n => !before.Contains(n)).ToList();
         if (asked is not [var name] || name != node.Name)
             lock (Misnamed) Misnamed.Add($"NAME the node started as {node.Name} asked layer 2 for [{string.Join(", ", asked)}]");
         lock (_nodes) _nodes.Add(node);
@@ -151,6 +157,15 @@ public sealed class Harness : IAsyncDisposable
         foreach (var node in Alive) await StopAsync(node);
         Watcher.TearingDown();
         await _cluster.DisposeAsync();
+        // A killed node's calls still stalled execute when their stall ends: wait for them, so the checks see them.
+        var idleSince = long.MaxValue;     // idle on samples spanning 100 ms: a pass between two calls is not idle
+        if (!await WaitAsync(() =>
+            {
+                if (!_stores.Values.All(s => s.Idle)) idleSince = long.MaxValue;
+                else if (idleSince == long.MaxValue) idleSince = Environment.TickCount64;
+                return Environment.TickCount64 - idleSince >= 100;
+            }, Lease * 4 + TimeSpan.FromSeconds(2)))
+            lock (Misnamed) Misnamed.Add("TEARDOWN store calls of stopped or killed nodes were still under way after four leases");
     }
 
     private bool _stopped;
