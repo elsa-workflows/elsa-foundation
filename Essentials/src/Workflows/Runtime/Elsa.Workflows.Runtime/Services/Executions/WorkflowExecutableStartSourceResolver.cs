@@ -27,7 +27,8 @@ public sealed class WorkflowExecutableStartSourceResolver(
 
     private static WorkflowExecutableSourceProvenance? ResolveKnown(IReadOnlyCollection<WorkflowExecutableSourceReference> references,
         string artifactId, WorkflowExecutableSourceSelection? selection, WorkflowExecutableProvenanceRequirement provenanceRequirement,
-        WorkflowExecutableReferenceScope requiredScope, DateTimeOffset now, PersistenceScope? accessScope)
+        WorkflowExecutableReferenceScope requiredScope, DateTimeOffset now, PersistenceScope? accessScope,
+        bool explicitTenant = false, string? tenantId = null)
     {
         if (references.Count == 0)
         {
@@ -44,7 +45,8 @@ public sealed class WorkflowExecutableStartSourceResolver(
         }
 
         var scopedReferences = references.Where(reference => reference.Scope == requiredScope &&
-            (accessScope is null || reference.TenantId is null || reference.TenantId == accessScope.Value)).ToArray();
+            (explicitTenant ? reference.TenantId is null || reference.TenantId == tenantId :
+                accessScope is null || reference.TenantId is null || reference.TenantId == accessScope.Value)).ToArray();
         var selectedReferences = Select(scopedReferences, selection);
         var liveReferences = selectedReferences
             .Where(reference => reference.IsLive(now))
@@ -94,8 +96,18 @@ public sealed class WorkflowExecutableStartSourceResolver(
         return CaptureCoreAsync(binding, executable, scope, cancellationToken);
     }
 
+    // New combined sources supply the real tenant separately from the selected physical namespace.
+    // Ordinary embedded starts retain the existing missing-tenant legacy-reference behavior.
+    internal ValueTask<StimulusStartRecipient> CaptureInTenantAsync(WorkflowTriggerBinding binding,
+        WorkflowExecutableIdentity executable, PersistenceScope scope, string? tenantId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return CaptureCoreAsync(binding, executable, scope, cancellationToken, true, tenantId);
+    }
+
     private async ValueTask<StimulusStartRecipient> CaptureCoreAsync(WorkflowTriggerBinding binding,
-        WorkflowExecutableIdentity executable, PersistenceScope? accessScope, CancellationToken cancellationToken)
+        WorkflowExecutableIdentity executable, PersistenceScope? accessScope, CancellationToken cancellationToken,
+        bool explicitTenant = false, string? tenantId = null)
     {
         ArgumentNullException.ThrowIfNull(binding); ArgumentNullException.ThrowIfNull(executable);
         cancellationToken.ThrowIfCancellationRequested();
@@ -104,16 +116,17 @@ public sealed class WorkflowExecutableStartSourceResolver(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (WorkflowExecutableSourceReadException) { throw; }
         catch (Exception exception) { throw new WorkflowExecutableSourceReadException(binding.ArtifactId, WorkflowExecutableReferenceScope.Published, exception); }
-        return CaptureKnown(binding, executable, references, accessScope, timeProvider.GetUtcNow());
+        return CaptureKnown(binding, executable, references, accessScope, timeProvider.GetUtcNow(), explicitTenant, tenantId);
     }
 
     private static StimulusStartRecipient CaptureKnown(WorkflowTriggerBinding binding, WorkflowExecutableIdentity executable,
-        IReadOnlyCollection<WorkflowExecutableSourceReference> references, PersistenceScope? accessScope, DateTimeOffset now)
+        IReadOnlyCollection<WorkflowExecutableSourceReference> references, PersistenceScope? accessScope, DateTimeOffset now,
+        bool explicitTenant = false, string? tenantId = null)
     {
         var selection = binding.ActivationId is null && binding.SlotId is null ? null :
             new WorkflowExecutableSourceSelection(activationId: binding.ActivationId, slotId: binding.SlotId);
         var source = ResolveKnown(references, binding.ArtifactId, selection, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy,
-            WorkflowExecutableReferenceScope.Published, now, accessScope);
+            WorkflowExecutableReferenceScope.Published, now, accessScope, explicitTenant, tenantId);
         return new(binding, executable, source);
     }
 
@@ -136,28 +149,32 @@ public sealed class WorkflowExecutableStartSourceResolver(
         return ValidateCapturedCoreAsync(recipients, scope, cancellationToken);
     }
 
+    internal ValueTask ValidateCapturedInTenantAsync(IReadOnlyList<StimulusStartRecipient> recipients, PersistenceScope scope,
+        string? tenantId, CancellationToken cancellationToken) => ValidateCapturedCoreAsync(recipients, scope, cancellationToken, true, tenantId);
+
     private async ValueTask ValidateCapturedCoreAsync(IReadOnlyList<StimulusStartRecipient> recipients, PersistenceScope? scope,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool explicitTenant = false, string? tenantId = null)
     {
         ArgumentNullException.ThrowIfNull(recipients);
         cancellationToken.ThrowIfCancellationRequested();
         foreach (var recipient in recipients)
         {
             if (!recipient.SourceProvenanceCaptured) throw new InvalidDataException("A retained cohort requires an actual ordinary source capture for every start.");
-            var selected = await CaptureCoreAsync(recipient.Binding, recipient.Executable, scope, cancellationToken);
+            var selected = await CaptureCoreAsync(recipient.Binding, recipient.Executable, scope, cancellationToken, explicitTenant, tenantId);
             if (selected.SourceProvenance != recipient.SourceProvenance)
                 throw new InvalidDataException("The captured source differs from ordinary authoritative publication selection.");
         }
     }
 
     internal static void ValidateCapturedUnderReferenceGate(IReadOnlyList<StimulusStartRecipient> recipients,
-        IReadOnlyCollection<WorkflowExecutableSourceReference> references, PersistenceScope scope, DateTimeOffset now)
+        IReadOnlyCollection<WorkflowExecutableSourceReference> references, PersistenceScope scope, DateTimeOffset now,
+        bool explicitTenant = false, string? tenantId = null)
     {
         foreach (var recipient in recipients)
         {
             if (!recipient.SourceProvenanceCaptured) throw new InvalidDataException("The selected publication is uncaptured.");
             var selected = CaptureKnown(recipient.Binding, recipient.Executable,
-                references.Where(reference => reference.ArtifactId == recipient.Executable.ArtifactId).ToArray(), scope, now);
+                references.Where(reference => reference.ArtifactId == recipient.Executable.ArtifactId).ToArray(), scope, now, explicitTenant, tenantId);
             if (selected.SourceProvenance != recipient.SourceProvenance)
                 throw new InvalidDataException("The captured publication changed before atomic acceptance.");
         }
