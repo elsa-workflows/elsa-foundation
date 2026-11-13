@@ -79,7 +79,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     const included = await preview();
     const check = (result: QueryResult) => {
       expect(result.rows).toHaveLength(1);
-      expect(result.rows[0].values).toMatchObject({ definitionId: { value: seeded.definitionId }, "current.total": { value: String(expectedCurrent.length) }, "baseline.total": { value: String(expectedBaseline.length) }, "delta.total": { value: String(delta) } });
+      expect(result.rows[0].values).toMatchObject({ definitionId: { value: seeded.definitionId }, total: { value: String(expectedCurrent.length) }, "baseline.total": { value: String(expectedBaseline.length) }, "delta.total": { value: String(delta) } });
     };
     check(included.result);
     await capture(page, info, "comparison-included");
