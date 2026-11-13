@@ -1,3 +1,7 @@
+# Dashboard evidence index
+
+Current delivered source, original downloadable screenshots/ARIA, privacy-reviewed trace archives, exact model identities and allowlisted acceptance reports are in the [13 November delivery ledger](2026-11-13/README.md). The [resulting-main receipt](2026-11-13/resulting-main-receipt.json) qualifies clean main3a90b64b96 with actual provider/native keyboard journeys and real host restart. The history below retains its original failed, unavailable, preliminary and source-specific meanings.
+
 # Dashboard delivery evidence
 
 **12 November — historical receipts below:** #3913 closed without merging. The owner resumed delivery and extended the review limit within reason. [Delivery slices](../delivery-slices.md) owns current integration status. The local passes below belong to the preserved November 6 source; former `/tmp` artifacts are unavailable. They are not current-head, independent, downloadable or resulting-main qualification. References below to the exhausted review cap describe the old checkpoint, not a pending permission request.
