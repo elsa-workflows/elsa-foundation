@@ -272,7 +272,8 @@ internal static class StructuralParentEvaluationSupport
         RuntimeSchedulerWorkItem WorkItem,
         IActivityCommandPayload Payload,
         IReadOnlyDictionary<string, string> Metadata,
-        IReadOnlyDictionary<string, string> DerivedCommandMetadata);
+        IReadOnlyDictionary<string, string> DerivedCommandMetadata)
+    { internal IReadOnlyList<RuntimeHistorySourceFact>? HistorySourceFacts { get; init; } }
 
     /// <summary>
     /// Builds a <see cref="ParentEvaluationCommitSource"/> with the checkpoint metadata every parent evaluation
@@ -405,7 +406,12 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () =>
+            (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations))
+                .Concat((incidentChanges ?? []).Select(incident => RuntimeHistoryIncidentFacts.DecisionApplied(incident))), cancellationToken);
+        if (childControlContribution is not null)
+            commit = childControlContribution.Apply(commit);
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     /// <summary>
@@ -526,8 +532,21 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
+        commit = await checkpointCommitter.AddHistorySourceFactsAsync(commit, () => (source.HistorySourceFacts ?? []).Concat(CancellationIncidentFacts(subtreeCancellations)), cancellationToken);
+        if (childControlContribution is not null)
+            commit = childControlContribution.Apply(commit);
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
+
+    // The cancellation planner owns these exact suppressions; fault absorption explicitly substitutes a resolution.
+    // Facts are created lazily only for the final admitted profile and travel in the original raw checkpoint.
+    private static IEnumerable<RuntimeHistorySourceFact> CancellationIncidentFacts(IEnumerable<ActivitySubtreeCancellationPlan> plans) =>
+        plans.SelectMany(plan => plan.IncidentChanges).Select(incident => incident.Status switch
+        {
+            IncidentStatus.Suppressed => RuntimeHistoryIncidentFacts.Suppressed(incident),
+            IncidentStatus.Resolved => RuntimeHistoryIncidentFacts.Resolved(incident),
+            _ => throw new InvalidOperationException("A cancellation plan must identify its actual incident disposition.")
+        });
 
     internal sealed record SubtreeCancellationCommitChanges(
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions,

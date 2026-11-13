@@ -9,7 +9,11 @@ public sealed record RuntimeCheckpoint(
     string WorkflowExecutionId,
     DateTimeOffset OccurredAt,
     IReadOnlyCollection<string> ActivityExecutionIds,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+}
 
 public sealed record RuntimeCheckpointPersistenceDecision(
     RuntimeCheckpointPersistenceMode Mode,

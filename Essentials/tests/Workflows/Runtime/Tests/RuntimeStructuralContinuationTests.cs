@@ -10,6 +10,29 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimeStructuralContinuationTests
 {
     [Fact]
+    public void State_and_control_clones_preserve_immutable_and_lazy_owner_facts_until_the_exact_handoff()
+    {
+        var at = DateTimeOffset.UnixEpoch;
+        var supplied = new List<RuntimeHistorySourceFact> { new(RuntimeHistorySourceFactKind.ControlApplied, "eager", at) };
+        var calls = 0;
+        var continuation = RuntimeStructuralContinuation.Defer.WithHistorySourceFacts(supplied)
+            .WithHistorySourceFacts(observed => { calls++; return [new(RuntimeHistorySourceFactKind.ControlApplied, "lazy", observed)]; });
+        supplied.Clear();
+        var value = ValueEnvelope.Inline(new("state"), JsonSerializer.SerializeToElement(new { cursor = 1 }), ValueProtectionPolicy.InstanceInline);
+        var clone = continuation.WithState(value).WithControl(new(1, "consumer", 1, "run", "activity", "work", 0, false));
+        Assert.Equal(0, calls);
+        Assert.Single(clone.HistorySourceFacts!);
+        var facts = clone.MaterializeHistorySourceFacts(at.AddSeconds(1));
+        Assert.Equal(new[] { "eager", "lazy" }, facts.Select(fact => fact.SubjectId));
+        Assert.Equal(at.AddSeconds(1), facts[1].OccurredAt);
+        Assert.Equal(1, calls);
+        Assert.NotNull(clone.StateUpdate);
+        Assert.NotNull(clone.Control);
+        Assert.Null(RuntimeStructuralContinuation.Defer.HistorySourceFacts);
+        Assert.Throws<ArgumentNullException>(() => RuntimeStructuralContinuation.Defer.WithHistorySourceFacts((IReadOnlyList<RuntimeHistorySourceFact>)null!));
+    }
+
+    [Fact]
     public void Complete_CarriesOneImmutableOutcome()
     {
         var continuation = RuntimeStructuralContinuation.Complete("Approved");
