@@ -170,12 +170,19 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 
 /// <summary>
 /// The storage interface on Entity Framework Core, for PostgreSQL and SQLite, and with an <see cref="Engine"/> for SQL Server and MySQL. A commit is: the fence, checked; then
-/// one SaveChanges with everything else; then COMMIT. With <paramref name="fenceInBatch"/> the fence rides in the
-/// SaveChanges as concurrency tokens on epoch and position, which saves a round trip and takes the lease time from
-/// this machine's clock instead of the database's.
+/// one SaveChanges with everything else; then COMMIT. With the fence in the batch it rides in the SaveChanges as
+/// concurrency tokens on epoch and position, which saves a round trip and takes the lease time from this machine's
+/// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
+/// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBatch = false) : IKernelStore
+public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null) : IKernelStore
 {
+    /// <summary>
+    /// Whether the fence rides in the batch. The default (decided 12 and 13 November) is in the batch on every engine
+    /// but SQL Server, whose default is the checked fence: there the fence in the batch deadlocks takes (ENGINES.md E9).
+    /// </summary>
+    public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault ?? true;
+
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
     public bool Unfenced { get; init; }
 
@@ -274,7 +281,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             db.Database.AutoSavepointsEnabled = false;      // ENGINES.md E4: SAVEPOINT and RELEASE were two more round trips per commit on PostgreSQL
             await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
             var now = 0L;
-            if (fenceInBatch)
+            if (FenceInBatch)
             {
                 // MUTATION (Unfenced): the tokens are what the row says now, not what this owner believes, so the check always passes.
                 var (tokenEpoch, tokenPosition) = (batch.Epoch, batch.Position);
@@ -374,7 +381,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool fenceInBa
             // still holds, and is "not landed" otherwise. Epoch and position never return to old values, so a fence
             // that holds now held when the batch ran. An unknown outcome stays unknown: the batch may have landed and
             // moved the position itself.
-            if (fenceInBatch && !DefiniteBeatsFence && failure.Failure is Failure.Definite or Failure.Transient)
+            if (FenceInBatch && !DefiniteBeatsFence && failure.Failure is Failure.Definite or Failure.Transient)
             {
                 bool holds;
                 try { holds = await HoldsAsync(batch, cancellationToken); }
