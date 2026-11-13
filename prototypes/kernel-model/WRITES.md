@@ -86,11 +86,15 @@ docker run -d --rm -P -e POSTGRES_PASSWORD=kernel --name km-writes-pg-4229 postg
 docker port km-writes-pg-4229 5432
 PG="Host=localhost;Port=<port>;Username=postgres;Password=kernel"
 EFR="dotnet ef/Kernel.Ef.Run/bin/Release/net10.0/Kernel.Ef.Run.dll"
-$EFR x stress postgres "$PG;Database=kernel_wstress" seconds=40 messages=5000 writes=1 [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]
-$EFR x cost postgres "$PG;Database=kernel_wcost" writes=1 [history=state|minimal] [pad=4096] [fillfactor=70|90]
+$EFR x stress postgres "$PG;Database=kernel_wstress" seconds=40 messages=5000 writes=1 fence=checked [history=state|minimal] [pad=4096] [fillfactor=70] [fastvacuum=1]
+$EFR x cost postgres "$PG;Database=kernel_wcost" writes=1 fence=checked [history=state|minimal] [pad=4096] [fillfactor=70|90]
 # r2-cost-hot.log: after each cost run (fillfactor=100, 90, 70), a manual query of the whole run's counts
 docker exec km-writes-pg-4229 psql -U postgres -d kernel_wcost -tAc "select relname, n_tup_ins, n_tup_upd, n_tup_hot_upd, n_tup_del from pg_stat_user_tables where relname in ('Messages','Instances')"
 ```
+
+Every run here used the checked fence, the default when they ran. Since #4334 the default on PostgreSQL is the fence
+in the batch, so `fence=checked` reproduces them. The fence in the batch writes the same partition row in the same
+transaction and saves a round trip, so the bytes should barely move (not measured here).
 
 `wal_keep_size` keeps the run's WAL so that it can be read back. It does not change checkpoints. All other server
 settings are the defaults: `autovacuum_naptime` 1 min, `max_wal_size` 1 GB, `checkpoint_timeout` 5 min,
