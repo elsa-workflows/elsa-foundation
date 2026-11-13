@@ -13,6 +13,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.AspNetCore.Authentication;
@@ -547,9 +548,20 @@ public sealed partial class RuntimeHistoryApiTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.TryGetValue("X-History-Test", out var permission)) return Task.FromResult(AuthenticateResult.NoResult());
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, "operator"), new Claim(IdentityClaimTypes.Normalized, "v1"),
-                 new Claim(IdentityClaimTypes.Permission, permission == "read" ? "workflows/runtime:read" : "workflows/runtime:execute")], Scheme.Name)), Scheme.Name)));
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, "operator"), new(IdentityClaimTypes.TenantId, "tenant-a"),
+                new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission),
+                new(IdentityClaimTypes.Normalized, "v1"),
+                new(IdentityClaimTypes.Permission, permission == "read" ? "workflows/runtime:read" : "workflows/runtime:execute")
+            };
+            if (Request.Headers.ContainsKey("X-History-Values"))
+            {
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission));
+                claims.Add(new(IdentityClaimTypes.Permission, HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission));
+            }
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(
+                new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name)), Scheme.Name)));
         }
     }
 }
