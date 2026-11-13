@@ -5,6 +5,12 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
+if (args.SequenceEqual(["--recreate"]))
+{
+    InvocationRecreation.Run();
+    return;
+}
+
 var scenarios = (from mode in new[] { Modes.Balanced, Modes.Durable }
     from nested in new[] { false, true } from cut in Enum.GetValues<Cut>()
     select new Scenario(mode, nested, cut)).Concat(from mode in new[] { Modes.Balanced, Modes.Durable }

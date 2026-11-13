@@ -3,6 +3,7 @@
   <Folder Name="/Extensions/Agent/" />
   <Folder Name="/Extensions/Weaver/" />
   <Folder Name="/Extensions/Weaver/src/">
+    <Project Path="Extensions/Weaver/src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
     <Project Path="Extensions/Weaver/src/Elsa.Weaver/Elsa.Weaver.csproj" />
     <Project Path="Extensions/Weaver/src/Anthropic/Elsa.Weaver.Anthropic.csproj" />
     <Project Path="Extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj" />
@@ -36,6 +37,9 @@
   <Folder Name="/Extensions/Weaver/src/Workflows/">
     <Project Path="Extensions/Weaver/src/Workflows/Elsa.Weaver.Workflows/Elsa.Weaver.Workflows.csproj" />
     <Project Path="Extensions/Weaver/src/Workflows/Runtime/Elsa.Weaver.Workflows.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Weaver/tests/Dashboard/">
+    <Project Path="Extensions/Weaver/tests/Dashboard/Tests/Elsa.Weaver.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/Extensions/Weaver/tests/">
     <Project Path="Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj" />
@@ -474,6 +478,10 @@
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Core/Elsa.Workflows.Publishing.Releases.Core.csproj" />
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />
   </Folder>
+  <Folder Name="/Essentials/src/Workflows/Publishing/Releases/Persistence/">
+    <Project Path="Essentials/src/Workflows/Publishing/Releases/Persistence/Core/Elsa.Workflows.Publishing.Releases.Persistence.Core.csproj" />
+    <Project Path="Essentials/src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/">
     <Project Path="Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
@@ -831,6 +839,10 @@
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Tests/Elsa.Workflows.Publishing.Releases.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/">
+    <Project Path="Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/RestartProbe/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.RestartProbe.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Api/">
     <Project Path="Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
   </Folder>
@@ -923,5 +935,14 @@
     <Project Path="Extensions/Decisions/src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
     <Project Path="Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
     <Project Path="Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Examples/src/Acme.Processing/">
+    <Project Path="Extensions/Examples/src/Acme.Processing/Core/Acme.Processing.Core.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Examples/src/Acme.Processing/Module/">
+    <Project Path="Extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Examples/tests/">
+    <Project Path="Extensions/Examples/tests/Acme.Processing.Tests/Acme.Processing.Tests.csproj" />
   </Folder>
 </Solution>

@@ -37,3 +37,5 @@ Each method returns `ValueTask`. [The four aggregators](Query/DashboardQueryHand
 | `DashboardQueryDrilling` | `Query: DashboardQueryContext`; `Request: DashboardDrillRequest`; `Limits: DashboardQueryLimits`; `Results: ICollection<DashboardQueryResult>` | `DrillDashboardQuery` | [DashboardQueryService.DrillAsync](Query/DashboardQueryService.cs), after current validation and descriptor/period binding. |
 
 Query/result records and scope live in [DashboardQueryModels.cs](../Core/Models/DashboardQueryModels.cs); [the query contract](../../../../../specs/1217-ai-dashboards/contracts/query.md) defines supported limits and semantics. The planned Weaver authoring profile discloses declarations/definitions only. Future model-visible source facts require a separately reviewed original-evidence contract.
+
+The independently packaged [Acme Processing module](../../../../../Extensions/Examples/src/Acme.Processing/Module/EXTENSION_POINTS.md) now implements the four contributor contracts using only public Core contracts. It owns business fields/record access and adds no Workflow or central-query branch.

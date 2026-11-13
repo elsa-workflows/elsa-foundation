@@ -30,3 +30,14 @@ The fault variant only records a blockage through a normal composite callback. I
 operator retry. Model reload/takeover is not a real process/host/provider restart. Causal trigger cohorts, the full
 statechart, production authorization/API, retention/deletion, compensation and Studio acceptance remain open.
 No result is asserted by this README until an exact-source run is recorded on its PR.
+
+## Delete/recreate counterexample
+
+`--recreate` is a separate diagnostic, not a passing semantic qualification. It uses normal start, ordinary child
+completion, delete and start commands, then retries the old invocation input against the reused workflow ID.
+Four cases cross Balanced/Durable and root/nested placement. Its expected observation is a reused local frame
+address and a fresh acceptance into the new creation. The existing simulation oracle first reports I10 (the same ID went from its recorded Finished revision to a
+new Running row); the diagnostic records that exact target/status/revision failure and rejects other reported
+errors. Later checks, including I22 (deleted row reappeared), are not reached or independently qualified. No row is seeded or edited, no private nonce fixes the shared identity
+contract, and no public/provider/host result is claimed. If identity is fixed, this expected-counterexample
+assertion must fail and be replaced with a rejection regression. See the [terminal plan](../../../../specs/1210-state-machine/terminal-receipts-plan.md).

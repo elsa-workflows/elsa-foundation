@@ -1,6 +1,6 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useRef, useState } from "react";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { classifyEtlApiError, EtlApiError, invalidateEtlApiCapabilityCache, type EtlApiFailureKind } from "./etlApi";
 import { isValidEtlDefinitionId, sameEtlPipeline } from "./authoringHelpers";
 import { connectorAuthoringProfile, fileAuthoringProfile, type EtlAuthoringProfile } from "./authoringProfiles";
@@ -22,17 +22,17 @@ type MutationKind = "creating" | "loading-draft" | "saving" | "validating" | "pu
 type RequestFailure = { error: unknown; kind: EtlApiFailureKind };
 
 /** Authoring UI for finite ETL drafts and their immutable published artifacts. */
-type EtlDefinitionsPageProps = { context: StudioEndpointContext; dialogs: StudioDialogApi; profile?: "file" | "connector" };
+type EtlDefinitionsPageProps = { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi; profile?: "file" | "connector" };
 
-export function EtlDefinitionsPage({ context, dialogs, profile = "file" }: EtlDefinitionsPageProps) {
+export function EtlDefinitionsPage({ context, dialogs, notifications, profile = "file" }: EtlDefinitionsPageProps) {
   return profile === "connector"
-    ? <EtlDefinitionWorkspace key="connector" context={context} dialogs={dialogs} profile={connectorAuthoringProfile} />
-    : <EtlDefinitionWorkspace key="file" context={context} dialogs={dialogs} profile={fileAuthoringProfile} />;
+    ? <EtlDefinitionWorkspace key="connector" context={context} dialogs={dialogs} notifications={notifications} profile={connectorAuthoringProfile} />
+    : <EtlDefinitionWorkspace key="file" context={context} dialogs={dialogs} notifications={notifications} profile={fileAuthoringProfile} />;
 }
 
 function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, TBinding extends EtlBindingSummary>({
-  context, dialogs, profile
-}: { context: StudioEndpointContext; dialogs: StudioDialogApi; profile: EtlAuthoringProfile<TPipeline, TBinding> }) {
+  context, dialogs, notifications, profile
+}: { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi; profile: EtlAuthoringProfile<TPipeline, TBinding> }) {
   const { listEtlBindings, listEtlDefinitions, listEtlVersions, getEtlDefinition, createEtlDefinition,
     updateEtlDraft, validateEtlDraft, publishEtlDefinition, getEtlVersion } = profile.api;
   const PipelineEditor = profile.Editor;
@@ -387,7 +387,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
       setDefinitions(previous => previous.map(item => item.definitionId === definitionId
         ? { ...item, revision: reloaded.revision, lastPublishedVersion: reloaded.lastPublishedVersion, updatedAt: reloaded.updatedAt }
         : item));
-      setEditorNotice(`Reloaded saved draft ${definitionId} at revision ${reloaded.revision}.`);
+      notifications?.notify({ level: "success", title: `Reloaded saved draft ${definitionId} at revision ${reloaded.revision}.` });
     } catch (error) {
       if (isCurrentMutation(requestContext, generation, request))
         setEditorFailure(errorMessage(error, "reload the draft"));
@@ -454,7 +454,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
       clearArtifact();
       void loadFirstVersions(requestContext, created.definitionId, generation);
       void loadFirstDefinitions(requestContext, generation, false);
-      setEditorNotice(`Created draft ${created.definitionId}. Save and validate it before publishing.`);
+      notifications?.notify({ level: "success", title: `Created draft ${created.definitionId}.` });
     } catch (error) {
       if (isCurrentMutation(requestContext, generation, request)) setEditorFailure(errorMessage(error, "create the draft"));
     } finally {
@@ -484,7 +484,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
       setDefinitions(previous => previous.map(item => item.definitionId === definitionId
         ? { ...item, revision: saved.revision, updatedAt: saved.updatedAt }
         : item));
-      setEditorNotice(`Saved ${definitionId} at revision ${saved.revision}. Validate this revision before publishing.`);
+      notifications?.notify({ level: "success", title: `Saved ${definitionId} at revision ${saved.revision}.` });
     } catch (error) {
       if (isCurrentMutation(requestContext, generation, request)) setEditorFailure(errorMessage(error, "save the draft"));
     } finally {
