@@ -182,6 +182,23 @@ public sealed class EfIngressCheckpointAuthorityTests
             downstream.Command.Payload, downstream.Command.Metadata, downstream.Metadata);
         await startHandler.HandleAsync(childStart);
         var childCheckpoint = Assert.Single((await queue.ListAsync(new(downstream.WorkflowExecutionId))).Items);
+        foreach (var changed in new Dictionary<string, JsonElement>
+        {
+            [nameof(RuntimeCheckpointCommandPayload.PostCommitIntents)] = TamperedRoot(childCheckpoint),
+            [nameof(RuntimeCheckpointCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator")),
+            [nameof(RuntimeCheckpointCommandPayload.SeedInputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),
+            [nameof(RuntimeCheckpointCommandPayload.SeedStimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" }),
+            [nameof(RuntimeCheckpointCommandPayload.SeedTriggerMetadata)] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["forged"] = "metadata" })
+        })
+        {
+            var changedPayload = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
+            changedPayload[changed.Key] = changed.Value;
+            var changedWork = new RuntimeSchedulerWorkItem(childCheckpoint.WorkItemId, childCheckpoint.WorkflowExecutionId, childCheckpoint.CommandId,
+                childCheckpoint.CommandKind, childCheckpoint.EnvelopeId, childCheckpoint.IdempotencyKey, childCheckpoint.EnqueuedAt, childCheckpoint.RecordedAt,
+                childCheckpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload), childCheckpoint.CommandMetadata, childCheckpoint.EnvelopeMetadata);
+            await Assert.ThrowsAsync<InvalidDataException>(() => handler.HandleAsync(changedWork).AsTask());
+            Assert.Null(await executions.FindAsync(downstream.WorkflowExecutionId));
+        }
         var forgedJson = childCheckpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
         forgedJson[nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement(new RuntimeStimulusDeliveryOrigin(
             1, scope, eventSource.OutboxItemId, eventContext.IntentFingerprint, "not-in-cohort"));
@@ -203,6 +220,14 @@ public sealed class EfIngressCheckpointAuthorityTests
         await checkpoints.CommitAsync(childContinuation, new(RuntimeCheckpointPersistenceMode.Immediate));
         Assert.True(child.StimulusDeliveryOrigin!.IsEquivalentTo((await executions.FindAsync(child.WorkflowExecutionId))!.StimulusDeliveryOrigin));
 
+    }
+
+    private static JsonElement TamperedRoot(RuntimeSchedulerWorkItem checkpoint)
+    {
+        var intent = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!.PostCommitIntents.Single();
+        var json = JsonSerializer.SerializeToElement(intent).Deserialize<Dictionary<string, JsonElement>>()!;
+        json[nameof(RuntimePostCommitIntent.IntentId)] = JsonSerializer.SerializeToElement(intent.IntentId + ":forged");
+        return JsonSerializer.SerializeToElement(new[] { json });
     }
 
     private sealed class TargetIndexer(IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore schedules, DateTimeOffset now) : IWorkflowTriggerIndexer

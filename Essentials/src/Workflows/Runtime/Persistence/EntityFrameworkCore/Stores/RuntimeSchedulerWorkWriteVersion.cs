@@ -37,7 +37,8 @@ internal static class RuntimeSchedulerWorkWriteVersion
         if (item.CommandMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata) ||
             item.EnvelopeMetadata.ContainsKey(NativeStandaloneTriggerRuntimeTarget.OriginMetadata)) return true;
         if (item.Payload is not { ValueKind: JsonValueKind.Object } payload) return false;
-        if (Defined(Property(payload, "ingressOrigin")) || Defined(Property(payload, "ingressWaitOrigin"))) return true;
+        if (payload.EnumerateObject().Any(property => property.Name.Equals("stimulusDeliveryOrigin", StringComparison.OrdinalIgnoreCase))) return true;
+        if (Defined(Property(payload, "ingressOrigin")) || Defined(Property(payload, "ingressWaitOrigin")) || Defined(Property(payload, "stimulusDeliveryOrigin"))) return true;
         if (Property(payload, "modelWorkOrigin") is { ValueKind: JsonValueKind.Object } work && Defined(Property(work, "ingressOrigin"))) return true;
         var authority = Property(payload, "startAuthority");
         if (authority.ValueKind != JsonValueKind.Object) return false;

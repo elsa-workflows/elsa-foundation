@@ -565,6 +565,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             metadata: metadata,
             partition: partition);
 
+        if (savedOrigin is not null)
+            envelope = await _stimulusDeliveryStore!.SealSavedStartAsync(request.StartAuthority!.StimulusDelivery!, envelope, cancellationToken);
+
         var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: workflowExecutionId,
             reason: WorkflowExecutionActorActivationReason.Start,

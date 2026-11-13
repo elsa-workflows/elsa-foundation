@@ -28,7 +28,7 @@ internal sealed class RuntimeWorkflowIngressV2Upcaster : IEfSchemaUpcaster
     {
         using var document = JsonDocument.Parse(row[nameof(WorkflowExecutionStateEntity.ContentJson)]
             ?? throw new InvalidDataException("Workflow state has no content."));
-        if (document.RootElement.EnumerateObject().Any(property => property.Name.Equals("ingressOrigin", StringComparison.OrdinalIgnoreCase)) ||
+        if (document.RootElement.EnumerateObject().Any(property => (property.Name.Equals("ingressOrigin", StringComparison.OrdinalIgnoreCase) || property.Name.Equals("stimulusDeliveryOrigin", StringComparison.OrdinalIgnoreCase))) ||
             document.RootElement.EnumerateObject().Where(property => property.Name.Equals("modelWorkOrigin", StringComparison.OrdinalIgnoreCase))
                 .Any(property => property.Value.ValueKind == JsonValueKind.Object && property.Value.EnumerateObject().Any(nested => nested.Name.Equals("ingressOrigin", StringComparison.OrdinalIgnoreCase))))
             throw new InvalidDataException("A predecessor workflow format cannot carry accepted ingress authority.");

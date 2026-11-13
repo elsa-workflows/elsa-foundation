@@ -13,6 +13,7 @@ internal sealed class RuntimePostCommitOutboxV2Upcaster : IEfSchemaUpcaster
         var content = row[nameof(Entities.RuntimePostCommitOutboxEntity.ContentJson)] ?? throw new InvalidDataException("An outbox row has no content.");
         using var document = JsonDocument.Parse(content);
         if (document.RootElement.EnumerateObject().Any(property =>
+            property.Name.Equals("savedStimulusStarts", StringComparison.OrdinalIgnoreCase) ||
             property.Name.Equals("standaloneIngress", StringComparison.OrdinalIgnoreCase) ||
             property.Name.Equals("subscriptionDeliveryProtocolVersion", StringComparison.OrdinalIgnoreCase) ||
             property.Name.Equals("subscriptionDelivery", StringComparison.OrdinalIgnoreCase)))

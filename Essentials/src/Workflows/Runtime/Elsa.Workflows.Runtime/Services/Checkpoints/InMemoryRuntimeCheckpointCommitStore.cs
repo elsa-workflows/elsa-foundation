@@ -962,7 +962,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                 recipientSnapshot: existing.RecipientSnapshot,
                 standaloneIngress: existing.StandaloneIngress,
                 subscriptionDeliveryProtocolVersion: existing.SubscriptionDeliveryProtocolVersion,
-                subscriptionDelivery: existing.SubscriptionDelivery);
+                subscriptionDelivery: existing.SubscriptionDelivery, savedStimulusStarts: existing.SavedStimulusStarts);
         }
 
         return new ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>(
@@ -1195,7 +1195,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
 
     private static void RefuseUncheckedSubscriptionAdmission(RuntimePostCommitOutboxItem item)
     {
-        if (item.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || item.SubscriptionDelivery is not null)
+        if (item.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || item.SubscriptionDelivery is not null || item.SavedStimulusStarts is not null)
             throw new NotSupportedException("A generic pending/checkpoint writer cannot accept standalone sources or captured subscription responsibility.");
     }
 

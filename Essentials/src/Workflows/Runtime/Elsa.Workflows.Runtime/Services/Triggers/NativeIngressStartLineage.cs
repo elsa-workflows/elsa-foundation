@@ -12,7 +12,7 @@ internal static class NativeIngressStartLineage
     internal static RuntimeSchedulerWorkItem Build(RuntimeSchedulerWorkItem start, WorkflowExecutionStartCommandPayload payload,
         string rootNodeId)
     {
-        if (payload.StartAuthority?.StandaloneTrigger is null) throw new InvalidOperationException("A sealed ingress start origin is required.");
+        if (payload.StartAuthority?.StandaloneTrigger is null && payload.StimulusDeliveryOrigin is null) throw new InvalidOperationException("A sealed ingress start origin is required.");
         var now = start.EnqueuedAt;
         var metadata = start.CommandMetadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.WorkflowStartedAt] = now.ToString("O", CultureInfo.InvariantCulture);
@@ -35,7 +35,7 @@ internal static class NativeIngressStartLineage
             [], RuntimeCheckpointCommandPayload.WorkflowStartReason, [intent], payload.Variables, payload.Inputs, payload.StimulusInput,
             payload.TriggerNodeId, payload.RunKind, payload.PinnedSource, payload.ParentWorkflowExecutionId, payload.CorrelationId,
             payload.TenantId, payload.Partition, payload.Authority, payload.DispatchNestingDepth, payload.TestScope, payload.TriggerMetadata)
-        { IngressOrigin = payload.StartAuthority.StandaloneTrigger };
+        { IngressOrigin = payload.StartAuthority?.StandaloneTrigger, StimulusDeliveryOrigin = payload.StimulusDeliveryOrigin };
         var checkpointMetadata = new Dictionary<string, string>(metadata, StringComparer.Ordinal)
         { [RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory };
         return new(RuntimeChainId.Derive(start.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"), start.WorkflowExecutionId,

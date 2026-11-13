@@ -115,7 +115,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         }
 
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
-        if (ingress is not null)
+        if (ingress is not null || startPayload.StimulusDeliveryOrigin is not null)
         {
             await _schedulerWorkQueue.EnqueueAsync(NativeIngressStartLineage.Build(workItem, startPayload, rootActivityId), cancellationToken);
             return;
@@ -382,7 +382,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             StimulusDeliveryOrigin = startPayload.StimulusDeliveryOrigin
         };
 
-        if (payload.IngressOrigin is not null)
+        if (payload.IngressOrigin is not null || payload.StimulusDeliveryOrigin is not null)
         {
             var mandatory = commandMetadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             mandatory[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;

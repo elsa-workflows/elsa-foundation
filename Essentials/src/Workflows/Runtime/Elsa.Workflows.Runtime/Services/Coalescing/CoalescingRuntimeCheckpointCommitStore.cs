@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -71,8 +72,15 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
-        if (commit.StateChanges.PostCommitOutbox.Any(change => change.State.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || change.State.SubscriptionDelivery is not null))
+        if (commit.StateChanges.PostCommitOutbox.Any(change => change.State.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || change.State.SubscriptionDelivery is not null || change.State.SavedStimulusStarts is not null))
             throw new NotSupportedException("A workflow checkpoint cannot accept standalone sources or captured subscription responsibility.");
+        if (NativeIngressCheckpointAuthority.RequiresInitialPhysicalAdmission(commit))
+        {
+            // A pre-existing overlay cannot become admission evidence or change the initial checkpoint's lineage.
+            if (sessionAccessor.Current is { HasBufferedChanges: true } pending && pending.AppliesTo(commit.WorkflowExecutionId))
+                throw new NotSupportedException("Source-bound initial admission requires an empty coalescing segment.");
+            decision = ImmediateDecision;
+        }
         if (commit.StateChanges.PostCommitOutbox.Any(change => change.State.SubscriptionDeliveryProtocolVersion is not null))
             decision = ImmediateDecision;
 

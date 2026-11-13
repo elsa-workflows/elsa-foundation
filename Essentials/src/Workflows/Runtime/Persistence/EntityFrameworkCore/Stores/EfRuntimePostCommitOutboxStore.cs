@@ -1155,7 +1155,7 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
         try
         {
             using var content = JsonDocument.Parse(row.ContentJson);
-            foreach (var name in new[] { "recipientSnapshot", "stimulusDeliveryProtocolVersion", "stimulusDeliverySourceScope", "standaloneIngress", "subscriptionDeliveryProtocolVersion", "subscriptionDelivery" })
+            foreach (var name in new[] { "savedStimulusStarts", "recipientSnapshot", "stimulusDeliveryProtocolVersion", "stimulusDeliverySourceScope", "standaloneIngress", "subscriptionDeliveryProtocolVersion", "subscriptionDelivery" })
             {
                 var fields = content.RootElement.EnumerateObject()
                     .Where(property => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -1202,7 +1202,7 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
         ArgumentNullException.ThrowIfNull(item);
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
             throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
-        if (item.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || item.SubscriptionDelivery is not null)
+        if (item.SourceKind == RuntimeDeliverySourceKind.StandaloneIngress || item.SubscriptionDelivery is not null || item.SavedStimulusStarts is not null)
             throw new NotSupportedException("A generic pending/checkpoint writer cannot accept standalone sources or captured subscription responsibility.");
         ArgumentException.ThrowIfNullOrWhiteSpace(item.RequireWorkflowIntent().WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(item.DeliveryKind);
@@ -1279,7 +1279,7 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
             item.RecipientSnapshot,
             item.StandaloneIngress,
             item.SubscriptionDeliveryProtocolVersion,
-            item.SubscriptionDelivery);
+            item.SubscriptionDelivery, item.SavedStimulusStarts);
 
     private static RuntimePostCommitOutboxStatus NormalizeDeliveryStatus(
         RuntimePostCommitOutboxItem existing,
