@@ -49,6 +49,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
             : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History);
+        if (next is not null && row is not { Status: not InstanceStatus.Running }) next = WorkflowCommitClock.End(next);
         var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status };
         if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
         return unit;
@@ -80,6 +81,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         var instance = input.Actor;
         var running = row.Status == InstanceStatus.Running;
         var next = row with { Status = running ? InstanceStatus.Cancelled : row.Status, Revision = row.Revision + 1, Jobs = null, Children = null, Suspended = false };
+        if (running) next = WorkflowCommitClock.End(next);
         var children = row.Children is { } list && !input.Services.Has(Flaw.TerminateRootOnly) ? Json.Read<List<string>>(list) : [];
         var unit = new TurnOutcome(instance)
         {

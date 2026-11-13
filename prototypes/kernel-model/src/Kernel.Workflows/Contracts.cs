@@ -39,6 +39,7 @@ public interface IExecutionModel
 public interface ITurn
 {
     InstanceInfo Instance { get; }
+    ICommitClock Clock { get; }
     IReadOnlyList<Message> Inbox { get; }
     object State { get; set; }
     object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
