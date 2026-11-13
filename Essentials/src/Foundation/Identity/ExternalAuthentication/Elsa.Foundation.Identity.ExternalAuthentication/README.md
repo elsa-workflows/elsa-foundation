@@ -67,8 +67,9 @@ code/PKCE/nonce/issuer validation with secret references resolved when used. Ins
 install callback/chooser/API routes, enable a connection or establish recovery evidence. The existing direct
 bearer OIDC feature remains a separate composition.
 
-## Optional one-time artifact persistence
+## Optional artifact and session persistence
 
-The [EF artifact package](../Persistence/EntityFrameworkCore/README.md) supplies the optional durable
-`IAuthenticationArtifactStore` at its initial schema stage. It does not yet supply durable interactive
-sessions or callback routes. Deployment-only catalog composition still avoids the optional database.
+The [EF persistence package](../Persistence/EntityFrameworkCore/README.md) supplies optional durable
+`IAuthenticationArtifactStore` and `IAuthenticationSessionStore` authorities. Installing the stores does not
+switch canonical sign-in, cookies or tokens to durable sessions or install callback routes; those integrations
+follow in their owning slices. Deployment-only catalog composition still avoids the optional database.
