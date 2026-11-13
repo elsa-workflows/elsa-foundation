@@ -81,7 +81,7 @@ Cancel(reason)
   branches; the step's pending engine-owned changes still commit. Unspecified means `Done`, which a node declares only
   when a completion may choose no branch.
 - A script's explicitly recognized returned completion/routing form MUST keep the business result and selection
-  separate. Ordinary returned business data MUST NOT implicitly select an outcome. S-3 defines the form's signature,
+  separate. Ordinary returned business data MUST NOT implicitly select an outcome. S-3 defines the form's spelling,
   recognition and validation without requiring an ambient activity object or native outcome setters.
 - `Suspend` carries one immutable private state document and one or more typed trigger registrations.
 - `Fault` carries normalized persistable fault information, never an arbitrary serialized exception.

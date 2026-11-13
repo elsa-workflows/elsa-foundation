@@ -411,8 +411,7 @@ not publish successful values or outcomes through mutable execution-context `Set
   - A script selects by **returning an explicitly recognized completion/routing form** that carries the result and the
     outcome selection as separate channels. The native script surface gains no `setOutcome` / `setOutcomes` setters: the
     sandbox stays closed and side-effect-free, and the routing decision stays a value the script returns rather than a
-    host mutation. The form needs no ambient `activity` object or execution context; the earlier
-    `activity.complete(...)` example was illustrative, not a required spelling. Its exact spelling, a returned data
+    host mutation. The form needs no ambient `activity` object or execution context. Its exact spelling, a returned data
     representation or a pure constructor, and its recognition and validation are settled in the implementing spec
     (S-3). Elsa 3's setters remain conversion inputs (below).
   - **Routing and business data stay separate.** An ordinary returned value (a string, number, object, array or null)
@@ -422,7 +421,8 @@ not publish successful values or outcomes through mutable execution-context `Set
     `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome, so returning data can no
     longer change the route by accident: "nothing selected" is `Done` (not a silent `Unmatched`), an unknown name
     faults (not a silent `Unmatched`), and several outcomes are expressible where the node permits them.
-  - Named, unspecified and explicitly empty selections follow the same rules whatever their representation.
+  - **One set of rules.** A selection follows the same rules whether a C# activity returns it in `Complete` or a script
+    returns it in the recognized form.
   - **Ending routing by return value is deliberate.** A plain returned value is data and never selects a route; only the
     returned completion/routing form selects. A RunJavaScript workflow that relied on returning an outcome name changes
     behavior, so the change is never silent: publication warns when a RunJavaScript script returns a string literal that
@@ -467,7 +467,7 @@ not publish successful values or outcomes through mutable execution-context `Set
     and inspection treat a node that may select several outcomes as an inclusive fork.
   - This replaces the "one outcome per completion" invariant that was proposed before this amendment.
 
-*Effect on Elsa 3 conversion.* These become convertible:
+*Effect on Elsa 3 conversion.* These become convertible where conversion is faithful, and are refused otherwise:
 - Elsa 3's `setOutcome` / `setOutcomes`;
 - Switch in "match any" mode;
 - `Complete` with several outcomes.
@@ -493,7 +493,7 @@ Elsa 3's `Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only b
 becomes `Done` to `Done`. S-3 must prove this preserves routing through conversion, publication and execution,
 including connected RunJavaScript nodes whose `Done` was converted to `Unmatched`. Neither changing the script
 API nor supplying an outcome declaration proves that mapping faithful for every activity or failure path; this
-amendment does not implement or prove the fix.
+amendment does not itself implement or prove the `Done` to `Done` rule; S-3 does.
 
 *Left to the implementing spec (S-3):*
 - the spelling, recognition and validation of the script's returned completion/routing form (result and selection on
