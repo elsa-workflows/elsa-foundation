@@ -55,7 +55,7 @@ $SIM --backlog 1000                                  # how long a backlog of sus
 ```
 
 A seed fixes everything: the number of nodes, every action and every fault. `--flaw` takes the names of
-`Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 23 lists the
+`Kernel.Runtime.Flaw` (comma-separated); each one switches off one rule of the protocol. FINDINGS section 22 lists the
 first failing seed of every flaw, section 24 the two flaws round 4 renamed.
 
 ## Databases
