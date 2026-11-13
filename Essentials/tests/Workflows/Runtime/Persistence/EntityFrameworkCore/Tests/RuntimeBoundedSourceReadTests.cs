@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -79,6 +80,39 @@ public sealed class RuntimeBoundedSourceReadTests
     }
 
     [Fact]
+    public async Task Matching_invalid_UTF8_incarnations_are_refused_before_EF_can_repair_physical_identity()
+    {
+        await using var owner = await Owner.Create(); var workflow = Workflow(); await owner.Store.SaveAsync(workflow);
+        await owner.Context.Database.ExecuteSqlRawAsync("UPDATE elsa_runtime_workflow_executable SET IncarnationId=CAST(X'FF' AS TEXT)");
+        await owner.Context.Database.ExecuteSqlRawAsync("UPDATE elsa_runtime_workflow_executable_coordination SET IncarnationId=CAST(X'FF' AS TEXT)");
+        var exception = await Assert.ThrowsAsync<RuntimeSourceReadException>(() =>
+            owner.Store.FindMaterialBoundedAsync(workflow.Identity.ArtifactId, Owner.Partition, new()).AsTask());
+        Assert.Equal("runtime_source_stored_content_invalid", exception.Code);
+    }
+
+    [Fact]
+    public async Task Caller_transaction_is_refused_without_committing_or_disposing_it()
+    {
+        await using var owner = await Owner.Create(); var workflow = Workflow(); await owner.Store.SaveAsync(workflow);
+        await using var transaction = await owner.Context.Database.BeginTransactionAsync(); owner.Spy.Commands.Clear();
+        var exception = await Assert.ThrowsAsync<RuntimeSourceReadException>(() =>
+            owner.Store.FindMaterialBoundedAsync(workflow.Identity.ArtifactId, Owner.Partition, new()).AsTask());
+        Assert.True(exception.Unsupported); Assert.Equal("runtime_source_storage_profile_unsupported", exception.Code);
+        Assert.Same(transaction, owner.Context.Database.CurrentTransaction); Assert.Empty(owner.Spy.Commands);
+        await transaction.RollbackAsync();
+    }
+
+    [Fact]
+    public async Task An_ordinary_decorator_refuses_bounded_reads_without_forwarding_or_hydrating_payloads()
+    {
+        await using var owner = await Owner.Create(); owner.Spy.Commands.Clear();
+        IWorkflowExecutableStore decorated = new LegacyDecorator(owner.Store);
+        var exception = await Assert.ThrowsAsync<RuntimeSourceReadException>(() =>
+            decorated.FindMaterialBoundedAsync("exact", Owner.Partition, new()).AsTask());
+        Assert.True(exception.Unsupported); Assert.Empty(owner.Spy.Commands);
+    }
+
+    [Fact]
     public async Task Exact_selected_scope_is_checked_before_source_queries()
     {
         await using var owner = await Owner.Create(); owner.Spy.Commands.Clear();
@@ -142,6 +176,7 @@ public sealed class RuntimeBoundedSourceReadTests
     private static WorkflowExecutableSourceReference Reference(string id, string artifact, WorkflowExecutableReferenceScope scope) =>
         new(id, artifact, "WorkflowDefinitionVersion", "selected-version", "1.0.0", "selected-definition", "selected-version", "1.0.0", DateTimeOffset.UnixEpoch,
             scope == WorkflowExecutableReferenceScope.Published ? DateTimeOffset.UnixEpoch : null, scope);
+    private sealed class LegacyDecorator(IWorkflowExecutableStore inner) : WorkflowExecutableStoreDecorator(inner);
     private sealed class Accessor : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(Owner.Partition); }
     private sealed class Cursor : IRuntimeRecoveryContinuationCodec

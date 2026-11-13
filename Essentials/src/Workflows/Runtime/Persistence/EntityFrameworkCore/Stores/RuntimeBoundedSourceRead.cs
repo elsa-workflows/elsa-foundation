@@ -77,14 +77,25 @@ internal static partial class RuntimeBoundedSourceRead
                 await using (var reader = await command.ExecuteReaderAsync(token))
                 {
                     if (!await reader.ReadAsync(token)) throw Refuse("runtime_source_stored_snapshot_lost");
-                    var schema = Utf8.GetString(reader.GetFieldValue<byte[]>(0));
-                    if (schema != RuntimeArtifactEfModule.SchemaVersion) throw Refuse("runtime_source_schema_profile_unsupported", true);
-                    if (shape.HasPayload)
+                    var ordinal = 0;
+                    foreach (var field in shape.Fields.Where(field => field.Text))
                     {
-                        var payload = reader.GetFieldValue<byte[]>(1);
-                        if (payload.Length != lengths[row]) throw Refuse("runtime_source_stored_snapshot_lost");
-                        if (payload.AsSpan().StartsWith("elsaz1."u8)) throw Refuse("runtime_source_payload_frame_unsupported", true);
-                        CheckJson(payload, limits.MaxJsonDepth);
+                        if (reader.IsDBNull(ordinal))
+                        {
+                            ordinal++;
+                            if (!field.Nullable) throw Refuse("runtime_source_stored_snapshot_lost");
+                            continue;
+                        }
+                        var bytes = reader.GetFieldValue<byte[]>(ordinal++);
+                        // EF string hydration must never repair malformed physical identities, including
+                        // equal corrupt incarnation values on the material/coordination pair.
+                        _ = Utf8.GetCharCount(bytes);
+                        if (field.Name == "SchemaVersion" && Utf8.GetString(bytes) != RuntimeArtifactEfModule.SchemaVersion)
+                            throw Refuse("runtime_source_schema_profile_unsupported", true);
+                        if (field.Name != "ContentJson") continue;
+                        if (bytes.Length != lengths[row]) throw Refuse("runtime_source_stored_snapshot_lost");
+                        if (bytes.AsSpan().StartsWith("elsaz1."u8)) throw Refuse("runtime_source_payload_frame_unsupported", true);
+                        CheckJson(bytes, limits.MaxJsonDepth);
                     }
                     if (await reader.ReadAsync(token)) throw Refuse("runtime_source_stored_identity_ambiguous");
                 }
@@ -129,7 +140,6 @@ internal static partial class RuntimeBoundedSourceRead
         public Field[] Fields { get; }
         public string Preflight { get; }
         public string Content { get; }
-        public bool HasPayload { get; }
         public Shape(RuntimeDbContext context, Type type)
         {
             var entity = context.Model.FindEntityType(type) ?? throw Refuse("runtime_source_mapping_unsupported", true);
@@ -146,8 +156,7 @@ internal static partial class RuntimeBoundedSourceRead
             string Column(string name) => quote.DelimitIdentifier(entity.FindProperty(name)?.GetColumnName(store) ?? throw Refuse("runtime_source_mapping_unsupported", true));
             var from = " FROM " + quote.DelimitIdentifier(table, entity.GetSchema()) + " WHERE " + Column("Id") + "=@id";
             Preflight = "SELECT " + string.Join(",", Fields.SelectMany(field => field.Text ? new[] { "typeof(" + Column(field.Name) + ")", "length(CAST(" + Column(field.Name) + " AS BLOB))" } : new[] { "typeof(" + Column(field.Name) + ")" })) + from;
-            HasPayload = entity.FindProperty("ContentJson") is not null;
-            Content = "SELECT CAST(" + Column("SchemaVersion") + " AS BLOB)" + (HasPayload ? ",CAST(" + Column("ContentJson") + " AS BLOB)" : "") + from;
+            Content = "SELECT " + string.Join(",", Fields.Where(field => field.Text).Select(field => "CAST(" + Column(field.Name) + " AS BLOB)")) + from;
         }
     }
 }
