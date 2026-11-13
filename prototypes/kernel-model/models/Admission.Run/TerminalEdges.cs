@@ -1,3 +1,4 @@
+using Kernel.Workflows;
 using Kernel.Durable;
 using Kernel.Native;
 using Kernel.Runtime;
