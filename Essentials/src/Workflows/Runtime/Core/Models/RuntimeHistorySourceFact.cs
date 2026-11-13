@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Closed semantic facts supplied by the owner of an actual operation, before checkpoint coalescing.</summary>
@@ -78,12 +80,15 @@ public sealed record RuntimeHistorySourceFact
     public string? CompensationEntryId { get; }
     public string? ReasonCode { get; }
     public IReadOnlyList<string> OutcomeNames { get; }
+    /// <summary>False when OccurredAt is only a canonical reference time, not the operation's observed time.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? OccurredAtKnown { get; init; }
 
     /// <summary>Exact immutable owner-input equality, without serialization or timestamp normalization.</summary>
     public bool IsEquivalentTo(RuntimeHistorySourceFact other)
     {
         ArgumentNullException.ThrowIfNull(other);
-        return Kind == other.Kind && SubjectId == other.SubjectId && OccurredAt.EqualsExact(other.OccurredAt) &&
+        return Kind == other.Kind && SubjectId == other.SubjectId && OccurredAt.EqualsExact(other.OccurredAt) && OccurredAtKnown == other.OccurredAtKnown &&
             ActivityExecutionId == other.ActivityExecutionId && AttemptId == other.AttemptId && Causation == other.Causation &&
             RelatedWorkflowExecutionId == other.RelatedWorkflowExecutionId && RelatedActivityExecutionId == other.RelatedActivityExecutionId &&
             TimerId == other.TimerId && IncidentId == other.IncidentId && CompensationEntryId == other.CompensationEntryId &&

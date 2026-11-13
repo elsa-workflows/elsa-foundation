@@ -227,7 +227,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Null(await harness.InspectionStore.FindAsync("wfexec-1", "activity-1"));
         Assert.Single(harness.CommitStore.ListCommits());
 
+        harness.TimeProvider.Advance(TimeSpan.FromMinutes(5));
         await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+        harness.TimeProvider.Advance(TimeSpan.FromMinutes(5));
         await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
 
         var persistedActivity = await harness.ActivityStore.FindAsync("wfexec-1", "activity-1");
@@ -261,7 +263,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             var fact = Assert.Single(repairCommit.HistorySourceFacts!);
             Assert.Equal(RuntimeHistorySourceFactKind.IncidentProjectionReconciled, fact.Kind);
             Assert.Equal(incident.IncidentId, fact.IncidentId);
+            Assert.False(fact.OccurredAtKnown);
+            // Retains the canonical replay payload without claiming creation was the time of this later repair.
             Assert.Equal(incident.CreatedAt, fact.OccurredAt);
+            Assert.True(harness.TimeProvider.GetUtcNow() > fact.OccurredAt);
         }
         else Assert.Null(repairCommit.HistorySourceFacts);
         Assert.Equal("activity-1", Assert.Single(repairCommit.Checkpoint.ActivityExecutionIds));

@@ -24,8 +24,9 @@ public static class RuntimeHistoryIncidentFacts
         New(incident, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
             incident.ResolutionOutcome?.AppliedAt ?? throw new ArgumentException("An applied incident decision is required.", nameof(incident)), cause);
 
+    /// <summary>The reconstructible repair checkpoint carries a canonical timestamp, not a persisted observation time.</summary>
     public static RuntimeHistorySourceFact ProjectionReconciled(IncidentState incident, DateTimeOffset checkpointTime, RuntimeHistoryCausation? cause = null) =>
-        New(incident, RuntimeHistorySourceFactKind.IncidentProjectionReconciled, checkpointTime, cause);
+        New(incident, RuntimeHistorySourceFactKind.IncidentProjectionReconciled, checkpointTime, cause) with { OccurredAtKnown = false };
 
     private static RuntimeHistorySourceFact New(IncidentState incident, RuntimeHistorySourceFactKind kind, DateTimeOffset at, RuntimeHistoryCausation? cause)
     {

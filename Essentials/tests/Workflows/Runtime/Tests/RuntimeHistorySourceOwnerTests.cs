@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -142,7 +143,7 @@ public sealed class RuntimeHistorySourceOwnerTests
     }
 
     [Fact]
-    public void Incident_facts_distinguish_creation_applied_decision_resolution_and_projection_repair_times()
+    public void Incident_facts_distinguish_actual_decision_times_from_unavailable_repair_timing()
     {
         var applied = At.AddMinutes(1);
         var repaired = At.AddMinutes(2);
@@ -159,6 +160,11 @@ public sealed class RuntimeHistorySourceOwnerTests
         Assert.Null(facts[0].ReasonCode);
         Assert.Equal("Custom.Resolve", facts[1].ReasonCode);
         Assert.Null(facts[4].ReasonCode);
+        Assert.False(facts[4].OccurredAtKnown);
+        Assert.All(facts.Take(4), fact => Assert.Null(fact.OccurredAtKnown));
+        var reconstructedRepair = RuntimeHistoryIncidentFacts.ProjectionReconciled(incident, repaired);
+        Assert.True(facts[4].IsEquivalentTo(reconstructedRepair));
+        Assert.False(facts[4].IsEquivalentTo(reconstructedRepair with { OccurredAtKnown = true }));
     }
 
     [Fact]
@@ -181,6 +187,28 @@ public sealed class RuntimeHistorySourceOwnerTests
         var suppressed = Incident(IncidentStatus.Suppressed, new("suppress", At, null, "test"), At);
         Assert.Equal(RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistoryIncidentFacts.Suppressed(suppressed).Kind);
         Assert.Throws<ArgumentException>(() => RuntimeHistoryIncidentFacts.Resolved(suppressed));
+    }
+
+    [Fact]
+    public void Unavailable_occurrence_time_survives_roundtrip_positioning_and_identity_without_changing_old_envelopes()
+    {
+        RuntimeHistoryEvent Event(bool? known) => new("event", "run", 0, RuntimeHistoryEventCategory.IncidentLifecycle,
+            "IncidentProjectionReconciled", At) { OccurredAtKnown = known };
+        var unknown = Event(false);
+        var positioned = RuntimeHistoryIdentity.Position(unknown, 1, "physical", At.AddMinutes(5));
+        Assert.False(positioned.OccurredAtKnown);
+        Assert.Equal(At.AddMinutes(5), positioned.RecordedAt);
+        Assert.Equal(RuntimeHistoryIdentity.Compute(unknown), RuntimeHistoryIdentity.Compute(positioned));
+        Assert.NotEqual(RuntimeHistoryIdentity.Compute(unknown), RuntimeHistoryIdentity.Compute(Event(null)));
+        Assert.False(JsonSerializer.SerializeToElement(Event(null)).TryGetProperty("OccurredAtKnown", out _));
+        var restored = JsonSerializer.Deserialize<RuntimeHistoryEvent>(JsonSerializer.Serialize(positioned))!;
+        Assert.False(restored.OccurredAtKnown);
+        Assert.Equal(RuntimeHistoryIdentity.Compute(positioned), RuntimeHistoryIdentity.Compute(restored));
+        var fact = RuntimeHistoryIncidentFacts.ProjectionReconciled(Incident(IncidentStatus.Blocking), At);
+        var restoredFact = JsonSerializer.Deserialize<RuntimeHistorySourceFact>(JsonSerializer.Serialize(fact))!;
+        Assert.True(fact.IsEquivalentTo(restoredFact));
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(Commit() with { HistorySourceFacts = [fact] }),
+            RuntimeCheckpointCommitFingerprint.Compute(Commit() with { HistorySourceFacts = [fact with { OccurredAtKnown = true }] }));
     }
 
     private static IncidentState Incident(IncidentStatus status, IncidentResolutionOutcome? outcome = null, DateTimeOffset? resolved = null) =>

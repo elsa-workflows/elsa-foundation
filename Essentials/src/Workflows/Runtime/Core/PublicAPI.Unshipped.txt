@@ -10821,3 +10821,7 @@ static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIncidentFacts.StrategyEv
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIncidentFacts.Suppressed(Elsa.Workflows.Runtime.Core.Models.IncidentState! incident, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIncidentFacts.DecisionApplied(Elsa.Workflows.Runtime.Core.Models.IncidentState! incident, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryIncidentFacts.ProjectionReconciled(Elsa.Workflows.Runtime.Core.Models.IncidentState! incident, System.DateTimeOffset checkpointTime, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation? cause = null) -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact!
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent.OccurredAtKnown.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryEvent.OccurredAtKnown.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OccurredAtKnown.get -> bool?
+Elsa.Workflows.Runtime.Core.Models.RuntimeHistorySourceFact.OccurredAtKnown.init -> void
