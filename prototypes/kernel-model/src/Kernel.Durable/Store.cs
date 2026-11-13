@@ -77,9 +77,6 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 /// </summary>
 public interface IKernelStore : IMembership
 {
-    /// <summary>Qualified immutable clock facts in the same atomic commit; unavailable by default.</summary>
-    bool CommitClockAvailable => false;
-
     /// <summary>
     /// Qualified immutable clock facts in the same atomic commit; unavailable by default. A qualified store returns
     /// the exact authoritative stamp time in Committed.Now; the generic permission to omit that time does not apply.

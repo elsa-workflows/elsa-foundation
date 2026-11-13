@@ -122,7 +122,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     public bool CommitClockAvailable => _store.CommitClockAvailable;
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
-    public bool CommitClockAvailable => _store.CommitClockAvailable;
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
 
     /// <summary>Database time as far as this worker knows, whatever the flaws: what the lease is reckoned in.</summary>
