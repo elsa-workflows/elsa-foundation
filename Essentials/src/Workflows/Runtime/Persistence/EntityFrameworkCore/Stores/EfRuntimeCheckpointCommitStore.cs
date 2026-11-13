@@ -194,6 +194,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 $"Model checkpoint '{commit.CommitId}' for execution '{commit.WorkflowExecutionId}', input '{commit.ModelState.Input.InputId}' " +
                 $"in scope '{commit.ModelState.State.Scope.Value}' is unavailable.", exception);
         }
+        catch (Exception exception) when (commit.HistoryBatches is { Count: > 0 } &&
+            EfRuntimeHistoryCheckpoint.IsProviderUnavailable(exception, cancellationToken))
+        {
+            // Legacy native failures and the preceding exact-admission/model domain cases keep
+            // their existing boundary. Captured plain writes retain their history run/operation/cause.
+            throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "committing atomic checkpoint history", exception);
+        }
     }
 
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitCoreAsync(
@@ -337,7 +344,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
             return immediate;
         }
-        catch when (!readsMarkerFirst && !markerAbsentAfterFailure && !transactionCommitRequested &&
+        catch (Exception original) when (!readsMarkerFirst && !markerAbsentAfterFailure && !transactionCommitRequested &&
             !cancellationToken.IsCancellationRequested)
         {
             // A failure is about to leave a commit that did not read its marker first, and no marker read that
@@ -355,7 +362,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
             // attempt had asked its transaction to commit: its marker insert had succeeded, so no marker was durable
             // before it and there is no replay to answer. The caller has cancelled: then whatever failure was raised
             // leaves as it is.
-            if (await FindMarkerAsync(scope, commit.CommitId, cancellationToken) is not { } durable)
+            RuntimeCheckpointCommitEntity? durable;
+            try { durable = await FindMarkerAsync(scope, commit.CommitId, cancellationToken); }
+            catch (Exception lookupFailure) when (commit.HistoryBatches is { Count: > 0 } &&
+                EfRuntimeHistoryCheckpoint.IsProviderUnavailable(lookupFailure, cancellationToken))
+            {
+                throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "reconciling atomic checkpoint history",
+                    new AggregateException(original, lookupFailure));
+            }
+            if (durable is null)
                 throw;
             return ReplayOf(durable);
         }
@@ -698,6 +713,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
             {
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
                     "Exact bookmark admission could not reconcile its durable checkpoint.", new AggregateException(original, lookupFailure));
+            }
+            catch (Exception lookupFailure) when (commit.HistoryBatches is { Count: > 0 } &&
+                EfRuntimeHistoryCheckpoint.IsProviderUnavailable(lookupFailure, token))
+            {
+                throw new RuntimeHistoryUnavailableException(commit.WorkflowExecutionId, "reconciling atomic checkpoint history",
+                    new AggregateException(original, lookupFailure));
             }
 
             markerAbsentAfterFailure = found is null;

@@ -90,3 +90,9 @@ ambiguous-acknowledgement reconciliation. Allocation-only contention leaves as c
 unavailability after rollback/marker reconciliation; corruption and stale fences remain distinct. Actual
 selected reader/DI/profile admission remains unadvertised until the separately owned read adapter and
 observation/retention/deletion binding qualify. This direct-store source does not enable the public feature.
+
+After checking immutable native admission, a confirmed uncaptured/no-contribution checkpoint returns
+before accessing any history storage. Required/Optional captured obligations remain independent of
+current module switches. Captured provider failures retain run/operation/cause after native rollback
+and marker reconciliation; failed reconciliation preserves both write and lookup causes. Requested
+cancellation, hard retained integrity, exact admission, model and stale-fence cases retain precedence.

@@ -1,9 +1,11 @@
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -94,8 +96,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         var failure = new FailMarkerInsertInterceptor(); var commit = NativeHistoryCommit("marker-failure");
         await using (var context = database.Open("tenant-a", failure))
         {
-            failure.Arm(); await Assert.ThrowsAsync<DbUpdateException>(() =>
+            failure.Arm(); var error = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() =>
                 new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(commit, Decision()).AsTask());
+            Assert.IsType<DbUpdateException>(error.InnerException); Assert.Equal("workflow-a", error.WorkflowExecutionId);
             Assert.Empty(context.ChangeTracker.Entries());
         }
         await AssertNoNativeHistoryAsync(database);
@@ -115,8 +118,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
                 CREATE TRIGGER fail_native_history_member BEFORE INSERT ON elsa_runtime_history_occurrence_member
                 BEGIN SELECT RAISE(ABORT, 'controlled native history membership failure'); END;
                 """);
-            await Assert.ThrowsAsync<DbUpdateException>(() => new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
+            var error = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() => new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"))
                 .CommitAsync(NativeHistoryCommit("projection-failure"), Decision()).AsTask());
+            Assert.IsType<DbUpdateException>(error.InnerException); Assert.Equal("workflow-a", error.WorkflowExecutionId);
             Assert.Empty(context.ChangeTracker.Entries());
         }
         await AssertNoNativeHistoryAsync(database);
@@ -187,6 +191,77 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         {
             await using var read = database.Open("tenant-a"); Assert.Equal(2, await read.Set<RuntimeHistoryEventEntity>().CountAsync());
             Assert.Single(await read.Bookmarks.ToArrayAsync()); Assert.Single(await read.RuntimeCheckpointCommits.ToArrayAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Confirmed_uncaptured_native_work_commits_when_only_history_head_storage_is_unavailable()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var context = database.Open("tenant-a"))
+        {
+            var state = Execution("workflow-a", "tenant-a") with { HistoryCaptureEnabledAtAdmission = false };
+            context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a", EfWorkflowExecutionStateStore.CreateId("tenant-a", "workflow-a"), 1));
+            await context.SaveChangesAsync(); await context.Database.ExecuteSqlRawAsync("DROP TABLE elsa_runtime_history_head;");
+            var ordinary = WithBookmark("uncaptured-available", CheckpointBookmark("ordinary", "payload"), RuntimeStateChangeOperation.Upsert);
+            await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(ordinary, Decision());
+        }
+        await using var read = database.Open("tenant-a"); Assert.Single(await read.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Single(await read.Bookmarks.ToArrayAsync()); Assert.Empty(await read.Set<RuntimeHistoryEventEntity>().ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Optional_history_head_failure_retains_its_typed_provider_cause_without_a_batch()
+    {
+        var optional = new RuntimeHistoryCapturePolicy(NativeHistoryPolicy.PolicyId, 1, false, NativeHistoryPolicy.SupportedKinds);
+        await using var database = await TestDatabase.CreateAsync(); await SeedNativeHistoryAsync(database, optional);
+        await using (var context = database.Open("tenant-a"))
+        {
+            await context.Database.ExecuteSqlRawAsync("DROP TABLE elsa_runtime_history_head;");
+            var error = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(Commit("optional-unavailable"), Decision()).AsTask());
+            Assert.IsType<Microsoft.Data.Sqlite.SqliteException>(error.InnerException); Assert.Equal("workflow-a", error.WorkflowExecutionId);
+        }
+        await using var read = database.Open("tenant-a"); Assert.Empty(await read.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Empty(await read.Bookmarks.ToArrayAsync()); Assert.Empty(await read.Set<RuntimeHistoryEventEntity>().ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Captured_write_and_reconciliation_failures_keep_both_causes_at_the_public_boundary()
+    {
+        await using var database = await TestDatabase.CreateAsync(); await SeedNativeHistoryAsync(database);
+        var insert = new FailMarkerInsertInterceptor();
+        await using (var context = database.Open("tenant-a", insert, new FailHistoryMarkerLookup()))
+        {
+            insert.Arm(); var error = await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() =>
+                new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(NativeHistoryCommit("lookup-failure"), Decision()).AsTask());
+            var causes = Causes(error).ToArray(); Assert.Contains(causes, cause => cause is DbUpdateException);
+            Assert.Contains(causes, cause => cause is TimeoutException); Assert.Equal("workflow-a", error.WorkflowExecutionId);
+        }
+        await AssertNoNativeHistoryAsync(database);
+
+        static IEnumerable<Exception> Causes(Exception error)
+        {
+            yield return error;
+            if (error is AggregateException group)
+            {
+                foreach (var inner in group.InnerExceptions)
+                foreach (var cause in Causes(inner)) yield return cause;
+            }
+            else if (error.InnerException is { } inner)
+                foreach (var cause in Causes(inner)) yield return cause;
+        }
+    }
+
+    private sealed class FailHistoryMarkerLookup : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData data,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("SELECT", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("elsa_runtime_checkpoint_commit", StringComparison.Ordinal))
+                throw new TimeoutException("Controlled history marker reconciliation failure.");
+            return ValueTask.FromResult(result);
         }
     }
 
