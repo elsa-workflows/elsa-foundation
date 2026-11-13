@@ -6,11 +6,14 @@ using Kernel.Sim.Native;
 
 var names = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true }
     from cut in new[] { "recreation", "before-apply", "lost-ack" } select (mode, nested, cut)).ToArray();
+if (args.SequenceEqual(["--job-ack"]))
+{ await JobAcknowledgement.Run(false); await JobAcknowledgement.Run(true); return; }
 if (args.SequenceEqual(["--list"]))
-{ foreach (var name in names) Console.WriteLine("creation:" + name); return; }
+{ foreach (var name in names) Console.WriteLine("creation:" + name); Console.WriteLine("creation:job-ack,legacy"); Console.WriteLine("creation:job-ack,qualified"); return; }
 if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 foreach (var (mode, nested, cut) in names) new CreationWitness(mode, nested).Run(cut);
-Console.WriteLine("12/12 initial creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this initial runner.");
+await JobAcknowledgement.Run(false); await JobAcknowledgement.Run(true);
+Console.WriteLine("14/14 initial creation schedules passed. Remaining shared propagation/adverse controls are NOT qualified by this initial runner.");
 
 sealed class CreationWitness(string mode, bool nested)
 {

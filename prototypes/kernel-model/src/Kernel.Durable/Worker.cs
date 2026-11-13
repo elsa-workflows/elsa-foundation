@@ -590,7 +590,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void StartJob(Delivery ticket)
     {
-        if (!_slots.TryGetValue(ticket.Message.Target.Id, out var loadedSlot) || !loadedSlot.Loaded) return;
+        if (!_slots.TryGetValue(ticket.Message.Target.Id, out var loadedSlot) || !loadedSlot.Loaded || loadedSlot.Busy) return;
         if (loadedSlot.Row is null || CreationProtocol.TargetError(loadedSlot.Row, ticket.Message) is not null)
         {
             ticket.Cancel?.Cancel();
