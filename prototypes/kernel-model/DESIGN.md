@@ -257,8 +257,9 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 - **Timers** are messages with a future `due`. The poll returns database time; the owner anchors it and schedules on a
   monotonic clock. **A turn takes a timer back with `Recall`**: the row is deleted with the turn's commit, like a
   cancelled job's ticket (merge, F-N4).
-- **Redelivery:** `ITurn.Redelivered(message)` is true when the row was seen at an earlier epoch, so a turn that took
-  it may have run and its result been lost (merge, F-N6). "May have run", never "did run".
+- **Local lease deadline:** the worker stands down before starting new work once its conservative monotonic lease window expires. Existing work may still have external effects; the fence remains authoritative. The trace, scheduler tests and clock limitations are in [LEASE.md](LEASE.md).
+- **Redelivery:** `ITurn.Redelivered(message)` is true when its polled row already carried a seen or trial marker.
+  This is an observed-history hint: false does not prove that another owner did not execute it (F-N6, #4362).
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
   halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
   parked and the deliveries consumed. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
@@ -343,7 +344,7 @@ public interface ITurn
     void Hold(Message message);
     void Subscribe(string key, string wait, bool keep = false);
     void Unsubscribe(string key, string wait);
-    bool Redelivered(Message message);                        // may a turn with it have run before?
+    bool Redelivered(Message message);                        // observed delivery history, not proof of execution
     string Publish(string key, string? payload, TimeSpan keep);
     void Record(object entry);
     void Rebind(string definition);
@@ -403,7 +404,7 @@ published after the wait committed is delivered once); 14 one bad instance; 15 c
 mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once per scheduling id; G2 holds it to once per round where no merge lies
 upstream), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
-External effect that runs again is told that its turn may have run before. The graph invariants of the sketch (round 4):
+External effect sees the delivery-history hint implied by the metadata observed before marking; false does not prove no other owner executed. The graph invariants of the sketch (round 4):
 G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
 arrived, live or dead (G2 and G3 skip a merge and every node forward of it; the mix has no merge), G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
 
@@ -446,7 +447,7 @@ marked.
 | 2 | One writer per partition: no locks, many instances per commit | Failover takes about one lease; a hot partition has one writer; the partition count is fixed at creation | Partitions (64 on servers, 1 on SQLite: decided); lease (10 s: decided) |
 | 3 | An idle owner needs little traffic | A heartbeat per owned partition about three times per lease, plus one node beat | Lease |
 | 4 | Batching under load | A commit waits for the one before it | Rows per flush |
-| 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` says when they may have | Persistence mode per workflow |
+| 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` reports observed delivery history, not every possible rerun | Persistence mode per workflow |
 | 6 | A background job does not block the instance | It can execute more than once | None: inherent |
 | 7 | The viewer costs nothing on the hot path | The viewer lags the run; projector writes cost calls | History level |
 | 8 | Instances talk only through messages | No reading another instance's state | None: the design |

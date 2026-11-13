@@ -7,6 +7,22 @@ using Kernel.Sim;
 //   dotnet run -c Release --project sim -- --seed 42 [--actions 300] [--flaw Name]      replay one seed; prints a shrunk trace if it fails
 //   dotnet run -c Release --project sim -- --mutations [--seeds 2000]                   break the kernel on purpose and see who notices
 
+// A named mutation must select exactly its own bit. Aliases make unrelated controls run together.
+var namedFlaws = Enum.GetNames<Flaw>().Where(name => name != nameof(Flaw.None)).ToArray();
+foreach (var name in namedFlaws)
+{
+    var bit = unchecked((ulong)(long)Enum.Parse<Flaw>(name));
+    if (bit == 0 || (bit & (bit - 1)) != 0)
+        throw new InvalidOperationException($"Mutation {name} must have one nonzero bit");
+}
+var aliases = namedFlaws.GroupBy(name => Enum.Parse<Flaw>(name)).FirstOrDefault(group => group.Count() > 1);
+if (aliases is not null) throw new InvalidOperationException($"Mutations share a bit: {string.Join(", ", aliases)}");
+if (args.Contains("--check-flaws"))
+{
+    Console.WriteLine($"{namedFlaws.Length} named kernel mutations have distinct individual bits");
+    return 0;
+}
+
 string? Arg(string name) => Array.IndexOf(args, name) is >= 0 and var i && i + 1 < args.Length ? args[i + 1] : null;
 var actions = int.Parse(Arg("--actions") ?? "300");
 Generator.Faults = double.Parse(Arg("--faults") ?? "1", System.Globalization.CultureInfo.InvariantCulture);
@@ -14,6 +30,7 @@ var flaws = (Arg("--flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntri
 
 NativeSwitch.On = args.Contains("--native");
 NativeSwitch.Flaws = (Arg("--native-flaw") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Aggregate(Kernel.Native.NativeFlaw.None, (all, name) => all | Enum.Parse<Kernel.Native.NativeFlaw>(name, true));
+if (args.Contains("--lease-check")) return await LeaseChecks.Run(flaws);
 if (args.Contains("--native-mutations")) return NativeMutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (args.Contains("--mutations")) return Mutations(int.Parse(Arg("--seeds") ?? "2000"));
 if (Arg("--backlog") is { } backlog) return Backlog(int.Parse(backlog));
