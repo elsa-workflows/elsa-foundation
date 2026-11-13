@@ -7,7 +7,7 @@ if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Use
 const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: ".", testMatch: "outlined-fields.spec.ts", workers: 1, retries: 0,
-  metadata: { outlinedCases: builtInThemeDefinitions.length * allThemeModes.length + workspaceStyles.length * 2 + 1 },
+  metadata: { outlinedCases: builtInThemeDefinitions.length * allThemeModes.length + workspaceStyles.length * 2 + 1, outlinedBaseURL: baseURL },
   outputDir: `${evidence}/results`,
   reporter: [["line"], ["json", { outputFile: `${evidence}/playwright.json` }], ["html", { outputFolder: `${evidence}/html`, open: "never" }]],
   use: { baseURL, viewport: { width: 1100, height: 1000 }, trace: "retain-on-failure" },
