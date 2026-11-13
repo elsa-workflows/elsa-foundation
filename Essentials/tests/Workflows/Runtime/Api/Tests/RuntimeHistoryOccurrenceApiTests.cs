@@ -118,6 +118,16 @@ public sealed partial class RuntimeHistoryApiTests
     }
 
     [Fact]
+    public async Task Oversized_occurrence_token_is_rejected_before_the_provider()
+    {
+        var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source); host.Authenticate();
+        using var response = await host.Client.GetAsync(Path + "/occurrences?sequenceToken=" +
+            new string('a', RuntimeStorePageRequest.MaximumContinuationTokenLength + 1));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); Assert.Equal(0, source.Reads);
+    }
+
+    [Fact]
     public async Task Unknown_provider_limitation_does_not_expose_arbitrary_diagnostic_text()
     {
         var p = OccurrencePage();

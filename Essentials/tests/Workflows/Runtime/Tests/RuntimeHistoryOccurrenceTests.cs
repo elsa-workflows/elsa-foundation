@@ -213,6 +213,18 @@ public sealed class RuntimeHistoryOccurrenceTests
         Assert.Throws<ArgumentException>(() => new RuntimeHistoryOccurrenceQuery("run", position: 0, anchorActivityExecutionId: "a"));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(16385)]
+    public void Occurrence_tokens_reuse_the_runtime_blank_and_size_limits(int length)
+    {
+        var value = length <= 1 ? new string(' ', length) : new string('a', length);
+        Assert.Throws<ArgumentException>(() => new RuntimeHistoryOccurrenceQuery("run", sequenceToken: value));
+        var maximum = new string('a', RuntimeStorePageRequest.MaximumContinuationTokenLength);
+        Assert.Equal(maximum, new RuntimeHistoryOccurrenceQuery("run", sequenceToken: maximum).SequenceToken);
+    }
+
     private static string[] Ids(RuntimeHistoryOccurrencePage page) => page.Items.Select(item => item.Observation.ActivityExecutionId!).ToArray();
 
     private sealed class Fixture

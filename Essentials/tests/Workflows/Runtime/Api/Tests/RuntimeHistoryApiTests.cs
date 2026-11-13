@@ -243,7 +243,7 @@ public sealed partial class RuntimeHistoryApiTests
     public async Task Missing_reader_is_honest_and_missing_composite_contract_never_rejoins_independent_details()
     {
         var workflows = new InMemoryWorkflowExecutionStateStore();
-        await workflows.SaveAsync(workflow ?? Workflow());
+        await workflows.SaveAsync(Workflow());
         var service = new RuntimeHistoryInspectionService(workflows, new Authorization(), new FakeTimeProvider(Now));
         Assert.Equal("unsupported", (await service.ReadAsync(new("run"))).Coverage.State);
         var projection = new BaseProjection();
@@ -356,7 +356,7 @@ public sealed partial class RuntimeHistoryApiTests
     public async Task Cancellation_propagates_without_becoming_invalid_history()
     {
         var workflows = new InMemoryWorkflowExecutionStateStore();
-        await workflows.SaveAsync(workflow ?? Workflow());
+        await workflows.SaveAsync(Workflow());
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
         var history = new Projection();

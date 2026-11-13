@@ -19,7 +19,8 @@ public sealed class RuntimeHistoryOccurrenceQuery
         if (activityExecutionId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
         if (includeDescendants && activityExecutionId is null)
             throw new ArgumentException("Descendant scope requires an exact activity execution.", nameof(includeDescendants));
-        WorkflowExecutionId = workflowExecutionId; Limit = limit; SequenceToken = sequenceToken;
+        WorkflowExecutionId = workflowExecutionId; Limit = limit;
+        SequenceToken = RuntimeStorePageRequest.ValidateContinuationToken(sequenceToken, nameof(sequenceToken));
         Position = position; AnchorActivityExecutionId = anchorActivityExecutionId;
         ActivityExecutionId = activityExecutionId; IncludeDescendants = includeDescendants; AccessBinding = accessBinding;
     }
