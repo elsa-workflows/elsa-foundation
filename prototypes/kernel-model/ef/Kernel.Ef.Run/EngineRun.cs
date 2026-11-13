@@ -302,7 +302,8 @@ static class EngineRun
         var create = target.Has("locks") ? target.Workers(counter, counter.Transactions, opens, saves, locks) : target.Workers(counter, counter.Transactions, opens, saves);
         await target.ResetAsync(2);
         var store = target.Store(create);
-        var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000 });
+        // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
+        var owner = new Worker("owner", 0, store, new WorkflowInstance(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000, Lease = TimeSpan.FromHours(1) });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;

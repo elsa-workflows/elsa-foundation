@@ -15,7 +15,8 @@ public static class Cost
         await using var provided = await provider.CreateAsync(2, new StoreSetup(Counting: true));
         var counter = provided.Counter ?? throw new InvalidOperationException($"{provider.Name} does not count its round trips");
         var store = provided.Store;
-        var owner = new Worker("owner", 0, store, new WorkflowInstance(Stress.Models()));
+        // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
+        var owner = new Worker("owner", 0, store, new WorkflowInstance(Stress.Models()), new WorkerOptions { Lease = TimeSpan.FromHours(1) });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
         await owner.PollAsync();
         var n = 0;
