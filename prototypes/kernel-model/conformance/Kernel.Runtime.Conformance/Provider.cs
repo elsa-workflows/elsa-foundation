@@ -65,8 +65,11 @@ public sealed class BuiltInProvider : IRuntimeProvider
         private readonly List<Node> _nodes = [];
         private int _started;
 
+        private bool _disposed;
+
         public async Task<IRuntimeNode> StartNodeAsync(int side = 0)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             var name = $"builtin.{side}.{Interlocked.Increment(ref _started)}";
             var services = environment.Node(name);
             InProcessWakeSignal signal;
@@ -84,6 +87,7 @@ public sealed class BuiltInProvider : IRuntimeProvider
 
         public async ValueTask DisposeAsync()
         {
+            _disposed = true;
             List<Node> nodes;
             lock (_nodes) nodes = [.. _nodes];
             foreach (var node in nodes) await node.StopAsync();

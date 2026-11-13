@@ -32,7 +32,12 @@ public sealed class Harness : IAsyncDisposable
     {
         var provided = await store.CreateAsync(setup.Partitions, new StoreSetup(BrokenFence: setup.BrokenFence));
         var harness = new Harness(provided, setup);
-        harness._cluster = await runtime.CreateAsync(new RuntimeEnvironment(setup.Partitions, setup.Timing, harness.Node));
+        try { harness._cluster = await runtime.CreateAsync(new RuntimeEnvironment(setup.Partitions, setup.Timing, harness.Node)); }
+        catch
+        {
+            await provided.DisposeAsync();
+            throw;
+        }
         return harness;
     }
 
@@ -51,6 +56,14 @@ public sealed class Harness : IAsyncDisposable
     /// <summary>Names the runtime used twice: a restarted process must have a new name (finding F9).</summary>
     public List<string> Reused { get; } = [];
 
+    /// <summary>What the harness itself saw go wrong: a node whose name is not the one it asked layer 2 for.</summary>
+    public List<string> Misnamed { get; } = [];
+
+    /// <summary>Every violation the harness can see from outside the store: the watcher's, invariant 1 on the recorded commits, the store's ghosts, names.</summary>
+    public List<string> Violations() =>
+        [.. Watcher.Violations, .. Recorded.CheckOneWriter(), .. Provided.Ghosts.Select(g => "GHOST " + g),
+         .. Reused.Select(n => $"F9 the runtime reused the node name {n}"), .. Misnamed];
+
     public IReadOnlyList<IRuntimeNode> Alive
     {
         get { lock (_nodes) return _nodes.Where(n => !_gone.Contains(n.Name)).ToList(); }
@@ -67,6 +80,7 @@ public sealed class Harness : IAsyncDisposable
         {
             Lease = Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = Partitions,
             OnTurn = (_, _, _) => Interlocked.Increment(ref _turns),
+            JobScheduler = TaskScheduler.Default,      // a job's body off the runtime's scheduler, whatever the runtime
         };
         // No trial gate shared by the node's workers: a runtime may run the passes of a node's scopes at the same time,
         // and the gate is not safe for that (FINDINGS section 25).
@@ -76,7 +90,11 @@ public sealed class Harness : IAsyncDisposable
 
     public async Task<IRuntimeNode> StartAsync(int side = 0)
     {
+        var before = _names.Keys.ToHashSet();
         var node = await _cluster.StartNodeAsync(side);
+        var asked = _names.Keys.Where(n => !before.Contains(n)).ToList();
+        if (asked is not [var name] || name != node.Name)
+            lock (Misnamed) Misnamed.Add($"NAME the node started as {node.Name} asked layer 2 for [{string.Join(", ", asked)}]");
         lock (_nodes) _nodes.Add(node);
         return node;
     }
@@ -85,13 +103,14 @@ public sealed class Harness : IAsyncDisposable
     {
         lock (_nodes) if (!_gone.Add(node.Name)) return;
         await node.StopAsync();
+        Watcher.Stopped(node.Name);
     }
 
     public async Task KillAsync(IRuntimeNode node)
     {
         lock (_nodes) if (!_gone.Add(node.Name)) return;
-        Watcher.Dead(node.Name);
         await node.KillAsync();
+        Watcher.Dead(node.Name);
     }
 
     /// <summary>Add a message as the outside world does, retrying until the insert answers, and send a hint through a live node.</summary>
@@ -127,9 +146,20 @@ public sealed class Harness : IAsyncDisposable
     /// <summary>Every scope is held by exactly one live node.</summary>
     public bool Settled() => Watcher.Holders(Partitions).All(h => h.Count == 1);
 
+    /// <summary>Stop every live node, then the cluster (a node already killed stays as it is). The store stays, for the checks.</summary>
+    public async Task StopAllAsync()
+    {
+        if (_stopped) return;
+        _stopped = true;
+        foreach (var node in Alive) await StopAsync(node);
+        await _cluster.DisposeAsync();
+    }
+
+    private bool _stopped;
+
     public async ValueTask DisposeAsync()
     {
-        await _cluster.DisposeAsync();
-        await _provided.DisposeAsync();
+        try { await StopAllAsync(); }
+        finally { await _provided.DisposeAsync(); }
     }
 }
