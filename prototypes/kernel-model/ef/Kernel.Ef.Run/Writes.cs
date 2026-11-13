@@ -187,6 +187,18 @@ sealed class PgWrites(string connection)
         return (parts.Select(r => ((string)r[0], (string)r[1], L(r[2]), L(r[3]), L(r[4]), L(r[5]))).ToList(), kinds.Select(r => ((string)r[0], (string)r[1], L(r[2]), L(r[3]))).ToList());
     }
 
+    /// <summary>The bytes of full-page images on every block of the run's relations, by transactions that did not abort.</summary>
+    public async Task<long> FpiAsync(Snapshot from, Snapshot to)
+    {
+        if (Bytes(to.Lsn) <= Bytes(from.Lsn)) return 0;
+        await using var c = await OpenAsync();
+        return L((await RowsAsync(c, """
+            WITH aborted AS (SELECT DISTINCT xid FROM pg_get_wal_records_info($1::pg_lsn, $2::pg_lsn) WHERE resource_manager = 'Transaction' AND record_type LIKE 'ABORT%')
+            SELECT COALESCE(sum(block_fpi_length), 0) FROM pg_get_wal_block_info($1::pg_lsn, $2::pg_lsn, false)
+            WHERE reldatabase = (SELECT oid FROM pg_database WHERE datname = current_database()) AND NOT (xid <> '0'::xid AND xid IN (SELECT xid FROM aborted))
+            """, from.Lsn, to.Lsn))[0][0]);
+    }
+
     /// <summary>Exact live, dead and free bytes of each table, from a full scan (pgstattuple).</summary>
     public async Task<List<string>> TupleStatsAsync()
     {
@@ -225,8 +237,10 @@ sealed class PgWrites(string connection)
         Console.WriteLine($"\nWRITES | WAL {before.Lsn} to {end.Lsn}: {wal:N0} bytes ({end.WalRecords - before.WalRecords:N0} records, {end.WalFpi - before.WalFpi:N0} full-page images) | {batches:N0} commits landed, {units:N0} instance commits, {turns:N0} turns | {(batches == 0 ? 0 : wal / batches):N0} bytes per commit, {(units == 0 ? 0 : wal / units):N0} per instance commit");
         var (parts, kinds) = await SplitAsync(before, end);
         var (named, aborted) = (parts.Sum(p => p.Bytes), parts.Sum(p => p.Aborted));
-        Console.WriteLine($"  in this database's relations: {named:N0} bytes by transactions that did not abort, {(units == 0 ? 0 : named / units):N0} per landed instance commit; {aborted:N0} bytes ({(named + aborted == 0 ? 0 : 100.0 * aborted / (named + aborted)):F1} %) by transactions that aborted (fenced, killed); the rest is commit and abort records and any other database's work (autovacuum of an earlier run's database, say)");
-        Console.WriteLine($"  {"table",-14} {"part",-6} {"records",9} {"WAL bytes",14} {"of which FPI",13} {"per commit",11} {"per inst.",10} {"aborted",12}");
+        var fpiAll = await FpiAsync(before, end);
+        Console.WriteLine($"  in this database's relations: {named:N0} bytes by transactions that did not abort, {(units == 0 ? 0 : named / units):N0} per landed instance commit; {aborted:N0} bytes ({(named + aborted == 0 ? 0 : 100.0 * aborted / (named + aborted)):F1} % of the relation WAL, {(named == 0 ? 0 : 100.0 * aborted / named):F1} % on top of the rest) by transactions that aborted (fenced, killed); the rest is commit and abort records and any other database's work (autovacuum of an earlier run's database, say)");
+        Console.WriteLine($"  full-page images: {fpiAll:N0} bytes in the run's relations, by transactions that did not abort ({(units == 0 ? 0 : fpiAll / units):N0} per landed instance commit); the column below counts those of a record's first block only");
+        Console.WriteLine($"  {"table",-14} {"part",-6} {"records",9} {"WAL bytes",14} {"first-blk FPI",13} {"per commit",11} {"per inst.",10} {"aborted",12}");
         foreach (var p in parts.Where(p => p.Bytes + p.Aborted > 0))
             Console.WriteLine($"  {p.Table,-14} {p.Part,-6} {p.Records,9:N0} {p.Bytes,14:N0} {p.Fpi,13:N0} {(batches == 0 ? 0 : p.Bytes / (double)batches),11:N0} {(units == 0 ? 0 : p.Bytes / (double)units),10:N0} {p.Aborted,12:N0}");
         Console.WriteLine($"  {"(other)",-14} {"",-6} {"",9} {wal - named - aborted,14:N0} {"",13} {(batches == 0 ? 0 : (wal - named - aborted) / (double)batches),11:N0} {(units == 0 ? 0 : (wal - named - aborted) / (double)units),10:N0}   no relation of this database");

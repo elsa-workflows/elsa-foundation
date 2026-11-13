@@ -11,12 +11,14 @@ commit for a start that ends in its first turn, 0.9 kB for a turn woken by a mes
 outside start, once its insert into the inbox is counted. Under the stress test's chaos, a landed instance commit
 costs about 2.1 kB: 0.93 to 1.08 kB inbox, 0.64 to 0.71 kB instance row (more than half of it a few growing states),
 0.29 kB journal, and about 0.1 kB of commit records. Rolled-back attempts add another 8 to 12 % on top, counted
-apart. Dead tuples peak at about 1,100 on Instances and 6,600 on Messages. Autovacuum clears them at its default
+apart. Dead tuples peak at 577 to 723 on Instances and 4,946 to 5,397 on Messages at Full, and at up to about 1,100 and 6,600
+in the other runs. Autovacuum clears them at its default
 one-minute nap, once they pass its threshold. The heaps keep 5 to 15 % free space on Instances and 13 to 30 % on
-Messages. Write volume does not hurt at small states, so the lazy snapshot is not needed for them. Large states are
+Messages. These are floors: with a checkpoint every 30 s, full-page images
+add about a third. Write volume does not hurt at small states, so the lazy snapshot is not needed for them. Large states are
 where it hurts. An incompressible 4 kB state costs about 6.9 kB of WAL per landed instance commit, because PostgreSQL rewrites
-all of it through TOAST, and the TOAST table grows to 2.1 to 2.3 times its live data. A state that compresses costs
-less, and below about 2 kB compressed it stays in the row. That cost is what decision 10 (values by reference) is for.
+all of it through TOAST, and the TOAST table grows to 2.1 to 2.3 times its live data. By PostgreSQL's TOAST rules a state
+that compresses should cost less, and one below about 2 kB compressed stays in the row; that was not measured here. That cost is what decision 10 (values by reference) is for.
 A fill factor of 70 on Messages helps only bursts. A partitioned inbox split by the kernel's partition does not fit
 the current store without changing its keys.
 
@@ -31,6 +33,13 @@ the current store without changing its keys.
   transactions that aborted; the per-table columns count the run's own relations. In the stress logs of the second
   set, the sequence behind Messages' `Seq` (about 4 B per instance commit) is labelled "(catalog) index"; the tool
   now counts it with Messages.
+- **Full-page images.** With `full_page_writes` on, the first change to a page after a checkpoint writes the whole
+  page. These runs saw few of them: 6 to 114 per run in `pg_stat_wal`. The tables are a few MB, and most windows held
+  no checkpoint (`checkpoint_timeout` 5 min). The column "first-blk FPI" in the logs counts the images of a record's
+  first block only; the total over all blocks is printed above it from the third set on (`r3-*`). A run with
+  checkpoints every 30 s is below ("Checkpoints"). With many live instances spread over many pages, images add up to about one
+  8 kB page per page touched per checkpoint interval, so the per-commit figures here are a floor for a large
+  deployment.
 - **Tuple counts, dead tuples, vacuums and sizes** come from `pg_stat_user_tables`, `pg_relation_size`,
   `pg_indexes_size` and the TOAST table's size. They are sampled every second during the stress run, at the end, and
   again after a 70-second wait (autovacuum naps for one minute by default). The stress test kills about 2,100 to 3,000
@@ -60,7 +69,8 @@ the current store without changing its keys.
   1,800,824 B. At fill factor 70 they gave 1,295,352 to 1,325,568 B, up to 5 % apart on the Messages share. Background
   autovacuum or autoanalyze can also land in any row, and in a setup (`pg_statistic`, Instances, Journal).
 
-Commands, against PostgreSQL 17.11 in Docker, run one at a time (the stress test kills worker sessions on the whole
+The tool needs PostgreSQL 17 or later (`pg_walinspect`'s `pg_get_wal_block_info` with three arguments). Commands,
+against PostgreSQL 17.11 in Docker, run one at a time (the stress test kills worker sessions on the whole
 server):
 
 ```
@@ -112,7 +122,8 @@ The setup's Messages share is 497 to 510 B per start. The rest is the commit rec
 
 ## The stress run: a 40-second producer window, chaos until it ends, then settling
 
-3 nodes and 2 partitions, fence checked. 5,000 outside messages, paced over a 40-second producer window. On this loaded
+3 nodes and 2 partitions, fence checked. 5,000 producer steps (outside messages, lifecycle commands and events;
+6,529 outside messages are kept at the end), paced over a 40-second producer window. On this loaded
 machine the producer ran 117 to 190 s, and the chaos lasted as long. Sessions were killed throughout, 2,084 to 3,001
 per run. Each run had about 11,000 instance commits and 4,000 instances, so about 70 instance commits a second. Every
 run ended with "all properties hold". At Minimal that check proves less: the journal checks I2 (one journal row per
@@ -121,16 +132,17 @@ revision) and I6 (rows against the position) have few rows to compare (558 in th
 
 The table gives WAL per landed instance commit. "Total" is all WAL but that of transactions that aborted. The
 per-table columns are the run's own relations, and "other" is commit records and the like. "Aborted" is the WAL of
-transactions that rolled back, as a share on top of the run's relation WAL:
+transactions that rolled back, as a share of the run's relation WAL as the log prints it, and in brackets as a share
+on top of the counted relation WAL:
 
 | run | total | Instances (of which TOAST) | Journal | Messages | Partitions | other | aborted | HOT % Inst. / Msg. | dead tuples, peak Inst. / Msg. | autovacuums Inst. / Msg. |
 |---|---:|---:|---:|---:|---:|---:|---:|---|---|---|
-| Full (two runs) | 2,125 to 2,144 | 663 to 681 (368 to 379) | 288 to 289 | 959 to 1,015 | 40 to 42 | 84 to 100 | 8.2 to 9.6 % | 94 / 92 to 93 | 577 to 723 / 4,946 to 5,397 | 2 / 3 |
-| State | 2,112 | 710 (401) | 281 | 938 | 42 | 84 | 8.3 % | 93 / 93 | 1,099 / 6,552 | 2 / 3 |
-| Minimal | 1,753 | 733 (417) | 16 | 843 | 40 | 72 | 5.5 % | 96 / 95 | 896 / 5,867 | 2 / 3 |
-| 4 kB pad (two runs) | 6,913 to 6,931 | 5,408 to 5,461 (5,204 to 5,255) | 287 to 288 | 952 to 1,015 | 41 to 45 | 117 to 121 | 10.4 to 11.8 % | 96 to 97 / 92 to 94 | 459 to 504 / 5,303 to 5,374 | 2 / 3 to 4 |
-| fill factor 70 | 2,049 | 642 (359) | 291 | 931 | 43 | 85 | 11.8 % | 100 / 99 | 836 / 5,248 | 3 / 4 |
-| fast vacuum | 2,213 | 650 (363) | 290 | 1,079 | 42 | 89 | 8.5 % | 94 / 91 | 605 / 5,200 | 2 / 4 |
+| Full (two runs) | 2,125 to 2,144 | 663 to 681 (368 to 379) | 288 to 289 | 959 to 1,015 | 40 to 42 | 84 to 100 | 7.5 to 8.7 % (8.2 to 9.6 %) | 94 / 92 to 93 | 577 to 723 / 4,946 to 5,397 | 2 / 3 |
+| State | 2,112 | 710 (401) | 281 | 938 | 42 | 84 | 7.7 % (8.3 %) | 93 / 93 | 1,099 / 6,552 | 2 / 3 |
+| Minimal | 1,753 | 733 (417) | 16 | 843 | 40 | 72 | 5.2 % (5.5 %) | 96 / 95 | 896 / 5,867 | 2 / 3 |
+| 4 kB pad (two runs) | 6,913 to 6,931 | 5,408 to 5,461 (5,204 to 5,255) | 287 to 288 | 952 to 1,015 | 41 to 45 | 117 to 121 | 9.5 to 10.6 % (10.4 to 11.8 %) | 96 to 97 / 92 to 94 | 459 to 504 / 5,303 to 5,374 | 2 / 3 to 4 |
+| fill factor 70 | 2,049 | 642 (359) | 291 | 931 | 43 | 85 | 10.5 % (11.8 %) | 100 / 99 | 836 / 5,248 | 3 / 4 |
+| fast vacuum | 2,213 | 650 (363) | 290 | 1,079 | 42 | 89 | 7.8 % (8.5 %) | 94 / 91 | 605 / 5,200 | 2 / 4 |
 
 (Journal at Minimal: the journal rows of deletes and dropped starts, which every level keeps. State costs as much as
 Full here because the toy models' entries are a word or two; the cost run shows the difference for 1,000 starts.)
@@ -146,8 +158,27 @@ Where the bytes go in the first Full run (record types from `pg_walinspect`):
   journal.
 - **Journal**, 289 B: 115 heap, 174 index. The indexes cost more than the rows.
 - **Partitions**, 40 to 45 B: the fence, a HOT update of one row per commit.
-- **Aborted**, 8.2 % on top: the work of fenced commits and of sessions killed mid-commit, which the database writes
+- **Aborted**, 7.5 % of the relation WAL (8.2 % on top): the work of fenced commits and of sessions killed mid-commit, which the database writes
   and then throws away.
+
+## Checkpoints
+
+The runs above saw almost no full-page images. To see what they add, the third set ran the stress test with
+`checkpoint_timeout` at 30 s (`ALTER SYSTEM`, reloaded; reset afterwards), against a run at the default 5 min. Relation
+WAL per landed instance commit, transactions that did not abort:
+
+| run | relation WAL | full-page images (all blocks) | images in `pg_stat_wal` |
+|---|---:|---:|---:|
+| Full, checkpoint every 5 min (`r3-stress-full`) | 2,032 | 3 | 25 |
+| Full, checkpoint every 30 s (`r3-stress-full-ckpt30`) | 2,732 | 757 | 1,816 |
+| 4 kB pad, checkpoint every 30 s (`r3-stress-pad4k-ckpt30`) | 8,644 | 2,081 | 8,405 |
+
+At 30 s the images add a third to a small-state commit (+700 B) and about a quarter to the padded one (6,800 to 8,644
+B; the pad run at 5 min is from the second set). They fall on every table: on the instance row's heap and TOAST, on
+the inbox's heap and indexes, and on the journal's heap and indexes, whose pages are appended to but are not new at
+each checkpoint. Production tables are far larger than these few MB, and a busy server checkpoints every few minutes,
+so where the images land between these two runs depends on how many distinct pages a checkpoint interval touches.
+They do not change the comparison between the variants, and they are a reason not to shorten `checkpoint_timeout`.
 
 ## Bloat
 
@@ -201,13 +232,16 @@ the WAL with it and the replication traffic behind it.
    of the instance row's share is TOAST of six growing states. Of the journal's cost, its two indexes are 60 %.
 3. **Large states are the cost.** PostgreSQL rewrites a state of more than about 2 kB (after compression) through
    TOAST at every commit. For an incompressible 4 kB state, that is about 6.9 kB of WAL per instance commit, and the TOAST table
-   bloats to 2.1 to 2.3 times its live data. Real JSON compresses, so this is the upper end. Values by reference
+   bloats to 2.1 to 2.3 times its live data. Real JSON compresses, so this should be the upper end (expected from the TOAST rules, not measured). Values by reference
    (decision 10) is the fix for large values that do not change every turn. It should be measured with this tooling
    once it lands (`pad=` against the reference).
 4. **Fill factor:** 90 or lower on Messages pays off when work arrives in bursts. It buys nothing measurable under
    trickle load and costs heap space. On Instances it buys nothing measurable. Neither is a kernel default; it is a
    deployment note for the EF store's PostgreSQL schema.
-5. **Vacuum:** judged by `pgstattuple`, the default autovacuum kept up at these rates. The tuple counters behind
+5. **Checkpoints:** the figures here are a floor. With a checkpoint every 30 s, full-page images added a third to a
+   small-state commit and a quarter to a padded one. In a large deployment their share depends on how many distinct
+   pages a checkpoint interval touches.
+6. **Vacuum:** judged by `pgstattuple`, the default autovacuum kept up at these rates. The tuple counters behind
    autovacuum's triggers count rolled-back rows too, so under chaos they trigger it earlier, if anything. Per-table
    thresholds changed nothing measurable. Lowering `autovacuum_naptime` is the likely lever for a busy deployment, but
    it was not measured.
@@ -232,7 +266,8 @@ reference does not help. If that case comes, this would be the spike:
 
 ## Raw logs
 
-The stress numbers above come from the second set of runs: `r2-stress-full`, `full-b`, `state`, `minimal`, `pad4k`,
+The checkpoint runs are the third set (`r3-stress-*`), with the all-blocks full-page-image total. The other stress
+numbers above come from the second set of runs: `r2-stress-full`, `full-b`, `state`, `minimal`, `pad4k`,
 `pad4k-b`, `ff70` and `fastvac`. Their split leaves aborted transactions out, and their logs give the LSN range. A
 first set (`stress-*.log`, eleven runs) counted aborted work in, with totals of 2,154 to 2,546 B per instance commit
 at Full and 7,208 to 7,708 B with the pad. The other logs are:
