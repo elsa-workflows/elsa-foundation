@@ -128,3 +128,8 @@ observation and retention only alongside its owned selected EF reader. Stable kn
 identity supports either registration order; explicit foreign readers/independent ports are preserved
 without invoking factories during selection. This installs no capture options or source profile and
 leaves native capture capability unadvertised pending complete provider/default-owner qualification.
+
+Production hosts enroll semantic metadata history with AddWorkflowRuntimeHistory. It preserves retained
+capture policy, requires qualified actual source/native/read support at admission and selects no
+persistence or payload capture. Native EF registration alone adds no history options; EF capability
+remains separately qualified. The same public entry supports the default-order integration controls.

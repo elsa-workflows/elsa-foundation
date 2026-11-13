@@ -55,6 +55,20 @@ namespace Elsa.Workflows.Runtime.Extensions;
 [RuntimeDefaultRegistration]
 public static class RuntimeCoreServiceCollectionExtensions
 {
+    /// <summary>Opts the runtime into semantic metadata history for new eligible admissions.</summary>
+    /// <remarks>
+    /// Register the runtime and its semantic owners as usual. Admission requires a qualified selected
+    /// native writer, reader and source chain; unsupported composition refuses capture rather than
+    /// reporting missing history as complete. Disabled options affect new admissions only: retained
+    /// captured policies remain authoritative. This does not select persistence, migrate storage or
+    /// enable payload capture. Each node writing captured runs must install the history composition.
+    /// </remarks>
+    public static IServiceCollection AddWorkflowRuntimeHistory(this IServiceCollection services, RuntimeHistoryOptions? options = null)
+    {
+        RuntimeHistoryRegistration.AddServices(services, options);
+        return services;
+    }
+
     /// <summary>
     /// Registers the host-agnostic workflow runtime composition root. Idempotent (all registrations use <c>TryAdd</c>),
     /// so a host may register durable-provider overrides before or after calling this. Runs drain only once

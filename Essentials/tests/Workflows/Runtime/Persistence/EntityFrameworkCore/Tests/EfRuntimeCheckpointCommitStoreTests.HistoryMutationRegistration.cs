@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.History;
@@ -17,9 +18,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     public void Public_native_registration_selects_one_actual_mutation_owner_in_either_default_registration_order(bool defaultsFirst)
     {
         var services = CompleteHistoryReaderServices();
-        if (defaultsFirst) RuntimeHistoryRegistration.AddServices(services, new() { Enabled = false });
+        if (defaultsFirst) services.AddWorkflowRuntimeHistory(new() { Enabled = false });
         services.AddRuntimeCheckpointCommitEntityFrameworkCore();
-        if (!defaultsFirst) RuntimeHistoryRegistration.AddServices(services, new() { Enabled = false });
+        if (!defaultsFirst) services.AddWorkflowRuntimeHistory(new() { Enabled = false });
         services.AddRuntimeCheckpointCommitEntityFrameworkCore();
         Assert.Single(services.Where(descriptor => descriptor.ServiceType == typeof(IRuntimeHistoryObservationWriter)));
         Assert.Single(services.Where(descriptor => descriptor.ServiceType == typeof(IRuntimeHistoryRetentionStore)));
