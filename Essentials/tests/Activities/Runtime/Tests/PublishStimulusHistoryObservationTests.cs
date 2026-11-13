@@ -157,6 +157,38 @@ public sealed class PublishStimulusHistoryObservationTests
     }
 
     [Theory]
+    [InlineData("generic")] [InlineData("shed")] [InlineData("boundary")]
+    public async Task Requested_cancellation_during_failure_observation_keeps_the_same_cancellation_and_original_primary_diagnostics(string mode)
+    {
+        using var f = new Fixture(); using var cancellation = new CancellationTokenSource();
+        var original = new OperationCanceledException("controlled disposition cancellation", null, cancellation.Token);
+        const string key = "Elsa.Runtime.History.PublicationFailuresBeforeCancellation";
+        original.Data[key] = "opaque prior diagnostics";
+        Exception? primary = mode == "generic" ? new IOException("private route failure") : mode == "boundary"
+            ? new StimulusDeliveryBoundaryException("commit:send", new IOException("private source failure"), true) : null;
+        f.Router.Failure = primary;
+        if (mode == "shed") f.Router.Result = new([StimulusStartOutcome.Shed("binding", "artifact", null)], []);
+        f.Writer.Failure = row =>
+        {
+            if (row.Event.Name != Disposition) return null;
+            cancellation.Cancel(); return original;
+        };
+        Assert.Same(original, await Assert.ThrowsAsync<OperationCanceledException>(() => f.Deliver(cancellation.Token)));
+        var preserved = Assert.IsAssignableFrom<IReadOnlyList<object>>(original.Data[key]);
+        Assert.Equal("opaque prior diagnostics", preserved[0]);
+        if (mode == "boundary") Assert.Same(primary, Assert.IsType<RuntimePostCommitSourceBoundaryException>(preserved[1]).InnerException);
+        else
+        {
+            var delivery = Assert.IsType<RuntimePostCommitDeliveryException>(preserved[1]);
+            Assert.Equal(PostCommitFailureKind.Transient, delivery.Kind);
+            if (primary is not null) Assert.Same(primary, delivery.InnerException);
+        }
+        Assert.Equal(1, f.Router.Calls); Assert.Single(f.Writer.Stored);
+        Assert.Equal(1, f.Writer.Attempts.Count(row => row.Event.Name == Disposition));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, f.Source.Claim.Item.Status);
+    }
+
+    [Theory]
     [InlineData("source")] [InlineData("owner")] [InlineData("write")]
     public async Task Scope_drift_across_source_owner_or_observation_await_refuses_further_effects(string phase)
     {

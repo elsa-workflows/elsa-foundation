@@ -74,6 +74,15 @@ public sealed class RuntimeHistoryPublicationObservationContractTests
     }
 
     [Theory]
+    [InlineData("DeliveryReceived")] [InlineData("DeliveryFaulted")]
+    public void Admitted_older_delivery_names_cannot_bypass_the_publication_factory_contract(string name)
+    {
+        var olderVocabulary = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true, [name]);
+        Assert.Throws<ArgumentOutOfRangeException>(() => RuntimeHistorySourceFacts.PublicationObservation(olderVocabulary, Source(), "receipt",
+            name, At, "private exception text"));
+    }
+
+    [Theory]
     [InlineData("private-reason")] [InlineData("extra-metadata")] [InlineData("missing-attempt")]
     [InlineData("bookmark")] [InlineData("foreign-run")] [InlineData("missing-cause")]
     public void The_shared_writer_validator_rejects_unsafe_owner_shapes_even_when_the_factory_is_bypassed(string problem)

@@ -18,6 +18,7 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitDurableSourceInt
     private const string DeliveryFailureCode = "publish-stimulus-delivery-failed";
     private const string DeliveryFailureSummary = "The named-event stimulus could not be routed.";
     private const string ShedFailureCode = "publish-stimulus-start-shed";
+    private const string CancellationFailureDataKey = "Elsa.Runtime.History.PublicationFailuresBeforeCancellation";
 
     private readonly IStimulusRouter _stimulusRouter;
     private IServiceProvider? _historyServices;
@@ -123,6 +124,24 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitDurableSourceInt
     {
         if (observation is null) return;
         try { await observation.DispositionAsync(reason, cancellationToken); }
+        catch (OperationCanceledException cancellation) when (cancellationToken.IsCancellationRequested)
+        {
+            // Keep shutdown cancellation intact and retain the preceding routing failure as diagnostics only.
+            try
+            {
+                var data = cancellation.Data;
+                lock (data.SyncRoot)
+                {
+                    var prior = data[CancellationFailureDataKey];
+                    var failures = prior is IReadOnlyList<object> list ? list.ToList() : prior is null ? [] : new List<object> { prior };
+                    failures.Add(primary);
+                    data[CancellationFailureDataKey] = Array.AsReadOnly(failures.ToArray());
+                }
+            }
+            catch (Exception failure) when (failure is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+            { /* Supplementary diagnostics cannot replace the original requested cancellation. */ }
+            throw;
+        }
         catch (Exception secondary)
         {
             throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,

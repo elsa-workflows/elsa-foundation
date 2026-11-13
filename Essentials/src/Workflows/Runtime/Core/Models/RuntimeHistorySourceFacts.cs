@@ -18,6 +18,7 @@ public static class RuntimeHistorySourceFacts
         ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(receiptId);
         ArgumentException.ThrowIfNullOrWhiteSpace(name); ArgumentException.ThrowIfNullOrWhiteSpace(reasonCode);
+        if (!IsPublicationObservation(name)) throw new ArgumentOutOfRangeException(nameof(name), "Publication observations require a publication-owner kind.");
         if (receiptId.Length > 1024 || source.Intent.HistoryCausation is not { } origin ||
             origin.WorkflowExecutionId != source.Intent.WorkflowExecutionId || origin.DeliveryId != source.SourceOutboxItemId ||
             string.IsNullOrWhiteSpace(origin.HistoryEventId) || source.Claim.Item.StimulusDeliverySourceScope != source.Scope)
