@@ -210,6 +210,23 @@ fan-out, runtime key discovery or target compatibility is inferred. The existing
 S3 UI, S4 real runtime proof and S5 composed acceptance remain pending; this source slice closes no T022 or program
 acceptance box. The S0 cosmetic backend wording nit remains deferred.
 
+
+#4309 S3 source receipt (partial; acceptance still pending): ordinary workflow input rows now use the existing
+popover/transaction with the opt-in member capability. The enhanced branch browses canonical result/input/request/
+variable offers, exact literal/empty paths and breadcrumbs; collections remain whole values and unknown/map keys are
+queried without inferred keys. Open workflow requests expose a literal name proposal only for the open-input host
+and an allowed target; only the server's returned binding can be selected. Four member references and canonical
+workflow-request values render readable provenance with Replace/Clear through the existing row edit owner. No
+SDK wire or hidden save is added. Whole-output behavior remains in the original branch without a true capability.
+Focused requests abort on navigation, close, revision/base/target and readonly changes; late, malformed, wrong-kind/
+path and revoked answers cannot commit. Out-of-scope editors preserve reference payloads without cross-kind actions.
+Known data-reference replacements retain one edit; manual-expression/code-loss confirmations remain in place.
+Source-level behavioral checks cover Customer/member selection, source-family literal/empty keys, target switch through
+both row/reference callbacks, readonly transition, malformed offers, cancellation/refusal, keyboard focus and context
+absence. Composed current-head UI/runtime proof, independent visual acceptance and the S4/S5 permanent proof lanes
+are still required. No full T022/T023/T025, P1 or program acceptance box closes from this source-only receipt; S4/S5,
+US2 expression insertion, shared-editor/BPMN audits and the S0 cosmetic backend wording nit remain pending.
+
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.
 

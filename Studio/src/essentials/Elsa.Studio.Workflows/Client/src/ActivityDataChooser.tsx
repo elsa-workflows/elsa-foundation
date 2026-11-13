@@ -14,7 +14,7 @@ import {
 import { AlertTriangle, LocateFixed } from "lucide-react";
 import { AnchoredPopover, SkeletonRows } from "@elsa-workflows/studio-ui";
 import { authSessionEndedEvent, type StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
-import type { ActivityDataBinding, ActivityDataContextResult, ActivityDataSourceFacts, ActivityDataTarget } from "./api/activityDataSelection";
+import { matchesMemberOffer, type ActivityDataBinding, ActivityDataContextResult, ActivityDataSourceFacts, ActivityDataTarget } from "./api/activityDataSelection";
 import {
   activityResultSyntax,
   collectSourcePages,
@@ -28,6 +28,9 @@ import {
   type ActivityDataSelectionHost,
   type ActivityResultReference
 } from "./activityDataSelection";
+import { activityDataBreadcrumbs, describeActivityDataMember, readActivityDataMemberReference } from "./activityDataPickerModel";
+import { useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
+import { ActivityDataMemberBrowser } from "./ActivityDataMemberBrowser";
 import { ActivityOutputIcon } from "./activityOutputIcon";
 import { getInputPropertyName } from "./activityProperties";
 import { provideActivityResultReferenceEditor } from "./activityResultReferenceContribution";
@@ -38,6 +41,11 @@ import "./activityDataChooser.css";
  * action, its syntax-picker entry and a stored reference's Replace, and the readable reference itself. The browser
  * holds only transient request and focus state. Choosing commits through the caller's own edit path, once.
  */
+
+const ActivityDataBindingChangeContext = createContext<((binding: ActivityDataBinding) => void) | null>(null);
+export function ActivityDataBindingChangeProvider({ onSelect, children }: { onSelect(binding: ActivityDataBinding): void; children: ReactNode }) {
+  return <ActivityDataBindingChangeContext.Provider value={onSelect}>{children}</ActivityDataBindingChangeContext.Provider>;
+}
 
 const ActivityDataSelectionContext = createContext<ActivityDataSelectionHost | null>(null);
 // Rows only need to know whether Choose data exists; a boolean keeps them from re-rendering on every document edit.
@@ -73,6 +81,7 @@ type SourcesView =
 export function useActivityDataSources(host: ActivityDataSelectionHost | null, target: ActivityDataTarget, open: boolean) {
   const [view, setView] = useState<SourcesView>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const activeRequest = useRef<AbortController | null>(null);
   const hostRef = useRef(host);
   hostRef.current = host;
   const documentRevision = host?.documentRevision;
@@ -83,6 +92,7 @@ export function useActivityDataSources(host: ActivityDataSelectionHost | null, t
   useEffect(() => {
     if (!open || !requestSources) return;
     const controller = new AbortController();
+    activeRequest.current = controller;
     const requestedBase = hostRef.current?.baseRevision ?? "";
     const request = { nodeId: target.nodeId, inputKey: target.inputKey };
     setView(previous => previous.status === "answered" && listsSources(previous.result)
@@ -97,12 +107,17 @@ export function useActivityDataSources(host: ActivityDataSelectionHost | null, t
 
   const retry = useCallback(() => setAttempt(current => current + 1), []);
   const stale = view.status === "answered" && view.result.state === "stale";
-  const staleForOlderBase = stale && view.requestedBase !== baseRevision;
+  const olderBase = view.status === "answered" && view.requestedBase !== baseRevision;
+  const staleForOlderBase = stale && olderBase;
   useEffect(() => {
-    if (open && staleForOlderBase && !saving) retry();
-  }, [open, retry, saving, staleForOlderBase]);
+    if (open && olderBase && !saving) retry();
+  }, [open, retry, saving, olderBase]);
 
-  return { view, retry, awaitingSave: stale && (saving || staleForOlderBase) };
+  const refuse = useCallback((result: ActivityDataContextResult) => {
+    activeRequest.current?.abort();
+    setView({ status: "answered", result: { ...result, sources: [], target: null, memberReadsEnabled: false }, requestedBase: hostRef.current?.baseRevision ?? "" });
+  }, []);
+  return { view, retry, refuse, awaitingSave: stale && (saving || staleForOlderBase) };
 }
 
 interface ActivityDataBrowserProps {
@@ -122,7 +137,8 @@ interface ActivityDataBrowserProps {
  * a pending choice can never land in another activity's input.
  */
 export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open, current, onSelect, onClose }: ActivityDataBrowserProps) {
-  const { view, retry, awaitingSave } = useActivityDataSources(host, target, open);
+  const { view, retry, refuse, awaitingSave } = useActivityDataSources(host, target, open);
+  const memberEnabled = view.status === "answered" && listsSources(view.result) && view.result.memberReadsEnabled === true;
   const panelRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
   const consumerLabel = host.describeActivity(target.nodeId)?.label ?? "this activity";
@@ -188,7 +204,7 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
       const preferred = options.find(option => option.getAttribute("aria-selected") === "true")
         ?? options.find(option => option.getAttribute("aria-disabled") !== "true")
         ?? options[0]
-        ?? panel.querySelector<HTMLElement>("button")
+        ?? panel.querySelector<HTMLElement>("input:not(:disabled),button:not(:disabled)")
         ?? panel;
       preferred.focus();
     });
@@ -202,6 +218,15 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
       onClose("opener");
       return;
     }
+    if (event.key === "Tab" && memberEnabled) {
+      const controls = [...(panelRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled),input:not(:disabled)") ?? [])].filter(control => control.tabIndex >= 0);
+      const target = event.target as HTMLElement;
+      const next = event.shiftKey ? controls.filter(control => control.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING).at(-1)
+        : controls.find(control => control.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_PRECEDING);
+      event.preventDefault(); event.stopPropagation();
+      if (next) next.focus(); else onClose(event.shiftKey ? "previous" : "next");
+      return;
+    }
     if (event.key === "Tab") {
       // As in the syntax picker, Tab closes the popover and moves on; it continues from the opener in the row's own
       // order, because the popover itself lives at the end of the document.
@@ -210,6 +235,7 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
       onClose(event.shiftKey ? "previous" : "next");
       return;
     }
+    if (memberEnabled && event.target instanceof HTMLInputElement) return;
     const options = [...(panelRef.current?.querySelectorAll<HTMLElement>("[role='option']") ?? [])];
     if (options.length === 0) return;
     const index = options.findIndex(option => option === event.target);
@@ -243,9 +269,11 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
       >
         <div className="wf-data-chooser-heading">
           <span id={headingId}>Choose data for {inputLabel}</span>
-          <small>Outputs of activities that run before {consumerLabel}.</small>
+          <small>{memberEnabled ? "Earlier outputs, workflow inputs and variables." : <>Outputs of activities that run before {consumerLabel}.</>}</small>
         </div>
-        <ActivityDataBrowserContent
+        {memberEnabled && view.status === "answered" ? <ActivityDataMemberBrowser
+          host={host} target={target} result={view.result} current={!!currentListing && view.result.baseRevision === host.baseRevision}
+          refreshing={view.refreshing === true} onSelect={commit} onRefusal={refuse} onRefresh={retry} /> : <ActivityDataBrowserContent
           view={view}
           awaitingSave={awaitingSave}
           groups={groups}
@@ -255,7 +283,7 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
           waitingFor={waitingFor?.id ?? null}
           onRetry={retry}
           onChoose={choose}
-        />
+        />}
         {lostChoice ? <p className="wf-data-chooser-note wf-data-chooser-lost" role="status">{lostChoice}</p> : null}
       </div>
     </AnchoredPopover>
@@ -464,8 +492,13 @@ export function focusBeside(element: HTMLElement | null, direction: "next" | "pr
  * row to unbind the input (a null value), and every other field of the stored binding, such as a legacy producer scope,
  * stays as authored until then.
  */
-export function ActivityResultReferenceEditor({ descriptor, value, disabled, initialFocus, context, onChange }: StudioExpressionEditorProps) {
+export function ActivityResultReferenceEditor(props: StudioExpressionEditorProps) {
+  return props.syntax === activityResultSyntax ? <WholeActivityResultReferenceEditor {...props} /> : <ActivityDataMemberReferenceEditor {...props} />;
+}
+
+function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initialFocus, context, onChange }: StudioExpressionEditorProps) {
   const host = useActivityDataSelectionHost();
+  const changeBinding = useContext(ActivityDataBindingChangeContext);
   const reference = readActivityResultReference(value);
   const replaceRef = useRef<HTMLButtonElement>(null);
   // Open for one target only: when the row shows another activity, an open browser and any pending choice go away.
@@ -545,7 +578,7 @@ export function ActivityResultReferenceEditor({ descriptor, value, disabled, ini
           <button type="button" aria-label={`Clear data for ${inputLabel}`} onClick={() => onChange(null)}>Clear</button>
         ) : null}
       </div>
-      {browsing && host ? (
+      {browsing && host && canBrowse ? (
         <ActivityDataBrowser
           key={`${target.nodeId}\u001f${target.inputKey}`}
           host={host}
@@ -555,14 +588,91 @@ export function ActivityResultReferenceEditor({ descriptor, value, disabled, ini
           open={browsing}
           current={reference}
           onSelect={binding => {
-            // Only the role this editor owns is stored here; the server returns no other kind for an activity output.
-            if (binding.expressionType === activityResultSyntax) onChange(binding.value);
+            // The ordinary row owns cross-role edits; other surfaces keep this editor's whole-output contract.
+            if (changeBinding) changeBinding(binding);
+            else if (binding.expressionType === activityResultSyntax) onChange(binding.value);
           }}
           onClose={closeBrowser}
         />
       ) : null}
     </div>
   );
+}
+
+function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled, initialFocus, context, onChange }: StudioExpressionEditorProps) {
+  const host = useActivityDataSelectionHost();
+  const changeBinding = useContext(ActivityDataBindingChangeContext);
+  const authoring = useWorkflowReferenceAuthoring();
+  const binding = { expressionType: syntax, value };
+  const member = readActivityDataMemberReference(binding);
+  const raw = value && typeof value === "object" ? value as Record<string, unknown> : null;
+  const requestKey = syntax === "WorkflowRequest" && typeof raw?.memberKey === "string" ? raw.memberKey : null;
+  const replaceRef = useRef<HTMLButtonElement>(null);
+  const target = { nodeId: readNodeId(context.activity), inputKey: getInputPropertyName(descriptor) };
+  const targetKey = `${target.nodeId}\u001f${target.inputKey}`;
+  const [browsingFor, setBrowsingFor] = useState<string | null>(null);
+  const [details, setDetails] = useState<ActivityDataContextResult | null>(null);
+  const queryKey = JSON.stringify(member ?? (requestKey ? { memberKey: requestKey, path: raw?.path ?? null } : null));
+  useEffect(() => {
+    setDetails(null);
+    if (!host || disabled || (!member && !requestKey) || member?.kind === "InputMember") return;
+    const controller = new AbortController();
+    const source = member ? memberRootProposal(member) : { expressionType: "WorkflowRequest", value };
+    host.requestSources(target, controller.signal, 0, { source, memberPath: member?.memberPath ?? [], includeMemberShapes: true }).then(result => {
+      if (!controller.signal.aborted && result.documentRevision === host.documentRevision && (result.state === "supported" || result.state === "empty")) setDetails(result);
+    }, () => undefined);
+    const revoke = () => { controller.abort(); setDetails(null); };
+    window.addEventListener(authSessionEndedEvent, revoke);
+    return () => { controller.abort(); window.removeEventListener(authSessionEndedEvent, revoke); };
+    // The bounded query identity, not the decoded object instance, owns this request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [host?.documentRevision, host?.baseRevision, host?.requestSources, queryKey, target.nodeId, target.inputKey, disabled]);
+  const labels = { describeActivity: (nodeId: string) => host?.describeActivity(nodeId) ?? null,
+    describeScope: (scope: string) => host?.describeActivity(scope)?.label ?? null };
+  const source = details?.sources.find(source => {
+    if (!source.binding) return false;
+    if (member) return matchesMemberOffer(memberRootProposal(member), member.memberPath, source.binding);
+    const returned = source.binding.value && typeof source.binding.value === "object" ? source.binding.value as Record<string, unknown> : null;
+    return source.binding.expressionType === "WorkflowRequest" && returned?.memberKey === requestKey && (returned.path ?? null) === (raw?.path ?? null);
+  });
+  const description = member ? describeActivityDataMember(binding, details?.sources ?? [], labels, source?.shape) : null;
+  const variable = member?.kind === "VariableMember" ? authoring?.visibleVariables.find(variable => variable.referenceKey === member.referenceKey && variable.scopeId === member.declaringScopeId) : null;
+  const input = member?.kind === "InputMember" ? authoring?.workflowInputs.find(input => input.referenceKey === member.referenceKey) : null;
+  const fallbackLabel = variable ? `${variable.name} (${labels.describeScope(variable.scopeId) ?? (variable.isWorkflowScope ? "Workflow" : variable.scopeId)})`
+    : input ? input.displayName || input.name : null;
+  const text = fallbackLabel && member ? [fallbackLabel, ...activityDataBreadcrumbs(member.memberPath).slice(1).map(crumb => crumb.label)].join(" › ")
+    : description?.text ?? (requestKey ? source?.displayName ?? requestKey : null);
+  const canBrowse = !!host && !!changeBinding && !!target.nodeId && !disabled;
+  const close = useCallback((focus: "opener" | "next" | "previous" | "none") => {
+    setBrowsingFor(null);
+    if (focus === "opener") replaceRef.current?.focus(); else if (focus !== "none") focusBeside(replaceRef.current, focus);
+  }, []);
+  useEffect(() => { if (initialFocus) replaceRef.current?.focus(); }, [initialFocus]);
+  const problem = host?.findingsFor(target).map(describeReferenceFinding).find(text => text != null);
+  return <div className="wf-data-reference" data-problem={problem ? "true" : undefined}>
+    {text ? <p className="wf-data-reference-source"><ActivityOutputIcon size={14} aria-hidden="true" /><span><span className="wf-visually-hidden">Source: </span>{text}</span></p>
+      : <p className="wf-data-reference-problem">This reference is not supported here. Its value is preserved.</p>}
+    {description?.typeLabel ? <p className="wf-data-chooser-note">{description.typeLabel}</p> : member && member.kind !== "ActivityResultMember" ? <p className="wf-data-chooser-note">The member type is checked when the workflow runs.</p> : null}
+    {problem ? <p className="wf-data-reference-problem">{problem}</p> : null}
+    {!host || !changeBinding ? <p className="wf-data-chooser-note">Source selection is unavailable in this editor. The reference is preserved.</p> : null}
+    {canBrowse ? <div className="wf-data-reference-actions">
+      {member?.producerNodeId && host.describeActivity(member.producerNodeId) && host.revealActivity ? <button type="button" onClick={() => host.revealActivity?.(member.producerNodeId!)}>Go to</button> : null}
+      <button ref={replaceRef} type="button" aria-label={`Replace data for ${descriptor.displayName || descriptor.name}`} aria-haspopup="dialog"
+        aria-expanded={browsingFor === targetKey} onClick={() => setBrowsingFor(targetKey)}>Replace</button>
+      <button type="button" aria-label={`Clear data for ${descriptor.displayName || descriptor.name}`} onClick={() => onChange(null)}>Clear</button>
+    </div> : null}
+    {canBrowse && browsingFor === targetKey ? <ActivityDataBrowser key={targetKey} host={host} target={target}
+      inputLabel={descriptor.displayName || descriptor.name} anchorRef={replaceRef} open current={null} onSelect={changeBinding} onClose={close} /> : null}
+  </div>;
+}
+
+function memberRootProposal(member: NonNullable<ReturnType<typeof readActivityDataMemberReference>>): ActivityDataBinding {
+  switch (member.kind) {
+    case "ActivityResultMember": return { expressionType: "ActivityResult", value: { producerNodeId: member.producerNodeId, projectionKey: member.projectionKey, isOptional: member.isOptional === true } };
+    case "VariableMember": return { expressionType: "Variable", value: { referenceKey: member.referenceKey, declaringScopeId: member.declaringScopeId } };
+    case "InputMember": return { expressionType: "Input", value: { referenceKey: member.referenceKey } };
+    case "WorkflowRequestMember": return { expressionType: "WorkflowRequest", value: { memberKey: member.memberKey, path: null } };
+  }
 }
 
 function readNodeId(activity: unknown) {
