@@ -83,6 +83,8 @@ commits answered "landed" cover one position, and along the positions the epoch 
 | `events` | `{k, id}` | key, id, payload, keepUntil | Inserted; a duplicate is ignored |
 | `journal` | `{p, n}` | partition, position, instance, revision, entries | Unique `(partition, position)` as well: a second safety beside the fence |
 
+This is the schema of the MongoDB branch. Round 3 and the merge added fields and collections: the instance's `history`, `suspended`, `children` and `stateVersion`; the message's `replyTo`; the subscription's `start`; and the `nodes`, `projections` and `views` collections (`MongoStore.cs`).
+
 Records are not embedded in each other (for instance messages inside their instance): a message is added by anyone
 while the owner may be writing the instance, and the poll reads a partition's messages across instances in key order.
 
