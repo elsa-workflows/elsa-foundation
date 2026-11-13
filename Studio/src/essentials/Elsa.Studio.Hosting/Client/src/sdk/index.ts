@@ -1963,6 +1963,12 @@ export interface StudioActivityDefinitionImplementationEditorProps {
   value: StudioActivityDefinitionImplementationState;
   readOnly: boolean;
   onChange(value: StudioActivityDefinitionImplementationState): void;
+  /**
+   * Optional synchronous parent admission. Return true only after admitting this value against its
+   * exact baseline, or false without changing canonical state. Controlled editors require literal
+   * true before updating history; the legacy onChange notification is not an acknowledgement.
+   */
+  tryChange?(value: StudioActivityDefinitionImplementationState, expectedValue: StudioActivityDefinitionImplementationState): boolean;
 }
 
 export interface StudioActivityDefinitionImplementationEditorContribution extends StudioBackendAwareContribution {
