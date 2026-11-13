@@ -36,7 +36,7 @@ sealed partial class CreationWitness
             Events.PublishAsync(_world.Store, new EventRow("event:creation-event", "new-publication", Json.Write("new"), _world.Time + 100)).GetAwaiter().GetResult();
         else Apply(new("tick", 9000));
         Drain(); Require(Row.Status == InstanceStatus.Finished, "C5", "correct new event/deadline did not complete");
-        if (kind == "event") Require(State.Results["event"]!.GetValue<string>() == "new", "C5", "replacement wait received the old payload");
+        if (kind == "event") Require(State.Results["event"]?["Payload"]?.GetValue<string>() == "new", "C5", "replacement wait received the old payload");
         Console.WriteLine($"PASS creation:transport-race,{mode},kind={kind}");
     }
 }

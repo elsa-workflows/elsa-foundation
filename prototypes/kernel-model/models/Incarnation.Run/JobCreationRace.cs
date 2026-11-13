@@ -38,7 +38,7 @@ internal static class JobCreationRace
                 await worker.PollAsync(); if (worker.NeedsLoad) await worker.LoadAsync();
                 foreach (var ready in worker.Ready.ToArray()) worker.RunTurn(ready);
                 if (worker.NeedsFlush) await worker.FlushAsync();
-                await Task.Yield();
+                await Task.Delay(1); // give the independent default scheduler a pass; retain the bounded pump
             }
             Require(done(), "owned worker did not reach the required job boundary");
         }
