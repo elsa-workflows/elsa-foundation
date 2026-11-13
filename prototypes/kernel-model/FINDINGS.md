@@ -1296,11 +1296,21 @@ cost runs ran again against main at `acda0dd642` (the SQL Server fence default) 
 The only other difference is the order tags of one concurrent fence case (`[commit first, take first]`), which vary
 from run to run.
 
-**At the final state.** The SQLite gates ran again at `e1cdc8a6ea` (R1, R4, R14 and the cancellation of a balancing
-round and a release, with main merged in) against main at `6509a09a32` (the graph engine): the five simulation runs
-(0 failed; 0, 12 and 14 parked; 386,774 native instances matched, 850 reruns, all told), the mutations seed for seed,
-store conformance in memory and on SQLite in both fence modes, native smoke and cost, and EF cost in both fences give
-identical outputs, but for those order tags.
+**At the final state.** Every gate of README's "The gates of a refactor" ran again at `e1cdc8a6ea` (R1, R4, R14 and
+the cancellation of a balancing round and a release, with main merged in) and on main at `6509a09a32` (the graph
+engine), and gave the same outputs, but for those order tags and the PostgreSQL TCP column. Main's own numbers moved
+with the graph engine (section 26), so they differ from the table above:
+
+| Gate | Main and the final state |
+|---|---|
+| `$SIM --seeds 200000` | 0 failed; 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed; 12 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed; 14 parked; 386,774 matched; 850 reruns, all told |
+| `$SIM --mutations --seeds 20000`, `--native-mutations --seeds 20000` | The same table, seed for seed (8 native flaws, all caught) |
+| Store conformance in memory; EF on SQLite and PostgreSQL, both fences | 56 passed; 54 passed; 54 passed |
+| Native `smoke`, `cost sqlite`, `cost postgres` | All passed; the same rows |
+| EF `cost` on SQLite and PostgreSQL (`proxy=1`), both fences | The same commands, commits, counted and sent round trips |
+| `dotnet test models/Graph.Tests` | 41 passed |
 
 ### Not done
 
