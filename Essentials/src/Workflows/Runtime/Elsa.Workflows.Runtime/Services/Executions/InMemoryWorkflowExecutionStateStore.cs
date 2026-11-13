@@ -235,7 +235,14 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
     private bool DeleteExecutionAndCancelOutstandingWork(string workflowExecutionId)
     {
         CancelOutstandingBackgroundWork(workflowExecutionId);
-        return Remove(workflowExecutionId);
+        lock (_checkpointState.SyncRoot)
+        {
+            // DeleteAsync owns the same write gate as native checkpoints and independent observations.
+            // Native execution IDs are process-global; its one indexed captured owner supplies the scope.
+            if (_checkpointState.HistoryRunOwners.TryGetValue(workflowExecutionId, out var historyOwner))
+                _checkpointState.DeleteHistoryForRun(historyOwner.Scope, workflowExecutionId);
+            return Remove(workflowExecutionId);
+        }
     }
 
     private void CancelOutstandingBackgroundWork(string workflowExecutionId)

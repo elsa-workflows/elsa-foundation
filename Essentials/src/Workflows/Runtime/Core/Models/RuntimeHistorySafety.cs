@@ -5,6 +5,21 @@ public static class RuntimeHistorySafety
 {
     public static bool IsSafeMetadataKey(string key) => SafeMetadata.Contains(key);
 
+    /// <summary>Validates an unpositioned delivery-owner observation, independently of a runtime checkpoint.</summary>
+    public static void ValidateObservation(RuntimeHistoryObservation observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        ArgumentNullException.ThrowIfNull(observation.Policy);
+        ArgumentNullException.ThrowIfNull(observation.Event);
+        var e = observation.Event;
+        ValidateMetadata(e);
+        if (e.Authority != RuntimeHistoryAuthority.DeliveryObservation || e.Category != RuntimeHistoryEventCategory.DeliveryObservation ||
+            e.SchemaVersion != 1 || e.Sequence != 0 || e.PhysicalCommitId is not null || e.RecordedAt is not null ||
+            e.CheckpointId is not null || e.CheckpointOrdinal is not null ||
+            !DeliveryObservationKinds.Contains(e.Name) || !observation.Policy.SupportedKinds.Contains(e.Name, StringComparer.Ordinal))
+            throw new InvalidOperationException("A delivery observation must be safe, unpositioned and admitted by its retained policy.");
+    }
+
     public static void Validate(RuntimeHistoryBatch batch, string workflowExecutionId)
     {
         ArgumentNullException.ThrowIfNull(batch);
@@ -49,6 +64,13 @@ public static class RuntimeHistorySafety
             if (!SafeMetadata.Contains(pair.Key) || pair.Value.Length > 2048)
                 throw new InvalidOperationException("History metadata is not in the bounded semantic allowlist.");
     }
+
+    // Additional semantic owners extend this vocabulary with their own source-bound validation and proof.
+    // Declaring a kind here neither registers an owner nor enables capture for an admitted run.
+    private static readonly HashSet<string> DeliveryObservationKinds = new(StringComparer.Ordinal)
+    {
+        "DeliveryReceived", "DeliveryDispatched", "DeliveryDuplicate", "DeliveryUnmatched", "DeliveryRejected", "DeliveryDeferred", "DeliveryFaulted"
+    };
 
     private static readonly HashSet<string> SafeMetadata = new(StringComparer.Ordinal)
     {
