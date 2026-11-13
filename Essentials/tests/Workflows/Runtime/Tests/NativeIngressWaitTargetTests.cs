@@ -31,6 +31,25 @@ public sealed class NativeIngressWaitTargetTests
         Assert.ThrowsAny<Exception>(() => NativeIngressWaitTargetEvidence.Origin(Probe("{\"IngressWaitOrigin\":{}}")));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_different_supplied_seal_is_a_domain_refusal_before_actor_effects(bool dispatch)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Wait); fixture.Seal(seal);
+        var changed = new RuntimeIngressWaitDispatchSeal(seal.Origin, seal.Identity, seal.CommittedAt.AddSeconds(1),
+            seal.CommandProtocol, seal.CommandProtocolVersion, seal.Command);
+        var failure = await Assert.ThrowsAsync<TriggerOperationException>(async () =>
+        {
+            if (dispatch) await fixture.Target.DispatchAsync(fixture.Item, fixture.Wait, changed);
+            else await fixture.Target.ReconcileAsync(fixture.Item, fixture.Wait, changed);
+        });
+        Assert.Equal("conflict", failure.Code);
+        Assert.Equal(0, fixture.Executor.Calls);
+        Assert.Empty((await fixture.Queue.ListAsync(new(fixture.Wait.Identity.WorkflowExecutionId))).Items);
+    }
+
     private static WorkflowExecutionCommandEnvelope Probe(string json) => new("probe", "running",
         new("command", "running", WorkflowExecutionCommandKind.ResumeBookmark, Now,
             JsonDocument.Parse(json).RootElement.Clone(), new Dictionary<string, string>()),
@@ -74,7 +93,8 @@ public sealed class NativeIngressWaitTargetTests
             WorkflowExecutionCommandKind.ResumeBookmark, envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt,
             Now, payload: JsonSerializer.SerializeToElement(new { falsePayload = true }));
         await fixture.Queue.EnqueueAsync(altered);
-        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Target.ReconcileAsync(fixture.Item, fixture.Wait, seal).AsTask());
+        var refusal = await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Target.ReconcileAsync(fixture.Item, fixture.Wait, seal).AsTask());
+        Assert.IsType<InvalidDataException>(refusal.InnerException);
     }
 
     [Fact]
@@ -117,7 +137,8 @@ public sealed class NativeIngressWaitTargetTests
         Assert.Null(fixture.Executor.Options!.AmbientServices);
         Assert.Null(await fixture.Target.ReconcileAsync(fixture.Item, fixture.Wait, seal));
         fixture.Ingress.Current = null;
-        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Target.DispatchAsync(fixture.Item, fixture.Wait, seal).AsTask());
+        var failure = await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Target.DispatchAsync(fixture.Item, fixture.Wait, seal).AsTask());
+        Assert.IsType<InvalidDataException>(failure.InnerException);
         Assert.Equal(1, fixture.Executor.Calls);
     }
 

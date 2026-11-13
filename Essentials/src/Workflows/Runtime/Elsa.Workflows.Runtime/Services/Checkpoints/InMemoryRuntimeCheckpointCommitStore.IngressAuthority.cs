@@ -21,14 +21,18 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
     {
         if (commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert } change) return;
         var proposed = change.State;
-        if (proposed.IngressOrigin is not { } origin) return;
         var executions = ExactResumeExecutions;
         var prior = executions is null ? null : await executions.FindAsync(proposed.WorkflowExecutionId, cancellationToken);
-        if (prior?.IngressOrigin is not null)
+        if (prior?.IngressOrigin is not null || prior?.ModelWorkOrigin?.IngressOrigin is not null)
         {
             NativeIngressCheckpointAuthority.ValidateContinuation(proposed, prior);
             return;
         }
+        if (proposed.ModelWorkOrigin?.IngressOrigin is not null)
+            throw new NotSupportedException("The native checkpoint writer does not support initial ingress model-worker admission.");
+        if (proposed.IngressOrigin is not { } origin) return;
+        if (executions is null || !ReferenceEquals(executions.CheckpointState, _state))
+            throw new NotSupportedException("Ingress workflow checkpoints require the actual selected native execution writer.");
         if (prior is not null || commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
             _persistenceAccessContextAccessor?.Current.RequireScope() != origin.Scope)
             throw new InvalidDataException("Ingress workflow authority requires its exact initial physical checkpoint.");

@@ -58,9 +58,18 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
         new(source.OutboxItemId, source.SourceFingerprint, source.SubscriptionDelivery?.SelectionFingerprint ?? throw Invalid(),
             recipient.StartIdentity.Scope, recipient.RecipientId);
 
-    internal static RuntimeIngressCommandOrigin? Origin(WorkflowExecutionCommandEnvelope envelope) =>
-        envelope.Command.Kind == WorkflowExecutionCommandKind.Start && envelope.Command.Payload is { } payload
-            ? payload.Deserialize<WorkflowExecutionStartCommandPayload>()?.StartAuthority?.StandaloneTrigger : null;
+    internal static RuntimeIngressCommandOrigin? Origin(WorkflowExecutionCommandEnvelope envelope)
+    {
+        // Probe only our explicit marker. Ordinary command payloads retain their original decoder.
+        if (envelope.Command.Kind != WorkflowExecutionCommandKind.Start || envelope.Command.Payload is not { } payload ||
+            payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty(nameof(WorkflowExecutionStartCommandPayload.StartAuthority), out var authority) ||
+            authority.ValueKind != JsonValueKind.Object ||
+            !authority.TryGetProperty(nameof(WorkflowExecutableStartAuthority.StandaloneTrigger), out var marker) ||
+            marker.ValueKind == JsonValueKind.Null)
+            return null;
+        return payload.Deserialize<WorkflowExecutionStartCommandPayload>()?.StartAuthority?.StandaloneTrigger;
+    }
 
     internal static void ValidateSelection(RuntimePostCommitOutboxItem source, RuntimeSubscriptionRecipient recipient)
     {

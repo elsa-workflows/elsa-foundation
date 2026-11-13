@@ -24,6 +24,35 @@ public sealed class NativeStandaloneTriggerTargetTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 6, 10, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"StartAuthority\":{}}")]
+    [InlineData("{\"StartAuthority\":{\"StandaloneTrigger\":null}}")]
+    public async Task An_opaque_legacy_start_keeps_its_duplicate_response(string json)
+    {
+        var executor = new WitnessExecutor();
+        using var actors = new InProcessWorkflowExecutionActorProvider(executor);
+        var envelope = new WorkflowExecutionCommandEnvelope("legacy", "legacy-execution",
+            new("legacy-command", "legacy-execution", WorkflowExecutionCommandKind.Start, Now,
+                JsonDocument.Parse(json).RootElement.Clone(), new Dictionary<string, string>()),
+            "legacy-key", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now);
+        var actor = await actors.GetAgentAsync(new(envelope.WorkflowExecutionId, WorkflowExecutionActorActivationReason.Start,
+            Now, "legacy", WorkflowExecutionActorCapabilities.None));
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await actor.EnqueueAsync(envelope)).Status);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, (await actor.EnqueueAsync(envelope)).Status);
+        Assert.Equal(1, executor.Calls);
+    }
+
+    [Fact]
+    public void A_claimed_start_origin_requires_a_valid_typed_payload()
+    {
+        var envelope = new WorkflowExecutionCommandEnvelope("claimed", "running",
+            new("command", "running", WorkflowExecutionCommandKind.Start, Now,
+                JsonDocument.Parse("{\"StartAuthority\":{\"StandaloneTrigger\":{}}}").RootElement.Clone(), new Dictionary<string, string>()),
+            "claimed-key", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now);
+        Assert.ThrowsAny<Exception>(() => NativeIngressTargetEvidence.Origin(envelope));
+    }
+
     [Fact]
     public async Task Prepared_native_command_is_pure_deterministic_and_a_seal_or_actor_result_is_not_a_target_receipt()
     {
@@ -155,6 +184,61 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.Null(await fixture.Target.ReconcileAsync(fixture.Item, fixture.Recipient, seal));
     }
 
+    [Fact]
+    public async Task Stripping_a_retained_origin_refuses_before_consuming_claimed_work()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
+        var start = StartItem(NativeIngressTargetEvidence.ReadEnvelope(seal));
+        await fixture.StartHandler.HandleAsync(start);
+        var initial = Assert.Single((await fixture.Queue.ListAsync(new(start.WorkflowExecutionId))).Items);
+        await fixture.CheckpointHandler.HandleAsync(initial);
+        await fixture.Queue.DeleteAsync(initial.WorkflowExecutionId, initial.WorkItemId);
+        var prior = (await fixture.Executions.FindAsync(start.WorkflowExecutionId))!;
+        Assert.NotNull(prior.IngressOrigin);
+        var work = new RuntimeSchedulerWorkItem("continuation", start.WorkflowExecutionId, "continue", WorkflowExecutionCommandKind.RunSchedulerWork,
+            "continue-envelope", "continue-key", Now, Now);
+        await fixture.Queue.EnqueueAsync(work);
+        var claim = (await fixture.Queue.ClaimAsync(new(start.WorkflowExecutionId, "owner", Now, TimeSpan.FromMinutes(1))))!;
+        var commit = StateCommit(prior with { IngressOrigin = null }, "stripped", [ConsumedSchedulerWorkItem.FromClaim(claim)]);
+        var before = fixture.CheckpointStore.ListCommits().Count;
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.CheckpointStore.CommitAsync(commit,
+            new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        Assert.Same(prior, await fixture.Executions.FindAsync(prior.WorkflowExecutionId));
+        Assert.Equal(before, fixture.CheckpointStore.ListCommits().Count);
+        Assert.Equal(work.WorkItemId, Assert.Single((await fixture.Queue.ListAsync(new(start.WorkflowExecutionId))).Items).WorkItemId);
+        Assert.True((await fixture.Queue.ConsumeClaimedAsync(ConsumedSchedulerWorkItem.FromClaim(claim))).Succeeded);
+    }
+
+    [Fact]
+    public async Task A_fresh_nested_model_origin_without_parent_proof_cannot_receive_a_native_writer_permit()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var id = fixture.Recipient.StartIdentity.WorkflowExecutionId;
+        var material = fixture.Recipient.Material;
+        var origin = NativeIngressTargetEvidence.Origin(fixture.Item, fixture.Recipient);
+        var nested = new RuntimeModelNativeWorkOrigin(1, origin.Scope, "model-parent", new("test.model", 1),
+            material, "incarnation", "binding", "invocation", "attempt", material, id,
+            "model-commit:worker-intent", "worker-intent", "test.result", "result-input")
+        { IngressOrigin = origin, Partition = fixture.Recipient.Partition };
+        var state = new WorkflowExecutionState(id, material, WorkflowExecutionStatus.Running, null, Now, Now, Now,
+            null, null, null, "tenant", new Dictionary<string, string>())
+        { ModelWorkOrigin = nested, RunKind = WorkflowRunKind.PublishedRun, Partition = fixture.Recipient.Partition };
+        var commit = StateCommit(state, "unproved-worker");
+        Assert.Null(commit.ExpectedModelExecution); Assert.Null(commit.ModelState);
+        await Assert.ThrowsAsync<NotSupportedException>(() => fixture.CheckpointStore.CommitAsync(commit,
+            new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        Assert.Null(await fixture.Executions.FindAsync(id));
+        Assert.Empty(fixture.CheckpointStore.ListCommits());
+        Assert.Empty((await fixture.Queue.ListAsync(new(id))).Items);
+    }
+
+    private static RuntimeCheckpointCommit StateCommit(WorkflowExecutionState state, string id,
+        IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumed = null) => new(id,
+        new("checkpoint:" + id, consumed is null ? RuntimeCheckpointNames.WorkflowStarted : RuntimeCheckpointNames.PostCommitIntentRecorded, state.WorkflowExecutionId, Now, [], new Dictionary<string, string>()),
+        new(new(state.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>()),
+            null, [], [], [], [], [], null, null, null, null, null, consumed), [], new Dictionary<string, string>());
+
     private static RuntimeSchedulerWorkItem StartItem(WorkflowExecutionCommandEnvelope envelope) => new(envelope.EnvelopeId,
         envelope.WorkflowExecutionId, envelope.Command.CommandId, envelope.Command.Kind, envelope.EnvelopeId,
         envelope.IdempotencyKey, envelope.EnqueuedAt, envelope.EnqueuedAt.AddSeconds(1), envelope.Sequence,
@@ -174,6 +258,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         internal NativeStandaloneTriggerRuntimeTarget Target = null!;
         internal WorkflowStartSchedulerWorkHandler StartHandler = null!;
         internal WorkflowCheckpointSchedulerWorkHandler CheckpointHandler = null!;
+        internal InMemoryRuntimeCheckpointCommitStore CheckpointStore = null!;
         private Fixture() => Actors = new(Executor);
         internal static async Task<Fixture> CreateAsync()
         {
@@ -205,10 +290,11 @@ public sealed class NativeStandaloneTriggerTargetTests
             fixture.StartHandler = new(fixture.Executables, fixture.Queue, new RuntimeExecutionIdGenerator(fixture.Clock), fixture.Clock,
                 fixture.Executions, null, null, null, null, fixture.Ingress);
             var activities = new InMemoryActivityExecutionStateStore();
-            var checkpointStore = new InMemoryRuntimeCheckpointCommitStore(fixture.Executables,
+            var checkpointStore = fixture.CheckpointStore = new InMemoryRuntimeCheckpointCommitStore(fixture.Executables,
                 new InMemoryWorkflowExecutableSourceReferenceStore(fixture.Executables, fixture.Clock), fixture.Executions, activities,
                 durableValueStateStore: new InMemoryDurableValueStateStore(), operationalStateStore: fixture.Executions.ExecutionLivenessStateStore,
                 state: fixture.Executions.CheckpointState, timeProvider: fixture.Clock, persistenceAccessContextAccessor: new Access(scope),
+                schedulerWorkQueue: fixture.Queue,
                 rootWriteLeaseManager: new WorkflowExecutableRootWriteLeaseManager(fixture.Executables,
                     Options.Create(new WorkflowExecutableGarbageCollectionOptions()), fixture.Clock));
             var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore,

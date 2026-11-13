@@ -1,3 +1,4 @@
+using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
@@ -14,10 +15,9 @@ internal sealed record ResolvedTriggerTarget(WorkflowActivationSlot? Slot, Workf
 
 /// <summary>Reads current logical slots. This performs no policy admission, mapping, queue writes or runtime adapter resolution.</summary>
 internal sealed class TriggerTargetResolver(IWorkflowActivationAuthority slots, IWorkflowExecutableSourceReferenceStore sources,
-    IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access, IEnumerable<ITriggerTargetModelSource> modelSources,
+    IWorkflowExecutableStore executables, IPersistenceAccessContextAccessor access, IInlineEventPublisher publisher,
     TimeProvider clock)
 {
-    private readonly TriggerTargetModelDescriptor[] models = ValidateModels(modelSources);
 
     internal IWorkflowActivationAuthority Slots => slots;
     internal IWorkflowExecutableSourceReferenceStore Sources => sources;
@@ -45,6 +45,9 @@ internal sealed class TriggerTargetResolver(IWorkflowActivationAuthority slots, 
         }
         else native = await executables.FindAsync(source.ArtifactId, ct)
             ?? throw new InvalidDataException("The serving publication material is missing.");
+        var discovery = new TriggerTargetModelsDiscovering();
+        await publisher.Publish(discovery, ct);
+        var models = ValidateModels(discovery.Models);
         var matching = models.Where(model => native is not null
             ? model.ProtocolKey is null
             : model.ProtocolKey == material!.Model!.Protocol.Key && model.ProtocolVersion == material.Model.Protocol.Version &&
@@ -69,14 +72,9 @@ internal sealed class TriggerTargetResolver(IWorkflowActivationAuthority slots, 
             throw new InvalidOperationException("Trigger target discovery requires its actual persistence scope.");
     }
 
-    private static TriggerTargetModelDescriptor[] ValidateModels(IEnumerable<ITriggerTargetModelSource> sources)
+    internal static TriggerTargetModelDescriptor[] ValidateModels(IEnumerable<TriggerTargetModelDescriptor> models)
     {
-        // Own the profile list before the producer iterator can clear or reuse it.
-        var result = sources.SelectMany(source => source.GetModels())
-            .Select(model => model is null || model.Profiles is null ? model : model with
-            {
-                Profiles = Array.AsReadOnly(model.Profiles.ToArray())
-            }).ToArray();
+        var result = models.ToArray();
         if (result.Any(item => item is null || string.IsNullOrWhiteSpace(item.ModelKey) || item.Profiles is null) ||
             result.GroupBy(item => item.ModelKey, StringComparer.Ordinal).Any(group => group.Count() != 1) ||
             result.Count(item => item.ProtocolKey is null) > 1)
@@ -92,4 +90,23 @@ internal sealed class TriggerTargetResolver(IWorkflowActivationAuthority slots, 
 internal sealed class NativeTriggerTargetModelSource : ITriggerTargetModelSource
 {
     public IEnumerable<TriggerTargetModelDescriptor> GetModels() => [new("native", null, null, [], true)];
+}
+
+internal sealed class CollectTriggerTargetModels(IEnumerable<ITriggerTargetModelSource> sources)
+    : IEventHandler<TriggerTargetModelsDiscovering>
+{
+    public Task Handle(TriggerTargetModelsDiscovering domainEvent, CancellationToken cancellationToken)
+    {
+        foreach (var source in sources)
+            foreach (var model in source.GetModels())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Detach before the producer iterator can clear or reuse its profile collection.
+                domainEvent.Models.Add(model is null || model.Profiles is null ? model! : model with
+                {
+                    Profiles = Array.AsReadOnly(model.Profiles.ToArray())
+                });
+            }
+        return Task.CompletedTask;
+    }
 }

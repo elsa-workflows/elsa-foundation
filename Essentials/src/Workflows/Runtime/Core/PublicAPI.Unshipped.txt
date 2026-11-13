@@ -12017,3 +12017,6 @@ Elsa.Workflows.Runtime.Core.Models.RecurringTriggerSchedule.FailureReason.get ->
 Elsa.Workflows.Runtime.Core.Models.RecurringTriggerSchedule.FailureReason.init -> void
 Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleObservation.FailureReason.get -> Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason?
 Elsa.Workflows.Runtime.Core.Contracts.IRecurringTriggerScheduleStore.ReleaseClaimWithFailureAsync(Elsa.Workflows.Runtime.Core.Models.RecurringTriggerOccurrenceClaim! claim, System.DateTimeOffset visibleAt, Elsa.Workflows.Runtime.Core.Models.RecurringTriggerScheduleFailureReason failureReason, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetModelsDiscovering
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetModelsDiscovering.TriggerTargetModelsDiscovering() -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetModelsDiscovering.Models.get -> System.Collections.Generic.ICollection<Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetModelDescriptor!>!
