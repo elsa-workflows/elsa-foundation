@@ -47,6 +47,14 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Known implementations: **pending** optional canvas implementation/package slices S10–S11 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md). No canvas is registered by this prerequisite.
 - Consumers: compatibility/preference helpers are present; actual Workflow and Activity Graph editor consumers are **pending** S13–S14. This seam does not activate either canvas or establish editor/runtime acceptance.
 
+### Complete BPMN source authoring port (Workflows)
+
+- Signature: `loadBpmnDocumentAuthoring(): Promise<BpmnDocumentAuthoring>` from `@elsa-workflows/studio-workflows`; optional views receive canonical read/reference, atomic command/transaction, syntax-planning and namespace-preserving serialization helpers.
+- The port owns authored schema 2 XML and disjoint Elsa configuration. A native modeler projection is temporary; its serialization cannot replace canonical source. Reconcile complete command groups with narrow commands or refuse the entire edit.
+- Native comparison uses projection-owned namespace contexts and exact copy provenance separately from raw modeler XML; namespace-only writer normalization cannot change retained opaque or QName meaning.
+- Known implementation: canonical Workflows source helpers; optional BPMN projection/diff core is inert in S10 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md).
+- Consumers: package registration/lifetime is **pending** S11; actual Workflow and Activity Graph consumers are **pending** S13–S14. The helper export registers no canvas. Guard the existing optional canvas registry on older hosts as described above.
+
 ### Workflow run related links (SDK — Elsa.Studio.Hosting)
 
 - Kind: Contributor; optional `workflow.run.related-links` slot (`api.workflowRunRelatedLinks`).
