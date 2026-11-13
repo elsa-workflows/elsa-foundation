@@ -10,6 +10,12 @@ public static class StandaloneTriggerServiceCollectionExtensions
     /// <summary>Installs one producer-bound signal port. The source module separately supplies its trusted scoped context.</summary>
     public static IServiceCollection AddStandaloneTriggerIngress<TSource>(this IServiceCollection services,
         StandaloneTriggerSourceDescriptor descriptor) where TSource : class
+        => new StandaloneTriggerSourceRegistrar(services).Register<TSource>(descriptor);
+}
+
+internal sealed class StandaloneTriggerSourceRegistrar(IServiceCollection services)
+{
+    internal IServiceCollection Register<TSource>(StandaloneTriggerSourceDescriptor descriptor) where TSource : class
     {
         ArgumentNullException.ThrowIfNull(services); ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentException.ThrowIfNullOrWhiteSpace(descriptor.TypeKey); ArgumentException.ThrowIfNullOrWhiteSpace(descriptor.SourceFamily);

@@ -41,7 +41,13 @@ public sealed class RuntimeIngressControlFacts
             transport.GroupBy(item => item.ExchangeId, StringComparer.Ordinal).Any(group =>
                 group.Count(item => item.State is not (RuntimeIngressTransportState.AwaitingResponse or RuntimeIngressTransportState.ReceiptUnknown)) > 1))
             throw new ArgumentException("Control and exchange facts must have distinct immutable identities.");
-        Receipts = Array.AsReadOnly(receipts.ToArray()); Transport = Array.AsReadOnly(transport.ToArray());
+        if (receipts.Any(receipt => receipt.Recipients is null || receipt.Recipients.Any(item => item is null)))
+            throw new ArgumentException("Control receipts require defined recipient outcomes.", nameof(receipts));
+        Receipts = Array.AsReadOnly(receipts.Select(receipt => receipt with
+        {
+            Recipients = Array.AsReadOnly(receipt.Recipients.ToArray())
+        }).ToArray());
+        Transport = Array.AsReadOnly(transport.ToArray());
     }
     public IReadOnlyList<RuntimeIngressControlReceipt> Receipts { get; }
     public IReadOnlyList<RuntimeIngressTransportObservation> Transport { get; }

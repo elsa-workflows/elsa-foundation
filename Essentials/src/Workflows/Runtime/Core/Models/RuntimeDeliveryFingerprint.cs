@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -49,15 +50,33 @@ internal static class RuntimeDeliveryFingerprint
                 writer.WriteStringValue(value.GetString());
                 break;
             case JsonValueKind.Number:
-                if (value.TryGetDecimal(out var number))
-                    writer.WriteRawValue(number.ToString("G29", CultureInfo.InvariantCulture));
-                else writer.WriteRawValue(value.GetRawText());
+                writer.WriteRawValue(CanonicalNumber(value.GetRawText()));
                 break;
             case JsonValueKind.True: writer.WriteBooleanValue(true); break;
             case JsonValueKind.False: writer.WriteBooleanValue(false); break;
             case JsonValueKind.Null: writer.WriteNullValue(); break;
             default: throw new ArgumentException("Delivery JSON must be defined.", nameof(value));
         }
+    }
+
+    // Normalize a JSON decimal token as an integer coefficient and arbitrary-size decimal exponent.
+    // Decimal/Double parsing can round a valid source token before the hash sees it.
+    private static string CanonicalNumber(string token)
+    {
+        var negative = token[0] == '-';
+        var unsigned = negative ? token[1..] : token;
+        var exponentAt = unsigned.IndexOfAny(['e', 'E']);
+        var mantissa = exponentAt < 0 ? unsigned : unsigned[..exponentAt];
+        var exponent = exponentAt < 0 ? BigInteger.Zero :
+            BigInteger.Parse(unsigned.AsSpan(exponentAt + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+        var pointAt = mantissa.IndexOf('.');
+        if (pointAt >= 0) exponent -= mantissa.Length - pointAt - 1;
+        var digits = mantissa.Replace(".", "", StringComparison.Ordinal).TrimStart('0');
+        if (digits.Length == 0) return "0";
+        var coefficient = digits.TrimEnd('0');
+        exponent += digits.Length - coefficient.Length;
+        return (negative ? "-" : "") + coefficient +
+            (exponent.IsZero ? "" : "e" + exponent.ToString(CultureInfo.InvariantCulture));
     }
 
     internal static void Text(string value, string name, bool allowEmpty = false)

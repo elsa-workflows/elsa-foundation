@@ -10833,8 +10833,8 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.Contract
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetObservation.State.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTargetState
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.ConfigurationEditorId.get -> string?
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerTypeDescriptor.ConfigurationEditorId.init -> void
-Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceHandler
-Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceHandler.HandleAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceExecutor
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeliverySourceExecutor.HandleAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.DispatchAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceContext! source, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitIntentDispatcher.SupportsSourceKind(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxProcessor.SupportsSourceKind(Elsa.Workflows.Runtime.Core.Models.RuntimeDeliverySourceKind sourceKind) -> bool
@@ -11061,7 +11061,7 @@ override Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialActivationCommand.To
 override Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialDeactivationCommand.Equals(object? obj) -> bool
 override Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialDeactivationCommand.GetHashCode() -> int
 override Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialDeactivationCommand.ToString() -> string!
-static Elsa.Workflows.Runtime.Core.Extensions.RuntimePostCommitIntentHandlerServiceCollectionExtensions.AddRuntimeDeliverySourceHandler<THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! intentKind, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Workflows.Runtime.Core.Extensions.RuntimePostCommitIntentHandlerServiceCollectionExtensions.AddRuntimeDeliverySourceExecutor<THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! intentKind, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.CreateStandaloneIngress(Elsa.Workflows.Runtime.Core.Models.RuntimeStandaloneIngressSource! source, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionDelivery! delivery, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy) -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem!
 static Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialActivationCommand.operator !=(Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialActivationCommand? left, Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialActivationCommand? right) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialActivationCommand.operator ==(Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialActivationCommand? left, Elsa.Workflows.Runtime.Core.Models.WorkflowMaterialActivationCommand? right) -> bool

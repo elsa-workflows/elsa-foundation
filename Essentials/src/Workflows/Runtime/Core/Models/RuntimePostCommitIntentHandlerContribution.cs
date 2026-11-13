@@ -49,7 +49,7 @@ public sealed class RuntimePostCommitIntentHandlerContribution
             subscriptionDeliveryProtocolVersion != RuntimeSubscriptionDelivery.CurrentVersion))
             throw new ArgumentException("Standalone ingress requires its own source and subscription protocol.", nameof(sourceKind));
 
-        var handlerContract = sourceKind == RuntimeDeliverySourceKind.StandaloneIngress ? typeof(IRuntimeDeliverySourceHandler) : typeof(IRuntimePostCommitIntentHandler);
+        var handlerContract = sourceKind == RuntimeDeliverySourceKind.StandaloneIngress ? typeof(IRuntimeDeliverySourceExecutor) : typeof(IRuntimePostCommitIntentHandler);
         if (!handlerContract.IsAssignableFrom(handlerType) || handlerType.IsAbstract || handlerType.IsInterface)
         {
             throw new ArgumentException(

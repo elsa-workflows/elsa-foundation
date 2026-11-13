@@ -42,9 +42,9 @@ public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
             RuntimeDeliverySourceKind.WorkflowCheckpoint, subscriptionDeliveryProtocolVersion));
 
     /// <summary>Uses the same exact-kind registry for a true standalone source; no workflow publisher is fabricated.</summary>
-    public static IServiceCollection AddRuntimeDeliverySourceHandler<THandler>(this IServiceCollection services,
+    public static IServiceCollection AddRuntimeDeliverySourceExecutor<THandler>(this IServiceCollection services,
         string intentKind, RuntimePostCommitRetryPolicy retryPolicy)
-        where THandler : class, IRuntimeDeliverySourceHandler =>
+        where THandler : class, IRuntimeDeliverySourceExecutor =>
         Register(services, new(intentKind, typeof(THandler), retryPolicy, true, null,
             RuntimeDeliverySourceKind.StandaloneIngress, RuntimeSubscriptionDelivery.CurrentVersion));
 

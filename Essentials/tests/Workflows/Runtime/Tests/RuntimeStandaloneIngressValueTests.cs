@@ -154,6 +154,48 @@ public sealed class RuntimeStandaloneIngressValueTests
             new(item.OutboxItemId, RuntimePostCommitOutboxStatus.FailedFinal, Now.AddSeconds(3), "failure")));
     }
 
+    [Theory]
+    [InlineData("1e-29", "0")]
+    [InlineData("0.1234567890123456789012345678901", "0.1234567890123456789012345678902")]
+    [InlineData("1e1000000", "1e1000001")]
+    [InlineData("9007199254740992", "9007199254740993")]
+    public void Changed_exact_numeric_payloads_have_distinct_request_fingerprints(string left, string right) =>
+        Assert.NotEqual(NumericFingerprint(left), NumericFingerprint(right));
+
+    [Theory]
+    [InlineData("100.000", "1e2")]
+    [InlineData("-0.000e9999999999999999999999999999999", "0")]
+    [InlineData("1.234567890123456789012345678901", "1234567890123456789012345678901e-30")]
+    [InlineData("1e9999999999999999999999999999999", "10e9999999999999999999999999999998")]
+    public void Equivalent_exact_numeric_payloads_have_the_same_request_fingerprint(string left, string right) =>
+        Assert.Equal(NumericFingerprint(left), NumericFingerprint(right));
+
+    [Fact]
+    public void Retained_control_facts_own_nested_outcomes_and_refuse_replacement()
+    {
+        var original = new RuntimeIngressRecipientControlResult("subscription", RuntimeIngressControlOutcome.Cancelled);
+        var outcomes = new List<RuntimeIngressRecipientControlResult> { original };
+        var receipt = new RuntimeIngressControlReceipt("actor", "request", Hash, RuntimeIngressControlKind.CancelPendingRecipients, Now, outcomes);
+        var facts = new RuntimeIngressControlFacts([receipt], []);
+        var item = Pending();
+        var captured = item.WithSubscriptionDelivery(item.SubscriptionDelivery!.WithControlFacts(facts));
+        var fingerprint = RuntimeIngressInspection.DeliveryFingerprint(captured);
+        outcomes[0] = original with { Outcome = RuntimeIngressControlOutcome.DispatchCommitted };
+        outcomes.Clear();
+        Assert.Equal(original, Assert.Single(Assert.Single(facts.Receipts).Recipients));
+        Assert.Equal(fingerprint, RuntimeIngressInspection.DeliveryFingerprint(captured));
+        var changed = new RuntimeIngressControlFacts([receipt], []);
+        Assert.Throws<InvalidOperationException>(() => changed.EnsurePreserves(facts));
+        Assert.Throws<InvalidOperationException>(() => captured.WithSubscriptionDelivery(captured.SubscriptionDelivery!.WithControlFacts(changed)));
+    }
+
+    private static string NumericFingerprint(string token)
+    {
+        using var document = JsonDocument.Parse(token);
+        return RuntimeStandaloneIngressSource.ComputeRequestFingerprint(Scope, "tenant", "trigger", "source", "key",
+            new("Test.Numeric", schemaVersion: 1), document.RootElement, new("source", "actor"));
+    }
+
     private static RuntimeStandaloneIngressSource Source(RuntimeIngressAdmissionPolicy policy = RuntimeIngressAdmissionPolicy.RequireAll,
         string? tenantId = "tenant", PersistenceScope? scope = null)
     {
