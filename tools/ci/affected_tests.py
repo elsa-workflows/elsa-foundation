@@ -59,6 +59,8 @@ PROTOTYPES = "prototypes/"
 MSBUILD_PATH = re.compile(r"(?:\$\(MSBuild(?:ThisFile|Project)Directory\)[/\\]?)?(?:\.\.[/\\])+[^\"'<>;|\s]*")
 # `$(MSBuildThisFileDirectory)VersionLines.props` in a Directory.* file: a sibling it imports.
 MSBUILD_SIBLING = re.compile(r"\$\(MSBuildThisFileDirectory\)([^\"'<>;|\s$]+)")
+# Imports can also be plain paths relative to their containing MSBuild file, including a same-directory filename.
+MSBUILD_IMPORT = re.compile(r"<Import\b[^>]*\bProject\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
 CS_STRING = re.compile(r'(?<![$@\w])"((?:[^"\\\n]|\\.)*)"')
 CS_PATH_CALL = re.compile(r"\bPath\.(?:Combine|Join|GetFullPath)\s*\(")
 
@@ -265,7 +267,7 @@ def build_graph(tree: Tree) -> Graph:
         if ".md" in text:
             markdown_projects.add(project)
         base = posixpath.dirname(project)
-        for token in MSBUILD_PATH.findall(text):
+        for token in MSBUILD_PATH.findall(text) + MSBUILD_IMPORT.findall(text):
             resolved = _resolve(base, token)
             if resolved:
                 claim(project, resolved)
@@ -295,9 +297,9 @@ def build_graph(tree: Tree) -> Graph:
         scoped = {project for project in projects if project.startswith(base + "/")} if path.startswith(PROTOTYPES) else set()
         for project in scoped:
             claims.append((path, project, True))
-        for token in MSBUILD_PATH.findall(text) + MSBUILD_SIBLING.findall(text):
+        for token in MSBUILD_PATH.findall(text) + MSBUILD_SIBLING.findall(text) + MSBUILD_IMPORT.findall(text):
             resolved = _resolve(base, token)
-            if resolved and resolved in tree.file_set:
+            if resolved:
                 if path.startswith(PROTOTYPES):
                     for project in scoped:
                         claims.append((resolved, project, True))
@@ -315,9 +317,9 @@ def build_graph(tree: Tree) -> Graph:
             continue
         visited.add((path, consumer))
         text = tree.read(path)
-        for token in MSBUILD_PATH.findall(text) + MSBUILD_SIBLING.findall(text):
+        for token in MSBUILD_PATH.findall(text) + MSBUILD_SIBLING.findall(text) + MSBUILD_IMPORT.findall(text):
             resolved = _resolve(posixpath.dirname(path), token)
-            if resolved and resolved in tree.file_set:
+            if resolved:
                 if consumer is None:
                     shared_imports.add(resolved)
                 else:
@@ -626,8 +628,22 @@ def self_test() -> int:
     shared_files["Directory.Build.props"] = '<Project><Import Project="$(MSBuildThisFileDirectory)prototypes/kernel/Version.props" /></Project>'
     check("a prototype file imported by the shared root still selects everything",
           decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["Directory.Build.props"] = '<Project><Import Project="prototypes/kernel/Version.props" /></Project>'
+    check("a literal prototype import from the shared root still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["prototypes/kernel/Nested.props"] = '<Project><Import Project="Version.props" /></Project>'
+    literal_graph = build_graph(_tree(shared_files | {"Directory.Build.props": "<Project />"}))
+    d = decide(["prototypes/kernel/Version.props"], literal_graph, arch)
+    check("a literal nested import retains the explicit external consumer",
+          not d.everything and "tests/Nested/Nested.Tests.csproj" in d.affected)
     shared_files["Directory.Build.props"] = '<Project><Import Project="$(MSBuildThisFileDirectory)prototypes/kernel/Nested.props" /></Project>'
     check("a nested prototype import from the shared root still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    del shared_files["prototypes/kernel/Version.props"]
+    check("a deleted nested shared prototype import still selects everything",
+          decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
+    shared_files["Directory.Build.props"] = '<Project><Import Project="$(MSBuildThisFileDirectory)prototypes/kernel/Version.props" /></Project>'
+    check("a deleted direct shared prototype import still selects everything",
           decide(["prototypes/kernel/Version.props"], build_graph(_tree(shared_files)), arch).everything)
     del shared_files["prototypes/kernel/sim/Sim.csproj"]
     shared_files["Directory.Build.props"] = "<Project />"
