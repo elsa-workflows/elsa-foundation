@@ -7,7 +7,8 @@ namespace Kernel.Runtime.Orleans;
 /// <summary>One partition of the store, as an Orleans grain keyed by the partition.</summary>
 public interface IPartitionGrain : IGrainWithIntegerKey
 {
-    /// <summary>Nothing but the call: it activates the grain if no silo has it active. The keeper's.</summary>
+    /// <summary>Nothing but the call: it activates the grain if no silo has it active. The keeper's. It touches no state, so it never waits for a pass.</summary>
+    [AlwaysInterleave]
     Task EnsureAsync();
 
     /// <summary>A hint: an actor of this partition may have work. One-way, and not needed for correctness.</summary>
@@ -74,24 +75,26 @@ public sealed class PartitionGrain(OrleansActorRuntime runtime) : Grain, IPartit
     }
 
     /// <summary>Activate the scope if this grain does not hold it, wake it at the poll interval, run one pass. Returns when to tick again.</summary>
-    private async Task<TimeSpan> PassAsync(CancellationToken stopping)
+    private async Task<TimeSpan> PassAsync(CancellationToken crashing)
     {
         if (_activation is not { Active: true })
         {
             if (runtime.Host is not { } host) return Options.RetryEvery;
             // A lost activation is not given up: layer 2 already dropped its memory, and the node takes the scope again.
-            _activation = await host.ActivateAsync(Scope, stopping);
+            _activation = await host.ActivateAsync(Scope, crashing);
             if (_activation is null) return Options.RetryEvery;
-            await _activation.WokenAsync(null, stopping);     // a take starts from empty memory: the first pass reads the inbox
+            await _activation.WokenAsync(null, crashing);     // a take starts from empty memory: the first pass reads the inbox
             _pollAt = Now + (long)Options.PollInterval.TotalMilliseconds;
         }
         else if (Now >= _pollAt)
         {
-            await _activation.WokenAsync(null, stopping);
+            await _activation.WokenAsync(null, crashing);
             _pollAt = Now + (long)Options.PollInterval.TotalMilliseconds;
         }
+        // A take that landed after the silo crashed starts no pass: its lease runs out, as after a crash.
+        if (crashing.IsCancellationRequested) return Options.RetryEvery;
         var untilPoll = TimeSpan.FromMilliseconds(Math.Max(0, _pollAt - Now));
-        return await _activation.RunAsync(stopping) switch
+        return await _activation.RunAsync(crashing) switch
         {
             null => Options.RetryEvery,         // the fence was lost: take the scope again once it is free
             { } delay when delay < untilPoll => delay,
