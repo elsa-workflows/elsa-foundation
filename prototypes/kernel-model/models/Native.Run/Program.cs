@@ -66,6 +66,10 @@ static class Cost
         Console.WriteLine("|---|---|---:|---:|---:|---:|---|");
         async Task Row(string name, string mode, Func<Task<bool>> body)
         {
+            // Both leases fresh before counting starts: an idle pass beats a third of a lease after the last renewal,
+            // and a row's count should not depend on how long the rows before it took.
+            await owner.Worker.BeatAsync();
+            await other.Worker.BeatAsync();
             counter.Reset();
             store.Reset();
             var trace = Environment.GetEnvironmentVariable("NATIVE_TRACE") is { Length: > 0 } t && $"{name}, {mode}".StartsWith(t, StringComparison.Ordinal);

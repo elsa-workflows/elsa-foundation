@@ -85,8 +85,13 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
 
     Console.WriteLine($"\n{(postgres ? "PostgreSQL" : "SQLite")}, fence {(fenceInBatch ? "in the SaveChanges batch (concurrency tokens)" : "as its own checked statement")}");
     Console.WriteLine($"{"run",-66} {"commands",8} {"begin",6} {"commit",6} {"round trips",11}");
+    Worker? other = null;   // the second owner, from the waits on
     async Task Row(string name, Func<Task> body)
     {
+        // Both leases fresh before counting starts: an idle pass beats a third of a lease after the last renewal, and a
+        // row's count should not depend on how long the rows before it took.
+        await owner.BeatAsync();
+        if (other is not null) await other.BeatAsync();
         counter.Reset();
         await body();
         // PostgreSQL: Npgsql sends BEGIN with the first command of the transaction, so a round trip is a command or a COMMIT/ROLLBACK.
@@ -113,7 +118,7 @@ static async Task Cost(bool postgres, string connection, bool fenceInBatch)
         await Drain(owner, poll: false);
     });
     // Waiting for an event: through the subscription and event tables, and through a correlation instance per key.
-    var other = new Worker("other", 1, store, new WorkflowInstance(Models()));
+    other = new Worker("other", 1, store, new WorkflowInstance(Models()));
     await new DurableHost([other]).ActivateAsync(other.Partition);
     await other.PollAsync();
     string Key(int partition) => Enumerable.Range(0, 1000).Select(i => $"k{partition}-{n}-{i}").First(k => Correlation.Of(k, 2).Partition == partition);
