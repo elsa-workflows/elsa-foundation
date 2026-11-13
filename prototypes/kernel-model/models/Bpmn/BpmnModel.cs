@@ -7,9 +7,12 @@ namespace Kernel.Bpmn;
 public static class BpmnKinds
 {
     public const string Timer = "bpmn.timer";     // a timer's wait is over
+    public const string Signal = "bpmn.signal";   // a called child signals its call activity (an escalation)
 }
 
 public sealed record TimerDue(string Handle);
+
+public sealed record ScopeSignal(string Child, string Code, string? Payload);
 
 /// <summary>The start spec's input: variables over the process's own.</summary>
 public sealed record BpmnStart(JsonObject? Variables = null);
