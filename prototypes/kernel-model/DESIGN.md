@@ -13,7 +13,7 @@ Words: a **turn** is one call of an instance's code with the messages that are d
 **background job** (job) is work a turn starts outside itself, whose result comes back as a message; a **pass** is the
 runtime's call into a partition, which runs the turns that are due and commits them in batches.
 
-The kernel is 2,235 lines in three projects: `src/Kernel.Runtime` 279, `src/Kernel.Durable` 1,675 (of which 254 are
+The kernel is 2,240 lines in three projects: `src/Kernel.Runtime` 279, `src/Kernel.Durable` 1,680 (of which 254 are
 the in-memory store) and `src/Kernel.Workflows` 281. Before the split, `src/Kernel` was 1,758; the difference is the
 seam's interfaces, `PartitionRuntime`, the durable half of a turn (`DurableTurn`) and their comments. Around it: the EF
 store and its four dialects, the MongoDB store, the store conformance suite, the deterministic simulation, and the
@@ -142,7 +142,7 @@ a concurrent stress test with injected connection failures and the provider's ow
 | `TakeAsync`, `ReleaseAsync` | A conditional take that bumps the epoch; a take from another owner is a death and adds one attempt to exactly the rows on trial at that owner's last epoch, in the same transaction |
 | `CommitAsync` | The fence (epoch and position) and everything else of the batch, atomic. A fence that matched nothing answers `Landed = false`, **whatever else in the batch would have failed** (E1, M5). Counts are checked: an update at the wrong revision, a consumed, done or held message that is not there, a delete at the wrong revision |
 | `PollAsync` | A plain read of a partition's unseen, undone, due rows in order-key order, with the store's time |
-| `AddAsync`, `PublishAsync`, `SubscribeAsync` | Create-only by id; a second add answers false |
+| `AddAsync`, `PublishAsync`, `SubscribeAsync` | Create-only by id: a second `AddAsync` answers false; `PublishAsync` and `SubscribeAsync` are idempotent |
 | `LoadAsync`, `FindSubscriptionsAsync`, `FindEventsAsync`, `ReadJournalAsync` | Reads by key |
 | `HeartbeatAsync` (`IMembership`, the built-in runtime's) | The node's row, the nodes heard from within a window, the partitions nobody holds |
 | `ProjectedAsync`, `ProjectAsync`, `ReadViewsAsync` | The projector's own row and the partition's position; a move of the projector's row only from where it was read, with the view rows, in one transaction; the viewer's read |
