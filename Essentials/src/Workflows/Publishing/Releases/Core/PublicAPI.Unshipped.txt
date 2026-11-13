@@ -287,3 +287,6 @@ Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.<Clone>$() -> E
 Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? other) -> bool
 static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool
 static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.ToString() -> string!
