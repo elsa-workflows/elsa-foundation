@@ -77,4 +77,7 @@ public enum Flaw : long
     HideDeliveryHistory = 1L << 43,  // mutation: suppress the delivery-history hint
     IgnoreLeaseDeadline = 1L << 42, // mutation: start new work after the local safe deadline
     TrialBeforeLoad = 1L << 41,    // for the measurement of section 21: a trial may start before its instance is loaded and idle
+
+    // Round 4 (FINDINGS 25).
+    KeepExpiredCallers = 1L << 42, // an owner keeps a caller's reply address past its deadline: it pins the instance and is still sent replies
 }

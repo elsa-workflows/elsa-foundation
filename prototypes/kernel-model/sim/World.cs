@@ -180,6 +180,12 @@ public sealed partial class World
     public readonly PartitionRuntime[] Runtimes;    // layer 1, one per process: the built-in runtime the simulation drives
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
+
+    /// <summary>
+    /// A request's deadline, which its reply address carries (decision 6): the route's timeout, 30 s; one request in four
+    /// has 250 ms, shorter than the models' 300 ms timers, so callers expire while their instances go on.
+    /// </summary>
+    private long Deadline(string request) => Time + (long.Parse(request[1..]) % 4 == 0 ? 250 : 30_000);
     public readonly List<(string Node, Reply Reply)> Deliveries = [];                   // on the transport between nodes
     public readonly List<SubscriptionRow> CatchingUp = [];                              // start subscriptions inserted, their read still owed
     private readonly TrialGate[] _gates;
@@ -476,9 +482,9 @@ public sealed partial class World
             {
                 if (Live(act.A) is not { } actor || !actor.Worker.Owns) return null;
                 var request = act.M!.ReplyTo![(act.M.ReplyTo.IndexOf('|') + 1)..];
-                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request) };
+                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request, Deadline(request)) };
                 if (!actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id)) return null;
-                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Time + 30_000), asked.Target.Id));
+                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Deadline(request)), asked.Target.Id));
                 Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
                 return "";
             }
@@ -487,9 +493,9 @@ public sealed partial class World
                 if (Paused[act.A] || !Oracle.Https.ContainsKey(act.M!.Target.Id)) return null;
                 var process = Of(act.A, 0).Worker.Node;
                 var request = act.M.ReplyTo!;
-                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request) };
+                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request, Deadline(request)) };
                 var added = Store.AddAsync(asked).Result;
-                Asked.Add((process, Processes[process].Open(request, Time + 30_000), asked.Target.Id));
+                Asked.Add((process, Processes[process].Open(request, Deadline(request)), asked.Target.Id));
                 return added ? "added" : "duplicate key";
             }
             case "disconnect":
