@@ -22,7 +22,7 @@ public sealed class RuntimeHistoryCompositionTests
     [InlineData(true)]
     public void Ordinary_service_resolution_remains_lazy_before_an_admission_scope_exists(bool enabled)
     {
-        var services = Services();
+        var services = Services(new Access(global: true));
         RuntimeHistoryRegistration.AddServices(services, new() { Enabled = enabled });
         var reads = 0;
         services.AddScoped<IRuntimeHistoryStore>(_ => { reads++; throw new IOException("reader unavailable"); });
@@ -100,7 +100,7 @@ public sealed class RuntimeHistoryCompositionTests
     [InlineData("scope")]
     public void An_incoherent_component_refuses_before_new_admission(string missing)
     {
-        var services = Services(missing == "scope" ? null : new Access());
+        var services = Services(new Access(global: missing == "scope"));
         RuntimeHistoryRegistration.AddServices(services);
         switch (missing)
         {
@@ -186,8 +186,8 @@ public sealed class RuntimeHistoryCompositionTests
             "run", At, ["activity"], new Dictionary<string, string>()),
             new(null, null, [new("activity", RuntimeStateChangeOperation.Upsert, activity, new Dictionary<string, string>())], [], [], [], []), [], new Dictionary<string, string>());
     }
-    private sealed class Access : IPersistenceAccessContextAccessor
-    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new("scope-a")); }
+    private sealed class Access(bool global = false) : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => global ? PersistenceAccessContext.Global : PersistenceAccessContext.Scoped(new("scope-a")); }
     private sealed class LegacyWriter : IRuntimeCheckpointCommitStore
     { public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) => throw new NotSupportedException(); }
     private sealed class LegacyValues : IRuntimeActivityExecutionInspectionAccumulator
