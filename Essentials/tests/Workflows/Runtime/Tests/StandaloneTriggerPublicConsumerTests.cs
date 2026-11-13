@@ -370,6 +370,8 @@ public sealed class StandaloneTriggerPublicConsumerTests
     public async Task Native_row_incarnation_survives_idempotent_save_and_changes_after_recreation(bool guarded)
     {
         var services = RuntimeServices();
+        services.AddScoped<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
+        services.AddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
         using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
         var selected = scope.ServiceProvider; Bind(selected);
         await SeedActualPublicationAndResourceAsync(selected);
