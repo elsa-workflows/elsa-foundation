@@ -59,6 +59,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Taken;              // a turn or a commit in flight has it
     internal string? Key;             // of a job
     internal CancellationTokenSource? Cancel;
+    internal Task? JobDriver;
 }
 
 /// <summary>What a turn is given: the actor, its committed row and live state, and the messages that are due, in order.</summary>
