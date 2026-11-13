@@ -1138,7 +1138,7 @@ on them from outside the store, as in the store suite. The watcher fails a case 
 
 - makes two calls into one node's scope at once (an activation, a pass, a release; a worker is single-threaded);
 - runs a pass after it gave the activation up, or after its node stopped or was killed;
-- stops a node without giving up every scope it held, or gives a scope up while its node is being killed;
+- stops a node without giving up every scope it held;
 - gives up an old activation after a newer one of the same node succeeded (that would release the new epoch).
 
 It counts activations asked for while another node held the scope, the ones layer 2 declined, pairs of activations of
@@ -1160,7 +1160,7 @@ commit got back and counts the node's commits the store answered "not landed".
 | poll | Required | A message added without a hint is handled within twice the poll interval and half a second |
 | hint | Reference | With a 20 s poll interval, a hinted message is handled within 2 s |
 | timer | Reference | With a 20 s poll interval, a child's 1.5 s timer fires within 2.5 s of being due |
-| crash | Required | The holder of partition 0 dies while thirty messages come in and it has handled some; its scopes are taken over and every message is applied once, in order |
+| crash | Required | With a 3 s lease, the holder of partition 0 dies while thirty messages come in and it has handled some. Right after the kill every scope it held still refuses a take (a crash gives nothing up); its scopes are taken over and every message is applied once, in order |
 | stop | Reference | The holder of partition 0 stops; its scopes are taken over before its 6 s lease would have run out |
 | fence | Required | A node stalls past its lease, another process takes the scope and dies; the node commits after that, the store refuses it, and the runtime activates the scope again |
 | split | Required | Nodes on two sides; the holder's next commit in partition 0 is held in flight for three leases (all its calls wait) while the other side handles the twenty messages sent to it. Partition 0 must have been held on both sides at once, the held commit answered "not landed", and every message applied once, in order |
@@ -1242,9 +1242,11 @@ not refused, and the store's count check is what stopped it.
   not use `IWakeSignal`, which stays the built-in runtime's.
 - **R11. Orleans' in-process kill is not a crash.** `InProcessTestCluster.KillSiloAsync` still runs the grains'
   `OnDeactivateAsync`, so the first version of the adapter released every scope when its silo was "killed": the crash
-  case passed, but as a graceful stop. The watcher's rule that a node may give nothing up while it is being killed
-  found it. After `Crash()` the grain now gives nothing up, as a dead process would, and a take that lands after the
-  crash starts no pass.
+  case passed, but as a graceful stop. A watcher rule (no scope given up while a node is being killed) found it; that
+  rule also flagged a release a correct runtime had begun just before the kill, so the crash case now checks it
+  through the store instead: right after the kill, every scope the node held must still refuse a take. With the
+  adapter's guard switched off, that check fails ("the killed node gave partition 0 up"). After `Crash()` the grain
+  gives nothing up, as a dead process would, and a take that lands after the crash starts no pass.
 - **R12. A finished background job wakes nobody.** Its result goes into the instance's inbox in memory, but the
   runtime is not told, so the turn that handles it waits for the next pass, at worst the poll interval (1 s by default;
   under Orleans and `RuntimeNode` alike). The simulation and the native host's pump run passes back to back, so they do
