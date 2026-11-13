@@ -1,3 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi></PropertyGroup>
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
 </Project>
