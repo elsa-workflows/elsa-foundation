@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
-using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
