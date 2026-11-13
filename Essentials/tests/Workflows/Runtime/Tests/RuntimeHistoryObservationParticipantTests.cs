@@ -2,10 +2,13 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -291,17 +294,20 @@ public sealed class RuntimeHistoryObservationParticipantTests
         Assert.Equal(before, await f.Reader.FindHeadAsync("run"));
     }
 
-    [Fact]
-    public async Task Deletion_and_observation_wait_for_the_same_gate_and_late_observations_never_resurrect_history()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Deletion_and_observation_wait_for_the_same_gate_and_late_observations_never_resurrect_history(bool bookmarkLinked)
     {
         var f = await Fixture.CreateAsync();
         var native = (await f.Executions.FindAsync("run"))!;
+        var observation = Observation(Event(bookmark: bookmarkLinked ? "native-only" : null));
         await f.State.WriteGate.WaitAsync();
         Task<RuntimeHistoryObservationResult> recording;
         Task<bool> deletion;
         try
         {
-            recording = f.Writer.RecordAsync(Observation()).AsTask();
+            recording = f.Writer.RecordAsync(observation).AsTask();
             deletion = f.Executions.DeleteAsync("run").AsTask();
             Assert.False(recording.IsCompleted);
             Assert.False(deletion.IsCompleted);
@@ -310,14 +316,62 @@ public sealed class RuntimeHistoryObservationParticipantTests
         await recording;
         Assert.True(await deletion);
         Assert.Null(await f.Reader.FindHeadAsync("run"));
-        Assert.False((await f.Writer.RecordAsync(Observation())).Recorded);
+        Assert.False((await f.Writer.RecordAsync(observation)).Recorded);
         Assert.Empty((await f.Reader.ReadPageAsync(new("run"))).Items);
+        Assert.Empty((await f.Reader.ReadPageAsync(new("run", BookmarkId: "native-only"))).Items);
+        Assert.Empty(f.State.HistoryBookmarkEvents);
+        Assert.Empty(f.State.HistoryBookmarkEventIds);
         Assert.Empty(f.State.HistoryCandidateFingerprints);
         // Even a deliberately permissive native fixture cannot restore the deleted diagnostic identity.
         await f.Executions.SaveAsync(native);
-        Assert.False((await f.Writer.RecordAsync(Observation())).Recorded);
+        Assert.False((await f.Writer.RecordAsync(observation)).Recorded);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await f.Store.CommitAsync(Commit("after-deletion"), Immediate));
         Assert.Null(await f.Reader.FindHeadAsync("run"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Owning_terminal_deletion_clears_observation_only_bookmark_indexes_and_tombstones_history(bool coalescing)
+    {
+        var services = new ServiceCollection();
+        var access = new Access();
+        var clock = new FakeTimeProvider(At.AddHours(1));
+        services.AddLogging();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(access);
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(new Lease());
+        services.AddWorkflowRuntime();
+        if (coalescing) services.AddPersistenceModes();
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        var selected = scope.ServiceProvider;
+        var state = selected.GetRequiredService<InMemoryRuntimeCheckpointStoreState>();
+        var executions = coalescing ? selected.GetRequiredService<CoalescingInner<IWorkflowExecutionStateStore>>().Value
+            : selected.GetRequiredService<IWorkflowExecutionStateStore>();
+        await executions.SaveAsync(new("run", new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Completed,
+            null, At, At, At, At, null, null, null, new Dictionary<string, string>())
+            { HistoryCapturePolicy = Policy, HistoryCaptureEnabledAtAdmission = true });
+        await selected.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().CommitAsync(Commit("seed", starts: true), Immediate);
+        var reader = new InMemoryRuntimeHistoryStore(state, access, Codec());
+        var writer = new InMemoryRuntimeHistoryObservationWriter(state, access, executions, clock);
+        Assert.True(writer.CanRecordHistory(reader));
+        Assert.True((await writer.RecordAsync(Observation(Event(bookmark: "native-only")))).Recorded);
+        Assert.Empty(state.HistoryBookmarks); // No lifecycle projection owns this bookmark-event index.
+        Assert.Single(state.HistoryBookmarkEvents);
+        var deletion = selected.GetRequiredService<IWorkflowExecutionDeletionStore>();
+        Assert.True(deletion.IsSupported);
+        var candidate = (await deletion.ReadAsync("run"))!;
+        Assert.Equal(WorkflowExecutionDeletionResult.Deleted, await deletion.TryDeleteTerminalAsync(candidate));
+        Assert.Null(await executions.FindAsync("run"));
+        Assert.Null(await reader.FindHeadAsync("run"));
+        Assert.Empty((await reader.ReadPageAsync(new("run", BookmarkId: "native-only"))).Items);
+        Assert.Empty(state.HistoryBookmarkEvents);
+        Assert.Empty(state.HistoryBookmarkEventIds);
+        Assert.Empty(state.HistoryCandidateFingerprints);
+        Assert.False(state.HistoryRunOwners.ContainsKey("run"));
+        Assert.Contains(("scope-a", "run"), state.HistoryDeletedRuns);
+        Assert.False((await writer.RecordAsync(Observation())).Recorded);
     }
 
     [Fact]
@@ -361,9 +415,9 @@ public sealed class RuntimeHistoryObservationParticipantTests
     }
 
     private static RuntimeHistoryObservation Observation(RuntimeHistoryEvent? e = null) => new(Policy, e ?? Event());
-    private static RuntimeHistoryEvent Event(string id = "observation", bool? known = null, IReadOnlyDictionary<string, string>? metadata = null) =>
+    private static RuntimeHistoryEvent Event(string id = "observation", bool? known = null, IReadOnlyDictionary<string, string>? metadata = null, string? bookmark = null) =>
         new(id, "run", 0, RuntimeHistoryEventCategory.DeliveryObservation, "DeliveryReceived", At, metadata: metadata)
-        { Authority = RuntimeHistoryAuthority.DeliveryObservation, Causation = new(DeliveryId: "delivery"), OccurredAtKnown = known };
+        { Authority = RuntimeHistoryAuthority.DeliveryObservation, Causation = new(DeliveryId: "delivery"), OccurredAtKnown = known, BookmarkId = bookmark };
     private static RuntimeCheckpointCommit Commit(string id, bool starts = false) => new(id,
         new("checkpoint-" + id, "test", "run", At, [], new Dictionary<string, string>()),
         new(null, null, [], [], [], [], []), [], new Dictionary<string, string>())

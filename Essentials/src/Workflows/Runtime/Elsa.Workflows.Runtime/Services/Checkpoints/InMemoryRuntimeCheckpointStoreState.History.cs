@@ -17,6 +17,7 @@ public sealed partial class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<(string Scope, string Run), List<string>> HistoryBookmarkOrder { get; } = new();
     internal Dictionary<(string Scope, string Run, string Activity), List<string>> HistoryActivityBookmarkOrder { get; } = new();
     internal Dictionary<(string Scope, string Run, string Bookmark), List<RuntimeHistoryEvent>> HistoryBookmarkEvents { get; } = new();
+    internal Dictionary<(string Scope, string Run), HashSet<string>> HistoryBookmarkEventIds { get; } = new();
 
     internal HashSet<(string Scope, string Run)> HistoryDeletedRuns { get; } = new();
     internal Dictionary<(string Scope, string Run), HashSet<string>> HistoryReceiptIds { get; } = new();
@@ -62,6 +63,8 @@ public sealed partial class InMemoryRuntimeCheckpointStoreState
         }
         if (e.BookmarkId is { } bookmark)
         {
+            if (!HistoryBookmarkEventIds.TryGetValue(owner, out var ids)) HistoryBookmarkEventIds[owner] = ids = new(StringComparer.Ordinal);
+            ids.Add(bookmark);
             var bookmarkKey = (scope, e.WorkflowExecutionId, bookmark);
             if (!HistoryBookmarkEvents.TryGetValue(bookmarkKey, out var own)) HistoryBookmarkEvents[bookmarkKey] = own = [];
             own.Add(e);
@@ -110,6 +113,9 @@ public sealed partial class InMemoryRuntimeCheckpointStoreState
                 }
             if (HistoryNames.Remove(owner, out var names)) foreach (var name in names) HistoryNameEvents.Remove((scope, run, name));
             if (HistoryCategories.Remove(owner, out var categories)) foreach (var category in categories) HistoryCategoryEvents.Remove((scope, run, category));
+            // Delivery observations may name a native/uncaptured handle with no lifecycle projection.
+            if (HistoryBookmarkEventIds.Remove(owner, out var eventBookmarks))
+                foreach (var bookmark in eventBookmarks) HistoryBookmarkEvents.Remove((scope, run, bookmark));
             if (HistoryBookmarkOrder.Remove(owner, out var bookmarks))
                 foreach (var bookmark in bookmarks)
                     if (HistoryBookmarks.Remove((scope, run, bookmark), out var projection))
