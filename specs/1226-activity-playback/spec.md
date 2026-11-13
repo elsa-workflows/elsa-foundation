@@ -8,7 +8,7 @@
 
 **Tracking**: [Feature #4366](https://github.com/elsa-workflows/elsa-foundation/issues/4366).
 
-**Program-goal bucket**: Timeline workspace and run history ([#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849)). This is separate specification intake alongside [spec 1211](../1211-run-history-timeline/spec.md); it does not change the ownership or sequencing of that feature's delivery slices.
+**Program-goal bucket**: **none/free-flow**. Related feature: Timeline workspace and run history ([#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849)); the accepted handoff scopes coordinated prerequisite implementation without transferring that feature's active claim.
 
 **Input**: The owner requested a GitHub issue and Spec Kit specification for activity-by-activity playback, including previous/next, play/pause, speed controls and timeline scrubbing, so a user can interactively follow the path a workflow run took.
 
