@@ -65,6 +65,7 @@ public enum BpmnFlaw
     ResurrectArrivals = 1 << 5, // the stored state keeps the arrivals a join consumed, as a careless merge of old and new tokens would
     NeverEnd = 1 << 6,          // the host misses the interpreter's Complete and leaves the instance running
     LoseChildOutput = 1 << 7,   // a call activity completes, the variables its child set do not reach the state
+    KeepChild = 1 << 8,         // a stopped call activity's child is not terminated
 }
 
 public sealed class BpmnOptions

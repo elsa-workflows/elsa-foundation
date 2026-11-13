@@ -237,7 +237,7 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
                 case WorkKinds.Job: turn.CancelJob(work.Key); break;
                 case WorkKinds.Timer: turn.Recall(work.Key); break;
                 case WorkKinds.Message: turn.Unsubscribe(work.Key, handle); break;
-                case WorkKinds.Call: turn.Send(new InstanceRef(work.Key), Kinds.Terminate); break;
+                case WorkKinds.Call when !Has(BpmnFlaw.KeepChild): turn.Send(new InstanceRef(work.Key), Kinds.Terminate); break;
             }
         turn.Record($"x {handle} {work.Element}");
     }
