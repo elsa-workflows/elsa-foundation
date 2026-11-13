@@ -36,7 +36,7 @@ internal sealed partial class Burst
             prefix &= message.Kind == InvocationInput.Kind;
             if (!prefix) { turn.Hold(message); continue; }
             Admission result;
-            try { result = Admit(message.Read<InvocationInput>()); }
+            try { result = message.Payload is null ? new("", "", "Invalid") : Admit(message.Read<InvocationInput>()); }
             catch (Exception error) when (error is JsonException or EncoderFallbackException)
             { result = new("", "", "Invalid"); }
             if (AdmissionHas(AdmissionFlaw.EarlyReply)) turn.Emit(Request.Response, result);

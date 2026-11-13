@@ -5,23 +5,38 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
-foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
-foreach (var nested in new[] { false, true })
-foreach (var cut in Enum.GetValues<Cut>()) new Witness(mode, nested, cut).Run();
-foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
-foreach (var nested in new[] { false, true }) new Witness(mode, nested, Cut.None, blocked: true).Run();
-foreach (var defect in new[] { AdmissionFlaw.Hydrate, AdmissionFlaw.ForgetIds, AdmissionFlaw.IgnoreCapacity, AdmissionFlaw.EarlyReply })
+var scenarios = (from mode in new[] { Modes.Balanced, Modes.Durable }
+    from nested in new[] { false, true } from cut in Enum.GetValues<Cut>()
+    select new Scenario(mode, nested, cut)).Concat(from mode in new[] { Modes.Balanced, Modes.Durable }
+        from nested in new[] { false, true } select new Scenario(mode, nested, Cut.None, true)).ToArray();
+var controls = new[] { AdmissionFlaw.Hydrate, AdmissionFlaw.ForgetIds, AdmissionFlaw.IgnoreCapacity, AdmissionFlaw.EarlyReply };
+if (args.SequenceEqual(["--list"]))
+{
+    foreach (var scenario in scenarios) Console.WriteLine("schedule:" + scenario);
+    foreach (var control in controls) Console.WriteLine("control:" + control);
+    return;
+}
+if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
+var passed = 0;
+foreach (var scenario in scenarios)
+{
+    new Witness(scenario.Mode, scenario.Nested, scenario.Cut, blocked: scenario.Blocked).Run();
+    passed++;
+}
+var detected = 0;
+foreach (var defect in controls)
 {
     var name = defect switch { AdmissionFlaw.Hydrate => "A1", AdmissionFlaw.ForgetIds => "A2",
         AdmissionFlaw.IgnoreCapacity => "A3", _ => "A4" };
     try { new Witness(Modes.Balanced, false, Cut.None, defect).Run(); }
     catch (InvalidOperationException error) when (error.Message.StartsWith(name + ":", StringComparison.Ordinal))
-    { Console.WriteLine($"Detected {defect}: {error.Message}"); continue; }
+    { Console.WriteLine($"Detected {defect}: {error.Message}"); detected++; continue; }
     throw new InvalidOperationException($"Negative control {defect} did not fail its named assertion {name}.");
 }
-Console.WriteLine("24 schedules passed; 4 named negative controls detected. Model reload only, not host/provider qualification.");
+Console.WriteLine($"{passed}/{scenarios.Length} schedules passed; {detected}/{controls.Length} named controls detected. Model reload only, not host/provider qualification.");
 
 enum Cut { None, BeforeCommit, LostAcknowledgement, Reload, StaleOwner }
+sealed record Scenario(string Mode, bool Nested, Cut Cut, bool Blocked = false);
 
 sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = AdmissionFlaw.None, bool blocked = false)
 {
@@ -40,7 +55,7 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         ProbeReceiver.Forbidden = false;
         var receiver = Wf.Node<ProbeReceiver>("receiver").With(
             Wf.Sequence("phase", Wf.Set("exit", "exitDone", true), blocked ? Wf.Node<ProbeFault>("fault") : Wf.Event("gate", "release")),
-            Wf.Event("finish", "finish"), Wf.Event("park", "park"));
+            Wf.Event("finish", "finish"), Wf.Event("park", "park"), Wf.Node<ProbeNotice>("notice"));
         var root = nested ? Wf.Sequence("parent", receiver, Wf.Set("after", "returned", true)) : receiver;
         NativeWorkflows.Registry.Add(Wf.Workflow("admission-probe", root));
         Apply(new("take", Actor.Id));
@@ -56,6 +71,12 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Drain();
         Require(ProbeReceiver.Births == births, "A1: admission constructed the authored receiver");
         Require(Inbox.Pending.Count == 1 && Inbox.Receipts["a"].Order == 1, "A2: first admission lost");
+        var malformed = "request" + ++_transport;
+        _requests[malformed] = "";
+        Add(new(malformed, _instance, InvocationInput.Kind, Payload: null, ReplyTo: ReplyTo.Of("outside", malformed)));
+        Drain();
+        Require(Replies[^1].Result == "Invalid" && Inbox.Pending.Count == 1 && State.Frames.ContainsKey(_frame),
+            "A11: absent payload parked the receiver or changed admitted work");
         if (cut is Cut.Reload or Cut.StaleOwner) ChangeOwner(cut == Cut.StaleOwner);
         var before = Replies.Length;
         Send("a", "name", null); Drain();
@@ -67,6 +88,11 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Send("c", "name", "third"); Drain();
         Require(Replies[^1].Result == "Full" && Inbox.Pending.Select(i => i.Id).SequenceEqual(["a", "b"]),
             "A3: full admission evicted, reordered or overfilled pending inputs");
+        Send("a", "name", null); Drain();
+        Require(Replies[^1].Result == "Duplicate" && Replies[^1].Order == 1 && Inbox.Pending.Count == 2,
+            "A2: pending capacity hid a retained duplicate");
+        Send("a", "name", ""); Drain();
+        Require(Replies[^1].Result == "Conflict" && Inbox.Pending.Count == 2, "A2: pending capacity hid an ID conflict");
         for (var i = 0; i < 5; i++) { Send("c", "name", "third"); Drain(); }
         foreach (var group in _world.Deliveries.GroupBy(x => x.Reply.Request))
             Require(group.Count() == 1 && group.Single().Reply.Item is Admission receipt && receipt.Id == _requests[group.Key],
@@ -85,9 +111,10 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Send("c", "name", "third"); Drain();
         Require(Replies[^1].Result == "Full", "A6: selected input freed its capacity too early");
         // Both mixed orders, with no later outside arrival: held suffixes must wake by their own committed continuation.
-        Resume("finish"); Send("d", "name", "fourth"); Drain();
+        Resume("finish"); var heldAdmission = Send("d", "name", "fourth"); SplitAndReload(heldAdmission); Drain();
         Require(Inbox.Receipts["b"].Status == "Completed" && Inbox.Receipts.ContainsKey("d"), "A7: normal/admission batch stalled");
-        Send("e", "name", "fifth"); Resume("park"); Drain();
+        Require(!_world.Deliveries.Any(x => x.Reply.Channel == "notice"), "A5: admission callers retained workflow observation");
+        Send("e", "name", "fifth"); var heldNormal = Resume("park"); SplitAndReload(heldNormal); Drain();
         Require(Inbox.Receipts.ContainsKey("e") && State.Frames.Values.Any(f => f.Node == "park"), "A7: admission/normal batch stalled");
         // No Event is needed for transport correlation; an obsolete occurrence is refused without another queue entry.
         Send("obsolete", "name", null, _frame + "-old"); Drain();
@@ -96,19 +123,29 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Resume("park"); Drain();
         Send("f", "name", "sixth"); Drain();
         Require(Replies[^1].Result == "ReceiptFull" && Inbox.Pending.Count == 0, "A9: retained receipt bound was not enforced");
+        Send("a", "name", null); Drain();
+        Require(Replies[^1].Result == "Duplicate" && Replies[^1].Order == 1 && Replies[^1].Outcome == "done" && Inbox.Pending.Count == 0,
+            "A2: receipt capacity hid the completed duplicate/outcome");
+        Send("a", "name", ""); Drain();
+        Require(Replies[^1].Result == "Conflict" && Inbox.Pending.Count == 0, "A2: receipt capacity hid an ID conflict");
         Require(Inbox.Receipts.Keys.Order().SequenceEqual(new[] { "a", "b", "d", "e" }.Order()), "A9: accepted receipt disappeared");
         Console.WriteLine($"PASS {mode},nested={nested},cut={cut}");
     }
 
-    private void Send(string id, string name, string? value, string? frame = null)
+    private string Send(string id, string name, string? value, string? frame = null)
     {
         var transport = "request" + ++_transport;
         _requests[transport] = id;
         Add(new(transport, _instance, InvocationInput.Kind, Json.Write(new InvocationInput(frame ?? _frame, id, name, value)),
             ReplyTo: ReplyTo.Of("outside", transport, beforeCommit: true)));
+        return transport;
     }
-    private void Resume(string name) => Add(new("resume" + ++_transport, _instance, NativeKinds.Resume,
-        Json.Write(new ResumeStimulus(name))));
+    private string Resume(string name)
+    {
+        var id = "resume" + ++_transport;
+        Add(new(id, _instance, NativeKinds.Resume, Json.Write(new ResumeStimulus(name))));
+        return id;
+    }
     private void Add(Message message) => Apply(new("add", M: message));
     private void Apply(Act act)
     {
@@ -133,10 +170,7 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
     }
     private void CommitCut(Cut failure)
     {
-        Apply(new("poll", Actor.Id));
-        if (Actor.Worker.NeedsLoad) Apply(new("load", Actor.Id));
-        if (Actor.Worker.NeedsFlush) Apply(new("flush", Actor.Id));
-        Apply(new("turn", Actor.Id, S: _instance.Id));
+        PrepareTurn();
         _world.Auto = false;
         var call = Actor.Calls.Count;
         Apply(new("flush", Actor.Id));
@@ -148,9 +182,36 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         _world.Auto = true;
         ChangeOwner(false);
     }
+    private void PrepareTurn()
+    {
+        Apply(new("poll", Actor.Id));
+        if (Actor.Worker.NeedsLoad) Apply(new("load", Actor.Id));
+        if (Actor.Worker.NeedsFlush) Apply(new("flush", Actor.Id));
+        Apply(new("turn", Actor.Id, S: _instance.Id));
+    }
+    private void SplitAndReload(string suffix)
+    {
+        PrepareTurn();
+        Apply(new("flush", Actor.Id));
+        Require(_world.Store.Messages.TryGetValue(suffix, out var held) && !held.Done &&
+            _world.Store.Messages.Values.Any(m => !m.Done && m.Message.Kind == NativeKinds.Continue),
+            "A7: split turn did not retain suffix and its durable wake");
+        ChangeOwner(false);
+    }
     private void ChangeOwner(bool zombie)
     {
         var old = Actor;
+        var call = -1;
+        if (zombie)
+        {
+            Send("a", "name", null);
+            PrepareTurn();
+            _world.Auto = false;
+            call = old.Calls.Count;
+            Apply(new("flush", old.Id));
+            Require(old.Calls.Count == call + 1 && old.Calls[call].Kind == "commit", "A0: stale admission commit not staged");
+            _world.Auto = true;
+        }
         Apply(new("crash", _owner, Flag: zombie));
         Apply(new("tick", 20000));
         _owner = 1 - _owner;
@@ -159,8 +220,12 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         if (zombie)
         {
             var position = _world.Store.Partitions[0].Position;
-            Apply(new("beat", old.Id));
-            Require(!old.Worker.Owns && position == _world.Store.Partitions[0].Position, "A0: stale fence advanced");
+            var replies = Replies.Length;
+            Apply(new("exec", old.Id, call));
+            Apply(new("answer", old.Id, call));
+            Require(!old.Worker.Owns && position == _world.Store.Partitions[0].Position && Replies.Length == replies,
+                "A0: stale admission commit changed state or released its receipt");
+            Drain();
         }
     }
     private static void Require(bool ok, string message)
@@ -171,6 +236,11 @@ public sealed record ProbeState(string Phase, string? Selected = null);
 public sealed class ProbeFault : Activity
 {
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => new(Fault("probe", "ordinary child failure"));
+}
+public sealed class ProbeNotice : Activity
+{
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) =>
+        new(Complete().With(new EmitEffect("notice", Values.From("ordinary output"))));
 }
 public sealed class ProbeReceiver : CompositeActivity
 {
@@ -201,7 +271,7 @@ public sealed class ProbeReceiver : CompositeActivity
         if (state.Selected is { } id) context.FinishInput(id, "done");
         while (context.SelectInput() is { } pending) context.FinishInput(pending.Id, "done");
         context.SetState(new ProbeState("Settled"));
-        context.Schedule(context.Children.Single(c => c.Id == "park"));
+        context.Schedule(context.Children.Single(c => c.Id == (child.Node == "finish" ? "notice" : "park")));
     }
     protected override void OnChildFaulted(CompositeContext context, ChildFaulted child) =>
         context.SetState(new ProbeState("AwaitingRecovery"));
