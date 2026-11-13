@@ -57,8 +57,7 @@ ADDITIONAL_ARTIFACTS = {
 
 def configure_dashboard_qualification(settings, shells):
     """Only the temporary QA host gets native password principals and predefined CAS grant profiles."""
-    # The QA bootstrap owns activation/readiness; a second concurrent warmup can race
-    # the changing shell generation before principal initialization begins.
+    # The QA bootstrap owns explicit catalog preparation and activation/readiness.
     settings.setdefault('Elsa', {}).setdefault('Readiness', {})['WarmDefaultShell'] = False
     native = ['api-capabilities:read', 'studio/questions:read', 'studio/questions:create', 'studio/questions:edit',
               'studio/dashboards:read', 'studio/dashboards:create', 'studio/dashboards:edit',
