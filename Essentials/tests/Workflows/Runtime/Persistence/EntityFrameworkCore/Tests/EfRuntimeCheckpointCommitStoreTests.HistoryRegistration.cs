@@ -14,7 +14,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     [Fact]
     public void Public_native_registration_selects_one_scoped_history_reader_without_enabling_capture()
     {
-        var services = CompleteEfServices(); services.AddRuntimeCheckpointCommitEntityFrameworkCore(); services.AddRuntimeCheckpointCommitEntityFrameworkCore();
+        var services = CompleteHistoryReaderServices(); services.AddRuntimeCheckpointCommitEntityFrameworkCore(); services.AddRuntimeCheckpointCommitEntityFrameworkCore();
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRuntimeHistoryStore));
         using var provider = services.BuildServiceProvider(); using var first = provider.CreateScope(); using var second = provider.CreateScope();
         var reader = first.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>(); Assert.IsType<EfRuntimeHistoryStore>(reader);
@@ -40,8 +40,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     {
         var connection = $"Data Source=file:ef-history-di-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
         await using var keeper = new SqliteConnection(connection); await keeper.OpenAsync();
-        var services = CompleteEfServices(connection); services.AddRuntimeCheckpointCommitEntityFrameworkCore();
+        var services = CompleteHistoryReaderServices(connection); services.AddRuntimeCheckpointCommitEntityFrameworkCore();
         using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new("tenant-a")));
         var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>(); await context.Database.EnsureCreatedAsync();
         var state = Execution("workflow-a", "tenant-a") with { HistoryCapturePolicy = NativeHistoryPolicy, HistoryCaptureEnabledAtAdmission = true };
         context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a", EfWorkflowExecutionStateStore.CreateId("tenant-a", "workflow-a"), 1));
@@ -55,5 +56,12 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         var bookmarks = await reader.ListBookmarksAsync(new("workflow-a"));
         Assert.Equal("history-bookmark", Assert.Single(bookmarks.Items).Bookmark.Identity.BookmarkId);
         Assert.Single(await context.Bookmarks.ToArrayAsync()); Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    private static ServiceCollection CompleteHistoryReaderServices(string connection = "Data Source=:memory:")
+    {
+        var services = CompleteEfServices(connection);
+        services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "history-reader-registration-controls-0123456789");
+        return services;
     }
 }
