@@ -15,7 +15,8 @@ import { chooseDataJourney } from "./chooseDataJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  if ((info.project.use.viewport?.width ?? 0) <= 1024) {
+  const viewportWidth = page.viewportSize()?.width ?? await page.evaluate(() => innerWidth);
+  if (viewportWidth <= 1024) {
     const overlaps = await page.locator(".sidebar .nav-section a, .sidebar .nav-group-toggle").evaluateAll(nodes => {
       const bounds = nodes.map(node => ({ label: node.textContent?.trim(), box: node.getBoundingClientRect() })).filter(item => item.box.width > 0 && item.box.height > 0).sort((a, b) => a.box.left - b.box.left);
       return bounds.slice(1).flatMap((item, index) => item.box.left < bounds[index].box.right - 1 ? [`${bounds[index].label} overlaps ${item.label}`] : []);
