@@ -59,6 +59,20 @@ public sealed class UserTaskIdentityJourneyTests
         var open = await Get(next, "/runtime/user-tasks/" + taskId);
         using (var claim = await next.PostAsJsonAsync($"/runtime/user-tasks/{taskId}/claim", new { revision = open["revision"]!.GetValue<long>(), requestId = "claim-released" })) Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
         var current = await Get(next, "/runtime/user-tasks/" + taskId);
+        // #4198: a reader without manage permission, who may not list assignment targets, sees the other person and the group by name.
+        var firstId = ReferenceEquals(first, alice) ? aliceId : bobId; string firstName, nextName, groupName;
+        await using (var directory = Directory(host))
+        {
+            var users = new EfUserStore(directory, new Access(tenant));
+            firstName = Named((await users.FindAsync(tenant, firstId))!); nextName = Named((await users.FindAsync(tenant, nextId))!);
+            groupName = (await new EfRoleStore(directory, new Access(tenant)).FindAsync(tenant, group))!.Name;
+        }
+        Assert.False((await Get(next, "/runtime/user-task-identity"))["canManage"]!.GetValue<bool>());
+        using (var targets = await next.GetAsync("/runtime/user-task-targets")) Assert.Equal(HttpStatusCode.Forbidden, targets.StatusCode);
+        Assert.Equal(nextName, current["claimantName"]!.GetValue<string>()); Assert.Equal(groupName, current["groupName"]!.GetValue<string>());
+        Assert.Contains(current["history"]!.AsArray(), entry => entry!["actorId"]!.GetValue<string>() == firstId && entry!["actorName"]?.GetValue<string>() == firstName);
+        var row = Assert.Single((await Get(next, "/runtime/user-tasks?view=mine"))["items"]!.AsArray(), item => item!["id"]!.GetValue<string>() == taskId)!;
+        Assert.Equal(nextName, row["claimantName"]!.GetValue<string>());
         await using (var directory = Directory(host))
         {
             var users = new EfUserStore(directory, new Access(tenant)); var user = (await users.FindAsync(tenant, nextId))!;
@@ -84,6 +98,7 @@ public sealed class UserTaskIdentityJourneyTests
         Assert.Equal(supervisorId, terminal["decision"]!["actorId"]!.GetValue<string>());
         Assert.Single(terminal["history"]!.AsArray(), entry => entry!["operation"]!.GetValue<string>() == "accepted");
     }
+    private static string Named(Elsa.Foundation.Identity.Core.Iam.UserRecord user) => string.IsNullOrWhiteSpace(user.DisplayName) ? user.UserName : user.DisplayName;
     private static IdentityIamSqliteDbContext Directory(OwnedWorkbench host) => new(new DbContextOptionsBuilder<IdentityIamSqliteDbContext>().UseSqlite($"Data Source={Path.Combine(host.ContentRoot, "elsa.db")};Pooling=False").Options);
     private sealed class Access(string scope) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new(scope)); }
 }
