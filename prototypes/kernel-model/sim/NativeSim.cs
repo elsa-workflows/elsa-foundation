@@ -151,7 +151,10 @@ public sealed partial class World
                 var (node, round) = (p[4], p[5]);
                 var live = p[6].Split(',', StringSplitOptions.RemoveEmptyEntries);
                 var dead = p[7].Split(',', StringSplitOptions.RemoveEmptyEntries);
-                var merge = flow.Gateways.GetValueOrDefault(node, (Gateway)(-1)) == Gateway.Merge;
+                // A merge passes every token on, so a node behind one may fire once per token in a round and be released
+                // by the graph going quiet with only the merge's side answered: G2 and G3 hold where no merge lies upstream.
+                var graph = Flowchart.GraphOf(flow);
+                var merge = flow.Gateways.Any(g => g.Value == Gateway.Merge && graph.CanReachForward(g.Key, node));
                 if (live.Length == 0) Faults.Add($"G1 {instance}: a dead path ran node {node} of {flowId} (round {round}): every arrival it took was dead");
                 if (!merge && !Native.Fired.Add($"{key}|{node}|{round}")) Faults.Add($"G2 {instance}: node {node} of {flowId} fired twice in round {round}");
                 var inbound = flow.Connections.Where(c => c.Target == node).Select(c => c.Source).Distinct().ToList();
