@@ -135,6 +135,8 @@ internal static class SendHttpRequestTestSupport
         {
             outcomes.AddRange(expectedStatusCodes.Select(code => code.ToString()));
             outcomes.Add(HttpActivityOutcomes.UnmatchedStatusCode);
+            // The Done rule (spec 1208 FR-012a): with expected codes every response selects a code or the catch-all.
+            outcomes.Remove(ActivityOutcomes.Done);
         }
 
         return outcomes.ToArray();

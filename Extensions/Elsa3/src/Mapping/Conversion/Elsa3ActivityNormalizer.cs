@@ -1096,7 +1096,7 @@ internal sealed class Elsa3ActivityNormalizer(
     {
         [FormPostNotParsed] = "Elsa 4 does not parse form posts into ParsedContent, and a text body becomes a string.",
         [RequestSizeNoOutcome] = "A request over the size limit has no outcome in Elsa 4; the request is refused.",
-        [HttpOutcomeSingle] = "Elsa 4 emits one outcome per response: Done no longer fires together with a status-code outcome, and a non-2xx response goes to Failed.",
+        [HttpOutcomeSingle] = "Without expected status codes, a non-2xx response goes to Failed in Elsa 4; Elsa 3 completed it with Done.",
         [AuthHeaderUnvalidated] = "Elsa 4 does not validate the Authorization header, as if validation were disabled.",
         [HttpAuthorizationUseConnection] = "Create an http connection and bind it to Connection. SendHttpRequest.Authorization was removed.",
         [WhilePersistedCondition] = "Elsa 4 re-reads the While condition only from persisted state.",
@@ -1104,7 +1104,6 @@ internal sealed class Elsa3ActivityNormalizer(
         [BreakStopsAtParallel] = "In Elsa 4, Break does not cross a Parallel branch.",
         [ForkWaitAnyCancellation] = "Fork WaitAny becomes a Parallel with threshold 1; cancellation of the other branches may differ.",
         [ExecuteWorkflowDurable] = "ExecuteWorkflow becomes a durable dispatch that waits for completion, not an in-process call.",
-        [ScriptOutcomeRouting] = "Elsa 4 routes RunJavaScript by its return value; setOutcomes with several outcomes is refused.",
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
         [HttpResponseJsonVariant] = "Elsa 3 matched this JSON content type only by exact string and sent the object's type name; Elsa 4 sends the object as JSON.",

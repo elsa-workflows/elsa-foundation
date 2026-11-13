@@ -74,7 +74,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new ActivityChildCompletedContext(context, "entry-execution", "entry", [ActivityOutcomes.Done]));
 
         Assert.True(completion.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, completion.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, completion.OutcomeNames);
         var preparation = await graph.PrepareCompletionCheckpointAsync(
             context,
             [],
@@ -100,10 +100,10 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new ActivityChildCompletedContext(context, "entry-execution", "entry", ["Rejected"]));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Declined", completion.OutcomeName);
-        Assert.Equal(
-            "Declined",
-            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Declined" }, completion.OutcomeNames);
+        Assert.Equal(new[] { 
+            "Declined" },
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
     [Fact]
@@ -121,10 +121,10 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new ActivityChildCompletedContext(context, "entry-execution", "entry", ["Rejected"]));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Accepted", completion.OutcomeName);
-        Assert.Equal(
-            "Accepted",
-            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Accepted" }, completion.OutcomeNames);
+        Assert.Equal(new[] { 
+            "Accepted" },
+            Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
     [Theory]
@@ -178,8 +178,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var continuation = await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Failed", continuation.OutcomeName);
-        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Failed" }, continuation.OutcomeNames);
+        Assert.Equal(new[] { "Failed" }, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
         var cancellation = Assert.Single(context.GetChildSubtreeCancellationRequests());
         Assert.Equal("entry-execution", cancellation.ChildActivityExecutionId);
     }
@@ -196,7 +196,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
         var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
 
-        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        Assert.Equal(new[] { "Failed" }, Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Selection.ResolveNames());
     }
 
     [Fact]
@@ -391,7 +391,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
 
         Assert.Single(preparation.DurableValueChanges);
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition);
-        Assert.Equal(ActivityOutcomes.Done, completion.Outcome);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, completion.Selection.ResolveNames());
         var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(completion.Result);
         Assert.Equal("completed", Assert.IsType<JsonElement>(result["result"]).GetString());
     }
@@ -420,7 +420,7 @@ public sealed class GraphActivityExecutionTests : IDisposable
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition);
         var result = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(completion.Result);
         Assert.Equal(42, Assert.IsType<JsonElement>(result["sum"]).GetInt32());
-        Assert.Equal("Calculated", completion.Outcome);
+        Assert.Equal(new[] { "Calculated" }, completion.Selection.ResolveNames());
     }
 
     [Fact]

@@ -285,6 +285,35 @@ button.wf-node-slot-badge:focus-visible {
   pointer-events: auto;
 }
 
+/* A port the node no longer declares, kept so its connection can be repaired (FR-013). */
+.wf-node-port-label.wf-node-port-missing {
+  border-style: dashed;
+  border-color: var(--wf-danger);
+  color: var(--wf-danger);
+}
+
+.react-flow__edge.wf-edge-missing-port .react-flow__edge-path {
+  stroke: var(--wf-danger);
+  stroke-dasharray: 6 4;
+}
+
+/* The node may select several outcomes per completion (an inclusive fork, FR-014). */
+.wf-node-multi-outcome-badge {
+  position: absolute;
+  top: -9px;
+  right: 18px;
+  padding: 1px 6px;
+  border: 1px solid var(--wf-border);
+  border-radius: 999px;
+  background: var(--wf-panel);
+  color: var(--wf-muted-text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  z-index: 2;
+}
+
 .wf-node-port-label[data-side="right"] {
   left: calc(100% + 10px);
   transform: translateY(-50%);

@@ -829,7 +829,7 @@ public sealed partial class CanonicalRuntimeInputBindingResolverTests
                     new ValueTypeDescriptor("test/result"),
                     JsonSerializer.SerializeToElement(new { customerId = "customer-7" }),
                     ValueProtectionPolicy.InstanceInline),
-                "Done",
+                Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"),
                 completedAt,
                 "contract"),
             CompletedAt = completedAt

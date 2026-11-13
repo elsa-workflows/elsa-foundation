@@ -388,7 +388,8 @@ describe("buildExecutableInspectorCanvas", () => {
       ariaLabel: "Connection from Write Line (write-line-1), True output, to Write Line (write-line-2). Not selected.",
       domAttributes: { "aria-pressed": false }
     });
-    expect(canvas.edges[0].data).toBeUndefined();
+    // Routing vertices stay ignored; "True" is not among the node's outcomes, so the connection is kept and flagged (spec 1208 FR-013).
+    expect(canvas.edges[0].data).toEqual({ missingPort: true });
   });
 
   it("treats a null connections projection as no flowchart edges", () => {

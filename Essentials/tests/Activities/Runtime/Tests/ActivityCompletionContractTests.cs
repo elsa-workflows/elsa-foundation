@@ -25,7 +25,7 @@ public sealed class ActivityCompletionContractTests
             ActivityTransition.Complete(new ChargeResult("receipt-1", true), "Charged"),
             DateTimeOffset.UtcNow);
 
-        Assert.Equal("Charged", projected.Completion.OutcomeKey);
+        Assert.Equal(new[] { "Charged" }, projected.Completion.OutcomeNames);
         Assert.Equal(ResultType, projected.Completion.Result.Type);
         Assert.Equal("receipt-1", projected.Projections["receipt-id"].InlineValue!.Value.GetString());
         Assert.True(projected.Projections["approved"].InlineValue!.Value.GetBoolean());

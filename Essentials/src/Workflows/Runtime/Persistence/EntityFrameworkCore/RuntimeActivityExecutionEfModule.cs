@@ -7,9 +7,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 /// </summary>
 public static class RuntimeActivityExecutionEfModule
 {
-    /// <summary>2.0.0: the activity completion carries an outcome selection instead of one outcome key (spec 1208);
-    /// 1.0.0 rows are read through <see cref="RuntimeActivityExecutionV1Upcaster"/>.</summary>
-    public const string SchemaVersion = "2.0.0";
+    public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeActivityExecution";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
     /// upcasts through.</summary>

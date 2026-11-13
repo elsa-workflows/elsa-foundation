@@ -409,12 +409,12 @@ public sealed class ClrAssemblyScanner(
             return null;
 
         // Absent means the attribute's default catch-all; an explicit null declares none (a RunJavaScript, spec 1208).
-        var unmatchedArgument = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome));
-        var unmatched = unmatchedArgument.MemberName is null
-            ? "Unmatched"
-            : unmatchedArgument.TypedValue.Value as string;
-        var selectsArgument = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == nameof(ActivityValueOutcomesAttribute.SelectsOnEveryCompletion));
-        var selectsOnEveryCompletion = selectsArgument.MemberName is null || selectsArgument.TypedValue.Value is true;
+        // A default CustomAttributeNamedArgument has no member, so look the arguments up by name instead of FirstOrDefault.
+        var named = attribute.NamedArguments.ToDictionary(argument => argument.MemberName, argument => argument.TypedValue.Value, StringComparer.Ordinal);
+        var unmatched = named.TryGetValue(nameof(ActivityValueOutcomesAttribute.UnmatchedOutcome), out var unmatchedValue)
+            ? unmatchedValue as string
+            : "Unmatched";
+        var selectsOnEveryCompletion = !named.TryGetValue(nameof(ActivityValueOutcomesAttribute.SelectsOnEveryCompletion), out var selects) || selects is true;
         var descriptor = new Dictionary<string, object>
         {
             ["kind"] = "valuePerItem",

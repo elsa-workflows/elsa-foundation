@@ -125,9 +125,6 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>ExecuteWorkflow becomes a durable dispatch instead of an in-process call.</summary>
     public const string ExecuteWorkflowDurable = "ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE";
 
-    /// <summary>RunJavaScript.PossibleOutcomes: routing is by return value.</summary>
-    public const string ScriptOutcomeRouting = "ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING";
-
     /// <summary>
     /// A null member of an alias or a verbatim catalog key gets the Elsa 4 input's default; Elsa 3 ran it with its own
     /// activity's default, which the conversion cannot see (#3293).

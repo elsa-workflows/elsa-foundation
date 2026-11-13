@@ -139,7 +139,7 @@ public sealed class ImportedReusableRunsTests(ImportedApprovalFixture fixture) :
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal(outcome, activity.Completion?.OutcomeKey);
+        Assert.Equal(new[] { outcome }, activity.Completion?.OutcomeNames);
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public sealed class ImportedReusableValueReadTests
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
-        Assert.Equal(outcome, activity.Completion?.OutcomeKey);
+        Assert.Equal(new[] { outcome }, activity.Completion?.OutcomeNames);
     }
 
     [Fact]

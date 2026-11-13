@@ -26,7 +26,7 @@ public sealed class FlowchartActivityTests : IDisposable
         var continuation = await ExecuteAsync(context);
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
         Assert.Empty(context.GetChildActivityScheduleRequests());
     }
 
@@ -141,7 +141,7 @@ public sealed class FlowchartActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Done, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Done }, continuation.OutcomeNames);
     }
 
     [Fact]
