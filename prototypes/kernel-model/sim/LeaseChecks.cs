@@ -230,6 +230,7 @@ public static class LeaseChecks
 // Delay a successful commit's response, after the inner store has actually committed.
 public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
 {
+    public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool DelayNext, DelayTake;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource TakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);

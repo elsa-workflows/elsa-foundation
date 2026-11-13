@@ -120,6 +120,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public IEnumerable<string> Callers => _slots.Values.SelectMany(s => s.Replies);
     private long _used;
 
+    public bool CommitClockAvailable => _store.CommitClockAvailable;
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
 
@@ -147,6 +148,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>Test observation of a completed job result, after it has been placed in the instance inbox.</summary>
     public bool JobResultReady(string instance, string key) => _slots.TryGetValue(instance, out var slot)
         && slot.Inbox.Exists(i => !i.Taken && i.Message.Kind == Kinds.JobFinished && i.Message.Id == TicketId(instance, key));
+
+    /// <summary>
+    /// Diagnostic: capture before a ticket is removed. The task ends after its driver queues or discards the result;
+    /// it does not establish that a model consumed the result or committed a logical job outcome.
+    /// </summary>
+    public Task? JobCompletion(string instance, string key) =>
+        _items.GetValueOrDefault(TicketId(instance, key)) is { } ticket
+            && ticket.Message.Target.Id == instance && ticket.Key == key ? ticket.JobDriver : null;
 
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
@@ -551,7 +560,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // Callers finish their current collection operation before standing down, so a refused ticket is never stranded.
         if (!CanStartWork || ticket.Cancel is not null || ticket.Taken || Awaits(ticket) || Blocked || (_trial.Count > 0 && !_trial.Contains(ticket))) return;
         ticket.Cancel = new CancellationTokenSource();
-        _ = DriveJob(ticket, ticket.Message.Read<JobTicket>());
+        ticket.JobDriver = DriveJob(ticket, ticket.Message.Read<JobTicket>());
     }
 
     private bool JobMayRun(long generation)
@@ -689,7 +698,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var sending = DbNow;
             var started = _options.Monotonic();
             Committed result;
-            try { result = await _store.CommitAsync(batch, cancellationToken); }
+            try
+            {
+                if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
+                result = await _store.CommitAsync(batch, cancellationToken);
+            }
             catch (StoreException e) when (e.Failure != Failure.Unknown)
             {
                 if (generation != _generation) return Outcome.Lost;
@@ -719,6 +732,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var seqs = new Queue<long>(result.Seqs);
             foreach (var unit in units)
             {
+                if (unit.Row is { } row) unit.Row = CommitClockFacts.Stamp(row, result.Now);
                 Apply(unit, seqs, handOver);
                 if (!LeaseUsable()) return Outcome.Lost;
             }

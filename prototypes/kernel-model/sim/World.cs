@@ -90,6 +90,7 @@ public sealed class Actor(int id, int node, int partition)
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
         if (world.Auto)
@@ -208,8 +209,10 @@ public sealed partial class World
     }
     public Action<string>? Log;
 
-    public World(Config config)
+    private readonly Func<int, IExecutionModel>? _extraModel;
+    public World(Config config, Func<int, IExecutionModel>? extraModel = null)
     {
+        _extraModel = extraModel;
         Config = config;
         Native = new NativeOracle(config.Partitions);
         Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { Refuses = row => row.State.Contains(Fragile.Sour) };
@@ -265,6 +268,7 @@ public sealed partial class World
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
             new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
+            .. _extraModel is null ? Array.Empty<IExecutionModel>() : new[] { _extraModel(node) },
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, new WorkflowInstance(models), new WorkerOptions
