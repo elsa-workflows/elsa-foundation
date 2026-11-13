@@ -16,8 +16,10 @@ export interface NativePropertyIntent extends NativeModeledIntent {
   readonly attribute?: string;
   readonly body?: boolean;
   readonly kinds: readonly string[];
-  readonly references: readonly (NativeModeledIntent & { readonly id: string })[];
+  readonly references: readonly { readonly id: string; readonly kind: string; readonly payload?: NativeModeledIntent }[];
 }
+class ReferenceAdmissionError extends Error {}
+const referenceRefuse = (message: string): never => { throw new ReferenceAdmissionError(`Cannot reconcile native BPMN edit: ${message}.`); };
 const standard = new Set(["bpmn", "bpmndi", "dc", "di"]);
 const primitive = new Set(["String", "Boolean", "Integer", "Real"]);
 const kind = (element: Element) => `${element.namespaceURI}|${element.localName}`;
@@ -72,7 +74,7 @@ export function captureNativePropertyIntents(ownerValue: unknown, properties: Re
     const property = owner.$descriptor.propertiesByName[name];
     if (!property || property.isVirtual) nativeRefuse(`property '${name}' has no qualified modeled intent contract`);
     if (property.isAttr && !property.isReference && (value == null || typeof value !== "object")) continue;
-    const references = new Map<string, NativeModeledIntent>(), seen = new Set<Modeled>();
+    const references = new Map<string, { id: string; kind: string; payload?: NativeModeledIntent }>(), referenceObjects = new Map<string, Modeled>(), seen = new Set<Modeled>();
     const inspect = (elementValue: unknown) => {
       const element = modeled(elementValue);
       if (seen.has(element)) return;
@@ -99,22 +101,29 @@ export function captureNativePropertyIntents(ownerValue: unknown, properties: Re
         } else if (primitive.has(field.type)) {
           if (typeof member !== (field.type === "String" ? "string" : field.type === "Boolean" ? "boolean" : "number")) nativeRefuse("modeled property intent has an incompatible scalar type");
         } else {
-          const child = modeled(member);
-          if (!child.$descriptor.allTypesByName[field.type]) nativeRefuse("modeled property intent has an incompatible child type");
-          inspect(child);
+          let child: Modeled;
+          try { child = modeled(member); }
+          catch (error) { if (field.isReference) referenceRefuse("reference intent has no qualified modeled identity/type"); throw error; }
+          if (!child.$descriptor.allTypesByName[field.type]) (field.isReference ? referenceRefuse : nativeRefuse)("modeled property intent has an incompatible child type");
           if (field.isReference) {
-            if (typeof child.id !== "string" || !child.id) nativeRefuse("reference intent has no modeled identity");
-            const snapshot = write(child), existing = references.get(child.id);
-            if (existing && JSON.stringify(existing) !== JSON.stringify(snapshot)) nativeRefuse("reference intent has conflicting modeled identities");
-            references.set(child.id, snapshot);
-          }
+            if (typeof child.id !== "string" || !child.id) referenceRefuse("reference intent has no modeled identity");
+            const id = child.id as string, existing = referenceObjects.get(id);
+            if (existing && existing !== child) referenceRefuse("reference intent has conflicting modeled identities");
+            if (existing) continue;
+            referenceObjects.set(id, child);
+            const admission = { id, kind: kind(nativeIntentElement(write(child, { id }))), payload: undefined as NativeModeledIntent | undefined };
+            references.set(id, admission);
+            // Selection owns identity/type. Only admission of a new ID later requires this payload.
+            try { inspect(child); admission.payload = write(child); }
+            catch (error) { if (error instanceof ReferenceAdmissionError) throw error; }
+          } else inspect(child);
         }
       }
     };
     check(owner, property, value);
     result.push(Object.freeze({ name, ...write(owner, { [name]: value }), kinds: propertyKinds(owner, property),
       ...(property.isAttr ? { attribute: property.ns.localName } : {}), ...(property.isBody ? { body: true } : {}),
-      references: Object.freeze([...references].map(([id, snapshot]) => Object.freeze({ id, ...snapshot }))) }));
+      references: Object.freeze([...references.values()].map(reference => Object.freeze(reference))) }));
   }
   return Object.freeze(result);
 }
@@ -171,9 +180,10 @@ export function assertNativePropertyIntents(intents: readonly NativePropertyInte
       : intent.body ? expected.textContent === owner.textContent
         : [...expected.children].map(signature).join() === [...owner.children].filter(child => intent.kinds.includes(kind(child))).map(signature).join();
     if (!same) nativeRefuse(`modeled property '${intent.name}' differs from completed command intent`);
-    for (const reference of intent.references) if (!oldIndex.has(reference.id)) {
-      const actual = newIndex.get(reference.id);
-      if (!actual || signature(nativeIntentElement(reference)) !== signature(actual)) nativeRefuse("new referenced global differs from completed command intent");
+    for (const reference of intent.references) {
+      const actual = newIndex.get(reference.id), previous = oldIndex.get(reference.id);
+      if (!actual || kind(actual) !== reference.kind || previous && kind(previous) !== reference.kind) nativeRefuse("referenced identity/type differs from completed command intent");
+      if (!previous && (!reference.payload || signature(nativeIntentElement(reference.payload)) !== signature(actual))) nativeRefuse("new referenced global needs its qualified captured payload and exact command intent");
     }
   }
 }

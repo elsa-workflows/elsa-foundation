@@ -110,7 +110,7 @@ export function contextualizeNativeNamespacePair(authoring: BpmnDocumentAuthorin
       [...source.children].forEach((child, index) => { if (children[index]) bindIntent(child, children[index], contexts); });
       for (const reference of intent.references) {
         const element = [...next.getElementsByTagName("*")].find(element => element.getAttribute("id") === reference.id);
-        if (element && !old.has(`id:${reference.id}`)) { const source = nativeIntentElement(reference); bindIntent(source, element, captureNativeNamespaceContexts(source.ownerDocument)); }
+        if (element && reference.payload && !old.has(`id:${reference.id}`)) { const source = nativeIntentElement(reference.payload); bindIntent(source, element, captureNativeNamespaceContexts(source.ownerDocument)); }
       }
     }
   }

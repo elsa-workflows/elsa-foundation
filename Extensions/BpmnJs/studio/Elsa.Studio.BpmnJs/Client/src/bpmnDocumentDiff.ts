@@ -93,17 +93,19 @@ export function diffBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, bas
     const [prefix, local] = value.split(":");
     return element.lookupNamespaceURI(prefix) === element.ownerDocument.documentElement.getAttribute("targetNamespace") ? local : undefined;
   };
-  const groupLabels = new Map<string, string>();
+  const groupLabels = new Map<string, string | null>();
   for (const action of group.actions) if (action.command === "element.updateLabel") {
-    if (typeof action.newLabel !== "string") nativeRefuse("label command has no captured text intent");
+    if (action.newLabel !== null && typeof action.newLabel !== "string") nativeRefuse("label command has no captured text intent");
     const element = newIndex.get(action.elementId ?? "");
-    if (element?.localName === "textAnnotation" && nativeChildren(element, ns.model, "text").map(child => child.textContent ?? "").join("") !== action.newLabel)
-      nativeRefuse("annotation label differs from completed command intent");
+    if (element?.localName === "textAnnotation") {
+      const text = nativeChildren(element, ns.model, "text");
+      if (action.newLabel === null ? text.length !== 0 : text.length !== 1 || text[0].textContent !== action.newLabel) nativeRefuse("annotation label differs from completed command intent");
+    }
     if (element?.localName === "group") {
       const category = reference(element, element.getAttribute("categoryValueRef") ?? "");
       if (!category || newIndex.get(category)?.getAttribute("value") !== action.newLabel) nativeRefuse("group category label differs from completed command intent");
       targets.add(category); groupLabels.set(category, action.newLabel);
-    } else if (element?.localName !== "textAnnotation" && (element?.getAttribute("name") ?? "") !== action.newLabel) nativeRefuse("label differs from completed command intent");
+    } else if (element?.localName !== "textAnnotation" && element?.getAttribute("name") !== action.newLabel) nativeRefuse("label differs from completed command intent");
   }
   const references = (element: Element): string[] => [...element.attributes].flatMap(attribute =>
     !attribute.namespaceURI && (attribute.localName.endsWith("Ref") || ["default", "bpmnElement"].includes(attribute.localName))

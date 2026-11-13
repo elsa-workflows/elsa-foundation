@@ -5,6 +5,7 @@ import CommandStack from "diagram-js/lib/command/CommandStack";
 import UpdateModdlePropertiesHandler from "bpmn-js/lib/features/modeling/cmd/UpdateModdlePropertiesHandler";
 import { collectBpmnNativeCommandGroups, mapBpmnNativeCommandGroup, type NativeCommandEvents, type NativeCommandGroup } from "../bpmnDocumentCommands";
 import { authoring, modeled, owner, rawXml } from "./bpmnDocumentFixture";
+import { captureNativePropertyIntents } from "../bpmnDocumentIntent";
 
 async function commands(source = owner()) {
   const native = await modeled(source), events = new EventBus();
@@ -83,6 +84,40 @@ describe("pinned modeled property intent snapshots", () => {
       expect(candidate.byId.get("new-message")!.getAttribute("name")).toBe("Expected");
       message.name = "Unexpected";
       await expect(h.map(group)).rejects.toThrow("new referenced global");
+    } finally { h.detach(); }
+  });
+
+  it.each([false, true])("admits an existing opaque global, but requires a qualified new payload (new=%s)", async introduced => {
+    const source = owner(rawXml.replace('id="message" name="Message"', 'id="message" name="Message" xml:lang="en"'));
+    const h = await commands(source);
+    try {
+      const message = introduced ? h.moddle.create("bpmn:Message", { id: "new-message", name: "New" }) : h.definitions.rootElements.find((element: { id: string }) => element.id === "message");
+      if (introduced) { message.$attrs["xml:lang"] = "en"; h.definitions.rootElements.push(message); }
+      const group = h.execute(h.end, h.end, { eventDefinitions: [h.moddle.create("bpmn:MessageEventDefinition", { messageRef: message })] });
+      if (introduced) await expect(h.map(group)).rejects.toThrow(/new referenced global|payload/);
+      else {
+        const candidate = authoring.readBpmnDocument(authoring.applyBpmnDocumentCommands(source, await h.map(group)));
+        expect(candidate.byId.get("message")!.getAttributeNS("http://www.w3.org/XML/1998/namespace", "lang")).toBe("en");
+        const wrong = { ...group, actions: group.actions.map(action => ({ ...action, propertyIntents: action.propertyIntents?.map(intent => ({ ...intent, references: intent.references.map(reference => ({ ...reference, kind: `${authoring.bpmnNamespaces.model}|signal` })) })) })) };
+        await expect(h.map(wrong)).rejects.toThrow(/reference.*type|identity/);
+        message.name = "Unrequested";
+        await expect(h.map(group)).rejects.toThrow(/unaccounted|referenced global/);
+        const collision = h.execute(h.end, h.end, { eventDefinitions: [h.moddle.create("bpmn:SignalEventDefinition", { signalRef: h.moddle.create("bpmn:Signal", { id: "message" }) })] });
+        await expect(h.map(collision)).rejects.toThrow(/reference.*type|identity/);
+      }
+    } finally { h.detach(); }
+  });
+
+  it("bounds cyclic reference payload capture and refuses duplicate identities inside it", async () => {
+    const h = await commands();
+    try {
+      const process = h.moddle.create("bpmn:Process", { id: "cycle" }), participant = h.moddle.create("bpmn:Participant"); process.supports = [process];
+      const intent = captureNativePropertyIntents(participant, { processRef: process })[0];
+      expect(intent.references).toHaveLength(1); expect(intent.references[0].payload!.xml).toContain("cycle");
+      process.supports.push(h.moddle.create("bpmn:Process", { id: "cycle" }));
+      expect(() => captureNativePropertyIntents(participant, { processRef: process })).toThrow("conflicting modeled identities");
+      process.supports = [{}];
+      expect(() => captureNativePropertyIntents(participant, { processRef: process })).toThrow("identity/type");
     } finally { h.detach(); }
   });
 

@@ -17,7 +17,7 @@ export interface NativeCommandAction {
   readonly parentId?: string;
   readonly properties?: Readonly<Record<string, unknown>>;
   readonly propertyIntents?: readonly NativePropertyIntent[];
-  readonly newLabel?: string;
+  readonly newLabel?: string | null;
   readonly oldElementId?: string;
   readonly newElementId?: string;
   readonly elementIds?: readonly string[];
@@ -47,7 +47,7 @@ function snapshotAction(command: string, context: Record<string, unknown>): Nati
   const di = record(target?.di);
   const properties = record(context.properties);
   const propertyIntents = properties && captureNativePropertyIntents(context.moddleElement ?? target?.businessObject, properties);
-  if (command === "element.updateLabel" && context.newLabel != null && typeof context.newLabel !== "string") nativeRefuse("label command has no qualified text intent");
+  if (command === "element.updateLabel" && context.newLabel !== null && typeof context.newLabel !== "string") nativeRefuse("label command has no qualified text intent");
   const relatedIds = new Set<string>();
   const references = (value: unknown, seen = new Set<unknown>()) => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
@@ -97,7 +97,7 @@ function snapshotAction(command: string, context: Record<string, unknown>): Nati
     ...(moddle ? { moddleOwnerId: id(moddle), ...(moddleDocumentRoot ? { moddleDocumentRoot: true } : {}) } : {}),
     ...(moddlePath.length ? { moddlePath: Object.freeze(moddlePath) } : {}),
     ...(properties ? { properties: Object.freeze(Object.fromEntries(Object.entries(structuredClone(copied!)).map(([name, value]) => [name, value && typeof value === "object" ? Object.freeze(value) : value]))), propertyNames: Object.freeze(Object.keys(properties)), propertyIntents } : {}),
-    ...(relatedIds.size ? { relatedIds: Object.freeze([...relatedIds]) } : {}), ...(command === "element.updateLabel" ? { newLabel: context.newLabel as string ?? "" } : {}) });
+    ...(relatedIds.size ? { relatedIds: Object.freeze([...relatedIds]) } : {}), ...(command === "element.updateLabel" ? { newLabel: context.newLabel as string | null } : {}) });
 }
 
 /** Contexts copy at the complete group boundary. Teardown belongs to clean controller retirement, not fallible view detachment. */
@@ -321,7 +321,7 @@ function mapBoundedBpmnNativeCommandGroup(authoring: BpmnDocumentAuthoring, base
   for (const action of group.actions) {
     switch (action.command) {
       case "element.updateLabel": {
-        if (typeof action.newLabel !== "string") nativeRefuse("label command has no text");
+        if (action.newLabel !== null && typeof action.newLabel !== "string") nativeRefuse("label command has no captured text intent");
         const [target] = pair(action.elementId);
         if (target.localName === "textAnnotation" || target.localName === "group") nativeRefuse("this label needs its own typed source text/category command");
         attribute(action.elementId, "name", action.newLabel);
