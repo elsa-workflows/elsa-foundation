@@ -94,11 +94,17 @@ def signal_owned_group(process, signal_number):
         # Only tolerate this when no living process owned by us remains in that group.
         if process.poll() is None:
             raise
-        members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
-        if any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
-               and int(parts[1]) == process.pid and not parts[2].startswith('Z')
-               for line in members.splitlines()):
-            raise
+        # A reaped leader can leave a member visible for a brief exit transition.
+        # Permit only bounded quiescence; a live owned member still fails cleanup.
+        for attempt in range(10):
+            members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
+            if not any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
+                       and int(parts[1]) == process.pid and not parts[2].startswith('Z')
+                       for line in members.splitlines()):
+                return
+            if attempt < 9:
+                time.sleep(0.05)
+        raise
 
 
 def stop_group(process, *, graceful_timeout=15):
