@@ -348,6 +348,31 @@ describe("workflow run workbench incident navigation", () => {
     }
   });
 
+  it("keeps timeline selection visible and opens the selected occurrence only when Activity is chosen", async () => {
+    const first = activityExecution();
+    const second = { ...first, activityExecutionId: "execution-second", scheduledAt: "2026-10-01T12:01:00Z" };
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [first, second], incidents: [] }));
+    renderWorkbench("timeline");
+
+    await vi.waitFor(() => expect(container.querySelectorAll(".wf-timeline-entry")).toHaveLength(2));
+    const entries = container.querySelectorAll<HTMLButtonElement>(".wf-timeline-entry");
+    click(entries[0]);
+    await vi.waitFor(() => expect(entries[0]?.getAttribute("data-selected")).toBe("true"));
+    expect(container.querySelector("[data-tab-id='timeline']")?.getAttribute("aria-selected")).toBe("true");
+    expect(entries[0]?.isConnected).toBe(true);
+
+    click(entries[1]);
+    await vi.waitFor(() => expect(entries[1]?.getAttribute("data-selected")).toBe("true"));
+    expect(entries[0]?.getAttribute("data-selected")).toBe("false");
+    expect(container.querySelector("[data-tab-id='timeline']")?.getAttribute("aria-selected")).toBe("true");
+
+    click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
+    await vi.waitFor(() => expect(container.textContent).toContain(second.activityExecutionId));
+    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+    click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
+    expect(container.querySelectorAll(".wf-timeline-entry")[1]?.getAttribute("data-selected")).toBe("true");
+  });
+
   it("uses the pinned Sequence canvas without authoring controls", async () => {
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
     designApi.getDefinition.mockResolvedValue({
@@ -732,6 +757,7 @@ describe("workflow run workbench incident navigation", () => {
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
     click(container.querySelector<HTMLButtonElement>(".wf-timeline-entry"));
+    click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.textContent).toContain("execution-healthy"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
@@ -774,6 +800,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("RefreshedFailure"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
     click(container.querySelector<HTMLButtonElement>(".wf-timeline-entry"));
+    click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
 
@@ -845,6 +872,7 @@ describe("workflow run workbench incident navigation", () => {
     const timelineEntries = container.querySelectorAll<HTMLButtonElement>(".wf-timeline-entry");
     expect(timelineEntries).toHaveLength(lastIndex + 1);
     click(timelineEntries[lastIndex]);
+    click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.textContent).toContain(executionId(lastIndex)));
 

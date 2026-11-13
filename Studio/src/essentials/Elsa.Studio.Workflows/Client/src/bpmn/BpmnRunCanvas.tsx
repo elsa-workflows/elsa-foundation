@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { Background, Controls, ReactFlow } from "@xyflow/react";
+import { Background, ReactFlow } from "@xyflow/react";
 import type { BpmnInspection } from "../api/bpmnRuntime";
 import type { ActivityNode } from "../workflowTypes";
 import { buildBpmnCanvas } from "./bpmnAdapter";
 import { bpmnElementTypeLabel, bpmnStructureKind, isEventElementType, isGatewayElementType, isTaskElementType } from "./bpmnTypes";
 import { nodeTypes, edgeTypes } from "../workflow-editor/graph";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "../workflow-editor/useReadOnlyFlowCanvas";
+import { ReadOnlyFlowControls } from "../workflow-editor/ReadOnlyFlowControls";
 import { workflowCanvasAriaLabelConfig } from "../workflow-editor/workflowAccessibility";
 import { layoutFromBpmnDiagram } from "../api/bpmnInterchange";
 
@@ -41,7 +42,7 @@ export function BpmnRunCanvas({ inspection, selectedElement, onSelect }: { inspe
       nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false} deleteKeyCode={null}
       onNodeClick={(_, node) => onSelect(node.id)} onNodeDragStart={undefined} minZoom={0.2} maxZoom={1.8}
       ariaLabelConfig={workflowCanvasAriaLabelConfig}>
-      <Background gap={18} size={1} /><Controls showInteractive={false} /><FitReadOnlyFlowView nodeCount={flowNodes.length} />
+      <Background gap={18} size={1} /><ReadOnlyFlowControls nodeCount={flowNodes.length} miniMap={false} showInteractive={false} /><FitReadOnlyFlowView nodeCount={flowNodes.length} miniMap={false} />
     </ReactFlow>
   </div>;
 }

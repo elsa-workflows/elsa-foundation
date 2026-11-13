@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -58,7 +59,7 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
         <div className="wf-dialog-heading"><div><h3 id={titleId}>Rename folder</h3><p>The folder keeps its existing identity and contents.</p></div></div>
         <div className="wf-folder-mutation-content">
           {error ? <p className="wf-dialog-error" role="alert">{error} <button type="button" disabled={busy} onClick={() => void reload()}>Reload folder</button></p> : null}
-          <label className="wf-form-field"><span>Name</span><input aria-label="Folder name" value={name} onChange={event => setName(event.target.value)} disabled={busy} /></label>
+          <StudioField className="wf-form-field" label={<><span>Name</span></>}><input aria-label="Folder name" value={name} onChange={event => setName(event.target.value)} disabled={busy} /></StudioField>
         </div>
         <div className="wf-dialog-actions"><button type="button" onClick={() => onClose()} disabled={busy}>Cancel</button><button type="submit" disabled={busy || !name.trim()}>{busy ? "Renaming…" : "Rename"}</button></div>
       </form>
