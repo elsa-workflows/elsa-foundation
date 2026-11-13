@@ -1,0 +1,40 @@
+{
+  "html": {
+    "walkthrough.html": "5c02550e1e8aecc6f28958638a2c25bfecb9e2b4d6c9d06c842f6a9a497ec78a",
+    "kernel-in-motion.html": "f2ee085fe9f9d8a392b1c517962f584041c4bfee3f003ab987696cb1a2bf6785"
+  },
+  "cases": [
+    {
+      "width": 390,
+      "colorScheme": "light",
+      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "motionCase": "B takes first",
+      "back": true,
+      "errors": []
+    },
+    {
+      "width": 390,
+      "colorScheme": "dark",
+      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "motionCase": "B takes first",
+      "back": true,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "colorScheme": "light",
+      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "motionCase": "B takes first",
+      "back": true,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "colorScheme": "dark",
+      "order": "batch fence at 6, subscription at 7; checked fence first",
+      "motionCase": "B takes first",
+      "back": true,
+      "errors": []
+    }
+  ]
+}
