@@ -228,7 +228,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       expect(records.rows).toHaveLength(4);
       expect(new Set(records.rows.map(row => row.values.executionId.value))).toEqual(new Set(seeded.executionIds));
       await capture(page, info, "question-records");
-      const dashboardNavigation = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
+      const dashboardNavigation = page.getByRole("navigation", { name: "Operate", exact: true }).getByRole("link", { name: "Dashboards", exact: true });
       async function revealDashboardNavigation() {
         if (!await dashboardNavigation.isVisible()) await page.getByRole("button", { name: "Operate", exact: true }).click();
         await expect(dashboardNavigation).toBeVisible();
