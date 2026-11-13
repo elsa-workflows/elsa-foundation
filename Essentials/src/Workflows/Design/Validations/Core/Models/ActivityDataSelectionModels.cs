@@ -40,13 +40,35 @@ public sealed record ActivityDataSelectionTarget(string NodeId, string InputKey)
 /// <remarks>Source is an existing canonical role binding. It is re-resolved, not trusted as metadata.</remarks>
 public sealed record ActivityDataSelectionQuery
 {
+    private readonly ImmutableArray<string> _memberPath = [];
+
+    public ActivityDataSelectionQuery() { }
+
+    /// <summary>Preserves optional query defaults in source-generated JSON readers of this immutable model.</summary>
+    [JsonConstructor]
+    public ActivityDataSelectionQuery(bool includeSources = true, string? search = null, int skip = 0, int take = 100,
+        ArgumentValue? source = null, ActivitySerializedShapeLimits? shapeLimits = null)
+    {
+        IncludeSources = includeSources;
+        Search = search;
+        Skip = skip;
+        Take = take;
+        Source = source;
+        ShapeLimits = shapeLimits ?? new();
+    }
+
     /// <summary>False resolves only the actual target and restrictions, before any source metadata is acquired.</summary>
     public bool IncludeSources { get; init; } = true;
     public string? Search { get; init; }
     public int Skip { get; init; }
     public int Take { get; init; } = 100;
     public ArgumentValue? Source { get; init; }
-    public ImmutableArray<string> MemberPath { get; init; } = [];
+    /// <summary>An omitted path selects the whole value; generated readers may supply the default array.</summary>
+    public ImmutableArray<string> MemberPath
+    {
+        get => _memberPath;
+        init => _memberPath = value.IsDefault ? [] : value;
+    }
     public ActivitySerializedShapeLimits ShapeLimits { get; init; } = new();
 }
 
@@ -89,6 +111,12 @@ public sealed record ActivityDataSelectionAnalysis(
     /// publication can pin the selected member's contract. A read the analysis could not type is listed as not known.
     /// </summary>
     public ImmutableArray<ActivityDataMemberReadFacts> MemberReads { get; init; } = [];
+
+    /// <summary>
+    /// Whether the analysis that produced this result offers and admits member reads. A client offers member
+    /// selection only when it is true; an answer that does not carry it reads as false.
+    /// </summary>
+    public bool MemberReadsEnabled { get; init; }
 }
 
 /// <summary>

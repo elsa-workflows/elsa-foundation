@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { type DragEvent, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import type {
@@ -184,7 +185,7 @@ function CollectionRepeater({
                     onDisclosureFallbackChange={onDisclosureFallbackChange}
                   />
                 ) : (
-                  <input type="text" value={item == null ? "" : String(item)} disabled={disabled} onChange={event => replaceAt(index, event.target.value)} />
+                  <StudioField label={`${label} item ${index + 1}`}><input type="text" value={item == null ? "" : String(item)} disabled={disabled} onChange={event => replaceAt(index, event.target.value)} /></StudioField>
                 )}
               </div>
               <div className="wf-collection-item-actions">

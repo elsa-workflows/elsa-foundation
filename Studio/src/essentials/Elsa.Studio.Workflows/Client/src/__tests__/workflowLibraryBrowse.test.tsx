@@ -230,6 +230,7 @@ describe("workflow library query boundaries", () => {
     await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("25"));
     await click(button(container, "Next")); await waitForText(container, "Tagged page 2");
     await click(button(container, "Next")); await waitForText(container, "Tagged page 3");
+    await waitForCondition(() => expect(button(container, "Favorites")).not.toBeNull());
     await click(button(container, "Favorites")); await waitForText(container, "Favorite page 1");
     if (!invalidate) {
       await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "50");
@@ -242,12 +243,15 @@ describe("workflow library query boundaries", () => {
     }
     const beforeBack = requests.length;
     window.history.back();
-    await waitForCondition(() => expect(requests.length).toBeGreaterThan(beforeBack));
-    const restored = requests.at(-1)!;
-    expect(restored.searchParams.get("pageSize")).toBe("25");
-    expect(restored.searchParams.get("continuationToken")).toBe(invalidate ? null : "tag-page-three");
-    expect(restored.searchParams.has("favoritesOnly")).toBe(false);
-    expect(JSON.parse(restored.searchParams.get("tagFilters")!)).toEqual([{ tagId: "critical", operator: "exists" }]);
+    await waitForCondition(() => {
+      expect(new URL(window.location.href).searchParams.has("favoritesOnly")).toBe(false);
+      expect(requests.length).toBeGreaterThan(beforeBack);
+      const restored = requests.at(-1)!;
+      expect(restored.searchParams.get("pageSize")).toBe("25");
+      expect(restored.searchParams.get("continuationToken")).toBe(invalidate ? null : "tag-page-three");
+      expect(restored.searchParams.has("favoritesOnly")).toBe(false);
+      expect(JSON.parse(restored.searchParams.get("tagFilters")!)).toEqual([{ tagId: "critical", operator: "exists" }]);
+    });
     await waitForText(container, `Tagged page ${invalidate ? 1 : 3}`);
   });
 

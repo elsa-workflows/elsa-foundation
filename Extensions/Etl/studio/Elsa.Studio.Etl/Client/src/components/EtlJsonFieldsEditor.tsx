@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import type { EtlColumnType, EtlHttpJsonSource, EtlHttpPagination, EtlJsonField, EtlJsonlSource, EtlRabbitMqSource } from "../etlTypes";
 
@@ -76,15 +77,15 @@ function EtlHttpPageControls({ source, disabled, onChange }: {
           help="Select the array of records in each JSON response, for example /data/items."
           onChange={recordsPointer => onChange({ ...source, recordsPointer })}
         />
-        <div className="etl-editor-field">
-          <label htmlFor={`${id}-pagination`}>Pagination strategy</label>
+        <div className="etl-editor-field"><StudioField controlId={`${id}-pagination`} label="Pagination strategy">
+
           <select id={`${id}-pagination`} value={source.pagination.kind} disabled={disabled} onChange={event => selectPagination(event.currentTarget.value as EtlHttpPagination["kind"])}>
             <option value="singlePage">Single page</option>
             <option value="token">Continuation token in query</option>
             <option value="nextLink">Next link</option>
           </select>
           <small>Continuation values are read from the current page using a JSON Pointer.</small>
-        </div>
+        </StudioField></div>
       </div>
       {source.pagination.kind !== "singlePage" ? (
         <div className="etl-editor-binding-grid">
@@ -126,10 +127,10 @@ function TextField({ label, value, disabled, help, onChange }: {
 }) {
   const id = useId();
   return (
-    <div className="etl-editor-field">
-      <label htmlFor={id}>{label}</label>
+    <div className="etl-editor-field"><StudioField controlId={id} label={<>{label}</>}>
+
       <input id={id} type="text" value={value} disabled={disabled} aria-describedby={`${id}-help`} onChange={event => onChange(event.currentTarget.value)} />
       <small id={`${id}-help`}>{help}</small>
-    </div>
+    </StudioField></div>
   );
 }

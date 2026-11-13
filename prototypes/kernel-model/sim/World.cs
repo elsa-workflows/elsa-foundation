@@ -3,7 +3,7 @@ using Kernel.Native;
 namespace Kernel.Sim;
 
 // Native and NativeFlaws: native workflow instances in the mix (sim/NativeSim.cs), and the model broken on purpose.
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None);
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None);
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)

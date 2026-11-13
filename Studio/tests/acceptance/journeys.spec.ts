@@ -1,16 +1,24 @@
+import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
+import { executionNavigationJourney } from "./executionNavigationJourney";
+import { timelineSelectionJourney } from "./timelineSelectionJourney";
 import { writeFileSync } from "node:fs";
-import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
 import { userTasksJourney } from "./userTasksJourney";
 import { decisionsJourney } from "./decisionsJourney";
+import { settingsTabsJourney } from "./settingsTabsJourney";
+import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacementHolds } from "./toastPlacementControl";
 import { structuredLogsJourney } from "./structuredLogsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
+import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
+import { phoneContentJourney } from "./phoneContentJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
+  await assertToastPlacementHolds(page);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const screenshot = info.outputPath(`${name}.png`);
   await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
@@ -18,6 +26,16 @@ async function capture(page: Page, info: TestInfo, name: string) {
   const aria = info.outputPath(`${name}.aria.yml`);
   writeFileSync(aria, await page.locator("body").ariaSnapshot());
   await info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
+  await assertToastPlacementHolds(page);
+}
+
+async function expectToastBelowModal(toast: Locator, backdropSelector: string) {
+  await expect(toast).toBeVisible();
+  expect(await toast.evaluate((element, selector) => {
+    const bounds = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    return hit !== null && hit.closest(selector) !== null && hit.closest(".studio-toast") === null;
+  }, backdropSelector)).toBe(true);
 }
 
 async function signIn(page: Page) {
@@ -42,10 +60,16 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));
+
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
+test("settings tabs and preserved edits", async ({ page }, info) => settingsTabsJourney(page, info, capture));
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
+test("structured logs readability and recovery", async ({ page }, info) => structuredLogsReadabilityJourney(page, info, capture));
+test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
+  await releaseToastPlacementHolds(page);
   const creations = createdWorkflows.get(page) ?? [];
   const failures: Error[] = [];
   const outcomes: Array<{ id: string; url: string; status?: number; error?: string }> = [];
@@ -181,6 +205,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
   const search = page.getByRole("searchbox", { name: /search connections/i });
+  // The heading precedes the initial list/descriptor response; Enter cannot submit while Search is disabled.
   await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
   await search.fill(`absent-${stamp}`);
   await search.press("Enter");
@@ -206,6 +231,125 @@ test("collections and connection creation", async ({ page }, info) => {
   await secret.getByLabel("Value", { exact: true }).fill("disposable-acceptance-value");
   await secret.getByRole("button", { name: "Create", exact: true }).click();
   await expect(secret).toBeHidden();
+  await expect(page.locator(".studio-toast").filter({ hasText: "Secret created." })).toBeVisible();
+  const secretHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: "Secret created." }));
+  await expect(page.locator(".secrets-notification")).toHaveCount(0);
+  await capture(page, info, "secret-created-toast");
+  // Secrets uses the lowest first-party modal layer, so the shared toast must stay below it too.
+  const createdSecretRow = page.getByRole("row").filter({ hasText: secretName });
+  await createdSecretRow.getByRole("button", { name: `Actions for ${secretName}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: "Rotate", exact: true }).click();
+  const rotate = page.getByRole("dialog", { name: "Rotate secret", exact: true });
+  await expect(rotate).toBeVisible();
+  await expectToastBelowModal(page.locator(".studio-toast").filter({ hasText: "Secret created." }), ".secrets-modal");
+  await capture(page, info, "secret-dialog-over-toast");
+  await rotate.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(rotate).toBeHidden();
+
+  // Follow the shell navigation so notification history stays in the same mounted host session.
+  const moreTools = page.getByRole("button", { name: "More tools", exact: true });
+  if (await moreTools.getAttribute("aria-expanded") === "false") await moreTools.press("Enter");
+  await page.getByRole("link", { name: "Connections", exact: true }).press("Enter");
+  const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
+  await expect(openConnection).toBeEnabled();
+  await openConnection.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+  const name = dialog.getByLabel("Name", { exact: true });
+  await expect(name).toBeFocused();
+  await name.fill("invalid name");
+  await dialog.getByLabel("Auth scheme", { exact: true }).selectOption("api-key");
+  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(secretName);
+  await dialog.getByLabel("Base URL", { exact: true }).fill("https://example.invalid");
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await name.scrollIntoViewIfNeeded();
+  // Visibility alone cannot detect a toast painting over the dialog or intercepting its footer.
+  await expectToastBelowModal(page.locator(".studio-toast").filter({ hasText: "Secret created." }), ".connections-modal-backdrop");
+  await name.click();
+  await expect(name).toBeFocused();
+  await capture(page, info, "invalid-name");
+  await secretHold.release();
+  await name.fill(`qa-${stamp}`);
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` })).toBeVisible();
+  const connectionHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` }));
+  await expect(page.locator(".connections-notice")).toHaveCount(0);
+  const createdRow = page.getByRole("row").filter({ hasText: `qa-${stamp}` });
+  await expect(createdRow).toBeVisible();
+  const nameLink = createdRow.getByRole("button", { name: `qa-${stamp}`, exact: true });
+  // A table can stay inside the viewport while its flexible name column collapses to one character.
+  expect((await nameLink.boundingBox())!.width).toBeGreaterThan(100);
+  expect((await createdRow.boundingBox())!.height).toBeLessThan(160);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeFocused();
+  await capture(page, info, "completed");
+  // A toast must not obscure the primary action or the shell chrome. Keyboard focus alone
+  // cannot detect the pointer obstruction caused by the former top-right placement.
+  const toastHost = page.locator(".studio-toast-host");
+  await expect(toastHost).toBeVisible();
+  const assertToastPlacement = async () => expect.poll(() => openConnection.evaluate(button => {
+    const action = button.getBoundingClientRect();
+    const stack = document.querySelector(".studio-toast-host")!.getBoundingClientRect();
+    const dock = document.querySelector(".bottom-panel")!.getBoundingClientRect();
+    const header = document.querySelector(".topbar")!.getBoundingClientRect();
+    const hit = document.elementFromPoint(action.x + action.width / 2, action.y + action.height / 2);
+    return {
+      clickable: hit !== null && button.contains(hit),
+      overlapsAction: stack.left < action.right && stack.right > action.left && stack.top < action.bottom && stack.bottom > action.top,
+      aboveDock: stack.bottom <= dock.top - 10,
+      belowHeader: stack.top >= header.bottom,
+      withinViewport: stack.left >= 0 && stack.right <= innerWidth && stack.top >= 0
+    };
+  })).toEqual({ clickable: true, overlapsAction: false, aboveDock: true, belowHeader: true, withinViewport: true });
+  await assertToastPlacement();
+  await capture(page, info, "primary-action-with-toasts");
+  await page.getByRole("button", { name: "Expand bottom panel", exact: true }).click();
+  await assertToastPlacement();
+  await expect(page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` })).toBeVisible();
+  await capture(page, info, "toasts-above-expanded-dock");
+  await page.getByRole("button", { name: "Collapse bottom panel", exact: true }).click();
+  await assertToastPlacement();
+  await openConnection.click();
+  await expect(dialog).toBeVisible();
+  await expect(name).toBeFocused();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const confirmation = page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` });
+  await expect(page.locator('.studio-toast-live[aria-live="polite"]')).toContainText(`Connection 'qa-${stamp}' created.`);
+  await page.getByRole("button", { name: "Expand bottom panel", exact: true }).click();
+  await page.getByRole("button", { name: "Maximize bottom panel", exact: true }).click();
+  await expect(confirmation).toBeVisible();
+  await expect.poll(() => toastHost.evaluate(host => {
+    const stack = host.getBoundingClientRect();
+    const header = document.querySelector(".topbar")!.getBoundingClientRect();
+    return stack.top >= header.bottom && stack.bottom <= innerHeight && stack.left >= 0 && stack.right <= innerWidth;
+  })).toBe(true);
+  await capture(page, info, "toasts-over-maximized-dock");
+  await connectionHold.release();
+  while (await page.locator(".studio-toast").count()) {
+    await page.locator(".studio-toast").first().getByRole("button", { name: "Dismiss notification", exact: true }).press("Enter");
+  }
+  await expect(confirmation).toHaveCount(0);
+  const restoreDock = page.getByRole("button", { name: "Restore bottom panel", exact: true });
+  await expect(restoreDock).toBeFocused();
+  await restoreDock.press("Enter");
+  await page.getByRole("button", { name: "Collapse bottom panel", exact: true }).click();
+  await page.getByRole("button", { name: /^Notifications, \d+ unread$/ }).press("Enter");
+  const history = page.getByRole("dialog", { name: "Notifications", exact: true });
+  await expect(history).toBeVisible();
+  await expect(history).toContainText("Secret created.");
+  await expect(history).toContainText(`Connection 'qa-${stamp}' created.`);
+  await expect(page.locator(".studio-toast")).toHaveCount(0);
+  await capture(page, info, "notification-history");
+  await history.press("Escape");
+  await expect(history).toBeHidden();
+  await expect(page.getByRole("button", { name: /^Notifications, \d+ unread$/ })).toBeFocused();
+
+  // Verify transient toast behavior before reloading for persisted Secret casing.
+  await page.goto("/security/secrets");
   await page.reload();
   const secretRow = page.getByRole("row").filter({ hasText: secretName });
   await expect(secretRow).toBeVisible();
@@ -231,36 +375,6 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(secret).toBeHidden();
   await expect(page.getByRole("button", { name: "Create secret", exact: true }).first()).toBeFocused();
 
-  await page.goto("/security/connections");
-  const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
-  await expect(openConnection).toBeEnabled();
-  await openConnection.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
-  const name = dialog.getByLabel("Name", { exact: true });
-  await expect(name).toBeFocused();
-  await name.fill("invalid name");
-  await dialog.getByLabel("Auth scheme", { exact: true }).selectOption("api-key");
-  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(secretName);
-  await dialog.getByLabel("Base URL", { exact: true }).fill("https://example.invalid");
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
-  await expect(name).toHaveAttribute("aria-invalid", "true");
-  await name.scrollIntoViewIfNeeded();
-  await capture(page, info, "invalid-name");
-  await name.fill(`qa-${stamp}`);
-  await dialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("status").filter({ hasText: /^Connection / })).toContainText(`Connection 'qa-${stamp}' created.`);
-  const createdRow = page.getByRole("row").filter({ hasText: `qa-${stamp}` });
-  await expect(createdRow).toBeVisible();
-  const nameLink = createdRow.getByRole("button", { name: `qa-${stamp}`, exact: true });
-  // A table can stay inside the viewport while its flexible name column collapses to one character.
-  expect((await nameLink.boundingBox())!.width).toBeGreaterThan(100);
-  expect((await createdRow.boundingBox())!.height).toBeLessThan(160);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeFocused();
-  await capture(page, info, "completed");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("agent authoring and navigation", async ({ page }, info) => {
@@ -414,6 +528,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
   await capture(page, info, "completed");
 });
 
+
 test("save template toast", async ({ page }, info) => {
   await templateToastJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
@@ -537,4 +652,12 @@ test("tabbed Secrets authoring and metadata", async ({ page }, info) => {
 
 test("compact runtime Inputs retain exact captured values and accessible technical details", async ({ page }, info) => {
   await compactInputsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("execution navigation keeps keyboard focus and exact evidence", async ({ page }, info) => {
+  await executionNavigationJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("timeline selection retains its tab and exact occurrence", async ({ page }, info) => {
+  await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
