@@ -957,6 +957,23 @@ interfaces directly: it always creates its own scope and takes only the staged p
 - **Selection:** Hosts select the existing Runtime artifact persistence backend. No event fan-in, temporary container,
   startup task or separate read backend is introduced. Complete owner retention/source/import witnesses follow separately.
 
+
+Bounded retention uses the additional `IRuntimeBoundedSourceLeaseStore` capability and the
+scope/limits/authorization overload of `IWorkflowExecutableRootWriteLeaseManager.ExecuteFencedAsync`.
+The manager authorizes each newly discovered material before reading its body, bounds the complete
+native/model dependency graph, acquires and renews every exact physical root, then rereads the same
+pins/incarnations before invoking the retained callback. Leases remain live until that awaited callback
+finishes; normal deadline, cancellation and lost-grant rules still apply. This is a retention primitive,
+not authority to capture an unpublished root or a release-source adapter.
+
+The EF implementation admits the same explicit SQLite current-schema, uncompressed UTF-8 profile
+as the bounded readers. Acquisition preflights material, coordination and lease rows inside its owned
+snapshot; renewal preflights the lease row before string hydration. Captured scope and schema-write
+fences remain authoritative. Both built-in cache adapters explicitly forward bounded operations to the
+physical provider and bypass executable body caches. Arbitrary decorators and other providers gain
+no implicit capability; they must preserve all three qualified lease operations themselves. Runtime-only
+consumers gain no Publishing, Design or source-capture package dependency from these primitives.
+
 ### `WorkflowExecutableStoreDecorator` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Derivation base (pass-through decorator scaffold over `IWorkflowExecutableStore`).
 - **Signature:** data/lease/guard operations forward virtually to protected `Inner`; physical coordination stays opaque by default. A cooperating decorator explicitly implements `GetMaterialStore()`.
