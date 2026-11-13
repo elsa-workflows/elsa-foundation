@@ -89,6 +89,22 @@ describe("workspace tab strip", () => {
     expect(props.onActivate).toHaveBeenCalledWith("b");
   });
 
+  it("keeps the full name on title and the accessible name when the active tab is long", () => {
+    const title = "Picker-created policy narrow-dark-1731234567890";
+    render({
+      tabs: [
+        { id: "workflow", title: "Decision picker narrow-dark-1731234567890", icon: null, pinned: false, guarded: true },
+        { id: "policy", title, icon: null, pinned: false, guarded: false }
+      ],
+      activeId: "policy"
+    });
+    const active = tabButtons()[1];
+    expect(active.getAttribute("title")).toBe(title);
+    expect(active.getAttribute("aria-label")).toBe(title);
+    expect(container.querySelector('[data-active="true"] .studio-workspace-tab-title')?.textContent).toBe(title);
+    expect(container.querySelector('[data-active="true"] .studio-workspace-tab-close')).not.toBeNull();
+  });
+
   it("has no axe violations, including with a notice", async () => {
     render({ notice: "\"Order flow\" has unsaved changes or a save in progress." });
     const panels = tabs.map(tab => {
