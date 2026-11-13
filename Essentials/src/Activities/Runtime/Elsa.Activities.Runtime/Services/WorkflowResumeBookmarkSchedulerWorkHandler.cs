@@ -131,6 +131,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var bookmark = await ReadResumeStateAsync(() => bookmarkStateStore.FindAsync(workItem.WorkflowExecutionId, resumePayload.BookmarkId, cancellationToken), resumePayload, cancellationToken);
         var deliveryMetadata = ResolveTriggerDeliveryMetadata(workItem, resumePayload, state);
 
+        SavedResumeHistoryContext? savedResumeHistory = null;
         var hasClaimedResume = TryResolveClaimedResume(state, workItem, deliveryMetadata, out var claimedDelivery, out var claimedAttempt);
         if (!hasClaimedResume && resumePayload.ExpectedBookmarkResume is { } expected)
         {
@@ -156,6 +157,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             var execution = await ReadResumeStateAsync(() => executions.FindAsync(workItem.WorkflowExecutionId, cancellationToken), resumePayload, cancellationToken)
                 ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
             access.EnsureTenantScope(execution.TenantId);
+            savedResumeHistory = new(execution, access);
             var observedAt = _timeProvider.GetUtcNow();
             if (!expected.MatchesAdmission(observed, execution, state, access.RequireScope(), observedAt))
             {
@@ -219,7 +221,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
 
         var siblingBookmarks = await LoadOwnedSiblingBookmarksAsync(bookmarkStateStore, workItem, resumePayload, state, bookmark, cancellationToken);
-        await ResumeActivityAsync(serviceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, siblingBookmarks, executable, executableNode, state, triggerDelivery!, null, cancellationToken, historyPolicy);
+        await ResumeActivityAsync(serviceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, siblingBookmarks, executable, executableNode, state, triggerDelivery!, null, cancellationToken, historyPolicy, savedResumeHistory);
     }
 
     private static async ValueTask<T> ReadResumeStateAsync<T>(Func<ValueTask<T>> read, RuntimeResumeBookmarkCommandPayload payload, CancellationToken cancellationToken)
@@ -242,6 +244,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             (IsUnavailableRead(inner, cancellationToken) || inner is InvalidOperationException { InnerException: null });
     }
 
+    private sealed record SavedResumeHistoryContext(WorkflowExecutionState Execution, PersistenceAccessContext Access);
+
     private async ValueTask ResumeActivityAsync(
         IServiceProvider serviceProvider,
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -259,7 +263,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         ActivityTriggerDelivery triggerDelivery,
         ActivityAttempt? claimedAttempt,
-        CancellationToken cancellationToken, RuntimeHistoryCapturePolicy? historyPolicy)
+        CancellationToken cancellationToken, RuntimeHistoryCapturePolicy? historyPolicy, SavedResumeHistoryContext? savedResumeHistory = null)
     {
         ActivityAttempt? historyAttempt = null;
         var historyFacts = new List<RuntimeHistorySourceFact>();
@@ -302,7 +306,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             }
             catch (BookmarkResumeSupersededException) when (resumePayload.ExpectedBookmarkResume is not null)
             {
-                return; // The atomic admission lost; do not invoke a callback or consume a replacement wait.
+                // The authoritative claim rejected this saved recipient after the preliminary check. Record only
+                // that decision, without inferring which current wait/state won or manufacturing a consumption.
+                var saved = savedResumeHistory ?? throw new RuntimeSchedulerWorkUnavailableException(
+                    "runtime.history.capture-unavailable", "The saved resume's admission observation context is unavailable.");
+                await ActivityResumeHistoryObservations.UnmatchedAsync(serviceProvider, workItem, resumePayload,
+                    saved.Execution, saved.Access, _timeProvider.GetUtcNow(), "receiver-admission-superseded", cancellationToken);
+                return;
             }
             resumeAttempt = activationClaim.Attempt;
             executionState = activationClaim.State;
