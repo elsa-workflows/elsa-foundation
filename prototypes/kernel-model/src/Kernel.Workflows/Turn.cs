@@ -84,7 +84,8 @@ internal sealed class Turn : ITurn
         if (_status != InstanceStatus.Running || Has(Flaw.HoldLoses)) _durable.HoldNothing();     // nothing is held into an ended instance
         var row = new InstanceRow(Id, Instance.Model, _definition ?? Instance.Definition, _status, Json.Write(State), _durable.Revision, Instance.Parent, Jobs: _durable.Jobs(), History: history,
             Children: ChildRegistry.Write(_children), StateVersion: version, Creation: Instance.Creation,
-            StartIntent: _input.Row?.StartIntent ?? CreationProtocol.Fingerprint(_input.Spec), ParentCreation: _input.Row?.ParentCreation ?? _input.Spec?.ParentCreation ?? 0);
+            StartIntent: _input.Row?.StartIntent ?? CreationProtocol.Fingerprint(_input.Spec, _input.Taken[_input.From].Message.Kind, _input.Taken[_input.From].Message.Payload),
+            ParentCreation: _input.Row?.ParentCreation ?? _input.Spec?.ParentCreation ?? 0);
         if (_input.Row is { Status: not InstanceStatus.Running } ended)
             row = ended with { State = Json.Write(State), Revision = _durable.Revision, StateVersion = version };
         if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running } && row.Parent is not null) _durable.Add(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));

@@ -36,7 +36,7 @@ await JobCreationRace.Run();
 await BoundaryCases.Run();
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) new CreationWitness(mode, false).VisitIsolation();
 foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
-Console.WriteLine("33/33 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
+Console.WriteLine("35/35 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
 
 sealed partial class CreationWitness(string mode, bool nested)
 {

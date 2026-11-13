@@ -13,8 +13,8 @@ public static class CreationProtocol
     // Length-prefix the full physical address: neither user punctuation nor a different parent partition aliases it.
     public static string Origin(string actor, long creation) => creation > 0 ? FormattableString.Invariant($"c{actor.Length}_{actor}_{creation}") : actor;
 
-    public static string? Fingerprint(StartSpec? start) => start?.Creation is null ? null
-        : "v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Json.Write(start))));
+    public static string? Fingerprint(StartSpec? start, string kind = Kinds.Start, string? payload = null) => start?.Creation is null ? null
+        : "v1:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Json.Write(new { Start = start, Kind = kind, Payload = payload }))));
     public static void RejectUnsupported(CommitBatch batch)
     {
         if (batch.Turns.Any(t => t.Row is { } row && (row.Creation != 0 || row.Retired || row.StartIntent is not null || row.ParentCreation != 0) ||
@@ -28,14 +28,14 @@ public static class CreationProtocol
     public static void RejectUnsupported(SubscriptionRow subscription)
     { if (subscription.Creation != 0 || subscription.Start?.Creation is not null) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
 
-    internal static string? StartError(InstanceRow? previous, StartSpec start)
+    internal static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload)
     {
         if (start.Creation is not { } creation) return previous?.Creation > 0 ? "IdentityRequired" : null;
         if (creation.Intent is not { Length: > 0 and <= 128 } || creation.Generation < 1 || creation.Previous < 0)
             return "InvalidCreation";
         if (start.Parent is null ? start.ParentCreation != 0 : start.ParentCreation <= 0) return "InvalidParentCreation";
         if (previous is { Retired: false })
-            return previous.Creation == creation.Generation && previous.StartIntent == Fingerprint(start) ? "ExistingCreation" : "StartConflict";
+            return previous.Creation == creation.Generation && previous.StartIntent == Fingerprint(start, kind, payload) ? "ExistingCreation" : "StartConflict";
         var high = previous?.Creation ?? 0;
         if (high == long.MaxValue) return "CreationExhausted";
         return creation.Previous == high && creation.Generation == high + 1 ? null : "RetiredOrConflictingCreation";

@@ -14,10 +14,10 @@ sweep to 180 seconds, with one processor. Record commands, source and assembly h
 failures. Mutation copies must be isolated and fail their named assertion, not merely time out or fail to build.
 No service, provider host, Docker, cloud resource or previous Azure grant is used by this runner.
 
-The 33 cases comprise twelve ordinary start/finish/receipt-expiry/Delete/recreate schedules across both modes,
+The 35 cases comprise twelve ordinary start/finish/receipt-expiry/Delete/recreate schedules across both modes,
 root/nested placement and first-creation uncertainty; six parent-cancel-before-child-commit races; four actual
 old event/timer carrier replays; one separately scheduled, non-cooperative old job completion/ticket replay; four
-store/reader boundaries; two visit-isolation cases; and four job acknowledgement races. Select subsets with
+store/reader boundaries; two semantic-start/mixed-event cases; two visit-isolation cases; and four job acknowledgement races. Select subsets with
 `--parent-race`, `--transport-races` (also includes the job race), `--boundaries`, `--visits` or `--job-ack`.
 The default run includes every listed case. An assertion failure stops it; subsequent cases are not run.
 
@@ -25,7 +25,7 @@ Normal workflows create the positive lifecycle witnesses. Their delete clears wo
 positive history, but retains an actor-ID/generation high-water mark for as long as that ID is reusable. This
 is deliberate lifecycle retention, not complete physical erasure. Missing or stale targeting cannot become a
 command for the replacement. Takeover preserves generation; explicit recreation advances it. Existing qualified
-starts compare an immutable fingerprint of all start contents, rather than treating the intent string alone
+starts compare an immutable fingerprint of all start contents plus the triggering kind/payload, rather than treating the intent string alone
 as equivalence. Native receipt registration requires this shared identity; existing legacy receipts remain
 readable/protected without fabricated generation or retention metadata.
 

@@ -144,7 +144,8 @@ public static class Events
     /// the double is refused; a start's target is derived from event and subscription too, so it is created once.
     /// </summary>
     public static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
-        ? new($"ev:{e.Id}:{s.Instance}{(s.Creation > 0 ? "@" + s.Creation : "")}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
+        ? new(s.Creation > 0 ? FormattableString.Invariant($"evq:{e.Id.Length}:{e.Id}:{CreationProtocol.Origin(s.Instance, s.Creation)}:{s.Wait}")
+            : $"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
             TargetCreation: s.Creation > 0 ? s.Creation : null)
         : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
 
@@ -154,8 +155,18 @@ public static class Events
     /// </summary>
     public static (string Event, string Wait)? Delivered(Message m)
     {
+        if (m.Kind == Kinds.Event && m.Start is null && m.TargetCreation is > 0 && m.Id.StartsWith("evq:", StringComparison.Ordinal))
+        {
+            var split = m.Id.IndexOf(':', 4);
+            if (split < 0 || !int.TryParse(m.Id.AsSpan(4, split - 4), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var length) || length > m.Id.Length - split - 1) return null;
+            var start = split + 1;
+            var qualifiedMarker = $":{CreationProtocol.Origin(m.Target.Id, m.TargetCreation.Value)}:";
+            if (!m.Id.AsSpan(start + length).StartsWith(qualifiedMarker, StringComparison.Ordinal)) return null;
+            return (m.Id.Substring(start, length), m.Id[(start + length + qualifiedMarker.Length)..]);
+        }
         if (m.Kind != Kinds.Event || !m.Id.StartsWith("ev:", StringComparison.Ordinal)) return null;
-        var marker = m.Start is null ? $":{m.Target.Id}{(m.TargetCreation is > 0 ? "@" + m.TargetCreation : "")}:" : "::";
+        var marker = m.Start is null ? $":{m.Target.Id}:" : "::";
         var at = m.Id.LastIndexOf(marker, StringComparison.Ordinal);
         return at < 3 ? null : (m.Id[3..at], m.Id[(at + marker.Length)..]);
     }

@@ -6,10 +6,10 @@ using Kernel.Workflows;
 
 internal static class BoundaryCases
 {
-    internal static readonly string[] Names = ["immutable-header", "unsupported-store", "legacy-v2-reader", "generation-exhaustion-reader"];
+    internal static readonly string[] Names = ["immutable-header", "unsupported-store", "legacy-v2-reader", "generation-exhaustion-reader", "semantic-start-envelope", "mixed-event-addresses"];
     internal static async Task Run()
     {
-        await ImmutableHeader(); await Unsupported(); await Legacy(); await Exhaustion();
+        await ImmutableHeader(); await Unsupported(); await Legacy(); await Exhaustion(); await StartEnvelope(); await MixedEvents();
     }
 
     private static void Require(bool ok, string detail)
@@ -102,6 +102,42 @@ internal static class BoundaryCases
         Console.WriteLine("PASS creation:generation-exhaustion-reader (boundary setup)");
     }
 
+    private static async Task StartEnvelope()
+    {
+        await using var h = new Harness(new Counter()); await h.Activate();
+        var spec = Counter.Spec with { Creation = new(1, 0, "semantic-start") };
+        await h.Send("add", new Add("first"), spec, 1);
+        var before = h.Row;
+        Require(Json.Read<CounterState>(before.State).Tokens.SequenceEqual(["first"]), "start payload did not perform its normal initial work");
+        await h.Send("add", new Add("first"), spec, 1);
+        Require(h.Last is CreationResult { Result: "ExistingCreation" } && h.Row == before, "same semantic start with new transport ID did not deduplicate");
+        foreach (var (kind, payload) in new[] { ("add", new Add("changed")), ("other-kind", new Add("first")) })
+        {
+            await h.Send(kind, payload, spec, 1);
+            Require(h.Last is CreationResult { Result: "StartConflict" } && h.Row == before, "changed start kind/payload did not conflict");
+        }
+        Console.WriteLine("PASS creation:semantic-start-envelope");
+    }
+
+    private static async Task MixedEvents()
+    {
+        var registry = new WorkflowRegistry(); registry.Add(Wf.Workflow("mixed-events", Wf.Event("same-wait", "mixed-event")));
+        await using var h = new Harness(new NativeModel(registry)); await h.Activate();
+        var legacy = new InstanceRef(h.Target.Id + "@1");
+        var spec = NativeModel.Spec("mixed-events");
+        await h.Send(Kinds.Start, start: spec with { Creation = new(1, 0, "mixed-qualified") }, creation: 1);
+        await h.Send(Kinds.Start, start: spec, target: legacy);
+        const string eventId = "event:0/boundary@1:same-wait";
+        await Events.PublishAsync(h.Store, new("event:mixed-event", eventId, Json.Write("payload"), 10000));
+        var deliveries = h.Store.Messages.Values.Where(m => m.Message.Kind == Kinds.Event).Select(m => m.Message).ToArray();
+        Require(deliveries.Length == 2 && deliveries.Select(m => m.Id).Distinct().Count() == 2 &&
+            deliveries.All(m => Events.Delivered(m)?.Event == eventId), "mixed event addresses collided or lost their logical source");
+        await h.Drain();
+        Require(h.Row.Status == InstanceStatus.Finished && h.Store.Instances[legacy.Id].Status == InstanceStatus.Finished,
+            "mixed event fan-out failed to complete both normally authored waits");
+        Console.WriteLine("PASS creation:mixed-event-addresses");
+    }
+
     private sealed class Harness : IAsyncDisposable, IReplyTransport
     {
         internal readonly InMemoryStore Store = new(1, () => 100);
@@ -113,11 +149,15 @@ internal static class BoundaryCases
         internal Harness(IExecutionModel model) => _worker = new Worker("creation-boundary", 0, Store, new WorkflowInstance([model]),
             new WorkerOptions { Monotonic = () => 100, Transport = this });
         internal async Task Activate() => await new DurableHost([_worker]).ActivateAsync(0);
-        internal async Task Send(string kind, object? payload = null, StartSpec? start = null, long? creation = null)
+        internal async Task Send(string kind, object? payload = null, StartSpec? start = null, long? creation = null, InstanceRef? target = null)
         {
             var id = "boundary-" + ++_serial; Last = null;
-            await Store.AddAsync(new Message(id, Target, kind, payload is null ? null : Json.Write(payload), Start: start,
+            await Store.AddAsync(new Message(id, target ?? Target, kind, payload is null ? null : Json.Write(payload), Start: start,
                 ReplyTo: ReplyTo.Of("outside", id, 10000), TargetCreation: creation));
+            await Drain();
+        }
+        internal async Task Drain()
+        {
             for (var i = 0; i < 100; i++)
             {
                 await _worker.PollAsync(); if (_worker.NeedsLoad) await _worker.LoadAsync();

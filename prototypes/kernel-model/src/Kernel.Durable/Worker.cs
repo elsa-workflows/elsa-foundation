@@ -535,7 +535,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             ? request.Start.Creation is null ? "IdentityRequired"
                 : !CreationIdentityAvailable ? "CreationIdentityUnavailable"
                 : request.TargetCreation is { } target && target != request.Start.Creation.Generation ? "WrongCreation"
-                : CreationProtocol.StartError(slot.Row, request.Start)
+                : CreationProtocol.StartError(slot.Row, request.Start, request.Kind, request.Payload)
             : CreationProtocol.TargetError(slot.Row, request);
         if (creationError is not null)
         {
@@ -544,7 +544,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         var creator = slot.Row is null or { Retired: true } ? due.FindIndex(i => i.Message.Start is not null) : -1;
         var spec = creator < 0 ? null : due[creator].Message.Start;
-        slot.Starting = spec;
+        slot.Starting = creator < 0 ? null : due[creator].Message;
         var input = new TurnInput(this, slot, instance, due, Math.Max(creator, 0), spec);
         if (_type.Command(input) is { } command)
             Enqueue(Bound(command, slot));
@@ -574,9 +574,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
         unit.Slot = slot;
         if (unit.Row is { Retired: false } row)
         {
-            if (slot.Row is null or { Retired: true } && slot.Starting?.Creation is { } start)
+            if (slot.Row is null or { Retired: true } && slot.Starting is { Start.Creation: { } start } request)
             {
-                unit.Row = row with { Creation = start.Generation, StartIntent = CreationProtocol.Fingerprint(slot.Starting), ParentCreation = slot.Starting.ParentCreation };
+                unit.Row = row with { Creation = start.Generation, StartIntent = CreationProtocol.Fingerprint(request.Start, request.Kind, request.Payload), ParentCreation = request.Start.ParentCreation };
                 unit.Expected = slot.Row?.Revision;
                 unit.Revision = unit.Row.Revision;
             }
@@ -942,7 +942,7 @@ internal sealed class Slot
 {
     public long ActiveCreation;    // volatile latch captured by background drivers; retired/missing is -1
     public InstanceRow? Row;        // the committed row; null while the instance does not exist
-    public StartSpec? Starting;     // creation intent of this staged activation, including a failed initial turn
+    public Message? Starting;     // semantic creation envelope, including a failed initial turn; excludes transport retry identity
     public object? State;           // the live state between turns, equal to Row.State
     public bool Loaded, Busy;
     public long Used;               // when a turn last started or it was loaded: the least recent idle one goes first
