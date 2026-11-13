@@ -154,8 +154,11 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await page.getByRole("button", { name: "Preview question", exact: true }).click();
     const rejected = await boundResponse; expect(rejected.status()).toBe(422);
     const bounded = await rejected.json() as { code: string; message: string }; expect(bounded.code).toBe("QUERY_LIMIT");
-    await expect(page.getByRole("alert").filter({ hasText: bounded.message })).toBeVisible();
-    await page.getByRole("alert").filter({ hasText: bounded.message }).scrollIntoViewIfNeeded();
+    const timeControls = page.getByRole("group", { name: "Time and comparison", exact: true });
+    await expect(timeControls).toHaveAttribute("aria-invalid", "true");
+    await expect(timeControls.getByText(bounded.message, { exact: true })).toBeVisible();
+    await timeControls.getByText(bounded.message, { exact: true }).scrollIntoViewIfNeeded();
+    await expect(timeControls.getByText(bounded.message, { exact: true })).toBeInViewport();
     await capture(page, info, "edge-bounded-cost-rejection");
     await page.getByLabel("From (inclusive UTC instant)", { exact: true }).fill(from);
     const retry = await preview(); expect(retry.outcome).toBe("succeeded"); await captureState("edge-bounded-cost-retry");
