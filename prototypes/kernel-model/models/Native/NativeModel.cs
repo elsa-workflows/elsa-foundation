@@ -176,8 +176,14 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
                 break;
             }
             case NativeKinds.Timer:
-                Resume(m.Read<TimerFired>().Wait, null);
+            {
+                // The timer's message is consumed by this turn. Its resume may wait in the agenda past a Durable boundary,
+                // and a cancel meanwhile must not recall a message that is gone: Recall is for one not yet received.
+                var wait = m.Read<TimerFired>().Wait;
+                if (_s.Waits.TryGetValue(wait, out var timer)) _s.Waits[wait] = timer with { Key = "" };
+                Resume(wait, null);
                 break;
+            }
             case Kinds.Event:
                 // Friction F-N3, fixed in the merge: the kernel says which wait a delivery is for.
                 if (Events.Delivered(m) is { } delivered) Resume(delivered.Wait, Values.Parse(m.Payload));
@@ -368,7 +374,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
             case "child" when cancel: turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel); break;
-            case "timer" when cancel: turn.Recall(wait.Key); break;      // its row goes with this commit
+            case "timer" when cancel && wait.Key.Length > 0: turn.Recall(wait.Key); break;      // its row goes with this commit
         }
     }
 
