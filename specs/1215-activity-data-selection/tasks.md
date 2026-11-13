@@ -227,6 +227,14 @@ absence. Composed current-head UI/runtime proof, independent visual acceptance a
 are still required. No full T022/T023/T025, P1 or program acceptance box closes from this source-only receipt; S4/S5,
 US2 expression insertion, shared-editor/BPMN audits and the S0 cosmetic backend wording nit remain pending.
 
+
+S3 review/exploration follow-up (still partial): current refused reference analyses now retain safe findings for the
+exact reference/target/document/base without retaining candidates, capability or type facts; unsaved invalid references
+show a problem while keeping Replace/Clear explicit. Initial c84 composed exploration verified the real Customer
+catalog/member choice but exposed long canonical type labels squeezing source names; scoped type sizing/tooltips and
+wrapped type notes address that observed issue. That exploratory run is not accepted proof; final composed proof
+must use the corrected committed head. No task completion or runtime success is claimed from these source fixes.
+
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.
 

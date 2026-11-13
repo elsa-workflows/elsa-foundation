@@ -28,11 +28,12 @@ import {
   type ActivityDataSelectionHost,
   type ActivityResultReference
 } from "./activityDataSelection";
-import { activityDataBreadcrumbs, describeActivityDataMember, readActivityDataMemberReference } from "./activityDataPickerModel";
+import { activityDataBreadcrumbs, describeActivityDataMember, describeActivityDataMemberFinding, readActivityDataMemberReference } from "./activityDataPickerModel";
 import { useWorkflowReferenceAuthoring } from "./workflowReferenceAuthoring";
 import { ActivityDataMemberBrowser } from "./ActivityDataMemberBrowser";
 import { ActivityOutputIcon } from "./activityOutputIcon";
 import { getInputPropertyName } from "./activityProperties";
+import { parseValidationErrorPath } from "./validationDiagnostics";
 import { provideActivityResultReferenceEditor } from "./activityResultReferenceContribution";
 import "./activityDataChooser.css";
 
@@ -611,7 +612,7 @@ function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled
   const target = { nodeId: readNodeId(context.activity), inputKey: getInputPropertyName(descriptor) };
   const targetKey = `${target.nodeId}\u001f${target.inputKey}`;
   const [browsingFor, setBrowsingFor] = useState<string | null>(null);
-  const [details, setDetails] = useState<ActivityDataContextResult | null>(null);
+  const [details, setDetails] = useState<{ result: ActivityDataContextResult; targetKey: string; queryKey: string } | null>(null);
   const queryKey = JSON.stringify(member ?? (requestKey ? { memberKey: requestKey, path: raw?.path ?? null } : null));
   useEffect(() => {
     setDetails(null);
@@ -619,7 +620,11 @@ function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled
     const controller = new AbortController();
     const source = member ? memberRootProposal(member) : { expressionType: "WorkflowRequest", value };
     host.requestSources(target, controller.signal, 0, { source, memberPath: member?.memberPath ?? [], includeMemberShapes: true }).then(result => {
-      if (!controller.signal.aborted && result.documentRevision === host.documentRevision && (result.state === "supported" || result.state === "empty")) setDetails(result);
+      if (controller.signal.aborted || result.documentRevision !== host.documentRevision || result.baseRevision !== host.baseRevision) return;
+      if (result.state === "supported" || result.state === "empty" || result.state === "invalid") setDetails({
+        result: result.state === "invalid" ? { ...result, sources: [], target: null, memberReadsEnabled: false } : result,
+        targetKey, queryKey
+      });
     }, () => undefined);
     const revoke = () => { controller.abort(); setDetails(null); };
     window.addEventListener(authSessionEndedEvent, revoke);
@@ -627,15 +632,17 @@ function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled
     // The bounded query identity, not the decoded object instance, owns this request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [host?.documentRevision, host?.baseRevision, host?.requestSources, queryKey, target.nodeId, target.inputKey, disabled]);
+  const currentDetails = details?.targetKey === targetKey && details.queryKey === queryKey &&
+    details.result.documentRevision === host?.documentRevision && details.result.baseRevision === host.baseRevision ? details.result : null;
   const labels = { describeActivity: (nodeId: string) => host?.describeActivity(nodeId) ?? null,
     describeScope: (scope: string) => host?.describeActivity(scope)?.label ?? null };
-  const source = details?.sources.find(source => {
+  const source = currentDetails?.sources.find(source => {
     if (!source.binding) return false;
     if (member) return matchesMemberOffer(memberRootProposal(member), member.memberPath, source.binding);
     const returned = source.binding.value && typeof source.binding.value === "object" ? source.binding.value as Record<string, unknown> : null;
     return source.binding.expressionType === "WorkflowRequest" && returned?.memberKey === requestKey && (returned.path ?? null) === (raw?.path ?? null);
   });
-  const description = member ? describeActivityDataMember(binding, details?.sources ?? [], labels, source?.shape) : null;
+  const description = member ? describeActivityDataMember(binding, currentDetails?.sources ?? [], labels, source?.shape) : null;
   const variable = member?.kind === "VariableMember" ? authoring?.visibleVariables.find(variable => variable.referenceKey === member.referenceKey && variable.scopeId === member.declaringScopeId) : null;
   const input = member?.kind === "InputMember" ? authoring?.workflowInputs.find(input => input.referenceKey === member.referenceKey) : null;
   const fallbackLabel = variable ? `${variable.name} (${labels.describeScope(variable.scopeId) ?? (variable.isWorkflowScope ? "Workflow" : variable.scopeId)})`
@@ -648,7 +655,11 @@ function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled
     if (focus === "opener") replaceRef.current?.focus(); else if (focus !== "none") focusBeside(replaceRef.current, focus);
   }, []);
   useEffect(() => { if (initialFocus) replaceRef.current?.focus(); }, [initialFocus]);
-  const problem = host?.findingsFor(target).map(describeReferenceFinding).find(text => text != null);
+  const focusedProblem = currentDetails?.findings?.filter(finding => {
+    const path = parseValidationErrorPath(finding.path);
+    return finding.type && path.nodeId === target.nodeId && path.bag === "inputs" && path.referenceKey === target.inputKey;
+  }).map(describeActivityDataMemberFinding).find(Boolean);
+  const problem = focusedProblem ?? host?.findingsFor(target).map(describeReferenceFinding).find(text => text != null);
   return <div className="wf-data-reference" data-problem={problem ? "true" : undefined}>
     {text ? <p className="wf-data-reference-source"><ActivityOutputIcon size={14} aria-hidden="true" /><span><span className="wf-visually-hidden">Source: </span>{text}</span></p>
       : <p className="wf-data-reference-problem">This reference is not supported here. Its value is preserved.</p>}

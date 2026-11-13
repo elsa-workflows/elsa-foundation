@@ -333,3 +333,20 @@
   color: var(--studio-text-muted);
   font-size: 11px;
 }
+
+/* Long canonical type aliases retain their full tooltip without squeezing the source name into single letters. */
+.wf-data-members .wf-data-chooser-option {
+  grid-template-columns: minmax(0, 1fr) fit-content(35%) auto;
+}
+
+.wf-data-members .wf-data-chooser-option-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-data-members .wf-data-chooser-note {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

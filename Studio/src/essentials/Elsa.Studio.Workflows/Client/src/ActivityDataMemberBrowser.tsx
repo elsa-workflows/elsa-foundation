@@ -130,7 +130,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
               if (ready) changePath(member.memberPath, member.shape.kind === "scalar" || member.shape.kind === "collection");
             }}>
             <span className="wf-data-chooser-option-label">{member.serializedName === "" ? '"" (empty name)' : member.serializedName}</span>
-            <span className="wf-data-chooser-option-type">{activityDataTypeLabel(member.shape.type)}</span>
+            <span className="wf-data-chooser-option-type" title={activityDataTypeLabel(member.shape.type) ?? undefined}>{activityDataTypeLabel(member.shape.type)}</span>
             {member.shape.kind === "scalar" || member.shape.kind === "collection" ? null : <ChevronRight size={12} aria-hidden="true" />}
           </button>)}
         </div> : null}
@@ -157,7 +157,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
                 option.source.shape?.kind === "scalar" || option.source.shape?.kind === "collection");
             }}>
             <span className="wf-data-chooser-option-label">{option.label}{option.disambiguation ? ` · ${option.disambiguation}` : ""}{option.shadowed ? " (outer scope)" : ""}</span>
-            <span className="wf-data-chooser-option-type">{option.typeLabel}</span>
+            <span className="wf-data-chooser-option-type" title={option.typeLabel ?? undefined}>{option.typeLabel}</span>
             {option.unavailableReason ? <small>{option.unavailableReason}</small> : <ChevronRight size={12} aria-hidden="true" />}
           </button>)}
         </div>

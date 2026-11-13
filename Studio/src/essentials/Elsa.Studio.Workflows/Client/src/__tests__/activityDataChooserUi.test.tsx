@@ -959,6 +959,54 @@ describe("Choose data with member capability", () => {
     expect(changes.mock.calls[0]![0].customerId.expression.value).toBe(commitOffer!.value);
   });
 
+  it.each(["ValueFlow/UnavailableProducer", "ActivityData/UnknownMember"])("shows current unsaved reference refusal %s without saved findings or an edit", async type => {
+    const changes = vi.fn();
+    const { memberBinding } = nestedHost();
+    const dataHost = host({ documentRevision: "unsaved-2", findingsFor: () => [], requestSources: vi.fn(async () => answer("invalid", {
+      documentRevision: "unsaved-2", memberReadsEnabled: true, target: { displayName: "LEAK", type: { alias: "LEAK", collectionKind: "Single" }, constraint: null },
+      sources: [{ ...sources[0]!, displayName: "LEAK", binding: memberBinding, shape: memberShape({ type: { alias: "LEAK", collectionKind: "Single" } }) }],
+      findings: [{ path: "node-1/inputs/customerId", type, message: "Raw server text is not presentation authority." }]
+    })) });
+    const container = render({ dataHost, onChange: changes, activity: {
+      nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+      customerId: { typeName: "System.String", expression: { type: memberBinding.expressionType, value: memberBinding.value } }
+    } });
+    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem")?.textContent).toContain("Replace it or clear it"));
+    expect(container.querySelector(".wf-data-reference")?.getAttribute("data-problem")).toBe("true");
+    expect(container.textContent).not.toContain("LEAK");
+    expect(container.textContent).not.toContain("Raw server text");
+    expect(changes).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLButtonElement>("button[aria-label='Replace data for Customer ID']")?.disabled).toBe(false);
+    const clear = container.querySelector<HTMLButtonElement>("button[aria-label='Clear data for Customer ID']")!;
+    expect(clear.disabled).toBe(false);
+    flushSync(() => clear.click());
+    expect(changes).toHaveBeenCalledTimes(1);
+    expect(changes.mock.calls[0]![0]).not.toHaveProperty("customerId");
+  });
+
+  it("does not present a refused finding belonging to another target or an older document", async () => {
+    const { memberBinding } = nestedHost();
+    const first = host({ requestSources: vi.fn(async () => answer("invalid", { findings: [
+      { path: "other/inputs/customerId", type: "ValueFlow/UnavailableProducer", message: "Other target" }
+    ] })) });
+    const container = render({ dataHost: first, activity: { nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+      customerId: { typeName: "System.String", expression: { type: memberBinding.expressionType, value: memberBinding.value } } } });
+    await settle();
+    expect(container.querySelector(".wf-data-reference-problem")).toBeNull();
+    let finish: (() => void) | undefined;
+    let signal: AbortSignal | undefined;
+    flushSync(() => setHost({ ...first, documentRevision: "rev-2", requestSources: async (_target, requestSignal) => new Promise<ActivityDataContextResult>(resolve => {
+      signal = requestSignal; finish = () => resolve(answer("invalid", { documentRevision: "rev-2", findings: [
+        { path: "node-1/inputs/customerId", type: "ActivityData/UnknownMember", message: "Old document" }
+      ] }));
+    }) }));
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    flushSync(() => setHost({ ...first, documentRevision: "rev-3" }));
+    expect(signal?.aborted).toBe(true);
+    finish!(); await settle();
+    expect(container.querySelector(".wf-data-reference-problem")).toBeNull();
+  });
+
   it("keeps an out-of-scope stored member intact without replacement or clear actions", async () => {
     const changes = vi.fn();
     const { memberBinding } = nestedHost();
