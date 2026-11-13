@@ -20,7 +20,7 @@ internal sealed class RuntimeHistoryOccurrenceAuthorization(IHttpContextAccessor
             throw new RuntimeResourceMissingSignal();
         var tenants = principal.FindAll(IdentityClaimTypes.TenantId).Select(claim => claim.Value).ToArray();
         var subjects = principal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
-        if (tenants.Length != 1 || subjects.Length != 1 || principal.HasClaim(claim => claim.Type == IdentityClaimTypes.SubjectProvider) ||
+        if (tenants.Length != 1 || subjects.Length != 1 || principal.FindAll(IdentityClaimTypes.SubjectProvider).Any() ||
             string.IsNullOrWhiteSpace(tenants[0]) || string.IsNullOrWhiteSpace(subjects[0]))
             return null; // NameIdentifier/sub may belong to an external provider; only its owner can assert an Elsa UserId.
         var tenant = tenants[0]; var subject = subjects[0];

@@ -558,6 +558,7 @@ public sealed partial class RuntimeHistoryApiTests
             };
             if (identityKind is not ("provider-only" or "no-user")) claims.Add(new(IdentityClaimTypes.UserId, "operator"));
             if (identityKind == "conflicting-user") claims.Add(new(IdentityClaimTypes.UserId, "another-user"));
+            if (identityKind == "conflicting-provider-casing") claims.Add(new(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "external-provider"));
             if (identityKind is "provider-only" or "conflicting-provider") claims.Add(new(IdentityClaimTypes.SubjectProvider, "external-provider"));
             if (Request.Headers.ContainsKey("X-History-Values"))
             {

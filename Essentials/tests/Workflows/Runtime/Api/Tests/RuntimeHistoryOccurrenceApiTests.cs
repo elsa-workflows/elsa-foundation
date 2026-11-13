@@ -234,7 +234,7 @@ public sealed partial class RuntimeHistoryApiTests
 
     [Theory]
     [InlineData("provider-only")] [InlineData("no-user")]
-    [InlineData("conflicting-user")] [InlineData("conflicting-provider")]
+    [InlineData("conflicting-user")] [InlineData("conflicting-provider")] [InlineData("conflicting-provider-casing")]
     public async Task External_or_ambiguous_subjects_never_borrow_a_matching_local_users_authority(string identityKind)
     {
         var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
