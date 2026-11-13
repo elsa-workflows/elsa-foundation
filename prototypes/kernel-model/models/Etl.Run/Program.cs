@@ -11,7 +11,7 @@ bool duplicate = args.Contains("--mutate-count"), excess = args.Contains("--muta
 if (size < 65) { Console.Error.WriteLine("The tree comparison requires at least 65 leaves."); return 2; }
 var tree = await Run(size, direct: false, fault: true, duplicate, excess);
 var direct = await Run(size, direct: true, fault: false, duplicate, excess);
-var expected = (long)size * (size + 1) / 2;
+var expected = ExpectedSum(size);
 bool ok = true;
 void Check(bool condition, string name) { Console.WriteLine($"{(condition ? "ok" : "FAIL")} {name}"); ok &= condition; }
 foreach (var result in new[] { tree, direct })
@@ -97,6 +97,8 @@ static async Task<RunResult> Run(int size, bool direct, bool fault, bool duplica
         partitionsUsed, states.All(s => s.Input.PayloadRef == "blob://dataset/1"), wire.Injected, recovered, stopwatch.Elapsed.TotalSeconds);
 }
 
+static long ExpectedSum(int size) => (long)size * (size + 1L) / 2;
+
 static int ValidateInputs()
 {
     var model = new EtlModel();
@@ -109,8 +111,8 @@ static int ValidateInputs()
         catch (ArgumentOutOfRangeException) { }
     }
     var valid = (EtlState)model.CreateState(new StartSpec(EtlModel.ModelKey, "range", Json.Write(new RangeInput(0, int.MaxValue, "ref", int.MaxValue, 1))));
-    bool ok = rejected && valid.Input.Count == int.MaxValue && EtlModel.SpanFor(int.MaxValue, 2) == 1_073_741_824;
-    Console.WriteLine(ok ? "invalid inputs rejected; maximum legal range and span accepted" : "FAIL input validation");
+    bool ok = rejected && valid.Input.Count == int.MaxValue && EtlModel.SpanFor(int.MaxValue, 2) == 1_073_741_824 && ExpectedSum(int.MaxValue) == 2_305_843_008_139_952_128L;
+    Console.WriteLine(ok ? "invalid inputs rejected; maximum legal range, span and sum accepted" : "FAIL input validation");
     return ok ? 0 : 1;
 }
 
