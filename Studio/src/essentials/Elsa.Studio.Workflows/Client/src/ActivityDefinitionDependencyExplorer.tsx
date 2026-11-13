@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowRight, RefreshCw } from "lucide-react";
@@ -152,9 +153,7 @@ export function ActivityDefinitionDependencyExplorer({
     </header>
 
     <section className="ad-dependency-controls" aria-label="Usage query">
-      <label>
-        <span>Version</span>
-        <select value={rootVersionId} onChange={event => setRootVersionId(event.target.value)}>
+      <StudioField label={<><span>Version</span></>}><select value={rootVersionId} onChange={event => setRootVersionId(event.target.value)}>
           <option value="">Choose a version</option>
           {showConfirmedInitialVersion ? <option value={confirmedInitialVersion.version.versionId} title={confirmedInitialVersion.version.version}>
             {displayActivityDefinitionVersion(confirmedInitialVersion.version.version)} · {confirmedInitialVersion.version.lifecycle}
@@ -163,8 +162,7 @@ export function ActivityDefinitionDependencyExplorer({
             <option key={item.version.versionId} value={item.version.versionId} title={item.version.version}>
               {displayActivityDefinitionVersion(item.version.version)} · {item.version.lifecycle}
             </option>)}
-        </select>
-      </label>
+        </select></StudioField>
       <fieldset className="ad-dependency-direction">
         <legend>Show</legend>
         <label><input type="radio" name="dependency-direction" checked={direction === "inbound"} onChange={() => setDirection("inbound")} /> Used by</label>

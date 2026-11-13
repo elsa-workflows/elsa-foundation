@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import type { VisibleVariableView } from "./workflowTypes";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import { WORKFLOW_SCOPE_ID } from "./scopedVariables";
@@ -39,7 +40,7 @@ export function VariableTargetSelect({
 
   return (
     <div className="wf-variable-picker">
-      <select
+      <StudioField label={ariaLabel}><select
         aria-labelledby={ariaLabelledBy}
         aria-label={ariaLabel}
         value={selected}
@@ -55,7 +56,7 @@ export function VariableTargetSelect({
             {variable.name} · {variable.isWorkflowScope ? "workflow" : "container"}
           </option>
         ))}
-      </select>
+      </select></StudioField>
       {status === "loading" ? (
         <p className="wf-variable-picker-note" role="status">Loading visible variables… The current target is preserved.</p>
       ) : status === "error" ? (

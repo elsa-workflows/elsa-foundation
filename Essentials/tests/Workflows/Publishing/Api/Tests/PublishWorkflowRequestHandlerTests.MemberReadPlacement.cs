@@ -92,6 +92,30 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), memberExecutable.RuntimeRequirements);
     }
 
+    /// <summary>
+    /// An input member read inside a reusable body reads the boundary's own input: placement lowers it to the request
+    /// member read of the boundary input's reference key, with the member path unchanged, and publishes it deferred.
+    /// </summary>
+    [Fact]
+    public async Task An_input_member_read_in_a_placed_reusable_body_is_published_as_the_boundary_request_member_read()
+    {
+        var read = new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
+        {
+            referenceKey = "customer", memberPath = new[] { "address", "a.b", "" }
+        }), "InputMember"), null, null, null, null);
+
+        var executable = await PublishPlacedBodyAsync(read, declaresCustomerInput: true);
+
+        var member = Assert.Single(executable.RootActivity.DescendantsAndSelf(),
+            node => node.InputBindings.TryGetValue("Text", out var text) && text.Source == RuntimeInputBindingSource.WorkflowRequestMember).InputBindings["Text"];
+        Assert.Equal("customer", member.WorkflowRequest!.MemberKey);
+        Assert.Null(member.WorkflowRequest.Path);
+        Assert.Equal(["address", "a.b", ""], member.Selection!.Segments);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, member.Selection.Mode);
+        Assert.Null(member.ConversionPlan);
+        Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
+    }
+
     private static WorkflowArgumentState BodyRead(AuthoredValueConversionRequest? conversion) =>
         new("Text", new ArgumentValue(JsonSerializer.SerializeToElement(new
         {
@@ -100,7 +124,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
 
     // Compiles a reusable activity whose body produces a customer and reads its typed customerId, places it in a
     // workflow and publishes that workflow, with member reads on in both analyses.
-    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null)
+    private async Task<WorkflowExecutable> PublishPlacedBodyAsync(WorkflowArgumentState read, object[]? bodyVariables = null, bool declaresCustomerInput = false)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(CustomerProducer), TypeAliasConvention.CanonicalAlias(typeof(CustomerProducer)));
@@ -122,7 +146,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(
                 [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("reader", read)]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
         var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()));
-        var contract = new DesignContract("1", [], [], [new("done", "Done", true)]);
+        var contract = new DesignContract("1", declaresCustomerInput ? [new("customer", "Customer", new("String"), false, true, null, "elsa.json")] : [], [], [new("done", "Done", true)]);
         var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new
         {
             rootActivity = body, variables = bodyVariables ?? [], outputMappings = Array.Empty<object>()
