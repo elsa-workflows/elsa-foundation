@@ -231,7 +231,8 @@ static class EngineRun
         string? sizes = null;
         if (writes is not null)
         {
-            await Task.Delay(1500);     // a backend's counts reach pg_stat_user_tables at most once a second
+            NpgsqlConnection.ClearAllPools();     // the workers' sessions end, and a session that ends reports its counts
+            await Task.Delay(1500);
             (end, tuplesEnd, sizes) = (await writes.TakeAsync(), await writes.TupleStatsAsync(), await writes.RowSizesAsync());
         }
 

@@ -142,16 +142,23 @@ sealed class PgWrites(string connection)
         }
     }
 
-    /// <summary>What the WAL between two snapshots holds, by table and part (heap, index, toast) and by record type.</summary>
-    public async Task<(List<(string Table, string Part, long Records, long Bytes, long Fpi)> Parts, List<(string Table, string Kind, long Records, long Bytes)> Kinds)> SplitAsync(Snapshot from, Snapshot to)
+    /// <summary>
+    /// What the WAL between two snapshots holds, by table and part (heap, index, toast) and by record type. <c>Bytes</c>
+    /// is the work of transactions that did not abort; <c>Aborted</c> that of transactions with an abort record in the
+    /// range (a fenced commit rolled back, a session killed mid-commit). The record types are of the first kind only.
+    /// </summary>
+    public async Task<(List<(string Table, string Part, long Records, long Bytes, long Fpi, long Aborted)> Parts, List<(string Table, string Kind, long Records, long Bytes)> Kinds)> SplitAsync(Snapshot from, Snapshot to)
     {
         if (Bytes(to.Lsn) <= Bytes(from.Lsn)) return ([], []);       // nothing written: pg_walinspect would find no record
         await using var c = await OpenAsync();
         // A record is counted once, on the relation of its first block; a record that names no block (a commit, say) is in no table.
         const string blocks = """
-            WITH b AS (
+            WITH aborted AS (
+              SELECT DISTINCT xid FROM pg_get_wal_records_info($1::pg_lsn, $2::pg_lsn) WHERE resource_manager = 'Transaction' AND record_type LIKE 'ABORT%'
+            ), b AS (
               SELECT start_lsn, block_id, relfilenode, record_length, block_fpi_length, resource_manager || '/' || record_type AS kind,
-                     block_id = min(block_id) OVER (PARTITION BY start_lsn) AS first
+                     block_id = min(block_id) OVER (PARTITION BY start_lsn) AS first,
+                     xid <> '0'::xid AND xid IN (SELECT xid FROM aborted) AS ab
               FROM pg_get_wal_block_info($1::pg_lsn, $2::pg_lsn, false)
               WHERE reldatabase = (SELECT oid FROM pg_database WHERE datname = current_database())
             ), names AS (
@@ -166,14 +173,15 @@ sealed class PgWrites(string connection)
             )
             """;
         var parts = await RowsAsync(c, blocks + """
-            SELECT COALESCE(n.tbl, '(catalog)'), COALESCE(n.part, ''), count(*) FILTER (WHERE b.first), COALESCE(sum(b.record_length) FILTER (WHERE b.first), 0), COALESCE(sum(b.block_fpi_length), 0)
+            SELECT COALESCE(n.tbl, '(catalog)'), COALESCE(n.part, ''), count(*) FILTER (WHERE b.first AND NOT b.ab), COALESCE(sum(b.record_length) FILTER (WHERE b.first AND NOT b.ab), 0),
+                   COALESCE(sum(b.block_fpi_length) FILTER (WHERE NOT b.ab), 0), COALESCE(sum(b.record_length) FILTER (WHERE b.first AND b.ab), 0)
             FROM b LEFT JOIN names n ON n.f = b.relfilenode GROUP BY 1, 2 ORDER BY 1, 2
             """, from.Lsn, to.Lsn);
         var kinds = await RowsAsync(c, blocks + """
             SELECT COALESCE(n.tbl, '(catalog)'), b.kind, count(*), sum(b.record_length)
-            FROM b LEFT JOIN names n ON n.f = b.relfilenode WHERE b.first GROUP BY 1, 2 ORDER BY 1, 4 DESC
+            FROM b LEFT JOIN names n ON n.f = b.relfilenode WHERE b.first AND NOT b.ab GROUP BY 1, 2 ORDER BY 1, 4 DESC
             """, from.Lsn, to.Lsn);
-        return (parts.Select(r => ((string)r[0], (string)r[1], L(r[2]), L(r[3]), L(r[4]))).ToList(), kinds.Select(r => ((string)r[0], (string)r[1], L(r[2]), L(r[3]))).ToList());
+        return (parts.Select(r => ((string)r[0], (string)r[1], L(r[2]), L(r[3]), L(r[4]), L(r[5]))).ToList(), kinds.Select(r => ((string)r[0], (string)r[1], L(r[2]), L(r[3]))).ToList());
     }
 
     /// <summary>Exact live, dead and free bytes of each table, from a full scan (pgstattuple).</summary>
@@ -211,16 +219,16 @@ sealed class PgWrites(string connection)
     {
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;     // this flow only: 1,234 whatever the machine's locale
         var wal = Bytes(end.Lsn) - Bytes(before.Lsn);
-        Console.WriteLine($"\nWRITES | WAL {wal:N0} bytes ({end.WalRecords - before.WalRecords:N0} records, {end.WalFpi - before.WalFpi:N0} full-page images) | {batches:N0} commits landed, {units:N0} instance commits, {turns:N0} turns | {(batches == 0 ? 0 : wal / batches):N0} bytes per commit, {(units == 0 ? 0 : wal / units):N0} per instance commit");
+        Console.WriteLine($"\nWRITES | WAL {before.Lsn} to {end.Lsn}: {wal:N0} bytes ({end.WalRecords - before.WalRecords:N0} records, {end.WalFpi - before.WalFpi:N0} full-page images) | {batches:N0} commits landed, {units:N0} instance commits, {turns:N0} turns | {(batches == 0 ? 0 : wal / batches):N0} bytes per commit, {(units == 0 ? 0 : wal / units):N0} per instance commit");
         var (parts, kinds) = await SplitAsync(before, end);
-        var named = parts.Sum(p => p.Bytes);
-        Console.WriteLine($"  in this database's relations: {named:N0} bytes, {(units == 0 ? 0 : named / units):N0} per instance commit; the rest is commit records and any other database's work (autovacuum of an earlier run's database, say)");
-        Console.WriteLine($"  {"table",-14} {"part",-6} {"records",9} {"WAL bytes",14} {"of which FPI",13} {"per commit",11} {"per inst.",10}");
-        foreach (var p in parts.Where(p => p.Bytes > 0))
-            Console.WriteLine($"  {p.Table,-14} {p.Part,-6} {p.Records,9:N0} {p.Bytes,14:N0} {p.Fpi,13:N0} {(batches == 0 ? 0 : p.Bytes / (double)batches),11:N0} {(units == 0 ? 0 : p.Bytes / (double)units),10:N0}");
-        Console.WriteLine($"  {"(other)",-14} {"",-6} {"",9} {wal - named,14:N0} {"",13} {(batches == 0 ? 0 : (wal - named) / (double)batches),11:N0} {(units == 0 ? 0 : (wal - named) / (double)units),10:N0}   no relation of this database");
+        var (named, aborted) = (parts.Sum(p => p.Bytes), parts.Sum(p => p.Aborted));
+        Console.WriteLine($"  in this database's relations: {named:N0} bytes by transactions that did not abort, {(units == 0 ? 0 : named / units):N0} per landed instance commit; {aborted:N0} bytes ({(named + aborted == 0 ? 0 : 100.0 * aborted / (named + aborted)):F1} %) by transactions that aborted (fenced, killed); the rest is commit and abort records and any other database's work (autovacuum of an earlier run's database, say)");
+        Console.WriteLine($"  {"table",-14} {"part",-6} {"records",9} {"WAL bytes",14} {"of which FPI",13} {"per commit",11} {"per inst.",10} {"aborted",12}");
+        foreach (var p in parts.Where(p => p.Bytes + p.Aborted > 0))
+            Console.WriteLine($"  {p.Table,-14} {p.Part,-6} {p.Records,9:N0} {p.Bytes,14:N0} {p.Fpi,13:N0} {(batches == 0 ? 0 : p.Bytes / (double)batches),11:N0} {(units == 0 ? 0 : p.Bytes / (double)units),10:N0} {p.Aborted,12:N0}");
+        Console.WriteLine($"  {"(other)",-14} {"",-6} {"",9} {wal - named - aborted,14:N0} {"",13} {(batches == 0 ? 0 : (wal - named - aborted) / (double)batches),11:N0} {(units == 0 ? 0 : (wal - named - aborted) / (double)units),10:N0}   no relation of this database");
         if (sizes is not null) Console.WriteLine(sizes);
-        Console.WriteLine("  by record type (largest first, per table):");
+        Console.WriteLine("  by record type, transactions that did not abort (largest first, per table):");
         foreach (var group in kinds.GroupBy(k => k.Table).Where(g => g.Sum(k => k.Bytes) > 0))
             Console.WriteLine($"    {group.Key,-14} " + string.Join(", ", group.Take(6).Select(k => $"{k.Kind} {k.Records:N0} x / {k.Bytes:N0} B")));
 
@@ -262,6 +270,7 @@ sealed class PgWrites(string connection)
         var wal = Bytes(to.Lsn) - Bytes(from.Lsn);
         var (parts, _) = await SplitAsync(from, to);
         var by = parts.GroupBy(p => p.Table).Select(g => (g.Key, Bytes: g.Sum(p => p.Bytes))).Where(g => g.Bytes > 0).OrderByDescending(g => g.Bytes);
-        return $"    WAL {wal:N0} B{(units == 0 ? "" : $", {wal / units:N0} per instance commit ({units})")}: " + string.Join(", ", by.Select(g => $"{g.Key} {g.Bytes:N0}")) + $", other {wal - parts.Sum(p => p.Bytes):N0}";
+        var aborted = parts.Sum(p => p.Aborted);
+        return $"    WAL {wal:N0} B{(units == 0 ? "" : $", {wal / units:N0} per instance commit ({units})")}: " + string.Join(", ", by.Select(g => $"{g.Key} {g.Bytes:N0}")) + $", other {wal - parts.Sum(p => p.Bytes) - aborted:N0}" + (aborted == 0 ? "" : $", aborted {aborted:N0}");
     }
 }
