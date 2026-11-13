@@ -110,7 +110,11 @@ describe("activity input wire adapter", () => {
       inputs: [{ referenceKey: "Connection", value: { value: reference, expressionType: "Connection" } }]
     });
 
-    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+    const authored: WorkflowDraft = { id: "draft-1", definitionId: "definition-1", state: seeded, layout: [], validationErrors: [] };
+    const applied = buildDraftFromJson(serializeDraftToJson(authored), authored);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) throw new Error("Code Apply failed.");
+    const resaved = canonicalizeStateForWire(expandStateFromWire(applied.draft.state));
 
     expect(resaved.rootActivity?.inputs).toEqual([
       { referenceKey: "Connection", value: { value: reference, expressionType: "Connection" } }
@@ -166,7 +170,10 @@ describe("activity input wire adapter", () => {
 
   it.each([
     // A member read this client cannot author yet: its path segments are literal names, dots included.
-    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "main", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["ActivityResultMember", { producerNodeId: "get-customer", projectionKey: "$result", isOptional: false, memberPath: ["billing.address", ""] }],
+    ["VariableMember", { referenceKey: "customer", declaringScopeId: "scope:root", memberPath: ["a/b", 'quoted"key'] }],
+    ["WorkflowRequestMember", { memberKey: "request", memberPath: ["CustomerId"] }],
+    ["InputMember", { referenceKey: "input-key", memberPath: ["", "literal.dot"] }],
     ["WorkflowRequest", { memberKey: "order", path: null }],
     // A source kind a later server adds, and a definition under a known language that is not a portable one.
     ["FutureSource", { kind: "next", nested: { items: [1, "two", null] } }],
