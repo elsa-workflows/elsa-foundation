@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).with_name('run.py'))
@@ -22,15 +23,24 @@ class VerdictTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.artifact = self.root / 'proof'
         self.artifact.write_text('proof')
+        self.trace = self.root / 'trace.zip'
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            for actor in ('owner', 'reader'):
+                archive.writestr(actor + '.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': actor}) + '\n')
         self.report = {'suites': [{'specs': [
             {'title': journey, 'tests': [
                 {'projectName': project, 'expectedStatus': 'passed', 'status': 'expected', 'results': [
                     {'status': 'passed', 'attachments': [
-                        {'name': name, 'path': str(self.artifact)} for name in
-                        ['trace'] + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]
-                        + acceptance.EVIDENCE.get(journey, [])]}]}
+                        {'name': name, 'path': str(self.trace if name == 'trace' else self.artifact)} for name in
+                        ['trace'] + sorted(acceptance.ADDITIONAL_ARTIFACTS.get(journey, set())) + list(acceptance.EVIDENCE.get(journey, [])) + [f'{capture}.{suffix}' for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}
                 for project in sorted(acceptance.JOURNEY_PROJECTS[journey])]}
-            for journey in sorted(acceptance.JOURNEYS)]}]}
+            for journey in acceptance.JOURNEYS]}]}
+
+    def test_native_reader_must_be_recorded_in_the_combined_trace(self):
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            archive.writestr('owner.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': 'owner'}) + '\n')
+        with self.assertRaisesRegex(ValueError, 'independent owner and reader'):
+            acceptance.verdict(self.report, self.root)
 
     def test_complete_evidence(self):
         self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
@@ -105,16 +115,22 @@ class VerdictTests(unittest.TestCase):
         self.artifact.write_text('')
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
         self.artifact.write_text('proof')
+        self.trace = self.root / 'trace.zip'
+        with zipfile.ZipFile(self.trace, 'w') as archive:
+            for actor in ('owner', 'reader'):
+                archive.writestr(actor + '.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': actor}) + '\n')
         with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root / 'different-run')
 
     def test_each_intermediate_capture_is_required(self):
         for spec in self.report['suites'][0]['specs']:
             for attachment in list(spec['tests'][0]['results'][0]['attachments']):
                 with self.subTest(journey=spec['title'], capture=attachment['name']):
-                    report = copy.deepcopy(self.report)
-                    target = next(row for row in report['suites'][0]['specs'] if row['title'] == spec['title'])
+                    # The whole-matrix positive is tested separately. Each negative keeps every
+                    # project of its actual selected journey and removes one required attachment.
+                    target = copy.deepcopy(spec)
                     target['tests'][0]['results'][0]['attachments'].remove(attachment)
-                    with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
+                    report = {'suites': [{'specs': [target]}]}
+                    with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [spec['title']])
 
     def test_stale_development_overlays_never_reach_owned_content_root(self):
         project = self.root / 'source/Host.csproj'
@@ -130,6 +146,21 @@ class VerdictTests(unittest.TestCase):
         acceptance.prepare_host(project, destination)
         self.assertEqual({'appsettings.json', 'shells.json'}, {file.name for file in destination.iterdir()})
 
+    def test_native_qualification_has_exact_private_grants_and_no_inference(self):
+        settings = {}
+        shells = {'CShells': {'Shells': {'default': {'Features': {'WeaverGitHubCopilot': {'Enabled': True}}}}}}
+        acceptance.configure_dashboard_qualification(settings, shells)
+        qualification = settings['Qualification']
+        self.assertEqual(1, len(qualification['Principals']))
+        self.assertEqual('default', qualification['Principals'][0]['tenant'])
+        profiles = qualification['GrantProfiles']
+        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source'}, set(profiles))
+        self.assertEqual({'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'},
+                         set(profiles['dashboard-native-reader']) - set(profiles['dashboard-native-no-source']))
+        self.assertFalse(any('*' in grant or 'agent' in grant or grant.endswith(':manage') or grant.endswith(':share')
+                             for grant in qualification['Principals'][0]['exactDirectPermissions']))
+        self.assertFalse(shells['CShells']['Shells']['default']['Features']['WeaverGitHubCopilot']['Enabled'])
+
     def test_exited_leader_does_not_hide_a_term_resistant_descendant(self):
         with patch.object(acceptance.os, 'killpg') as kill:
             from unittest.mock import Mock
@@ -137,6 +168,25 @@ class VerdictTests(unittest.TestCase):
             process.poll.return_value = 0
             acceptance.stop_group(process)
             self.assertEqual([(44, acceptance.signal.SIGTERM), (44, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
+
+    def test_retired_group_permission_denial_does_not_fail_a_successful_command(self):
+        from unittest.mock import Mock
+        process = Mock(pid=44); process.poll.return_value = 0
+        # A zombie is already dead; a different user's group must never be touched.
+        members = f'{os.getuid()} 44 Z\n{os.getuid() + 1} 44 S\n'
+        with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('retired group')) as kill, \
+             patch.object(acceptance.subprocess, 'check_output', return_value=members):
+            acceptance.stop_group(process)
+        self.assertEqual(2, kill.call_count)
+        self.assertEqual(2, process.wait.call_count)
+
+    def test_permission_denial_cannot_hide_a_live_owned_process(self):
+        from unittest.mock import Mock
+        for leader in (None, 0):
+            process = Mock(pid=44); process.poll.return_value = leader
+            with patch.object(acceptance.os, 'killpg', side_effect=PermissionError('live process')), \
+                 patch.object(acceptance.subprocess, 'check_output', return_value=f'{os.getuid()} 44 S\n'):
+                with self.assertRaises(PermissionError): acceptance.stop_group(process)
 
     def test_command_interrupt_stops_its_entire_group(self):
         with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.os, 'killpg') as kill:
@@ -149,6 +199,27 @@ class VerdictTests(unittest.TestCase):
             self.assertTrue(popen.call_args.kwargs['start_new_session'])
             self.assertEqual([(43, acceptance.signal.SIGTERM), (43, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
             self.assertEqual(3, process.wait.call_count)
+
+    def test_owned_host_gets_the_normal_dotnet_shutdown_window_before_forced_kill(self):
+        from unittest.mock import Mock
+        process = Mock(pid=44); process.returncode = None
+        process.poll.side_effect = lambda: process.returncode
+        def wait(timeout=None):
+            if process.returncode is not None: return process.returncode
+            if timeout is not None and timeout >= 30:
+                process.returncode = 0
+                return 0
+            raise acceptance.subprocess.TimeoutExpired('owned-dotnet-host', timeout)
+        process.wait.side_effect = wait
+        def signal_group(_pid, signal):
+            if signal == acceptance.signal.SIGKILL and process.returncode is None: process.returncode = -9
+        def launch(*_args, **options):
+            options['stdout'].write('Now listening on: http://localhost:1\n'); options['stdout'].flush()
+            return process
+        with patch.object(acceptance.subprocess, 'Popen', side_effect=launch), patch.object(acceptance.os, 'killpg', side_effect=signal_group), patch.object(acceptance.urllib.request, 'urlopen') as request:
+            request.return_value.__enter__.return_value.status = 200
+            with acceptance.host(self.root, 'owned.dll', 'http://localhost:1', '/', self.root / 'shutdown.log', {}): pass
+        self.assertEqual(0, process.returncode, 'A host stopping within .NET normal grace must not be reported as killed')
 
     def test_unrelated_healthy_listener_is_not_a_readiness_answer(self):
         with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.urllib.request, 'urlopen') as request, patch.object(acceptance.time, 'sleep'), patch.object(acceptance.os, 'killpg'):
@@ -330,7 +401,9 @@ class OrchestrationTests(unittest.TestCase):
                 if dll == 'Elsa.Workbench.dll':
                     shells = json.loads((directory / 'shells.json').read_text())
                     seed = shells['CShells']['Shells']['default']['Features'][acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
-                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl')))
+                settings = json.loads((directory / 'appsettings.json').read_text()) if dll == 'Elsa.Workbench.dll' else {}
+                principals = settings.get('Qualification', {}).get('Principals', [])
+                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready))
                 try:
                     yield
                 finally:
@@ -359,11 +432,15 @@ class OrchestrationTests(unittest.TestCase):
                 acceptance.run(output)
             report = json.loads((output / 'report.json').read_text())
         self.assertEqual('passed', report['status'])
-        self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components'}, report['isolatedFieldGallery'])
+        self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components', 'portOverrideConfirmed': False}, report['isolatedFieldGallery'])
         starts = [event for event in events if event[0] == 'start']
         seed, owned = starts[0], starts[1:]
         self.assertEqual(('workbench', 'Elsa.Workbench.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
         self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.dll'), events[1], 'The seed boot stops before any acceptance host starts')
+        self.assertEqual(0, seed[7], 'The first-boot seed must not create the Dashboard reader before grant narrowing')
+        self.assertEqual(1, owned[0][7], 'Only the combined acceptance boot creates the independent Dashboard reader')
+        self.assertEqual('/__qualification/ready', owned[0][8])
+        self.assertEqual(0, owned[2][7], 'The runtime-only subset does not receive Dashboard qualification principals')
         self.assertEqual(('restrict', 'workbench'), events[2])
         self.assertEqual(['workbench', 'studio', 'runtime-api-subset-workbench', 'runtime-api-subset-studio'],
                          [event[1] for event in owned])
@@ -409,7 +486,81 @@ class OrchestrationTests(unittest.TestCase):
                 acceptance.run(output, 'save template toast')
             report = json.loads((output / 'report.json').read_text())
         self.assertEqual(['workbench', 'studio'], starts)
-        self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components'}, report['isolatedFieldGallery'])
+        self.assertEqual({'executed': 1, 'sourceSha': 'abc', 'kind': 'isolated-shared-components', 'portOverrideConfirmed': False}, report['isolatedFieldGallery'])
+
+
+class SourcePairTests(unittest.TestCase):
+    def test_dirty_studio_checkout_is_refused_even_when_backend_source_is_clean(self):
+        with tempfile.TemporaryDirectory() as directory:
+            studio = Path(directory).resolve() / "studio-source"
+            output = Path(directory) / "evidence"
+            state = lambda root: ("frontend-head", " M component.tsx") if root == studio else ("backend-head", "")
+            with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command") as command:
+                with self.assertRaisesRegex(ValueError, "dirty run"):
+                    acceptance.run(output, 'existing home widgets and layout defaults', studio)
+            command.assert_not_called()
+            report = json.loads((output / "report.json").read_text())
+            self.assertTrue(report["studioDirty"])
+            self.assertEqual("frontend-head", report["studioSourceSha"])
+            self.assertEqual("failed", report["status"])
+
+    def test_unrelated_claimed_pr_head_is_refused_before_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "evidence"
+            with patch.dict(os.environ, {"UX_PR_HEAD_SHA": "f" * 40}), patch.object(acceptance, "source_state", return_value=("a" * 40, "")), patch.object(acceptance, "command") as command:
+                with self.assertRaisesRegex(ValueError, "PR head"):
+                    acceptance.run(output, 'existing home widgets and layout defaults')
+            command.assert_not_called()
+            self.assertEqual("failed", json.loads((output / "report.json").read_text())["status"])
+
+    def test_ci_merge_accepts_only_its_reviewed_second_parent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(['git', '-c', 'user.name=Owned test', '-c', 'user.email=owned@example.invalid', *args], cwd=root, text=True).strip()
+            git('init', '-q'); (root / 'code.txt').write_text('base'); git('add', '.'); git('commit', '-qm', 'Base')
+            base = git('rev-parse', 'HEAD'); git('checkout', '-qb', 'reviewed')
+            (root / 'code.txt').write_text('reviewed'); git('commit', '-qam', 'Reviewed'); reviewed = git('rev-parse', 'HEAD')
+            git('checkout', '-q', '--detach', base); git('merge', '--no-ff', '-m', 'Owned CI merge', 'reviewed')
+            merged = git('rev-parse', 'HEAD')
+            self.assertTrue(acceptance.supplies_pr_head(root, merged, reviewed))
+            self.assertTrue(acceptance.supplies_pr_head(root, merged, merged))
+            self.assertFalse(acceptance.supplies_pr_head(root, merged, base))
+            self.assertFalse(acceptance.supplies_pr_head(root, reviewed, base))
+            shallow = root / 'shallow-checkout'
+            subprocess.run(['git', 'clone', '-q', '--depth', '1', root.resolve().as_uri(), str(shallow)], check=True, capture_output=True)
+            self.assertTrue((shallow / '.git/shallow').is_file())
+            self.assertTrue(acceptance.supplies_pr_head(shallow, merged, reviewed))
+            self.assertFalse(acceptance.supplies_pr_head(shallow, merged, base))
+
+    def test_reported_studio_source_is_the_checkout_actually_built(self):
+        with tempfile.TemporaryDirectory() as directory:
+            studio = Path(directory).resolve() / "studio-source"; output = Path(directory) / "evidence"; calls = []
+            def command(argv, *_args, **kwargs):
+                calls.append((argv, kwargs.get("cwd")))
+                if "tests/browser/playwright.outlined-fields.config.ts" in argv:
+                    self.assertTrue(1024 <= int(kwargs["env"]["OUTLINED_PORT"]) <= 65535)
+                    gallery = Path(kwargs["env"]["OUTLINED_EVIDENCE"]); gallery.mkdir()
+                    image = gallery / "unit-fixture.png"; image.write_bytes(b"explicit unit artifact fixture")
+                    test = {"expectedStatus": "passed", "status": "expected", "results": [{"status": "passed", "attachments": [{"contentType": "image/png", "path": str(image)}]}]}
+                    (gallery / "playwright.json").write_text(json.dumps({"config": {"metadata": {"outlinedCases": 1}}, "suites": [{"specs": [{"title": "Unit fixture", "tests": [test]}]}]}))
+                if "studio-build.log" in str(_args): raise RuntimeError("Stop after verifying build selection")
+            state = lambda root: ("frontend-head", "") if root == studio else ("backend-head", "")
+            with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command", side_effect=command):
+                with self.assertRaisesRegex(RuntimeError, "build selection"):
+                    acceptance.run(output, 'existing home widgets and layout defaults', studio)
+            self.assertEqual(studio / "Studio", calls[1][1])
+            self.assertEqual(studio / "Studio", calls[2][1])
+            self.assertIn("tests/browser/playwright.outlined-fields.config.ts", calls[2][0])
+            self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"), calls[3][0])
+            report = json.loads((output / "report.json").read_text())
+            self.assertEqual("backend-head", report["sourceSha"])
+            self.assertEqual("frontend-head", report["studioSourceSha"])
+            self.assertEqual("frontend-head", report["isolatedFieldGallery"]["sourceSha"])
+            self.assertFalse(report["isolatedFieldGallery"]["portOverrideConfirmed"])
+            self.assertNotIn("url", report["isolatedFieldGallery"])
+
+
 
 
 class FieldGalleryVerdictTests(unittest.TestCase):
@@ -422,6 +573,10 @@ class FieldGalleryVerdictTests(unittest.TestCase):
                 {'contentType': 'image/png', 'path': str(screenshot)}]}]}
             report = {'config': {'metadata': {'outlinedCases': 1}}, 'suites': [{'specs': [{'title': 'Theme states', 'tests': [test]}]}]}
             self.assertEqual(1, acceptance.field_gallery_verdict(report, root))
+            self.assertEqual(1, acceptance.field_gallery_verdict(report, root, 4567))
+            report['config']['metadata']['outlinedBaseURL'] = 'http://127.0.0.1:4567'
+            self.assertEqual(1, acceptance.field_gallery_verdict(report, root, 4567))
+            with self.assertRaises(ValueError): acceptance.field_gallery_verdict(report, root, 7654)
             for change in ('empty', 'missing', 'duplicate', 'skip', 'retry', 'no-image', 'inline-only', 'external-image'):
                 with self.subTest(change=change):
                     broken = copy.deepcopy(report)

@@ -13,6 +13,16 @@ const toastSource = readFileSync(new URL("../../Studio/tests/acceptance/toastPla
 new Function("exports", ts.transpileModule(toastSource, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
 }).outputText)(toastControls);
+const dashboardSourcePath = new URL("../../Studio/tests/acceptance/dashboardJourneySupport.ts", import.meta.url);
+const dashboardSource = ts.createSourceFile(String(dashboardSourcePath), readFileSync(dashboardSourcePath, "utf8"), ts.ScriptTarget.Latest, true);
+const dashboardParts = dashboardSource.statements.filter(node =>
+  ts.isVariableStatement(node) && node.declarationList.declarations.some(item => item.name.getText(dashboardSource) === "pendingDashboardCleanup") ||
+  ts.isFunctionDeclaration(node) && ["registerDashboardCleanup", "cleanupDashboardJourney"].includes(node.name?.text)
+).map(node => node.getText(dashboardSource)).join("\n");
+const dashboardControls = {};
+new Function("exports", ts.transpileModule(dashboardParts, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+}).outputText)(dashboardControls);
 const source = ts.createSourceFile(sourcePath, readFileSync(sourcePath, "utf8"), ts.ScriptTarget.Latest, true);
 assert.equal(source.parseDiagnostics.length, 0, "The actual acceptance source parses");
 const hooks = [];
@@ -37,7 +47,7 @@ function sensitiveError() {
   return error;
 }
 
-async function exercise({ contextError, deleteError, deleteStatus = 204, cleanups = [], toastReleaseError } = {}) {
+async function exercise({ contextError, deleteError, deleteStatus = 204, cleanups = [], toastReleaseError, dashboardCleanupError } = {}) {
   const page = { context: () => ({ async storageState() { return { cookies: [] }; } }) };
   const createdWorkflows = new WeakMap([[page, [{ id: "metadata-owned", url: "http://owned.invalid/templates", authorization: authMarker }]]]);
   const designerDefinitions = new WeakMap([[page, ["frame-owned", "sequence-owned"]]]);
@@ -45,11 +55,14 @@ async function exercise({ contextError, deleteError, deleteStatus = 204, cleanup
   const browserErrors = new WeakMap([[page, []]]);
   const assertions = (actual, message) => ({ toEqual: expected => assert.deepEqual(actual, expected, message) });
   const exports = {};
-  const hook = new Function("createdWorkflows", "designerDefinitions", "ownedCleanups", "browserErrors", "expect", "process", "exports", "releaseToastPlacementHolds",
+  const hook = new Function("createdWorkflows", "designerDefinitions", "ownedCleanups", "browserErrors", "expect", "process", "exports", "releaseToastPlacementHolds", "cleanupDashboardJourney",
     `${compiled.outputText}\nreturn exports.cleanup;`)(createdWorkflows, designerDefinitions, ownedCleanups, browserErrors, assertions,
       { env: { ELSA_WORKBENCH_URL: "http://owned.invalid" } }, exports, async page => {
         await toastControls.releaseToastPlacementHolds(page);
         if (toastReleaseError !== undefined) throw toastReleaseError;
+      }, async page => {
+        await dashboardControls.cleanupDashboardJourney(page);
+        if (dashboardCleanupError !== undefined) throw dashboardCleanupError;
       });
   const attempts = [];
   let attachment;
@@ -148,4 +161,11 @@ test("a failed toast release still attempts every owned record and keeps teardow
   assert.ok(result.failure);
   assert.match(result.failure.message, /toast-release-failed/);
   assert.ok(!result.failure.message.includes(cookieMarker) && !result.failure.message.includes(authMarker));
+});
+
+ test("Dashboard cleanup failure stays failed while all owned definitions are attempted", async () => {
+  const result = await exercise({ dashboardCleanupError: sensitiveError() });
+  assert.ok(result.failure);
+  assert.match(String(result.failure), /dashboard-cleanup-failed/);
+  assert.ok(!String(result.failure).includes(cookieMarker) && !String(result.failure).includes(authMarker));
 });

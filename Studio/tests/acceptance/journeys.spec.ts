@@ -1,3 +1,6 @@
+import { cleanupDashboardJourney } from "./dashboardJourneySupport";
+import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
+import { dashboardHomeJourney } from "./dashboardHomeJourney";
 import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
@@ -62,6 +65,8 @@ const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 const designerDefinitions = new WeakMap<Page, string[]>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
+test("existing home widgets and layout defaults", async ({ page }, info) => dashboardHomeJourney(page, info, capture));
 test("user task authoring and workflow result", async ({ page }, info) => {
   const creations: CreatedWorkflow[] = [];
   createdWorkflows.set(page, creations);
@@ -79,7 +84,8 @@ test("phone authoring and settings content priority", async ({ page }, info) => 
 
 test.afterEach(async ({ page, playwright }, info) => {
   const failures: string[] = [];
-  // Releasing a placement control must not prevent the independent owned-record cleanup.
+  // Auxiliary releases fail independently so every owned record still receives cleanup.
+  try { await cleanupDashboardJourney(page); } catch { failures.push("dashboard-cleanup-failed"); }
   try { await releaseToastPlacementHolds(page); } catch { failures.push("toast-release-failed"); }
   const creations = createdWorkflows.get(page) ?? [];
   const designerIds = designerDefinitions.get(page) ?? [];
