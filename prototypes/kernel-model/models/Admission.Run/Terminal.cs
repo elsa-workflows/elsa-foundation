@@ -42,6 +42,7 @@ internal static class TerminalReceipts
         NativeWorkflows.Registry.Add(workflow);
         var serial = 0;
         var delayFinalCommit = false;
+        long? closingPreparedAt = null;
         void Require(bool ok, string name, string detail)
         { if (!ok) throw new InvalidOperationException(name + ": " + detail); }
         void Apply(Act act)
@@ -62,16 +63,19 @@ internal static class TerminalReceipts
                 Apply(new("poll", actor.Id));
                 if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
                 var before = world.Deliveries.Count;
+                var ran = false;
                 if (actor.Worker.Ready.Contains(target.Id))
                 {
                     Apply(new("turn", actor.Id, S: target.Id));
+                    ran = true;
                     Require(world.Deliveries.Count == before, "T1", "metadata response escaped before commit");
                 }
                 else if (!actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
                 if (actor.Worker.NeedsFlush)
                 {
                     // Let finalization sit staged for longer than R. The full window starts at durable disposition.
-                    if (delayFinalCommit && (ending != "completed" || TerminalReceiver.Closed)) { Apply(new("tick", 2000)); delayFinalCommit = false; }
+                    if (delayFinalCommit && ran && (ending != "completed" || TerminalReceiver.Closed))
+                    { closingPreparedAt = world.Time; Apply(new("tick", 2000)); delayFinalCommit = false; }
                     Apply(new("flush", actor.Id));
                 }
                 if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
@@ -98,6 +102,7 @@ internal static class TerminalReceipts
         delayFinalCommit = ending == "completed";
         if (ending != "cancelled-queued") { Add(NativeKinds.Resume, new ResumeStimulus("step")); Drain(); }
         if (ending != "completed") { delayFinalCommit = true; Add(Kinds.Terminate); Drain(); }
+        Require(closingPreparedAt is { } prepared && prepared < world.Time, "T0", "actual closing commit was not delayed");
         var inbox = State().Inboxes![frame];
         Require(inbox.Closed == (ending == "completed" ? "completed" : "cancelled"), "T0", "terminal reason not committed");
         Require(inbox.Pending.Count == 0 && !world.Store.Instances[target.Id].State.Contains("payload-canary"), "T3", "receipt payload retained");
