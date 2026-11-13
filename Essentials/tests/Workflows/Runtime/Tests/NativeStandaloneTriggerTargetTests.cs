@@ -211,6 +211,33 @@ public sealed class NativeStandaloneTriggerTargetTests
     }
 
     [Fact]
+    public async Task A_mixed_continuation_writer_refuses_before_consuming_claimed_work()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
+        var start = StartItem(NativeIngressTargetEvidence.ReadEnvelope(seal));
+        await fixture.StartHandler.HandleAsync(start);
+        var initial = Assert.Single((await fixture.Queue.ListAsync(new(start.WorkflowExecutionId))).Items);
+        await fixture.CheckpointHandler.HandleAsync(initial);
+        await fixture.Queue.DeleteAsync(initial.WorkflowExecutionId, initial.WorkItemId);
+        var prior = (await fixture.Executions.FindAsync(start.WorkflowExecutionId))!;
+        var work = new RuntimeSchedulerWorkItem("mixed-continuation", start.WorkflowExecutionId, "continue", WorkflowExecutionCommandKind.RunSchedulerWork,
+            "continue-envelope", "continue-key", Now, Now);
+        await fixture.Queue.EnqueueAsync(work);
+        var claim = (await fixture.Queue.ClaimAsync(new(start.WorkflowExecutionId, "owner", Now, TimeSpan.FromMinutes(1))))!;
+        var mixed = new InMemoryRuntimeCheckpointCommitStore(workflowExecutionStateStore: fixture.Executions,
+            state: new InMemoryRuntimeCheckpointStoreState(), schedulerWorkQueue: fixture.Queue,
+            rootWriteLeaseManager: new WorkflowExecutableRootWriteLeaseManager(fixture.Executables,
+                Options.Create(new WorkflowExecutableGarbageCollectionOptions()), fixture.Clock));
+        await Assert.ThrowsAsync<NotSupportedException>(() => mixed.CommitAsync(StateCommit(prior, "mixed",
+            [ConsumedSchedulerWorkItem.FromClaim(claim)]), new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        Assert.Same(prior, await fixture.Executions.FindAsync(prior.WorkflowExecutionId));
+        Assert.Empty(mixed.ListCommits());
+        Assert.Equal(work.WorkItemId, Assert.Single((await fixture.Queue.ListAsync(new(start.WorkflowExecutionId))).Items).WorkItemId);
+        Assert.True((await fixture.Queue.ConsumeClaimedAsync(ConsumedSchedulerWorkItem.FromClaim(claim))).Succeeded);
+    }
+
+    [Fact]
     public async Task A_fresh_nested_model_origin_without_parent_proof_cannot_receive_a_native_writer_permit()
     {
         using var fixture = await Fixture.CreateAsync();

@@ -25,6 +25,8 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
         var prior = executions is null ? null : await executions.FindAsync(proposed.WorkflowExecutionId, cancellationToken);
         if (prior?.IngressOrigin is not null || prior?.ModelWorkOrigin?.IngressOrigin is not null)
         {
+            if (!ReferenceEquals(executions!.CheckpointState, _state))
+                throw new NotSupportedException("Ingress workflow continuations require the actual selected native execution writer.");
             NativeIngressCheckpointAuthority.ValidateContinuation(proposed, prior);
             return;
         }
