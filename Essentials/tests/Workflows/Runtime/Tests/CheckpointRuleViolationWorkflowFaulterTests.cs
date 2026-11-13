@@ -49,6 +49,10 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         Assert.Equal(Assert.Single(commit.StateChanges.Incidents).StateId, fact.IncidentId);
         Assert.Equal(Now, fact.OccurredAt);
         Assert.Null(fact.ReasonCode);
+        var gap = Assert.Single(_executions.CheckpointState.HistoryHeads).Value;
+        Assert.True(gap.HasGaps);
+        Assert.False(gap.CapturedFromStart);
+        Assert.Equal(0, gap.LastSequence); // Owner inputs alone are not captured transition events.
     }
     private readonly InMemoryWorkflowExecutionStateStore _executions = new();
     private readonly InMemoryIncidentStateStore _incidents = new();
@@ -61,7 +65,9 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
         _store = new InMemoryRuntimeCheckpointCommitStore(
             _executions,
             incidentStateStore: _incidents,
-            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+                state: _executions.CheckpointState,
+                persistenceAccessContextAccessor: new RuntimeHistoryTestAccess());
         _faulter = NewFaulter(_dispatches);
     }
 

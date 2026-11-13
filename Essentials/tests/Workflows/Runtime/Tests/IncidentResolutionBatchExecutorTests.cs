@@ -359,7 +359,9 @@ public sealed class IncidentResolutionBatchExecutorTests
                 WorkflowStore,
                 activityExecutionStateStore: ActivityStore,
                 incidentStateStore: IncidentStore,
-                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+                state: WorkflowStore.CheckpointState,
+                persistenceAccessContextAccessor: new RuntimeHistoryTestAccess());
             var committer = new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 decorateCommitStore?.Invoke(CommitStore) ?? CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
