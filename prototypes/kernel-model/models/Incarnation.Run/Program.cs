@@ -9,6 +9,9 @@ var names = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in
 var parentNames = (from mode in new[] { Modes.Balanced, Modes.Durable }
     from cut in new[] { "pending", "before-apply", "lost-ack" } select (mode, cut)).ToArray();
 var transportNames = (from mode in new[] { Modes.Balanced, Modes.Durable } from kind in new[] { "event", "timer" } select (mode, kind)).ToArray();
+var refusalNames = (from mode in new[] { Modes.Balanced, Modes.Durable } from missing in new[] { false, true }
+    from control in new[] { Kinds.Resume, Kinds.Terminate } select (mode, missing, control)).ToArray();
+if (args.SequenceEqual(["--refusal-takeover"])) { foreach (var (mode, missing, control) in refusalNames) new CreationWitness(mode, false).RefusalTakeover(missing, control); return; }
 if (args.SequenceEqual(["--transport-races"]))
 { foreach (var (mode, kind) in transportNames) new CreationWitness(mode, false).TransportRace(kind); await JobCreationRace.Run(); return; }
 if (args.SequenceEqual(["--parent-race"]))
@@ -22,6 +25,7 @@ if (args.SequenceEqual(["--list"]))
     foreach (var name in names) Console.WriteLine("creation:" + name);
     foreach (var name in parentNames) Console.WriteLine("creation:parent-race," + name);
     foreach (var name in transportNames) Console.WriteLine("creation:transport-race," + name);
+    foreach (var name in refusalNames) Console.WriteLine("creation:refusal-takeover," + name);
     Console.WriteLine("creation:job-generation-race");
     foreach (var name in BoundaryCases.Names) Console.WriteLine("creation:" + name);
     foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) Console.WriteLine("creation:visit-isolation," + mode);
@@ -32,11 +36,12 @@ if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 foreach (var (mode, nested, cut) in names) new CreationWitness(mode, nested).Run(cut);
 foreach (var (mode, cut) in parentNames) new CreationWitness(mode, false).ParentRace(cut);
 foreach (var (mode, kind) in transportNames) new CreationWitness(mode, false).TransportRace(kind);
+foreach (var (mode, missing, control) in refusalNames) new CreationWitness(mode, false).RefusalTakeover(missing, control);
 await JobCreationRace.Run();
 await BoundaryCases.Run();
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) new CreationWitness(mode, false).VisitIsolation();
 foreach (var qualified in new[] { false, true }) foreach (var caughtUp in new[] { false, true }) await JobAcknowledgement.Run(qualified, caughtUp);
-Console.WriteLine("35/35 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
+Console.WriteLine("43/43 creation schedules/reader boundaries passed. Isolated mutations and provider/binary qualification remain separate.");
 
 sealed partial class CreationWitness(string mode, bool nested)
 {
