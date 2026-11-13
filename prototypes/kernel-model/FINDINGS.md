@@ -1003,3 +1003,31 @@ holds, 0 deadlocks, 1,143 resets (all fenced), takeovers 572 and 571, settled 21
 is now the fence in the batch, recorded at REPEATABLE READ in ENGINES.md (holds, one take deadlock); with
 `isolation=rc` the fence in the batch has no recorded stress run, and was not run here. README's stress commands now
 show the fence option on every engine.
+
+### 25.9 State size: the benchmark (decision 10, first part). Run
+
+**What changed.** The EF cost run (`$EFR x cost`) ends with a state-size table. A Balanced instance of a new benchmark
+model (`Blob`, in `ef/Kernel.Ef.Run/EngineRun.cs`) holds a string of N kilobytes, changes it at each turn, and ends each
+turn with a message to itself. So each of its ten commits rewrites the whole state. For N = 1, 10, 100 and 1,000
+(`sizes=` to choose), it prints the state's bytes per commit, the counted round trips per commit (commands, COMMITs
+and, but for PostgreSQL, BEGINs, as the rest of the run counts), and the median of three runs of the milliseconds per
+commit. The rest of the cost run is unchanged.
+
+**What it shows.** The round trips stay flat as the state grows, and the time grows with the bytes. On this machine
+(shared with other sessions' runs, SQL Server under amd64 emulation) the milliseconds are only indicative:
+
+| Engine, fence | Counted per commit | ms per commit at 1 / 10 / 100 / 1,000 KB |
+|---|---|---|
+| PostgreSQL 17, batch | 2 | 3.3 / 3.3 / 3.6 / 8.7 |
+| PostgreSQL 17, checked | 3 | 3.5 / 3.8 / 4.2 / 8.3 |
+| SQLite (WAL), batch | 7.7 | 1.7 / 1.7 / 2.0 / 3.6 |
+| SQLite (WAL), checked | 7.7 | 1.6 / 1.3 / 2.5 / 4.1 |
+| SQL Server 2022 (RCSI), default (checked) | 4 | 4.4 / 5.9 / 7.0 / 30.6 |
+| MySQL 8.4, default (batch) | 3 | 6.6 / 8.2 / 32.8 / 18.9 |
+
+The bytes per commit are 1,044, 10,260, 102,420 and 1,024,020: the JSON of the state. Up to 100 KB a commit costs
+little more than at 1 KB on PostgreSQL and SQLite. At 1 MB it costs about two to three times as much on PostgreSQL,
+and seven times on SQL Server. MySQL's 100 KB run being slower than its 1 MB run is noise of one run of three.
+
+**Not done here:** values by reference (the second part of decision 10). This benchmark is the measurement the
+decision asks for first; "segments only if measurements show the need".

@@ -38,7 +38,7 @@ static class EngineRun
     }
 
     private static IExecutionModel[] Models() =>
-        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { }), new OnEvent()];
+        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { }), new OnEvent(), new Blob()];
 
     // A host that runs passes of one scope until two in a row find nothing to do.
     private static async Task Drain(IScopeActivation scope, bool poll)
@@ -378,6 +378,25 @@ static class EngineRun
             {
                 for (var i = 0; i < many; i++) await store.AddAsync(Start(Sequence.Balanced) with { KeepUntil = keep });
             });
+
+        // Decision 10: what a commit costs as the state grows. Every turn rewrites the whole state, so the round trips stay
+        // the same and the bytes, and the time, grow with it. sizes= in kilobytes; each size runs three times.
+        Console.WriteLine("\nstate size (decision 10): a Balanced instance that rewrites its whole state at each of ten commits");
+        Console.WriteLine($"{"state",10} {"bytes per commit",17} {"counted per commit",19} {"ms per commit, median of 3",27}");
+        foreach (var kb in target.Get("sizes", "1,10,100,1000").Split(",").Select(int.Parse))
+        {
+            var (times, counted) = (new List<double>(), 0L);
+            for (var run = 0; run < 3; run++)
+            {
+                counter.Reset();
+                var clock = Stopwatch.StartNew();
+                owner.Post(new Message($"m{++n}", InstanceRef.In(0, $"blob{n}"), Kinds.Start, Start: Blob.Spec(kb * 1024, 10)), fresh: true);
+                await Drain(owner, poll: false);
+                times.Add(clock.Elapsed.TotalMilliseconds / 10);
+                counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
+            }
+            Console.WriteLine($"{kb + " KB",10} {Json.Write(new BlobState { Data = new string('x', kb * 1024) }).Length,17} {counted / 10.0,19:F1} {times.Order().ElementAt(1),27:F1}");
+        }
 
         await using var check = create();
         var unfinished = await check.Instances.CountAsync(i => i.Status != InstanceStatus.Finished && i.Status != InstanceStatus.Cancelled);
@@ -946,4 +965,29 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => await Call("subscribe", async () => { await inner.SubscribeAsync(subscription, cancellationToken); return 0; });
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) => Call("projected", () => inner.ProjectedAsync(partition, cancellationToken));
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) => Call("project", () => inner.ProjectAsync(partition, from, to, rows, cancellationToken));
+}
+
+/// <summary>Decision 10's benchmark: an instance whose state is <c>Size</c> characters, changed and committed at each of <c>Turns</c> turns.</summary>
+public sealed class BlobState
+{
+    public string Data { get; set; } = "";
+    public int Left { get; set; }
+}
+
+public sealed record BlobInput(int Size, int Turns);
+
+public sealed class Blob : Model<BlobState>
+{
+    public override string Key => "blob";
+    public static StartSpec Spec(int size, int turns) => new("blob", "b", Json.Write(new BlobInput(size, turns)));
+
+    public override object CreateState(StartSpec start) => Json.Read<BlobInput>(start.Input!) is var input ? new BlobState { Data = new string('x', input.Size), Left = input.Turns } : null!;
+
+    protected override void Turn(ITurn turn, BlobState state)
+    {
+        // One change per turn, so every commit writes a different state; a message to itself ends the turn (a commit each).
+        state.Data = (char)('a' + state.Left % 26) + state.Data[1..];
+        if (--state.Left > 0) turn.Send(turn.Instance.Ref, "continue");
+        else turn.SetStatus(InstanceStatus.Finished);
+    }
 }

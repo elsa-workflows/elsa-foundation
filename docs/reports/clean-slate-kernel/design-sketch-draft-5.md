@@ -44,7 +44,7 @@ Owner decisions on this proposal. They become binding when the design is approve
 10. **State size:** large values are stored by reference, and a size benchmark goes into the cost runs; segments only if measurements show the need.
 11. **Viewer read path:** the API shows a run from its projected rows plus the journal tail past the projector's cursor, expanded in memory, so the view is always current. Studio may ask for a projector catch-up for the partition; rounds are coalesced. Studio never forces an owner commit or shows uncommitted state. Live watching is a push stream of committed journal entries.
 
-**Built in the prototype so far:** decision 2 (both fence modes, and since round 4 each engine's default: the checked fence on SQL Server, the fence in the batch elsewhere), 5 (the tables) and part of 9 (job tickets are counted like messages; parking the job and faulting the instance is not built). Decision 3 in part: round 4 added the wake-signal interface with an in-process implementation. The rest is not built.
+**Built in the prototype so far:** decision 2 (both fence modes, and since round 4 each engine's default: the checked fence on SQL Server, the fence in the batch elsewhere), 5 (the tables) and part of 9 (job tickets are counted like messages; parking the job and faulting the instance is not built). Decision 3 in part: round 4 added the wake-signal interface with an in-process implementation. Decision 10 in part (round 4): the state-size benchmark in the cost runs; values by reference are not built. The rest is not built.
 
 ## Three layers
 
