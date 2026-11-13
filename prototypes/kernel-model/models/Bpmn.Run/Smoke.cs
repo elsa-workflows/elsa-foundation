@@ -256,6 +256,7 @@ public static class Smoke
 
         await ScopeChecks.Run(Registry(), Check);
         await StartAndCancelChecks.Run(Check);
+        await MessageStartChecks.Run(Check);
         Console.WriteLine("conditions");
         foreach (var (body, holds) in new[] { ("s != 'a==b'", true), ("s == 'x<y'", true), ("n >= 2", true), ("n < 2", false), ("flag", true), ("missing", false) })
         {

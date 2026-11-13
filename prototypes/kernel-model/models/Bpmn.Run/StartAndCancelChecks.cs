@@ -47,8 +47,7 @@ internal static class StartAndCancelChecks
             await owner.Worker.WokenAsync(null);
             for (int pass = 0; pass < 12; pass++) await owner.Worker.RunAsync();
         }
-        var subscription = new SubscriptionRow(BpmnModel.MessageKey("paid", "order"), "", "by-payment",
-            BpmnModel.Spec("order-start", new JsonObject { ["value"] = "configured" }));
+        var subscription = BpmnModel.MessageStart("order-start", "by-payment", "paid", "order", new JsonObject { ["value"] = "configured" });
         await Events.SubscribeAsync(store, subscription, 1);
         var paid = new EventRow(subscription.Key, "42", """{"value":"published"}""", 1000);
         await Events.PublishAsync(store, paid);

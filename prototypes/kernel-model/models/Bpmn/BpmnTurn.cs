@@ -53,8 +53,8 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             case Kinds.Start when !_s.Started:
                 Start(m, null);
                 break;
-            case Kinds.Event when !_s.Started && m.Start is not null && Events.Delivered(m) is { } trigger:
-                Start(m, new BpmnStartSignal(trigger.Wait));
+            case Kinds.Event when !_s.Started && m.Start is not null:
+                Start(m, Events.Delivered(m) ?? throw new InvalidOperationException("Malformed BPMN event-start delivery."));
                 break;
             case BpmnKinds.Timer:
                 Completed(m.Read<TimerDue>().Handle, []);
@@ -108,11 +108,22 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
         }
     }
 
-    private void Start(Message message, BpmnStartSignal? signal)
+    private void Start(Message message, (string Event, string Wait)? delivery)
     {
+        var input = Json.Read<BpmnStart>(message.Start?.Input ?? "{}");
+        BpmnStartSignal? signal = null;
+        if (delivery is { } supplied)
+        {
+            var trigger = input.Trigger;
+            if (trigger is null || string.IsNullOrEmpty(trigger.Key) || string.IsNullOrEmpty(trigger.Element) ||
+                BpmnModel.StartWait(_process.Id, trigger) != supplied.Wait)
+                throw new InvalidOperationException("Invalid BPMN event start; register it through BpmnModel.MessageStart.");
+            _s.TakenEvents.Add(new ConsumedEvent(trigger.Key, supplied.Event));
+            signal = new BpmnStartSignal(trigger.Element);
+        }
         _s.Started = true;
         foreach (var (name, value) in _process.Variables) _s.Variables[name] = value?.DeepClone();
-        foreach (var (name, value) in Json.Read<BpmnStart>(message.Start?.Input ?? "{}").Variables ?? []) _s.Variables[name] = value?.DeepClone();
+        foreach (var (name, value) in input.Variables ?? []) _s.Variables[name] = value?.DeepClone();
         if (signal is not null) Merge(Object(message.Payload));
         Apply(BpmnModel.Semantics.Start(new BpmnStartRequest(_process.Graph, _s.Tokens, Snapshot(), signal)));
     }

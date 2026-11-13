@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Bpmn.Model;
 using Bpmn.Model.State;
 using Bpmn.Semantics;
@@ -16,7 +17,9 @@ public sealed record TimerDue(string Handle);
 public sealed record ScopeSignal(string Child, string Code, string? Payload);
 
 /// <summary>The start spec's input: variables over the process's own.</summary>
-public sealed record BpmnStart(JsonObject? Variables = null);
+public sealed record BpmnStart(JsonObject? Variables = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MessageStartBinding? Trigger = null);
+public sealed record MessageStartBinding(string Key, string Element);
 
 public sealed record JobArgs(string Process, string Service, string Element, JsonObject Variables);
 
@@ -85,8 +88,24 @@ public sealed class BpmnModel(ProcessRegistry registry, BpmnOptions? options = n
     internal BpmnOptions Options { get; } = options ?? new BpmnOptions();
     internal static BpmnInterpreter Semantics => Interpreter;
 
+    /// <summary>Direct workflow start. For event subscriptions use <see cref="MessageStart"/>.</summary>
     public static StartSpec Spec(string process, JsonObject? variables = null, History history = History.Full) =>
         new(ModelKey, process, Json.Write(new BpmnStart(variables)), History: history);
+
+    /// <summary>Register this row through Events.SubscribeAsync. The wait is a stable identity for the whole
+    /// registration. The event key and local BPMN element travel separately in its start spec.</summary>
+    public static SubscriptionRow MessageStart(string process, string element, string messageName, string correlation,
+        JsonObject? variables = null, History history = History.Full)
+    {
+        var binding = new MessageStartBinding(MessageKey(messageName, correlation), element);
+        var spec = new StartSpec(ModelKey, process, Json.Write(new BpmnStart(variables, binding)), History: history);
+        return new SubscriptionRow(binding.Key, "", StartWait(process, binding), spec);
+    }
+
+    internal static string StartWait(string process, MessageStartBinding binding) =>
+        // A wait without ':' is unambiguous in the kernel's eventId::wait delivery and eventId:wait physical name.
+        "bpmn-start-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(Json.Write(new[] { process, binding.Element, binding.Key }))));
 
     /// <summary>The event key a message catch waits for, and a publisher publishes to.</summary>
     public static string MessageKey(string name, string correlation) => $"msg:{Escape(name)}:{Escape(correlation)}";
