@@ -70,12 +70,16 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     /// </summary>
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        if (await HaltAsync(kill: false)) await OnNode(() => _runtime.StopAsync(cancellationToken).AsTask());
+        bool halted;
+        using (cancellationToken.Register(_kill.Cancel))      // a stop that may not wait any longer becomes a kill
+            halted = await HaltAsync(kill: false);
+        if (halted && !_kill.IsCancellationRequested) await OnNode(() => _runtime.StopAsync(cancellationToken).AsTask());
     }
 
     /// <summary>
     /// A crash: the loop stops (a pass under way stops at a turn boundary, before its commit) and nothing is given up,
-    /// then or later: a stop or dispose after a kill does nothing.
+    /// then or later: a stop or dispose after a kill does nothing. Background jobs already under way run on, as in a
+    /// process that lives on after it was declared dead; their results are dropped with the worker's memory.
     /// </summary>
     public async ValueTask KillAsync() => await HaltAsync(kill: true);
 
@@ -149,8 +153,13 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                     if (activation is null) continue;
                     if (Volatile.Read(ref _due[scope]) > Now) continue;
                     Volatile.Write(ref _due[scope], long.MaxValue);
-                    if (await _runtime.PassAsync(scope, kill) is { } delay) Sooner(ref _due[scope], Now + (long)delay.TotalMilliseconds);
-                    else if (!_runtime.Owns(scope)) _seen[scope] = null;   // lost: the node gets the same activation back when it takes the scope again
+                    TimeSpan? next = TimeSpan.FromMilliseconds(100);      // what a pass that throws gets: another try soon, not at the next poll
+                    try { next = await _runtime.PassAsync(scope, kill); }
+                    finally
+                    {
+                        if (next is { } delay) Sooner(ref _due[scope], Now + (long)delay.TotalMilliseconds);
+                        else if (!_runtime.Owns(scope)) _seen[scope] = null;   // lost: the node gets the same activation back when it takes the scope again
+                    }
                 }
             }
             catch (OperationCanceledException) when (kill.IsCancellationRequested) { break; }
