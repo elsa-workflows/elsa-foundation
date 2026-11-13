@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 WriteLine.Out = null;
 if (args is ["deadlines"]) return await Deadlines.RunAsync();
 if (args is ["smoke"]) return await Smoke.RunAsync();
+if (args is ["park"]) return await ParkChecks.RunAsync();
 if (args is ["expr", var text, .. var vars])
 {
     var scope = new Probe(vars.Select(v => v.Split('=')).ToDictionary(p => p[0], p => JsonNode.Parse(p[1])));
