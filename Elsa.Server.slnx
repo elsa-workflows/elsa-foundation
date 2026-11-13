@@ -410,6 +410,9 @@
     <Project Path="Essentials/src/Secrets/Workflows/Elsa.Secrets.Workflows.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Studio/" />
+  <Folder Name="/Essentials/src/Studio/Dashboard/">
+    <Project Path="Essentials/src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+  </Folder>
   <Folder Name="/Essentials/src/Studio/Preferences/">
     <Project Path="Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
     <Project Path="Essentials/src/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj" />

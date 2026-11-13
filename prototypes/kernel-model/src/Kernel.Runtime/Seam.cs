@@ -16,7 +16,10 @@ public interface IActorRuntime
     ValueTask StopAsync(CancellationToken cancellationToken = default);
 }
 
-/// <summary>Implemented by layer 2: activating a scope takes its fence, or declines.</summary>
+/// <summary>
+/// Implemented by layer 2: activating a scope takes its fence, or declines. A new activation starts from empty memory,
+/// so the runtime wakes it (<see cref="IScopeActivation.WokenAsync"/> with null) before its first pass.
+/// </summary>
 public interface IScopeHost
 {
     ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default);
@@ -38,8 +41,9 @@ public interface IScopeActivation : IAsyncDisposable
 
     /// <summary>
     /// One pass: the turns that are due, committed in batches. Returns when to call again: at once (zero) while there is
-    /// work, after a delay for the next timer it holds, or null to wait for a wake-up or the poll interval. A cancelled
-    /// token stops the pass at a turn boundary, before its commit: a process that goes away.
+    /// work, or after a delay for the next timer it holds or the next renewal of its lease, which layer 2 makes itself;
+    /// null once it no longer holds the scope. A runtime that calls again when asked keeps an idle scope's lease. A
+    /// cancelled token stops the pass at a turn boundary, before its commit: a process that goes away.
     /// </summary>
     ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default);
 }
@@ -54,17 +58,22 @@ public interface IWakeSignal
     void Listen(Action<InstanceRef> woken);
 }
 
-/// <summary>The wake signal of one process: a call to every listener, at once.</summary>
+/// <summary>The wake signal of one process: a call to every listener, at once, on the sender's thread.</summary>
 public sealed class InProcessWakeSignal : IWakeSignal
 {
     private readonly List<Action<InstanceRef>> _listeners = [];
 
     public void Send(InstanceRef actor)
     {
-        foreach (var listener in _listeners.ToList()) listener(actor);
+        Action<InstanceRef>[] listeners;
+        lock (_listeners) listeners = [.. _listeners];
+        foreach (var listener in listeners) listener(actor);
     }
 
-    public void Listen(Action<InstanceRef> woken) => _listeners.Add(woken);
+    public void Listen(Action<InstanceRef> woken)
+    {
+        lock (_listeners) _listeners.Add(woken);
+    }
 }
 
 /// <summary>What a heartbeat sees: how many nodes were heard from within the window, and which partitions nobody holds.</summary>
