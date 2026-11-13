@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 
-// Not installed in RuntimeDbContext until the owner's coherent four-provider migration slice.
+// Private derived shapes installed with the Runtime owner's coherent four-provider migration slice.
 internal static class RuntimeHistoryOccurrenceEntityConfiguration
 {
     internal const string OccurrenceTable = "elsa_runtime_history_occurrence";

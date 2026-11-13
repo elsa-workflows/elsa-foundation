@@ -89,6 +89,8 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new WorkflowActivationSlotEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RecurringTriggerScheduleEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RecurringTriggerScheduleProjectionStateEntityConfiguration());
+        RuntimeHistoryEntityConfiguration.Configure(modelBuilder);
+        RuntimeHistoryOccurrenceEntityConfiguration.Configure(modelBuilder);
         modelBuilder.MapSchemaFinalization(RuntimeEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
