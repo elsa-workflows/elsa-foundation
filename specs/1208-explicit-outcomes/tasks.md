@@ -21,13 +21,20 @@ There are no setters.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm that this spec is approved. Diff the merged ADR 0045 §6 and spec 095 text (`70399f75f`,
+- [x] T001 Confirm that this spec is approved. Diff the merged ADR 0045 §6 and spec 095 text (`70399f75f`,
   `a5d22a454`, and anything later on the initiative branch) against spec.md, and amend spec, plan, contract and these tasks for any change (including the answers to Q1–Q11) before
   starting. Also read Elsa 3's SendHttpRequest (elsa-core) and record whether `Done` fires on "Failed to
   connect" and "Timeout" (research R-7, FR-029a). Confirm that #3195 is fixed, and #3287 for the fixtures that read
   variables: without them no converted RunJavaScript runs, so T013, T015 and T030 cannot pass (research R-7)
-- [ ] T002 Check whether the general port defect issue (spec *Out of scope*, research R-8) is still open. If it is
+  - **Done 2026-11-13.** Spec approved (`209854bc7`); the branch has no ADR 0045 or spec 095 change after
+    `a5d22a454`, so spec, plan, contract and tasks stand as written. Elsa 3 (`elsa-core` `release/3.6.3`,
+    `FlowSendHttpRequest.HandleResponseAsync`): `Done` fires with every response, next to the code or
+    `Unmatched status code`; `Failed to connect` and `Timeout` complete with that outcome alone, without `Done`. So
+    T015 maps `Done` onto every code and the unmatched status code, not onto `Failed` or `Timeout`. #3195 is closed;
+    **#3287 is open**, so T013, T015 and T030 are blocked by #3287 for fixtures whose script reads a variable or input.
+- [x] T002 Check whether the general port defect issue (spec *Out of scope*, research R-8) is still open. If it is
   fixed, drop the port check in T031 and build US6 on the existing one
+  - **Done 2026-11-13.** #3809 is open, so T031 adds the port check and fixes it.
 
 ## Phase 2: Foundational (blocks every story)
 
