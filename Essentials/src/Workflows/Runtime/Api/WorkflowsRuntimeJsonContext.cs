@@ -17,6 +17,7 @@ namespace Elsa.Workflows.Runtime.Api;
 [JsonSerializable(typeof(UserTasks.TargetRequest))]
 [JsonSerializable(typeof(UserTasks.AssignmentTargets))]
 [JsonSerializable(typeof(UserTasks.UserTaskView))]
+[JsonSerializable(typeof(UserTasks.UserTaskHistoryView))]
 [JsonSerializable(typeof(UserTasks.UserTaskPageView))]
 [JsonSerializable(typeof(UserTasks.TaskListRequest))]
 [JsonSerializable(typeof(UserTasks.TaskIdRequest))]

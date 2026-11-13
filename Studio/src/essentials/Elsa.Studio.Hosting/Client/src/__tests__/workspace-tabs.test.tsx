@@ -148,6 +148,11 @@ describe("workspace tabs", () => {
     const editorTab = controller.state.activeId;
     const whenActive = editorProbe.whenActive!;
     await act(async () => controller.open("/list"));
+    // Capture the new tab's identity from a rendered controller, not the fixed scheduler delay.
+    await vi.waitFor(() => {
+      expect(controller.activeTab.location).toBe("/list");
+      expect(controller.state.activeId).not.toBe(editorTab);
+    });
     const listTab = controller.state.activeId;
 
     // A request the editor started completes in the background and opens what it created.

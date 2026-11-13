@@ -4,7 +4,7 @@ export interface TaskField { key: string; label: string; kind: string; required:
 export interface TaskForm { id: string; version: string; name: string; provider: string; fields: TaskField[] }
 export interface FormVersion { tenantId: string; form: TaskForm; createdAt: string; createdBy: string }
 export interface TaskActor { userId: string; canRead: boolean; canAct: boolean; canManage: boolean; canManageForms: boolean; canReadForms: boolean }
-export interface TaskItem { id: string; title: string; description?: string; assigneeId?: string; groupId?: string; claimantId?: string; actions: string[]; optionalFormActions: string[]; form?: TaskForm; prefill: Record<string, unknown>; status: string; revision: number; history: { operation: string; actorId: string; at: string; action?: string }[]; decision?: { response: { action: string; data: Record<string, unknown> }; actorId: string } }
+export interface TaskItem { id: string; title: string; description?: string; assigneeId?: string; assigneeName?: string | null; groupId?: string; groupName?: string | null; claimantId?: string; claimantName?: string | null; actions: string[]; optionalFormActions: string[]; form?: TaskForm; prefill: Record<string, unknown>; status: string; revision: number; history: { operation: string; actorId: string; actorName?: string | null; at: string; action?: string }[]; decision?: { response: { action: string; data: Record<string, unknown> }; actorId: string } }
 export interface TaskPage { items: TaskItem[]; next?: string | null }
 export interface TaskTargets { users: { id: string; name: string }[]; groups: { id: string; name: string }[]; moreUsers: boolean; moreGroups: boolean }
 export const basicProvider = "elsa.basic-forms/1";

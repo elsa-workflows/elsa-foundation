@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Layer 3, actor types: the workflow instance and the execution-model contract it runs. -->
+  <PropertyGroup>
+    <RootNamespace>Kernel.Workflows</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Kernel.Durable/Kernel.Durable.csproj" />
+  </ItemGroup>
+</Project>

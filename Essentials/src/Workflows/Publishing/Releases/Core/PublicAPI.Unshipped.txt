@@ -1,0 +1,45 @@
+#nullable enable
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.ReadDirectoryAsync(string! directory, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.ReadZipAsync(System.IO.Stream! input, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.Validate(System.ReadOnlyMemory<byte> manifestUtf8, System.Collections.Generic.IReadOnlyDictionary<string!, System.ReadOnlyMemory<byte>>! blobs, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.WriteZipAsync(Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport! bundle, System.IO.Stream! output, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.AttachmentPaths.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.Digest.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.GetAttachmentBytes(string! path) -> byte[]!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.GetBlobBytes(string! payloadDigest) -> byte[]!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.GetManifestBytes() -> byte[]!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.Manifest.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.Members.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleFormatException
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleFormatException.Code.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleFormatException.ReleaseBundleFormatException(string! code) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxArchiveBytes.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxArchiveBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxBlobBytes.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxBlobBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxDependencyDepth.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxDependencyDepth.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEdges.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEdges.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEntries.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEntries.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxExpandedBytes.get -> long
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxExpandedBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxJsonDepth.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxJsonDepth.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxManifestBytes.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxManifestBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxMembers.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxMembers.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.ReleaseBundleLimits() -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.ByteLength.get -> long
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.Codec.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.CodecVersion.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.Identity.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.Kind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.PayloadDigest.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.ReleaseBundleMember(string! kind, string! identity, string! codec, int codecVersion, string! payloadDigest, long byteLength) -> void

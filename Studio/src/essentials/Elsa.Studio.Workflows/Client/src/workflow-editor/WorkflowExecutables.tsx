@@ -1,5 +1,5 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -174,14 +174,11 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           value={definitionFilter ?? ""}
           onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
         />
-        <label className="wf-toolbar-field">
-          <span>Scope</span>
-          <select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
+        <StudioField className="wf-toolbar-field" label={<><span>Scope</span></>}><select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
             <option value="published">Published</option>
             <option value="test-runs">Test runs</option>
             <option value="all">All</option>
-          </select>
-        </label>
+          </select></StudioField>
         <label className="wf-toolbar-field wf-toolbar-checkbox">
           <input
             type="checkbox"
@@ -336,12 +333,9 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {pagerFirstItem}-{pagerLastItem} of {totalCount}
           </span>
-          <label className="wf-page-size">
-            Rows
-            <select aria-label="Executable page size" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
+          <StudioField className="wf-page-size" label="Rows"><select aria-label="Executable page size" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
               {definitionPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
           <div className="wf-page-controls">
             <StudioButton onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page" title="Previous page">
               <ChevronLeft size={14} /> Previous

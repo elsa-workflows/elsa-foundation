@@ -59,6 +59,13 @@ agreement; newly created records remain `needs-triage` until a maintainer change
 
 ## Current objective and completion
 
+Work resumed on 12 November 2026. The [recovered specification and status](../../specs/1210-state-machine/README.md)
+record what landed and what remains. PR #3840 was closed unmerged for review size; the
+[ordered delivery slices](../../specs/1210-state-machine/delivery.md) preserve its requirements and evidence without
+reopening the large PR. M0 must reassess its historical runtime mapping against the newer clean-slate kernel
+direction before adding production integration. This is a continuation of the existing program, not a new scope
+or approval of the kernel model.
+
 Establishment #3826 records the program setup and deferral reconciliation; #3820 owns the continuing owner
 design session. The still-open M0 choices include the implementable event ordering/capacity/delivery and outcome
 contract, event/trigger lifetime and matching, complete hierarchical/parallel selection and recovery semantics,

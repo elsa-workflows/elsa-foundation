@@ -12,6 +12,7 @@ public sealed partial class InMemoryWorkflowExecutableSourceReferenceStore
         WorkflowExecutableIdentity root, IReadOnlyList<WorkflowExecutableRootWriteLease> leases, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(reference); ArgumentNullException.ThrowIfNull(root); ArgumentNullException.ThrowIfNull(leases);
+        if (reference.PublicationScope is not null) throw new NotSupportedException("Generic fenced sources cannot assert protected logical publication scope.");
         ArgumentException.ThrowIfNullOrWhiteSpace(reference.SourceReferenceId);
         cancellationToken.ThrowIfCancellationRequested();
         if (_executableStore is null) throw new NotSupportedException("Source publication requires its actual native executable store.");

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Boxes, FolderGit2, FolderPlus, Package, RefreshCcw } from "lucide-react";
-import { StatusChip, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import type {
   ExtensionBuilderCapabilities,
   ExtensionRepositorySummary,
@@ -112,23 +112,23 @@ export function HomeView({
             <div className="extension-builder-create-block">
               <h4><FolderPlus size={15} /> New managed solution</h4>
               <div className="extension-builder-create-fields">
-                <input aria-label="Repository name" placeholder="Solution name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
+                <StudioField label="Repository name"><input aria-label="Repository name" placeholder="Solution name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} /></StudioField>
                 <button type="button" className="studio-button studio-button-primary" disabled={busy || !canCreate || !workspaceName.trim()} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>Create managed repo</button>
               </div>
             </div>
             <div className="extension-builder-create-block">
               <h4><FolderGit2 size={15} /> Clone from Git</h4>
               <div className="extension-builder-create-fields">
-                <input aria-label="Clone repository URL" placeholder="https://github.com/acme/extension.git" value={cloneRepositoryUrl} disabled={busy || !canCreate} onChange={event => onCloneRepositoryUrlChange(event.target.value)} />
-                <input aria-label="Clone repository name" placeholder="Display name (optional)" value={cloneRepositoryName} disabled={busy || !canCreate} onChange={event => onCloneRepositoryNameChange(event.target.value)} />
+                <StudioField label="Clone repository URL"><input aria-label="Clone repository URL" placeholder="https://github.com/acme/extension.git" value={cloneRepositoryUrl} disabled={busy || !canCreate} onChange={event => onCloneRepositoryUrlChange(event.target.value)} /></StudioField>
+                <StudioField label="Clone repository name"><input aria-label="Clone repository name" placeholder="Display name (optional)" value={cloneRepositoryName} disabled={busy || !canCreate} onChange={event => onCloneRepositoryNameChange(event.target.value)} /></StudioField>
                 <button type="button" className="studio-button" disabled={busy || !canCreate || !cloneRepositoryUrl.trim()} title={canCreate ? "Clone from Git" : "Requires canCreateWorkspace"} onClick={onCloneRepository}>Clone from Git</button>
               </div>
             </div>
             <div className="extension-builder-create-block">
               <h4><FolderPlus size={15} /> Attach server-local</h4>
               <div className="extension-builder-create-fields">
-                <input aria-label="Server-local repository path" placeholder="/srv/elsa/extensions/repo" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} />
-                <input aria-label="Server-local repository name" placeholder="Display name (optional)" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} />
+                <StudioField label="Server-local repository path"><input aria-label="Server-local repository path" placeholder="/srv/elsa/extensions/repo" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} /></StudioField>
+                <StudioField label="Server-local repository name"><input aria-label="Server-local repository name" placeholder="Display name (optional)" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} /></StudioField>
                 <button type="button" className="studio-button" disabled={busy || !canCreate || !serverLocalPath.trim()} title={canCreate ? "Attach server-local repository" : "Requires canCreateWorkspace"} onClick={onAttachServerLocalRepository}>Attach server-local</button>
               </div>
             </div>
@@ -137,7 +137,7 @@ export function HomeView({
           <div className="extension-builder-create-block extension-builder-create-primary">
             <h4><Package size={15} /> New extension</h4>
             <div className="extension-builder-create-fields">
-              <input aria-label="Extension name" placeholder="Acme Orders" value={extensionName} disabled={busy || !canCreate} onChange={event => onExtensionNameChange(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && extensionName.trim()) onCreateExtension(); }} />
+              <StudioField label="Extension name"><input aria-label="Extension name" placeholder="Acme Orders" value={extensionName} disabled={busy || !canCreate} onChange={event => onExtensionNameChange(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && extensionName.trim()) onCreateExtension(); }} /></StudioField>
               <button type="button" className="studio-button studio-button-primary" disabled={busy || !canCreate || !extensionName.trim()} title={canCreate ? "Create a new extension" : "Requires canCreateWorkspace"} onClick={onCreateExtension}>
                 <FolderPlus size={15} />
                 New extension
