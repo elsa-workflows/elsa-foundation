@@ -10,11 +10,16 @@ sealed partial class CreationWitness
         NativeWorkflows.Registry.Add(Wf.Workflow("creation-probe", Wf.Node<IdentityReceiver>("receiver").With(Wf.Event("finish", "finish"))));
         Apply(new("take", Actor.Id)); Send(Kinds.Start, 1, start: Spec(1)); Drain(); Retire(1);
         var predecessor = Row; var refusals = 0;
-        if (failure == "refused") _world.Store.Refuses = row =>
+        if (failure == "refused")
         {
-            if (row.Id != _target.Id || row.Creation != 2 || row.Status != InstanceStatus.Running) return false;
-            refusals++; return true;
-        };
+            // Oracle expectation only: the real store predicate must reject a normal generation-two row below.
+            _world.Oracle.Fragiles[_target.Id] = true;
+            _world.Store.Refuses = row =>
+            {
+                if (row.Id != _target.Id || row.Creation != 2 || row.Status != InstanceStatus.Running) return false;
+                refusals++; return true;
+            };
+        }
         Send(Kinds.Start, 2, start: Spec(2));
         var start = _world.Store.Messages.Values.Single(m => m.Message.Start?.Creation?.Generation == 2).Message.Id;
         if (failure == "poison")
