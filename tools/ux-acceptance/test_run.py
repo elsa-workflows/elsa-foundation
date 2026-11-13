@@ -259,16 +259,24 @@ class SourcePairTests(unittest.TestCase):
             studio = Path(directory).resolve() / "studio-source"; output = Path(directory) / "evidence"; calls = []
             def command(argv, *_args, **kwargs):
                 calls.append((argv, kwargs.get("cwd")))
+                if "tests/browser/playwright.outlined-fields.config.ts" in argv:
+                    gallery = Path(kwargs["env"]["OUTLINED_EVIDENCE"]); gallery.mkdir()
+                    image = gallery / "unit-fixture.png"; image.write_bytes(b"explicit unit artifact fixture")
+                    test = {"expectedStatus": "passed", "status": "expected", "results": [{"status": "passed", "attachments": [{"contentType": "image/png", "path": str(image)}]}]}
+                    (gallery / "playwright.json").write_text(json.dumps({"config": {"metadata": {"outlinedCases": 1}}, "suites": [{"specs": [{"title": "Unit fixture", "tests": [test]}]}]}))
                 if "studio-build.log" in str(_args): raise RuntimeError("Stop after verifying build selection")
             state = lambda root: ("frontend-head", "") if root == studio else ("backend-head", "")
             with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command", side_effect=command):
                 with self.assertRaisesRegex(RuntimeError, "build selection"):
                     acceptance.run(output, 'existing home widgets and layout defaults', studio)
             self.assertEqual(studio / "Studio", calls[1][1])
-            self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"), calls[2][0])
+            self.assertEqual(studio / "Studio", calls[2][1])
+            self.assertIn("tests/browser/playwright.outlined-fields.config.ts", calls[2][0])
+            self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"), calls[3][0])
             report = json.loads((output / "report.json").read_text())
             self.assertEqual("backend-head", report["sourceSha"])
             self.assertEqual("frontend-head", report["studioSourceSha"])
+            self.assertEqual("frontend-head", report["isolatedFieldGallery"]["sourceSha"])
 
 
 if __name__ == '__main__':
