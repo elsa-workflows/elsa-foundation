@@ -23,6 +23,9 @@ public static class CaseSmoke
     /// </summary>
     private sealed class Gates
     {
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> Returning = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> ReturnPermit = new(StringComparer.Ordinal);
+        public int PendingReturns;
         public readonly ConcurrentDictionary<string, TaskCompletionSource> Held = new(StringComparer.Ordinal);
         public readonly HashSet<string> Services = new(StringComparer.Ordinal);
         public readonly ConcurrentDictionary<string, bool> Cancelled = new(StringComparer.Ordinal);    // the service's job was told to stop
@@ -35,11 +38,17 @@ public static class CaseSmoke
             var service = Json.Read<JobArgs>(job.Arguments!).Service;
             if (!Services.Contains(service)) return;
             using var _ = cancel.Register(() => Cancelled[service] = true);
+            Interlocked.Increment(ref PendingReturns);
             await Of(service).Task;
             if (Cancelled.ContainsKey(service)) Ran[service] = true;
+            Returning.GetOrAdd(service, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
+            await ReturnPermit.GetOrAdd(service, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+            Interlocked.Decrement(ref PendingReturns);
         }
 
         public void Release(string service) => Of(service).TrySetResult();
+        public Task ReadyToReturn(string service) => Returning.GetOrAdd(service, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        public void AllowReturn(string service) => ReturnPermit.GetOrAdd(service, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
 
         public void Clear()
         {
@@ -47,10 +56,23 @@ public static class CaseSmoke
             Held.Clear();
             Cancelled.Clear();
             Ran.Clear();
+            Returning.Clear();
+            ReturnPermit.Clear();
         }
     }
 
     public static async Task<int> RunAsync()
+    {
+        var schedulers = new ConcurrentExclusiveSchedulerPair(TaskScheduler.Default, maxConcurrencyLevel: 1);
+        try
+        {
+            return await Task.Factory.StartNew(RunOnOwnerAsync, CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach, schedulers.ExclusiveScheduler).Unwrap();
+        }
+        finally { schedulers.Complete(); await schedulers.Completion; }
+    }
+
+    private static async Task<int> RunOnOwnerAsync()
     {
         var gates = new Gates();
         var store = new InMemoryStore(1, () => Environment.TickCount64);
@@ -71,6 +93,27 @@ public static class CaseSmoke
         }
         static string? Var(BpmnState s, string name) => s.Variables.GetValueOrDefault(name)?.ToJsonString();
         static List<string> Joins(List<string> journal, string element) => journal.Where(e => e.StartsWith($"j {element} ", StringComparison.Ordinal)).ToList();
+        async Task<Task> CaptureJob(InstanceRef parent, bool child = false)
+        {
+            Task? driver = null;
+            await owner.PumpAsync(() =>
+            {
+                var instance = child ? owner.Worker.Instances.FirstOrDefault(i => i.Row?.Parent == parent.Id).Id : parent.Id;
+                driver = instance is null ? null : owner.Worker.JobCompletion(instance, "h1");
+                return driver is not null;
+            });
+            return driver!;
+        }
+        async Task FinishLateJob(string service, Task driver)
+        {
+            gates.Release(service);
+            await gates.ReadyToReturn(service).WaitAsync(TimeSpan.FromSeconds(10));
+            Check(!driver.IsCompleted, "the actual worker driver is pending while the cancelled body withholds its return");
+            gates.AllowReturn(service);
+            await driver.WaitAsync(TimeSpan.FromSeconds(10));
+            await owner.PumpAsync(() => true);
+            Check(gates.Ran.ContainsKey(service), "the cancelled job body reached its late return");
+        }
 
         Console.WriteLine("parallel: a fork into two service tasks (jobs) and a join");
         {
@@ -99,16 +142,13 @@ public static class CaseSmoke
         Console.WriteLine("an interrupting boundary timer cancels the service task's job");
         {
             gates.Services.Add("slow");
-            var (s, journal, id) = await Run("b-boundary");
+            Task? lateDriver = null;
+            var (s, journal, id) = await Run("b-boundary", meanwhile: async target => { lateDriver = await CaptureJob(target); });
             Check(Var(s, "escalated") == "true" && Var(s, "slow-done") is null, "the timer fired first: the timeout path ran, the task did not complete");
             Check(journal.Any(e => e == "x h1 slow"), "the job was stopped");
             Check(gates.Cancelled.ContainsKey("slow"), "the job was told to stop");
             var commits = store.Journal.Count;
-            gates.Release("slow");      // the job ignores the cancel: it runs and returns its result now
-            await owner.PumpAsync(() => gates.Ran.ContainsKey("slow") && store.Messages.Values.All(m => m.Done));
-            // The gate knows when the job resumed, not when its result reached the worker: give it time, then run passes again.
-            await Task.Delay(200);
-            await owner.PumpAsync(() => true);
+            await FinishLateJob("slow", lateDriver!);
             Check(owner.State(id.Id)!.Variables.GetValueOrDefault("slow-done") is null && owner.Status(id.Id) == InstanceStatus.Finished && store.Journal.Count == commits,
                 "the job's late result changed nothing and made no commit");
             gates.Clear();
@@ -141,13 +181,17 @@ public static class CaseSmoke
         Console.WriteLine("a boundary timer on the call activity terminates the child");
         {
             gates.Services.Add("child");
-            var (s, journal, id) = await Run("b-call", new JsonObject { ["order"] = "c2" });
+            Task? lateDriver = null;
+            var (s, journal, id) = await Run("b-call", new JsonObject { ["order"] = "c2" },
+                async target => { lateDriver = await CaptureJob(target, child: true); });
             var child = journal.First(e => e.StartsWith("w ", StringComparison.Ordinal) && e.Contains(" call ", StringComparison.Ordinal)).Split(' ')[4];
             await owner.PumpAsync(() => owner.Status(child) == InstanceStatus.Cancelled);
             Check(Var(s, "child-out") is null && journal.Contains("x h1 call"), "the timer fired first and stopped the call");
             Check(store.Instances[child].Status == InstanceStatus.Cancelled && gates.Cancelled.ContainsKey("child"), $"child {child} was terminated, and its job was told to stop");
-            gates.Release("child");     // its work ends; its result is nobody's
-            await owner.PumpAsync(() => gates.Ran.ContainsKey("child") && store.Messages.Values.All(m => m.Done));
+            var commits = store.Journal.Count;
+            await FinishLateJob("child", lateDriver!);
+            Check(owner.Status(id.Id) == InstanceStatus.Finished && owner.Status(child) == InstanceStatus.Cancelled && store.Journal.Count == commits,
+                "the child's actual late driver leaves the terminal parent and child unchanged and makes no commit");
             gates.Clear();
         }
 
@@ -161,6 +205,7 @@ public static class CaseSmoke
         }
 
         Check(store.Messages.Values.All(m => m.Done) && store.Subscriptions.Count == 0, "no message and no subscription left");
+        Check(gates.PendingReturns == 0, "every held job body actually returned before the suite finished");
         Console.WriteLine(_failures == 0 ? "cases: all passed" : $"cases: {_failures} FAILED");
         return _failures;
     }
