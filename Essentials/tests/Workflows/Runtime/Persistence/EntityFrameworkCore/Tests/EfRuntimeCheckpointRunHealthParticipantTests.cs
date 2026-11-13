@@ -118,7 +118,7 @@ public sealed class EfRuntimeCheckpointRunHealthParticipantTests
         var workflow = Workflow("workflow-a", WorkflowExecutionStatus.Pending, WorkflowRunKind.PublishedRun);
         await using (var seed = database.Open("tenant-a"))
         {
-            seed.Context.WorkflowRunHealthStates.Add(HealthEntity(workflow, "tenant-a"));
+            seed.Context.WorkflowRunHealthStates.Add(HealthEntity(seed.Context, workflow, "tenant-a"));
             await seed.Context.SaveChangesAsync();
         }
 
@@ -316,7 +316,7 @@ public sealed class EfRuntimeCheckpointRunHealthParticipantTests
         };
     }
 
-    private static WorkflowRunHealthStateEntity HealthEntity(WorkflowExecutionState state, string scope)
+    private static WorkflowRunHealthStateEntity HealthEntity(RuntimeDbContext context, WorkflowExecutionState state, string scope)
     {
         var assembly = typeof(EfWorkflowExecutionStateStore).Assembly;
         var projectionType = assembly.GetType(
@@ -334,7 +334,7 @@ public sealed class EfRuntimeCheckpointRunHealthParticipantTests
             "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointRunHealthParticipantStaging")!;
         var id = CompositeId(scope, state.WorkflowExecutionId);
         var toEntity = stagingType.GetMethod("ToEntity", BindingFlags.NonPublic | BindingFlags.Static)!;
-        return (WorkflowRunHealthStateEntity)toEntity.Invoke(null, [projection, scope, id, 1L])!;
+        return (WorkflowRunHealthStateEntity)toEntity.Invoke(null, [context, projection, scope, id, 1L])!;
     }
 
     private static string SerializeRuntime<T>(T value)
