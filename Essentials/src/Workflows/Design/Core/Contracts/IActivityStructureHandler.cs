@@ -75,6 +75,13 @@ public interface IActivityStructureHandler
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>
+    /// Compiles with exact server-resolved invocation facts and the original source/projection.
+    /// Existing handlers retain their ordinary compilation behavior by default.
+    /// </summary>
+    ActivityNodeStructure CompileExecutableStructure(ActivityNode activity, ActivityStructureCompilationContext context) =>
+        CompileExecutableStructure(activity);
+
+    /// <summary>
     /// Rewrites the semantic child-node references in an already compiled structure after its
     /// authored children have received placement-specific executable identities.
     /// </summary>
