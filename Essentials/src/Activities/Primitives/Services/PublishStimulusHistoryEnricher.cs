@@ -50,22 +50,23 @@ internal sealed class PublishStimulusHistoryEnricher(IPersistenceAccessContextAc
         var originals = commit.PostCommitIntents.Concat(pending.Select(item => item.Intent)).Where(IsPublication)
             .GroupBy(intent => intent.IntentId, StringComparer.Ordinal).ToArray();
         var facts = (commit.HistorySourceFacts ?? []).Where(fact => fact.Kind == RuntimeHistorySourceFactKind.StimulusPublicationCommitted).ToArray();
+        var factsBySubject = facts.ToLookup(fact => fact.SubjectId, StringComparer.Ordinal);
         if (commit.Checkpoint.Metadata.ContainsKey(RuntimeMetadataKeys.CoalescedFlush))
         {
             // A physical flush carries original raw sources and their already captured logical groups, never a new send.
             var events = batches.SelectMany(batch => batch.Candidates).Select(candidate => candidate.Event)
-                .Where(item => item.Name == "StimulusPublicationCommitted").ToArray();
+                .Where(item => item.Name == "StimulusPublicationCommitted").ToLookup(item => item.HistoryEventId, StringComparer.Ordinal);
             if (commit.PostCommitIntents.Any(IsPublication) || pending.Any(item => item.Intent.HistoryCausation is not { } cause ||
                 cause.WorkflowExecutionId != commit.WorkflowExecutionId || cause.DeliveryId != item.OutboxItemId ||
                 item.StimulusDeliverySourceScope != scope ||
-                !events.Any(itemEvent => itemEvent.HistoryEventId == cause.HistoryEventId && itemEvent.WorkflowExecutionId == commit.WorkflowExecutionId &&
+                cause.HistoryEventId is not { } eventId || !events[eventId].Any(itemEvent => itemEvent.WorkflowExecutionId == commit.WorkflowExecutionId &&
                     itemEvent.HistoryEventId == RuntimeHistoryIdentity.CreateId(itemEvent.CheckpointId!, "StimulusPublicationCommitted", item.Intent.IntentId))))
                 throw Changed();
             return ValueTask.CompletedTask;
         }
         if (facts.Length != originals.Length || originals.Any(group => group.Any(intent => !group.First().IsEquivalentTo(intent)) ||
             group.Any(intent => intent.HistoryCausation != Origin(commit, intent)) ||
-            facts.Count(fact => fact.SubjectId == group.Key && fact.IsEquivalentTo(Fact(commit, group.First()))) != 1) ||
+            factsBySubject[group.Key].Count(fact => fact.IsEquivalentTo(Fact(commit, group.First()))) != 1) ||
             pending.Any(item => item.StimulusDeliverySourceScope != scope))
             throw Changed();
         return ValueTask.CompletedTask;

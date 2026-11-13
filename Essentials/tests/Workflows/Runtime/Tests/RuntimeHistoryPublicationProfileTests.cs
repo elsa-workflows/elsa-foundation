@@ -324,9 +324,10 @@ public sealed class RuntimeHistoryPublicationProfileTests
                     .Select(change => change.StateId == row.OutboxItemId ? change with { State = replacement } : change).ToArray()) });
             }
             var original = commit.PostCommitIntents.Concat(commit.StateChanges.PostCommitOutbox.Select(change => change.State.Intent)).First(intent => intent.Kind == Kind);
-            var late = new RuntimePostCommitIntent("late", commit.WorkflowExecutionId, Kind, At, "activity", "late-key", original.Payload);
-            if (mode == "rebind") late = late with { HistoryCausation = original.HistoryCausation! with
-                { DeliveryId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, late.IntentId) } };
+            var lateCause = mode == "rebind" ? original.HistoryCausation! with
+                { DeliveryId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, "late") } : null;
+            var late = new RuntimePostCommitIntent("late", commit.WorkflowExecutionId, Kind, At, "activity", "late-key", original.Payload)
+                { HistoryCausation = lateCause };
             if (mode == "logical") return ValueTask.FromResult(commit with { PostCommitIntents = commit.PostCommitIntents.Append(late).ToArray() });
             var pending = commit.PostCommitIntents.Append(late).Select(intent => RuntimePostCommitOutboxItems.CreatePending(commit, intent, contributions, Scope));
             var changes = commit.StateChanges.PostCommitOutbox.Concat(pending.Select(item =>
