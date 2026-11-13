@@ -9,22 +9,31 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 public sealed partial class RuntimeHistoryInspectionService
 {
+    internal Func<WorkflowExecutionState, string, CancellationToken, ValueTask<string?>>? OccurrenceAccessBinding { get; init; }
+
     public async Task<RuntimeHistoryOccurrencePageView> ReadOccurrencesAsync(GetRuntimeHistoryOccurrences request,
         CancellationToken token = default)
     {
         var workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
+        var requestBinding = await BindingAsync(token);
         var query = new RuntimeHistoryOccurrenceQuery(request.WorkflowExecutionId, request.Limit, request.SequenceToken,
             request.Position, request.AnchorActivityExecutionId, request.ActivityExecutionId,
-            request.IncludeDescendants, await BindingAsync(token));
+            request.IncludeDescendants, requestBinding);
         if (history is not IRuntimeHistoryOccurrenceStore occurrences)
             return EmptyOccurrences("occurrence-facet-unsupported", await CoverageAsync(workflow, null, token));
+        var binding = OccurrenceAccessBinding is { } bind
+            ? await bind(workflow, requestBinding, token) : null;
+        if (binding is null) return EmptyOccurrences("current-authorization-unsupported", await CoverageAsync(workflow, null, token));
+        query = new(request.WorkflowExecutionId, request.Limit, request.SequenceToken, request.Position,
+            request.AnchorActivityExecutionId, request.ActivityExecutionId, request.IncludeDescendants, binding);
         try
         {
             var page = await occurrences.ReadOccurrencesAsync(query, token);
             ValidateOccurrences(query, page);
             // A pending provider read must not disclose its result after access/profile retirement.
             workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
-            if (await BindingAsync(token) != query.AccessBinding) throw new RuntimeResourceMissingSignal();
+            var currentBinding = await OccurrenceAccessBinding!(workflow, await BindingAsync(token), token);
+            if (currentBinding != query.AccessBinding) throw new RuntimeResourceMissingSignal();
             var coverage = await CoverageAsync(workflow, page.Head, token);
             var state = page.Availability switch
             {

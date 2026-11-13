@@ -19,7 +19,7 @@ public sealed class RuntimeStructuralContinuationTests
             .WithHistorySourceFacts(observed => { calls++; return [new(RuntimeHistorySourceFactKind.ControlApplied, "lazy", observed)]; });
         supplied.Clear();
         var value = ValueEnvelope.Inline(new("state"), JsonSerializer.SerializeToElement(new { cursor = 1 }), ValueProtectionPolicy.InstanceInline);
-        var clone = continuation.WithState(value).WithControl(new(1, "consumer", 1, "run", "activity", "work", 0, false));
+        var clone = continuation.WithState(value).WithControl(new(1, "consumer", 1, "run", "activity", "work", 0, false, [new("source-notice")]));
         Assert.Equal(0, calls);
         Assert.Single(clone.HistorySourceFacts!);
         var facts = clone.MaterializeHistorySourceFacts(at.AddSeconds(1));

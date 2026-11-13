@@ -1,6 +1,11 @@
 using System.Net;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Capabilities;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Extensions;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +27,9 @@ public sealed partial class RuntimeHistoryApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var query = Assert.IsType<RuntimeHistoryOccurrenceQuery>(source.OccurrenceQuery);
         Assert.Equal(1, query.Limit); Assert.Equal("window", query.SequenceToken); Assert.Equal(0, query.Position);
-        Assert.Equal(RuntimeHistoryIdentity.CreateBinding(["tenant-a", "operator", "structure-only"]), query.AccessBinding);
+        Assert.Equal(RuntimeHistoryIdentity.CreateBinding([
+            RuntimeHistoryIdentity.CreateBinding(["tenant-a", "operator", "structure-only"]),
+            "tenant-a", "operator", "structure", "no-payloads"]), query.AccessBinding);
         Assert.Equal(1, source.Reads); Assert.Equal(0, source.IndependentExactReads); Assert.Equal(0, host.Authorization.ValueReads);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()); var root = json.RootElement;
         Assert.Equal("available", root.GetProperty("state").GetString());
@@ -67,8 +74,7 @@ public sealed partial class RuntimeHistoryApiTests
         release.SetResult();
         using var response = await request;
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.False(json.RootElement.TryGetProperty("items", out _));
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
         Assert.Equal(0, host.Authorization.ValueReads);
     }
 
@@ -154,8 +160,118 @@ public sealed partial class RuntimeHistoryApiTests
         Assert.Equal(1, json.RootElement.GetProperty("items").GetArrayLength());
     }
 
-    private static Task<Host> OccurrenceHost(OccurrenceProjection source) => Host.StartAsync(
-        services => services.AddSingleton<IRuntimeHistoryStore>(source), workflow: Workflow() with { HistoryCapturePolicy = OccurrencePolicy });
+    [Theory]
+    [InlineData("workflows/runtime:read")]
+    [InlineData(HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission)]
+    [InlineData(HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission)]
+    [InlineData(HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission)]
+    public async Task Default_HTTP_adapter_rechecks_current_subject_grants_before_disclosing_a_held_occurrence(string permission)
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        host.Client.DefaultRequestHeaders.Add("X-History-Values", "true");
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.Pending = async token => { entered.SetResult(); await release.Task.WaitAsync(token); return source.Occurrences; };
+        var pending = host.Client.GetAsync(Path + "/occurrences");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        current.DeniedPermission = permission; release.SetResult();
+        using var response = await pending;
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.All(current.Requests, request => { Assert.Equal("tenant-a", request.TenantId); Assert.Equal("operator", request.SubjectId); });
+        Assert.Equal(1, source.Reads); Assert.Equal(0, source.IndependentExactReads);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Current_subject_denial_or_unsupported_admission_never_reads_occurrences(bool unsupported)
+    {
+        var current = new CurrentOccurrencePermissions { Unsupported = unsupported,
+            DeniedPermission = "workflows/runtime:read" };
+        var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        using var response = await host.Client.GetAsync(Path + "/occurrences");
+        Assert.Equal(unsupported ? HttpStatusCode.OK : HttpStatusCode.NotFound, response.StatusCode);
+        if (unsupported)
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal("current-authorization-unsupported", json.RootElement.GetProperty("reason").GetString());
+            Assert.Equal(0, json.RootElement.GetProperty("items").GetArrayLength());
+            Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("sequenceToken").ValueKind);
+        }
+        Assert.Equal(0, source.Reads);
+    }
+
+    [Fact]
+    public async Task Current_grants_cannot_expand_the_incoming_structure_only_request_ceiling()
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        using var response = await host.Client.GetAsync(Path + "/occurrences");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain(current.Requests, request => request.Permission == HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission ||
+            request.Permission == HttpContextActivityExecutionInspectionAuthorizationContext.ResolveValuePayloadsPermission);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("available", json.RootElement.GetProperty("state").GetString());
+        var item = json.RootElement.GetProperty("items")[0];
+        Assert.False(item.TryGetProperty("payload", out _)); Assert.False(item.TryGetProperty("metadata", out _));
+    }
+
+    [Fact]
+    public async Task Current_subject_support_lost_while_a_read_is_pending_retires_the_result()
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.Pending = async token => { entered.SetResult(); await release.Task.WaitAsync(token); return source.Occurrences; };
+        var pending = host.Client.GetAsync(Path + "/occurrences");
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); current.Unsupported = true; release.SetResult();
+        using var response = await pending;
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("provider-only")] [InlineData("no-user")]
+    [InlineData("conflicting-user")] [InlineData("conflicting-provider")] [InlineData("conflicting-provider-casing")]
+    public async Task External_or_ambiguous_subjects_never_borrow_a_matching_local_users_authority(string identityKind)
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        host.Client.DefaultRequestHeaders.Add("X-History-Identity", identityKind);
+        using var response = await host.Client.GetAsync(Path + "/occurrences");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("current-authorization-unsupported", json.RootElement.GetProperty("reason").GetString());
+        Assert.Equal(0, source.Reads); Assert.Empty(current.Requests);
+    }
+
+    [Fact]
+    public async Task Canonical_user_authority_uses_UserId_even_when_the_tokens_audit_subject_differs()
+    {
+        var current = new CurrentOccurrencePermissions(); var source = new OccurrenceProjection();
+        await using var host = await OccurrenceHost(source, current, defaultAuthorization: true); host.Authenticate();
+        host.Client.DefaultRequestHeaders.Add("X-History-Identity", "canonical-alias");
+        using var response = await host.Client.GetAsync(Path + "/occurrences");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("available", json.RootElement.GetProperty("state").GetString());
+        Assert.NotEmpty(current.Requests);
+        Assert.All(current.Requests, request => Assert.Equal("operator", request.SubjectId));
+        Assert.Equal(1, source.Reads);
+    }
+
+    private static Task<Host> OccurrenceHost(OccurrenceProjection source, CurrentOccurrencePermissions? permissions = null,
+        bool defaultAuthorization = false) => Host.StartAsync(
+        services =>
+        {
+            services.AddSingleton<IRuntimeHistoryStore>(source);
+            services.Replace(ServiceDescriptor.Singleton<ICurrentSubjectPermissionAuthorizer>(permissions ?? new CurrentOccurrencePermissions()));
+            services.EnsureReplacementContract<ICurrentSubjectPermissionAuthorizer, CurrentOccurrencePermissions>();
+            if (defaultAuthorization)
+                services.Replace(ServiceDescriptor.Scoped<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>());
+        }, workflow: Workflow() with { HistoryCapturePolicy = OccurrencePolicy });
 
     private static RuntimeHistoryOccurrencePage OccurrencePage(long sequence = 1)
     {
@@ -164,6 +280,19 @@ public sealed partial class RuntimeHistoryApiTests
             "ActivityStarted", Now, "activity", metadata: new Dictionary<string, string> { ["private"] = "withheld" })
         { Authority = RuntimeHistoryAuthority.CommittedTransition, RecordedAt = Now, PhysicalCommitId = "physical", OccurredAtKnown = false };
         return new(head, RuntimeHistoryOccurrenceAvailability.Available, null, sequence, 0, 1, 0, [new(0, observation)], "window", false);
+    }
+
+    private sealed class CurrentOccurrencePermissions : ICurrentSubjectPermissionAuthorizer
+    {
+        public string? DeniedPermission { get; set; }
+        public bool Unsupported { get; set; }
+        public List<CurrentSubjectPermissionRequest> Requests { get; } = [];
+        public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested(); Requests.Add(request);
+            return ValueTask.FromResult(Unsupported ? CurrentSubjectPermissionResult.Unsupported("controlled unsupported") :
+                request.Permission == DeniedPermission ? CurrentSubjectPermissionResult.Denied("controlled revocation") : CurrentSubjectPermissionResult.Granted);
+        }
     }
 
     private sealed class OccurrenceProjection : BaseProjection, IRuntimeHistoryOccurrenceStore
