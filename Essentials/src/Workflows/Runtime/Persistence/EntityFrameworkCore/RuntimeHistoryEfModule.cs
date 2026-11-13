@@ -24,8 +24,9 @@ internal static class RuntimeHistoryEfModule
             foreach (var member in shape.Properties)
             {
                 var property = entity.FindProperty(member.Name);
-                if (property is null || property.ClrType != member.PropertyType || property.PropertyInfo?.DeclaringType != member.DeclaringType ||
-                    property.PropertyInfo.Name != member.Name) return false;
+                var binding = property?.PropertyInfo;
+                if (property is null || binding is null || property.ClrType != member.PropertyType || binding.DeclaringType != member.DeclaringType ||
+                    binding.Name != member.Name) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
