@@ -22,6 +22,7 @@ public static class RuntimeCheckpointCommitEntityFrameworkCoreRegistration
             RequireEfParticipants(services);
             RuntimeEfContractBackendRegistration.EnsureSharedContext(services, "Runtime checkpoint EF persistence");
             RuntimeHistoryReadEntityFrameworkCoreRegistration.AddOwnedReader(services);
+            RuntimeHistoryMutationEntityFrameworkCoreRegistration.AddOwnedMutations(services);
 
             var selected = RuntimeCheckpointCommitStoreBackend.Find(services);
             if (selected?.Name == RuntimeCheckpointCommitStoreBackend.EntityFramework)

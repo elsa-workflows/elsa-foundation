@@ -13,6 +13,9 @@ internal static class RuntimeHistoryReadEntityFrameworkCoreRegistration
         provider.GetRequiredService<RuntimeDbContext>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
         provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>(), RuntimeHistoryEfModule.Chain);
 
+    internal static bool IsOwnedReader(ServiceDescriptor descriptor) => descriptor.ServiceType == typeof(IRuntimeHistoryStore) &&
+        descriptor.Lifetime == ServiceLifetime.Scoped && ReferenceEquals(descriptor.ImplementationFactory, Factory);
+
     internal static void AddOwnedReader(IServiceCollection services)
     {
         var readers = services.Where(descriptor => descriptor.ServiceType == typeof(IRuntimeHistoryStore)).ToArray();

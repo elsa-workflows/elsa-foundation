@@ -9,9 +9,18 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Services.History;
 
-/// <summary>Internal composition boundary; the production feature/host is installed after owner/provider qualification.</summary>
+/// <summary>Internal implementation of production history enrollment; admission qualifies the actual selected owner/provider chain.</summary>
 internal static class RuntimeHistoryRegistration
 {
+    private static readonly Func<IServiceProvider, object> ObservationFactory = provider => new InMemoryRuntimeHistoryObservationWriter(
+        provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+        RuntimeCoreServiceCollectionExtensions.ResolveUnderlyingStore<IWorkflowExecutionStateStore>(provider, typeof(CoalescingWorkflowExecutionStateStore)),
+        provider.GetRequiredService<TimeProvider>());
+
+    internal static bool IsOwnedObservationRegistration(ServiceDescriptor descriptor) =>
+        descriptor.ServiceType == typeof(IRuntimeHistoryObservationWriter) && descriptor.Lifetime == ServiceLifetime.Scoped &&
+        ReferenceEquals(descriptor.ImplementationFactory, ObservationFactory);
+
     private static readonly RuntimeHistorySourceSupport CoreSources = new([
         RuntimeHistorySourceFactKind.IncidentCreated, RuntimeHistorySourceFactKind.IncidentResolved,
         RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentProjectionReconciled,
@@ -23,10 +32,7 @@ internal static class RuntimeHistoryRegistration
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(options ?? new RuntimeHistoryOptions());
         services.TryAddScoped<IRuntimeHistoryStore, InMemoryRuntimeHistoryStore>();
-        services.TryAddScoped<IRuntimeHistoryObservationWriter>(provider => new InMemoryRuntimeHistoryObservationWriter(
-            provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(), provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            RuntimeCoreServiceCollectionExtensions.ResolveUnderlyingStore<IWorkflowExecutionStateStore>(provider, typeof(CoalescingWorkflowExecutionStateStore)),
-            provider.GetRequiredService<TimeProvider>()));
+        services.TryAdd(ServiceDescriptor.Scoped(typeof(IRuntimeHistoryObservationWriter), ObservationFactory));
         services.TryAddScoped<IRuntimeHistorySourceExtension, DefaultRuntimeHistorySourceExtension>();
         services.TryAddScoped<RuntimeHistoryCaptureCapabilities>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
