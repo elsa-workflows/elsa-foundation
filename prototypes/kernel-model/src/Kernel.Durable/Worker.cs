@@ -121,6 +121,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private long _used;
 
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
+    public bool CommitClockAvailable => _store.CommitClockAvailable;
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
 
     /// <summary>Database time as far as this worker knows, whatever the flaws: what the lease is reckoned in.</summary>
@@ -693,7 +694,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var sending = DbNow;
             var started = _options.Monotonic();
             Committed result;
-            try { result = await _store.CommitAsync(batch, cancellationToken); }
+            try
+            {
+                if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
+                result = await _store.CommitAsync(batch, cancellationToken);
+            }
             catch (StoreException e) when (e.Failure != Failure.Unknown)
             {
                 if (generation != _generation) return Outcome.Lost;
@@ -723,6 +728,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var seqs = new Queue<long>(result.Seqs);
             foreach (var unit in units)
             {
+                if (unit.Row is { } row) unit.Row = CommitClockFacts.Stamp(row, result.Now);
                 Apply(unit, seqs, handOver);
                 if (!LeaseUsable()) return Outcome.Lost;
             }
