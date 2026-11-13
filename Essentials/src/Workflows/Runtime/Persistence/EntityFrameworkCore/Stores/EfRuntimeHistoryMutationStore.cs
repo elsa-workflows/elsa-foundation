@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using System.Transactions;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -62,6 +63,10 @@ internal sealed class EfRuntimeHistoryMutationStore(RuntimeDbContext context, IP
             _ = captured.RequireScope(); token.ThrowIfCancellationRequested();
         }
         Recheck();
+        // Invalidate only this run's clean internal history snapshots before tracking reads can
+        // identity-resolve an older head. Preserve unrelated caller-owned tracked native state.
+        EfRuntimeHistoryRetention.DetachHistory(context, scope, run);
+        var callerEntities = context.ChangeTracker.Entries().Select(entry => entry.Entity).ToHashSet(ReferenceEqualityComparer.Instance);
         IDbContextTransaction? transaction = null; Exception? original = null; Exception? cause = null;
         T staged = default!; var commitRequested = false;
         try
@@ -91,7 +96,8 @@ internal sealed class EfRuntimeHistoryMutationStore(RuntimeDbContext context, IP
             }
             // No pending native/history work may leak into a later caller SaveChanges, including
             // after an interrupted commit whose durable outcome will be read below.
-            context.ChangeTracker.Clear();
+            foreach (var entry in context.ChangeTracker.Entries().Where(entry => !callerEntities.Contains(entry.Entity)).ToArray())
+                entry.State = EntityState.Detached;
         }
         Recheck();
         if (original is null) return staged;
@@ -107,7 +113,7 @@ internal sealed class EfRuntimeHistoryMutationStore(RuntimeDbContext context, IP
         }
         if (original is InvalidDataException)
             throw new RuntimeHistoryIntegrityException(run, "retained history mutation data could not be interpreted", original);
-        if (EfRuntimeHistoryCheckpoint.IsProviderUnavailable(original, token))
+        if (original is EfRuntimeHistoryCheckpoint.HeadAllocationConflictException || EfRuntimeHistoryCheckpoint.IsProviderUnavailable(original, token))
             throw new RuntimeHistoryUnavailableException(run, operation, cause!);
         ExceptionDispatchInfo.Capture(original).Throw();
         throw new InvalidOperationException("The history mutation did not produce an outcome.");

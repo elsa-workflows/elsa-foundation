@@ -114,7 +114,7 @@ internal static class EfRuntimeHistoryRetention
         DetachHistory(context, scope, run); return EnsureAccess;
     }
 
-    private static void DetachHistory(RuntimeDbContext context, string scope, string run)
+    internal static void DetachHistory(RuntimeDbContext context, string scope, string run)
     {
         foreach (var entry in context.ChangeTracker.Entries().Where(entry => EntityTypes.Contains(entry.Metadata.ClrType) &&
             entry.Property("ScopeKey").CurrentValue as string == Encode(scope) && entry.Property("WorkflowExecutionId").CurrentValue as string == Encode(run)).ToArray())

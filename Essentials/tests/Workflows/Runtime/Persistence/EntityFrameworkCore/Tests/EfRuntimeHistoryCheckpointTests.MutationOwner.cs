@@ -23,7 +23,11 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
     {
         await using var db = await CapturedDatabaseAsync(); await using var context = db.Open(); var owner = MutationOwner(context);
         var first = await owner.RecordAsync(Observation("independent")); var replay = await owner.RecordAsync(Observation("independent"));
-        Assert.True(first.Recorded); Assert.Equal(first, replay); Assert.Equal(2, first.Event!.Sequence);
+        Assert.True(first.Recorded); Assert.True(replay.Recorded); Assert.Equal(2, first.Event!.Sequence);
+        Assert.NotNull(replay.Event); Assert.Equal(first.Event.HistoryEventId, replay.Event.HistoryEventId);
+        Assert.Equal(first.Event.Sequence, replay.Event.Sequence); Assert.Equal(first.Event.PhysicalCommitId, replay.Event.PhysicalCommitId);
+        Assert.Equal(first.Event.RecordedAt, replay.Event.RecordedAt); Assert.Equal(first.Event.OccurredAt, replay.Event.OccurredAt);
+        Assert.Equal(RuntimeHistoryIdentity.Compute(first.Event), RuntimeHistoryIdentity.Compute(replay.Event));
         Assert.Empty(context.ChangeTracker.Entries()); Assert.Null(context.Database.CurrentTransaction);
         await using var read = db.Open(); var head = await read.Set<RuntimeHistoryHeadEntity>().SingleAsync();
         Assert.Equal(2, head.LastSequence); Assert.Equal("native-checkpoint", head.LastPhysicalCommitId);
@@ -183,6 +187,63 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
         Assert.Empty(retired.ChangeTracker.Entries()); Assert.Null(retired.Database.CurrentTransaction);
     }
 
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Accepted_unrelated_native_tracking_survives_success_and_failure_and_can_still_be_saved(bool purge, bool fail)
+    {
+        await using var db = await CapturedDatabaseAsync();
+        await using (var seed = db.Open())
+        {
+            seed.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(Workflow(null) with { WorkflowExecutionId = "unrelated" },
+                Scope, EfWorkflowExecutionStateStore.CreateId(Scope, "unrelated"), 1));
+            await seed.SaveChangesAsync();
+        }
+        await using var context = fail ? db.Open(new MutationCommitRefusal()) : db.Open();
+        var id = EfWorkflowExecutionStateStore.CreateId(Scope, "unrelated");
+        var callerRow = await context.WorkflowExecutionStates.SingleAsync(row => row.Id == id); var owner = MutationOwner(context);
+        if (fail)
+        {
+            if (purge) await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() => owner.PurgeThroughAsync(Run, 1).AsTask());
+            else await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() => owner.RecordAsync(Observation("caller-state")).AsTask());
+        }
+        else if (purge) Assert.Equal(1, await owner.PurgeThroughAsync(Run, 1));
+        else Assert.True((await owner.RecordAsync(Observation("caller-state"))).Recorded);
+        Assert.Equal(EntityState.Unchanged, context.Entry(callerRow).State);
+        callerRow.Revision++; await context.SaveChangesAsync();
+        await using var read = db.Open(); Assert.Equal(2, (await read.WorkflowExecutionStates.SingleAsync(row => row.Id == id)).Revision);
+        Assert.Null(context.Database.CurrentTransaction);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Owner_refreshes_its_clean_tracked_history_after_another_context_appends(bool purge)
+    {
+        await using var db = await CapturedDatabaseAsync(); await using var stale = db.Open();
+        var previous = await stale.Set<RuntimeHistoryHeadEntity>().SingleAsync(); Assert.Equal(1, previous.LastSequence);
+        await using (var other = db.Open()) await MutationOwner(other).RecordAsync(Observation("arrived-before-mutation"));
+        if (purge) Assert.Equal(2, await MutationOwner(stale).PurgeThroughAsync(Run, long.MaxValue));
+        else Assert.Equal(3, (await MutationOwner(stale).RecordAsync(Observation("after-refresh"))).Event!.Sequence);
+        Assert.Equal(EntityState.Detached, stale.Entry(previous).State);
+        await using var read = db.Open(); Assert.Equal(purge ? 2 : 3, (await read.Set<RuntimeHistoryHeadEntity>().SingleAsync()).LastSequence);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Actual_head_cas_refusal_is_typed_unavailability_and_rolls_back_before_caller_retry(bool purge)
+    {
+        await using var db = await CapturedDatabaseAsync(); var bump = new BumpMutationHeadRevision(); await using var context = db.Open(bump);
+        var owner = MutationOwner(context);
+        var failure = purge
+            ? await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() => owner.PurgeThroughAsync(Run, 1).AsTask())
+            : await Assert.ThrowsAsync<RuntimeHistoryUnavailableException>(() => owner.RecordAsync(Observation("cas-refusal")).AsTask());
+        Assert.IsType<EfRuntimeHistoryCheckpoint.HeadAllocationConflictException>(failure.InnerException); Assert.Equal(1, bump.Hits);
+        Assert.Empty(context.ChangeTracker.Entries()); Assert.Null(context.Database.CurrentTransaction);
+        await using (var read = db.Open())
+        { var head = await read.Set<RuntimeHistoryHeadEntity>().SingleAsync(); Assert.Equal(1, head.LastSequence); Assert.Equal(0, head.PurgedThroughSequence); }
+        if (purge) Assert.Equal(1, await owner.PurgeThroughAsync(Run, 1));
+        else Assert.Equal(2, (await owner.RecordAsync(Observation("cas-refusal"))).Event!.Sequence);
+    }
+
     private static EfRuntimeHistoryMutationStore MutationOwner(RuntimeDbContext context, Accessor? selectedAccess = null)
     {
         var access = selectedAccess ?? new Accessor(); var reader = new EfRuntimeHistoryStore(context, access, MutationCodec, Chain);
@@ -209,6 +270,22 @@ public sealed partial class EfRuntimeHistoryCheckpointTests
         {
             if (Hits != 0) return ValueTask.FromResult(result);
             Hits++; throw new IOException("Actual mutation commit refused.");
+        }
+    }
+
+    // Mechanism control: change the actual stored CAS revision in the same provider transaction
+    // immediately before its conditional update. It is not a concurrent-provider contention proof.
+    private sealed class BumpMutationHeadRevision : DbCommandInterceptor
+    {
+        public int Hits { get; private set; }
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Hits != 0 || !command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) ||
+                !command.CommandText.Contains(RuntimeHistoryProjectionSchema.HeadTable, StringComparison.Ordinal)) return result;
+            Hits++; await using var advance = command.Connection!.CreateCommand(); advance.Transaction = command.Transaction;
+            advance.CommandText = $"UPDATE {RuntimeHistoryProjectionSchema.HeadTable} SET Revision = Revision + 1";
+            Assert.Equal(1, await advance.ExecuteNonQueryAsync(cancellationToken)); return result;
         }
     }
 }
