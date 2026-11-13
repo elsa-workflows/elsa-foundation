@@ -112,6 +112,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>Database time as far as this worker knows: the latest reading plus what its monotonic clock has counted since.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _anchor + _options.Monotonic();
 
+    /// <summary>Database time as far as this worker knows, whatever the flaws: what the lease is reckoned in.</summary>
+    private long DbNow => _anchor + _options.Monotonic();
+
     public bool Taking => _taking;
     public bool Polling => _polling;
     public bool Loading => _loading;
@@ -184,12 +187,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
             RunTurn(id);
         }
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
-        if (!cancellationToken.IsCancellationRequested && Owns && Now >= RenewBy) await BeatAsync(cancellationToken);
+        if (!cancellationToken.IsCancellationRequested && Owns && DbNow >= RenewBy) await BeatAsync(cancellationToken);
         if (!Owns) return null;
         if (busy) return TimeSpan.Zero;
         var now = Now;
-        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value).DefaultIfEmpty(long.MaxValue).Min();
-        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(next, RenewBy) - now));     // never zero: zero means there is work
+        var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now).DefaultIfEmpty(long.MaxValue).Min();
+        return TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(next, RenewBy - DbNow)));     // never zero: zero means there is work
     }
 
     /// <summary>When the pass beats if nothing commits before: a third of the lease after it was last renewed (the sketch's cadence).</summary>
@@ -603,8 +606,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             // When the lease is renewed at the latest, as far as this worker can tell: its estimate of database time
             // never runs ahead of the database, and the commit executes after it is sent. A store may answer without
-            // the database's time (Now 0, the fence in the batch).
-            var sending = Now;
+            // the database's time (Now 0). The EF store with the fence in the batch writes the lease from the node's
+            // own clock instead (ENGINES.md); a beat at a third of the lease then tolerates up to two thirds of a lease
+            // of skew between the node's clock and the database's.
+            var sending = DbNow;
             Committed result;
             try { result = await _store.CommitAsync(batch, cancellationToken); }
             catch (StoreException e) when (e.Failure != Failure.Unknown)
