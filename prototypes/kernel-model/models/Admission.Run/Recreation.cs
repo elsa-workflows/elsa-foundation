@@ -70,6 +70,9 @@ internal static class InvocationRecreation
         Require(world.Store.Instances[target.Id].Status == InstanceStatus.Finished, "ordinary child did not complete workflow");
         if (nested) Require(State().Variables["returned"]!.GetValue<bool>(), "caller did not continue");
         endedRevision = world.Store.Instances[target.Id].Revision;
+        // Let the receipt promise expire while renewing the real owner lease in bounded steps.
+        for (var elapsed = 0; elapsed < 60_000; elapsed += 5000)
+        { Apply(new("tick", 5000)); Apply(new("beat", actor.Id)); }
         Add(Kinds.Delete); Drain();
         Require(!world.Store.Instances.ContainsKey(target.Id), "normal delete did not remove ended row");
         recreated = true;
@@ -90,7 +93,7 @@ public sealed class RecreationReceiver : CompositeActivity
 {
     protected override void Execute(CompositeContext context)
     {
-        context.RegisterInputInbox(1, 2);
+        context.RegisterInputInbox(1, 2, TimeSpan.FromMinutes(1));
         context.Schedule(context.Children.Single());
     }
     protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
