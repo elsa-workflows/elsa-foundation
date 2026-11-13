@@ -50,6 +50,11 @@ function clearActivityDefinitionRecoveryOnAuthSessionEnded() {
 // WorkflowDesignerPanelContext is the TContext behind the workflow.designer.panels slot — exported so
 // contributed-panel authors can type their `context` prop instead of hand-copying the shape.
 export type { GraphPaletteElement } from "./graph-authoring/graphPaletteElements";
+export { loadBpmnDocumentAuthoring } from "./bpmn/bpmnDocumentAuthoring";
+export type { BpmnDocumentAuthoring } from "./bpmn/bpmnDocumentAuthoring";
+export type { ActivityNode } from "./workflowTypes";
+export type { BpmnDocumentCommand, BpmnDocumentTransaction, BpmnDocumentConfigurationChange, BpmnXmlAddress,
+  BpmnScopeAddress, BpmnBounds, BpmnPoint } from "./bpmn/bpmnDocument";
 export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
