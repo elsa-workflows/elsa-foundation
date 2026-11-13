@@ -48,7 +48,7 @@ A batch that writes no journal rows has `k = 0`. This includes an empty heartbea
 
 The epoch identifies an ownership generation. An old owner cannot commit after a successful take has incremented it, even when the journal position has not moved.
 
-The position's main job is a gapless, ordered journal within each partition. It also checks the owner's belief about that journal's end. The two fields answer different questions: *which generation prepared this?* and *at which journal position?*
+The position's main job is to allocate gapless, ordered journal positions within each partition. Deleting an instance can later remove its earlier journal rows while preserving that high-water mark, so surviving rows can have gaps. It also checks the owner's belief about that journal's end. The two fields answer different questions: *which generation prepared this?* and *at which journal position?*
 
 A lost answer illustrates the distinction:
 
@@ -61,12 +61,14 @@ A lost answer illustrates the distinction:
 
 ## A take racing a stale commit
 
-The partition row orders the two transactions. A successful conditional update holds a write lock until its transaction ends.
+The partition record orders the two transactions. On relational engines, a successful conditional update holds a write lock until its transaction ends; the table below describes that locking case.
 
 | Order at the partition row | Result |
 |---|---|
 | The old commit obtains the row first. | Its writes either commit together or roll back. A take waits. If it subsequently succeeds, it receives the position left by that transaction and increments the epoch. A renewed, still-valid lease can instead make that take decline. |
 | The take obtains the row first. | It increments the epoch and commits. The old commit waits, then finds its expected epoch no longer matches. Its entire transaction rolls back. |
+
+MongoDB can instead reject a competing transaction immediately with a transient write conflict. Its caller retries; a successful take still changes the epoch before a stale commit can land. It need not wait for the winner as a relational lock contender does.
 
 The fence need not be the first SQL statement for this safety argument: writes made earlier in the same transaction must roll back when the fence fails. Statement order does matter for contention and deadlocks.
 
