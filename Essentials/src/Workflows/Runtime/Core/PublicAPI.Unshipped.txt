@@ -10599,3 +10599,9 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestExecutionRoutingBoundary
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestExecutionRoutingBoundary.CanRouteTestEntryAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry! entry, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionActorProvider! actors, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestEntryContextResolver
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTestEntryContextResolver.FindAsync(string! contextId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry?>
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.TestEntry.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.TestEntry.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.TestEntry.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.TestEntry.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.TestEntry.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.TestEntry.init -> void

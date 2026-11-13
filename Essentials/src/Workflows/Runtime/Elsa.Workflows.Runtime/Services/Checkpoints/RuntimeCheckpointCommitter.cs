@@ -29,6 +29,8 @@ public sealed class RuntimeCheckpointCommitter
     /// to the durable stores, which a session needs before it may answer a point read from memory. A host that
     /// registered its own commit store over the decorator, or instead of it, gets <see langword="false"/>.
     /// </summary>
+    internal IRuntimeCheckpointCommitStore SelectedStore => _checkpointCommitStore;
+
     internal bool CommitsThroughCoalescingStore => _checkpointCommitStore is Coalescing.CoalescingRuntimeCheckpointCommitStore;
 
     /// <summary>
@@ -120,7 +122,10 @@ public sealed class RuntimeCheckpointCommitter
         if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
             throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
-        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
+        if (commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted && commit.StateChanges.WorkflowExecution?.State.TestEntry is not null)
+            decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
+                "Selected root admission and its scheduling intent require an atomic physical checkpoint.");
+        else if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
                 "Model decisions and native worker admission require an atomic physical checkpoint.");
         else if (commit.ExpectedBookmarkResume is not null)

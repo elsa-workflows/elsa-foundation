@@ -43,7 +43,8 @@ internal static class StartCommandExecution
             return null;
         }
 
-        if (payload is null)
+        // A rejected selected admission must never be synthesized as an ordinary full-root execution.
+        if (payload is null || payload.TestEntry is not null)
             return null;
 
         return new WorkflowExecutionState(

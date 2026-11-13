@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Services.Executions;
+using Microsoft.Extensions.DependencyInjection;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Contracts;
@@ -14,6 +16,8 @@ namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 
 public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
+    private readonly QueuedSelectedStart? _selectedStarts;
+
     public const string HandlerName = nameof(WorkflowCheckpointSchedulerWorkHandler);
 
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
@@ -41,7 +45,20 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         IWorkflowExecutableStore? workflowExecutableStore = null,
         IRuntimeCoalescingSessionAccessor? sessionAccessor = null,
         IWorkflowExecutableReader? executableReader = null)
+        : this(null, activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, timeProvider, workflowExecutionStateStore, workflowExecutableStore, sessionAccessor, executableReader) { }
+
+    public WorkflowCheckpointSchedulerWorkHandler(
+        IServiceProvider? services,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IWorkflowExecutableStore? workflowExecutableStore = null,
+        IRuntimeCoalescingSessionAccessor? sessionAccessor = null,
+        IWorkflowExecutableReader? executableReader = null)
     {
+        _selectedStarts = services?.GetService<QueuedSelectedStart>();
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -152,6 +169,25 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
+        VariableFrameState? selectedRootFrame = null;
+        if (payload.TestEntry is not null)
+        {
+            ValidateSelectedRootIntent(workItem, payload);
+            if (executable is null || _workflowExecutionStateStore is null)
+                throw QueuedSelectedStart.Refused("The selected checkpoint has no exact native executable or state provider.");
+            if (priorWorkflowState is not null && !payload.TestEntry.Matches(priorWorkflowState.TestEntry))
+                throw QueuedSelectedStart.Refused("The selected checkpoint differs from an existing root.");
+            var start = new WorkflowExecutionStartCommandPayload(payload.PinnedExecutable, payload.PinnedExecutable.ArtifactId,
+                payload.SeedVariables, payload.SeedInputs, payload.SeedStimulusInput, payload.SeedTriggerNodeId,
+                payload.RunKind, payload.PinnedSource, payload.ParentWorkflowExecutionId, payload.CorrelationId,
+                payload.TenantId, payload.Partition, payload.Authority, WorkflowExecutableStartAuthority.LiveReference,
+                payload.DispatchNestingDepth, payload.TestScope, payload.SeedTriggerMetadata) { TestEntry = payload.TestEntry };
+            selectedRootFrame = await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
+                .PrepareAsync(start, executable, workItem.WorkflowExecutionId, _workflowExecutionStateStore, null, _checkpointCommitter, null, cancellationToken);
+        }
+        else if (payload.CheckpointName == RuntimeCheckpointNames.WorkflowStarted && priorWorkflowState?.TestEntry is not null)
+            throw QueuedSelectedStart.Refused("An ordinary start cannot replace a selected root.");
+
         // At start, record the mode this drain runs the run in on the durable instance. Later drains read it back so the
         // run keeps its mode, and the read model reports the mode the run actually used. Other checkpoints carry it
         // forward via PreserveSystemMetadata.
@@ -169,7 +205,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode),
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode, selectedRootFrame),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -183,6 +219,23 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             }));
+    }
+
+    private static void ValidateSelectedRootIntent(RuntimeSchedulerWorkItem workItem, RuntimeCheckpointCommandPayload payload)
+    {
+        if (payload.CheckpointName != RuntimeCheckpointNames.WorkflowStarted || payload.Reason != RuntimeCheckpointCommandPayload.WorkflowStartReason ||
+            payload.ModelWorkOrigin is not null || payload.ActivityExecutionIds.Count != 0 || payload.PostCommitIntents.Count != 1)
+            throw QueuedSelectedStart.Refused("The selected first checkpoint must contain only its root scheduling intent.");
+        var intent = payload.PostCommitIntents.Single();
+        var work = intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>();
+        var child = work?.Payload?.Deserialize<RuntimeScheduleActivityCommandPayload>();
+        if (intent.Kind != RuntimePostCommitIntentKinds.EnqueueSchedulerWork || intent.WorkflowExecutionId != workItem.WorkflowExecutionId ||
+            work?.WorkflowExecutionId != workItem.WorkflowExecutionId || work.CommandKind != WorkflowExecutionCommandKind.ScheduleActivity ||
+            child is null || child.ExecutableNodeId != payload.TestEntry!.ExecutableNodeId ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(child.PinnedExecutable, payload.PinnedExecutable) ||
+            child.ParentActivityExecutionId is not null || child.SchedulingActivityExecutionId is not null || child.IterationFrame is not null ||
+            child.Reason != RuntimeScheduleActivityCommandPayload.WorkflowStartReason)
+            throw QueuedSelectedStart.Refused("The selected root scheduling intent differs from its admitted entry.");
     }
 
     private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedDurableValueChanges(
@@ -232,10 +285,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
         WorkflowExecutable? executable,
-        PersistenceMode? persistenceMode)
+        PersistenceMode? persistenceMode, VariableFrameState? selectedRootFrame)
     {
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted))
-            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode);
+            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode, selectedRootFrame);
 
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
             return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt, priorWorkflowState);
@@ -249,7 +302,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
         WorkflowExecutable? executable,
-        PersistenceMode? persistenceMode)
+        PersistenceMode? persistenceMode, VariableFrameState? selectedRootFrame)
     {
         var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
@@ -277,7 +330,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
-            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
+            TestEntry = priorWorkflowState?.TestEntry ?? payload.TestEntry,
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? selectedRootFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -377,6 +431,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
+            TestEntry = priorWorkflowState?.TestEntry ?? payload.TestEntry,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame
                 ? rootFrame.Status == VariableFrameStatus.Active ? rootFrame.Close(rootFrame.Revision) : rootFrame
                 : null

@@ -226,6 +226,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }, cancellationToken);
     }
 
+    internal bool CoordinatesSelectedStart(InMemoryWorkflowExecutionStateStore executions,
+        InMemoryWorkflowTestScopeStore scopes, InMemoryBackgroundActivityWorkStore background) =>
+        ReferenceEquals(ExactResumeExecutions, executions) && ReferenceEquals(executions.CheckpointState, _state) &&
+        scopes.Coordinates(_state) && background.Coordinates(_state) && ((IRuntimeCheckpointCommitStore)this).SupportsExactBookmarkResume;
+
     private InMemoryWorkflowExecutionStateStore? ExactResumeExecutions => _retentionExecutions ?? _workflowExecutionStateStore as InMemoryWorkflowExecutionStateStore;
 
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume =>
@@ -1330,7 +1335,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (execution is not null &&
                 (commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? execution.TestScope :
                     WorkflowTestScopeAdmission.ScopeRequiredToStart(execution, executionExists)) is { } rootScope)
-                EnsureOpenScope(rootScope, commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt);
+                EnsureOpenScope(rootScope, execution.TestEntry is not null || commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt);
 
             foreach (var change in commit.StateChanges.WorkflowDispatches)
             {

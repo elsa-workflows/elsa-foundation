@@ -8,6 +8,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class RuntimeCheckpointCommandPayload
 {
+    /// <summary>Selected root carried only from the admitted start to its first atomic checkpoint.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTestEntry? TestEntry { get; init; }
+
     public const string WorkflowStartReason = "WorkflowStart";
     public const string ActivityCompletionPropagationReason = "ActivityCompletionPropagation";
 

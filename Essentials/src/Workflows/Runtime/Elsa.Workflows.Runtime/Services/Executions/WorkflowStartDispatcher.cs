@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -10,6 +11,8 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
+    private readonly QueuedSelectedStart? _selectedStarts;
+
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&
         ReferenceEquals(material, _executableStore) && ReferenceEquals(executions, _workflowExecutionStateStore);
@@ -139,7 +142,25 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IStimulusDeliveryStore? stimulusDeliveryStore,
         IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters,
         IWorkflowExecutableInputValidator? inputValidator)
+        : this(null, executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor, startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore, stimulusIntentAdapters, inputValidator) { }
+
+    public WorkflowStartDispatcher(
+        IServiceProvider? services,
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
+        IStimulusDeliveryStore? stimulusDeliveryStore,
+        IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters,
+        IWorkflowExecutableInputValidator? inputValidator)
     {
+        _selectedStarts = services?.GetService<QueuedSelectedStart>();
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
         ArgumentNullException.ThrowIfNull(agentProvider);
@@ -171,6 +192,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentNullException.ThrowIfNull(request);
         if (request.DispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
+        if (request.TestEntry is not null && (request.WorkflowExecutionId is null || request.IdempotencyKey is not null || request.StartAuthority is { Kind: not WorkflowExecutableStartAuthorityKind.LiveReference }))
+            throw QueuedSelectedStart.Refused("Selected starts require an explicit root request without keyed or retained start authority.");
         var saved = request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery
             ? await ReadStimulusStartAsync(request, requiredScope, cancellationToken) : null;
 
@@ -211,6 +234,17 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
         var inputs = ApplyInputContract(executable, request.Inputs);
         await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
+        if (request.TestEntry is not null)
+        {
+            var payload = new WorkflowExecutionStartCommandPayload(resolved.Identity, request.ArtifactId,
+                WorkflowExecutionStartCommandPayload.ToJsonValues(request.Variables), inputs, request.StimulusInput,
+                request.TriggerNodeId, request.RunKind, resolved.Source, request.ParentWorkflowExecutionId,
+                request.CorrelationId, request.TenantId, partition, request.Authority, request.StartAuthority,
+                request.DispatchNestingDepth, request.TestScope, request.TriggerMetadata) { TestEntry = request.TestEntry };
+            await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
+                .PrepareAsync(payload, executable, request.WorkflowExecutionId!, _workflowExecutionStateStore!,
+                    null, null, _agentProvider, cancellationToken);
+        }
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
@@ -514,7 +548,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata));
+            triggerMetadata: request.TriggerMetadata) { TestEntry = request.TestEntry });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
 

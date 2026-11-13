@@ -16,6 +16,8 @@ public sealed class InMemoryWorkflowTestScopeStore :
     public InMemoryWorkflowTestScopeStore(InMemoryRuntimeCheckpointStoreState? state = null) =>
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
 
+    internal bool Coordinates(InMemoryRuntimeCheckpointStoreState state) => ReferenceEquals(_state, state);
+
     public ValueTask<WorkflowTestScopeRecord> CreateAsync(
         WorkflowTestScope scope,
         DateTimeOffset createdAt,
