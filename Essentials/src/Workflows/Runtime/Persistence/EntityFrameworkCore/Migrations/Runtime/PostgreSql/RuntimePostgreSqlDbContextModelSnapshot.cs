@@ -1948,8 +1948,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("TriggerOrderKey")
                         .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasMaxLength(516)
+                        .HasColumnType("character varying(516)");
 
                     b.Property<string>("TypeKey")
                         .IsRequired()
@@ -2059,8 +2059,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("SubscriptionOrderKey")
                         .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
+                        .HasMaxLength(516)
+                        .HasColumnType("character varying(516)");
 
                     b.Property<string>("TenantHash")
                         .IsRequired()

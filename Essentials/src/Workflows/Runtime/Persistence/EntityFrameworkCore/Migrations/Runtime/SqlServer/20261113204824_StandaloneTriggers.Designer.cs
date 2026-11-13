@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.SqlServer
 {
     [DbContext(typeof(RuntimeSqlServerDbContext))]
-    [Migration("20261113202642_StandaloneTriggers")]
+    [Migration("20261113204824_StandaloneTriggers")]
     partial class StandaloneTriggers
     {
         /// <inheritdoc />
@@ -1940,8 +1940,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("TriggerOrderKey")
                         .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("nvarchar(512)");
+                        .HasMaxLength(516)
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("TypeKey")
                         .IsRequired()
@@ -2051,8 +2051,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("SubscriptionOrderKey")
                         .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("nvarchar(512)");
+                        .HasMaxLength(516)
+                        .HasColumnType("nvarchar(516)");
 
                     b.Property<string>("TenantHash")
                         .IsRequired()

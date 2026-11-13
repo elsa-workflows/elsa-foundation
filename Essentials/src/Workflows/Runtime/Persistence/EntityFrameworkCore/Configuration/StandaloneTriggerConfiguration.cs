@@ -16,7 +16,7 @@ internal sealed class StandaloneTriggerConfiguration : IEntityTypeConfiguration<
         b.Property(row => row.TenantKey).IsRequired();
         b.Property(row => row.TenantHash).HasMaxLength(64);
         b.Property(row => row.TriggerKey).IsRequired();
-        b.Property(row => row.TriggerOrderKey).HasMaxLength(512);
+        b.Property(row => row.TriggerOrderKey).HasMaxLength(RuntimeOperationalStateEfModule.OrderKeyMaximumLength);
         b.Property(row => row.TypeKey).IsRequired();
         b.Property(row => row.SearchName).HasMaxLength(256);
         b.Property(row => row.ContentJson).IsRequired();
@@ -39,7 +39,7 @@ internal sealed class TriggerSubscriptionConfiguration : IEntityTypeConfiguratio
         b.Property(row => row.TenantHash).HasMaxLength(64);
         b.Property(row => row.TriggerRowId).HasMaxLength(64);
         b.Property(row => row.SubscriptionKey).IsRequired();
-        b.Property(row => row.SubscriptionOrderKey).HasMaxLength(512);
+        b.Property(row => row.SubscriptionOrderKey).HasMaxLength(RuntimeOperationalStateEfModule.OrderKeyMaximumLength);
         b.Property(row => row.DefinitionHash).HasMaxLength(64);
         b.Property(row => row.DefinitionKey).IsRequired();
         b.Property(row => row.SlotKey).IsRequired();

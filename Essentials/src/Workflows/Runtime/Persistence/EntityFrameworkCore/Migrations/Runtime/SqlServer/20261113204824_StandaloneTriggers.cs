@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.Sqlite
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runtime.SqlServer
 {
     /// <inheritdoc />
     public partial class StandaloneTriggers : Migration
@@ -13,109 +13,109 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
             migrationBuilder.AlterColumn<string>(
                 name: "StimulusType",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT");
+                oldType: "nvarchar(max)");
 
             migrationBuilder.AlterColumn<string>(
                 name: "StimulusHash",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT");
+                oldType: "nvarchar(max)");
 
             migrationBuilder.AlterColumn<string>(
                 name: "ExecutableNodeId",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT");
+                oldType: "nvarchar(max)");
 
             migrationBuilder.AlterColumn<string>(
                 name: "ArtifactIdOrderKey",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(516)",
                 maxLength: 516,
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(516)",
                 oldMaxLength: 516);
 
             migrationBuilder.AlterColumn<string>(
                 name: "ArtifactIdHash",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(64)",
                 maxLength: 64,
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(64)",
                 oldMaxLength: 64);
 
             migrationBuilder.AlterColumn<string>(
                 name: "ArtifactId",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(344)",
                 maxLength: 344,
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(344)",
                 oldMaxLength: 344);
 
             migrationBuilder.AlterColumn<string>(
                 name: "WorkflowExecutionIdOrderKey",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(196)",
                 maxLength: 196,
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(196)",
                 oldMaxLength: 196);
 
             migrationBuilder.AlterColumn<string>(
                 name: "WorkflowExecutionIdHash",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(64)",
                 maxLength: 64,
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(64)",
                 oldMaxLength: 64);
 
             migrationBuilder.AlterColumn<string>(
                 name: "WorkflowExecutionId",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: true,
                 oldClrType: typeof(string),
-                oldType: "TEXT");
+                oldType: "nvarchar(max)");
 
             migrationBuilder.AddColumn<string>(
                 name: "SourceId",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(1024)",
                 maxLength: 1024,
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "SourceKeyHash",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(64)",
                 maxLength: 64,
                 nullable: true);
 
             migrationBuilder.AddColumn<int>(
                 name: "SourceKind",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "INTEGER",
+                type: "int",
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
                 name: "TriggerIdHash",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(64)",
                 maxLength: 64,
                 nullable: true);
 
@@ -123,20 +123,20 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 name: "elsa_runtime_ingress_reservations",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    ScopeKey = table.Column<string>(type: "TEXT", nullable: false),
-                    ScopeHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    TenantKey = table.Column<string>(type: "TEXT", nullable: false),
-                    StimulusType = table.Column<string>(type: "TEXT", nullable: false),
-                    StimulusTypeHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    StimulusHash = table.Column<string>(type: "TEXT", nullable: false),
-                    StimulusHashHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    OwnerKind = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    OwnerId = table.Column<string>(type: "TEXT", nullable: false),
-                    OwnerHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Revision = table.Column<long>(type: "INTEGER", nullable: false),
-                    ContentJson = table.Column<string>(type: "TEXT", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false)
+                    Id = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false),
+                    ScopeKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ScopeHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    TenantKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    StimulusType = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    StimulusTypeHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    StimulusHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    StimulusHashHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    OwnerKind = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
+                    OwnerId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    OwnerHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false),
+                    ContentJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -147,19 +147,19 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 name: "elsa_runtime_standalone_triggers",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    ScopeKey = table.Column<string>(type: "TEXT", nullable: false),
-                    ScopeHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    TenantKey = table.Column<string>(type: "TEXT", nullable: false),
-                    TenantHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    TriggerKey = table.Column<string>(type: "TEXT", nullable: false),
-                    TriggerOrderKey = table.Column<string>(type: "TEXT", maxLength: 512, nullable: false),
-                    TypeKey = table.Column<string>(type: "TEXT", nullable: false),
-                    SearchName = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
-                    DesiredState = table.Column<int>(type: "INTEGER", nullable: false),
-                    Revision = table.Column<long>(type: "INTEGER", nullable: false),
-                    ContentJson = table.Column<string>(type: "TEXT", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false)
+                    Id = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    ScopeKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ScopeHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    TenantKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TenantHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    TriggerKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TriggerOrderKey = table.Column<string>(type: "nvarchar(516)", maxLength: 516, nullable: false),
+                    TypeKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SearchName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    DesiredState = table.Column<int>(type: "int", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false),
+                    ContentJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -170,14 +170,14 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 name: "elsa_runtime_trigger_mutations",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    ScopeKey = table.Column<string>(type: "TEXT", nullable: false),
-                    TenantKey = table.Column<string>(type: "TEXT", nullable: false),
-                    ActorKey = table.Column<string>(type: "TEXT", nullable: false),
-                    RequestKey = table.Column<string>(type: "TEXT", nullable: false),
-                    TriggerRowId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    ContentJson = table.Column<string>(type: "TEXT", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false)
+                    Id = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    ScopeKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TenantKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ActorKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    RequestKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TriggerRowId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    ContentJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -188,21 +188,21 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 name: "elsa_runtime_trigger_subscriptions",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    ScopeKey = table.Column<string>(type: "TEXT", nullable: false),
-                    ScopeHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    TenantKey = table.Column<string>(type: "TEXT", nullable: false),
-                    TenantHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    TriggerRowId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    SubscriptionKey = table.Column<string>(type: "TEXT", nullable: false),
-                    SubscriptionOrderKey = table.Column<string>(type: "TEXT", maxLength: 512, nullable: false),
-                    DefinitionHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    DefinitionKey = table.Column<string>(type: "TEXT", nullable: false),
-                    SlotKey = table.Column<string>(type: "TEXT", nullable: false),
-                    Revision = table.Column<long>(type: "INTEGER", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ContentJson = table.Column<string>(type: "TEXT", nullable: false),
-                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false)
+                    Id = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    ScopeKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ScopeHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    TenantKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    TenantHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    TriggerRowId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    SubscriptionKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SubscriptionOrderKey = table.Column<string>(type: "nvarchar(516)", maxLength: 516, nullable: false),
+                    DefinitionHash = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    DefinitionKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SlotKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Revision = table.Column<long>(type: "bigint", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    ContentJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -313,101 +313,101 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
             migrationBuilder.AlterColumn<string>(
                 name: "StimulusType",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(max)",
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "StimulusHash",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(max)",
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "ExecutableNodeId",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(max)",
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "ArtifactIdOrderKey",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(516)",
                 maxLength: 516,
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(516)",
                 oldMaxLength: 516,
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "ArtifactIdHash",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(64)",
                 maxLength: 64,
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(64)",
                 oldMaxLength: 64,
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "ArtifactId",
                 table: "elsa_runtime_recurring_trigger_schedule",
-                type: "TEXT",
+                type: "nvarchar(344)",
                 maxLength: 344,
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(344)",
                 oldMaxLength: 344,
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "WorkflowExecutionIdOrderKey",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(196)",
                 maxLength: 196,
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(196)",
                 oldMaxLength: 196,
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "WorkflowExecutionIdHash",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(64)",
                 maxLength: 64,
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(64)",
                 oldMaxLength: 64,
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<string>(
                 name: "WorkflowExecutionId",
                 table: "elsa_runtime_post_commit_outbox",
-                type: "TEXT",
+                type: "nvarchar(max)",
                 nullable: false,
                 defaultValue: "",
                 oldClrType: typeof(string),
-                oldType: "TEXT",
+                oldType: "nvarchar(max)",
                 oldNullable: true);
         }
     }

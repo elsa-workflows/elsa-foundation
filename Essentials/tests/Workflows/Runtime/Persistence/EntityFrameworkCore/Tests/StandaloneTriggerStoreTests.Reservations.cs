@@ -65,11 +65,13 @@ public sealed partial class StandaloneTriggerStoreTests
         else Assert.IsType<InvalidDataException>(error.InnerException);
     }
 
-    [Fact]
-    public async Task Physical_database_failure_retains_the_cause_at_both_public_ports()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Physical_database_failure_retains_the_cause_at_both_public_ports(bool executionStrategyWrapper)
     {
         await using var database = await Database.CreateAsync();
-        var fault = new FailingRead();
+        var fault = new FailingRead(executionStrategyWrapper);
         await using var fixture = database.Open(interceptors: [fault]);
         var resource = await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Store.FindAsync(Scope, "http").AsTask());
         Assert.Equal("unavailable", resource.Code);
@@ -81,9 +83,11 @@ public sealed partial class StandaloneTriggerStoreTests
         Assert.Equal("route", reservation.Fields!["identity"]);
     }
 
-    private sealed class FailingRead : DbCommandInterceptor
+    private sealed class FailingRead(bool wrapped) : DbCommandInterceptor
     {
-        internal SqliteException Cause { get; } = new("physical read failed", 1);
+        internal Exception Cause { get; } = wrapped
+            ? new InvalidOperationException("execution strategy rejected the physical read", new SqliteException("physical read failed", 1))
+            : new SqliteException("physical read failed", 1);
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) =>
             ValueTask.FromException<InterceptionResult<DbDataReader>>(Cause);
