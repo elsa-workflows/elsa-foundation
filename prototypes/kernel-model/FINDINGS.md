@@ -1142,7 +1142,8 @@ on them from outside the store, as in the store suite. The watcher fails a case 
 - stops a node without giving up every scope it held;
 - gives up an old activation after a newer one of the same node succeeded (that would release the new epoch).
 
-It counts activations asked for while another node held the scope, the ones layer 2 declined, pairs of activations of
+It counts activations asked for while another node held the scope, every activation layer 2 declined (also while a
+crashed node's lease ran out), pairs of activations of
 one scope held at once on two live nodes, and passes that started holding the scope and ended without it. The harness
 also checks that every node started under the name it asked layer 2 for and that no name comes twice (F9).
 
@@ -1188,7 +1189,7 @@ lease), hint and timer (20 s poll); 600 ms and 300 ms in the stress test. One ru
 |---|---|---|
 | `semantic` | 10 passed, 0 required failed, 0 reference differ | 9 passed, 0 required failed, 1 reference differs (join, R8) |
 | `semantic-broken` | 2 of 2 fence cases failed on the fence | 2 of 2 fence cases failed on the fence |
-| `stress 20 2000` | All properties hold; 51 pairs held at once; 13 held commits refused; 38 passes told by the fence | All properties hold; 44 pairs held at once; 8 held commits refused; 44 passes told by the fence; 355 activations asked for while the other side held the scope, 349 declined |
+| `stress 20 2000` | All properties hold; 51 pairs held at once; 13 held commits refused; 38 passes told by the fence | All properties hold; 44 pairs held at once; 8 held commits refused; 44 passes told by the fence; 355 activations asked for while another node held the scope; 349 declined in all (also while a crashed node's lease ran out) |
 | `stress-broken 10 1000` | 175 violations | 17 violations |
 
 With the fence broken, the split case's held commit "threw StoreException: instance 0/c is at revision 20": it was
@@ -1227,7 +1228,8 @@ not refused, and the store's count check is what stopped it.
   tests set the attempts high enough that nothing is parked. A lock in `TrialGate` is a small layer 2 change (leak L8).
 - **R7. A split costs takes.** Every partition grain on the side that does not hold the fence asks again every
   `RetryEvery`, and each ask is a take: a store round trip on the holder's partition row, declined. In one Orleans
-  stress run (four partitions, `RetryEvery` 150 ms, 20 s of load and its settling) 349 takes were declined. A
+  stress run (four partitions, `RetryEvery` 150 ms, 20 s of load and its settling) 355 activations were asked for
+  while another node held the scope, nearly all from the side without the fence, and 349 takes were declined in all. A
   deployment pays at most partitions × (sides − 1) / `RetryEvery` takes per second while a split lasts (fewer when
   the store is slow, since the retry is armed after the take answers); backing the retry off towards the lease would
   cut it. A first version also asked on every wake hint; review found it, and a hint now runs only a held scope.

@@ -4,19 +4,23 @@ Status: the design of the kernel model after round 4 stage A, which split the me
 and renamed step to turn and off-step work (run) to background job, at the owner's decisions of 12 November. Stage A
 changed no behaviour: every gate gives the numbers it gave before (FINDINGS section 24). Round 4's graph engine
 (FINDINGS section 26) puts the native Flowchart on main's Flowchart engine (`models/Graph`) and adds the graph
-invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. The source of design intent is
+invariants G1 to G5 to the simulation; it changes no kernel behaviour and no round trip. Round 4's runtimes (FINDINGS
+section 27) add the built-in runtime on a clock (`RuntimeNode`), the Orleans adapter and the runtime conformance suite,
+and change layer 2 where the seam needed it: a pass renews an idle lease (R1), a new activation is woken (R4), and a
+job's body may run off the runtime's scheduler (R14); no gate's numbers moved. The source of design intent is
 draft 5 of the kernel sketch (three layers, partitions only, deployment profiles, persistence as an abstraction,
 synchronous HTTP, trade-offs). This text says what the code is; where the code and draft 5 differ, the section "Where
 the code and draft 5 differ" says which and why. What was found, with the seeds and traces, is in
-[FINDINGS.md](FINDINGS.md) (section 24 is stage A, section 23 the merge), [ENGINES.md](ENGINES.md),
+[FINDINGS.md](FINDINGS.md) (section 27 is the runtime suite and Orleans, section 26 the graph engine, section 24 stage A,
+section 23 the merge), [ENGINES.md](ENGINES.md),
 [MONGO.md](MONGO.md) and [NATIVE.md](NATIVE.md).
 
 Words: a **turn** is one call of an instance's code with the messages that are due, ending in its commit; a
 **background job** (job) is work a turn starts outside itself, whose result comes back as a message; a **pass** is the
 runtime's call into a partition, which runs the turns that are due and commits them in batches.
 
-The kernel is 2,240 lines in three projects: `src/Kernel.Runtime` 279, `src/Kernel.Durable` 1,680 (of which 254 are
-the in-memory store) and `src/Kernel.Workflows` 281. Before the split, `src/Kernel` was 1,758; the difference is the
+The kernel is 2,290 lines in three projects: `src/Kernel.Runtime` 295, `src/Kernel.Durable` 1,714 (of which 254 are
+the in-memory store) and `src/Kernel.Workflows` 281 (2,240 at stage A; the runtimes of section 27 added the rest). Before the split, `src/Kernel` was 1,758; the difference is the
 seam's interfaces, `PartitionRuntime`, the durable half of a turn (`DurableTurn`) and their comments. Around it: the EF
 store and its four dialects, the MongoDB store, the store conformance suite, the deterministic simulation, and the
 native model.
