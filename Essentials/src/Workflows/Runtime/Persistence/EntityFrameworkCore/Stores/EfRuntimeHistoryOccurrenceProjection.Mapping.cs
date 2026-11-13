@@ -26,9 +26,9 @@ internal static partial class EfRuntimeHistoryOccurrenceProjection
     private static string Decode(string value) => EfRelationalIdentity.Decode(value);
     private static RuntimeHistoryIntegrityException Invalid(string run, string reason) => new(run, "occurrence projection " + reason);
 
-    internal static Receipt ReadReceipt(RuntimeHistoryOccurrenceEntity row, string scope, string run, EfSchemaChain chain)
+    internal static Receipt ReadReceipt(RuntimeHistoryOccurrenceEntity row, string scope, string run, EfSchemaChain chain) => Checked(chain, row.SchemaVersion, run, () =>
     {
-        var value = Content<RuntimeHistoryOccurrenceEntity, Receipt>(chain, row.SchemaVersion, row.ContentJson, run);
+        var value = Content<RuntimeHistoryOccurrenceEntity, Receipt>(chain, row.SchemaVersion, row.ContentJson);
         if (value.Activity is null || value.FirstEvent is null || value.Ancestors is null) throw Invalid(run, "receipt is incomplete");
         var activity = Decode(value.Activity);
         Owner(scope, run, row.Id, ReceiptId(scope, run, activity), row.ScopeKey, row.ScopeKeyHash,
@@ -45,11 +45,11 @@ internal static partial class EfRuntimeHistoryOccurrenceProjection
         if (value.Parent is not null) _ = Decode(value.Parent);
         foreach (var ancestor in value.Ancestors) _ = Decode(ancestor);
         return value;
-    }
+    });
 
-    internal static Counter ReadCounter(RuntimeHistoryOccurrenceCounterEntity row, string scope, string run, EfSchemaChain chain)
+    internal static Counter ReadCounter(RuntimeHistoryOccurrenceCounterEntity row, string scope, string run, EfSchemaChain chain) => Checked(chain, row.SchemaVersion, run, () =>
     {
-        var value = Content<RuntimeHistoryOccurrenceCounterEntity, Counter>(chain, row.SchemaVersion, row.ContentJson, run);
+        var value = Content<RuntimeHistoryOccurrenceCounterEntity, Counter>(chain, row.SchemaVersion, row.ContentJson);
         var activityScope = value.ActivityScope is null ? null : Decode(value.ActivityScope);
         Owner(scope, run, row.Id, CounterId(scope, run, activityScope), row.ScopeKey, row.ScopeKeyHash,
             row.WorkflowExecutionId, row.WorkflowExecutionIdHash, row.Revision);
@@ -62,11 +62,11 @@ internal static partial class EfRuntimeHistoryOccurrenceProjection
             activityScope is not null && value.FirstUnknownObservationSequence is not null)
             throw Invalid(run, "counter disagrees with its owner or coverage");
         return value;
-    }
+    });
 
-    internal static Membership ReadMembership(RuntimeHistoryOccurrenceMembershipEntity row, string scope, string run, EfSchemaChain chain)
+    internal static Membership ReadMembership(RuntimeHistoryOccurrenceMembershipEntity row, string scope, string run, EfSchemaChain chain) => Checked(chain, row.SchemaVersion, run, () =>
     {
-        var value = Content<RuntimeHistoryOccurrenceMembershipEntity, Membership>(chain, row.SchemaVersion, row.ContentJson, run);
+        var value = Content<RuntimeHistoryOccurrenceMembershipEntity, Membership>(chain, row.SchemaVersion, row.ContentJson);
         if (value.Activity is null) throw Invalid(run, "membership is incomplete");
         var activity = Decode(value.Activity);
         var activityScope = value.ActivityScope is null ? null : Decode(value.ActivityScope);
@@ -79,15 +79,25 @@ internal static partial class EfRuntimeHistoryOccurrenceProjection
             row.Ordinal != value.Ordinal || value.Ordinal < 0 || value.FirstSequence <= 0)
             throw Invalid(run, "membership disagrees with its owner or ordinal");
         return value;
-    }
+    });
 
-    private static T Content<TRow, T>(EfSchemaChain chain, string version, string json, string run) where T : class
+    private static T Content<TRow, T>(EfSchemaChain chain, string version, string json) where T : class
     {
         // The caller supplies the owning family, including its declared content and upcasters.
         // No alternate version reader, hard-coded family, or raw-deserialization fallback exists.
         var content = chain.Upcast<TRow>(version, ("ContentJson", json))["ContentJson"];
-        try { return RuntimeArtifactJson.Deserialize<T>(content ?? throw Invalid(run, "content is missing")) ?? throw Invalid(run, "content is null"); }
-        catch (JsonException error) { throw new RuntimeHistoryIntegrityException(run, "occurrence projection content is malformed", error); }
+        return RuntimeArtifactJson.Deserialize<T>(content ?? throw new InvalidDataException("Occurrence projection content is missing."))
+            ?? throw new InvalidDataException("Occurrence projection content is null.");
+    }
+
+    private static T Checked<T>(EfSchemaChain chain, string version, string run, Func<T> read)
+    {
+        // Settle deployment compatibility before interpreting any stamped identity or content.
+        EfSchemaVersion.EnsureReadable(chain, version);
+        try { return read(); }
+        catch (Exception error) when (error is JsonException or InvalidDataException or ArgumentException or FormatException or
+            InvalidOperationException or NotSupportedException or OverflowException)
+        { throw new RuntimeHistoryIntegrityException(run, "an occurrence projection cannot be interpreted safely", error); }
     }
 
     private static void Owner(string scope, string run, string id, string expectedId, string storedScope,
