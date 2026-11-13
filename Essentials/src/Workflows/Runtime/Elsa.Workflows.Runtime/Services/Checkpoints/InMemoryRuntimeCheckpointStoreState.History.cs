@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 public sealed partial class InMemoryRuntimeCheckpointStoreState
 {
     internal Dictionary<(string Scope, string Run), RuntimeHistoryHead> HistoryHeads { get; } = new();
-    internal HashSet<string> RequiredHistoryRunIds { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, (string Scope, RuntimeHistoryCapturePolicy Policy)> HistoryRunOwners { get; } = new(StringComparer.Ordinal);
     internal Dictionary<(string Scope, string Run), RuntimeHistoryCapturePolicy> RequiredHistoryRuns { get; } = new();
     internal Dictionary<(string Scope, string Run), List<RuntimeHistoryEvent>> HistoryEvents { get; } = new();
     internal Dictionary<(string Scope, string Run, string Event), RuntimeHistoryEvent> HistoryEventsById { get; } = new();
@@ -95,7 +95,7 @@ public sealed partial class InMemoryRuntimeCheckpointStoreState
             var owner = (scope, run);
             HistoryDeletedRuns.Add(owner);
             RequiredHistoryRuns.Remove(owner);
-            if (!RequiredHistoryRuns.Keys.Any(key => key.Run == run)) RequiredHistoryRunIds.Remove(run);
+            if (HistoryRunOwners.TryGetValue(run, out var nativeOwner) && nativeOwner.Scope == scope) HistoryRunOwners.Remove(run);
             HistoryHeads.Remove(owner);
             HistoryEvents.Remove(owner);
             HistoryActiveBookmarks.Remove(owner);
