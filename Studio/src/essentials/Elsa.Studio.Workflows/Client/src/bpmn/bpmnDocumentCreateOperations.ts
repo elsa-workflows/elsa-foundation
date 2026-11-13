@@ -202,9 +202,12 @@ export function planBpmnCreateShape(owner: ActivityNode, scope: BpmnScopeAddress
   if (entry.type === "boundaryEvent") {
     element.setAttribute("attachedToRef", intent.attachedToElementId!);
     const temporary = { ...context.parsed, byId: new Map(context.parsed.byId).set(elementId, element) };
-    // Parent is known from the host activity; the standard boundary itself remains a flow-scope sibling.
-    const policy = assessBpmnBoundaryAttachment(temporary, elementId, intent.attachedToElementId!);
-    if (!policy.allowed) refuseBpmnOperation(policy.reason);
+    // Validate the planned sibling in this private parse, then detach the fragment for the transaction.
+    parent.append(element);
+    try {
+      const policy = assessBpmnBoundaryAttachment(temporary, elementId, intent.attachedToElementId!);
+      if (!policy.allowed) refuseBpmnOperation(policy.reason);
+    } finally { element.remove(); }
     const instances = context.scene.shapes.filter(shape => shape.elementId === bpmnIdentity(host!));
     if (instances.length !== 1) refuseBpmnOperation("boundary attachment needs one actual activity DI instance");
     const frame = instances[0].bounds, center = { x: value.x + value.width / 2, y: value.y + value.height / 2 };

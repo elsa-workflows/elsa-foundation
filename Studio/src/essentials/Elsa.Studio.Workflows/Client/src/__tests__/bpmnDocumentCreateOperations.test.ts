@@ -6,6 +6,15 @@ import { bpmnDocumentToolboxShapes } from "../bpmn/bpmnDocumentToolbox";
 import { operationOwner, operationScope } from "./bpmnDocumentOperationsFixture";
 
 describe("complete-source toolbox creation plans", () => {
+  it("creates a source-context fragment without capturing QName-looking user labels", () => {
+    const owner = operationOwner(), before = structuredClone(owner);
+    const plan = planBpmnCreateShape(owner, operationScope, { toolId: "task", name: "q:New activity", position: { x: 0, y: 0 } });
+    const next = readBpmnDocument(applyBpmnDocumentTransaction(owner, plan.transaction));
+    expect(next.byId.get(plan.selection!.elementId)!.getAttribute("name")).toBe("q:New activity");
+    expect(next.byId.get(plan.selection!.elementId)!.lookupNamespaceURI("q")).toBe("urn:test");
+    expect(owner).toEqual(before);
+  });
+
   it.each(bpmnDocumentToolboxShapes.filter(entry => entry.type !== "lane"))("creates $id in its actual standard context with DI and retains native/opaque data", entry => {
     const owner = operationOwner(), before = structuredClone(owner);
     const scope = entry.eventSubprocessOnly ? { ...operationScope, scopeElementId: "ES", diagramId: "EventDiagram" }
@@ -92,6 +101,7 @@ describe("complete-source toolbox creation plans", () => {
   it("refuses missing boundary context, outside-plane endpoints and wrong-owner data references atomically", () => {
     const owner = operationOwner(), before = structuredClone(owner);
     expect(() => planBpmnCreateShape(owner, operationScope, { toolId: "boundaryEvent-timer", position: { x: 0, y: 0 } })).toThrow("real activity");
+    expect(() => planBpmnCreateShape(owner, operationScope, { toolId: "boundaryEvent-timer", attachedToElementId: "ES", position: { x: 0, y: 0 } })).toThrow("cannot host");
     expect(() => planBpmnCreateConnection(owner, operationScope, { kind: "sequenceFlow", sourceId: "Child", targetId: "Child", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] })).toThrow("hidden by a collapsed");
     expect(() => planBpmnCreateConnection(owner, operationScope, { kind: "dataInputAssociation", sourceId: "Data", targetId: "B", targetRef: "Child", points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] })).toThrow("actual owner input");
     expect(owner).toEqual(before);

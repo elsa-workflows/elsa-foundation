@@ -4,7 +4,7 @@ import { assessBpmnDocumentConnection, bpmnBoolean, bpmnEventDefinitions, bpmnFl
 import { isActivityBearingElementType, isEventElementType, isGatewayElementType, isSubProcessElementType } from "./bpmnNotationTypes";
 import { planBpmnCreateConnection, type BpmnCreateConnectionIntent, type BpmnDocumentOperationPlan } from "./bpmnDocumentCreateOperations";
 import { bpmnDocumentToolboxShapes } from "./bpmnDocumentToolbox";
-import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, isBpmnOwnedSyntax, refuseBpmnOperation, requireBpmnVisibleElement, resolveBpmnOperationAddress } from "./bpmnDocumentOperationXml";
+import { bpmnChildren, bpmnFragment, bpmnIdentity, bpmnOperationContext, bpmnSourceAddress, bpmnXml, isBpmnOwnedSyntax, refuseBpmnOperation, requireBpmnVisibleElement, resolveBpmnOperationAddress } from "./bpmnDocumentOperationXml";
 
 /** Modeler-like replace intent with an explicit choice before removing existing standard configuration. */
 export function planBpmnReplace(owner: ActivityNode, scope: BpmnScopeAddress, selection: BpmnDocumentSelection, toolId: string, replaceEventConfiguration = false): BpmnDocumentOperationPlan {
@@ -41,7 +41,7 @@ export function planBpmnReplace(owner: ActivityNode, scope: BpmnScopeAddress, se
       if (type === "conditionalEventDefinition") definition.append(bpmnFragment(context, "condition"));
       if (type === "linkEventDefinition") definition.setAttribute("name", element.getAttribute("name") ?? "Link");
       // The existing definitions are removed first; inserting before them would use a stale property address.
-      commands.push({ kind: "append", parent: { elementId: selection.elementId }, xml: new XMLSerializer().serializeToString(definition) });
+      commands.push({ kind: "append", parent: { elementId: selection.elementId }, xml: bpmnXml(definition) });
     }
   }
   for (const name of ["cancelActivity", "isInterrupting", "parallelMultiple"]) if (event(element.localName)) commands.push({ kind: "attribute", target: { elementId: selection.elementId }, name, value: entry.attributes?.[name] ?? null });

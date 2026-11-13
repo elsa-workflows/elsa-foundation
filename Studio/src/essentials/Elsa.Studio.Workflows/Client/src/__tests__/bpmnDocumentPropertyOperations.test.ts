@@ -5,6 +5,20 @@ import { planBpmnAppearance, planBpmnCondition, planBpmnDefaultFlow, planBpmnLab
 import { operationOwner, operationScope } from "./bpmnDocumentOperationsFixture";
 
 describe("source-owned standard properties", () => {
+  it("preserves restored namespace bindings inside cloned label-style fragments", () => {
+    const owner = operationOwner();
+    owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string)
+      .replace('<dc:Bounds x="100.25" y="100.5" width="100" height="80"/>', '<dc:Bounds x="100.25" y="100.5" width="100" height="80"/><bd:BPMNLabel labelStyle="Shared"/>')
+      .replace('</bd:BPMNPlane></bd:BPMNDiagram>', '</bd:BPMNPlane><bd:BPMNLabelStyle id="Shared"><dc:Font name="Source" size="12"/><v:container xmlns:q="urn:other"><v:keep xmlns:q="urn:test" literal="q:Kept">before<!-- keep --><![CDATA[after]]></v:keep></v:container></bd:BPMNLabelStyle></bd:BPMNDiagram>');
+    const next = readBpmnDocument(applyBpmnDocumentTransaction(owner, planBpmnAppearance(owner, operationScope, "ADI", { font: { size: 15 } }).transaction));
+    const styleId = next.byId.get("ADI")!.getElementsByTagNameNS(ns.diagram, "BPMNLabel")[0].getAttribute("labelStyle")!;
+    const retained = next.byId.get(styleId)!.getElementsByTagNameNS("urn:vendor", "keep")[0];
+    expect(styleId).not.toBe("Shared");
+    expect(retained.lookupNamespaceURI("q")).toBe("urn:test");
+    expect(retained.getAttribute("literal")).toBe("q:Kept");
+    expect([...retained.childNodes].map(node => node.nodeType)).toEqual([3, 8, 4]);
+  });
+
   it("refuses activity loops on an event subprocess using XML boolean one", () => {
     const owner = operationOwner();
     owner.structure!.payload.documentXml = (owner.structure!.payload.documentXml as string).replace('triggeredByEvent="true"', 'triggeredByEvent="1"');

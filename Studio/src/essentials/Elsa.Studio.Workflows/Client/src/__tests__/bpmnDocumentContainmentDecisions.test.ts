@@ -174,7 +174,7 @@ describe("explicit pool deletion decisions", () => {
   });
 
   it("refuses process deletion that would leave an actual retained call reference", () => {
-    const setup = pooled(), owner = applyBpmnDocumentTransaction(setup.owner, { commands: [{ kind: "append", parent: { elementId: "P" }, xml: `<b:callActivity xmlns:b="${ns.model}" id="Caller" calledElement="q:${setup.otherProcessId}"/>` }] });
+    const setup = pooled(), owner = applyBpmnDocumentTransaction(setup.owner, { commands: [{ kind: "append", parent: { elementId: "P" }, xml: `<b:callActivity xmlns:b="${ns.model}" xmlns:q="urn:test" id="Caller" calledElement="q:${setup.otherProcessId}"/>` }] });
     const before = structuredClone(owner);
     expect(() => prepareBpmnPoolDelete(owner, setup.scope, setup.otherPoolId, { deleteProcess: true })).toThrow("reference");
     expect(owner).toEqual(before);

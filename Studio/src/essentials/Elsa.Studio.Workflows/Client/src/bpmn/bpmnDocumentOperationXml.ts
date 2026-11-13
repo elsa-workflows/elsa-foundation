@@ -2,6 +2,7 @@ import type { ActivityNode } from "../workflowTypes";
 import { bpmnNamespaces as ns, projectBpmnDocumentScene, readBpmnDocument, resolveBpmnDocumentReference,
   type BpmnDocumentCommand, type BpmnDocumentScene, type BpmnScopeAddress, type BpmnXmlAddress, type ParsedBpmnDocument } from "./bpmnDocument";
 import { bpmnOwningProcess, isBpmnModelElement } from "./bpmnDocumentPolicy";
+import { serializeBpmnXml } from "./bpmnDocumentXml";
 
 export function refuseBpmnOperation(reason: string): never { throw new Error(`Cannot author BPMN source: ${reason}.`); }
 
@@ -64,11 +65,13 @@ export function bpmnFragment(context: BpmnOperationContext, localName: string, a
   // Reuse source namespace context. Fresh prefixes are local to a new fragment, never rebound globally.
   const prefix = root.lookupPrefix(namespace) ?? (root.lookupNamespaceURI(null) === namespace ? "" : context.allocate(namespace === ns.model ? "bpmnNs" : namespace === ns.diagram ? "bpmndiNs" : namespace === ns.bounds ? "dcNs" : "diNs"));
   const element = context.parsed.document.createElementNS(namespace, prefix ? `${prefix}:${localName}` : localName);
+  for (const attribute of [...root.attributes]) if (attribute.namespaceURI === "http://www.w3.org/2000/xmlns/")
+    element.setAttributeNS(attribute.namespaceURI, attribute.name, attribute.value);
   element.setAttributeNS("http://www.w3.org/2000/xmlns/", prefix ? `xmlns:${prefix}` : "xmlns", namespace);
   for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
   return element;
 }
-export function bpmnXml(element: Element) { return new XMLSerializer().serializeToString(element); }
+export function bpmnXml(element: Element) { return serializeBpmnXml(element); }
 /** Clone a configuration fragment with its QName context; do not infer references in opaque text. */
 export function cloneBpmnPropertyFragment(element: Element, destination: Element): Element {
   const clone = element.cloneNode(true) as Element, declarations = new Map<string, string>();
