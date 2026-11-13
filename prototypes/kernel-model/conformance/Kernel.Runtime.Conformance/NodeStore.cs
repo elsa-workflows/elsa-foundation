@@ -33,10 +33,16 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     /// <summary>What the commit held by <see cref="StallNextCommit"/> got back once it executed: "refused", "landed", or what it threw.</summary>
     public Task<string> Held => _held.Task;
 
-    /// <summary>Every call from now on waits until <paramref name="duration"/> from now, or longer if a stall under way lasts longer.</summary>
+    /// <summary>Every call from now on waits until <paramref name="duration"/> from now (or until <see cref="Resume"/>), or longer if a stall under way lasts longer.</summary>
     public void Stall(TimeSpan duration)
     {
         lock (_lock) Begin(duration);
+    }
+
+    /// <summary>Ends the stall under way now.</summary>
+    public void Resume()
+    {
+        lock (_lock) _until = Math.Min(_until, Environment.TickCount64);
     }
 
     /// <summary>
@@ -50,7 +56,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
 
     private void Begin(TimeSpan duration)     // under the lock
     {
-        var until = Environment.TickCount64 + (long)duration.TotalMilliseconds;
+        var until = duration == Timeout.InfiniteTimeSpan ? long.MaxValue : Environment.TickCount64 + (long)duration.TotalMilliseconds;
         if (_stall is not null)
         {
             _until = Math.Max(_until, until);   // a stall during a stall lasts as long as the longer of the two
@@ -70,7 +76,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
                     if (left <= 0) _stall = null;      // under the same lock that extends it: no extension is lost
                 }
                 if (left <= 0) break;
-                await Task.Delay(TimeSpan.FromMilliseconds(left));
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(left, 20)));     // short steps, so a Resume ends it soon
             }
             stall.SetResult();
         });
