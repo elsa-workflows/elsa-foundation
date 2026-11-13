@@ -40,7 +40,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Publishing.Releases.NativeCapture.Tests;
 
 /// <summary>Real intrinsic compiler, publication handler, EF slot switch, journal and source stores. No hand-minted publication proof.</summary>
-internal sealed class PublishedNativeFixture : IAsyncDisposable
+internal sealed partial class PublishedNativeFixture : IAsyncDisposable
 {
     public static PersistenceScope Partition { get; } = new("native-source");
     public static ReleaseRuntimeContentScope Scope { get; } = new("trusted-source", null, Partition.Value);

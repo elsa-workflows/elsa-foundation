@@ -1379,3 +1379,5 @@ Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor
 Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor.Current.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
 Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections
 const Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections.WorkflowDefinitionVersion = "elsa.workflow-definition-version" -> string!
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization.AuthorizeActivityVersionAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! activityVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
