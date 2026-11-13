@@ -32,7 +32,7 @@ if (args is ["probe", var probe])
     // ordinal has no fixed width (as the kernel wrote them before finding F8). It does not: EF sends them in key order.
     var create = Factory(true, probe);
     await using (var db = create()) await db.Database.EnsureDeletedAsync();
-    var store = new EfStore(create, postgres: true);
+    var store = new EfStore(create, postgres: true, fenceInBatch: false);
     await store.CreateAsync(2);
     var lease = (await store.TakeAsync(0, "probe", TimeSpan.FromSeconds(30)))!;
     var sent = Enumerable.Range(0, 12).Select(i => new Message($"0/a#1.{i}", InstanceRef.In(1, "b"), "add")).ToList();
@@ -176,7 +176,7 @@ static async Task<int> Stress(string connection, int seconds, int messages, bool
     var create = Factory(true, connection + ";Application Name=kernel-worker;Maximum Pool Size=40");
     var admin = Factory(true, connection + ";Application Name=kernel-admin");
     await using (var db = admin()) await db.Database.EnsureDeletedAsync();
-    var store = new EfStore(create, postgres: true) { Unfenced = unfenced };     // unfenced: the mutation that the test must notice
+    var store = new EfStore(create, postgres: true, fenceInBatch: false) { Unfenced = unfenced };     // unfenced: the mutation that the test must notice
     await new EfStore(admin, postgres: true).CreateAsync(partitions);
 
     var calm = false;
