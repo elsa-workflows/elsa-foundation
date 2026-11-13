@@ -12,6 +12,7 @@ public interface ICommitClock
 
 public static class CommitClockFacts
 {
+    public const string ModelPrefix = "turn:";
     public static void RejectUnsupported(CommitBatch batch)
     {
         if (batch.Turns.Any(t => t.Row?.CommitTimes is not null))
@@ -29,7 +30,7 @@ public static class CommitClockFacts
         foreach (var (key, value) in next ?? [])
             if (old is not null && old.TryGetValue(key, out var kept) ? value != kept : value is not null)
                 throw new StoreException(Failure.Definite, "commit clock fact must be new/unstamped or retained unchanged");
-        if (old?.Keys.Any(key => !key.StartsWith("turn:", StringComparison.Ordinal) && next?.ContainsKey(key) != true) == true)
+        if (old?.Keys.Any(key => !key.StartsWith(CommitClockFacts.ModelPrefix, StringComparison.Ordinal) && next?.ContainsKey(key) != true) == true)
             throw new StoreException(Failure.Definite, "actor-owned commit clock fact cannot be released");
     }
 
@@ -49,7 +50,7 @@ internal sealed class TurnClock(InstanceRow? row, long revision, ITurnServices s
     public string Capture()
     {
         Require();
-        var reference = "turn:" + revision;
+        var reference = CommitClockFacts.ModelPrefix + revision;
         _times!.TryAdd(reference, null);
         return reference;
     }
@@ -57,7 +58,7 @@ internal sealed class TurnClock(InstanceRow? row, long revision, ITurnServices s
     public void Release(string reference)
     {
         Require();
-        if (!reference.StartsWith("turn:", StringComparison.Ordinal))
+        if (!reference.StartsWith(CommitClockFacts.ModelPrefix, StringComparison.Ordinal))
             throw new ArgumentException("Only model-owned clock facts can be released.", nameof(reference));
         _times!.Remove(reference);
     }

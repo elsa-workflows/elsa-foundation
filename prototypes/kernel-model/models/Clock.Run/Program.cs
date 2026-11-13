@@ -53,10 +53,11 @@ sealed class ClockWitness(string scenario)
         _world.Apply(act);
         if (_world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
     }
-    private void Send(string kind, string? input = null)
+    private void Send(string kind, string? input = null, bool reply = false)
     {
         var id = "clock-message-" + ++_serial;
-        Apply(new("add", M: new Message(id, _target, kind, Start: kind == Kinds.Start ? new("clock-probe", "probe", input) : null)));
+        Apply(new("add", M: new Message(id, _target, kind, Start: kind == Kinds.Start ? new("clock-probe", "probe", input) : null,
+            ReplyTo: reply ? ReplyTo.Of("outside", id, _world.Time + 30_000) : null)));
     }
     private void Prepare()
     {
@@ -117,6 +118,12 @@ sealed class ClockWitness(string scenario)
             Require(Row.Status == InstanceStatus.Cancelled && Row.State == opaque && Row.StateVersion == 2 &&
                 Times.GetValueOrDefault(WorkflowCommitClock.Terminal) == _world.Time, "C5", "older model lost opaque-state terminal anchor");
             var ended = Times[WorkflowCommitClock.Terminal];
+            Send("clock-metadata", reply: true); Drain();
+            Require(_world.Deliveries.Last().Reply.Item is ModelMetadataUnavailable { StoredVersion: 2, AvailableVersion: 1 } &&
+                Row.State == opaque && Row.StateVersion == 2, "C5", "older metadata reader parsed or downgraded opaque future state");
+            Send("late"); Drain();
+            Require(!_world.Store.Messages.ContainsKey("clock-message-" + _serial) && Row.State == opaque,
+                "C5", "ordinary terminal late input did not drain through the older model");
             Apply(new("tick", 50)); Send(Kinds.Terminate); Drain();
             Require(Times[WorkflowCommitClock.Terminal] == ended, "C3", "repeat termination restamped end");
             Console.WriteLine("PASS clock:" + scenario); return;
@@ -218,11 +225,16 @@ public sealed class ClockState
     public bool AbsentWasNull { get; set; }
     public string FutureCanary { get; set; } = "opaque-future-state";
 }
-public sealed class ClockProbe(int version) : IExecutionModel
+public sealed class ClockProbe(int version) : IExecutionModel, IModelMetadata
 {
     public string Key => "clock-probe";
     public Type StateType => typeof(ClockState);
     public int StateVersion => version;
+    public bool HandlesMetadata(Message message) => message.Kind == "clock-metadata";
+    public ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("older metadata reader must not execute opaque future state");
+    public void TerminateMetadata(object state) { }
+    public bool ProtectsDeletion(object state, long now, ICommitClock clock) => false; // this clock probe promises no receipt retention
     public object CreateState(StartSpec start) => new ClockState();
     public object UpgradeState(string state, int fromVersion) => Json.Read<ClockState>(state);
     public ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken) => new((object?)null);
