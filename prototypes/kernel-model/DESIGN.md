@@ -148,7 +148,7 @@ a concurrent stress test with injected connection failures and the provider's ow
 | `ProjectedAsync`, `ProjectAsync`, `ReadViewsAsync` | The projector's own row and the partition's position; a move of the projector's row only from where it was read, with the view rows, in one transaction; the viewer's read |
 | `SweepAsync` | Delete done outside commands and events whose window passed |
 | Failures | Unknown (reset), transient (try the same batch again), definite (commit one by one, park the one that fails). When a provider cannot tell, unknown (M4) |
-| Subscriptions | Idempotent (FINDINGS 25.2): a wait subscribed twice is one row; removing one that is not there changes nothing; within a turn its subscribes apply before its unsubscribes. EF writes them in the batch and, only when one of them fails the batch, sends it once more with them as statements that tolerate both |
+| Subscriptions | Idempotent (FINDINGS 25.2): a wait subscribed twice is one row; removing one that is not there changes nothing; within a turn its subscribes apply before its unsubscribes. EF writes them in the batch; when its first count that does not match is on a wait, or when it subscribes anything and fails with a definite error while the fence holds, it sends the batch once more with them as statements that tolerate both |
 | Order key | A later send from the same sender gets a larger key (M1). An identity column on SQL; on MongoDB a clock in the sender's partition document, cut under the fence |
 
 | Provider | How | Evidence |
