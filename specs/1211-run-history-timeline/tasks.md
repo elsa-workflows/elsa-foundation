@@ -28,7 +28,7 @@
 
 - [ ] T009 [US1] Add authorized history page/exact-event handlers, requests/views/endpoints and optional capability relations in Essentials/src/Workflows/Runtime/Api/{Handlers,Requests,Models,Endpoints,Capabilities} using existing structure authority and missing/denied behavior.
 - [ ] T010 [US1] Add source-bound run/wait/incident history API behavior tests in Essentials/tests/Workflows/Runtime/Api/Tests/ including unknown kinds and explicit uncaptured/disabled coverage.
-- [ ] T011 [P] [US1] Add capability-aware client contracts and bounded stale-preserving history observation in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/, workflowTypes.ts and workflow-editor/run-history/.
+- [X] T011 [P] [US1] Add capability-aware client contracts and bounded stale-preserving history observation in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/, workflowTypes.ts and workflow-editor/run-history/.
 - [ ] T012 [US1] Integrate primary Timeline/Diagram, explicit scope/filter/search and event/causation inspection in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx and workflow-editor/run-history/ with public Studio tokens.
 - [ ] T013 [US1] Preserve relevant pinned/current diagram labels, persistence/granularity help and resolved-incident history in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ and workflowInstanceInspection.ts.
 - [ ] T014 [US1] Add full run-workbench/history observation regressions and update deliberate default-view assumptions in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/ and Studio/tests/browser/workflow-run-detail-layout.spec.ts.
