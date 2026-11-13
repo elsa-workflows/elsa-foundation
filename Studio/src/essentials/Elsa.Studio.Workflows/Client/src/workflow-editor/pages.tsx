@@ -154,14 +154,29 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   const workflowExecutionId = readWorkflowExecutionIdFromUrl(routeLocation.pathname);
   const searchParams = routeLocation.searchParams;
   const workspaceTab = useStudioWorkspaceTab();
+  const currentWorkspaceTab = useRef(workspaceTab); currentWorkspaceTab.current = workspaceTab;
+  const [historyNavigation, setHistoryNavigation] = useState(0);
+  useEffect(() => {
+    // The host emits popstate for accepted navigation and stops cross-tab entries in capture phase.
+    // Local replaceState and workspace tab restoration have no such navigation event.
+    const navigated = () => {
+      if (currentWorkspaceTab.current && !currentWorkspaceTab.current.isActive()) return;
+      if (readWorkflowExecutionIdFromUrl(window.location.pathname) === workflowExecutionId)
+        setHistoryNavigation(value => value + 1);
+    };
+    window.addEventListener("popstate", navigated);
+    return () => window.removeEventListener("popstate", navigated);
+  }, [workflowExecutionId]);
   // The host tab location changes for real navigation, while local selection synchronization only
   // replaces the address bar. Apply new same-run intents without replaying our own URL writes.
   const routeIntent = workspaceTab?.location ?? `${routeLocation.pathname}${routeLocation.search}`;
-  const initialSelection = useRef<{ workflowExecutionId: string; routeIntent: string; activityExecutionId: string | null; returnTo: string | null; historySearch: string } | null>(null);
-  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId || workspaceTab && initialSelection.current.routeIntent !== routeIntent) {
+  const initialSelection = useRef<{ workflowExecutionId: string; routeIntent: string; navigation: number; activityExecutionId: string | null; returnTo: string | null; historySearch: string } | null>(null);
+  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId || initialSelection.current.navigation !== historyNavigation
+      || workspaceTab && initialSelection.current.routeIntent !== routeIntent) {
     initialSelection.current = {
       workflowExecutionId,
       routeIntent,
+      navigation: historyNavigation,
       activityExecutionId: readRunSelection(routeLocation.search),
       returnTo: searchParams.get("returnTo"),
       historySearch: routeLocation.search
@@ -197,7 +212,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} initialHistorySearch={initialSelection.current.historySearch} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} initialHistorySearch={initialSelection.current.historySearch} initialHistoryNavigation={historyNavigation} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );
