@@ -214,6 +214,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       // Turning autosave off drops a pending autosave, so the header stops claiming one (#4085).
       await expect(saveStatus).not.toContainText("Autosaving");
       await page.locator('.wf-sequence-step[data-id="decide"]').press("Enter");
+      if (page.viewportSize()!.width <= 600) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
       const picker = page.getByRole("combobox", { name: "Business decision", exact: true });
       await expect(picker.locator("option", { hasText: existingDecision })).toHaveCount(1);
       await picker.selectOption(existingId); await expect(picker).toHaveValue(existingId);

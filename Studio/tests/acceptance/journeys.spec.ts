@@ -1,3 +1,4 @@
+import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
@@ -12,6 +13,8 @@ import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
 import { structuredLogsJourney } from "./structuredLogsJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
+import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
+import { phoneContentJourney } from "./phoneContentJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -54,9 +57,13 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));
+
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
 test("settings tabs and preserved edits", async ({ page }, info) => settingsTabsJourney(page, info, capture));
 test("structured logs table accessibility", async ({ page }, info) => structuredLogsJourney(page, info, capture));
+test("structured logs readability and recovery", async ({ page }, info) => structuredLogsReadabilityJourney(page, info, capture));
+test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
   const creations = createdWorkflows.get(page) ?? [];
@@ -470,37 +477,58 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await page.locator(".studio-library-header").getByRole("link", { name: "Activity availability", exact: true }).click({ modifiers: ["Alt"] });
   await expect(screens.getByRole("tab")).toHaveCount(previousScreenCount + 1);
   await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Settings sections", exact: true })).toContainText("Workflow authoring");
+  const settingsSections = page.getByRole("navigation", { name: "Settings sections", exact: true });
+  const settingsSelect = page.getByRole("combobox", { name: "Settings section", exact: true });
+  const compactSettings = (page.viewportSize()?.width ?? 0) <= 800;
+  if (compactSettings) {
+    await expect(settingsSelect).toBeVisible();
+    await expect(settingsSelect.locator('optgroup[label="Workflow authoring"]')).toHaveCount(1);
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Activity availability");
+  } else await expect(settingsSections).toContainText("Workflow authoring");
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Loading availability…", { exact: true })).toHaveCount(0);
   await capture(page, info, "workflow-authoring-settings");
-  const settingsSections = page.getByRole("navigation", { name: "Settings sections", exact: true });
   const sectionTabCount = await screens.getByRole("tab").count();
   const settingsDocument = await page.evaluate(() => performance.timeOrigin);
-  await settingsSections.getByRole("link", { name: "Runtime evidence settings", exact: true }).click({ modifiers: ["Alt"] });
-  await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
-  await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
-  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
-  const originalSettingsUrl = page.url();
-  const nativeSectionPage = page.context().waitForEvent("page");
-  await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click({ modifiers: ["ControlOrMeta"] });
-  const nativePage = await nativeSectionPage;
-  try {
-    await expect(nativePage).toHaveURL(/\/settings\/workflows-activity-availability(?:\?|$)/);
-    await expect(nativePage.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
-    await expect(page).toHaveURL(originalSettingsUrl);
+  if (compactSettings) {
+    const backendBefore = new URL(page.url()).searchParams.get("backend");
+    await settingsSelect.selectOption({ label: "Runtime evidence settings" });
+    await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+    await settingsSelect.selectOption({ label: "Activity availability" });
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Activity availability");
+    expect(new URL(page.url()).searchParams.get("backend")).toBe(backendBefore);
+    await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+  } else {
+    await settingsSections.getByRole("link", { name: "Runtime evidence settings", exact: true }).click({ modifiers: ["Alt"] });
+    await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+    await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+    const originalSettingsUrl = page.url();
+    const nativeSectionPage = page.context().waitForEvent("page");
+    await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click({ modifiers: ["ControlOrMeta"] });
+    const nativePage = await nativeSectionPage;
+    try {
+      await expect(nativePage).toHaveURL(/\/settings\/workflows-activity-availability(?:\?|$)/);
+      await expect(nativePage.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+      await expect(page).toHaveURL(originalSettingsUrl);
+      await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+    } finally { await nativePage.close(); }
+    await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click();
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
     await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
-  } finally { await nativePage.close(); }
-  await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click();
-  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
-  await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
-  expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+  }
   // Existing bookmarked routes must resolve to their new Settings surface as well.
   await page.goto("/workflows/runtime-diagnostics");
   await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Settings sections", exact: true })).toContainText("Runtime");
+  if (compactSettings) await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+  else await expect(settingsSections).toContainText("Runtime");
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
   await capture(page, info, "runtime-settings");
   await navLink("Diagnostics").click();

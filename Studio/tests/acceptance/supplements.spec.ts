@@ -92,6 +92,32 @@ async function keyboardTo(page: Page, target: Locator, limit = 150) {
   await expect(target).toBeFocused();
 }
 
+// Settings uses links on desktop and a native section selector on compact layouts.
+// Keyboard journeys reach the real control with Tab; no direct route or scripted focus substitutes for it.
+async function activateSettingsSection(page: Page, label: "Appearance" | "Runtime evidence settings", touch?: (target: Locator, label: string, changed?: boolean) => Promise<void>) {
+  const select = page.getByRole("combobox", { name: "Settings section", exact: true });
+  if ((page.viewportSize()?.width ?? 0) <= 800) {
+    await expect(select).toBeVisible();
+    if (touch) {
+      await touch(select, "Settings section selector", false);
+      await page.keyboard.press("Escape");
+    }
+    await keyboardTo(page, select);
+    await select.press(label === "Appearance" ? "Home" : "r");
+    await select.press("Enter");
+    await expect(select.locator("option:checked")).toHaveText(label);
+  } else {
+    const link = page.getByRole("navigation", { name: "Settings sections", exact: true }).getByRole("link", { name: label, exact: true });
+    if (touch) await touch(link, `${label} section`, false);
+    else {
+      await keyboardTo(page, link);
+      await page.keyboard.press("Enter");
+    }
+    await expect(link).toHaveAttribute("aria-current", "page");
+  }
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: label, exact: true })).toBeVisible();
+}
+
 async function capabilities(page: Page, backend: string, headers?: Record<string, string>) {
   const response = await page.request.get(`${backend}/capabilities`, { headers });
   const body = await response.json();
@@ -199,14 +225,13 @@ test("coarse pointer grouped navigation", async ({ page }, info) => {
   await capture(page, info, "touch-local-views");
 
   await tap(link("Settings"), "Settings entry");
-  const sections = page.getByRole("navigation", { name: "Settings sections", exact: true });
-  // Settings-shell section links are existing controls; they are tapped and recorded, not held to the new 44px rule.
-  await tap(sections.getByRole("link", { name: "Runtime evidence settings", exact: true }), "Runtime evidence settings section", false);
+  // Settings controls are tapped and recorded, outside the changed shell targets' 44px rule.
+  await activateSettingsSection(page, "Runtime evidence settings", tap);
   await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
   await expect(link("Settings")).toHaveAttribute("aria-current", "page");
   await capture(page, info, "touch-settings-runtime");
 
-  await tap(sections.getByRole("link", { name: "Appearance", exact: true }), "Appearance section", false);
+  await activateSettingsSection(page, "Appearance", tap);
   await tap(page.getByRole("radiogroup", { name: "Navigation", exact: true }).getByRole("radio", { name: "Top", exact: true }), "Top navigation choice", false);
   await expect(page.locator("html")).toHaveAttribute("data-nav-mode", "top");
   await tap(group("Build"), "Top Build open");
@@ -358,26 +383,24 @@ test("restricted principal settings access", async ({ page }, info) => {
   expect(settingsResponse.status()).toBe(200);
   expect(runtimeSettings.permissions.canManage).toBe(false);
 
-  const sections = page.getByRole("navigation", { name: "Settings sections", exact: true });
-  await expect(sections.getByRole("link", { name: "Appearance", exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(sections.getByRole("link", { name: "Features", exact: true })).toHaveCount(0);
-  await expect(sections.getByText("Administration", { exact: true })).toHaveCount(0);
+  const sectionSelect = page.getByRole("combobox", { name: "Settings section", exact: true });
+  await expect(sectionSelect).toBeVisible();
+  await expect(sectionSelect.locator("option:checked")).toHaveText("Appearance");
+  await expect(sectionSelect.locator('option[value="feature-management"]')).toHaveCount(0);
+  await expect(sectionSelect.locator('optgroup[label="Administration"]')).toHaveCount(0);
   await capture(page, info, "restricted-appearance");
   const denials: Record<string, string> = {};
   for (const [bookmark, name] of [["/settings/feature-management", "restricted-features-settings-denied"], ["/features", "restricted-features-bookmark-denied"]]) {
     await page.goto(bookmark);
     const denied = pane.locator(".empty-state[role=status]").filter({ visible: true });
     await expect(denied).toHaveText("You don't have access to this section.");
-    await expect(sections.getByRole("link", { name: "Features", exact: true })).toHaveCount(0);
+    await expect(sectionSelect.locator('option[value="feature-management"]')).toHaveCount(0);
     denials[bookmark] = (await denied.textContent()) ?? "";
     await capture(page, info, name);
-    const appearance = sections.getByRole("link", { name: "Appearance", exact: true });
-    await keyboardTo(page, appearance);
-    await page.keyboard.press("Enter");
+    await activateSettingsSection(page, "Appearance");
     await expect(pane.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
   }
-  await keyboardTo(page, sections.getByRole("link", { name: "Runtime evidence settings", exact: true }));
-  await page.keyboard.press("Enter");
+  await activateSettingsSection(page, "Runtime evidence settings");
   await expect(pane.getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
   // Loaded from the real runtime settings response (not the pre-load disabled state), then read-only for this reader.
   await expect(pane.getByText(/^Maximum allowed by Host Policy: /)).toBeVisible();
@@ -392,11 +415,8 @@ test("restricted principal settings access", async ({ page }, info) => {
   // Even a forced activation of the disabled Save cannot submit.
   await save.click({ force: true });
   await capture(page, info, "restricted-runtime-readonly");
-  const appearance = sections.getByRole("link", { name: "Appearance", exact: true });
-  await keyboardTo(page, appearance);
-  await page.keyboard.press("Enter");
-  await expect(pane.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
-  await expect(appearance).toHaveAttribute("aria-current", "page");
+  await activateSettingsSection(page, "Appearance");
+  await expect(sectionSelect.locator("option:checked")).toHaveText("Appearance");
   await capture(page, info, "restricted-keyboard-recovery");
   page.off("request", record);
   await attachJson(info, "restricted-network.json", { signInPosts, observedRequestsAfterSignIn: observed, transportNegotiations, writes, denials, expectedWritesAfterSignIn: [] });

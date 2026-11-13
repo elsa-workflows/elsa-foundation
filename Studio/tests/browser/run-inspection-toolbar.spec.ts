@@ -92,6 +92,7 @@ test.describe("touch targets", () => {
     await expect(page.getByRole("region", { name: "Test run summary", exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage).some(key => key.startsWith("elsa.editor.test-run:")))).toBe(true);
     await page.reload();
+    await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
     await page.getByRole("tab", { name: "Runtime", exact: true }).click();
     const previous = page.getByRole("group", { name: "Previous Test Run", exact: true });
     await expect(previous).toBeVisible();

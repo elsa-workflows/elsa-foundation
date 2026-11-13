@@ -3735,3 +3735,23 @@ html[data-theme-material] .otel-panel .otel-traces-layout {
 .theme-builder-view-panel {
   min-width: 0;
 }
+
+.theme-builder-workbench.is-compact {
+  align-content: start;
+}
+
+.theme-builder-select {
+  display: grid;
+  align-content: start;
+  align-self: start;
+  gap: 6px;
+  min-width: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.theme-builder-select select {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
