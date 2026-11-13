@@ -164,6 +164,7 @@
 }
 
 .studio-workspace-tab-actions {
+  /* Cover tabs that scroll under the + and All tabs controls. */
   position: relative;
   z-index: 1;
   display: flex;
@@ -246,9 +247,8 @@
 
 @media (max-width: 600px) {
   .studio-workspace-tab {
-    flex: 1 1 0%;
+    flex: 0 0 auto;
     max-width: 168px;
-    min-width: 0;
   }
 
   .studio-workspace-tab[data-active="true"] {

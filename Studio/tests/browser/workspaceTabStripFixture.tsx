@@ -12,10 +12,23 @@ writeAppearancePreferences({ themeId: "classic", mode: appearance === "dark" ? "
 
 const longWorkspaceTabTitle = "Picker-created policy narrow-dark-1731234567890";
 
-const initialTabs: WorkspaceTabView[] = [
+const twoTabs: WorkspaceTabView[] = [
   { id: "workflow", title: "Decision picker narrow-dark-1731234567890", icon: <Scale size={14} />, pinned: false, guarded: true },
   { id: "policy", title: longWorkspaceTabTitle, icon: <FolderKanban size={14} />, pinned: false, guarded: false }
 ];
+
+const manyTabs: WorkspaceTabView[] = [
+  { id: "home", title: "Home", icon: <Scale size={14} />, pinned: true, guarded: false },
+  { id: "orders", title: "Orders workflow", icon: <FolderKanban size={14} />, pinned: false, guarded: false },
+  { id: "customers", title: "Customers", icon: <Scale size={14} />, pinned: false, guarded: false },
+  { id: "invoices", title: "Invoices draft", icon: <FolderKanban size={14} />, pinned: false, guarded: true },
+  { id: "reports", title: "Reports", icon: <Scale size={14} />, pinned: false, guarded: false },
+  { id: "settings", title: "Workspace settings", icon: <FolderKanban size={14} />, pinned: false, guarded: false },
+  { id: "workflow", title: "Decision picker narrow-dark-1731234567890", icon: <Scale size={14} />, pinned: false, guarded: true },
+  { id: "policy", title: longWorkspaceTabTitle, icon: <FolderKanban size={14} />, pinned: false, guarded: false }
+];
+
+const initialTabs = query.get("tabs") === "many" ? manyTabs : twoTabs;
 
 function WorkspaceTabStripFixture() {
   const [tabs, setTabs] = useState(initialTabs);

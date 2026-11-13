@@ -58,6 +58,15 @@ function tabLabel(tab: WorkspaceTabView) {
   return tab.detail ? `${tab.title} · ${tab.detail}` : tab.title;
 }
 
+function scrollTabIntoView(tab: HTMLElement) {
+  const tablist = tab.closest(".studio-workspace-tablist");
+  if (!(tablist instanceof HTMLElement)) return;
+  const tabBox = tab.getBoundingClientRect();
+  const listBox = tablist.getBoundingClientRect();
+  if (tabBox.left < listBox.left) tablist.scrollLeft += tabBox.left - listBox.left;
+  else if (tabBox.right > listBox.right) tablist.scrollLeft += Math.ceil(tabBox.right - listBox.right);
+}
+
 export function WorkspaceTabStrip({ baseId, tabs, activeId, notice, onDismissNotice, onActivate, onClose, onCloseOthers, onCloseAll, onNewTab, onPin, onMove }: WorkspaceTabStripProps & { baseId: string }) {
   const [focusedId, setFocusedId] = useState(activeId);
   const [menu, setMenu] = useState<{ tabId: string } | { all: true } | null>(null);
@@ -68,7 +77,22 @@ export function WorkspaceTabStrip({ baseId, tabs, activeId, notice, onDismissNot
 
   useEffect(() => {
     setFocusedId(activeId);
-    tabRefs.current.get(activeId)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const tab = tabRefs.current.get(activeId);
+    if (!tab) return;
+    let cancelled = false;
+    const run = () => { if (!cancelled && tab.isConnected) scrollTabIntoView(tab); };
+    run();
+    const frame = requestAnimationFrame(run);
+    const tablist = tab.closest(".studio-workspace-tablist");
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(run);
+    observer?.observe(tab);
+    if (tablist instanceof Element) observer?.observe(tablist);
+    void document.fonts?.ready?.then(run);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
   }, [activeId]);
 
   useEffect(() => {
