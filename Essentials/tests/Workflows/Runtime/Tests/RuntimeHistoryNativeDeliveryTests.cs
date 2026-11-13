@@ -21,7 +21,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 // Seeded invocation; actual native delivery/claim/callback/history. Not authored start/host/provider/restart proof.
-public sealed class RuntimeHistoryNativeDeliveryTests
+public sealed partial class RuntimeHistoryNativeDeliveryTests
 {
     private static readonly DateTimeOffset At = DateTimeOffset.UnixEpoch.AddDays(1);
     private static readonly WorkflowExecutableIdentity Pin = new("artifact", "definition", "version", "1", "hash");
@@ -126,7 +126,7 @@ public sealed class RuntimeHistoryNativeDeliveryTests
     }
     private static ValueTypeDescriptor Descriptor<T>() => new(TypeAliasConvention.CanonicalAlias(typeof(T)), schemaVersion: 1);
 
-    private sealed class Fixture : IDisposable
+    private sealed partial class Fixture : IDisposable
     {
         private readonly ServiceProvider provider;
         private readonly IServiceScope scope;
@@ -145,7 +145,7 @@ public sealed class RuntimeHistoryNativeDeliveryTests
         internal IBookmarkStateStore Bookmarks { get; }
         internal IWorkflowSchedulerWorkQueue Queue { get; }
         internal InMemoryWorkflowSchedulerPoisonStore Poison { get; }
-        internal static async Task<Fixture> CreateAsync(string outcome)
+        internal static async Task<Fixture> CreateAsync(string outcome, bool publication = false, bool captured = true)
         {
             var clock = new FakeTimeProvider(At); var activator = new Activator(outcome);
             var services = new ServiceCollection(); services.AddLogging();
@@ -154,7 +154,10 @@ public sealed class RuntimeHistoryNativeDeliveryTests
             services.AddSingleton<ActivityCompletionProjector>(); services.AddSingleton<RuntimeOutputCaptureProjector>();
             services.AddScoped(sp => new ActivityFaultIncidentRecorder(sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>(), DefaultRuntimeFaultCapturePolicy.CreateDefault()));
-            services.AddWorkflowRuntime(); RuntimeHistoryRegistration.AddServices(services);
+            if (publication) ConfigurePublication(services);
+            services.AddWorkflowRuntime();
+            if (publication) services.AddWorkflowStimulusRouter();
+            RuntimeHistoryRegistration.AddServices(services);
             services.Configure<RuntimeRecoveryContinuationOptions>(options => options.SigningKey = "native-history-delivery-tests-signing-key-at-least-32-bytes");
             services.AddSingleton(new RuntimeHistorySourceSupport([
                 RuntimeHistorySourceFactKind.ActivityContinuationStarted, RuntimeHistorySourceFactKind.ActivityContinuationReturned,
@@ -165,8 +168,10 @@ public sealed class RuntimeHistoryNativeDeliveryTests
             var writer = sp.GetRequiredService<IRuntimeCheckpointCommitStore>();
             Assert.True(writer.CanCommitExactBookmarkResume(f.Bookmarks, executions, activities));
             var policy = RuntimeHistoryRegistration.ResolvePolicy(sp, Run)!;
+            var stimulusType = publication ? PublicationStimulusType : "approval";
+            var stimulusHash = publication ? PublicationStimulusHash : "hash";
             await executions.SaveAsync(new(Run, Pin, WorkflowExecutionStatus.Running, null, At, At, At, null, null, null, "native-history", new Dictionary<string, string>())
-                { HistoryCapturePolicy = policy, HistoryCaptureEnabledAtAdmission = true, Partition = new("native-history"), RunKind = WorkflowRunKind.PublishedRun });
+                { HistoryCapturePolicy = captured ? policy : null, HistoryCaptureEnabledAtAdmission = captured, Partition = new("native-history"), RunKind = WorkflowRunKind.PublishedRun });
             var descriptor = JsonSerializer.SerializeToElement(new { type = "native-history" });
             var contract = new ActivityContract("test/native-history", "1", "native-history", descriptor, [],
                 new ActivityResultContract(new("Elsa.Unit"), true, ActivityValuePolicy.Default, []), ["Done"],
@@ -188,16 +193,16 @@ public sealed class RuntimeHistoryNativeDeliveryTests
                 PrivateState = new(ActivityId, 1, ValueEnvelope.Inline(stateType, JsonSerializer.SerializeToElement(new WaitState("request")),
                     ValueProtectionPolicy.InstanceInline), "initial-attempt", At),
                 TriggerRegistrations = [new Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration(Wait, ActivityId, Resume, triggerType,
-                    "approval", "hash", ActivityTriggerDeduplicationPolicy.IdempotencyKey)], TriggerDeliveries = []
+                    stimulusType, stimulusHash, ActivityTriggerDeduplicationPolicy.IdempotencyKey)], TriggerDeliveries = []
             };
             await activities.SaveAsync(state);
-            var payload = new RuntimeCreateBookmarkCommandPayload(Pin, Wait, ActivityId, Node, Resume, "approval", "hash", null, null,
+            var payload = new RuntimeCreateBookmarkCommandPayload(Pin, Wait, ActivityId, Node, Resume, stimulusType, stimulusHash, null, null,
                 RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason);
             var work = new RuntimeSchedulerWorkItem("create", Run, "create-command", WorkflowExecutionCommandKind.CreateBookmark,
                 "create-envelope", "create-key", At, At, payload: JsonSerializer.SerializeToElement(payload));
             await new WorkflowCreateBookmarkSchedulerWorkHandler(sp.GetRequiredService<IWorkflowExecutableStore>(), activities,
                 sp.GetRequiredService<RuntimeCheckpointCommitter>(), sp.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>(), clock).HandleAsync(work);
-            Assert.NotNull(await f.History.FindHeadAsync(Run));
+            if (captured) Assert.NotNull(await f.History.FindHeadAsync(Run)); else Assert.Null(await f.History.FindHeadAsync(Run));
             return f;
         }
         internal async Task<BookmarkResumeDispatchRequest> RequestAsync()
