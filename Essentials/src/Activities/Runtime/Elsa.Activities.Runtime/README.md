@@ -126,3 +126,7 @@ If the workflow became terminal and recording failed, the normal drainer keeps r
 The existing Runtime resumption cleanup instead observes the queued saved resume as terminal/ineligible
 before deleting its residue. Missing/unacknowledged retained history stops that purge until a later sweep;
 this separate diagnostic observation does not manufacture a callback or bookmark consumption.
+
+A terminal history outage is reported for that execution without stopping unrelated recovery or backlog
+progress. Held terminal work follows the same rule. Its source remains owed; partial cleanup does not mark
+the run fully purged or reap its mailbox. Cancellation or changed access still stops the sweep.

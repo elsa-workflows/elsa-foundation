@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.History;
@@ -136,7 +137,8 @@ public sealed class RuntimeResumptionService(
         {
             var id = executionIds[index];
             var terminal = await service.PurgeIfTerminalAsync(request, id, ct);
-            outcomes[index] = (terminal, terminal.IsTerminal ? null : await service.RedriveAsync(id, ct));
+            outcomes[index] = (terminal, service.TerminalHistoryFailureDispatch(id, terminal) ??
+                (terminal.IsTerminal ? null : await service.RedriveAsync(id, ct)));
         }
         if (operationScopeFactory is not null && request.MaxConcurrentDispatches > 1)
         {
@@ -162,7 +164,7 @@ public sealed class RuntimeResumptionService(
             if (terminal.PurgedCount is { } purged)
             {
                 purgedWorkItemCount += purged;
-                terminalExecutionsPurged++;
+                if (terminal.HistoryFailure is null) terminalExecutionsPurged++;
             }
             if (dispatch is not null)
                 dispatches.Add(dispatch);
@@ -173,11 +175,13 @@ public sealed class RuntimeResumptionService(
         foreach (var workflowExecutionId in discovery.Held)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if ((await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken)).PurgedCount is { } purged)
+            var terminal = await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken);
+            if (terminal.PurgedCount is { } purged)
             {
                 purgedWorkItemCount += purged;
-                terminalExecutionsPurged++;
+                if (terminal.HistoryFailure is null) terminalExecutionsPurged++;
             }
+            if (TerminalHistoryFailureDispatch(workflowExecutionId, terminal) is { } failure) dispatches.Add(failure);
         }
 
         CommitRecoveryCursor(discovery, dispatches);
@@ -216,9 +220,9 @@ public sealed class RuntimeResumptionService(
         if (await IsOwnedByLiveDrainAsync(workflowExecutionId, cancellationToken))
             return TerminalPurge.Owned;
 
-        var purged = await PurgeResidualSchedulerWorkAsync(request, execution, cancellationToken);
-        await ReapTerminalMailboxAsync(workflowExecutionId, cancellationToken);
-        return new TerminalPurge(IsTerminal: true, PurgedCount: purged);
+        var (purged, failure) = await PurgeResidualSchedulerWorkAsync(request, execution, cancellationToken);
+        if (failure is null) await ReapTerminalMailboxAsync(workflowExecutionId, cancellationToken);
+        return new TerminalPurge(IsTerminal: true, PurgedCount: purged) { HistoryFailure = failure };
     }
 
     // A read, never an acquisition: acquiring ownership always issues a newer fencing token, which would fence the live
@@ -252,8 +256,8 @@ public sealed class RuntimeResumptionService(
 
     // Deletes every scheduler work item still queued for a terminal execution. Reads a bounded page, deletes each
     // item by identity (idempotent — a concurrent completion just yields Delete=false), and repeats until the queue
-    // is empty or the safety cap is hit. Returns the number of items removed.
-    private async ValueTask<int> PurgeResidualSchedulerWorkAsync(
+    // is empty or the safety cap is hit. Returns the removed count and any classified history failure that stopped this execution.
+    private async ValueTask<(int Purged, Exception? HistoryFailure)> PurgeResidualSchedulerWorkAsync(
         RuntimeResumptionSweepRequest request,
         WorkflowExecutionState execution,
         CancellationToken cancellationToken)
@@ -271,14 +275,36 @@ public sealed class RuntimeResumptionService(
 
             foreach (var item in listed.Items)
             {
-                await RuntimeTerminalResumeHistory.RecordAsync(item, execution, terminalHistoryWriter, terminalHistoryReader,
-                    persistenceAccessContextAccessor, timeProvider.GetUtcNow(), cancellationToken);
+                var accessBefore = persistenceAccessContextAccessor?.Current;
+                try
+                {
+                    await RuntimeTerminalResumeHistory.RecordAsync(item, execution, terminalHistoryWriter, terminalHistoryReader,
+                        persistenceAccessContextAccessor, timeProvider.GetUtcNow(), cancellationToken);
+                }
+                catch (Exception failure) when ((failure is RuntimeSchedulerWorkUnavailableException or RuntimeHistoryIntegrityException) &&
+                    persistenceAccessContextAccessor?.Current == accessBefore)
+                {
+                    // Keep this execution owed without starving the independent candidates after it. Context drift
+                    // and requested cancellation escape instead; continuing under a changed context is unsafe.
+                    return (purged, failure);
+                }
                 if (await workQueue.DeleteAsync(workflowExecutionId, item.WorkItemId, cancellationToken))
                     purged++;
             }
         }
 
-        return purged;
+        return (purged, null);
+    }
+
+    private RuntimeResumptionDispatch? TerminalHistoryFailureDispatch(string workflowId, TerminalPurge terminal)
+    {
+        if (terminal.HistoryFailure is not { } failure) return null;
+        // The operational result exposes only a bounded classification. The logger retains the original domain
+        // exception and cause; neither its private message nor payload becomes history or result metadata.
+        logger.Log(failure is RuntimeHistoryIntegrityException ? LogLevel.Error : LogLevel.Warning, failure,
+            "Terminal resume history for '{WorkflowExecutionId}' remains owed; continuing the recovery sweep", workflowId);
+        return new(workflowId, RuntimeResumptionDispatchOutcome.Faulted, EnvelopeId: null,
+            Failure: failure is RuntimeSchedulerWorkUnavailableException ? "runtime.history.capture-unavailable" : "runtime.history.integrity");
     }
 
     private void CommitRecoveryCursor(
@@ -693,6 +719,7 @@ public sealed class RuntimeResumptionService(
 
     private readonly record struct TerminalPurge(bool IsTerminal, int? PurgedCount)
     {
+        internal Exception? HistoryFailure { get; init; }
         public static TerminalPurge NotTerminal => new(IsTerminal: false, PurgedCount: null);
 
         public static TerminalPurge Owned => new(IsTerminal: true, PurgedCount: null);

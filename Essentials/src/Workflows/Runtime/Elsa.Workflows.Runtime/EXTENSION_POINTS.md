@@ -1359,6 +1359,13 @@ actual paired Core writer/reader; its original constructor remains and cannot wa
 No source/capture-chain qualification is claimed for this pure observation beyond the selected provider's
 native policy/scope/deletion contract; it enables no native activity effect.
 
-All28 new and35 prior native component controls plus the existing resumption suite are NOT RUN. One Runtime
+All31 new and35 prior native component controls plus the existing resumption suite are NOT RUN. One Runtime
 constructor/API baseline entry is added; no Core contract/schema/reference/dependency/friend/module/host.
 Other receiver branches, authored journeys, durable provider and UX acceptance remain open.
+
+Terminal observation outages are isolated as per-execution Faulted sweep outcomes, including held terminal
+candidates. Closed failure codes stay in the result; the original domain exception/cause goes to the logger,
+not history/result metadata. Other candidates and the bounded backlog walk continue, so the pump can apply
+its existing per-execution backoff. Partially purged failed executions are not counted as fully purged and
+are not reaped. Requested cancellation/access drift still escape. Three added controls cover repeated
+one-execution pages ahead of healthy live/legacy work and held-terminal partial purge accounting.
