@@ -242,4 +242,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../Extensions/Weaver/src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj" />
+  </ItemGroup>
 </Project>
