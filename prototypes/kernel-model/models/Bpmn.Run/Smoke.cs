@@ -107,6 +107,7 @@ public static class Smoke
         p.Chain("start", "observe", "end");
         registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work> { ["observe"] = new JobWork("observe") }));
 
+        ScopeChecks.Register(registry);
         return registry
             .Service("observe", v => new ServiceResult(new JsonObject
             {
@@ -253,6 +254,7 @@ public static class Smoke
             Check(Conditions.Holds(expression, new Dictionary<string, JsonNode?> { ["n"] = JsonNode.Parse(json) }) == expected,
                 $"{json} in {expression} is {expected}");
 
+        await ScopeChecks.Run(Registry(), Check);
         Console.WriteLine("conditions");
         foreach (var (body, holds) in new[] { ("s != 'a==b'", true), ("s == 'x<y'", true), ("n >= 2", true), ("n < 2", false), ("flag", true), ("missing", false) })
         {

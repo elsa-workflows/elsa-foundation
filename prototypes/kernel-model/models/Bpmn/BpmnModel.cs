@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Bpmn.Model;
 using Bpmn.Model.State;
 using Bpmn.Semantics;
 
@@ -23,7 +24,10 @@ public sealed record JobArgs(string Process, string Service, string Element, Jso
 /// One unit of host work in flight, keyed by its handle: the interpreter's binding, iteration and token, and the
 /// kernel's side of it (a job key, a timer's message id, a subscription key, a child's id).
 /// </summary>
-public sealed record LiveWork(string Binding, string? Iteration, string Token, string Element, string Kind, string Key);
+public sealed record LiveWork(string Binding, string? Iteration, string Token, string Element, string Kind, string Key,
+    IReadOnlyDictionary<string, BpmnValue>? IterationValues = null);
+
+public sealed record ConsumedEvent(string Key, string Id);
 
 public static class WorkKinds
 {
@@ -46,7 +50,11 @@ public sealed class BpmnState
     /// The events message catches took. A kept event reaches every catch that subscribes within its window, so a catch
     /// that comes round again must skip it. It grows by one id per message taken (BPMN.md: friction F-B1).
     /// </summary>
-    public HashSet<string> Taken { get; set; } = new(StringComparer.Ordinal);
+    public HashSet<ConsumedEvent> TakenEvents { get; set; } = [];
+
+    // Older checkpoints stored only event IDs. Keep suppressing those prior deliveries. New receipts are keyed.
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public HashSet<string>? Taken { get; set; }
 
     /// <summary>The variables set since the start: what a called child gives back, so it does not overwrite its parent's with stale copies.</summary>
     public HashSet<string> Set { get; set; } = new(StringComparer.Ordinal);

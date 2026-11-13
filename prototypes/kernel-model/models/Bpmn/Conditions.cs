@@ -14,13 +14,15 @@ namespace Kernel.Bpmn;
 /// <c>== != &lt; &lt;= &gt; &gt;=</c> and the literal a number, <c>true</c>, <c>false</c>, <c>null</c> or <c>'text'</c>.
 /// Answers are a function of the expression and the variables, as the port requires.
 /// </summary>
-public sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpmnVariableReader, IBpmnConditionEvaluator
+public sealed class Conditions(BpmnState state, LiveWork? reporting = null) : IBpmnVariableReader, IBpmnConditionEvaluator
 {
+    public Conditions(Dictionary<string, JsonNode?> variables) : this(new BpmnState { Variables = variables }) { }
+
     private static readonly string[] Operators = ["==", "!=", "<=", ">=", "<", ">"];
 
     public bool TryRead(string name, out BpmnValue value)
     {
-        if (!variables.TryGetValue(name, out var node))
+        if (!state.Variables.TryGetValue(name, out var node))
         {
             value = BpmnValue.Absent;
             return false;
@@ -31,16 +33,37 @@ public sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpmnV
 
     public BpmnConditionResult Evaluate(BpmnConditionRequest request)
     {
-        try { return BpmnConditionResult.Of(Holds(request.Body, variables)); }
+        IReadOnlyDictionary<string, BpmnValue>? frame = null;
+        if (request.Iteration is { } iteration)
+        {
+            var work = reporting?.Iteration == iteration ? reporting : state.Live.Values.FirstOrDefault(w => w.Iteration == iteration);
+            frame = work?.IterationValues;
+            if (frame is null) return BpmnConditionResult.Failed("host.condition.iteration", $"Missing iteration frame '{iteration}'.");
+        }
+        try { return BpmnConditionResult.Of(Holds(request.Body, name => Read(state.Variables, frame, name))); }
         catch (FormatException e) { return BpmnConditionResult.Failed("host.condition.syntax", e.Message); }
     }
 
-    public static bool Holds(string body, IReadOnlyDictionary<string, JsonNode?> variables)
+    internal static JsonNode? Read(IReadOnlyDictionary<string, JsonNode?> variables, IReadOnlyDictionary<string, BpmnValue>? frame, string name)
+    {
+        if (frame is null || !frame.TryGetValue(name, out var local)) return variables.GetValueOrDefault(name);
+        return local.Presence switch
+        {
+            BpmnValuePresence.Absent or BpmnValuePresence.Null => null,
+            BpmnValuePresence.Present when local.Json is { } json => JsonNode.Parse(json.GetRawText()),
+            _ => throw new FormatException($"Cannot read {local.Presence} iteration variable '{name}'."),
+        };
+    }
+
+    public static bool Holds(string body, IReadOnlyDictionary<string, JsonNode?> variables) =>
+        Holds(body, name => variables.GetValueOrDefault(name));
+
+    private static bool Holds(string body, Func<string, JsonNode?> read)
     {
         var text = body.Trim();
         if (Operator(text) is var (at, op))
         {
-            var left = variables.GetValueOrDefault(text[..at].Trim());
+            var left = read(text[..at].Trim());
             var literal = text[(at + op.Length)..].Trim();
             if (Numeric.TryRead(literal) is { } number)
             {
@@ -52,7 +75,7 @@ public sealed class Conditions(Dictionary<string, JsonNode?> variables) : IBpmnV
             var right = Literal(literal);
             return op switch { "==" => JsonNode.DeepEquals(left, right), "!=" => !JsonNode.DeepEquals(left, right), _ => false };
         }
-        return variables.GetValueOrDefault(text) is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+        return read(text) is JsonValue v && v.TryGetValue<bool>(out var b) && b;
     }
 
     /// <summary>The first operator outside a quoted literal, the two-character ones first at a position.</summary>
