@@ -1,0 +1,322 @@
+[
+  {
+    "file": "screenshots/home-desktop-light--home-widgets.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-light/home-widgets.png",
+    "sha256": "0fced15b888591d6190657bfc1ad15f169ebb078771b66875c4a03a4bcfbdac2",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-light--home-module-settings-reopened.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-light/home-module-settings-reopened.png",
+    "sha256": "deb2a1f676eda8f21704841035c3cac379a2338ac22077f1052c161d30f79b08",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-light--home-server-default.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-light/home-server-default.png",
+    "sha256": "f9cccc4621aaa371dc55ca9c6bf21c34d8024bbd9bf5f418939e4d05931b6113",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-light--home-module-portfolio.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-light/home-module-portfolio.png",
+    "sha256": "9d25a3bdf28776acf3b0458095093ca942eedb3c8f63bbc3f55ef1e6ddfe000e",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-light--home-populated-appearance-1.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-light/home-populated-appearance-1.png",
+    "sha256": "381bf301ca73359cc47aed0ce30d5908cdc7f8d60197a2f2cb076d0f3d2625ac",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-light--home-populated-appearance-2.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-light/home-populated-appearance-2.png",
+    "sha256": "4ae300457fc0be5873410d198e479d7a65d173050e453e26028b0a192aadbece",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-dark--home-layout-reopened.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-dark/home-layout-reopened.png",
+    "sha256": "ff9f140b59e1d7a86bd048b262418049c4b1a229cb7477338b3486731e9e4e08",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-dark--home-module-picker-1.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-dark/home-module-picker-1.png",
+    "sha256": "c142709ce9c304df4c73021fa2a335f75ddffd128cefb51d8090d04f2af6c8ad",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-dark--home-populated-appearance-1.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-dark/home-populated-appearance-1.png",
+    "sha256": "899180212662225a3f1d3dc372f8319d2b36160976962d1f71b3f03a8ac45d16",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-desktop-dark--home-populated-appearance-2.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-desktop-dark/home-populated-appearance-2.png",
+    "sha256": "77423da4362dda447ba50893219101d95fa48f78b37ed8c11c6fc490ffe2c4a5",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-light--home-widgets.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-light/home-widgets.png",
+    "sha256": "4ca2233d4bb2b3fcc4d317e580fbf4d9ae04376c9f80ca928c79e96c37ba7a40",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-light--home-widget-picker.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-light/home-widget-picker.png",
+    "sha256": "ba41d28b3803cc2bc64c02569219cc7c907b647c116ce39afc737620b571c374",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-light--home-module-portfolio.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-light/home-module-portfolio.png",
+    "sha256": "6be3f354192d84bc769b537881899427dafe690a4603882a9f72e6b8d8435466",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-light--home-populated-appearance-1.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-light/home-populated-appearance-1.png",
+    "sha256": "fe2d9c4f92a9b904d34263e9774d4f8455900f54de31f0ec3fd99f241698421e",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-light--home-populated-appearance-2.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-light/home-populated-appearance-2.png",
+    "sha256": "4cd408f99b8aef9fc30ea66b93ce5c30b6e463250e6c9825b3c8d58ddf4032c4",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-dark--home-layout-reopened.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-dark/home-layout-reopened.png",
+    "sha256": "85cff06da59c7c51ba317dd3cd49e5cbdc48f81dcdf284df225c43f7243b2bb4",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-dark--home-module-settings-reopened.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-dark/home-module-settings-reopened.png",
+    "sha256": "0555936dcda7b4f966f75710b75be8d88ca52655f42f651903c3c136d6cb661d",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-dark--home-module-run-health.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-dark/home-module-run-health.png",
+    "sha256": "8cb503806b693ba76036a2f4479c2e498684a91951e3a8bafa2ee97ea34bfdf2",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-dark--home-populated-appearance-1.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-dark/home-populated-appearance-1.png",
+    "sha256": "b4fcbb7c466a6b91487f386ae2a8452d53e987ad79561878b6c707c11f419fa4",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/home-narrow-dark--home-populated-appearance-2.png",
+    "sourceSha": "6f7db4b23dd22891edb2523eb08b0912ead90ad5",
+    "run": "3604-home-main-20261113-r2",
+    "original": "results/journeys-existing-home-widgets-and-layout-defaults-narrow-dark/home-populated-appearance-2.png",
+    "sha256": "75e91a7cf4daa144d346203cc8348c95be360f8970ba887d0a9531ac6e0c1ab1",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-clarification.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-clarification.png",
+    "sha256": "ecf355ba9b50c7dcd04a60cf2495a4908323e4308bd1dcd7a453f5134d4b85e4",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-proposal-preview-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-proposal-preview-values.png",
+    "sha256": "990664e3a1addc39e94573c546e6f8ab00396308dc7eeb7cdb1bd1e72a7a4241",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-refined-preview-chart.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-refined-preview-chart.png",
+    "sha256": "274e0e5b83da70d680a6e3f909be9ea3657bed615287e0950d97015e3c6c4817",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-saved-light-desktop-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-saved-light-desktop-values.png",
+    "sha256": "2cfc3ceb4a9d4f0a81483a67e816996685c0342aec81ab4b6d4f76e04b50ee87",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-saved-dark-desktop-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-saved-dark-desktop-values.png",
+    "sha256": "ee49bd513d6ff72038a55d8cf815b1302b1ed8e85f3678461cd06d93a2da34b2",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-saved-light-narrow-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-saved-light-narrow-values.png",
+    "sha256": "c0564263a20554fde6be40500baf5523824e49e62a18c1b38b7781b94a42e512",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-saved-dark-narrow-values-end.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-saved-dark-narrow-values-end.png",
+    "sha256": "eb6dfd2d1cebd1445e270af777f79e255642e69a639b1bc8b339b4334323785c",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-refreshed.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-refreshed.png",
+    "sha256": "74afc3506d11c8068666590adfc094726d62acb58243e6d586c820c3c120450c",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-workflow--live-drill.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop/live-drill.png",
+    "sha256": "a273ba18eb3d18fe3ce342714d20580758ba75f97e7825c7a01bc59f5edc80cf",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-clarification.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-clarification.png",
+    "sha256": "7540801448fc102d1cb0f8baad8f2a12c8f2c07a992aa2650bbde4041012a055",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-proposal-preview-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-proposal-preview-values.png",
+    "sha256": "c8b7ecab8a028ac83fab69f176c7e4869a9f0ce452c55fb05f5a8745b6861404",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-refined-preview-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-refined-preview-values.png",
+    "sha256": "2a26dcfbe2c3326f2930a69a07b92a10997f82110d4fa9b1a61c4c21333d4c94",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-saved-light-desktop-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-saved-light-desktop-values.png",
+    "sha256": "88f9f8350ef601ae01f3d6f56357595cca7c55480a5dc46267c595df8f9410dd",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-saved-dark-desktop-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-saved-dark-desktop-values.png",
+    "sha256": "c0ffe5f07a2b50e7a3ce5388bed96c98790adbe3a67d963fa74066ed0399afdf",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-saved-light-narrow-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-saved-light-narrow-values.png",
+    "sha256": "1bd79bf8aab1bc745147da0c482b28a67e61eef83504fd663d00c8880da4c944",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-saved-dark-narrow-values-end.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-saved-dark-narrow-values-end.png",
+    "sha256": "9e0a225fe992b2db044138e66509c684321e7b21bd9e03d1d4b1b2ded9344361",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-shared-reader-values.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-shared-reader-values.png",
+    "sha256": "92fe108d9c35be967f5f5f97235914130858b2ac62e57d05f86fc6bdcdf2f13e",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-reader-no-category.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-reader-no-category.png",
+    "sha256": "9deb9230475421cc2d5c02f03757ce69db61b7cc16ddf2f0ba8107510352d494",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-applied-draft.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-applied-draft.png",
+    "sha256": "3073fefa769b6c4a4d577a2e985f83114853ef3ed401013f09810978024208c3",
+    "independentlyInspected": true
+  },
+  {
+    "file": "screenshots/live-acme--live-share.png",
+    "sourceSha": "c56b64e365bffc775ba2034655f290f985a1c2cc",
+    "run": "3604-live-main-20261113-r3",
+    "original": "results/liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop/live-share.png",
+    "sha256": "d6ed6f4089e2b4ac6c5ea54b64d6eee28c8eac1d16e0671c193466fd12fd17ec",
+    "independentlyInspected": true
+  }
+]
