@@ -16,7 +16,8 @@ public static class Cli
         {
             case ["semantic", .. var rest]:
                 var outcomes = await Cases.RunAsync(runtime, store, filter: Filter(rest));
-                return outcomes.Any(o => !o.Passed && o.Case.Level == Level.Required) ? 1 : 0;
+                if (outcomes.Count == 0) Console.Error.WriteLine("no case matches the filter");
+                return outcomes.Count == 0 || outcomes.Any(o => !o.Passed && o.Case.Level == Level.Required) ? 1 : 0;
             default:
                 Console.Error.WriteLine("semantic [filter]");
                 return 2;
