@@ -36,6 +36,7 @@ internal static class RuntimeArtifactJson
 
     private static T Deserialize<T>(string value, JsonSerializerOptions options)
     {
+        // Direct state reads only; a future containing payload also needs presence-aware decoding.
         if (typeof(T) != typeof(DurableValueState))
             return JsonSerializer.Deserialize<T>(value, options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
 
