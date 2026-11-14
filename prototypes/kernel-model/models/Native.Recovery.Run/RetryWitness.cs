@@ -40,10 +40,10 @@ internal static class RetryWitness
             Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "successor-proof") }))); Drain();
         var source = State().Frames.Values.Single(f => f.Node == "leaf");
         Check(source.Intervention is not null && RetryLeaf.Invocations.Count == 1, "R12: retry witness did not begin with an ordinary intervention");
-        Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(new NativeRetry("operator-1", source.Id, source.Intervention!.Id, "dependency repaired")), TargetCreation: 1))); Drain(cut: true);
+        Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(new NativeRetry("operator-1", source.Id, source.Intervention!.Id, "dependency repaired")), ReplyTo: ReplyTo.Of("outside", "retry", world.Time + 30_000), TargetCreation: 1))); Drain(cut: true);
         var checkpoint = State();
         Check(checkpoint.Agenda.Any(w => w.Node == "leaf" && w.Frame != source.Id && w.Parent == source.Parent) && !checkpoint.Frames.ContainsKey(source.Id) && RetryLeaf.Invocations.Count == 1,
-            "R13: retry did not durably stage a fresh successor before executing it");
+            "R13: retry did not durably stage a fresh successor before executing it; " + world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().LastOrDefault()?.Result);
         Drain(); var next = State();
         Check(RetryLeaf.Invocations.Count == 2 && RetryLeaf.Invocations[1].Frame != source.Id && RetryLeaf.Invocations[1].Operation == source.OperationKey && RetryLeaf.Invocations[1].Value == 17 &&
             (direct || next.Variables["before"]!.ToString() == "1" && next.Variables["after"]!.ToString() == "1") && world.Store.Instances[target.Id].Status == InstanceStatus.Running,

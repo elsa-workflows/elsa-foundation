@@ -205,8 +205,12 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         switch (m.Kind)
         {
             case NativeRetry.Kind:
-                turn.Reply(m, Request.Response, Retry(m));
+            {
+                var result = Retry(m);
+                turn.Reply(m, Request.Response, result);
+                turn.Record($"recovery:{result.Id}:{result.Result}:{result.Successor}");
                 break;
+            }
             case Kinds.Start when !_s.Started:
             {
                 _s.Started = true;
