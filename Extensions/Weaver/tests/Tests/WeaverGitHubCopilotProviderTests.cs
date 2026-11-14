@@ -101,6 +101,69 @@ public sealed class WeaverGitHubCopilotProviderTests : IDisposable
         Assert.Equal("external-runtime", diagnostics.Metadata["authMode"]);
     }
 
+    [Theory]
+    [InlineData(true, "configured", "external-runtime")]
+    [InlineData(true, "environment", "external-runtime")]
+    [InlineData(true, "logged-in", "external-runtime")]
+    [InlineData(true, "all", "external-runtime")]
+    [InlineData(false, "configured", "configured-token")]
+    [InlineData(false, "environment", "environment")]
+    [InlineData(false, "logged-in", "logged-in-user")]
+    public async Task Diagnostics_external_runtime_auth_precedes_unused_provider_auth_and_preserves_local_modes(bool external, string providerAuth, string expectedMode)
+    {
+        var environmentName = "ELSA_WEAVER_3831_RUNTIME_AUTH_" + Guid.NewGuid().ToString("N");
+        var configuredToken = "configured-canary-" + Guid.NewGuid().ToString("N");
+        var environmentToken = "environment-canary-" + Guid.NewGuid().ToString("N");
+        var connectionToken = "runtime-canary-" + Guid.NewGuid().ToString("N");
+        _options.Enabled = true;
+        _options.RuntimeUrl = external ? "http://127.0.0.1:49152" : null;
+        _options.RuntimeConnectionToken = connectionToken;
+        _options.GitHubToken = providerAuth is "configured" or "all" ? configuredToken : null;
+        _options.UseLoggedInUser = providerAuth is "logged-in" or "all";
+        _options.GitHubTokenEnvironmentVariable = environmentName;
+        try
+        {
+            Environment.SetEnvironmentVariable(environmentName, providerAuth is "environment" or "all" ? environmentToken : null);
+            var diagnostics = await _provider.GetDiagnosticsAsync();
+
+            Assert.True(diagnostics.IsAvailable);
+            Assert.Equal("configured", diagnostics.Metadata["statusCode"]);
+            Assert.Equal(expectedMode == "environment" ? "environment:" + environmentName : expectedMode, diagnostics.Metadata["authMode"]);
+            var request = Assert.IsType<GitHubCopilotClientRequest>(_factory.Client.LastClientRequest);
+            Assert.Equal(external ? null : providerAuth == "configured" ? configuredToken : providerAuth == "environment" ? environmentToken : null,
+                request.GitHubToken);
+            Assert.Equal(_options.RuntimeUrl, request.RuntimeUrl);
+            Assert.Equal(connectionToken, request.RuntimeConnectionToken);
+            var rendered = JsonSerializer.Serialize(diagnostics);
+            Assert.DoesNotContain(configuredToken, rendered);
+            Assert.DoesNotContain(environmentToken, rendered);
+            Assert.DoesNotContain(connectionToken, rendered);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(environmentName, null);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, "http://127.0.0.1:49152", "disabled", "none")]
+    [InlineData(true, "not-a-runtime-url", "misconfigured", "invalid-runtime-url")]
+    public async Task Diagnostics_disabled_or_invalid_external_runtime_stops_before_client_creation(bool enabled, string runtimeUrl, string status, string authMode)
+    {
+        _options.Enabled = enabled;
+        _options.RuntimeUrl = runtimeUrl;
+        _options.GitHubToken = "configured-canary-" + Guid.NewGuid().ToString("N");
+        _options.UseLoggedInUser = true;
+        var diagnostics = await _provider.GetDiagnosticsAsync();
+
+        Assert.False(diagnostics.IsAvailable);
+        Assert.Equal(status, diagnostics.Metadata["statusCode"]);
+        Assert.Equal(authMode, diagnostics.Metadata["authMode"]);
+        Assert.Null(_factory.Client.LastClientRequest);
+        Assert.False(_factory.Client.Started);
+        Assert.False(_factory.Client.Pinged);
+    }
+
     [Fact]
     public async Task Diagnostics_reports_sdk_failure_without_exposing_token()
     {

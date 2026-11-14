@@ -36,6 +36,46 @@ public sealed class GitHubCopilotServerStateTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task External_runtime_client_constructs_with_connection_auth_without_local_provider_auth(bool useLoggedInUser, bool supplyGitHubToken)
+    {
+        var githubToken = supplyGitHubToken ? "github-canary-" + Guid.NewGuid().ToString("N") : null;
+        var connectionToken = "runtime-canary-" + Guid.NewGuid().ToString("N");
+        var request = new GitHubCopilotClientRequest(githubToken, useLoggedInUser, "http://127.0.0.1:49152", connectionToken,
+            Path.GetTempPath(), null) { TenantId = "tenant-a" };
+        var factory = new GitHubCopilotSdkClientFactory(NullLoggerFactory.Instance);
+        // Construction must pass the actual SDK validation; StartAsync is deliberately never called.
+        await using var client = factory.Create(request);
+        var options = factory.BuildOptions(request);
+        Assert.Null(options.GitHubToken);
+        Assert.Null(options.UseLoggedInUser);
+        var connection = Assert.IsType<UriRuntimeConnection>(options.Connection);
+        Assert.Equal(request.RuntimeUrl, connection.Url);
+        Assert.Equal(connectionToken, connection.ConnectionToken);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Local_runtime_client_preserves_explicit_provider_auth_without_starting_it(bool useLoggedInUser, bool supplyGitHubToken)
+    {
+        var githubToken = supplyGitHubToken ? "github-canary-" + Guid.NewGuid().ToString("N") : null;
+        var request = new GitHubCopilotClientRequest(githubToken, useLoggedInUser, null, null, Path.GetTempPath(), null)
+            { TenantId = "tenant-a" };
+        var factory = new GitHubCopilotSdkClientFactory(NullLoggerFactory.Instance);
+        await using var client = factory.Create(request);
+        var options = factory.BuildOptions(request);
+        Assert.Equal(githubToken, options.GitHubToken);
+        Assert.Equal((bool?)useLoggedInUser, options.UseLoggedInUser);
+        Assert.False(options.Connection is UriRuntimeConnection);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Actual_sdk_config_allows_only_current_registered_custom_callbacks_in_the_same_session(bool resume)

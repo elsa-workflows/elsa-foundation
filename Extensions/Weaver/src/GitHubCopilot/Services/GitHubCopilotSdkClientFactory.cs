@@ -20,15 +20,21 @@ internal sealed class GitHubCopilotSdkClientFactory(ILoggerFactory loggerFactory
             // Server integrations expose only the installed, policy-guarded Weaver tools. Empty
             // mode also disables ambient instructions, skills, plugins, memory and environment.
             Mode = CopilotClientMode.Empty,
-            GitHubToken = request.GitHubToken,
-            UseLoggedInUser = request.UseLoggedInUser,
             BaseDirectory = StateDirectory(request),
             WorkingDirectory = request.WorkingDirectory,
             Logger = loggerFactory.CreateLogger<CopilotClient>()
         };
 
         if (!string.IsNullOrWhiteSpace(request.RuntimeUrl))
+        {
+            // An existing runtime owns provider authentication; only its connection token is forwarded.
             options.Connection = RuntimeConnection.ForUri(request.RuntimeUrl, request.RuntimeConnectionToken);
+        }
+        else
+        {
+            options.GitHubToken = request.GitHubToken;
+            options.UseLoggedInUser = request.UseLoggedInUser;
+        }
 
         return options;
     }
