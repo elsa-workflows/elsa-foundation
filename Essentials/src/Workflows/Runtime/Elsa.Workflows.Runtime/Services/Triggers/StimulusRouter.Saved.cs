@@ -18,10 +18,11 @@ public sealed partial class StimulusRouter
                 throw new NotSupportedException("Both selected dispatchers must support this actual source/material/execution boundary.");
             var source = await delivery.Sources.ReadSourceAsync(supplied, cancellationToken);
             var request = delivery.Request(source);
+            var publisher = await delivery.ReadPublisherAsync(source, cancellationToken);
             if (source.Claim.Item.RecipientSnapshot is null)
             {
                 delivery.RequireFreshSubscriptionPipeline(source);
-                var candidate = await delivery.SelectAsync(source, request, _globalBookmarkStimulusLookup, _triggerBindingStore, cancellationToken);
+                var candidate = await delivery.SelectAsync(source, request, _globalBookmarkStimulusLookup, _triggerBindingStore, publisher, cancellationToken);
                 if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null)
                 {
                     var independent = await delivery.SelectSubscriptionsAsync(source, cancellationToken);
@@ -32,7 +33,7 @@ public sealed partial class StimulusRouter
                 // authorize effects or substitute a loser when a provider acknowledgment was ambiguous.
                 source = await delivery.Sources.ReadSourceAsync(source, cancellationToken);
             }
-            StimulusDeliveryServices.ValidateWinner(source, request);
+            StimulusDeliveryServices.ValidateWinner(source, request, publisher);
             var winner = source.Claim.Item.RecipientSnapshot!;
             Exception? independentFailure = null;
             if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null)
@@ -46,7 +47,7 @@ public sealed partial class StimulusRouter
             foreach (var recipient in winner.Starts)
             {
                 source = await delivery.Sources.ReadSourceAsync(source, cancellationToken);
-                StimulusDeliveryServices.ValidateWinner(source, request);
+                StimulusDeliveryServices.ValidateWinner(source, request, publisher);
                 var binding = recipient.Binding; var key = KeyedWorkflowStartIdentity.For(request.IdempotencyKey!, recipient.Executable.ArtifactId);
                 var start = new WorkflowExecutionStartDispatchRequest(recipient.Executable.ArtifactId, request.RequestedBy,
                     key.WorkflowExecutionId, key.StartKey, metadata, null, null, request.Input, binding.ExecutableNodeId,
@@ -72,7 +73,7 @@ public sealed partial class StimulusRouter
             foreach (var recipient in winner.Resumes)
             {
                 source = await delivery.Sources.ReadSourceAsync(source, cancellationToken);
-                StimulusDeliveryServices.ValidateWinner(source, request);
+                StimulusDeliveryServices.ValidateWinner(source, request, publisher);
                 var result = await _resumeDispatcher.DispatchAsync(source, recipient.WorkflowExecutionId, recipient.BookmarkId, cancellationToken);
                 if (result.Status is not (BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate or BookmarkResumeDispatchStatus.NotFound))
                     throw new IOException("A saved resume did not accept its queued responsibility.");
