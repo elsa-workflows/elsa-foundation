@@ -106,6 +106,19 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         }
     }
 
+    private static string SerializeEvidenceReference(string evidenceId)
+    {
+        // Ordinary JSON serialization substitutes malformed UTF-16. Refuse before emitting a false link.
+        for (var index = 0; index < evidenceId.Length; index++)
+        {
+            if (!char.IsSurrogate(evidenceId[index])) continue;
+            if (!char.IsHighSurrogate(evidenceId[index]) || index + 1 == evidenceId.Length || !char.IsLowSurrogate(evidenceId[index + 1]))
+                throw new InvalidOperationException("The evidence identifier cannot be represented as an exact JSON reference.");
+            index++;
+        }
+        return JsonSerializer.Serialize(new[] { evidenceId });
+    }
+
     private static bool IsFlush(RuntimeCheckpointCommit commit) => commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
 
     private static RuntimeHistoryBatch Build(RuntimeCheckpointCommit commit, RuntimeHistoryCapturePolicy policy)
@@ -165,6 +178,10 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                             (deletesBookmarks ? "ActivityResumeClaimed" : "ActivityResumeRetried") : "ActivityAttemptClaimed") : null
             };
             if (name is null) continue;
+            // Parent outcome/inbox acknowledgement also upserts already-terminal children.
+            // Their status is unchanged; only the callback owner has this terminal transition.
+            if (a.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Recovered &&
+                selectedActivity is not null && a.InvocationId != selectedActivity) continue;
             Add(name, RuntimeHistoryEventCategory.ActivityLifecycle, change.StateId, a,
                 metadata: new Dictionary<string, string> { ["history.status"] = a.Status.ToString() });
         }
@@ -274,7 +291,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                     ?? throw new InvalidOperationException("A checkpoint value contribution references unavailable exact evidence.")).ToArray();
                 foreach (var value in contributed.Where(value => outputsOnly is null || (value.Subject != ActivityExecutionInspectionValueSubject.ActivityInput) == outputsOnly))
                 {
-                    var metadata = new Dictionary<string, string> { ["history.valueEvidenceIds"] = JsonSerializer.Serialize(new[] { value.EvidenceId }) };
+                    var metadata = new Dictionary<string, string> { ["history.valueEvidenceIds"] = SerializeEvidenceReference(value.EvidenceId!) };
                     if (policy.Version >= 2)
                     {
                         if (value.Phase is { } phase) metadata["history.valuePhase"] = phase;

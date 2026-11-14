@@ -245,6 +245,61 @@ public sealed class RuntimeHistoryCandidateTests
         else Assert.Same(cause, Assert.IsType<RuntimeSchedulerWorkUnavailableException>(caught).InnerException);
     }
 
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Faulted)] [InlineData(ActivityExecutionStatus.Completed)] [InlineData(ActivityExecutionStatus.Cancelled)]
+    public async Task Parent_completion_ignores_terminal_child_marker_or_inbox_updates_but_retains_real_subtree_cancellation(ActivityExecutionStatus status)
+    {
+        using var fixture = await Fixture.Create(Policy("ActivityCompleted", "ActivityFaulted", "ActivityCancelled"));
+        var parent = Activity(ActivityExecutionStatus.Completed) with { Execution = new("parent", "run", "node", "authored", "test", "1") };
+        var metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ActivityExecutionId] = "parent", [RuntimeMetadataKeys.SchedulerWorkItemId] = "work" };
+        var child = Activity(status) with
+        {
+            Execution = new("child", "run", "child-node", "child-authored", "test", "1"), ParentActivityExecutionId = "parent",
+            CompletedAt = status == ActivityExecutionStatus.Cancelled ? At.AddSeconds(5) : At,
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work" },
+            ChildControlInbox = status == ActivityExecutionStatus.Completed
+                ? new(1, new("run", "child", "parent", Workflow(null).PinnedExecutable, "root", "consumer", 1), 1, true) : null
+        };
+        var raw = Commit("parent-completion", RuntimeCheckpointNames.ActivityCompleted);
+        raw = raw with
+        {
+            Checkpoint = raw.Checkpoint with { ActivityExecutionIds = ["parent", "child"], Metadata = metadata }, Metadata = metadata,
+            StateChanges = new(null, null,
+                [new("parent", RuntimeStateChangeOperation.Upsert, parent, metadata), new("child", RuntimeStateChangeOperation.Upsert, child, metadata)], [], [], [], [])
+        };
+        var captured = await fixture.Capture.EnrichAsync(raw); await fixture.Capture.ValidateFinalAsync(captured);
+        var events = Assert.Single(captured.HistoryBatches!).Candidates.Select(candidate => candidate.Event).ToArray();
+        Assert.Single(events, item => item.Name == "ActivityCompleted" && item.ActivityExecutionId == "parent");
+        var childEvents = events.Where(item => item.ActivityExecutionId == "child").ToArray();
+        if (status == ActivityExecutionStatus.Cancelled) Assert.Equal("ActivityCancelled", Assert.Single(childEvents).Name);
+        else Assert.Empty(childEvents);
+    }
+
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, false)] [InlineData(2, true)]
+    public async Task Evidence_reference_preserves_exact_valid_identity_or_refuses_an_unrepresentable_identifier(int identity, bool representable)
+    {
+        // Construct opaque UTF-16 inside execution; test-discovery JSON also normalizes invalid surrogates.
+        var evidence = identity < 2 ? new string((char)(0xd800 + identity), 1) : "evidence-\U0001F9EA";
+        using var fixture = await Fixture.Create(Policy("ValueCaptured"));
+        var state = Activity(ActivityExecutionStatus.Running);
+        var raw = Commit("exact-value-reference", "values", activity: state);
+        var snapshot = new ActivityExecutionInspectionValueSnapshot("input", ActivityExecutionInspectionValueSubject.ActivityInput,
+            default, null, At, JsonSerializer.SerializeToElement("private"), "test", false, new Dictionary<string, string>(), EvidenceId: evidence);
+        var projection = ActivityExecutionInspectionProjection.FromState(state, raw.Checkpoint.CheckpointId, At, valueSnapshots: [snapshot]) with
+            { CheckpointValueCapture = new(raw.Checkpoint.CheckpointId, "work", [evidence]) };
+        raw = raw with { StateChanges = new(null, null, raw.StateChanges.ActivityExecutions, [], [], [], [],
+            activityExecutionInspections: [new("activity", RuntimeStateChangeOperation.Upsert, projection, new Dictionary<string, string>())]) };
+        if (!representable)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.EnrichAsync(raw));
+            return;
+        }
+        var captured = await fixture.Capture.EnrichAsync(raw); await fixture.Capture.ValidateFinalAsync(captured);
+        var value = Assert.Single(Assert.Single(captured.HistoryBatches!).Candidates).Event;
+        Assert.Equal(evidence, Assert.Single(JsonSerializer.Deserialize<string[]>(value.Metadata["history.valueEvidenceIds"])!));
+    }
+
     private static RuntimeHistorySourceFact Fact(RuntimeHistorySourceFactKind kind, int second) =>
         new(kind, kind.ToString(), At.AddSeconds(second), "activity", "attempt", new(SchedulerWorkItemId: "work"));
     private static WorkflowExecutionState Workflow(RuntimeHistoryCapturePolicy? policy) => new("run", new("artifact", "definition", "version", "1", "hash"),
