@@ -23,24 +23,69 @@ def records(recipe, phase="mutated"):
         "r15-refusal-admission": 'Assert.Equal() Failure: Strings differ\nExpected: "schema-version-not-finalized"\nActual: "test.refused"',
         "r15-bare-disclosure": "Assert.Single() Failure: The collection did not contain a matching item",
         "r15-optional-representation": 'Assert.Null() Failure: Value is not null\nValue: WeaverError { Code = "weaver.proposal.expired" }',
+        "copilot-external-constructor-auth": "System.ArgumentException : GitHubToken and UseLoggedInUser cannot be combined with RuntimeConnection.ForUri (the existing runtime manages its own auth). (Parameter 'options')",
     }
+    def message(name):
+        if recipe.id == "copilot-external-auth-mode":
+            actual = "environment:ELSA_WEAVER_3831_RUNTIME_AUTH_" + "a" * 32 if 'providerAuth: "environment"' in name else \
+                "logged-in-user" if 'providerAuth: "logged-in"' in name else "configured-token"
+            return f'Assert.Equal() Failure: Strings differ\nExpected: "external-runtime"\nActual: "{actual}"'
+        return messages[recipe.id]
     failed = recipe.failed_names() if phase == "mutated" else ()
     return [{"name": name, "status": "failed" if name in failed else "passed",
-        "message": messages[recipe.id] if name in failed else "",
+        "message": message(name) if name in failed else "",
         "stack": f"at {recipe.test}() in /synthetic/{Path(recipe.assertion_file).name}:line {recipe.assertion_line}" if name in failed else ""}
         for name in recipe.names()]
 
 
 class VerdictControls(unittest.TestCase):
-    def test_the_nine_concrete_contracts_accept_only_their_declared_triplet(self):
-        self.assertEqual(len(proof.RECIPES), 9)
-        self.assertEqual(len({recipe.id for recipe in proof.RECIPES}), 9)
+    def test_the_eleven_concrete_contracts_accept_only_their_declared_triplet(self):
+        self.assertEqual(len(proof.RECIPES), 11)
+        self.assertEqual(len({recipe.id for recipe in proof.RECIPES}), 11)
         for recipe in proof.RECIPES:
             with self.subTest(recipe=recipe.id):
                 proof.assess(recipe, "baseline", 0, records(recipe, "baseline"))
                 result = proof.assess(recipe, "mutated", 1, records(recipe))
                 self.assertEqual(result["failed"], len(recipe.failed_names()))
                 proof.assess(recipe, "restored", 0, records(recipe, "restored"))
+
+    def test_constructor_auth_control_requires_the_exact_sdk_exception_at_create(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "copilot-external-constructor-auth")
+        for change in (
+                lambda row: row.update(message=row["message"].replace("System.ArgumentException", "System.InvalidOperationException")),
+                lambda row: row.update(message="System.InvalidOperationException : wrapped\n---> " + row["message"]),
+                lambda row: row.update(message="System.ArgumentException : ConnectionToken must be a non-empty string or null."),
+                lambda row: row.update(stack=row["stack"].replace(":line 51", ":line 53")),
+                lambda row: row.update(status="passed")):
+            with self.subTest(change=change):
+                rows = records(recipe)
+                change(rows[0])
+                with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 1, rows)
+
+    def test_auth_mode_control_rejects_unrelated_modes_frames_and_local_failures(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "copilot-external-auth-mode")
+        for change in (
+                lambda rows: rows[0].update(message='Assert.Equal() Failure: Strings differ\nExpected: "external-runtime"\nActual: "unrelated-mode"'),
+                lambda rows: rows[0].update(stack=rows[0]["stack"].replace(":line 131", ":line 132")),
+                lambda rows: rows[0].update(message="System.ArgumentException : unrelated setup error"),
+                lambda rows: rows[4].update(status="failed", message=rows[0]["message"], stack=rows[0]["stack"])):
+            with self.subTest(change=change):
+                rows = records(recipe)
+                change(rows)
+                with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 1, rows)
+
+    def test_auth_mode_control_allows_xunit_to_abbreviate_the_generated_environment_name(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "copilot-external-auth-mode")
+        rows = records(recipe)
+        rows[1]["message"] = 'Assert.Equal() Failure: Strings differ\nExpected: "external-runtime"\nActual: "environment:ELSA_WEAVER_"···'
+        proof.assess(recipe, "mutated", 1, rows)
+
+    def test_copilot_auth_controls_reject_zero_missing_or_foreign_selected_rows(self):
+        for recipe in proof.RECIPES:
+            if not recipe.id.startswith("copilot-external-"): continue
+            for rows in ([], records(recipe)[:-1], [{**row, "name": "Foreign.test"} for row in records(recipe)]):
+                with self.subTest(recipe=recipe.id, rows=len(rows)), self.assertRaises(proof.ProofFailure):
+                    proof.assess(recipe, "mutated", 1, rows)
 
     def test_wrong_cause_wrong_frame_and_wrong_theory_row_never_count_as_a_bite(self):
         recipe = proof.RECIPES[0]
