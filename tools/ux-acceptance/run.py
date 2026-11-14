@@ -89,6 +89,7 @@ CAPTURES['native dashboard questions and sharing'] += (
 JOURNEYS = set(CAPTURES)
 # The Weaver inventory is opt-in. The inherited dashboard/native baseline and its no-inference profile stay unchanged.
 CAPTURES.update(weaver_inventory.CAPTURES)
+CAPTURES.update(weaver_inventory.SEMANTIC_CAPTURES)
 MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped activity data'}
 DATA_JOURNEYS = MEMBER_JOURNEYS | {'choose data for activity outputs'}
 COMPOSITIONS = {'normal', 'minimal', 'default-off'}
@@ -188,11 +189,11 @@ def stop_group(process, *, graceful_timeout=15):
         process.wait(timeout=10)
 
 
-def command(args, log, *, cwd=ROOT, env=None):
+def command(args, log, *, cwd=ROOT, env=None, timeout=None):
     with log.open('w') as output:
         process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            result = process.wait()
+            result = process.wait(timeout=timeout)
             if result:
                 raise subprocess.CalledProcessError(result, args)
         finally:
@@ -214,7 +215,7 @@ def recorded_browser_contexts(path):
 def verdict(report, artifacts, journeys=None, *, projects=None, composition="normal"):
     """An exit code alone cannot certify that every intended journey actually ran."""
     journeys = JOURNEYS if journeys is None else set(journeys)
-    if not journeys or not journeys <= JOURNEYS | weaver_inventory.JOURNEYS:
+    if not journeys or not journeys <= JOURNEYS | weaver_inventory.JOURNEYS | weaver_inventory.SEMANTIC_JOURNEYS:
         raise ValueError("Unknown or empty journey inventory")
     rows = []
     def walk(suites):
@@ -239,10 +240,11 @@ def verdict(report, artifacts, journeys=None, *, projects=None, composition="nor
             raise ValueError(f'{project} / {title}: not a single successful execution')
         attachments = results[0].get('attachments', [])
         names = {item.get('name') for item in attachments}
-        interaction = 'trace' if title not in weaver_inventory.JOURNEYS else 'weaver-interaction.json'
+        weaver = title in weaver_inventory.JOURNEYS | weaver_inventory.SEMANTIC_JOURNEYS
+        interaction = 'weaver-interaction.json' if weaver else 'trace'
         required = {interaction} | ADDITIONAL_ARTIFACTS.get(title, set()) | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
-        if title in weaver_inventory.JOURNEYS:
-            required.add('weaver-inventory.json')
+        if weaver:
+            required.add('weaver-semantic.json' if title in weaver_inventory.SEMANTIC_JOURNEYS else 'weaver-inventory.json')
             required.add('safe-export.json')
         if not required <= names:
             raise ValueError(f'{project} / {title}: missing artifacts {sorted(required - names)}')
@@ -258,9 +260,10 @@ def verdict(report, artifacts, journeys=None, *, projects=None, composition="nor
             trace = next(item['path'] for item in attachments if item.get('name') == 'trace')
             if len(recorded_browser_contexts(trace)) < 2:
                 raise ValueError(f'{project} / {title}: independent owner and reader contexts are missing from the combined trace')
-        if title in weaver_inventory.JOURNEYS:
+        if weaver:
             manifest = next(item['path'] for item in attachments if item.get('name') == 'safe-export.json')
-            weaver_inventory.export_manifest_verdict(manifest, artifacts, project=project)
+            weaver_inventory.export_manifest_verdict(manifest, artifacts, project=project,
+                semantic=title in weaver_inventory.SEMANTIC_JOURNEYS)
     return len(rows)
 
 
@@ -572,6 +575,100 @@ def run_weaver_inventory(output, data, backend_project, studio_project, env, sha
         raise ValueError('Incomplete normal-host inventory appearance/phase matrix')
 
 
+def run_weaver_semantic(output, data, backend_project, studio_project, env, sha, studio_sha, report):
+    """Separate bounded real-SDK protocol observation, with no model/provider purchase or host injection."""
+    protocol = _load_sibling('copilot_protocol')
+    report.update(stage='weaver-semantic', hostProfile='normal shipped hosts; owned external Copilot protocol service',
+        modelEvidence='machine protocol observation only; live model reasoning unverified',
+        t045Acceptance='incomplete', storyAcceptance='incomplete', independentUXAcceptance='incomplete',
+        evidenceDisclosure='allowlisted correlated hashes/counts and closed-panel native captures; originals private')
+    completed, joined, protocols = [], [], []
+    for project in sorted(PROJECTS):
+        owned = data / project
+        owned.mkdir(mode=0o700)
+        backend, studio = owned / 'workbench', owned / 'studio'
+        prepare_host(backend_project, backend, include_development=True)
+        prepare_host(studio_project, studio, include_development=True)
+        backend_url, studio_url = f'http://localhost:{free_port()}', f'http://localhost:{free_port()}'
+        evidence = output / project
+        evidence.mkdir(mode=0o700)
+        private = owned / 'private-evidence'
+        private.mkdir(mode=0o700)
+        management_key, connection_token = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        # Service is owned outside both product hosts. Only shipped adapter options connect to it.
+        with protocol.CopilotProtocolPeer(private / 'protocol', connection_token) as peer:
+            settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
+            shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
+            settings['Cors']['AllowedOrigins'] = [studio_url]
+            settings.setdefault('Elsa', {}).setdefault('ExtensionBuilder', {})['Enabled'] = False
+            settings['Elsa'].setdefault('ModuleManagement', {})['ApiKey'] = management_key
+            features = shells['CShells']['Shells']['default']['Features']
+            features['FoundationIdentityAspNetCoreIdentity']['AllowedReturnUrlOrigins'] = [studio_url]
+            features['WeaverGitHubCopilot'].update(Enabled=True, RuntimeUrl=peer.runtime_url,
+                RuntimeConnectionToken=connection_token, GitHubToken=None, GitHubTokenEnvironmentVariable=None,
+                UseLoggedInUser=False, BaseDirectory=str(owned / 'copilot-state'))
+            (backend / 'appsettings.json').write_text(json.dumps(settings))
+            (backend / 'shells.json').write_text(json.dumps(shells))
+            studio_shells = json.loads((studio / 'shells.json').read_text(encoding='utf-8-sig'))
+            studio_shells['CShells']['Shells']['Default']['Features'].pop('ExtensionBuilderStudio', None)
+            (studio / 'shells.json').write_text(json.dumps(studio_shells))
+            with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', private / 'studio.log',
+                      dict(env, HOME=str(owned), DOTNET_CLI_HOME=str(owned), Studio__BackendBaseUrl=backend_url,
+                           Studio__BackendModuleManagementApiKey=management_key)):
+                for phase, title in [('baseline', weaver_inventory.SEMANTIC_BASELINE), ('enabled', weaver_inventory.SEMANTIC_ENABLED)]:
+                    report.update(stage='weaver-semantic-' + phase, activeSemantic={'project': project, 'phase': phase})
+                    private_phase = private / phase
+                    private_phase.mkdir(mode=0o700)
+                    if phase == 'enabled':
+                        settings['Elsa']['ExtensionBuilder']['Enabled'] = True
+                        (backend / 'appsettings.json').write_text(json.dumps(settings))
+                    start = len(peer.turn_records)
+                    with host(backend, 'Elsa.Workbench.dll', backend_url, '/health/ready', private_phase / 'backend.log',
+                              dict(env, HOME=str(owned), DOTNET_CLI_HOME=str(owned)),
+                              on_readiness=lambda value: report.update(nativeReadiness=value)) as process:
+                        browser_env = dict(clean_environment(),
+                            **{key: os.environ[key] for key in ('CI', 'PLAYWRIGHT_BROWSERS_PATH') if key in os.environ},
+                            UX_ACCEPTANCE_OWNED='1', UX_ACCEPTANCE_PROFILE='weaver-semantic', UX_WEAVER_PHASE=phase,
+                            ELSA_STUDIO_URL=studio_url, ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
+                            UX_ACCEPTANCE_OUT=str(private_phase), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha)
+                        args = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts',
+                                '--project', project, '--timeout', '240000', '--grep', r'(?:^|\s)' + re.escape(title) + '$']
+                        public = None
+                        try:
+                            command(args, private_phase / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env, timeout=300)
+                        finally:
+                            if (private_phase / 'playwright.json').is_file():
+                                public = weaver_inventory.safe_export(private_phase / 'playwright.json', private,
+                                    evidence / phase, source=sha, project=project, title=title, phase=phase,
+                                    forbidden_values=[management_key, connection_token, str(owned), peer.runtime_url],
+                                    peer_records=peer.turn_records[start:])
+                        if public is None:
+                            raise ValueError('No private semantic browser report')
+                        count = verdict(public, evidence / phase, journeys=[title], projects=[project])
+                    if process.returncode != 0:
+                        raise ValueError('Owned backend did not stop cleanly across semantic root switch')
+                    receipt = json.loads((evidence / phase / 'weaver-semantic.json').read_text())
+                    joined.extend(receipt['correlation'])
+                    completed.append({'project': project, 'phase': phase, 'executed': count, 'backendExit': process.returncode})
+                    report['semanticExecutions'] = completed
+            peer.assert_healthy()
+        # Context exit proves owned service cleanup after the real hosts/SDK connections have stopped.
+        safe = weaver_inventory.protocol_projection(peer.safe_receipt())
+        appearance_joins = joined[-5:]
+        require_protocol = {(row['sessionHash'], row['sdkRequestId'], row['nonceHash'], row['promptHash'], row['responseHash'], row['sdkRequestHash'], row['userRequestHash']) for row in appearance_joins}
+        observed_protocol = {(row['sessionHash'], row['requestId'], row['nonceHash'], row['promptHash'], row['responseHash'], row['requestHash'], row['userRequestHash']) for row in safe['turns']}
+        if require_protocol != observed_protocol or len(require_protocol) != 5:
+            raise ValueError('Closed service evidence does not match every correlated browser turn')
+        (evidence / 'protocol.json').write_text(json.dumps(safe, indent=2) + '\n')
+        protocols.append({'project': project, 'physicalTurns': len(safe['turns']), 'closed': safe['close']['complete'],
+                          'receiptSha256': hashlib.sha256((evidence / 'protocol.json').read_bytes()).hexdigest()})
+        report['protocolAppearances'] = protocols
+    report['executed'] = sum(item['executed'] for item in completed)
+    report['physicalTurns'] = len(joined)
+    if report['executed'] != len(PROJECTS) * 2 or len(joined) != 20 or len({row['nonceHash'] for row in joined}) != 20:
+        raise ValueError('Incomplete or duplicate semantic appearance/phase/turn matrix')
+
+
 def fingerprints(root):
     return {str(file.relative_to(root)): hashlib.sha256(file.read_bytes()).hexdigest()
             for file in sorted(root.rglob('*')) if file.is_file() and
@@ -580,7 +677,8 @@ def fingerprints(root):
 
 def run(output, journey=None, studio_root=None, *, profile='default', composition='normal'):
     output.mkdir(parents=True, exist_ok=False)
-    if profile == 'weaver-inventory':
+    private_weaver = profile in {'weaver-inventory', 'weaver-semantic'}
+    if private_weaver:
         output.chmod(0o700) # Actual provider traces are private evidence; never publish raw traces.
     studio_root = (studio_root or ROOT).resolve()
     sha, dirty = source_state(ROOT)
@@ -594,7 +692,7 @@ def run(output, journey=None, studio_root=None, *, profile='default', compositio
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
               'profile': profile, 'composition': composition,
-              'journeys': sorted(weaver_inventory.JOURNEYS) if profile == 'weaver-inventory' else []}
+              'journeys': sorted(weaver_inventory.SEMANTIC_JOURNEYS if profile == 'weaver-semantic' else weaver_inventory.JOURNEYS) if private_weaver else []}
     if head is not None:
         report['headSha'] = head
     try:
@@ -605,10 +703,10 @@ def run(output, journey=None, studio_root=None, *, profile='default', compositio
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
-        if profile == 'weaver-inventory' and (journey is not None or composition != 'normal' or studio_root != ROOT.resolve()):
+        if private_weaver and (journey is not None or composition != 'normal' or studio_root != ROOT.resolve()):
             raise ValueError('Weaver inventory owns its normal composition, both actual host sources and its complete appearance/phase matrix')
         studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        if profile == 'weaver-inventory':
+        if private_weaver:
             # Build logs, native host data, screenshots and traces originate outside the publishable output root.
             with tempfile.TemporaryDirectory(prefix='elsa-ux-weaver-inventory-') as temporary:
                 private = Path(temporary)
@@ -620,16 +718,18 @@ def run(output, journey=None, studio_root=None, *, profile='default', compositio
                     report['stage'] = stage
                     log = private / (stage + '.log')
                     try:
-                        command(args, log, cwd=cwd)
+                        command(args, log, cwd=cwd, timeout=900 if profile == 'weaver-semantic' else None)
                     except Exception as error:
                         report['nativeFailure'] = weaver_inventory.failure_fact(error, stage, log)
                         raise
-                run_weaver_inventory(output, private, backend_project, studio_project,
+                observe = run_weaver_semantic if profile == 'weaver-semantic' else run_weaver_inventory
+                observe(output, private, backend_project, studio_project,
                     dict(clean_environment(), **{'Logging__LogLevel__Microsoft.Hosting.Lifetime': 'Information'}), sha, studio_sha, report)
             if (sha, dirty) != source_state(ROOT):
                 raise ValueError('Source changed during inventory acceptance')
-            report.update(status='passed', stage='complete-native-observations',
-                          providerAnswers='unavailable; no semantic answers verified', t045Acceptance='incomplete', storyAcceptance='incomplete')
+            report.update(status='passed', stage='complete-protocol-observations' if profile == 'weaver-semantic' else 'complete-native-observations',
+                          providerAnswers='machine protocol only; live reasoning unverified' if profile == 'weaver-semantic' else 'unavailable; no semantic answers verified',
+                          t045Acceptance='incomplete', storyAcceptance='incomplete')
             return
         selected = selected_journeys(journey, composition)
         report['journeys'] = sorted(selected)
@@ -711,15 +811,16 @@ def run(output, journey=None, studio_root=None, *, profile='default', compositio
             raise ValueError('Dirty source run is preliminary evidence, not final acceptance')
         report.update(status='passed', stage='complete')
     except Exception as error:
-        if profile == 'weaver-inventory':
-            report['error'] = 'Weaver inventory failed or is incomplete; private diagnostic text was not exported'
+        if private_weaver:
+            report['error'] = ('Weaver semantic observation failed or is incomplete; private diagnostic text was not exported'
+                               if profile == 'weaver-semantic' else 'Weaver inventory failed or is incomplete; private diagnostic text was not exported')
             report['errorKind'] = type(error).__name__ if type(error).__name__ in {
-                'ValueError', 'RuntimeError', 'TimeoutError', 'InterruptedError', 'CalledProcessError'} else 'Exception'
+                'ValueError', 'RuntimeError', 'TimeoutError', 'TimeoutExpired', 'InterruptedError', 'CalledProcessError'} else 'Exception'
             report['privateErrorSha256'] = weaver_inventory.hashlib.sha256(str(error).encode()).hexdigest()
             report.setdefault('nativeFailure', weaver_inventory.failure_fact(error, report['stage']))
         else:
             report['error'] = str(error)
-        if profile == 'weaver-inventory':
+        if private_weaver:
             raise RuntimeError(report['error']) from None
         raise
     finally:
@@ -749,7 +850,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--studio-root', type=Path, help='Optional clean committed Studio checkout; both frontend/backend revisions are recorded and fenced')
-    parser.add_argument('--profile', choices=['default', 'weaver-inventory'], default='default', help='Explicitly opt in to the normal-host Weaver inventory; inherited UX baseline is unchanged')
+    parser.add_argument('--profile', choices=['default', 'weaver-inventory', 'weaver-semantic'], default='default', help='Opt-in native inventory or separate real-SDK machine protocol observation; inherited UX baseline is unchanged')
     parser.add_argument('--journey', action='append', choices=sorted(JOURNEYS), help='Repeat for exact complete journeys across four projects; default requires every normal journey')
     parser.add_argument('--composition', choices=sorted(COMPOSITIONS), default='normal', help='Owned activity-data host composition; nonnormal modes require explicit journeys')
     args = parser.parse_args()

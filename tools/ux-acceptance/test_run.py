@@ -69,7 +69,7 @@ class ProvenanceInputPrivacyTests(unittest.TestCase):
             build.assert_not_called()
 
     def test_invalid_head_never_enters_failed_report_or_stdout_and_starts_no_build(self):
-        for profile in ('default', 'weaver-inventory'):
+        for profile in ('default', 'weaver-inventory', 'weaver-semantic'):
             for supplied in ('/Users/private-head-canary/auth.json', 'Bearer private-head-canary',
                              'eyJprivate-head-canary.payload.signature', 'private-head-canary\nBearer token'):
                 with self.subTest(profile=profile, supplied=supplied), tempfile.TemporaryDirectory() as temporary:
@@ -432,6 +432,16 @@ class VerdictTests(unittest.TestCase):
             self.assertEqual([(43, acceptance.signal.SIGTERM), (43, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
             self.assertEqual(3, process.wait.call_count)
 
+    def test_bounded_command_timeout_stops_its_owned_group_and_preserves_timeout_cause(self):
+        with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.os, 'killpg') as kill:
+            process = popen.return_value
+            process.pid = 43
+            process.wait.side_effect = [subprocess.TimeoutExpired(['browser-runner'], 300), 0, 0]
+            with self.assertRaises(subprocess.TimeoutExpired):
+                acceptance.command(['browser-runner'], self.root / 'command.log', timeout=300)
+            self.assertEqual(300, process.wait.call_args_list[0].kwargs['timeout'])
+            self.assertEqual([(43, acceptance.signal.SIGTERM), (43, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
+
     def test_owned_host_gets_the_normal_dotnet_shutdown_window_before_forced_kill(self):
         from unittest.mock import Mock
         process = Mock(pid=44); process.returncode = None
@@ -554,6 +564,26 @@ class CompositionTests(unittest.TestCase):
 
 
 class SourcePairTests(unittest.TestCase):
+    def test_semantic_profile_owns_normal_hosts_and_stays_outside_default_and_native_profiles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'evidence'
+            with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'a' * 40}), \
+                 patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                 patch.object(acceptance, 'command') as build, \
+                 patch.object(acceptance, 'run_weaver_semantic') as semantic, \
+                 patch.object(acceptance, 'run_weaver_inventory') as inventory, \
+                 patch.object(acceptance, 'configure_dashboard_qualification') as dashboard, \
+                 patch.object(acceptance, 'configure_activity_data') as activity, redirect_stdout(io.StringIO()):
+                acceptance.run(output, profile='weaver-semantic', composition='normal')
+            self.assertEqual(3, build.call_count)
+            self.assertIn('-p:ElsaDashboardQualification=false', build.call_args_list[0].args[0])
+            self.assertTrue(all(call.kwargs['timeout'] == 900 for call in build.call_args_list))
+            semantic.assert_called_once(); inventory.assert_not_called(); dashboard.assert_not_called(); activity.assert_not_called()
+            report = json.loads((output / 'report.json').read_text())
+            self.assertEqual('weaver-semantic', report['profile']); self.assertEqual('incomplete', report['t045Acceptance'])
+            self.assertNotIn('fixture', report)
+            self.assertTrue(acceptance.weaver_inventory.SEMANTIC_JOURNEYS.isdisjoint(acceptance.selected_journeys()))
+
     def test_weaver_profile_keeps_its_shipped_host_build_separate_from_activity_compositions(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'evidence'
