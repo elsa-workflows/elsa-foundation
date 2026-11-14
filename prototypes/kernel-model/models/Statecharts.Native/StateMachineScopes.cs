@@ -49,7 +49,13 @@ internal sealed partial class StateMachine
 
     private static void ValidateResources(CompositeContext context, MachineState state)
     {
-        if (state.Scopes is not { } scopes) return; // Pure legacy probe; materialization is a separate mutation.
+        if (state.Scopes is not { } scopes)
+        {
+            // A genuinely old checkpoint had neither visit handles nor resources owned by this frame.
+            if (context.OwnedLexicalScopes().Length != 0)
+                throw new InvalidOperationException("Legacy statechart checkpoint already owns lexical resources.");
+            return; // Pure legacy probe; materialization is a separate mutation.
+        }
         var machine = context.LexicalScopeInfo(scopes.Machine);
         if (machine.Owner != context.FrameId || machine.Parent is not null)
             throw new InvalidOperationException("Invalid statechart machine scope owner.");
