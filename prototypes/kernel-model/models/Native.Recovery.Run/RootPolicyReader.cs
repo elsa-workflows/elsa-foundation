@@ -72,7 +72,7 @@ internal static class RootPolicyReader
             Check(Json.Write(copy) == json && NativeInterventions.Policy(copy) == 1 && copy.InterventionPolicy == 0, "v6 retry data gained latest capabilities or changed");
         });
         yield return ("mixed-v6-policy", () => Refuse(() => new NativeModel(new()).UpgradeState(Json.Write(Held()), 6), "Legacy native state contains unsupported recovery policy data."));
-        foreach (var version in new[] { -1, 4 }) yield return ("unsupported-policy-" + version, () =>
+        foreach (var version in new[] { -1, 6 }) yield return ("unsupported-policy-" + version, () =>
         {
             var state = Held(); state.InterventionPolicy = version;
             try { NativeInterventions.Validate(state); } catch (NotSupportedException e) when (e.Message == "Unsupported native intervention policy.") { return; }
