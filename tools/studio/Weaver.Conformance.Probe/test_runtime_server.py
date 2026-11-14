@@ -1,5 +1,6 @@
 """Real owned-process observation controls; this fixture is not Studio qualification."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import signal
@@ -97,6 +98,73 @@ class RuntimeContentRootTests(unittest.TestCase):
         (self.published / "host.py").write_text("changed binary input")
         with self.assertRaisesRegex(RuntimeError, "assembly changed"):
             owned.require_unchanged_inputs()
+
+    def test_publish_inventory_covers_nested_dependencies_and_uses_order_independent_identity(self):
+        dependency = self.published / "nested" / "dependency.dll"
+        dependency.parent.mkdir()
+        dependency.write_bytes(b"retained dependency")
+        expected = {"host.py": {"bytes": 20, "sha256": hashlib.sha256(b"immutable host input").hexdigest()},
+                    "nested/dependency.dll": {"bytes": 19, "sha256": hashlib.sha256(b"retained dependency").hexdigest()}}
+        self.assertEqual(expected, runtime.published_files(self.published))
+        self.assertEqual(runtime.published_files_digest(expected), runtime.published_files_digest(dict(reversed(list(expected.items())))))
+
+    def test_wrong_or_incomplete_publish_inventory_refuses_before_any_process(self):
+        self.profile["contentRoot"] = self.content
+        (self.published / "dependency.dll").write_bytes(b"original dependency")
+        files = runtime.published_files(self.published)
+        for manifest in ({}, None, {"host.py": files["host.py"]}, {**files, "unowned.dll": files["host.py"]}):
+            with self.subTest(manifest=manifest), patch.object(runtime.subprocess, "Popen") as launch:
+                self.profile["publishedFiles"] = manifest
+                with self.assertRaisesRegex(RuntimeError, "inventory differs"):
+                    runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+                launch.assert_not_called()
+
+    def test_dependency_change_between_admission_and_spawn_refuses_before_process_creation(self):
+        self.profile["contentRoot"] = self.content
+        dependency = self.published / "dependency.dll"
+        dependency.write_bytes(b"original dependency")
+        self.profile["publishedFiles"] = runtime.published_files(self.published)
+        owned = runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+        dependency.write_bytes(b"different dependency")
+        with patch.object(runtime.subprocess, "Popen") as launch:
+            with self.assertRaisesRegex(RuntimeError, "changed before process creation"):
+                owned.spawn()
+            launch.assert_not_called()
+
+    def test_dependency_addition_or_change_after_launch_cannot_be_accepted_by_mutating_the_profile(self):
+        self.profile["contentRoot"] = self.content
+        dependency = self.published / "dependency.dll"
+        dependency.write_bytes(b"original dependency")
+        self.profile["publishedFiles"] = runtime.published_files(self.published)
+        with patch.object(runtime.subprocess, "Popen") as launch:
+            launch.return_value.pid = 123
+            owned = runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+            receipt = owned.spawn()
+        self.assertEqual(2, receipt["publishedFileCount"])
+        self.assertEqual(runtime.published_files_digest(self.profile["publishedFiles"]), receipt["publishedFilesSha256"])
+        dependency.write_bytes(b"different dependency")
+        self.profile["publishedFiles"].update(runtime.published_files(self.published))
+        with self.assertRaisesRegex(RuntimeError, "dependency files changed"):
+            owned.require_unchanged_inputs()
+        dependency.write_bytes(b"original dependency")
+        (self.published / "added.dll").write_bytes(b"unexpected dependency")
+        with self.assertRaisesRegex(RuntimeError, "dependency files changed"):
+            owned.require_unchanged_inputs()
+
+    def test_immutable_publish_needs_separate_content_and_rejects_links_and_special_entries(self):
+        self.profile["publishedFiles"] = runtime.published_files(self.published)
+        with self.assertRaisesRegex(RuntimeError, "separate runtime content"):
+            runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+        link = self.published / "linked.dll"
+        link.symlink_to(self.published / "host.py")
+        with self.assertRaisesRegex(RuntimeError, "symlinks"):
+            runtime.published_files(self.published)
+        link.unlink()
+        if hasattr(os, "mkfifo"):
+            fifo = self.published / "special.pipe"
+            os.mkfifo(fifo)
+            with self.assertRaisesRegex(RuntimeError, "special entries"):
+                runtime.published_files(self.published)
 
 
 class RuntimeObservationTests(unittest.TestCase):
@@ -410,11 +478,13 @@ server.serve_forever()
         (second / "host.py").write_text(self.HOST + "\n# independently published second generation\n")
         before = {directory: {path.name: runtime.sha(path) for path in directory.iterdir()} for directory in (self.published, second)}
         self.run.profiles["backend"]["contentRoot"] = content
+        self.run.profiles["backend"]["publishedFiles"] = runtime.published_files(self.published)
 
         def switch():
             with self.assertRaises(OSError):
                 runtime.Http(self.origin).request("/health/live")
             self.run.profiles["backend"]["published"] = second
+            self.run.profiles["backend"]["publishedFiles"] = runtime.published_files(second)
             return {"publishedDirectory": str(second)}
 
         with runtime.RestartableServer(self.run, "backend", self.origin) as host:
@@ -428,12 +498,16 @@ server.serve_forever()
         self.assertEqual(str(content), old["contentRoot"])
         self.assertEqual((old["contentRoot"], old["contentRootIdentity"]), (new["contentRoot"], new["contentRootIdentity"]))
         self.assertNotEqual(old["assemblySha256"], new["assemblySha256"])
+        self.assertNotEqual(old["publishedFilesSha256"], new["publishedFilesSha256"])
+        self.assertEqual((1, 1), (old["publishedFileCount"], new["publishedFileCount"]))
         self.assertEqual(0, old["exitCode"])
         self.assertIs(True, old["inputsUnchangedAtCloseout"])
         final = json.loads((self.root / "backend-process-g2.json").read_text())
         self.assertEqual((0, new["publishedDirectory"], new["contentRootIdentity"]),
                          (final["exitCode"], final["publishedDirectory"], final["contentRootIdentity"]))
         self.assertIs(True, final["inputsUnchangedAtCloseout"])
+        self.assertEqual((new["publishedFilesSha256"], new["publishedFileCount"]),
+                         (final["publishedFilesSha256"], final["publishedFileCount"]))
 
     def test_a_failure_inside_a_phase_keeps_its_cause_and_still_stops_the_running_generation(self):
         original = RuntimeError("Original restart-phase failure")

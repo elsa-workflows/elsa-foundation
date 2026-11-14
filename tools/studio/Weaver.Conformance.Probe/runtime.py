@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import http.cookiejar
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -47,6 +48,25 @@ def owned_content_root(run, profile):
             check(not selected.is_relative_to(binary_root) and not binary_root.is_relative_to(selected),
                   "Separate consumer content root must not overlap a published binary directory")
     return selected
+
+
+def published_files(directory):
+    """Inventory an immutable binary publish, including dependencies rather than only its entry assembly."""
+    directory = Path(directory)
+    check(directory.is_dir() and not directory.is_symlink(), "Published files need an ordinary binary directory")
+    files = {}
+    for path in sorted(directory.rglob("*")):
+        check(not path.is_symlink(), "Published files cannot contain symlinks")
+        if path.is_dir():
+            continue
+        check(path.is_file(), "Published files cannot contain special entries")
+        files[path.relative_to(directory).as_posix()] = {"bytes": path.stat().st_size, "sha256": sha(path)}
+    check(bool(files), "Published file inventory cannot be empty")
+    return files
+
+
+def published_files_digest(files):
+    return hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def private_json(path, value):
@@ -187,11 +207,19 @@ class _OwnedProcess:
         self.assembly = self.root / profile["assembly"]
         check(self.assembly.is_file() and not self.assembly.is_symlink() and self.assembly.resolve().parent == self.root,
               "Consumer executable must be an ordinary file in its published binary directory")
+        self.published_files = None
+        if "publishedFiles" in profile:
+            check(self.content_root != self.root, "An immutable publish requires a separate runtime content root")
+            actual = published_files(self.root)
+            check(profile["publishedFiles"] == actual, "Published file inventory differs from the retained producer inputs")
+            self.published_files = actual
         self.env = profile["env"]
         self.process, self.started, self.caches, self.cache_files = None, None, {}, None
 
     def spawn(self):
         check(owned_content_root(self.run, self.profile) == self.content_root, "Consumer content root changed before launch")
+        if self.published_files is not None:
+            check(published_files(self.root) == self.published_files, "Published files changed before process creation")
         identity = self.content_root.stat()
         assembly_hash = sha(self.assembly)
         command = [self.run.dotnet, str(self.assembly), "--contentRoot", str(self.content_root), "--urls", self.origin]
@@ -215,6 +243,9 @@ class _OwnedProcess:
                         "contentRootIdentity": {"device": identity.st_dev, "inode": identity.st_ino},
                         "log": str(self.log), "startedAt": time.time(),
                         "runtimePackageCaches": dict(self.caches)}
+        if self.published_files is not None:
+            self.started.update(publishedFilesSha256=published_files_digest(self.published_files),
+                                publishedFileCount=len(self.published_files))
         if self.generation != 1:
             self.started["generation"] = self.generation
         self.save()
@@ -258,6 +289,8 @@ class _OwnedProcess:
         check(self.assembly.is_file() and not self.assembly.is_symlink()
               and self.assembly.resolve().parent == self.root and sha(self.assembly) == self.started["assemblySha256"],
               "Published consumer assembly changed during its generation")
+        if self.published_files is not None:
+            check(published_files(self.root) == self.published_files, "Published dependency files changed during their generation")
 
     def shutdown(self, *, abrupt=False):
         process = self.process
@@ -362,7 +395,8 @@ class RestartableServer:
             owned.shutdown(abrupt=abrupt)
         owned.require_stopped(abrupt=abrupt)
         stopped_at = time.time()
-        provenance = ("publishedDirectory", "contentRoot", "contentRootIdentity", "assemblySha256", "command")
+        provenance = ("publishedDirectory", "contentRoot", "contentRootIdentity", "assemblySha256", "command",
+                      "publishedFilesSha256", "publishedFileCount")
         stopped = {key: owned.started.get(key) for key in ("pid", "origin", "log", "startedAt", "readyAt", "stoppedAt", "exitCode", "runtimeCacheFiles", "inputsUnchangedAtCloseout", *provenance)}
         waited = while_stopped() if while_stopped is not None else None
         started_at = time.time()
