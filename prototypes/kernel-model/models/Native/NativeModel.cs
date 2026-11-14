@@ -123,6 +123,8 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     {
         if (fromVersion is not (1 or 2 or 3)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
+        // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
+        if (native is null) return null!;
         if (LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
         return native;
     }
