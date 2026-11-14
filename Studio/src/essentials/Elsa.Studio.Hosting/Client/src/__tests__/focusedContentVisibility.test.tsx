@@ -112,6 +112,7 @@ async function mount(nested?: "start" | "end", supporting?: "hint" | "error" | "
   };
   await update(() => { field.focus(); field.setSelectionRange(2, 7); });
   return { controller, field, frame, scrollport, inner, assertUncovered,
+    setSupporting: (next: "hint" | "error") => root.render(<Fixture controller={controller} nested={Boolean(nested)} supporting={next} />),
     setToastHeight: (height: number) => { toastHeight = height; },
     setFieldHeight: (height: number) => { fieldHeight = height; },
     setControlHeight: (height: number) => { controlHeight = height; },
@@ -137,6 +138,19 @@ for (const supporting of ["hint", "error", "child"] as const) it(`keeps a last f
   const message = container.querySelector("small")!, host = container.querySelector(".studio-toast-host")!;
   expect(message.getBoundingClientRect().bottom).toBeLessThanOrEqual(host.getBoundingClientRect().top - 8);
   expect(f.field.getAttribute("aria-describedby")?.split(/\s+/)).toContain(message.id);
+});
+
+it("reveals a still-focused field when validation replaces its supporting text", async () => {
+  const f = await mount(undefined, "hint");
+  await update(() => { f.controller.api.notify({ level: "error", title: "Persistent notice" }); });
+  f.assertUncovered();
+  // A pointer can scroll to a validation trigger without changing the retained editor focus.
+  f.scrollport.scrollTop = 0;
+  await update(() => f.setSupporting("error"));
+  expect(container.querySelector("small")?.textContent).toBe("Choose a different value.");
+  f.assertUncovered();
+  expect(container.querySelector("small")!.getBoundingClientRect().bottom)
+    .toBeLessThanOrEqual(container.querySelector(".studio-toast-host")!.getBoundingClientRect().top - 8);
 });
 
 it("responds to wrapped persistent notices and restores scroll styles without taking focus from toast actions", async () => {

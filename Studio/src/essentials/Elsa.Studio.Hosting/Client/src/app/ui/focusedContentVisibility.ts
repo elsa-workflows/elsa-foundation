@@ -213,7 +213,7 @@ function createFocusObserver(document: Document) {
     resize?.disconnect(); mutations.disconnect();
     const measured = new Set<HTMLElement>();
     for (const root of roots.keys()) {
-      mutations.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+      mutations.observe(root, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
       for (let parent: HTMLElement | null = root; parent; parent = parent.parentElement) {
         if (!measured.has(parent)) { resize?.observe(parent); measured.add(parent); }
       }
