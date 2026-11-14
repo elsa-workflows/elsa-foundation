@@ -114,7 +114,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Integrations SDK (connector activities, named HTTP client auth scope) | [`Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md) |
+| Integrations SDK (connector activities, named HTTP client auth scope) | [`Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk/EXTENSION_POINTS.md) |
 
 ### Secrets
 

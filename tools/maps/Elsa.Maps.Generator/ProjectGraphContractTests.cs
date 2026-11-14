@@ -18,6 +18,8 @@ public static class ProjectGraphContractTests
         ("Extensions/A/studio/X.csproj", false),
         // git's pathspec "Extensions/*/src/*.csproj" matches this one, since its '*' also matches '/'.
         ("Extensions/A/studio/src/X.csproj", false),
+        ("Extensions/A/templates/src/X.csproj", false),
+        ("Extensions/A/templates/tests/X.csproj", false),
         ("Extensions/A/X.csproj", false),
         ("Studio/src/X.csproj", false),
         ("tools/x/X.csproj", false),
