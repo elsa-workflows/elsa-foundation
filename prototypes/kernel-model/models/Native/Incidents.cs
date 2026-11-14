@@ -4,7 +4,10 @@ using System.Text.Json.Serialization;
 namespace Kernel.Native;
 
 // Private, intervention-only profile. It does not yet expose operator retry or product incident strategy APIs.
-internal interface IInterventionParent;
+internal interface IInterventionParent
+{
+    JsonNode? PrepareRetry(Node definition, JsonNode? state, RetryChild child);
+}
 internal sealed record NativeIntervention(string Id, ActivityFault Fault, string Outcome = "WaitForIntervention", int Version = 1);
 
 public sealed partial class NativeState
@@ -24,7 +27,7 @@ public sealed partial class Frame
 
 internal static class NativeInterventions
 {
-    internal static bool Present(NativeState state) => state.InterventionEnabled || state.Frames.Values.Any(f =>
+    internal static bool Present(NativeState state) => state.InterventionEnabled || NativeRetries.Present(state) || state.Frames.Values.Any(f =>
         f.Intervention is not null || f.RecoveryInputs is not null || f.OperationKey is not null);
 
     internal static void Validate(NativeState state)
@@ -49,6 +52,7 @@ internal static class NativeInterventions
                 state.Waits.Values.Any(w => w.Frame == f.Id) || state.Frames.Values.Any(child => child.Parent == f.Id))
                 throw new InvalidOperationException("Invalid native intervention ownership.");
         }
+        NativeRetries.Validate(state);
     }
 }
 
@@ -72,6 +76,7 @@ internal sealed partial class Burst
         if (!_s.InterventionEnabled || !typeof(ILeaf).IsAssignableFrom(node.Type) || node.Background || !InterventionParent(frame) ||
             Hydrator.Of(node.Type).Any(p => !node.Inputs.ContainsKey(p.Name))) return null;
         var snapshot = Hydrator.Snapshot(node, b => Evaluate(b, scope));
+        frame.RecoveryMaterial = NativeRecoveryMaterial.Describe(_wf);
         frame.RecoveryInputs = (JsonObject)snapshot.DeepClone();
         frame.OperationKey = CreationProtocol.Origin(turn.Instance.Ref.Id, turn.Instance.Creation) + "/activity/" + frame.Id;
         return snapshot;

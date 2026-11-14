@@ -63,6 +63,12 @@ public sealed class CallService : Activity<string>
 /// <summary>Stateless: the next child follows from the position of the one that completed.</summary>
 public sealed class Sequence : CompositeActivity, IInterventionParent
 {
+    System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child)
+    {
+        if (state is not null || definition.Children.Count(n => n.Id == child.Node) != 1)
+            throw new InvalidOperationException("Invalid sequence retry obligation.");
+        return null;
+    }
     protected internal override void Execute(CompositeContext context)
     {
         if (context.Children.Count == 0) context.Complete();
@@ -108,6 +114,15 @@ public sealed record ParallelState
 /// <summary>Fork and threshold join. It counts its branches in its own state, where Elsa 4 queried the activity-state store.</summary>
 public sealed class Parallel : CompositeActivity, IInterventionParent
 {
+    System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child)
+    {
+        var progress = Values.To<ParallelState>(state?.DeepClone()) ?? throw new InvalidOperationException("Missing parallel retry obligation.");
+        if (progress.Joined || progress.Pending.Count(f => f == child.Source) != 1 || progress.Pending.Contains(child.Successor) ||
+            child.Tag != child.Node || definition.Children.Count(n => n.Id == child.Node) != 1)
+            throw new InvalidOperationException("Invalid parallel retry obligation.");
+        progress.Pending[progress.Pending.IndexOf(child.Source)] = child.Successor;
+        return Values.From(progress);
+    }
     [Input] public int? Threshold { get; set; }
 
     protected internal override void Execute(CompositeContext context)

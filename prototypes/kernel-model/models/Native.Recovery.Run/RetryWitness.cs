@@ -6,13 +6,19 @@ using Kernel.Sim.Native;
 
 internal static class RetryWitness
 {
+    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } select $"recovery:fresh-successor-minimal,{m},parallel-parent={d}";
     internal static void Run()
+    {
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var direct in new[] { false, true }) Run(mode, direct);
+    }
+    private static void Run(string mode, bool direct)
     {
         RetryLeaf.Invocations.Clear();
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
         var target = InstanceRef.In(0, "successor"); var actor = world.Of(0, 0);
+        var leaf = Wf.Node<RetryLeaf>("leaf", ("Value", Binding.Literal(17)));
         var workflow = Wf.Workflow("successor", Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.Parallel("parallel", null,
-            Wf.Sequence("sequence", Wf.Set("before", "before", 1), Wf.Node<RetryLeaf>("leaf", ("Value", Binding.Literal(17))), Wf.Set("after", "after", 1)),
+            direct ? leaf : Wf.Sequence("sequence", Wf.Set("before", "before", 1), leaf, Wf.Set("after", "after", 1)),
             Wf.Event("sibling", "finish"))));
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
         void Apply(Act a) { world.Apply(a); if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
@@ -31,7 +37,7 @@ internal static class RetryWitness
         NativeState State() => Json.Read<NativeState>(world.Store.Instances[target.Id].State);
         void Check(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
         Apply(new("take", actor.Id)); Apply(new("add", M: new("start", target, Kinds.Start,
-            Start: NativeModel.Spec(workflow.Id) with { Creation = new(1, 0, "successor-proof") }))); Drain();
+            Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "successor-proof") }))); Drain();
         var source = State().Frames.Values.Single(f => f.Node == "leaf");
         Check(source.Intervention is not null && RetryLeaf.Invocations.Count == 1, "R12: retry witness did not begin with an ordinary intervention");
         Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(new NativeRetry("operator-1", source.Id, source.Intervention!.Id, "dependency repaired")), TargetCreation: 1))); Drain(cut: true);
@@ -40,9 +46,9 @@ internal static class RetryWitness
             "R13: retry did not durably stage a fresh successor before executing it");
         Drain(); var next = State();
         Check(RetryLeaf.Invocations.Count == 2 && RetryLeaf.Invocations[1].Frame != source.Id && RetryLeaf.Invocations[1].Operation == source.OperationKey && RetryLeaf.Invocations[1].Value == 17 &&
-            next.Variables["before"]!.ToString() == "1" && next.Variables["after"]!.ToString() == "1" && world.Store.Instances[target.Id].Status == InstanceStatus.Running,
+            (direct || next.Variables["before"]!.ToString() == "1" && next.Variables["after"]!.ToString() == "1") && world.Store.Instances[target.Id].Status == InstanceStatus.Running,
             "R14: successor lost pinned identity/input or ordinary parent completion routing");
-        Console.WriteLine("PASS recovery:fresh-successor-minimal");
+        Console.WriteLine($"PASS recovery:fresh-successor-minimal,{mode},parallel-parent={direct}");
     }
 }
 internal sealed class RetryLeaf : Kernel.Native.Activity<int>
