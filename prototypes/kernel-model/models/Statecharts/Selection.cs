@@ -3,7 +3,8 @@ namespace Kernel.Statecharts;
 internal enum NodeKind { Root, Compound, Parallel, Region, Atomic, Final }
 internal enum VisitMode { Internal, Preserve, Reenter }
 internal sealed record GraphNode(string Id, NodeKind Kind, string? Parent = null, string? Initial = null, string? Entry = null, string? Exit = null);
-internal sealed record GraphRule(string Id, int Order, string Source, string? Target, VisitMode Mode, string Trigger, string? Action = null);
+internal sealed record GraphRule(string Id, int Order, string Source, string? Target, VisitMode Mode, string Trigger, string? Action = null, string? When = null);
+internal sealed record StructuralDefinition(GraphNode[] Nodes, GraphRule[] Rules);
 internal sealed record StateVisit(string State, string Occurrence);
 internal sealed record GraphStep(string Id, string Phase, string State, string? Activity, string? Visit, string? Transition, string[] After);
 internal sealed record GraphPlan(string[] Candidates, string[] Selected, string[] Next, GraphStep[] Steps);
@@ -86,6 +87,8 @@ internal sealed class SelectionChart
 
     internal bool Within(string node, string ancestor) => _paths[node].Contains(ancestor, StringComparer.Ordinal);
     private string Branch(string node, string ancestor) => _paths[node][Array.IndexOf(_paths[node], ancestor) - 1];
+    internal IEnumerable<string> Activities => _nodes.Values.SelectMany(n => new[] { n.Entry, n.Exit })
+        .Concat(_rules.Select(r => r.Action)).OfType<string>();
     internal string? Entry(string state) => _nodes[state].Entry;
     internal bool IsTopFinal(IEnumerable<string> active) => active.Any(id => _nodes[id].Parent == _root && _nodes[id].Kind == NodeKind.Final);
 

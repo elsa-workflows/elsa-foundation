@@ -12,6 +12,7 @@ public sealed record Reaction(string? EventId, string[] Next, Step[] Steps);
 public sealed class Chart
 {
     private readonly SelectionChart _selection;
+    internal SelectionChart Compiled => _selection;
     private readonly Rule[] _rules;
 
     public Chart(Definition definition)
@@ -60,7 +61,7 @@ public sealed class Chart
             if (source.Id == target.Id || source.Parent != target.Parent)
                 throw new NotSupportedException("The legacy prototype profile supports distinct sibling transitions.");
         }
-        _selection = new(nodes, _rules.Select((r, i) => new GraphRule("rule:" + i, i, r.Source, r.Target, VisitMode.Reenter, r.Event, r.Action)));
+        _selection = new(nodes, _rules.Select((r, i) => new GraphRule("rule:" + i, i, r.Source, r.Target, VisitMode.Reenter, r.Event, r.Action, r.When)));
     }
 
     public Reaction Start()
