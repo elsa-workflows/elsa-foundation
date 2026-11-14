@@ -51,10 +51,34 @@ permission/ownership/availability profiles. Invoking those scripts can start pro
 adding them here does not launch or authorize them. Full Studio mode requires current successful owned build
 provenance and served-module byte verification. Isolated components do not establish full Studio acceptance.
 
-The Probe project and linked fixture/project paths are source-staged. Its lock file is deliberately not copied
-from the obsolete carrier; authorized tooling must regenerate affected metadata before a locked producer can
-succeed. Real-provider, store/process, packed-public-consumer, full Studio and Workbench runners are introduced
-by the next source slice. Current-source compiled/runtime/package/visual and independent review evidence,
+The Probe project and linked fixture/project paths use solver-generated dependency locks. The runner sources
+below produce current-source compiled/runtime/package/visual evidence. Independent review,
 protected merge and resulting-main qualification remain required by
 [spec1212](../../../specs/1212-external-authentication/spec.md). Historical results on
 [closed PR3806](https://github.com/elsa-workflows/elsa-foundation/pull/3806) remain bound to their recorded source.
+
+## Prepared qualification runners
+
+These entry points do not themselves establish a passing result or authorize execution. Use the current
+owner-authorized local resource scope, current locks, and successful exact-source producer
+receipts through the ordinary build-slot launcher. Do not import helpers just to inspect them: imports can
+capture tools, start processes or create state. Preserve failures and UNKNOWN results as such.
+
+| Entry point | Intended scope and options |
+|---|---|
+| `qualify-keycloak.mjs` | Two independently owned, digest-pinned Keycloak instances, exact callback registration and same-subject/different-issuer journeys. Default uses the component driver; `--studio` uses the full Studio runner. The image must already exist; no implicit pull. |
+| `qualify-nodes.mjs` | Separate backend processes sharing the owned provider/store/key scope. Default is PostgreSQL managed mode; `--sqlite` selects SQLite and `--baseline` selects configuration-only mode. Record each of the four combinations separately. |
+| `qualify-studio.mjs` | Composed Studio, verified served module bytes and source-bound browser evidence. No argument selects the managed journey; supported profiles are `empty`, `configuration`, `provider-reader`, `denied`, `external-owned`, `hybrid`, `missing-api`, `missing-sessions`. |
+| `qualify-workbench.mjs` | Source-built Workbench with an owned temporary shell configuration, local sign-in and administration smoke. Repository assembly discovery does not activate external sign-in in the default deployment. |
+| `qualify-packages.py` | Archive exact clean HEAD, derive the backend production reference closure, pack it and run a separate public NuGet consumer without project references. Optional `--output` must name a new owned directory. |
+
+The package consumer uses current `TokenSubject.ForProviderSubject` factories and verifies issuer isolation.
+The local version override follows the existing `PackageVersioning.props` development-pack exception;
+compilation and NuGet provenance still require actual qualification. Studio packages additionally use the
+current `tools/ci/studio-package-identities.json` inventory and `verify_studio_nuget_packages.py` pipeline.
+Neither closure has a fixed historical package count.
+
+The CI additions retain existing job selection, required check names, unrelated journeys and time limits.
+They prepare one standard Studio producer, the thirteen controls, the Probe producer and all nine Studio
+profiles. Downloadable outputs are restricted to screenshots and bounded source-bound receipts; private
+credentials, callback material, raw logs and capture custody are excluded. No CI has been dispatched here.
