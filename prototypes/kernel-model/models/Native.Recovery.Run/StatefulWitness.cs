@@ -23,8 +23,8 @@ internal static class StatefulWitness
         var body = parent == "foreach" ? Wf.ForEach("parent", Binding.Literal(new[] { 17, 19 }), leaf) : parent == "parallel"
             ? Wf.Parallel("parent", null, leaf, Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("changed", "value", -1)))
             : Wf.Sequence("parent", leaf, Wf.Set("after", "after", 1));
-        var wf = Wf.Workflow("stateful-proof", parent == "root" ? leaf : Wf.Node<AbsorbRecoveryFault>("outer").With(body));
-        wf.InterventionRequested = true; wf.Variables["value"] = Values.From(17); NativeWorkflows.Registry.Add(wf);
+        var wf = Wf.Workflow("stateful-proof", parent == "root" ? leaf : Wf.Node<AbsorbRecoveryFault>("outer").With(body), ("value", 17));
+        wf.InterventionRequested = true; NativeWorkflows.Registry.Add(wf);
         NativeState State() => Json.Read<NativeState>(world.Store.Instances[target.Id].State);
         void Check(bool yes, string why) { if (!yes) throw new InvalidOperationException(why); }
         void Apply(Act a)
