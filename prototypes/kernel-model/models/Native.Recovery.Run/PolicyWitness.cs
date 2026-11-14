@@ -47,7 +47,7 @@ internal static class PolicyWitness
             var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:start");
             Apply(new("add", M: Events.Deliver(new("event:start", "release", null, world.Time + 120_000), wait))); Drain();
             var state = State(); var expected = kind is "sequence" or "parallel";
-            if (state.InterventionPolicy != (kind == "unmarked" ? 2 : 0) || RootLeaf.Calls.Count != 1 ||
+            if (state.InterventionPolicy != (kind == "unmarked" ? 3 : 0) || RootLeaf.Calls.Count != 1 ||
                 (expected ? world.Store.Instances[target.Id].Status != InstanceStatus.Running || !state.Frames.Values.Any(f => f.Node == "leaf" && f.Intervention is not null)
                     : world.Store.Instances[target.Id].Status != InstanceStatus.Finished || state.Frames.Count != 0))
                 throw new InvalidOperationException("R29: latest host or new parent support silently changed an existing invocation policy");

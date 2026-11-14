@@ -52,13 +52,14 @@ internal static class NativeRetries
                 r.Resolution != "Retried" || string.IsNullOrEmpty(r.Successor) || r.Successor == r.Source.Id || !successors.Add(r.Successor) || !sources.Add(r.Source.Id) || s.Frames.ContainsKey(r.Source.Id))
                 throw new InvalidOperationException("Invalid native retry lineage.");
             NativeInterventions.ValidateIncident(r.Source.Intervention);
+            NativeStatefulRecovery.Validate(s, r.Source);
             if (r.Source.Parent is not null) continue;
             if (NativeInterventions.Policy(s) < 2 || !NativeInterventions.RootDescriptor(r.Source))
                 throw new InvalidOperationException("Invalid native root retry lineage.");
-            var queued = s.Agenda.Where(w => w.Frame == r.Successor).ToArray(); s.Frames.TryGetValue(r.Successor, out var current);
+            var queued = s.Agenda.Where(w => w.Frame == r.Successor && !w.Resume).ToArray(); s.Frames.TryGetValue(r.Successor, out var current);
             if (queued.Length == 0 && current is null) continue; // completed/superseded forensic receipts need no live root
             var staged = queued.Length == 1 && current is null && s.Frames.Count == 0 && s.Agenda.Count == 1 && !queued[0].Resume && queued[0].RetrySource == r.Source.Id;
-            var retained = queued.Length == 0 && current is not null && s.Frames.Count == 1 && s.Agenda.Count == 0 && current.RetrySource == r.Source.Id;
+            var retained = queued.Length == 0 && current is not null && s.Frames.Count == 1 && (s.Agenda.Count == 0 || NativeStatefulRecovery.SuspendedRoot(s, current)) && current.RetrySource == r.Source.Id;
             if (!staged && !retained) throw new InvalidOperationException("Invalid native staged root obligation.");
         }
         NativeRetryReceipt Lineage(string source, string successor) => (s.Retries?.Values.SingleOrDefault(r => r.Source.Id == source && r.Successor == successor))
@@ -69,7 +70,7 @@ internal static class NativeRetries
             if (f.RetrySource is { } source)
             {
                 var old = Lineage(source, f.Id).Source;
-                if (f.Node != old.Node || f.Parent != old.Parent || f.Tag != old.Tag || f.OperationKey != old.OperationKey || !Borrowed(f.LexicalScope, old.LexicalScope) ||
+                if (f.RecoveryStateful != old.RecoveryStateful || f.Node != old.Node || f.Parent != old.Parent || f.Tag != old.Tag || f.OperationKey != old.OperationKey || !Borrowed(f.LexicalScope, old.LexicalScope) ||
                     !JsonNode.DeepEquals(Values.From(f.Scope), Values.From(old.Scope)) ||
                     !JsonNode.DeepEquals(f.RecoveryInputs, old.RecoveryInputs) || !JsonNode.DeepEquals(f.RecoveryMaterial, old.RecoveryMaterial))
                     throw new InvalidOperationException("Invalid native successor frame provenance.");
@@ -113,7 +114,7 @@ internal sealed partial class Burst
         { if (!_s.Frames.TryGetValue(parentId, out parent) || Blocked(parent.Id)) return Result("ParentUnavailable"); }
         else if (!NativeInterventions.Root(_s, source)) return Result("RootUnavailable");
         if (!JsonNode.DeepEquals(source.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf))) return Result("MaterialUnavailable");
-        if (!_wf.Nodes.TryGetValue(source.Node, out var node) || !typeof(ILeaf).IsAssignableFrom(node.Type) || node.Background || source.RecoveryInputs is null ||
+        if (!_wf.Nodes.TryGetValue(source.Node, out var node) || !RecoverableKind(node) || node.Background || source.RecoveryInputs is null ||
             Hydrator.Of(node.Type).Any(p => !source.RecoveryInputs.ContainsKey(p.Name)) || !InterventionBoundary(source)) return Result("UnsupportedBoundary");
         if (_s.Waits.Values.Any(w => w.Frame == source.Id) || _s.Frames.Values.Any(f => f.Parent == source.Id) ||
             _s.Agenda.Any(w => w.Frame == source.Id || w.Parent == source.Id) || (_s.LexicalScopes?.Values.Any(s => s.Owner == source.Id) ?? false)) return Result("SourceBusy");

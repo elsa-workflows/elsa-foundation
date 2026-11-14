@@ -111,7 +111,7 @@ internal static class RootWitness
         if (cut == "reload-staged") Reload();
         Drain();
         var again = State().Frames.Values.Single(f => f.Node == "leaf");
-        Check(RootLeaf.Calls.Count == 2 && again.Intervention is not null && again.Id != source.Id && State().InterventionPolicy == 2,
+        Check(RootLeaf.Calls.Count == 2 && again.Intervention is not null && again.Id != source.Id && State().InterventionPolicy == 3,
             "R28: repeated root/iteration fault lost its fresh occurrence, intervention or frozen policy");
         foreach (var retry in new[] { first, first with { Reason = "conflict" }, first with { Id = "stale-source" } })
         { Send("replay-" + retry.Id + retry.Reason, retry); Drain(); }
