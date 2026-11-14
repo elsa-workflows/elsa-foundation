@@ -69,9 +69,9 @@ internal static partial class ShortWaitRaces
                 Need(Store.Messages[input].Seen == previous.Epoch && Store.Messages[input].Trial == 0, "missing former mark for " + input);
         }
 
-        public void ExpectTrial(Worker owner, string member)
+        public void ExpectTrial(Worker owner, InboxKey member)
         {
-            Need(owner.Trial.SequenceEqual([member]) && Store.Messages[member].Trial == owner.Epoch
+            Need(owner.Trial.SequenceEqual([member.Id]) && Store.Messages[member].Trial == owner.Epoch
                 && Store.Messages.Values.All(r => r.Attempts == 0), "incorrect fenced trial: " + string.Join(",", owner.Trial));
         }
 
@@ -157,7 +157,7 @@ internal static partial class ShortWaitRaces
                 var model = new Spawner(finish: true, wait: true);
                 var f = new JobCut(model);
                 await f.Add("spawn");
-                var ticket = Worker.TicketId(f.Actor.Id, "job");
+                var ticket = InboxKey.Ticket(f.Actor.Id, "job");
                 await using (var previous = await f.Activate("former"))
                 {
                     await previous.FlushAsync();
@@ -187,7 +187,7 @@ internal static partial class ShortWaitRaces
             {
                 var model = new Spawner(finish, wait: true);
                 var f = new JobCut(model);
-                var ticket = Worker.TicketId(f.Actor.Id, "job");
+                var ticket = InboxKey.Ticket(f.Actor.Id, "job");
                 await f.Add("spawn");
                 await using (var former = await f.Activate("former"))
                 {
@@ -229,7 +229,7 @@ internal static partial class ShortWaitRaces
                 var model = new Spawner(finish: false, wait: true);
                 var f = new JobCut(model);
                 await f.Add("spawn");
-                var ticket = Worker.TicketId(f.Actor.Id, "job");
+                var ticket = InboxKey.Ticket(f.Actor.Id, "job");
                 await using (var issuer = await f.Activate("issuer"))
                 {
                     await issuer.FlushAsync();
