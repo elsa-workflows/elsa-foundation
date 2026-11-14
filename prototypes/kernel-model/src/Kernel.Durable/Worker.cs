@@ -581,7 +581,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (!item.SuppliedTicket && message.Kind == Kinds.Job && attempts >= _options.MaxAttempts && Has(Flaw.JobPoisonAsError))
         {
-            // A job that was on trial when too many owners were lost is parked: its result is an error.
+            // Mutation: restore the old rule which reported an error result instead of parking.
             var error = $"the job was on trial when {attempts} owners were lost";
             item.CompletedJob = true;
             item.Original = message;
@@ -621,10 +621,6 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(Canonical(suspect.Message.Target.Id), out var slot) && Withheld(slot)
         && CreationError(slot, suspect.Message) is null;
 
-    /// <summary>
-    /// An instance that cannot be given its messages now, as its actor type says (<see cref="IActorType.Withholds"/>).
-    /// Kernel messages still pass.
-    /// </summary>
     // Exhausted input is a known pending Park, so do not begin a neighbour's trial or physical job first.
     private bool PoisonPending(Slot slot) => Volatile.Read(ref slot.PoisonAt) <= Now;
 
@@ -634,6 +630,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             !Kinds.IsControl(i.Message.Kind) && CreationError(slot, i.Message) is null)
             .Select(i => i.Message.Due ?? long.MinValue).DefaultIfEmpty(long.MaxValue).Min());
 
+    /// <summary>
+    /// An instance that cannot be given its messages now, as its actor type says (<see cref="IActorType.Withholds"/>).
+    /// Kernel messages still pass.
+    /// </summary>
     private bool Withheld(Slot slot) => slot.Row is { Retired: false } row && _type.Withholds(row, this);
 
     /// <summary>
