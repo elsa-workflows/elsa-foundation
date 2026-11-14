@@ -243,6 +243,11 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         }
     }
 
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(Journal.Values.Where(j => j.Partition == partition && j.Instance == instance && j.Position > after).OrderBy(j => j.Position).ToList());
+    }
+
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)
     {
         lock (_gate) return new(instances.Select(i => Views.GetValueOrDefault(i)).OfType<ViewRow>().ToList());

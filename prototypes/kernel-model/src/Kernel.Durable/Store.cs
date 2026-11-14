@@ -134,6 +134,13 @@ public interface IKernelStore : IMembership
     /// <summary>The viewer's read: the view rows of these instances, as the projectors have written them. Missing ids are skipped.</summary>
     ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Decision 11, the viewer's tail: one instance's journal rows past position <paramref name="after"/>, in position order.
+    /// Return one committed snapshot, including any delete marker visible in that snapshot. Concurrent commits must
+    /// not extend the read indefinitely or combine rows from different snapshots. Wrappers forward this operation.
+    /// </summary>
+    ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default);
+
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
 }

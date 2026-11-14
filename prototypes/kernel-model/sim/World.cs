@@ -145,6 +145,8 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => world.Store.SubscribeAsync(subscription);
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) =>
         Send("journal", $"journal p{partition} after {after}", () => world.Store.ReadJournalAsync(partition, after, take));
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) =>
+        Send("journal", $"journal of {instance} after {after}", () => world.Store.ReadJournalOfAsync(partition, instance, after, cancellationToken));
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) =>
         Send("projected", $"projection p{partition}", () => world.Store.ProjectedAsync(partition));
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) =>
