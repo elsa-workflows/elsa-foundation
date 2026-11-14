@@ -18,6 +18,48 @@ internal static class RecoveryReader
         yield return ("current-roundtrip", () => { var json = Json.Write(Valid()); var copy = Json.Read<NativeState>(json); NativeInterventions.Validate(copy); Check(Json.Write(copy) == json, "codec lost intervention data"); });
         foreach (var version in new[] { 1, 2, 3, 4 })
             yield return ("mixed-v" + version, () => Refuse(() => new NativeModel(new()).UpgradeState(Json.Write(Valid()), version), "Legacy native state contains unsupported recovery data."));
+        yield return ("v5-intervention", () => { var json = Json.Write(Valid()); Check(Json.Write(new NativeModel(new()).UpgradeState(json, 5)) == json, "v5 intervention was changed or blessed with current material"); });
+        yield return ("v5-null", () => Check(new NativeModel(new()).UpgradeState("null", 5) is null, "v5 null checkpoint changed"));
+        yield return ("mixed-successor-v5", () => Refuse(() => new NativeModel(new()).UpgradeState(Json.Write(Staged()), 5), "Legacy native state contains unsupported successor data."));
+        yield return ("staged-codec", () => { var json = Json.Write(Staged()); var state = Json.Read<NativeState>(json); NativeInterventions.Validate(state); Check(Json.Write(state) == json, "staged source/successor codec changed"); });
+        foreach (var entry in new (string Name, Action<NativeState> Apply, string Error)[]
+        {
+            ("missing-lineage", s => s.Retries = null, "Missing native retry lineage."),
+            ("reused-physical-id", s => s.Retries!["operator"] = s.Retries["operator"] with { Successor = "f" }, "Invalid native retry lineage."),
+            ("changed-operation", s => s.Agenda[0].OperationKey = "different", "Invalid native successor work provenance."),
+            ("changed-input", s => s.Agenda[0].RecoveryInputs!["value"] = 99, "Invalid native successor work provenance."),
+            ("changed-material", s => s.Agenda[0].RecoveryMaterial!["different"] = true, "Invalid native successor work provenance."),
+            ("changed-iteration", s => s.Agenda[0].Scope!["CurrentItem"] = 99, "Invalid native successor work provenance."),
+            ("dropped-lexical", s => s.Agenda[0].LexicalScope = null, "Invalid native successor work provenance."),
+            ("changed-lexical", s => s.Agenda[0].LexicalScope = "other", "Invalid native successor work provenance."),
+            ("copied-attempt", s => s.Agenda[0].Attempt = 2, "Invalid native successor work provenance.")
+        }) yield return (entry.Name, () => { var state = Staged(); entry.Apply(state); Refuse(() => NativeInterventions.Validate(state), entry.Error); });
+        yield return ("successor-frame-codec", () => { var state = Materialized(); LexicalScopes.Validate(state); NativeInterventions.Validate(state); });
+        foreach (var change in new[] { "iteration", "drop-lexical", "other-lexical" })
+            yield return ("frame-" + change, () =>
+            {
+                var state = Materialized(); var frame = state.Frames["fresh"];
+                if (change == "iteration") frame.Scope!["CurrentItem"] = 99;
+                else frame.LexicalScope = change == "drop-lexical" ? null : "other";
+                LexicalScopes.Validate(state);
+                Refuse(() => NativeInterventions.Validate(state), "Invalid native successor frame provenance.");
+            });
+        foreach (var live in new[] { false, true }) foreach (var cancelled in new[] { false, true })
+            yield return ($"retired-forensic,frame={live},cancelled={cancelled}", () =>
+            {
+                var state = live ? Materialized() : Staged(); var original = Json.Write(state.Retries);
+                LexicalScopes.Terminate(state); LexicalScopes.Validate(state);
+                if (cancelled) NativeInterventions.Validate(state, cancelled: true);
+                else Refuse(() => NativeInterventions.Validate(state), live ? "Invalid native successor frame provenance." : "Invalid native successor work provenance.");
+                Check(Json.Write(state.Retries) == original, "forced retirement rewrote forensic source provenance");
+            });
+        foreach (var retired in new[] { false, true }) yield return ("cancelled-drift,retired=" + retired, () =>
+        {
+            var state = Staged();
+            if (retired) { LexicalScopes.Terminate(state); state.Agenda[0].Scope!["CurrentItem"] = 99; }
+            else state.Agenda[0].LexicalScope = null;
+            Refuse(() => NativeInterventions.Validate(state, cancelled: true), "Invalid native successor work provenance.");
+        });
         foreach (var change in new (string Name, Action<NativeState> Apply, string Error)[]
         {
             ("no-profile", s => s.InterventionEnabled = false, "Native recovery data requires its opted-in profile."),
@@ -38,6 +80,23 @@ internal static class RecoveryReader
             try { NativeInterventions.Validate(state); } catch (NotSupportedException e) when (e.Message == "Unsupported native intervention version.") { return; }
             throw new InvalidOperationException("R10: future incident version was accepted");
         });
+    }
+    private static NativeState Staged()
+    {
+        var state = Valid(); var source = state.Frames["f"]; source.RecoveryMaterial = new(); state.Frames.Remove("f");
+        source.Scope = new() { ["CurrentItem"] = Values.From(7) }; source.LexicalScope = "borrowed";
+        state.LexicalScopes = new() { ["borrowed"] = new("p", null, new()), ["other"] = new("p", null, new()) };
+        state.Retries = new() { ["operator"] = new(new("operator", "f", "incident", "repaired"), source, "fresh") };
+        state.Agenda.Add(new() { Frame = "fresh", Node = "leaf", Parent = "p", RetrySource = "f", OperationKey = source.OperationKey, LexicalScope = "borrowed", Scope = new() { ["CurrentItem"] = Values.From(7) },
+            RecoveryInputs = (JsonObject)source.RecoveryInputs!.DeepClone(), RecoveryMaterial = new() });
+        return state;
+    }
+    private static NativeState Materialized()
+    {
+        var state = Staged(); var work = state.Agenda.Single(); state.Agenda.Clear();
+        state.Frames.Add("fresh", new() { Id = "fresh", Node = work.Node!, Parent = work.Parent, RetrySource = work.RetrySource, Scope = work.Scope, LexicalScope = work.LexicalScope,
+            RecoveryInputs = work.RecoveryInputs, RecoveryMaterial = work.RecoveryMaterial, OperationKey = work.OperationKey });
+        return state;
     }
     private static void Check(bool ok, string reason) { if (!ok) throw new InvalidOperationException("R10: " + reason); }
     private static void Refuse(Action action, string expected)
