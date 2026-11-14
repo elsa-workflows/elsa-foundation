@@ -41,7 +41,7 @@ For Workflow Test Runs, this feature also contributes the scoped `Elsa.Event`
 start driver (`event` mode) and active-wait driver (`event` mode). These
 single-Test-Run paths share the event payload contract but remain distinct from
 `PublishEvent`'s production broadcast behavior. See the [Runtime Test Run
-driver guide](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
+driver guide](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
 
 Coverage lives in `Essentials/tests/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
 pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
