@@ -83,11 +83,29 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Contains("portable expression declares result type", exception.ToString(), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_dynamic_portable_SetOutput_keeps_its_open_contract_for_a_scalar_Object_output(bool serialized)
+    {
+        var expression = SetOutputExpression(new TypeReference("Elsa.Any"));
+        var argument = new ArgumentValue(serialized ? JsonSerializer.SerializeToElement(expression) : expression, "JavaScript");
+
+        var binding = await PublishSetOutputValueAsync("Count", new TypeReference("Elsa.Any"),
+            argument: argument, declaredOutputType: new TypeReference("Object"));
+
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal("Elsa.Any", binding.TargetType.Alias);
+        Assert.Equal("Elsa.Any", binding.Expression!.ResultType!.Id);
+        Assert.Null(binding.ConversionPlan);
+    }
+
     private static ExpressionDefinition SetOutputExpression(TypeReference resultType) =>
         new("JavaScript", "7", resultType, new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
 
-    private async Task<RuntimeInputBinding> PublishSetOutputValueAsync(string outputName, TypeReference authoredType, object? value = null, ArgumentValue? argument = null)
+    private async Task<RuntimeInputBinding> PublishSetOutputValueAsync(string outputName, TypeReference authoredType,
+        object? value = null, ArgumentValue? argument = null, TypeReference? declaredOutputType = null)
     {
         var setOutput = new ActivityNode("set-output", "elsa.intrinsic.set-output@1",
         [
@@ -101,7 +119,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         {
             Id = "version-1",
             Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
-            State = new WorkflowDefinitionState([], SequenceNode("sequence", [setOutput]), [], [CountOutput], null)
+            State = new WorkflowDefinitionState([], SequenceNode("sequence", [setOutput]), [],
+                [declaredOutputType is null ? CountOutput : CountOutput with { Type = declaredOutputType }], null)
         };
 
         var publication = await Handler(version, _writeLineActivity, _sequenceActivity).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
