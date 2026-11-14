@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
@@ -29,13 +30,15 @@ public static class ExternalAuthenticationEntityFrameworkCoreRegistration
         var existing = services.Select(descriptor => descriptor.ImplementationInstance).OfType<Registration>().SingleOrDefault();
         if (existing is not null && existing != registration) throw new InvalidOperationException("External authentication persistence is already registered with different options.");
         var stores = services.Where(descriptor => descriptor.ServiceType == typeof(IAuthenticationArtifactStore)).ToArray();
+        var sessions = services.Where(descriptor => descriptor.ServiceType == typeof(IAuthenticationSessionStore)).ToArray();
         if (existing is not null)
         {
-            if (stores.Length != 1 || stores[0].ImplementationType != typeof(EfAuthenticationArtifactStore))
-                throw new InvalidOperationException("External authentication persistence no longer owns its artifact store.");
+            if (stores.Length != 1 || stores[0].ImplementationType != typeof(EfAuthenticationArtifactStore) ||
+                sessions.Length != 1 || sessions[0].ImplementationType != typeof(EfAuthenticationSessionStore))
+                throw new InvalidOperationException("External authentication persistence no longer owns its artifact/session stores.");
             return services;
         }
-        if (stores.Length != 0) throw new InvalidOperationException("Select one external authentication artifact authority.");
+        if (stores.Length != 0 || sessions.Length != 0) throw new InvalidOperationException("Select one external authentication artifact/session authority.");
         services.AddFoundationExternalAuthentication();
         services.AddSingleton(registration);
         var add = Binding.Select<Action<IServiceCollection, ExternalAuthenticationEntityFrameworkCoreOptions>>(provider,
@@ -43,6 +46,7 @@ public static class ExternalAuthenticationEntityFrameworkCoreRegistration
             AddContext<ExternalAuthenticationPostgreSqlDbContext>, AddContext<ExternalAuthenticationMySqlDbContext>);
         add(services, options);
         services.EnsureReplacementContract<IAuthenticationArtifactStore, EfAuthenticationArtifactStore>();
+        services.EnsureReplacementContract<IAuthenticationSessionStore, EfAuthenticationSessionStore>();
         return services;
     }
 
@@ -59,7 +63,7 @@ public static class ExternalAuthenticationEntityFrameworkCoreRegistration
 [ManifestFeatureCategory("Identity")]
 [ManifestFeatureCategory("Persistence")]
 [ShellFeature(name: "FoundationIdentityExternalAuthenticationEntityFrameworkCore", DisplayName = "External authentication persistence",
-    Description = "Durable one-time authentication and preview artifacts with provider-owned schema lifecycle.")]
+    Description = "Durable authentication artifacts and sessions with provider-owned schema lifecycle.")]
 [UsesEfModule(ExternalAuthenticationEfModule.Name)]
 public class ExternalAuthenticationEntityFrameworkCoreFeature : IShellFeature
 {

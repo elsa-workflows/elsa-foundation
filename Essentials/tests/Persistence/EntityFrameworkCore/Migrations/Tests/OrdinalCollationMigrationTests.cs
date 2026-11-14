@@ -34,6 +34,10 @@ public sealed class OrdinalCollationMigrationTests
     /// </summary>
     private static readonly (string Module, string Table, string Column)[] MustBeOrdinal =
     [
+        ("ExternalAuthentication", "identity_authentication_sessions", "Id"),
+        ("ExternalAuthentication", "identity_authentication_sessions", "TenantKey"),
+        ("ExternalAuthentication", "identity_authentication_sessions", "UserKey"),
+        ("ExternalAuthentication", "identity_authentication_sessions", "Version"),
         ("ExternalAuthentication", "identity_authentication_artifacts", "Id"),
         ("ExternalAuthentication", "identity_authentication_artifacts", "TenantKey"),
         ("ExternalAuthentication", "identity_authentication_artifacts", "BrowserBinding"),
@@ -102,6 +106,7 @@ public sealed class OrdinalCollationMigrationTests
     /// </summary>
     private static readonly (string Module, string Table, string Column)[] MustNotBeOrdinal =
     [
+        ("ExternalAuthentication", "identity_authentication_sessions", "ProtectedPayload"),
         ("ExternalAuthentication", "identity_authentication_artifacts", "ProtectedPayload"),
         ("ActivitiesDesign", "elsa_activity_availability_settings", "Rules"),
         ("ActivitiesDesign", "elsa_activity_management_definitions", "SearchText"),

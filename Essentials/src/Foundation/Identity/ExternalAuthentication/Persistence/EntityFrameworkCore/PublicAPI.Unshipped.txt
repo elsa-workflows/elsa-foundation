@@ -4,7 +4,7 @@ abstract Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrame
 const Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEfModule.HistoryModuleName = "ElsaIdentityExternalAuthentication" -> string!
 const Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEfModule.Name = "Identity.ExternalAuthentication" -> string!
 const Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEfModule.SchemaFamily = "IdentityExternalAuthentication" -> string!
-const Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEfModule.SchemaVersion = "1.0.0" -> string!
+const Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEfModule.SchemaVersion = "1.1.0" -> string!
 const Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEfModule.TableName = "identity_authentication_artifacts" -> string!
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationDbContext
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationDbContext.EnsureProviderBinding() -> void
@@ -43,12 +43,20 @@ Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationSqliteDbContext.ExternalAuthenticationSqliteDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationSqliteDbContext!>! options) -> void
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationSqlServerDbContext
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationSqlServerDbContext.ExternalAuthenticationSqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationSqlServerDbContext!>! options) -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.DurableSessions
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.DurableSessions.DurableSessions() -> void
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.Initial
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.Initial.Initial() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.DurableSessions
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.DurableSessions.DurableSessions() -> void
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.Initial
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.Initial.Initial() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.DurableSessions
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.DurableSessions.DurableSessions() -> void
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.Initial
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.Initial.Initial() -> void
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.DurableSessions
+Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.DurableSessions.DurableSessions() -> void
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.Initial
 Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.Initial.Initial() -> void
 override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! builder) -> void
@@ -57,15 +65,27 @@ static Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFramewo
 static Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEntityFrameworkCoreRegistration.AddExternalAuthenticationEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static readonly Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEfModule.Chain -> Elsa.Persistence.EntityFramework.EfSchemaChain!
 virtual Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.ExternalAuthenticationEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.DurableSessions.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.DurableSessions.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.DurableSessions.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.DurableSessions.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.DurableSessions.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.DurableSessions.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.DurableSessions.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.DurableSessions.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.DurableSessions.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.MySql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.DurableSessions.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.PostgreSql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.DurableSessions.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.SqlServer.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.DurableSessions.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
 ~override Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.Migrations.ExternalAuthentication.Sqlite.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
