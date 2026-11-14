@@ -896,7 +896,8 @@ test("workflow template metadata defaults", async ({ page }, info) => {
     creations.push({ url: saved.url(), authorization: saved.request().headers().authorization, id: body.definition.id });
     expect(saved.request().postDataJSON()).toMatchObject({ name: expectedName });
     expect(saved.request().postDataJSON().description || "").toBe(expectedDescription);
-    await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible();
+    // Creation starts a lazy editor transition after the API response; use the navigation-readiness budget.
+    await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible({ timeout: 30_000 });
     await page.reload();
     const properties = page.getByRole("tab", { name: "Properties", exact: true });
     await expect(properties).toBeVisible();

@@ -245,6 +245,7 @@
   </Folder>
   <Folder Name="/Essentials/src/Activities/Graph/">
     <Project Path="Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
+    <Project Path="Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj" />
     <Project Path="Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/DispatchWorkflow/">
@@ -850,6 +851,9 @@
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Capture/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Capture/Tests/Elsa.Workflows.Publishing.Releases.Capture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/NativeCapture/">
+    <Project Path="Essentials/tests/Workflows/Publishing/Releases/NativeCapture/Tests/Elsa.Workflows.Publishing.Releases.NativeCapture.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Runtime/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj" />

@@ -44,6 +44,7 @@ const descriptor: StudioActivityDescriptor = {
 const expressionEditors: StudioExpressionEditorContribution[] = [
   {
     id: "browser.http-connection-picker",
+    presentsField: true,
     supports: context => context.syntax === "Connection",
     surfaces: { inline: props => <ConnectionPickerEditor {...props} endpointContext={endpointContext} /> },
     createDefaultValue: () => null

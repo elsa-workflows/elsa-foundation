@@ -78,6 +78,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     }
 
     /// <summary>Direct (no-pipeline) dispatch: build the checkpoint commit and commit it inline.</summary>
+    /// <exception cref="RuntimeCheckpointCommitValidationException">Invalid saved initial marker, origin or checkpoint name; retains the cause and work/execution identifiers before effects.</exception>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -89,6 +90,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     }
 
     /// <summary>Pipeline dispatch: build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
+    /// <exception cref="RuntimeCheckpointCommitValidationException">Invalid saved initial marker, origin or checkpoint name; retains the cause and work/execution identifiers before effects.</exception>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -104,6 +106,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         CancellationToken cancellationToken)
     {
+        SavedStimulusStartSeal.ValidateHandlerOrigin(workItem, payload.StimulusDeliveryOrigin);
+        if (payload.StimulusDeliveryOrigin is not null && payload.CheckpointName != RuntimeCheckpointNames.WorkflowStarted)
+            throw SavedStimulusStartSeal.RefuseWork(workItem, "Saved initial work must retain its canonical workflow-start checkpoint.");
         if (payload.IngressOrigin is { } origin)
         {
             if (_ingressDeliveryStore is null)
@@ -178,6 +183,13 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? DrainModeOf(workItem.WorkflowExecutionId)
             : null;
 
+        var commitMetadata = new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+            [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
+        };
+        if (payload.StimulusDeliveryOrigin is { } savedOrigin)
+            commitMetadata[SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin);
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
             Checkpoint: new RuntimeCheckpoint(
@@ -197,11 +209,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 operational: [],
                 activityExecutionInspections: activityInspectionChanges.ToArray()),
             PostCommitIntents: payload.PostCommitIntents.ToArray(),
-            Metadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
-                [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
-            }));
+            Metadata: RuntimeModelMetadata.Snapshot(commitMetadata));
     }
 
     private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedDurableValueChanges(
@@ -295,6 +303,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             IngressOrigin = priorWorkflowState?.IngressOrigin ?? payload.IngressOrigin,
+            StimulusDeliveryOrigin = priorWorkflowState?.StimulusDeliveryOrigin ?? payload.StimulusDeliveryOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
@@ -396,6 +405,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             Authority = priorWorkflowState?.Authority ?? payload.Authority,
             ModelWorkOrigin = priorWorkflowState?.ModelWorkOrigin ?? payload.ModelWorkOrigin,
             IngressOrigin = priorWorkflowState?.IngressOrigin ?? payload.IngressOrigin,
+            StimulusDeliveryOrigin = priorWorkflowState?.StimulusDeliveryOrigin ?? payload.StimulusDeliveryOrigin,
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame

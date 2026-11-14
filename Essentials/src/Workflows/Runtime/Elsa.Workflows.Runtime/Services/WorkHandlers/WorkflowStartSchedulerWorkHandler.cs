@@ -74,12 +74,19 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         return workItem.CommandKind == WorkflowExecutionCommandKind.Start;
     }
 
+    /// <exception cref="RuntimeCheckpointCommitValidationException">Invalid saved initial authority or marker; retains the cause and work/execution identifiers before effects.</exception>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
+        SavedStimulusStartSeal.ValidateHandlerOrigin(workItem, startPayload.StimulusDeliveryOrigin);
+        if (startPayload.StimulusDeliveryOrigin is { } saved &&
+            (startPayload.StartAuthority?.StimulusDelivery is not { } accepted || saved.Scope != accepted.Scope ||
+             saved.SourceOutboxItemId != accepted.SourceOutboxItemId || saved.IntentFingerprint != accepted.IntentFingerprint ||
+             saved.TriggerBindingId != accepted.TriggerBindingId))
+            throw SavedStimulusStartSeal.RefuseWork(workItem, "The saved scope origin differs from the accepted ordinary start authority.");
         RuntimeCommittedRecipient? ingress = null;
         if (startPayload.StartAuthority?.StandaloneTrigger is { } origin)
         {
@@ -110,7 +117,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         }
 
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
-        if (ingress is not null)
+        if (ingress is not null || startPayload.StimulusDeliveryOrigin is not null)
         {
             await _schedulerWorkQueue.EnqueueAsync(NativeIngressStartLineage.Build(workItem, startPayload, rootActivityId), cancellationToken);
             return;
@@ -373,10 +380,11 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             testScope: startPayload.TestScope)
         {
             ModelWorkOrigin = startPayload.StartAuthority?.ModelWork,
-            IngressOrigin = startPayload.StartAuthority?.StandaloneTrigger
+            IngressOrigin = startPayload.StartAuthority?.StandaloneTrigger,
+            StimulusDeliveryOrigin = startPayload.StimulusDeliveryOrigin
         };
 
-        if (payload.IngressOrigin is not null)
+        if (payload.IngressOrigin is not null || payload.StimulusDeliveryOrigin is not null)
         {
             var mandatory = commandMetadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             mandatory[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
