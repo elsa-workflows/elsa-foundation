@@ -98,7 +98,7 @@ public sealed class StandaloneRecurringPumpTests
 
     private static RecurringTriggerPumpTask Pump(IRecurringTriggerScheduleStore store, IStandaloneScheduleSource source,
         TimeProvider clock, IRecurringScheduleCalculator? calculator = null) => new(store, new InMemoryWorkflowTriggerBindingStore(),
-        new UnusedRouter(), calculator ?? new RecurringScheduleCalculator(), Options.Create(new RecurringTriggerPumpOptions
+        new UnusedRouter(), calculator ?? new RecurringScheduleCalculator(), Microsoft.Extensions.Options.Options.Create(new RecurringTriggerPumpOptions
         { SweepInterval = TimeSpan.FromSeconds(10), MaxBackoffInterval = TimeSpan.FromMinutes(5), ClaimVisibilityTimeout = TimeSpan.FromMinutes(1) }),
         clock, NullLogger<RecurringTriggerPumpTask>.Instance, source);
 
