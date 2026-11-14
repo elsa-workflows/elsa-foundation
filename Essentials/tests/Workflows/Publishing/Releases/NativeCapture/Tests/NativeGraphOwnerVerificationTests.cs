@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Graph.Releases;
+using WellKnownRuntimeActivityConsumers = Elsa.Activities.Runtime.Core.Models.WellKnownRuntimeActivityConsumers;
 using Elsa.Workflows.Publishing.Releases.Core;
 using Elsa.Workflows.Publishing.Releases.Runtime.Core;
 using Elsa.Workflows.Runtime.Core.Models;
