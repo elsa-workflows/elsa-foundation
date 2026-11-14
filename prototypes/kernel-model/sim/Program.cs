@@ -208,7 +208,7 @@ int Mutations(int seeds)
         // round 3: the rule of each new piece
         Flaw.GreedyBalancer, Flaw.TrialPerPartition, Flaw.ProjectorBlindWrite, Flaw.EmitBeforeCommit, Flaw.ReplyTwice, Flaw.NoDeadline, Flaw.DeliverWhileSuspended, Flaw.NoShelf, Flaw.SuspendDuringTrial, Flaw.TerminateRootOnly, Flaw.HoldLoses, Flaw.HoldKeepsTrial, Flaw.SkipUpgrade, Flaw.TurnNewerState, Flaw.RebindForgotten, Flaw.StartWithoutRead, Flaw.CancelKnownChildren, Flaw.EvictBusy, Flaw.DeleteLeavesJournal, Flaw.ProjectorStopsAtGap,
         // round 4 (FINDINGS 25)
-        Flaw.KeepExpiredCallers,
+        Flaw.KeepExpiredCallers, Flaw.ForgetShortWaits, Flaw.NoWriteFirst,
     ];
     var missed = 0;
     // A deploy in progress meets an older owner only now and then: this one runs 1,000 actions a seed.

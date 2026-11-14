@@ -21,7 +21,7 @@ internal static class PhaseReaders
             """);
         void Check(bool ok, string detail) { if (!ok) throw new InvalidOperationException("P7: " + detail); }
         var pending = StateMachine.Restore(legacy, chart);
-        Check(pending.Version == 3 && pending.Cursor == 0 && pending.Child is null &&
+        Check(pending.Version == 4 && pending.LegacyScopes && pending.Cursor == 0 && pending.Child is null &&
             pending.Progress!.Done.SequenceEqual([true, false, false, false]) && pending.Progress.Running.Count == 1 &&
             pending.Progress.Running.GetValueOrDefault("old-child", -1) == 1 && legacy.Cursor == 2 && legacy.Version == 1,
             "legacy prefix or exact running child changed");
@@ -37,7 +37,7 @@ internal static class PhaseReaders
             catch (InvalidOperationException) when (!future) { Console.WriteLine("PASS " + name); return; }
             throw new InvalidOperationException("P7: accepted invalid checkpoint " + name);
         }
-        Refuse(legacy with { Version = 4 }, Names[2], true);
+        Refuse(legacy with { Version = 5 }, Names[2], true);
         Refuse(pending with { Progress = pending.Progress! with { Running = new() { ["bad"] = 4 } } }, Names[3]);
         Refuse(pending with { Progress = pending.Progress! with { Running = new() { ["a"] = 1, ["b"] = 1 } } }, Names[4]);
         Refuse(legacy with { Cursor = 0 }, Names[5]);

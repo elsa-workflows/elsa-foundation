@@ -3,12 +3,15 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Workflows;
 
+if (args.SequenceEqual(["--race-check"])) { Environment.ExitCode = await ShortWaitRaces.Run(); return; }
+if (args.SequenceEqual(["--shortwait-check"])) { Environment.ExitCode = await ShortWaitIntegration.Run(); return; }
 var names = new[] { "normal", "before-apply", "lost-ack", "reload", "stale-commit", "future-pending-end", "unsupported" };
-if (args.SequenceEqual(["--list"])) { foreach (var name in names) Console.WriteLine("clock:" + name); Console.WriteLine("clock:delayed-wrapper"); return; }
+if (args.SequenceEqual(["--list"])) { foreach (var name in names) Console.WriteLine("clock:" + name); Console.WriteLine("clock:delayed-wrapper"); Console.WriteLine("clock:short-wait-promotion"); return; }
 if (args.Length != 0) throw new ArgumentException("Only --list is supported.");
 foreach (var name in names) new ClockWitness(name).Run();
 await DelayedClock();
-Console.WriteLine("8/8 shared clock schedules passed. In-memory protocol only; terminal receipt integration remains open.");
+await ShortWaitClockWitness.Run();
+Console.WriteLine("9/9 shared clock schedules passed. In-memory protocol only; terminal receipt integration remains open.");
 
 static async Task DelayedClock()
 {
@@ -261,5 +264,44 @@ public sealed class ClockProbe(int version) : IExecutionModel, IModelMetadata
                 case "end": turn.SetStatus(InstanceStatus.Finished); break;
             }
         return ValueTask.CompletedTask;
+    }
+}
+
+
+// The short-wait path keeps a requested fact unstamped until its first actual durable commit.
+static class ShortWaitClockWitness
+{
+    public static async Task Run()
+    {
+        long now = 100;
+        var store = new InMemoryStore(1, () => now);
+        await using var worker = new Worker("short-clock", 0, store, new WorkflowInstance([new ShortClockModel()]),
+            new WorkerOptions { Monotonic = () => now, ShortWait = TimeSpan.FromMilliseconds(100) });
+        await new DurableHost([worker]).ActivateAsync(0); await worker.PollAsync();
+        var id = InstanceRef.In(0, "short-clock");
+        worker.Post(new Message("short-clock-start", id, Kinds.Start, Start: new("short-clock", "probe", Ephemeral: true)), fresh: true);
+        await worker.RunAsync();
+        if (store.Instances.ContainsKey(id.Id) || !worker.Unwritten.Contains(id.Id))
+            throw new InvalidOperationException("short clock must begin unwritten");
+        var pending = worker.Instances.Single(i => i.Id == id.Id).Row!;
+        if (CommitClockFacts.Read(pending) is not { Count: 1 } facts || facts.Values.Single() is not null)
+            throw new InvalidOperationException("short clock was stamped without a commit");
+        now += 100;
+        await worker.FlushAsync();
+        var saved = store.Instances[id.Id];
+        if (saved.Revision != 1 || CommitClockFacts.Read(saved)?.Values.Single() != now ||
+            worker.Instances.Single(i => i.Id == id.Id).Row?.CommitTimes != saved.CommitTimes)
+            throw new InvalidOperationException($"promotion: revision={saved.Revision}, now={now}, saved={saved.CommitTimes}, cached={worker.Instances.Single(i => i.Id == id.Id).Row?.CommitTimes}");
+        Console.WriteLine("PASS clock:short-wait-promotion");
+    }
+}
+
+sealed class ShortClockModel : Kernel.Sim.Model<List<string>>
+{
+    public override string Key => "short-clock";
+    protected override void Turn(ITurn turn, List<string> state)
+    {
+        state.Add(turn.Clock.Capture());
+        turn.Send(turn.Instance.Ref, "later", options: new SendOptions(Delay: TimeSpan.FromMilliseconds(50)));
     }
 }
