@@ -47,7 +47,8 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal(source.SourceFingerprint, seal.SourceFingerprint);
         Assert.Equal(recipient.StartIdentity.InputId, seal.Command.Deserialize<RuntimeModelExecutionCommand>(Web)!.InputId);
         // Preparing data cannot replace the differently captured physical source or authorize enqueue.
-        await Assert.ThrowsAsync<InvalidDataException>(() => target.DispatchAsync(source, recipient, seal).AsTask());
+        var mismatchedSource = await Assert.ThrowsAsync<TriggerOperationException>(() => target.DispatchAsync(source, recipient, seal).AsTask());
+        Assert.IsType<InvalidDataException>(mismatchedSource.InnerException);
         await Assert.ThrowsAsync<BpmnModelValidationException>(() => target.PrepareDispatchAsync(WorkflowSource("foreign-tenant"), recipient).AsTask());
         Assert.Null(await services.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync(recipient.StartIdentity.WorkflowExecutionId));
         await AssertNativeEmptyAsync(services);
