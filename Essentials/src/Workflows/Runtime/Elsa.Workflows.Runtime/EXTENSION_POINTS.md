@@ -1423,7 +1423,11 @@ qualify this executing lexical protocol; shared readable versions and predecesso
 
 The process-private terminal-leaf interpreter accepts the prepared context's immutable whole-result
 fixtures. `RuntimeInputBindingResolutionContext.WorkflowState` carries the same committed workflow
-snapshot as lexical inputs; it supplies no start authority. The visible-frame projection retains that
+snapshot as lexical inputs; it supplies no start authority. Extension materializers must forward that
+committed store snapshot rather than construct a replacement. Activity invocation rows carry no run-kind
+or test-scope stamp, so a snapshot-less context cannot identify selected execution and retains the ordinary
+causal resolver for compatibility. The canonical activity and intrinsic adapters always forward the snapshot.
+The visible-frame projection retains that
 snapshot internally, avoiding an extra workflow-store read. Intrinsics pass their captured workflow
 snapshot through the same context.
 
