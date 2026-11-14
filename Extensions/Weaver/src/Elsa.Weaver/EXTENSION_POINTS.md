@@ -39,6 +39,12 @@ available. The exact proposed behavior and remaining qualification are in the
 [privilege/principal contract](../../../../specs/1203-weaver-module-support/contracts/privilege-policy.md)
 and [outcome contract](../../../../specs/1203-weaver-module-support/contracts/outcomes.md).
 
+When the API and an effects variation are selected, `/capabilities` adds `elsa.api.weaver.effects`
+contract1, with bootstrap and proposal links. Its typed API source uses the same selected-feature
+admission as execution, reporting current dormancy without gating the legacy `elsa.api.weaver`
+capability. It adds no schema observation to the in-memory store and no dependency on a module's
+tools, principal or resource store. Privilege limits and resource permission remain separate.
+
 The first-time [Core API inventory](../Core/PublicAPI.Unshipped.txt) and
 [HTTP API inventory](../Api/PublicAPI.Unshipped.txt) track their complete pre-GA surfaces.
 The [T042 provenance](../../../../specs/1203-weaver-module-support/evidence/t042-api-tracking.json)
