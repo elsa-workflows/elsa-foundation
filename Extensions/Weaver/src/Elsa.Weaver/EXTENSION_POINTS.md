@@ -39,6 +39,12 @@ available. The exact proposed behavior and remaining qualification are in the
 [privilege/principal contract](../../../../specs/1203-weaver-module-support/contracts/privilege-policy.md)
 and [outcome contract](../../../../specs/1203-weaver-module-support/contracts/outcomes.md).
 
+The first-time [Core API inventory](../Core/PublicAPI.Unshipped.txt) and
+[HTTP API inventory](../Api/PublicAPI.Unshipped.txt) track their complete pre-GA surfaces.
+The [T042 provenance](../../../../specs/1203-weaver-module-support/evidence/t042-api-tracking.json)
+separates the existing-source baseline from leaf0 additions and records the remaining guard checks.
+These inventories do not freeze the module-support preview.
+
 ## Overridable contracts
 
 All contracts below have layer badge **Core — `Elsa.Weaver.Core`**. Defaults are internal to `Elsa.Weaver` unless another project is named. Override one contract with `services.Replace(...)`; additive module contribution belongs in the next section. The linked contract files are the signature authority.
