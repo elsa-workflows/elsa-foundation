@@ -271,6 +271,36 @@ public sealed class PublicationMaterialActivationTests
         Assert.Equal("logical-definition", (await references.FindAsync(WorkflowActivationReferenceIdentity.Create(restored.ActiveActivationId)))!.DefinitionId);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Opaque_legacy_native_reader_refuses_protected_material_lifecycle_before_mutating_slots_or_journal(bool matchingProducer)
+    {
+        await using var host = await Harness.OpenAsync();
+        var material = await host.NativeAsync("opaque-native");
+        var definition = matchingProducer ? material.Identity.DefinitionId : "logical-definition";
+        var original = await host.Activator().ActivateMaterialAsync(host.Request(material, "opaque-publication", "opaque-version", definition: definition));
+        Assert.True(original.Succeeded);
+        var originalReference = (await host.References.FindAsync(original.Publication.SourceReferenceId!))!;
+        Assert.NotNull(originalReference.PublicationScope);
+        var legacy = new LegacyNativeReader(host.Materials);
+        var unpublish = new UnpublishPublicationSlotRequestHandler(host.Authority, host.Coordinator(), host.Publications, legacy, host.References, TimeProvider.System);
+        await Assert.ThrowsAsync<NotSupportedException>(() => unpublish.Handle(new(definition, "default"), default).AsTask());
+        Assert.Equal(original.Slot, await host.Authority.FindAsync(definition, "default"));
+        Assert.Equal(PublicationStatus.Active, (await host.Publications.FindAsync("opaque-publication"))!.Status);
+        Assert.True(WorkflowExecutableSourceReferenceComparer.SameSnapshot(originalReference, (await host.References.FindAsync(originalReference.SourceReferenceId))!));
+
+        var inactive = await host.Unpublisher().Handle(new(definition, "default"), default);
+        var prior = Assert.Single(await host.Publications.ListBySlotAsync(inactive.SlotId));
+        var restore = new RestorePublicationSlotRequestHandler(host.Authority, host.Publications, host.Activator(), legacy, host.References, TimeProvider.System);
+        await Assert.ThrowsAsync<NotSupportedException>(() => restore.Handle(new(definition, "default"), default).AsTask());
+        Assert.Equal(inactive, await host.Authority.FindAsync(definition, "default"));
+        Assert.Equal(prior, Assert.Single(await host.Publications.ListBySlotAsync(inactive.SlotId)));
+    }
+
+    // Inherits the contract's unsupported exact-material read, like a pre-material native provider/decorator.
+    private sealed class LegacyNativeReader(IWorkflowExecutableStore inner) : WorkflowExecutableStoreDecorator(inner);
+
     private static WorkflowExecutable NativeExecutable(string name) => new(
         new("native-" + name, "native-producer", "native-material-version", "1", "native-hash-" + name),
         new ExecutableNode("root", "root", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { }),
