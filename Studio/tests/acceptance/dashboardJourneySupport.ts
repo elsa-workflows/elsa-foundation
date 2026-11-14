@@ -1,3 +1,4 @@
+import * as keyboardUi from "./dashboardKeyboard";
 import { expect, type APIRequestContext, type Page, type Request, type TestInfo } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 
@@ -41,6 +42,17 @@ export async function dashboardBackend(request: APIRequestContext) {
 
 export type Backend = Awaited<ReturnType<typeof dashboardBackend>>;
 export const tag = (revision: string) => ({ "If-Match": `"${revision}"` });
+
+/** Native JSON writes optional nulls and UTC offsets; these preserve declarative meaning. */
+export function canonicalDashboardDefinition(value: unknown): unknown {
+  const optional = (item: unknown): unknown => Array.isArray(item) ? item.map(optional) : item && typeof item === "object"
+    ? Object.fromEntries(Object.entries(item).filter(([, member]) => member != null).map(([key, member]) => [key, optional(member)])) : item;
+  const result = optional(value) as { query?: { time?: Record<string, unknown>; comparison?: Record<string, unknown> } };
+  for (const period of [result.query?.time, result.query?.comparison])
+    for (const key of ["from", "to"])
+      if (typeof period?.[key] === "string") period[key] = period[key].replace(/\+00:00$/, "Z").replace(/\.([0-9]*?)0+Z$/, (_match, digits: string) => digits ? `.${digits}Z` : "Z");
+  return result;
+}
 
 /** No direct store writes or intercepted query responses: publish and execute three actual runs. */
 export async function seedDashboardRuns(backend: Backend, suffix: string) {
@@ -96,6 +108,6 @@ export async function signInDashboardReader(page: Page, info: TestInfo) {
   const form = page.locator('form[action="/_elsa/identity/login"]');
   await form.getByLabel(/username/i).fill("dashboard-reader");
   await form.getByLabel(/password/i).fill("Password123!");
-  await form.getByRole("button", { name: /sign in/i }).click();
+  await keyboardUi.click(form.getByRole("button", { name: /sign in/i }));
   await expect(page.getByRole("heading", { name: "Questions", level: 2, exact: true })).toBeVisible({ timeout: 60_000 });
 }

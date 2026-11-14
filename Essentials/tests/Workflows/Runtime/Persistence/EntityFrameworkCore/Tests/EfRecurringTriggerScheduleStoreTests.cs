@@ -24,6 +24,32 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     private static readonly DateTimeOffset Now = new(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task Direct_save_preserves_an_existing_newer_schema_stamp_without_a_host_gate()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = Context(connection);
+        await context.Database.EnsureCreatedAsync();
+        var store = Store(context, "tenant-a");
+        var schedule = Schedule("artifact", "timer", Now);
+        await store.SaveAsync(schedule);
+        // Workflow-owned content is readable at both stamps. A direct tool context still preserves
+        // the adopted version carried by a row that an admitted host previously wrote.
+        var seeded = await context.RecurringTriggerSchedules.SingleAsync();
+        seeded.SchemaVersion = RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion;
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var replacement = schedule with { Expression = "PT2M", NextOccurrence = Now.AddMinutes(2) };
+        await store.SaveAsync(replacement);
+
+        var saved = await context.RecurringTriggerSchedules.AsNoTracking().SingleAsync();
+        Assert.Equal(RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion, saved.SchemaVersion);
+        Assert.Equal(2, saved.Revision);
+        Assert.Equal(replacement, await store.FindAsync(schedule.ScheduleId));
+    }
+
+    [Fact]
     public async Task SQLite_round_trips_the_maximum_escaped_activation_fanout_schedule_id()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

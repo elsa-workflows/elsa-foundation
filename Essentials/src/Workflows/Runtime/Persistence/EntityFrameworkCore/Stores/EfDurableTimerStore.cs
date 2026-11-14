@@ -476,7 +476,7 @@ public sealed class EfDurableTimerStore(
         }
     }
 
-    private static DurableTimerEntity ToEntity(DurableTimer timer, string scope, string id, long revision)
+    private DurableTimerEntity ToEntity(DurableTimer timer, string scope, string id, long revision)
     {
         var entity = new DurableTimerEntity
         {
@@ -497,7 +497,7 @@ public sealed class EfDurableTimerStore(
             CreatedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(timer.CreatedAt),
             ClaimOrderKey = ClaimOrderKey(timer.DueTime, timer),
             ContentJson = RuntimeArtifactJson.Serialize(timer),
-            SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+            SchemaVersion = RuntimeSchemaWriteVersion.Operational(context),
             Revision = revision
         };
         return entity;
@@ -509,6 +509,7 @@ public sealed class EfDurableTimerStore(
         context.DurableTimers.Attach(row);
         context.Entry(row).Property(x => x.Revision).OriginalValue = originalRevision;
         context.Entry(row).State = EntityState.Modified;
+        row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion);
     }
 
     private void AttachForDelete(DurableTimerEntity row)
