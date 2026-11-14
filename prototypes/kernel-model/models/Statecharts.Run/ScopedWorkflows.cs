@@ -220,7 +220,7 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
 internal sealed class ScopedFailure : Kernel.Native.Activity
 {
     public ScopedFailure() { }
-    protected override Transition Execute(ActivityContext context) => Fault("scope-proof", "expected");
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context) => ValueTask.FromResult(Fault("scope-proof", "expected"));
 }
 internal sealed class CatchScopedFailure : CompositeActivity
 {
