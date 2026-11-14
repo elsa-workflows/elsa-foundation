@@ -401,6 +401,27 @@
     "artifactContents": "test-outcomes.json; CI did not upload the raw TRX",
     "scope": "Later successful whole-project CI, including the source roster of five PublicApiFilesGuardTests. This does not change the failed worker phase, prove a separate list-tests comparison or qualify subsequent source, remaining T042 gates or the Program."
   },
+  "additionalCommittedHeadCi": [
+    {
+      "head": "d3e0756db1d115689b4c0a68cc8562d59de0928e",
+      "testedMerge": "04f9f52fec18685bdad504a5cfcccd6b81937a68",
+      "testedMergeTree": "0a37ef67f9aba7c3fab15a75ef17530cf98da38d",
+      "testedMainParent": "23ecb8a17f314d80aa2ccfb5fb7474701c80a156",
+      "run": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43597281594",
+      "job": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43597281594/job/132459323945",
+      "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "filter": null,
+      "passed": 622,
+      "failed": 0,
+      "skipped": 0,
+      "total": 622,
+      "artifact": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43597281594/artifacts/14116917745",
+      "artifactBytes": 513,
+      "artifactSha256": "8c1d6ceae3a0ebb8ef091581341221f6051b111e16b6dfb402f69d0e9255ece5",
+      "artifactContents": "test-outcomes.json; this older workflow did not upload raw TRX or discovery output",
+      "scope": "Unfiltered architecture project passed on the actual CI merge of D3 and the recorded main parent, including the source roster of five PublicApiFilesGuardTests. This is not a separate discovery/count comparison or individual raw-TRX inspection, does not rewrite the failed worker receipt, and does not qualify newer private source, remaining T042 requirements or the Program."
+    }
+  ],
   "rawCustody": {
     "location": "Private local evidence archive; not published to the repository",
     "archiveBytes": 956233963,
