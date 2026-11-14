@@ -164,14 +164,14 @@ describe("connection administration page", () => {
     expect((await button(host.container, "Test configuration")).disabled).toBe(false);
   });
 
-  it.each([409, 503])("requires refresh before retrying a rejected or uncertain write (%s)", async status => {
+  it.each([["commands", 409], ["commands", 503], ["assess", 409]] as const)("requires refresh before retrying a rejected or uncertain write (%s %s)", async (operation, status) => {
     const host = harness();
     await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
     click(host.container.querySelector(".external-auth-row")!);
     await vi.waitFor(() => expect(field(host.container, "Display name")).toBeTruthy());
     type(field(host.container, "Display name"), "Preserved draft");
     const original = host.postJson.getMockImplementation()!;
-    host.postJson.mockImplementation((path: string, body: ConnectionCommand) => path.endsWith("/commands")
+    host.postJson.mockImplementation((path: string, body: ConnectionCommand) => path.endsWith("/" + operation)
       ? Promise.reject({ status }) : original(path, body));
     click(await button(host.container, "Save changes"));
     await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());

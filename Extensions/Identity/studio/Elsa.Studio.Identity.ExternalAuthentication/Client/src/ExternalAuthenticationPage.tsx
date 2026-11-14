@@ -194,7 +194,12 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
         setCreating(false); setSeed(null); setDirty(false);
         setNotice("Connection updated. The sign-in chooser uses the current effective configuration.");
       } else setNotice("The change was saved, but the current configuration could not be read. Refresh connections before continuing.");
-    } catch (cause) { if (currentClient.current === client) setError(externalAuthenticationError(cause)); }
+    } catch (cause) {
+      if (currentClient.current === client) {
+        if (cause && typeof cause === "object" && "status" in cause && cause.status === 409) setNeedsRefresh(true);
+        setError(externalAuthenticationError(cause));
+      }
+    }
     finally { if (currentClient.current === client) { busyRef.current = false; setBusy(null); } }
   }
   async function save(document: ConnectionDocument) {
