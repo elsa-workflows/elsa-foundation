@@ -6,9 +6,13 @@ The wire contract is pinned to github/copilot-sdk e7d2bd3483ecd2f49412709d565515
 
 Use ``with CopilotProtocolPeer(private_root, run_generated_token) as peer`` and
 configure the normal shipped provider with peer.runtime_url and that token.
-Queries name module IDs in ordinary user text and include one ``nonce=<8..64
-ASCII letters/digits/hyphens>``. Route queries ask about the current route without
-supplying its value. No phase or expected state is accepted. turn_records is a
+Queries use ``for/about module(s) <ID, ID and ID>?`` (or a semicolon/newline
+instead of ``?``); each exact ID may be bare or enclosed in matching backticks,
+single or double quotes. Plain and @scoped/IDs retain their spelling; lookup is
+case-insensitive. Include one ``nonce=<8..64 ASCII letters/digits/hyphens>``.
+Route queries ask about the current route without supplying its value; a separate
+route question may follow the module question in the same turn. No phase or
+expected state is accepted. turn_records is a
 PRIVATE snapshot; safe_receipt() intentionally exports hashes/counts only.
 All service errors are fixed codes; raw prompts/configuration stay in a 0600
 journal in an exclusively created 0700 child of private_root. Tokens are never
@@ -41,7 +45,7 @@ IO_TIMEOUT = 15
 ID = re.compile(r"@?[A-Za-z0-9_-]+(?:[./:][A-Za-z0-9_-]+)*\Z")
 NATIVE_ID = re.compile(r"[A-Za-z0-9._:*\-]{1,128}\Z")
 NONCE = re.compile(r"\bnonce=([A-Za-z0-9][A-Za-z0-9-]{7,63})(?![A-Za-z0-9-])")
-MODULE_WORD = re.compile(r"\b[A-Za-z0-9_]+(?:[.:/-][A-Za-z0-9_]+)+\b")
+MODULE_CLAUSE = re.compile(r"\b(?:for|about)\s+modules?\s+([^?;\n]+)(?=[?;\n])", re.I)
 
 
 class ProtocolError(ValueError):
@@ -161,7 +165,7 @@ def _studio(value):
     pairs = [(row["kind"], row["id"]) for row in registrations]
     _require(len(pairs) == len(set(pairs)), "duplicate-registration")
     route = value.get("activeRoute")
-    _require(route is None or isinstance(route, str) and 0 < len(route) <= 1024
+    _require(route is None or isinstance(route, str) and 0 < len(route) <= 2048
              and route.startswith("/") and not route.startswith("//") and not any(ord(c) < 32 for c in route), "studio-route")
     return value
 
@@ -230,6 +234,45 @@ def admitted_support(prompt):
     return found["studio"], found["backend"], question, metadata
 
 
+def _requested_modules(query):
+    """Read an explicit identifier list, never incidental prose or display names."""
+    clauses = list(MODULE_CLAUSE.finditer(query))
+    _require(len(clauses) <= 1, "question-module-clause")
+    if not clauses:
+        return [], query
+    clause = clauses[0]
+    body = clause.group(1).strip()
+    identities, seen = [], set()
+    position = 0
+    while position < len(body):
+        if body[position] in "`\"'":
+            end = body.find(body[position], position + 1)
+            _require(end >= 0, "question-module-ids")
+            identity = body[position + 1:end]
+            position = end + 1
+        else:
+            match = re.match(r"@?[A-Za-z0-9_-]+(?:[./:][A-Za-z0-9_-]+)*", body[position:])
+            _require(match is not None, "question-module-ids")
+            identity = match.group(0)
+            position += len(identity)
+        _require(_identifier(identity), "question-module-ids")
+        if identity.casefold() not in seen:
+            identities.append(identity)
+            seen.add(identity.casefold())
+        _require(len(identities) <= 8, "question-module-ids")
+        if position == len(body):
+            break
+        separator = re.match(r"(?:\s*,\s*(?:and\s+)?|\s+and\s+)", body[position:], re.I)
+        _require(separator is not None, "question-module-ids")
+        position += len(separator.group(0))
+        _require(position < len(body), "question-module-ids")
+    _require(identities, "question-module-ids")
+    # Scoped IDs legitimately contain '/'; only the remaining prose can supply
+    # a forbidden route value or ask for route context.
+    remainder = query[:clause.start()] + query[clause.end():]
+    return identities, remainder
+
+
 def derive_answer(prompt):
     """Bounded support oracle, with no expected phase/state parameter."""
     studio, backend, question, metadata = admitted_support(prompt)
@@ -238,26 +281,25 @@ def derive_answer(prompt):
     _require(len(matches) == 1, "question-nonce")
     nonce = matches[0].group(1)
     query = question[:matches[0].start()] + question[matches[0].end():]
-    _require(not re.search(r"\b(delete|remove|execute|invoke|purchase|credential|password|secret|write|create|run)\b", query, re.I),
+    ids, prose = _requested_modules(query)
+    _require(not re.search(r"\b(delete|remove|execute|invoke|purchase|credential|password|secret|write|create|run)\b", prose, re.I),
              "unrelated-operation")
     facts = {"studioCompleteness": studio["completeness"], "registrationCompleteness": studio["registrationCompleteness"],
              "backendCompleteness": backend["support"]["completeness"], "authority": "unchecked", "modules": []}
-    if re.search(r"\b(route|page)\b", query, re.I):
-        _require("/" not in query, "route-in-question")
+    answers = []
+    if re.search(r"\b(route|page)\b", prose, re.I):
+        _require("/" not in prose, "route-in-question")
         route = studio.get("activeRoute")
         _require(route is not None, "missing-admitted-route")
         facts["activeRoute"] = route
-        response = (f"Client-asserted current route: {route}. Module ownership and route-specific Weaver support are unknown; "
-                    "the admitted host-support inventory supplies no module-owned route mapping. Resource permission and execution authority remain unchecked.")
-    else:
-        _require(re.search(r"\b(module|modules|support|installed)\b", query, re.I), "unrelated-question")
-        ids = list(dict.fromkeys(word.casefold() for word in MODULE_WORD.findall(query)))
-        _require(0 < len(ids) <= 8 and all(_identifier(item) for item in ids), "question-module-ids")
+        answers.append(f"Client-asserted current route: {route}. Module ownership and route-specific Weaver support are unknown; "
+                       "the admitted host-support inventory supplies no module-owned route mapping. Resource permission and execution authority remain unchecked.")
+    if ids:
         modules = {row["id"].casefold(): row for row in studio["modules"]}
         for identity in ids:
-            module = modules.get(identity)
+            module = modules.get(identity.casefold())
             status = module["status"] if module else "absent" if studio["completeness"] == "complete" else "unknown"
-            registrations = [row for row in studio["registrations"] if (row.get("originModuleId") or "").casefold() == identity]
+            registrations = [row for row in studio["registrations"] if (row.get("originModuleId") or "").casefold() == identity.casefold()]
             # Resource/declared-module references do not make another module the owner.
             contribution = "observed" if registrations else "none" if studio["registrationCompleteness"] == "complete" else "unknown"
             facts["modules"].append({"id": identity, "status": status, "weaverContributions": contribution,
@@ -270,7 +312,9 @@ def derive_answer(prompt):
             statuses = ", ".join(sorted({item["status"] for item in row["registrations"]}))
             status = row["status"] + (" (not installed in complete Studio discovery)" if row["status"] == "absent" else "")
             clauses.append(f"{row['id']}: {status}; {contribution}" + (f"; registration statuses: {statuses}" if statuses else ""))
-        response = "Client-asserted Studio discovery: " + ". ".join(clauses) + ". Resource permission and execution authority remain unchecked."
+        answers.append("Client-asserted Studio discovery: " + ". ".join(clauses) + ". Resource permission and execution authority remain unchecked.")
+    _require(answers, "question-module-ids-or-route")
+    response = " ".join(answers)
     support = backend["support"]
     facts["backendTools"] = copy.deepcopy(support["tools"])
     facts["backendContexts"] = copy.deepcopy(support["contexts"])
@@ -355,7 +399,7 @@ class CopilotProtocolPeer:
     def safe_receipt(self):
         """No raw auth, prompts, configuration, routes, IDs, nonce or responses."""
         with self._lock:
-            return {"kind": "external-copilot-protocol-observation", "sdkVersion": "1.0.4",
+            return {"kind": "external-copilot-protocol-observation", "targetSdkVersion": "1.0.4",
                     "protocolVersion": 3, "connections": self._connections, "requests": self._requests,
                     "errors": list(self._errors), "closed": self._closed,
                     "turns": [{"sessionHash": _hash(row["sessionId"]), "requestId": row["requestId"],

@@ -200,6 +200,78 @@ class OracleTests(unittest.TestCase):
         with self.assertRaisesRegex(protocol.ProtocolError, "route-in-question"):
             protocol.derive_answer(prompt(value, question=question + " /unknown-observed-route"))
 
+    def test_combined_route_and_module_question_preserves_both_independent_facts(self):
+        question = QUESTION.replace(" nonce=", " What is known about the current route? nonce=")
+        value = studio()
+        value["activeRoute"] = "/unknown-observed-route"
+        answer = protocol.derive_answer(prompt(value, question=question))
+        self.assertEqual("/unknown-observed-route", answer["facts"]["activeRoute"])
+        self.assertEqual(["available", "disabled", "absent"], [row["status"] for row in answer["facts"]["modules"]])
+        self.assertIn("absent-module: absent (not installed", answer["response"])
+        self.assertIn("/unknown-observed-route", answer["response"])
+        value["activeRoute"] = "/another-admitted-route"
+        changed = protocol.derive_answer(prompt(value, question=question))
+        self.assertEqual(answer["facts"]["modules"], changed["facts"]["modules"])
+        self.assertNotEqual(answer["facts"]["activeRoute"], changed["facts"]["activeRoute"])
+        value.pop("activeRoute")
+        with self.assertRaisesRegex(protocol.ProtocolError, "missing-admitted-route"):
+            protocol.derive_answer(prompt(value, question=question))
+        value["activeRoute"] = "/unknown-observed-route"
+        value["completeness"] = "incomplete"
+        unknown = protocol.derive_answer(prompt(value, question=question))
+        self.assertEqual("unknown", unknown["facts"]["modules"][2]["status"])
+        self.assertNotIn("absent-module: absent", unknown["response"])
+
+    def test_explicit_scoped_plain_quoted_ids_preserve_spelling_and_case_insensitive_identity(self):
+        value = studio()
+        value["modules"] = [{"id": "@sample/module", "displayName": "Scoped", "status": "available"},
+                            {"id": "plain", "displayName": "Plain", "status": "disabled"},
+                            {"id": "run", "displayName": "A literal module ID", "status": "available"}]
+        value["registrations"] = [{"kind": "context", "id": "sample", "originModuleId": "@SAMPLE/MODULE", "status": "available"}]
+        for identity_list in ["@sample/module, plain and run", '`@SAMPLE/Module`, "Plain" and \'run\'']:
+            question = f"What support is installed for modules {identity_list}? nonce=identity123"
+            answer = protocol.derive_answer(prompt(value, question=question))
+            self.assertEqual(["available", "disabled", "available"], [row["status"] for row in answer["facts"]["modules"]])
+            self.assertTrue(answer["facts"]["modules"][0]["id"].startswith("@"))
+            self.assertEqual("observed", answer["facts"]["modules"][0]["weaverContributions"])
+            if identity_list.startswith("`"):
+                self.assertEqual(["@SAMPLE/Module", "Plain", "run"], [row["id"] for row in answer["facts"]["modules"]])
+        duplicate = protocol.derive_answer(prompt(value, question="What support for modules plain and PLAIN? nonce=identity123"))
+        self.assertEqual(1, len(duplicate["facts"]["modules"]))
+        missing_scope = protocol.derive_answer(prompt(value, question="What support for module sample/module? nonce=identity123"))
+        self.assertEqual("absent", missing_scope["facts"]["modules"][0]["status"])
+
+    def test_combined_scoped_id_does_not_supply_route_and_incidental_words_are_not_ids(self):
+        value = studio()
+        value["activeRoute"] = "/observed-route"
+        value["modules"] = [{"id": "@sample/module", "displayName": "Scoped", "status": "available"}]
+        question = "What support for module `@sample/module`? What is known about the current route? nonce=scoped123"
+        answer = protocol.derive_answer(prompt(value, question=question))
+        self.assertEqual("available", answer["facts"]["modules"][0]["status"])
+        self.assertEqual("/observed-route", answer["facts"]["activeRoute"])
+        route_only = protocol.derive_answer(prompt(value, question="What is known about the current route and its module support? nonce=scoped123"))
+        self.assertEqual([], route_only["facts"]["modules"])
+        for prose in ["What support is installed for structured-logs?", "Discuss plain and @sample/module support."]:
+            with self.subTest(prose=prose), self.assertRaises(protocol.ProtocolError):
+                protocol.derive_answer(prompt(value, question=prose + " nonce=scoped123"))
+
+    def test_explicit_identifier_list_rejects_malformed_or_ambiguous_grammar(self):
+        for identity_list in ["@sample//module", "plain,", '`plain"', '"plain words"', "plain or another", "@/module"]:
+            question = f"What support for modules {identity_list}? nonce=identity123"
+            with self.subTest(identity_list=identity_list), self.assertRaises(protocol.ProtocolError):
+                protocol.derive_answer(prompt(question=question))
+        with self.assertRaisesRegex(protocol.ProtocolError, "question-module-clause"):
+            protocol.derive_answer(prompt(question="What support for module plain? What support about module other? nonce=identity123"))
+
+    def test_admitted_route_uses_full_schema_bound_but_not_oversized_input(self):
+        value = studio()
+        value["activeRoute"] = "/" + "a" * 2047
+        question = "What is known about the current route? nonce=routebound123"
+        self.assertEqual(value["activeRoute"], protocol.derive_answer(prompt(value, question=question))["facts"]["activeRoute"])
+        value["activeRoute"] += "a"
+        with self.assertRaisesRegex(protocol.ProtocolError, "studio-route"):
+            protocol.derive_answer(prompt(value, question=question))
+
     def test_wrong_provenance_schema_origin_or_missing_content_refuses(self):
         for key, wrong in [("moduleId", "Other.Module"), ("schemaVersion", "2"), ("origin", "ResourceData")]:
             with self.subTest(key=key), self.assertRaises(protocol.ProtocolError):
@@ -243,15 +315,35 @@ class OracleTests(unittest.TestCase):
 
 
 class ServiceTests(unittest.TestCase):
+    def test_preconnect_receipt_labels_target_without_claiming_observed_sdk_identity(self):
+        with tempfile.TemporaryDirectory() as root:
+            peer = protocol.CopilotProtocolPeer(root, TOKEN)
+            receipt = peer.safe_receipt()
+            self.assertEqual("1.0.4", receipt["targetSdkVersion"])
+            self.assertNotIn("sdkVersion", receipt)
+            self.assertNotIn("actualSdkVersion", receipt)
+            self.assertEqual(0, receipt["connections"])
+            self.assertEqual([], receipt["turns"])
+            self.assertIsNone(receipt["close"])
+            peer.close()
+
     def test_handshake_diagnostics_create_send_delta_idle_destroy_resume(self):
         with tempfile.TemporaryDirectory() as root:
             with protocol.CopilotProtocolPeer(root, TOKEN) as peer:
                 with WireClient(peer) as client:
                     self.assertEqual(3, client.connect()["result"]["protocolVersion"])
+                    # This client is synthetic Python, so the peer cannot attest
+                    # a loaded SDK merely because it accepted a handshake.
+                    self.assertEqual("1.0.4", peer.safe_receipt()["targetSdkVersion"])
+                    self.assertNotIn("sdkVersion", peer.safe_receipt())
+                    self.assertNotIn("actualSdkVersion", peer.safe_receipt())
                     self.assertEqual("elsa", client.call("ping", {"message": "elsa"})["result"]["message"])
                     self.assertEqual("qualification-context-oracle", client.call("models.list")["result"]["models"][0]["id"])
                     self.assertTrue(client.create()["result"]["success"])
-                    reply, delta, idle = client.turn(prompt())
+                    current = studio()
+                    current["activeRoute"] = "/unknown-observed-route"
+                    combined = QUESTION.replace(" nonce=", " What is known about the current route? nonce=")
+                    reply, delta, idle = client.turn(prompt(current, question=combined))
                     self.assertIn("messageId", reply["result"])
                     self.assertEqual("session.event", delta["method"])
                     self.assertEqual("assistant.message_delta", delta["params"]["event"]["type"])
@@ -268,6 +360,8 @@ class ServiceTests(unittest.TestCase):
                     resumed.call("session.destroy", {"sessionId": "session-1"})
                 wait_for(lambda: len(peer.turn_records) == 2 and all(row["wireComplete"] for row in peer.turn_records))
                 records = peer.turn_records
+                self.assertEqual(3, len(records[0]["facts"]["modules"]))
+                self.assertEqual("/unknown-observed-route", records[0]["facts"]["activeRoute"])
                 records[0]["facts"]["modules"][0]["status"] = "tampered"
                 self.assertEqual("available", peer.turn_records[0]["facts"]["modules"][0]["status"])
             self.assertTrue(peer.close_receipt["complete"])
