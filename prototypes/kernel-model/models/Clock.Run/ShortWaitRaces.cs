@@ -347,6 +347,7 @@ internal static partial class ShortWaitRaces
             Need(state.Tokens.SequenceEqual(["first", "second"]), "delivery order is " + string.Join(",", state.Tokens));
             await worker.DisposeAsync();
         });
+        await More(Check);
         Console.WriteLine($"short-wait races: {failed} failures"); return failed == 0 ? 0 : 1;
     }
 }
