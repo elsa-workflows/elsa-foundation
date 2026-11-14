@@ -179,6 +179,6 @@ public sealed partial class StimulusDeliverySchemaGateTests
     }
     private sealed partial class Fixture
     {
-        internal Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationGates Registry => gates;
+        internal Elsa.Persistence.Schema.SchemaFinalization.EfSchemaFinalizationGates Registry => gates;
     }
 }

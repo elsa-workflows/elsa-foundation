@@ -203,6 +203,21 @@ public sealed class StandaloneHttpTriggerTests
         await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.SourceContext.GetAsync().AsTask());
     }
 
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, true)] [InlineData(2, false)]
+    public async Task Http_source_authority_requires_exactly_one_owning_reservation_policy(int policyCount, bool supported)
+    {
+        using var fixture = new Fixture(policyCount: policyCount);
+        Assert.Equal(supported, fixture.SourceContext.SupportsResourceAuthorization);
+        fixture.SourceContext.Bind(fixture.Reservation);
+        fixture.SourceContext.CaptureRequest(new("orders", "POST", new Dictionary<string, string[]>(), new Dictionary<string, string[]>(), "{}",
+            new Dictionary<string, string>()), fixture.Reservation.StimulusHash, []);
+        var row = new StandaloneTrigger("trigger", "HTTP", "http", 1, JsonSerializer.SerializeToElement(new { }), 1, 1, 1,
+            TriggerDesiredState.Paused, new(TriggerManagementKind.Studio), DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, "creator", tenantId: fixture.Reservation.Scope.TenantId);
+        Assert.Equal(supported, await fixture.SourceContext.AuthorizeAsync(row,
+            new(row.Id, "key", StandaloneHttpTriggerSource.Descriptor.PayloadSchema, JsonSerializer.SerializeToElement(new { }))));
+    }
+
     [Fact]
     public async Task Anonymous_standalone_route_cannot_resume_a_protected_legacy_wait_or_read_the_request_body()
     {
@@ -242,7 +257,7 @@ public sealed class StandaloneHttpTriggerTests
         internal readonly HttpTriggerSourceContext SourceContext;
         private readonly ServiceProvider services;
         private readonly StandaloneHttpTriggerMiddleware middleware;
-        internal Fixture(bool partial = false, string mode = "AsyncFanOut", string body = "{\"amount\":18446744073709551615}", int maxBytes = 1024, TimeSpan? timeout = null)
+        internal Fixture(bool partial = false, string mode = "AsyncFanOut", string body = "{\"amount\":18446744073709551615}", int maxBytes = 1024, TimeSpan? timeout = null, int policyCount = 1)
         {
             CapturedMode = mode;
             var scope = new TriggerScope(new("physical-http-scope"), "actual-tenant");
@@ -280,7 +295,7 @@ public sealed class StandaloneHttpTriggerTests
             Http.Request.Headers["Idempotency-Key"] = "key"; Http.Response.Body = new MemoryStream();
             var accessor = new Access(scope.Persistence);
             SourceContext = new HttpTriggerSourceContext(new HttpContextAccessor { HttpContext = Http }, accessor,
-                reservationPolicies: services.GetServices<IIngressReservationPolicy>());
+                reservationPolicies: Enumerable.Repeat(Assert.Single(services.GetServices<IIngressReservationPolicy>()), policyCount));
             Port.ReadContext = () => SourceContext.GetAsync();
             middleware = new(new FakeRouteTable("orders"), new TestRouteMatcher(), accessor,
                 Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions { MaxRequestBodyBytes = maxBytes, SyncRequestTimeout = timeout ?? TimeSpan.FromSeconds(3) }),
