@@ -7,6 +7,7 @@ namespace Kernel.Etl.Run;
 /// <summary>Passes through, once losing the response after a selected root checkpoint has landed.</summary>
 public sealed class FaultStore(IKernelStore inner, bool inject) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool Injected { get; private set; }
     public EtlState? LostCheckpoint { get; private set; }

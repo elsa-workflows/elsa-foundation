@@ -25,12 +25,21 @@ static class EngineRun
 {
     public static async Task<int> RunAsync(string[] args)
     {
+        if (args is ["size-check"]) return await StateSizeChecks.RunAsync();
         if (args.Length < 3) return 2;
-        var target = new Target(args[1], args[2], args.Skip(3).Select(a => a.Split('=', 2)).ToDictionary(a => a[0], a => a.Length > 1 ? a[1] : "1"));
+        var options = args.Skip(3).Select(a => a.Split('=', 2)).ToDictionary(a => a[0], a => a.Length > 1 ? a[1] : "1");
+        int[]? sizes = null;
+        if (args[0] == "cost")
+        {
+            try { sizes = StateSizeBenchmark.ParseSizes(options.GetValueOrDefault("sizes", "1,10,100,1000")); }
+            catch (ArgumentException error) { Console.Error.WriteLine(error.Message); return 2; }
+        }
+        // Validate every size before constructing Target (which can start a proxy), opening a database or resetting it.
+        var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
             "stress" => await Stress(target),
-            "cost" => await Cost(target),
+            "cost" => await Cost(target, sizes!),
             "probe" => await Probe(target),
             "block" => await Block(target),
             "definite" => await Definite(target),
@@ -40,7 +49,7 @@ static class EngineRun
     }
 
     private static IExecutionModel[] Models() =>
-        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { }), new OnEvent()];
+        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { }), new OnEvent(), new Blob()];
 
     // A host that runs passes of one scope until two in a row find nothing to do.
     private static async Task Drain(IScopeActivation scope, bool poll)
@@ -323,14 +332,14 @@ static class EngineRun
 
     // ---- what a run costs ----------------------------------------------------------------------------------------------
 
-    private static async Task<int> Cost(Target target)
+    private static async Task<int> Cost(Target target, int[] sizes)
     {
         var counter = new Counting();
         var (locks, opens, saves) = (new Locks(target), new Opens(), new Saves());
         var create = target.Has("locks") ? target.Workers(counter, counter.Transactions, opens, saves, locks) : target.Workers(counter, counter.Transactions, opens, saves);
         await target.ResetAsync(2);
-        var tally = target.Writes is null ? null : new Tally(target.Store(create));     // in process: it adds no round trip
-        IKernelStore store = tally ?? (IKernelStore)target.Store(create);
+        var tally = new Tally(target.Store(create));     // also proves each size trial landed ten commits; no round trip
+        IKernelStore store = tally;
         // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
         var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000, Lease = TimeSpan.FromHours(1) });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
@@ -416,6 +425,28 @@ static class EngineRun
             {
                 for (var i = 0; i < many; i++) await store.AddAsync(Start(Sequence.Balanced) with { KeepUntil = keep });
             });
+
+        // Decision 10: what a commit costs as the state grows. Every turn rewrites the whole state, so the round trips stay
+        // the same and the bytes, and the time, grow with it. sizes= in kilobytes; each size runs three times.
+        Console.WriteLine("\nstate size (decision 10): an instance that commits at every turn (Durable-shaped), its whole state each time, ten verified commits; seeded random lowercase letters, compression not measured");
+        Console.WriteLine($"{"state",10} {"chars per commit",17} {"counted per commit",19} {"ms per commit, median of 3",27}");
+        foreach (var bytes in sizes)
+        {
+            var (times, counted, chars) = (new List<double>(), 0L, 0);
+            for (var run = 0; run < 3; run++)
+            {
+                counter.Reset();
+                var clock = Stopwatch.StartNew();
+                var start = new Message($"m{++n}", InstanceRef.In(0, $"blob{n}"), Kinds.Start, Start: Blob.Spec(bytes, StateSizeBenchmark.Turns));
+                chars = await StateSizeBenchmark.TrialAsync(owner, tally, start, bytes, target.Shaper?.Level ?? start.Start!.History, () => Drain(owner, poll: false), () =>
+                {
+                    clock.Stop();
+                    counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
+                });
+                times.Add(clock.Elapsed.TotalMilliseconds / StateSizeBenchmark.Turns);
+            }
+            Console.WriteLine($"{bytes / 1024 + " KB",10} {chars,17} {counted / (double)StateSizeBenchmark.Turns,19:F1} {times.Order().ElementAt(1),27:F1}");
+        }
 
         await using var check = create();
         var unfinished = await check.Instances.CountAsync(i => i.Status != InstanceStatus.Finished && i.Status != InstanceStatus.Cancelled);
@@ -910,6 +941,7 @@ sealed class Locks(Target target) : DbTransactionInterceptor
 /// <summary>Counts what every store call came to: landed, fenced, or failed and with which of the engine's errors.</summary>
 sealed class Tally(IKernelStore inner) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly ConcurrentDictionary<string, int> _counts = new();
     private readonly ConcurrentDictionary<string, string> _samples = new();
@@ -1001,4 +1033,36 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => await Call("subscribe", async () => { await inner.SubscribeAsync(subscription, cancellationToken); return 0; });
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) => Call("projected", () => inner.ProjectedAsync(partition, cancellationToken));
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) => Call("project", () => inner.ProjectAsync(partition, from, to, rows, cancellationToken));
+}
+
+/// <summary>Decision 10's benchmark: an instance whose state is <c>Size</c> characters, changed and committed at each of <c>Turns</c> turns.</summary>
+public sealed class BlobState
+{
+    public string Data { get; set; } = "";
+    public int Left { get; set; }
+}
+
+public sealed record BlobInput(int Size, int Turns);
+
+public sealed class Blob : Model<BlobState>
+{
+    public override string Key => "blob";
+    public static StartSpec Spec(int size, int turns) => new("blob", "b", Json.Write(new BlobInput(size, turns)));
+
+    public override object CreateState(StartSpec start) => Json.Read<BlobInput>(start.Input!) is var input ? new BlobState { Data = Letters(input.Size, input.Size), Left = input.Turns } : null!;
+
+    /// <summary>Lowercase letters from a fixed seed. Their compression ratio has not been measured.</summary>
+    public static string Letters(int size, int seed)
+    {
+        var random = new Random(seed);
+        return string.Create(size, random, (span, r) => { for (var i = 0; i < span.Length; i++) span[i] = (char)('a' + r.Next(26)); });
+    }
+
+    protected override void Turn(ITurn turn, BlobState state)
+    {
+        // One change per turn, so every commit writes a different state; a message to itself ends the turn (a commit each).
+        state.Data = (char)('a' + state.Left % 26) + state.Data[1..];
+        if (--state.Left > 0) turn.Send(turn.Instance.Ref, "continue");
+        else turn.SetStatus(InstanceStatus.Finished);
+    }
 }
