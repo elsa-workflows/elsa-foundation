@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.EntityFramework.Tests;
@@ -15,6 +16,36 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class WorkflowMaterialActivationTests
 {
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Slot_route_replacement_across_logical_tenants_releases_the_old_owner_and_deactivates(bool sameRoute)
+    {
+        var physical = new PersistenceScope("shared-physical-scope");
+        await using var host = await Harness.OpenAsync(physical);
+        var oldMaterial = await host.NativeAsync("old-route");
+        var newMaterial = sameRoute ? oldMaterial : await host.NativeAsync("new-route");
+        var currentRoute = sameRoute ? "old-route" : "new-route";
+        var coordinator = host.Coordinator(exclusiveRoutes: true);
+        var firstCommand = host.Command(oldMaterial, "tenant-a-activation") with
+        { Reference = host.Reference(oldMaterial) with { TenantId = "tenant-a" } };
+        var first = await coordinator.ActivateMaterialAsync(firstCommand);
+        Assert.True(first.Succeeded);
+        var reader = new EfIngressReservationStore(host.Context, new ScopedAccess(physical));
+        var tenantA = new TriggerScope(physical, "tenant-a"); var tenantB = new TriggerScope(physical, "tenant-b");
+        Assert.NotNull(await reader.FindAsync(tenantA, "Http", "old-route"));
+
+        var secondCommand = host.Command(newMaterial, "tenant-b-activation", first.Slot.Revision) with
+        { Reference = host.Reference(newMaterial) with { TenantId = "tenant-b" } };
+        var second = await coordinator.ActivateMaterialAsync(secondCommand);
+        Assert.True(second.Succeeded);
+        Assert.Null(await reader.FindAsync(tenantA, "Http", "old-route"));
+        Assert.Equal(second.Slot.SlotId, (await reader.FindAsync(tenantB, "Http", currentRoute))!.OwnerId);
+        var removed = await coordinator.DeactivateMaterialAsync(new("logical-definition", newMaterial, "default",
+            WorkflowActivationSource.Publishing, second.Slot.Revision));
+        Assert.True(removed.Succeeded);
+        Assert.Empty((await reader.ListInScopeAsync(physical, new("Http"))).Items);
+    }
+
     [Fact]
     public async Task Protected_logical_sources_keep_opaque_physical_scope_and_tenant_distinct_and_generic_saves_cannot_forge_it()
     {
@@ -282,10 +313,10 @@ public sealed class WorkflowMaterialActivationTests
             return new(database, context, physical);
         }
 
-        public WorkflowActivationCoordinator Coordinator(IWorkflowTriggerIndexObserver? observer = null) => new(
+        public WorkflowActivationCoordinator Coordinator(IWorkflowTriggerIndexObserver? observer = null, bool exclusiveRoutes = false) => new(
             Materials, Authority, _switch, References,
             new WorkflowExecutableRootWriteLeaseManager(Materials, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), _clock),
-            _clock, new NativeIndexer(Bindings, Schedules), Bindings, Schedules,
+            _clock, new NativeIndexer(Bindings, Schedules, exclusiveRoutes), Bindings, Schedules,
             observer is null ? [] : [observer]);
 
         public async Task<RuntimeExecutionMaterial> ModelAsync(string behavior)
@@ -327,7 +358,7 @@ public sealed class WorkflowMaterialActivationTests
     private sealed class ScopedAccess(PersistenceScope scope) : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(scope); }
 
-    private sealed class NativeIndexer(IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore schedules) : IWorkflowTriggerIndexer
+    private sealed class NativeIndexer(IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore schedules, bool exclusiveRoutes = false) : IWorkflowTriggerIndexer
     {
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -335,9 +366,11 @@ public sealed class WorkflowMaterialActivationTests
         public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(WorkflowExecutable executable,
             string activationId, string slotId, CancellationToken cancellationToken = default)
         {
-            var binding = new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, executable.Identity.ArtifactId, "node", "event"),
+            var hash = exclusiveRoutes ? executable.Identity.ArtifactId : "event";
+            var binding = new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, executable.Identity.ArtifactId, "node", hash),
                 executable.Identity.ArtifactId, executable.Identity.DefinitionId, executable.Identity.ArtifactVersion, executable.Identity.ArtifactHash,
-                "node", "Event", "event", null, new Dictionary<string, string>(), DateTimeOffset.UtcNow, activationId, slotId);
+                "node", exclusiveRoutes ? "Http" : "Event", hash, null, new Dictionary<string, string>(), DateTimeOffset.UtcNow, activationId, slotId,
+                Cardinality: exclusiveRoutes ? TriggerCardinality.Exclusive : TriggerCardinality.FanOut);
             await bindings.PrepareActivationAsync(activationId, [binding], cancellationToken);
             await schedules.PrepareActivationAsync(activationId, [], cancellationToken);
             return [binding];

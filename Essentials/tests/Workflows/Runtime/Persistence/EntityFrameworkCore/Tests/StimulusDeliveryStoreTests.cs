@@ -1105,7 +1105,8 @@ public sealed partial class StimulusDeliveryStoreTests
         public IWorkflowExecutableStore Artifacts => Context is null ? memoryArtifacts : new EfWorkflowExecutableStore(Context, new Accessor());
         public IWorkflowExecutableSourceReferenceStore References => Context is null ? memoryReferences : new EfWorkflowExecutableSourceReferenceStore(Context, new Accessor(), new Codec(), Clock);
         private InMemoryRuntimeCheckpointCommitStore MemoryStore(PersistenceScope? scope = null) =>
-            new(memoryArtifacts, memoryReferences, publishers, operationalStateStore: liveness, state: memory,
+            new(memoryArtifacts, memoryReferences, publishers, activityExecutionStateStore: ingressActivities,
+                bookmarkStateStore: ingressBookmarks, operationalStateStore: liveness, state: memory,
                 persistenceAccessContextAccessor: new Accessor(scope), timeProvider: Clock,
                 rootWriteLeaseManager: Observe(new WorkflowExecutableRootWriteLeaseManager(memoryArtifacts,
                     Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock)));
@@ -1181,6 +1182,7 @@ public sealed partial class StimulusDeliveryStoreTests
         }
         public async ValueTask DisposeAsync()
         {
+            targetMetadata?.Dispose();
             foreach (var context in contexts) await context.DisposeAsync();
             if (connection is not null) await connection.DisposeAsync();
         }
