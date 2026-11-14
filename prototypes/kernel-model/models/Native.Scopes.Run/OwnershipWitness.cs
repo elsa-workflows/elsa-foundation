@@ -82,7 +82,7 @@ internal sealed class OwnershipWitness(string mode, bool nested, string kind)
         Check(_world.Store.Instances[_target.Id].Status == InstanceStatus.Finished && Native.LexicalScopes is null && Native.Variables.GetValueOrDefault("escaped") is null, "L9: completed owner leaked resources or foreign work ran");
         if (nested) Check(Native.Variables["returned"]!.ToString() == "true", "L9: outer workflow did not resume");
     }
-    private Subscription[] Waits() => _world.Store.Subscriptions.Where(s => s.Instance == _target.Id).ToArray();
+    private SubscriptionRow[] Waits() => _world.Store.Subscriptions.Where(s => s.Instance == _target.Id).ToArray();
     private void Release(string name)
     {
         var wait = Waits().Single(s => s.Key == "event:" + name);
