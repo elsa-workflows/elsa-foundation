@@ -581,7 +581,7 @@ def run_weaver_semantic(output, data, backend_project, studio_project, env, sha,
     report.update(stage='weaver-semantic', hostProfile='normal shipped hosts; owned external Copilot protocol service',
         modelEvidence='machine protocol observation only; live model reasoning unverified',
         t045Acceptance='incomplete', storyAcceptance='incomplete', independentUXAcceptance='incomplete',
-        evidenceDisclosure='allowlisted correlated hashes/counts and closed-panel native captures; originals private')
+        evidenceDisclosure='allowlisted correlation plus unchanged validated open-panel dialogue and native captures; raw SDK/config/auth/transport originals private')
     completed, joined, protocols = [], [], []
     for project in sorted(PROJECTS):
         owned = data / project

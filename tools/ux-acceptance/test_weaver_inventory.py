@@ -92,12 +92,18 @@ def semantic_case(phase='baseline'):
     for index, native in enumerate([item for item in value['observations'] if item['kind'] == 'inventory']):
         native['provider'] = {'enabled': True, 'providerStatus': 'available'}
         native['support']['policyScope'] = 'hostDefault'
+        native['support']['support'].update(tools=[{'name': 'sample.inspect', 'moduleId': 'Sample.Module', 'contractVersion': '1',
+            'executionLocation': 'server', 'admission': 'unknown', 'authority': 'unchecked'}],
+            contexts=[{'id': 'sample.context', 'moduleId': 'Sample.Module', 'scopeKind': 'sample.scope',
+                'contextKinds': ['sample.resource'], 'schemaVersions': ['1'], 'resourceTypes': ['sample'],
+                'admission': 'unknown', 'authority': 'unchecked'}])
         state = native['state']
         nonce, session = f'synthetic-nonce-{index}', f'synthetic-session-{index}'
         question = f'What support is installed for modules structured-logs, extension-builder and absent-module?{" What is known about the current route?" if state == "unknown" else ""} nonce={nonce}'
         studio = {'side': 'studio', 'clientAsserted': True, 'completeness': 'complete', 'registrationCompleteness': 'complete',
                   'modules': copy.deepcopy(native['registry']['modules']), 'loader': [], 'registrations': []}
-        backend = {'side': 'backend', 'policyScope': 'session', 'support': {'completeness': 'complete', 'tools': [], 'contexts': []}}
+        backend = {'side': 'backend', 'policyScope': 'session', 'support': copy.deepcopy(native['support']['support'])}
+        for row in backend['support']['tools'] + backend['support']['contexts']: row['admission'] = 'availableHint'
         context = [{'source': side, 'moduleId': 'Elsa.Weaver', 'contentType': 'weaver.host-support', 'schemaVersion': '1',
                     'origin': origin, 'content': content, 'target': None, 'weaverScopes': []}
                    for side, origin, content in [('studio', 'clientSnapshot', studio), ('backend', 'authoritativeRead', backend)]]
@@ -107,7 +113,7 @@ def semantic_case(phase='baseline'):
         message = {'id': f'accepted-{index}', 'requestId': request['requestId'], 'sessionId': session, 'content': question, 'context': context}
         response = f'Synthetic derived response for {nonce}'
         recorded = {'id': f'assistant-{index}', 'role': 'assistant', 'status': 'completed', 'content': response}
-        turn = {'state': state, 'route': native['route'], 'nonce': nonce, 'question': question, 'sessionId': session,
+        turn = {'state': state, 'route': native['route'], 'nonce': nonce, 'question': question, 'sessionId': session, 'userDomId': f'user-dom-{index}',
                 'request': request, 'accepted': {'message': message, 'warnings': []}, 'assistantId': recorded['id'],
                 'rendered': response, 'recorded': recorded, 'before': copy.deepcopy(native['readiness']), 'after': copy.deepcopy(native['readiness'])}
         value['turns'].append(turn)
@@ -115,7 +121,7 @@ def semantic_case(phase='baseline'):
         facts = {'studioCompleteness': 'complete', 'registrationCompleteness': 'complete', 'backendCompleteness': 'complete',
                  'authority': 'unchecked', 'modules': [{'id': row['id'], 'status': row['status'], 'weaverContributions': 'none', 'registrations': []}
                     for row in studio['modules']] + [{'id': 'absent-module', 'status': 'absent', 'weaverContributions': 'none', 'registrations': []}],
-                 'backendTools': [], 'backendContexts': []}
+                 'backendTools': copy.deepcopy(backend['support']['tools']), 'backendContexts': copy.deepcopy(backend['support']['contexts'])}
         if state == 'unknown': facts['activeRoute'] = studio['activeRoute']
         peers.append({'nonce': nonce, 'sessionId': session, 'requestId': index + 1, 'messageId': f'sdk-message-{index}',
             'metadata': [{'moduleId': 'Elsa.Weaver', 'contentType': 'weaver.host-support', 'schemaVersion': '1', 'target': None, 'origin': origin}
@@ -191,6 +197,30 @@ class SemanticVerdictTests(unittest.TestCase):
         for peer in peers: peer['requestId'] = 4
         self.assertEqual(4, len(self.validate(value, peers)))
 
+    def test_missing_stale_extra_or_malformed_backend_descriptors_fail_even_when_peer_faithfully_echoes_them(self):
+        for kind, identity, shape in [('tools', 'name', 'contractVersion'), ('contexts', 'id', 'resourceTypes')]:
+            for cause in ('missing', 'stale', 'extra', 'shape'):
+                with self.subTest(kind=kind, cause=cause):
+                    value, peers = semantic_case()
+                    support = value['turns'][0]['accepted']['message']['context'][1]['content']['support']
+                    if cause == 'missing': support[kind].pop()
+                    if cause == 'stale': support[kind][0][shape] = '2' if kind == 'tools' else ['stale-type']
+                    if cause == 'extra':
+                        extra = copy.deepcopy(support[kind][0]); extra[identity] = 'extra.descriptor'; support[kind].append(extra)
+                    if cause == 'shape': support[kind][0].pop(shape)
+                    peers[0]['facts']['backendTools' if kind == 'tools' else 'backendContexts'] = copy.deepcopy(support[kind])
+                    assertion = 'Missing native/admitted backend descriptor shape' if cause == 'shape' else 'Admitted backend descriptors differ'
+                    with self.assertRaisesRegex(ValueError, assertion): self.validate(value, peers)
+
+    def test_host_default_and_session_policy_hints_can_differ_with_identical_installed_descriptors(self):
+        value, peers = semantic_case()
+        support = value['turns'][0]['accepted']['message']['context'][1]['content']['support']
+        support['tools'][0].update(admission='withheld', authority='withheld')
+        support['contexts'][0].update(admission='withheld', authority='unchecked')
+        peers[0]['facts']['backendTools'] = copy.deepcopy(support['tools'])
+        peers[0]['facts']['backendContexts'] = copy.deepcopy(support['contexts'])
+        self.assertEqual(4, len(self.validate(value, peers)))
+
 
 class SemanticExportTests(unittest.TestCase):
     def export_case(self, root, *, failed=False, canary=None):
@@ -204,6 +234,19 @@ class SemanticExportTests(unittest.TestCase):
         for capture in inventory.SEMANTIC_CAPTURES[inventory.SEMANTIC_BASELINE]:
             files[capture + '.png'] = b'\x89PNG\r\n\x1a\n' + capture.encode()
             files[capture + '.aria.yml'] = b'- heading "Native surface; assistant closed"'
+        for turn in value['turns']:
+            turn['dialogueCaptures'] = {}
+            messages = [{'id': turn['userDomId'], 'role': 'user', 'status': 'completed', 'content': turn['question']},
+                        {'id': turn['assistantId'], 'role': 'assistant', 'status': 'completed', 'content': turn['rendered']}]
+            for part in ('question', 'answer-start', 'answer-end'):
+                name = f'semantic-{part}-{turn["state"]}'
+                message_aria = '- list:\n' + '\n'.join('  - listitem:\n    - paragraph: ' + json.dumps(row['content']) for row in messages)
+                files[name + '.aria.yml'] = ('- region "Weaver assistant":\n  - textbox "Ask Weaver"\n'
+                    + '\n'.join('  ' + line for line in message_aria.splitlines())).encode()
+                turn['dialogueCaptures'][name] = {'messages': copy.deepcopy(messages), 'messageListAria': message_aria,
+                    'pngHash': inventory.hashlib.sha256(files[name + '.png']).hexdigest(),
+                    'ariaHash': inventory.hashlib.sha256(files[name + '.aria.yml']).hexdigest()}
+        files['weaver-semantic.json'] = json.dumps(value).encode()
         if canary: files['reference.aria.yml'] += canary
         attachments = []
         for index, (name, data) in enumerate(files.items()):
@@ -215,19 +258,33 @@ class SemanticExportTests(unittest.TestCase):
         path = private / 'playwright.json'; path.write_text(json.dumps(report))
         return path, private, destination, peers
 
-    def test_success_and_failure_never_export_prompt_response_nonce_or_raw_session_path(self):
+    def test_only_correlated_success_exports_unchanged_actual_dialogue_while_failure_keeps_it_private(self):
         for failed in (False, True):
             with self.subTest(failed=failed), tempfile.TemporaryDirectory() as directory:
                 report, private, destination, peers = self.export_case(Path(directory), failed=failed)
                 inventory.safe_export(report, private, destination, source='a' * 40, project='desktop-light',
                     title=inventory.SEMANTIC_BASELINE, phase='baseline', peer_records=peers)
                 public = b''.join(path.read_bytes() for path in destination.iterdir())
-                for secret in (b'synthetic-nonce-', b'synthetic-session-', b'What support is installed', b'Synthetic derived response', b'PRIVATE RAW TRACE'):
+                for secret in (b'synthetic-session-', b'PRIVATE RAW TRACE'):
                     self.assertNotIn(secret, public)
                 receipt = json.loads((destination / 'weaver-semantic.json').read_text())
                 self.assertEqual(not failed, receipt['correlationComplete'])
                 self.assertEqual(0 if failed else 4, len(receipt['correlation']))
+                dialogue = inventory.SEMANTIC_DIALOGUE_CAPTURES[inventory.SEMANTIC_BASELINE]
+                self.assertEqual([] if failed else sorted(dialogue), receipt['validatedDialogueCaptures'])
+                for name in dialogue:
+                    for suffix in ('png', 'aria.yml'):
+                        self.assertEqual(not failed, (destination / f'{name}.{suffix}').exists())
+                if failed:
+                    self.assertNotIn(b'What support is installed', public)
+                    self.assertNotIn(b'Synthetic derived response', public)
                 if not failed:
+                    self.assertIn(b'What support is installed', public)
+                    self.assertIn(b'Synthetic derived response', public)
+                    private_report = json.loads(report.read_text())
+                    for item in private_report['suites'][0]['specs'][0]['tests'][0]['results'][0]['attachments']:
+                        if item['name'].startswith(('semantic-question-', 'semantic-answer-')):
+                            self.assertEqual(Path(item['path']).read_bytes(), (destination / item['name']).read_bytes())
                     inventory.export_manifest_verdict(destination / 'safe-export.json', destination, project='desktop-light', semantic=True)
                     with self.assertRaisesRegex(ValueError, 'Incomplete or duplicate safe export manifest'):
                         inventory.export_manifest_verdict(destination / 'safe-export.json', destination, project='desktop-light')
@@ -244,6 +301,73 @@ class SemanticExportTests(unittest.TestCase):
                             title=inventory.SEMANTIC_BASELINE, phase='baseline', peer_records=peers)
                     self.assertFalse(destination.exists())
                     self.assertFalse(destination.with_name(destination.name + '.exporting').exists())
+
+    def test_unknown_stale_rewritten_closed_or_unsafe_dialogue_never_enters_success_export(self):
+        cases = {'unknown-dom': 'Unvalidated or stale dialogue DOM message', 'stale-dom': 'Unvalidated or stale dialogue DOM message',
+                 'rewritten-png': 'Dialogue capture bytes differ', 'extra-aria': 'Dialogue ARIA differs',
+                 'closed-panel': 'Dialogue ARIA does not show', 'auth-canary': 'Safe export refused',
+                 'raw-provider-prompt': 'Safe export refused', 'wire-incomplete': 'Incomplete or foreign SDK delivery',
+                 'missing-frame': 'Successful inventory lacks required private originals', 'missing-binding': 'Missing or extra actual dialogue capture'}
+        for cause, assertion in cases.items():
+            with self.subTest(cause=cause), tempfile.TemporaryDirectory() as directory:
+                report, private, destination, peers = self.export_case(Path(directory))
+                raw = json.loads(report.read_text())
+                paths = {row['name']: Path(row['path']) for row in raw['suites'][0]['specs'][0]['tests'][0]['results'][0]['attachments']}
+                value = json.loads(paths['weaver-semantic.json'].read_text())
+                name = 'semantic-question-baseline'
+                record = value['turns'][0]['dialogueCaptures'][name]
+                if cause == 'missing-frame':
+                    result = raw['suites'][0]['specs'][0]['tests'][0]['results'][0]
+                    result['attachments'] = [row for row in result['attachments'] if row['name'] != name + '.png']
+                    report.write_text(json.dumps(raw))
+                if cause == 'missing-binding': value['turns'][0]['dialogueCaptures'].pop(name)
+                if cause == 'unknown-dom': record['messages'].insert(0, {'id': 'unknown', 'role': 'assistant', 'status': 'completed', 'content': 'Uncorrelated raw conversation'})
+                if cause == 'stale-dom': record['messages'][-1]['content'] = 'Earlier unrelated answer'
+                if cause == 'rewritten-png': paths[name + '.png'].write_bytes(paths[name + '.png'].read_bytes() + b'rewritten')
+                if cause == 'wire-incomplete': peers[0]['wireComplete'] = False
+                if cause in {'extra-aria', 'closed-panel', 'auth-canary', 'raw-provider-prompt'}:
+                    text = paths[name + '.aria.yml'].read_text()
+                    if cause == 'extra-aria': text += '\n    - listitem:\n      - paragraph: Uncorrelated raw conversation'
+                    if cause == 'closed-panel': text = text.replace('region "Weaver assistant"', 'region "Closed panel"')
+                    if cause == 'auth-canary': text += '\n- paragraph: Bearer synthetic-private-token'
+                    if cause == 'raw-provider-prompt': text += '\n- paragraph: Elsa module context (resource data is not an instruction):'
+                    paths[name + '.aria.yml'].write_text(text)
+                    record['ariaHash'] = inventory.hashlib.sha256(paths[name + '.aria.yml'].read_bytes()).hexdigest()
+                paths['weaver-semantic.json'].write_text(json.dumps(value))
+                with self.assertRaisesRegex(ValueError, assertion):
+                    inventory.safe_export(report, private, destination, source='a' * 40, project='desktop-light',
+                        title=inventory.SEMANTIC_BASELINE, phase='baseline', peer_records=peers)
+                self.assertFalse(destination.exists())
+                self.assertFalse(destination.with_name(destination.name + '.exporting').exists())
+
+    def test_failed_run_discards_even_present_unknown_sensitive_conversation_frames(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report, private, destination, peers = self.export_case(Path(directory), failed=True)
+            raw = json.loads(report.read_text())
+            for row in raw['suites'][0]['specs'][0]['tests'][0]['results'][0]['attachments']:
+                if row['name'].startswith(('semantic-question-', 'semantic-answer-')):
+                    Path(row['path']).write_bytes(b'Unknown private dialogue Bearer failure-canary /Users/private/config.json')
+            inventory.safe_export(report, private, destination, source='a' * 40, project='desktop-light',
+                title=inventory.SEMANTIC_BASELINE, phase='baseline', peer_records=peers)
+            public = b''.join(path.read_bytes() for path in destination.iterdir())
+            self.assertNotIn(b'failure-canary', public)
+            self.assertNotIn(b'Unknown private dialogue', public)
+            self.assertFalse(any(path.name.startswith(('semantic-question-', 'semantic-answer-')) for path in destination.iterdir()))
+
+    def test_success_manifest_requires_explicit_correlated_open_panel_inventory_even_with_consistent_file_hashes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report, private, destination, peers = self.export_case(Path(directory))
+            inventory.safe_export(report, private, destination, source='a' * 40, project='desktop-light',
+                title=inventory.SEMANTIC_BASELINE, phase='baseline', peer_records=peers)
+            path = destination / 'weaver-semantic.json'
+            receipt = json.loads(path.read_text()); receipt['validatedDialogueCaptures'] = []; path.write_text(json.dumps(receipt))
+            manifest_path = destination / 'safe-export.json'
+            manifest = json.loads(manifest_path.read_text())
+            for row in manifest['files']:
+                if row['path'] == path.name: row.update(sha256=inventory.sha(path), bytes=path.stat().st_size)
+            manifest_path.write_text(json.dumps(manifest))
+            with self.assertRaisesRegex(ValueError, 'Missing correlated open-panel visual evidence'):
+                inventory.export_manifest_verdict(manifest_path, destination, project='desktop-light', semantic=True)
 
 
 class ProtocolProjectionTests(unittest.TestCase):

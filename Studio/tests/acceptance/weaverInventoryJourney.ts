@@ -1,6 +1,8 @@
 import { desiredFeatureState } from "./weaverInventorySelection";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { dashboardBackend, attachDashboardJson, type Capture } from "./dashboardJourneySupport";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 export const weaverInventoryJourneys = {
   baseline: "Weaver shipped inventory and structured logs deselection",
@@ -157,8 +159,32 @@ async function shippedJourney(page: Page, info: TestInfo, capture: Capture, sema
       expect((request.contextAttachments as { contentType: string }[]).every(item => item.contentType === "weaver.host-support")).toBe(true);
       expect(accepted.message.context.every(item => (item as { contentType: string }).contentType === "weaver.host-support")).toBe(true);
     }
-    turns.push({ state, route, nonce, question, sessionId, request, accepted, assistantId, rendered, recorded: recorded[0], before, after });
-    // Raw question/answer DOM stays in private trace/receipt. Public captures show only native surfaces.
+    const user = page.locator('.weaver-message[data-role="user"]').last();
+    await expect(user.locator(".weaver-message-text")).toHaveText(question);
+    const userDomId = await user.getAttribute("data-message-id");
+    const dialogueCaptures: Record<string, { pngHash: string; ariaHash: string; messageListAria: string; messages: unknown[] }> = {};
+    turns.push({ state, route, nonce, question, sessionId, request, accepted, assistantId, userDomId, rendered,
+      recorded: recorded[0], before, after, dialogueCaptures });
+    const answer = terminal.locator(".weaver-markdown");
+    const scrollHeight = await page.locator(".weaver-surface .weaver-scroll").evaluate(element => element.clientHeight);
+    expect(scrollHeight).toBeGreaterThan(0);
+    // Real scrolling only: bounded start/end frames must cover the answer without editing its DOM or style.
+    expect(await answer.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(2 * scrollHeight);
+    expect(await user.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(scrollHeight);
+    for (const [part, element, block] of [["question", user, "start"], ["answer-start", answer, "start"], ["answer-end", answer, "end"]] as const) {
+      await element.evaluate((node, position) => node.scrollIntoView({ block: position, behavior: "instant" }), block);
+      const messages = await page.locator(".weaver-surface .weaver-message").evaluateAll(elements => elements.map(element => ({
+        id: element.getAttribute("data-message-id"), role: element.getAttribute("data-role"), status: element.getAttribute("data-status"),
+        content: (element.querySelector(".weaver-markdown, .weaver-message-text") as HTMLElement | null)?.innerText ?? ""
+      })));
+      const name = `semantic-${part}-${state}`;
+      const messageListAria = await page.locator(".weaver-surface .weaver-messages").ariaSnapshot();
+      await capture(page, info, name);
+      dialogueCaptures[name] = { messages, messageListAria,
+        pngHash: createHash("sha256").update(readFileSync(info.outputPath(`${name}.png`))).digest("hex"),
+        ariaHash: createHash("sha256").update(readFileSync(info.outputPath(`${name}.aria.yml`))).digest("hex") };
+    }
+    // Failure conversation frames remain private; only the runner can admit their unchanged bytes after correlation.
     await page.getByRole("button", { name: "Close assistant", exact: true }).click();
     await expect(composer).not.toBeVisible();
   };

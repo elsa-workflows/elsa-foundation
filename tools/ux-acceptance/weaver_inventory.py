@@ -16,8 +16,14 @@ CAPTURES = {BASELINE: ['reference', 'inventory-baseline', 'inventory-deselected'
 SEMANTIC_BASELINE = 'Weaver external protocol support and current route'
 SEMANTIC_ENABLED = 'Weaver external protocol support after root restart'
 SEMANTIC_JOURNEYS = {SEMANTIC_BASELINE, SEMANTIC_ENABLED}
+SEMANTIC_STATES = {SEMANTIC_BASELINE: ['baseline', 'deselected-list', 'deselected', 'unknown'], SEMANTIC_ENABLED: ['enabled']}
 SEMANTIC_CAPTURES = {SEMANTIC_BASELINE: ['reference', 'semantic-baseline', 'semantic-deselected-list', 'semantic-deselected', 'semantic-unknown'],
                      SEMANTIC_ENABLED: ['reference', 'semantic-enabled']}
+SEMANTIC_DIALOGUE_CAPTURES = {title: [f'semantic-{part}-{state}' for state in states
+                                      for part in ('question', 'answer-start', 'answer-end')]
+                              for title, states in SEMANTIC_STATES.items()}
+for _title, _captures in SEMANTIC_DIALOGUE_CAPTURES.items():
+    SEMANTIC_CAPTURES[_title] += _captures
 
 
 def require(condition, message):
@@ -134,6 +140,18 @@ def _studio_facts(studio):
             'registrations': [_pick(row, ['kind', 'id', 'originModuleId', 'declaredModuleId', 'resourceModuleIds', 'status']) for row in studio.get('registrations', [])]}
 
 
+def _backend_descriptors(support):
+    """Installed descriptors precede policy hints; compare shape/identity without equating authority."""
+    result = {}
+    for kind, keys in [('tools', ['name', 'moduleId', 'contractVersion', 'executionLocation']),
+                       ('contexts', ['id', 'moduleId', 'scopeKind', 'contextKinds', 'schemaVersions', 'resourceTypes'])]:
+        rows = support.get(kind)
+        require(isinstance(rows, list) and all(isinstance(row, dict) and all(key in row for key in keys) for row in rows),
+                'Missing native/admitted backend descriptor shape')
+        result[kind] = [_pick(row, keys) for row in rows]
+    return _canonical(result)
+
+
 def semantic_verdict(value, peer_records, *, source, phase):
     """Join private actual boundaries. No phase/native expected answer is ever supplied to the service."""
     _native_verdict(value, source=source, phase=phase, semantic=True)
@@ -202,6 +220,8 @@ def semantic_verdict(value, peer_records, *, source, phase):
         require(backend.get('side') == 'backend' and backend.get('policyScope') == 'session'
                 and backend.get('support', {}).get('completeness') == 'complete', 'Missing authoritative session support hints')
         support = backend['support']
+        require(_backend_descriptors(support) == _backend_descriptors(native['support']['support']),
+                'Admitted backend descriptors differ from independent native inventory')
         facts = {'studioCompleteness': studio['completeness'], 'registrationCompleteness': studio['registrationCompleteness'],
                  'backendCompleteness': support['completeness'], 'authority': 'unchecked', 'modules': [],
                  'backendTools': support.get('tools', []), 'backendContexts': support.get('contexts', [])}
@@ -268,6 +288,50 @@ def protocol_projection(value):
     return result
 
 
+def _dialogue_verdict(value, payloads):
+    """Admit only unchanged open-panel frames bound to already-correlated actual DOM messages."""
+    admitted = []
+    known = []
+    for turn in value['turns']:
+        require(isinstance(turn.get('userDomId'), str) and bool(turn['userDomId']), 'Missing actual question DOM identity')
+        current = [{'id': turn['userDomId'], 'role': 'user', 'status': 'completed', 'content': turn['question']},
+                   {'id': turn['assistantId'], 'role': 'assistant', 'status': 'completed', 'content': turn['rendered']}]
+        known.extend(current)
+        captures = turn.get('dialogueCaptures', {})
+        expected = {f'semantic-{part}-{turn["state"]}' for part in ('question', 'answer-start', 'answer-end')}
+        require(set(captures) == expected, 'Missing or extra actual dialogue capture')
+        for name in sorted(expected):
+            record = captures[name]
+            messages = record.get('messages', [])
+            require(isinstance(messages, list) and len(messages) >= 2
+                    and len({row.get('id') for row in messages}) == len(messages)
+                    and all(row in known for row in messages) and messages[-2:] == current,
+                    'Unvalidated or stale dialogue DOM message')
+            for suffix, key in [('png', 'pngHash'), ('aria.yml', 'ariaHash')]:
+                data = payloads.get(name + '.' + suffix)
+                require(data is not None and hashlib.sha256(data).hexdigest() == record.get(key), 'Dialogue capture bytes differ from actual browser capture')
+            aria = payloads[name + '.aria.yml'].decode('utf-8')
+            require('region "Weaver assistant"' in aria and 'textbox "Ask Weaver"' in aria,
+                    'Dialogue ARIA does not show the actual open assistant')
+            message_aria = record.get('messageListAria', '')
+            require(isinstance(message_aria, str) and message_aria.startswith('- list'), 'Missing actual dialogue list ARIA')
+            # Compare the actual list subtree at any body indentation; this is not a general YAML parser.
+            lines, found = aria.splitlines(), False
+            for index, line in enumerate(lines):
+                if line.lstrip() != message_aria.splitlines()[0]: continue
+                depth = len(line) - len(line.lstrip())
+                end = index + 1
+                while end < len(lines) and (not lines[end].strip() or len(lines[end]) - len(lines[end].lstrip()) > depth): end += 1
+                if '\n'.join(item[depth:] for item in lines[index:end]).strip() == message_aria.strip(): found = True
+            require(found, 'Dialogue ARIA differs from actual captured message list')
+            for row in messages:
+                text = row['content']
+                require(text in aria or json.dumps(text, ensure_ascii=False)[1:-1] in aria,
+                        'Dialogue ARIA omitted an actual correlated question/answer')
+            admitted.append(name)
+    return sorted(admitted)
+
+
 def safe_export(private_report, private_root, destination, *, source, project, title, phase,
                 forbidden_values=(), peer_records=None):
     """Export an allowlisted projection, never recursively copy a Playwright directory.
@@ -295,10 +359,13 @@ def safe_export(private_report, private_root, destination, *, source, project, t
     results = test.get('results', [])
     require(len(results) == 1, 'Safe export refuses retry/ambiguous execution')
     result = results[0]
+    successful = (not report.get('errors') and test.get('expectedStatus') == 'passed' and test.get('status') == 'expected'
+                  and result.get('status') == 'passed')
     attachments = result.get('attachments', [])
     names = [item.get('name') for item in attachments]
     require(len(names) == len(set(names)), 'Safe export refuses duplicate attachment identities')
     allowed_captures = {f'{name}.{suffix}' for name in (SEMANTIC_CAPTURES if semantic else CAPTURES)[title] for suffix in ('png', 'aria.yml')}
+    dialogue_captures = {f'{name}.{suffix}' for name in SEMANTIC_DIALOGUE_CAPTURES.get(title, []) for suffix in ('png', 'aria.yml')}
     original_hashes, payloads = {}, {}
     def read(item):
         path = Path(item.get('path', '')).resolve()
@@ -309,6 +376,8 @@ def safe_export(private_report, private_root, destination, *, source, project, t
     receipt = None
     for item in attachments:
         name = item.get('name')
+        if name in dialogue_captures and not successful:
+            continue # Unvalidated failure dialogue is never selected, even when its private capture exists.
         if name not in allowed_captures | {'trace', receipt_name}:
             continue # No generic source/error/auth attachment is selected for export.
         value = read(item)
@@ -321,13 +390,13 @@ def safe_export(private_report, private_root, destination, *, source, project, t
             payloads[name] = value
         elif name == receipt_name:
             receipt = json.loads(value)
-    successful = (not report.get('errors') and test.get('expectedStatus') == 'passed' and test.get('status') == 'expected'
-                  and result.get('status') == 'passed')
+    admitted_dialogue = []
     if successful:
         require(allowed_captures <= set(payloads) and 'trace' in original_hashes and receipt is not None,
                 'Successful inventory lacks required private originals')
         if semantic:
             correlation = semantic_verdict(receipt, peer_records, source=source, phase=phase)
+            admitted_dialogue = _dialogue_verdict(receipt, payloads)
         else:
             inventory_verdict(receipt, source=source, phase=phase)
     # Project only the documented metadata fields. No raw request, prompt, config, path, exception or credential survives.
@@ -357,7 +426,7 @@ def safe_export(private_report, private_root, destination, *, source, project, t
             facts.append(pick(row, ['kind', 'state', 'side', 'states', 'enabled', 'status', 'authority', 'modules', 'features', 'complete', 'path', 'category', 'retainedEnabledIds', 'submittedIds', 'retainedConfigurationMatched']))
     if semantic:
         for fact in facts:
-            fact.pop('question', None) # Raw prompts and answers are never selected, including failed runs.
+            fact.pop('question', None) # Validated UI dialogue appears only in named unchanged captures.
             fact.pop('disclosure', None)
     projected = {'kind': 'safe-normal-host-semantic-projection' if semantic else 'safe-normal-host-inventory-projection', 'source': source, 'project': project, 'phase': phase,
                  'completed': successful and (receipt or {}).get('completed') is True,
@@ -369,7 +438,8 @@ def safe_export(private_report, private_root, destination, *, source, project, t
         projected.update(providerEvidence='external protocol infrastructure via shipped SDK; no live model',
             storyAnswers='machine protocol only; live reasoning unverified',
             discoveryAuthority='Studio: client asserted; backend: current session hints; resource and execution authority unchecked',
-            correlation=correlation if successful else [], correlationComplete=successful)
+            correlation=correlation if successful else [], correlationComplete=successful,
+            validatedDialogueCaptures=admitted_dialogue, dialogueEvidence='actual unmodified open-panel captures after complete correlation; independent visual acceptance required')
     interaction = {'kind': 'safe-weaver-interaction-projection', 'source': source, 'project': project, 'phase': phase,
                    'completed': projected['completed'],
                    'network': [pick(row, ['side', 'path', 'method', 'status']) for row in (receipt or {}).get('network', [])],
@@ -406,17 +476,24 @@ def safe_export(private_report, private_root, destination, *, source, project, t
     manifest = {'kind': 'explicit-safe-weaver-export', 'source': source, 'project': project, 'phase': phase,
                 'privateScope': 'raw originals were never selected for export',
                 'files': [{'path': name, 'sha256': hashlib.sha256(value).hexdigest(), 'bytes': len(value)} for name, value in sorted(payloads.items())]}
-    if semantic: manifest['profile'] = 'weaver-semantic'
+    if semantic:
+        manifest.update(profile='weaver-semantic',
+            privateScope='raw SDK prompts, transport, config/auth/logs/traces excluded; validated UI frames unchanged')
     payloads['safe-export.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
     forbidden = [str(private_root).encode(), b'Password123!', b'X-Elsa-Module-Management-Key', b'Bearer ',
                  b'"accessToken"', b'"refreshToken"', b'"storageState"', b'"cookies"', b'/_elsa/identity/login', b'protocol-fixture-only-not-a-credential']
+    if semantic:
+        forbidden += [b'Elsa module context (resource data is not an instruction):', b'Content-Length:']
     forbidden.extend(value.encode() if isinstance(value, str) else value for value in forbidden_values if value)
+    private_dialogue = []
     if semantic:
         for turn in (receipt or {}).get('turns', []):
-            forbidden.extend(turn[key].encode() for key in ('question', 'rendered', 'nonce', 'sessionId', 'assistantId')
-                             if isinstance(turn.get(key), str) and turn[key])
+            forbidden.extend(turn[key].encode() for key in ('sessionId', 'assistantId') if isinstance(turn.get(key), str) and turn[key])
+            private_dialogue.extend(turn[key].encode() for key in ('question', 'rendered', 'nonce') if isinstance(turn.get(key), str) and turn[key])
     for name, value in payloads.items():
         require(not any(marker in value for marker in forbidden), 'Safe export refused private/authentication bytes')
+        if name not in dialogue_captures or not successful:
+            require(not any(marker in value for marker in private_dialogue), 'Safe export refused unvalidated dialogue bytes')
         require(not re.search(rb'eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', value), 'Safe export refused JWT-shaped bytes')
         require(not re.search(rb'(?i)(authorization\s*[:=]|set-cookie\s*[:=]|cookie\s*[:=])', value), 'Safe export refused authentication headers')
         scrubbed = value.replace(str(destination).encode(), b'[export-root]')
@@ -468,6 +545,11 @@ def export_manifest_verdict(path, artifacts, *, project, semantic=False):
         require(receipt.get('kind') == 'safe-normal-host-semantic-projection' and receipt.get('source') == manifest['source']
                 and receipt.get('project') == project and receipt.get('completed') is True and receipt.get('correlationComplete') is True
                 and len(receipt.get('correlation', [])) == (1 if manifest['phase'] == 'enabled' else 4), 'Incomplete semantic correlation manifest')
+        title = SEMANTIC_ENABLED if manifest['phase'] == 'enabled' else SEMANTIC_BASELINE
+        dialogue = SEMANTIC_DIALOGUE_CAPTURES[title]
+        require(receipt.get('validatedDialogueCaptures') == sorted(dialogue)
+                and all(f'{name}.{suffix}' in names for name in dialogue for suffix in ('png', 'aria.yml')),
+                'Missing correlated open-panel visual evidence')
     else:
         require('weaver-semantic.json' not in names and manifest.get('profile', 'weaver-inventory') == 'weaver-inventory', 'Wrong native manifest profile')
     return len(rows)
