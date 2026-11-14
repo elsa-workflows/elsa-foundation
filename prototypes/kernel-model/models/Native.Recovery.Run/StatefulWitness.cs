@@ -7,14 +7,15 @@ using Kernel.Sim.Native;
 
 internal static class StatefulWitness
 {
+    private static string[] Cuts => ["steady", "lost-before-apply", "lost-answer", "cancel-fault", "terminate-staged"];
     private static string[] Parents => ["root", "sequence", "parallel", "foreach"];
-    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from p in Parents from f in new[] { false, true }
-        select $"recovery:stateful,{m},parent={p},startFault={f}";
+    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from p in Parents from f in new[] { false, true } from cut in Cuts
+        select $"recovery:stateful,{m},parent={p},startFault={f},cut={cut}";
     internal static void Run()
     {
-        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var parent in Parents) foreach (var startFault in new[] { false, true }) Run(mode, parent, startFault);
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var parent in Parents) foreach (var startFault in new[] { false, true }) foreach (var cut in Cuts) Run(mode, parent, startFault, cut);
     }
-    private static void Run(string mode, string parent, bool startFault)
+    private static void Run(string mode, string parent, bool startFault, string cut)
     {
         StatefulProbe.Calls.Clear(); StatefulProbe.StartFault = startFault;
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true }; var target = InstanceRef.In(0, "stateful-proof"); var owner = 0;
@@ -68,15 +69,51 @@ internal static class StatefulWitness
             "R33: stateful fault lost detached pins or retained runnable consumed waits");
         if (!startFault) Check(source.State?["Marker"]?.ToString() == "first" && StatefulProbe.Calls[1].Value == 17 && StatefulProbe.Calls[1].Kept == 9,
             "R34: Resume reevaluated changed bindings or lost its retained private state");
+        void Cancel(bool staged)
+        {
+            var calls = StatefulProbe.Calls.Count;
+            Apply(new("add", M: new("cancel", target, staged ? Kinds.Terminate : NativeKinds.Cancel, TargetCreation: 1))); Drain();
+            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && StatefulProbe.Calls.Count == calls + (staged ? 1 : 0),
+                "R41: stateful cancellation changed normal wake order or resumed ended work");
+            var history = Json.Write(State().Retries); NativeWorkflows.Registry.Remove(wf.Id);
+            Apply(new("add", M: new("query", target, ReceiptQuery.Kind, Json.Write(new ReceiptQuery("unknown", "probe")), ReplyTo: ReplyTo.Of("outside", "query", world.Time + 120_000), TargetCreation: 1))); Drain();
+            Check(Json.Write(State().Retries) == history && world.Deliveries.Select(d => d.Reply.Item).OfType<Admission>().LastOrDefault()?.Result == "UnknownInvocation",
+                "R41: stateful terminal metadata hydrated authored material or altered history");
+            Console.WriteLine($"PASS recovery:stateful,{mode},parent={parent},startFault={startFault},cut={cut}");
+        }
+        if (cut == "cancel-fault") { Cancel(false); return; }
         var archive = Json.Write(source); Reload();
         var retry = new NativeRetry("stateful-retry", source.Id, source.Intervention!.Id, "repair dependency");
-        Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(retry), TargetCreation: 1))); Drain(retry.Id);
-        var work = State().Agenda.Single(w => !w.Resume && w.Node == "leaf");
-        Check(work.Frame != source.Id && work.Attempt == 0 && work.Payload is null && work.Wait is null && work.OperationKey == source.OperationKey && StatefulProbe.Calls.Count == (startFault ? 1 : 2),
+        Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(retry), TargetCreation: 1)));
+        if (cut.StartsWith("lost-", StringComparison.Ordinal))
+        {
+            var prepared = false;
+            for (var i = 0; i < 100 && !prepared; i++)
+            {
+                var actor = Actor(); Apply(new("poll", actor.Id)); if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
+                if (actor.Worker.Ready.Contains(target.Id)) Apply(new("turn", actor.Id, S: target.Id));
+                prepared = actor.Worker.Queued > 0 && actor.Worker.Messages.Any(m => m.Id == "retry" && m.Taken);
+                if (!prepared && actor.Worker.NeedsFlush) Apply(new("flush", actor.Id)); if (!prepared && actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
+            }
+            Check(prepared, "R42: stateful uncertainty missed retry preparation"); var calls = StatefulProbe.Calls.Count; var row = world.Store.Instances[target.Id];
+            world.Auto = false; var actorAtCut = Actor(); var call = actorAtCut.Calls.Count; Apply(new("flush", actorAtCut.Id));
+            Check(actorAtCut.Calls.Count == call + 1 && actorAtCut.Calls[call].Kind == "commit", "R42: stateful uncertainty missed physical commit");
+            Apply(new(cut == "lost-answer" ? "exec" : "lose", actorAtCut.Id, call));
+            Check(cut == "lost-answer" ? State().Retries?.Count == 1 : world.Store.Instances[target.Id] == row, "R42: stateful uncertainty crossed wrong boundary");
+            Apply(new("answer", actorAtCut.Id, call, Flag: true)); Check(StatefulProbe.Calls.Count == calls, "R42: unknown commit answer executed fresh stateful work");
+            world.Auto = true; Reload();
+        }
+        else Drain(retry.Id);
+        var work = State().Agenda.SingleOrDefault(w => !w.Resume && w.Node == "leaf");
+        if (!cut.StartsWith("lost-", StringComparison.Ordinal))
+        {
+        Check(work is not null && work.Frame != source.Id && work.Attempt == 0 && work.Payload is null && work.Wait is null && work.OperationKey == source.OperationKey && StatefulProbe.Calls.Count == (startFault ? 1 : 2),
             "R35: stateful retry did not stage a fresh non-resume invocation");
-        Reload();
+            if (cut == "terminate-staged") { Cancel(true); return; }
+            Reload();
+        }
         var fresh = State().Frames.Values.Single(f => f.Node == "leaf");
-        Check(fresh.Id == work.Frame && fresh.State?["Marker"]?.ToString() == "fresh" && Json.Write(State().Retries![retry.Id].Source) == archive && StatefulProbe.Calls.Last().Phase == "start" && StatefulProbe.Calls.Last().Value == 17,
+        Check(fresh.Id == State().Retries![retry.Id].Successor && fresh.State?["Marker"]?.ToString() == "fresh" && Json.Write(State().Retries![retry.Id].Source) == archive && StatefulProbe.Calls.Last().Phase == "start" && StatefulProbe.Calls.Last().Value == 17,
             "R36: successor replayed private state/payload, changed pins or mutated forensic source");
         var currentWait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:go");
         if (oldWait is not null)
@@ -92,7 +129,7 @@ internal static class StatefulWitness
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && StatefulProbe.Calls.Last().Payload == (parent == "foreach" ? "next-item" : "newly-accepted-name") &&
             StatefulProbe.Calls.Take(startFault ? 3 : 4).Select(c => c.Operation).Distinct().Count() == 1 && StatefulProbe.Calls.All(c => c.Kept == 9),
             "R38: fresh name-based delivery failed, operation changed or mutable JSON escaped its snapshot");
-        Console.WriteLine($"PASS recovery:stateful,{mode},parent={parent},startFault={startFault}");
+        Console.WriteLine($"PASS recovery:stateful,{mode},parent={parent},startFault={startFault},cut={cut}");
     }
 }
 internal sealed class StatefulProbe : StatefulActivity<int, JsonObject, string>
