@@ -10660,3 +10660,5 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.Workflow
 
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestContextState.RootActivityExecutionId.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestContextState.RootActivityExecutionId.init -> void
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSelectedStartTargetProfile.CanExecuteOwnedNodeAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry! entry, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! selectedRoot, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! ownedNode, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionPipeline! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>

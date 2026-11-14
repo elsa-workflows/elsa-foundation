@@ -32,12 +32,20 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
         if (!executable.NodesById.TryGetValue(entry.ExecutableNodeId, out var target))
             throw Refused("The exact selected target is unavailable in the pinned executable.");
         var profiles = services.GetServices<IRuntimeSelectedStartTargetProfile>().ToArray();
-        if (target.ChildSlots.Count != 0 || profiles.Length != 1 ||
-            !await profiles[0].CanExecuteAsync(entry, executable, target,
-                services.GetRequiredService<IRuntimeActivityExecutionPipeline>(), cancellationToken))
-            throw Refused("The exact selected leaf and its complete effect profile are unqualified.");
+        if (profiles.Length != 1) throw Refused("Selected work requires exactly one model/effect owner.");
+        var pipeline = services.GetRequiredService<IRuntimeActivityExecutionPipeline>();
+        var ownedNodes = OwnedNodes(target).ToArray();
+        if (target.ChildSlots.Count == 0)
+        {
+            if (!await profiles[0].CanExecuteAsync(entry, executable, target, pipeline, cancellationToken))
+                throw Refused("The exact selected leaf and its complete effect profile are unqualified.");
+        }
+        else
+            foreach (var node in ownedNodes)
+                if (!await profiles[0].CanExecuteOwnedNodeAsync(entry, executable, target, node, pipeline, cancellationToken))
+                    throw Refused("Every node of selected owned work requires explicit model/effect qualification.");
         var prepared = await preparer.PrepareAsync(entry, executable, executionId, payload.Inputs, payload.Variables, cancellationToken);
-        if (!prepared.IsAvailable)
+        if (!prepared.IsAvailable || !prepared.Context!.OwnedNodeIds.SequenceEqual(ownedNodes.Select(x => x.ExecutableNodeId), StringComparer.Ordinal))
             throw Refused("The trusted selected setup is unavailable.");
         // Match RuntimeContainerScopeService.BuildVisibleFramesCoreAsync: a scope's iteration is outer
         // to its own container. Supplied frames must preserve the same lexical shadowing order.
@@ -50,6 +58,13 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
             throw Refused("Competing selected captures into one supplied variable are unavailable.");
         await RequireSourceAsync(payload, cancellationToken);
         return prepared;
+    }
+
+    private static IEnumerable<ExecutableNode> OwnedNodes(ExecutableNode node)
+    {
+        yield return node;
+        foreach (var child in node.ChildSlots.SelectMany(x => x.Activities))
+            foreach (var owned in OwnedNodes(child)) yield return owned;
     }
 
     private async ValueTask RequireSourceAsync(WorkflowExecutionStartCommandPayload payload, CancellationToken cancellationToken)
