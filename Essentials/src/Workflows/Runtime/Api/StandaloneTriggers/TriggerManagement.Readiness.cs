@@ -22,6 +22,9 @@ internal sealed partial class TriggerManagement
             current.Trigger.Revision, proposed.Trigger, proposed.Subscriptions), ct);
         foreach (var descriptor in descriptors)
         {
+            var policy = reservationPolicies?.SingleOrDefault(item => item.StimulusType == descriptor.StimulusType);
+            if (policy is not null)
+            { await ValidateSemanticReservationAsync(proposed.Trigger, descriptor, policy, ct); continue; }
             RuntimeIngressReservationPage page;
             try { page = await reservations.ListInScopeAsync(access.Scope.Persistence,
                 new(descriptor.StimulusType, 2, StimulusHash: descriptor.StimulusHash), ct); }
@@ -30,6 +33,42 @@ internal sealed partial class TriggerManagement
             if (page.Next is not null || page.Items.Any(row => row.Scope != access.Scope ||
                 row.OwnerKind != RuntimeIngressReservation.StandaloneTriggerOwner || row.OwnerId != proposed.Trigger.Id))
                 throw new TriggerOperationException("route-conflict", "This source route is already reserved by another resource.");
+        }
+    }
+
+    private async ValueTask ValidateSemanticReservationAsync(StandaloneTrigger trigger, RuntimeIngressReservationDescriptor descriptor,
+        IIngressReservationPolicy policy, CancellationToken ct)
+    {
+        _ = policy.Conflicts(descriptor, descriptor);
+        string? after = null; var seen = new HashSet<string>(StringComparer.Ordinal);
+        do
+        {
+            RuntimeIngressReservationPage page;
+            try { page = await reservations!.ListInScopeAsync(access.Scope.Persistence, new(descriptor.StimulusType, After: after), ct); }
+            catch (NotSupportedException exception)
+            { throw new TriggerOperationException("unavailable", "The actual source reservation cannot be inspected in this composition.", innerException: exception); }
+            foreach (var row in page.Items)
+            {
+                if (row.Scope.Persistence != access.Scope.Persistence)
+                    throw new TriggerOperationException("unavailable", "The reservation reader returned another physical namespace.");
+                if (row.Scope == access.Scope && row.OwnerKind == RuntimeIngressReservation.StandaloneTriggerOwner && row.OwnerId == trigger.Id) continue;
+                if (policy.Conflicts(descriptor, new(row.StimulusType, row.StimulusHash, row.Metadata)))
+                    throw new TriggerOperationException("route-conflict", "This source route is already reserved by another resource.");
+            }
+            after = page.Next;
+            if (after is not null && !seen.Add(after))
+                throw new TriggerOperationException("unavailable", "The reservation reader did not advance its page.");
+        } while (after is not null);
+        if (triggerBindings is null)
+            throw new TriggerOperationException("unavailable", "Published source routes cannot be inspected in this composition.");
+        foreach (var binding in await triggerBindings.ListAllByStimulusTypeAsync(descriptor.StimulusType, ct))
+        {
+            // Native legacy bindings predate scoped reservations. Preserve original bindings and exclude a known
+            // foreign publication before interpreting its route metadata, as the physical publication writer does.
+            if (binding.ActivationId is { } activation && triggerSources is not null &&
+                (await triggerSources.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), ct))?.PublicationScope is { } physical && physical != access.Scope.Persistence) continue;
+            if (policy.Conflicts(descriptor, new(binding.StimulusType, binding.StimulusHash, binding.Metadata)))
+                throw new TriggerOperationException("route-conflict", "This source route is already owned by a published workflow.");
         }
     }
 

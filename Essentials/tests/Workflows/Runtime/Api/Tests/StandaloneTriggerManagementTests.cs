@@ -314,7 +314,7 @@ public sealed partial class StandaloneTriggerManagementTests
 
     private static Fixture HttpPreviewFixture(ReservationReader? reader)
     {
-        var fixture = new Fixture(new RuntimeCapability(true, true), reservations: reader, planners: [new ReservationPlanner()]);
+        var fixture = new Fixture(new RuntimeCapability(true, true), reservations: reader, planners: planners ?? [new ReservationPlanner()], policies: policies, bindings: bindings);
         var grant = new TriggerInvocationGrant("grant", "trigger-a", "subscription-a", "definition-a", "default", "native", "http", 1,
             TriggerGrantStatus.Granted, "operator", fixture.Clock.Now);
         var row = new TriggerSubscription("subscription-a", "trigger-a", "definition-a", "default", "native", 1, 1, true, [], new(TriggerManagementKind.Studio), grant);
@@ -333,7 +333,8 @@ public sealed partial class StandaloneTriggerManagementTests
     {
         internal RuntimeIngressReservation? Row; public bool SupportsReservations => true;
         public ValueTask<RuntimeIngressReservationPage> ListInScopeAsync(PersistenceScope scope, RuntimeIngressReservationQuery query, CancellationToken ct = default) =>
-            ValueTask.FromResult(new RuntimeIngressReservationPage(Row is null ? [] : [Row], null));
+            ValueTask.FromResult(new RuntimeIngressReservationPage(Row is null || Row.StimulusType != query.StimulusType ||
+                query.StimulusHash is not null && Row.StimulusHash != query.StimulusHash ? [] : [Row], null));
         public ValueTask<RuntimeIngressReservation?> FindAsync(TriggerScope scope, string type, string hash, CancellationToken ct = default) => ValueTask.FromResult(Row);
         public ValueTask<RuntimeIngressReservationPage> ListAsync(TriggerScope scope, RuntimeIngressReservationQuery query, CancellationToken ct = default) => ValueTask.FromResult(new RuntimeIngressReservationPage([], null));
     }
@@ -352,12 +353,13 @@ public sealed partial class StandaloneTriggerManagementTests
         internal TriggerManagement Management { get; }
         internal Fixture(ITriggerManagementCommitter? runtime = null, IRecurringTriggerScheduleStore? schedules = null,
             IRuntimeIngressReservationReader? reservations = null, IEnumerable<ITriggerReservationPlanner>? planners = null,
-            IEnumerable<IPortableExpressionHandler>? expressionHandlers = null, IPortableExpressionEvaluator? expressionEvaluator = null)
+            IEnumerable<IPortableExpressionHandler>? expressionHandlers = null, IPortableExpressionEvaluator? expressionEvaluator = null, IEnumerable<IIngressReservationPolicy>? policies = null,
+            IWorkflowTriggerBindingStore? bindings = null)
         {
             Committer = new(Store);
             Management = new(Store, runtime ?? Committer, Access, new Catalog(), Discovery, new Mapper(), new Publisher(), new EphemeralDataProtectionProvider(), Clock,
                 schedules: schedules, reservations: reservations, reservationPlanners: planners,
-                expressionHandlers: expressionHandlers, expressionEvaluator: expressionEvaluator);
+                expressionHandlers: expressionHandlers, expressionEvaluator: expressionEvaluator, reservationPolicies: policies, triggerBindings: bindings);
         }
     }
     private sealed class Clock : TimeProvider

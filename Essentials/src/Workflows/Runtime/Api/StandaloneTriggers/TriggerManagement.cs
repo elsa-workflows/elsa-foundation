@@ -17,7 +17,9 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
     TriggerDeliveryOperations? deliveries = null, IRecurringTriggerScheduleStore? schedules = null,
     IRuntimeIngressReservationReader? reservations = null, IEnumerable<ITriggerReservationPlanner>? reservationPlanners = null,
     IEnumerable<IPortableExpressionHandler>? expressionHandlers = null, IPortableExpressionEvaluator? expressionEvaluator = null,
-    IEnumerable<IStandaloneSchedulePlanner>? schedulePlanners = null)
+    IEnumerable<IStandaloneSchedulePlanner>? schedulePlanners = null,
+    IEnumerable<IIngressReservationPolicy>? reservationPolicies = null, IWorkflowTriggerBindingStore? triggerBindings = null,
+    IWorkflowExecutableSourceReferenceStore? triggerSources = null)
 {
     private readonly IDataProtector previewProtector = protection.CreateProtector("Elsa.StandaloneTriggers.ChangePreview.v1");
 
