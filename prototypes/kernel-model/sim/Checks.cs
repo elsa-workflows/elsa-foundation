@@ -487,7 +487,13 @@ public sealed partial class World
                     return $"I15 actor {Of(node, partition).Id} still holds the reply address {late} past its deadline";
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Jobs.Count > 0))) continue;
             if (Unfair() is not null) continue;
-            if (published && (!Config.Native || NativeMeet() == 0)) return End();    // native waits that appeared since get their events too
+            if (published && (!Config.Native || NativeMeet() == 0))    // native waits that appeared since get their events too
+            {
+                // A dying owner may commit after its observer disappears. Normal settlement still runs first;
+                // only the final idle check waits for live callers to reach their existing deadlines.
+                if (Asked.Any(a => Running(a.Process) && !a.Request.Done && Time < a.Request.Deadline)) continue;
+                return End();
+            }
             if (Meet() is { } missed) return missed;
             published = true;
         }

@@ -41,7 +41,22 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
         const items = await listDecisions(api); if (ticket !== generation.current) return; setAssets(items); setXml(""); setName("");
       }
     } catch (failure) { if (ticket === generation.current) setError(failureMessage(failure)); }
-    finally { if (ticket === generation.current) { settledRoute.current = `${assetId ?? ""}|${versionId ?? ""}`; setLoading(false); requestAnimationFrame(() => isNew ? titleInput.current?.focus() : editor ? heading.current?.focus() : newButton.current?.focus()); } }
+    finally {
+      if (ticket === generation.current) {
+        settledRoute.current = `${assetId ?? ""}|${versionId ?? ""}`;
+        const previousFocus = document.activeElement;
+        setLoading(false);
+        requestAnimationFrame(() => {
+          if (ticket !== generation.current) return;
+          const target = isNew ? titleInput.current : editor ? heading.current : newButton.current;
+          if (!target?.isConnected) return;
+          const active = target.ownerDocument.activeElement;
+          // A later field selection belongs to the author, even before this frame runs.
+          if (active && active !== target.ownerDocument.body && active !== previousFocus) return;
+          target.focus();
+        });
+      }
+    }
   }, [api, assetId, versionId, isNew, apply, editor]);
   const invalidate = useCallback(() => { generation.current += 1; }, []);
   // Retire old completions before the host hands notifications to the next visit.

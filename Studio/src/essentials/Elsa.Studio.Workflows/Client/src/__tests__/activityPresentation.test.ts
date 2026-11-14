@@ -57,7 +57,7 @@ describe("activity presentation metadata", () => {
     expect(resolveActivityLabel(undefined, undefined, "executable-missing:Elsa.HttpEndpoint@1.1.0")).toBe("HttpEndpoint");
   });
 
-  it("skips GUID and version-hash presentation names in favor of the catalog display name", () => {
+  it("distinguishes technical fallback labels from explicit presentation names", () => {
     expect(isTechnicalActivityLabel("0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5")).toBe(true);
     expect(isTechnicalActivityLabel("1.0.0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5")).toBe(true);
     expect(isTechnicalActivityLabel("3fa85f64-5717-4562-b3fc-2c963f66afa6")).toBe(true);
@@ -75,14 +75,22 @@ describe("activity presentation metadata", () => {
       { nodeId: "event-1", displayName: "3fa85f64-5717-4562-b3fc-2c963f66afa6" },
       eventCatalog,
       eventCatalog.activityTypeKey
-    )).toBe("Event");
+    )).toBe("3fa85f64-5717-4562-b3fc-2c963f66afa6");
     expect(resolveRuntimeActivityLabel(
       { nodeId: "event-1", displayName: "0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5" },
       eventCatalog,
       eventCatalog.activityTypeKey
-    )).toBe("Event");
+    )).toBe("0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5");
     expect(resolveRuntimeActivityLabel(undefined, undefined, "1.0.0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5"))
       .toBe("Activity");
+  });
+
+  it.each(["3fa85f64-5717-4562-b3fc-2c963f66afa6", "deadbeefdeadbeef", "2026111400000001"])("keeps the explicit name %s with or without a historical catalog", displayName => {
+    const presentation = { nodeId: "named", displayName: ` ${displayName} ` };
+    expect(resolveRuntimeActivityLabel(presentation, catalogItem, catalogItem.activityTypeKey)).toBe(displayName);
+    expect(resolveRuntimeActivityLabel(presentation, undefined, "executable-missing:Elsa.Sequence@1")).toBe(displayName);
+    expect(resolveRuntimeActivityLabel(undefined, { ...catalogItem, displayName }, catalogItem.activityTypeKey)).toBe("Activity");
+    expect(resolveRuntimeActivityLabel({ nodeId: "named", displayName: " " }, { ...catalogItem, displayName: "Event" }, "Elsa.Event")).toBe("Event");
   });
 
   it.each([

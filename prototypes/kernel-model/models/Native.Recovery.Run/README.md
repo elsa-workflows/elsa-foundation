@@ -1,0 +1,11 @@
+# Ordinary native intervention experiment
+
+Non-packable M0 evidence under [the proposed recovery contract](../../../../specs/1210-state-machine/contracts/recovery.md). This is an internal opt-in profile, not product incident/retry APIs or StateMachine acceptance.
+
+`dotnet run --project prototypes/kernel-model/models/Native.Recovery.Run -c Release` runs one minimal actual child-fault witness, 38 actual intervention/policy schedules and 17 literal reader fixtures. `--list` inventories them; `--minimal` isolates the original before/after witness.
+
+The profile freezes its effective policy in a qualified Balanced/Durable invocation. A materialized, non-background stateless leaf with every input bound can retain a fault awaiting intervention when its immediate ordinary parent is Sequence or Parallel. Input bindings use the normal hydrator snapshot once; mutable activity inputs cannot alter the retained snapshot. The failed occurrence is not runnable. Parents, completed work, independent siblings and ancestor-owned lexical values survive; ordinary native cancellation still disposes the subtree.
+
+Legacy policy and explicit custom fault absorption retain their existing routing. Unbound/constructor-default inputs, activation exceptions, intrinsic/stateful/background/composite faults, custom-parent routing, root-occurrence intervention and operator retry are **unsupported by this slice** and continue through existing fault routing. No unsupported retry boundary is exposed. Native checkpoint version 5 adds the private profile/incident/pinned-input fields; v4 scoped checkpoints upgrade without inventing recovery state. Mixed legacy recovery data is refused. Reader fixtures are not historical-binary rollout evidence.
+
+The actual schedules cover Sequence/Parallel, root/nested ordinary composition, both persistence modes, opposite branch orders, cold owner takeover, an independently completing waiting sibling, mutable input separation, retained scope ownership, cancellation and a stale continuation. They do not prove source installation, admission during recovery, fresh-successor identity/parent rebinding, StateMachine phase recovery, provider durability, product/operator authorization or Studio behavior. Those remain mandatory later units in the full program.

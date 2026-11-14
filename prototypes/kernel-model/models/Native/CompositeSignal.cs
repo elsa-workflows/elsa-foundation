@@ -19,7 +19,7 @@ internal sealed partial class Burst
 
     private (ISignalledComposite Receiver, CompositeContext Context)? Receiver(string frameId)
     {
-        if (!_s.Frames.TryGetValue(frameId, out var frame)) return null;
+        if (!_s.Frames.TryGetValue(frameId, out var frame) || frame.Intervention is not null) return null;
         var node = _wf.Nodes[frame.Node];
         if (!typeof(ISignalledComposite).IsAssignableFrom(node.Type)) return null;
         var receiver = (ISignalledComposite)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
