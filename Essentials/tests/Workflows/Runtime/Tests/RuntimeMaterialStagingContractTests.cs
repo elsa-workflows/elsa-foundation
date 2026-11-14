@@ -58,7 +58,7 @@ public sealed class RuntimeMaterialStagingContractTests
             while (true)
             {
                 if (++Enumerated > RuntimeMaterialStageCommand.MaximumMembers + 1) throw new InvalidOperationException("The command failed to bound enumeration.");
-                yield return new(new("activity-template", "template", new("source-" + Enumerated, "partition", null)), [1], null, null, null, template: member.Template);
+                yield return new(new("activity-template", "template", new("source-" + Enumerated, "partition", null)), new byte[] { 1 }, null, null, null, template: member.Template);
             }
         }
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
