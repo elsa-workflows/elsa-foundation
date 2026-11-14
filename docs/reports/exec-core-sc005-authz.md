@@ -86,3 +86,7 @@ Every hosted cell is SQLite Owned Workbench, one process. No second host, no sec
 ## 7. Out of scope (honoured)
 
 No production code change. [#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650), [#4038](https://github.com/elsa-workflows/elsa-foundation/issues/4038), ETL [#3804](https://github.com/elsa-workflows/elsa-foundation/issues/3804)/[#3789](https://github.com/elsa-workflows/elsa-foundation/issues/3789), [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) untouched. No issue closed.
+
+## Runnable example / supported profile / G-e
+
+The hosted non-admin Fact in this report is the SC-005 runnable example (same SQLite Owned Workbench limit as §6). The milestone supported profile is [unified-execution.md](../program-goals/unified-execution.md) plus [G2 Limit](exec-core-g2-child-outcome-mapping.md#limit-every-hosted-cell) and [S8 unsupported / open](exec-core-migration-rollback.md#6-unsupported--open). The recorded #3993 post-restart timeout is unrelated to authorization; see [G3 G-e](exec-core-g3-overhead-counts.md#g-e--recorded-3993-post-restart-timeout-causal).

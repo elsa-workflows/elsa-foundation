@@ -49,7 +49,11 @@ for (const width of [390, 1440, 2400]) {
     const canvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
     await expect(canvas).toBeVisible();
     const pageBox = (await page.locator(".golden-runs-page").boundingBox())!;
-    const titleBox = (await header.getByRole("heading", { name: "Run", exact: true }).boundingBox())!;
+    const heading = header.getByRole("heading", { name: "Run · Billing workflow", exact: true });
+    await expect(heading).toHaveAccessibleName("Run · Billing workflow");
+    await expect(heading).toHaveAttribute("title", "Run · Billing workflow");
+    const titleBox = (await heading.boundingBox())!;
+    expect(titleBox.height).toBeLessThanOrEqual(36);
     const contextBox = (await header.locator(".wf-page-context").boundingBox())!;
     const toolbarBox = (await toolbar.boundingBox())!;
     const buttonBox = (await toolbar.getByRole("button", { name: "Runs", exact: true }).boundingBox())!;
