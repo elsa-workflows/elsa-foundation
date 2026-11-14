@@ -29,6 +29,12 @@ public sealed record PublicationActivationRequest(
     WorkflowExecutable Executable,
     WorkflowExecutableSourceReference Reference);
 
+/// <summary>Publishes exact stored native/model material using the existing logical-definition slot and journal.</summary>
+public sealed record PublicationMaterialActivationRequest(
+    PublicationRecord Candidate,
+    RuntimeExecutionMaterial Material,
+    WorkflowExecutableSourceReference Reference);
+
 public sealed record PublicationActivationResult(
     bool Succeeded,
     PublicationRecord Publication,

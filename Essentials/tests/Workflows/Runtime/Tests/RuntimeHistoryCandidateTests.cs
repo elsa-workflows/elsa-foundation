@@ -287,9 +287,36 @@ public sealed class RuntimeHistoryCandidateTests
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Candidate capture must not write a store.");
     }
-    private sealed class FailedRead(Exception failure) : IWorkflowExecutionStateStore
+    [Theory]
+    [InlineData("io", false)] [InlineData("io", true)]
+    [InlineData("wrapped-cancel", false)] [InlineData("wrapped-cancel", true)]
+    [InlineData("json", false)] [InlineData("json", true)]
+    [InlineData("success", false)] [InlineData("success", true)]
+    public async Task Late_policy_read_honors_the_actual_caller_token_before_capture_or_final_validation(string shape, bool finalValidation)
     {
-        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw failure;
+        using var cancellation = new CancellationTokenSource();
+        Exception? failure = shape switch
+        {
+            "io" => new IOException("constructed dependency failure"),
+            "wrapped-cancel" => new InvalidOperationException("constructed provider cancellation", new OperationCanceledException(cancellation.Token)),
+            "json" => new JsonException("constructed malformed document"),
+            _ => null
+        };
+        using var fixture = await Fixture.Create(null, saveNative: false,
+            executionOverride: new FailedRead(failure, cancellation.Cancel, Workflow(Policy("WorkflowStarted"))));
+        var raw = Commit("cancelled-capture", RuntimeCheckpointNames.WorkflowStarted, workflow: Workflow(Policy("WorkflowStarted")));
+        var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            if (finalValidation) await fixture.Capture.ValidateFinalAsync(raw, cancellation.Token);
+            else await fixture.Capture.EnrichAsync(raw, cancellation.Token);
+        });
+        Assert.Equal(cancellation.Token, caught.CancellationToken);
+    }
+
+    private sealed class FailedRead(Exception? failure, Action? beforeReturn = null, WorkflowExecutionState? result = null) : IWorkflowExecutionStateStore
+    {
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        { beforeReturn?.Invoke(); return failure is null ? ValueTask.FromResult(result) : ValueTask.FromException<WorkflowExecutionState?>(failure); }
         public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();

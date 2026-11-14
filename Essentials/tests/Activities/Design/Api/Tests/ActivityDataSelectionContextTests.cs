@@ -1,4 +1,11 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Schema;
+using System.Text.Json.Nodes;
+using Elsa.Api.AspNetCore;
+using Elsa.Testing;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Services;
@@ -25,6 +32,59 @@ namespace Elsa.Activities.Design.Api.Tests;
 
 public sealed class ActivityDataSelectionContextTests
 {
+    [Fact]
+    public void Whole_value_query_path_is_an_optional_array_in_the_generated_schema()
+    {
+        var schema = JsonSchemaExporter.GetJsonSchemaAsNode(ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionQuery))!);
+        using var document = JsonDocument.Parse(schema.ToJsonString());
+        Assert.Equal("array", document.RootElement.GetProperty("properties").GetProperty("memberPath").GetProperty("type").GetString());
+        if (document.RootElement.TryGetProperty("required", out var required))
+            Assert.DoesNotContain(required.EnumerateArray(), member => member.GetString() == "memberPath");
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"includeSources\":true,\"take\":100,\"shapeLimits\":{\"maximumDepth\":4,\"maximumMembers\":128}}")]
+    public async Task Omitted_query_members_use_the_same_whole_value_defaults_as_an_explicit_empty_path(string queryJson)
+    {
+        using var fixture = new Fixture();
+        var before = fixture.Store.Draft.State;
+        var request = fixture.Request() with { Query = new() };
+        var expected = await InvokeJson(fixture, request, "{\"includeSources\":true,\"skip\":0,\"take\":100,\"memberPath\":[],\"shapeLimits\":{\"maximumDepth\":4,\"maximumMembers\":128}}");
+        var actual = await InvokeJson(fixture, request, queryJson);
+
+        Assert.Equal("empty", actual.State);
+        Assert.Equal(expected.ContextRevision, actual.ContextRevision);
+        Assert.Equal(JsonSerializer.Serialize(expected, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionContextResponse))!),
+            JsonSerializer.Serialize(actual, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionContextResponse))!));
+        Assert.Same(before, fixture.Store.Draft.State);
+        Assert.Equal(5, fixture.Store.Draft.Revision);
+    }
+
+    private static async Task<ActivityDataSelectionContextResponse> InvokeJson(Fixture fixture, ActivityDataSelectionContextRequest request, string queryJson)
+    {
+        using var services = new ServiceCollection().AddLogging().AddRouting().AddElsaEndpoints()
+            .AddSingleton(fixture.Service).BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(services);
+        ActivitiesDesignApi.MapActivitiesDesignApi(routes);
+        var endpoint = Assert.Single(routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>(),
+            route => route.RoutePattern.RawText == "/design/activities/drafts/{draftId}/activity-data/context");
+        var wire = JsonNode.Parse(JsonSerializer.Serialize(request, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionContextRequest))!))!;
+        wire["query"] = JsonNode.Parse(queryJson);
+        var http = new DefaultHttpContext { RequestServices = services };
+        http.Request.Method = "POST";
+        http.Request.Path = "/design/activities/drafts/draft/activity-data/context";
+        http.Request.RouteValues["draftId"] = "draft";
+        http.Request.ContentType = "application/json";
+        http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(wire.ToJsonString()));
+        http.Response.Body = new MemoryStream();
+        await endpoint.RequestDelegate!(http);
+        http.Response.Body.Position = 0;
+        Assert.Equal("no-store", http.Response.Headers.CacheControl.ToString());
+        return (await JsonSerializer.DeserializeAsync(http.Response.Body,
+            (System.Text.Json.Serialization.Metadata.JsonTypeInfo<ActivityDataSelectionContextResponse>)ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityDataSelectionContextResponse))!))!;
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

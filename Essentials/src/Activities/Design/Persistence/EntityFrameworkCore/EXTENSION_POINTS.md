@@ -49,3 +49,14 @@ ownership before registering the EF contexts, stores, projection writer, and ato
 `ActivitiesDesignEntityFrameworkCore` feature also registers `AddEfModuleMigrations<ActivitiesDesignDbContext>`,
 so the shared `EfModuleMigrator<TContext>` applies or validates the four-provider migrations under
 `Migrations/ActivitiesDesign/` in the CShells Prepare phase.
+
+## Exact reusable-publication source snapshots
+
+| Contract | Kind, layer and default | Signature | Replacement guidance and callers |
+|---|---|---|---|
+| `IActivityPublicationSnapshotReader` | Replacement in Activity Design Persistence.Core; an owned alias of selected `EfActivityDesignStores` | `ValueTask<ActivityPublicationSnapshot?> FindAsync(string versionId, string expectedPartition, ActivityPublicationSnapshotLimits limits, CancellationToken cancellationToken = default)` | Preserve original contract/provider JSON and publication projection fragments in a bounded consistent source snapshot. Copied arrays cannot mutate the snapshot. Future native release catalog acquisition consumes this capability; no capture source is installed here. |
+
+The expected physical partition is independent of the row's nullable logical owner tenant. An observed global
+row remains explicitly known global. The profile admits current-schema, uncompressed UTF-8 SQLite, refuses caller-owned
+transactions/pending changes, and checks actual stored types/combined JSON byte bounds before payload reads.
+Provider failures retain the Design persistence exception and cause. No compiler or typed contract projection runs.

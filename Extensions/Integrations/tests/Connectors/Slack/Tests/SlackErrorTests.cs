@@ -3,7 +3,7 @@ using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Integrations.Connectors.Slack;
 using Elsa.Integrations.Connectors.Slack.Activities;
-using Elsa.Integrations.Sdk.Harness;
+using Elsa.Integrations.Sdk.Testing;
 
 namespace Elsa.Integrations.Connectors.Slack.Tests;
 

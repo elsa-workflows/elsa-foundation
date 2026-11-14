@@ -69,8 +69,9 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     await page.goto(`/workflows/definitions?definition=${definitionId}&backend=legacy`);
     const consumer = page.locator('.wf-sequence-step[data-id="consumer"], .react-flow__node[data-id="consumer"]').first();
     await expect(consumer).toBeAttached();
-    // Selecting by keyboard works at every width, including when the narrow canvas is mostly covered.
+    // Phone authoring starts with the canvas; explicitly open the selected activity's details.
     await consumer.press("Enter");
+    if (page.viewportSize()!.width <= 600) await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
     await expect(page.locator(".wf-inspector-context h3")).toHaveText("Write Line");
     // A freshly loaded draft may autosave its normalized form; let that settle so the chooser answers the saved draft.
     await expect(page.getByText("Autosaving...", { exact: true })).toHaveCount(0, { timeout: 30_000 });

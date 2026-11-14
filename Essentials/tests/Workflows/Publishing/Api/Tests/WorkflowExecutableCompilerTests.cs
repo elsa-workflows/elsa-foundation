@@ -1300,12 +1300,14 @@ public sealed class WorkflowExecutableCompilerTests
 
         static Task<WorkflowExecutable> CompileAsync(
             WorkflowArgumentState input,
-            IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
+            IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null,
+            IReadOnlyCollection<InputDefinition>? workflowInputs = null) =>
             SecretBindingCompilerFixture.CompileAsync(
             SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse), input),
             [typeof(WriteHttpResponse)],
             variables: variables,
-            includeDeclaredInputDefaults: true);
+            includeDeclaredInputDefaults: true,
+            workflowInputs: workflowInputs);
 
         var literal = await CompileAsync(Input(nameof(WriteHttpResponse.Body), "literal-body", "Literal"));
         var objectValue = await CompileAsync(Input(
@@ -1315,7 +1317,8 @@ public sealed class WorkflowExecutableCompilerTests
         var request = await CompileAsync(Input(
             nameof(WriteHttpResponse.Body),
             JsonSerializer.SerializeToElement(new { memberKey = "body" }),
-            "WorkflowRequest"));
+            "WorkflowRequest"),
+            workflowInputs: [new("body", "body", new TypeReference("String"), null, "Body", null, IsNullable: false)]);
         var variableDefinition = new Elsa.Expressions.Core.Models.VariableDefinition(
             "response-body",
             "Response Body",

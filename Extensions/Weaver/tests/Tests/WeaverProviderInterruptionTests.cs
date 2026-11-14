@@ -90,7 +90,7 @@ public sealed class WeaverProviderInterruptionTests
             : [new(WeaverRole.User, "now")];
 
         var events = new List<WeaverStreamEvent>();
-        await foreach (var item in provider.RunTurnAsync(new WeaverHarnessTurnRequest("session-1", "actor-1", history, [], [], WeaverPolicy.Default)))
+        await foreach (var item in provider.RunTurnAsync(new WeaverHarnessTurnRequest("session-1", "actor-1", history, [], [], WeaverPolicy.Default) { TenantId = "tenant-1" }))
             events.Add(item);
 
         Assert.True(client.Created);
@@ -119,7 +119,7 @@ public sealed class WeaverProviderInterruptionTests
         IReadOnlyList<WeaverTurnMessage> history = [new(WeaverRole.User, "failed first"), new(WeaverRole.User, "now")];
 
         var events = new List<WeaverStreamEvent>();
-        await foreach (var item in provider.RunTurnAsync(new WeaverHarnessTurnRequest("session-1", "actor-1", history, [], [], WeaverPolicy.Default)))
+        await foreach (var item in provider.RunTurnAsync(new WeaverHarnessTurnRequest("session-1", "actor-1", history, [], [], WeaverPolicy.Default) { TenantId = "tenant-1" }))
             events.Add(item);
 
         Assert.True(client.Created);

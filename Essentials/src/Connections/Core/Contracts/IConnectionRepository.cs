@@ -41,12 +41,15 @@ public interface IConnectionRepository
 
     /// <summary>
     /// Saves a document with compare-and-swap on <see cref="ConnectionState.Version"/>. The save succeeds
-    /// only when the stored version equals the document's, and then stores the document with the version
+    /// only when the stored version and ordinal creation identity equal the document's, and then stores the document with the version
     /// incremented by one. Otherwise, including when the stored document was deleted, it throws
     /// <see cref="Exceptions.ConnectionConflictException"/> and writes nothing. The manager relies on this
     /// so that a concurrent update, revoke or test never overwrites another one. Whether the new version is
     /// also written back onto <paramref name="document"/> is up to the implementation, so read the document
     /// again before saving it a second time.
+    /// A known creation identity is immutable; save cannot replace it or restore a deleted incarnation when revisions
+    /// repeat. Legacy empty identities can update only an equally empty legacy identity and remain unqualified for
+    /// identity-bound mappings. Establishing a trustworthy identity for legacy data requires explicit owner adoption.
     /// </summary>
     ValueTask SaveAsync(ConnectionDocument document, CancellationToken cancellationToken = default);
 

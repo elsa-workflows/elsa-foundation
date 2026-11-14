@@ -1,0 +1,57 @@
+#nullable enable
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveReader
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveReader.FindAsync(string! captureId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveSnapshot?>
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveSnapshot
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveSnapshot.CaptureId.get -> string!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveSnapshot.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveSnapshot.Scope.get -> Elsa.Persistence.Core.SourceScope!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveSnapshot.Transport.get -> Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveSnapshot.ValidationLevel.get -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveValidationLevel
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveStoreCapabilities
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveStoreCapabilities.GetCapabilitiesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities!>
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveWriter
+Elsa.Workflows.Publishing.Releases.Persistence.Core.IReleaseArchiveWriter.CreateAsync(string! captureId, System.IO.Stream! zip, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt!>
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCommitOutcomeUnknownException
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCommitOutcomeUnknownException.ReleaseArchiveCommitOutcomeUnknownException(System.Exception! innerException) -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome.Created = 1 -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome.Existing = 2 -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome.Unknown = 0 -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.CaptureId.get -> string!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.CaptureId.init -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.Deconstruct(out string! CaptureId, out string! ReleaseDigest, out Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome Outcome) -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.Equals(Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt? other) -> bool
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.Outcome.get -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.Outcome.init -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.ReleaseArchiveCreateReceipt(string! CaptureId, string! ReleaseDigest, Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateOutcome Outcome) -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.ReleaseDigest.get -> string!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.ReleaseDigest.init -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.Deconstruct(out string! Provider, out bool DurableCapture, out bool SchemaReady) -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.DurableCapture.get -> bool
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.DurableCapture.init -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.Equals(Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities? other) -> bool
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.Provider.get -> string!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.Provider.init -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.ReleaseArchiveStoreCapabilities(string! Provider, bool DurableCapture, bool SchemaReady) -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.SchemaReady.get -> bool
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.SchemaReady.init -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreException
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreException.Code.get -> string!
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreException.ReleaseArchiveStoreException(string! code, System.Exception? innerException = null) -> void
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveValidationLevel
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveValidationLevel.TransportOnly = 1 -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveValidationLevel
+Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveValidationLevel.Unknown = 0 -> Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveValidationLevel
+override Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.ToString() -> string!
+static Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.operator !=(Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt? left, Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt.operator ==(Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt? left, Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveCreateReceipt? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.operator !=(Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities? left, Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities.operator ==(Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities? left, Elsa.Workflows.Publishing.Releases.Persistence.Core.ReleaseArchiveStoreCapabilities? right) -> bool

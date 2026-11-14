@@ -99,6 +99,8 @@
   --studio-field-border-width: 1px;
   --studio-field-padding: 10px 11px;
   --studio-field-surface: var(--studio-surface);
+  --studio-outlined-field-width: 1px;
+  --studio-outlined-field-gap: 5px;
 
   /* Disclosure motion. Caps enter/expand animation at 150ms; reduced-motion zeroes both. */
   --studio-disclosure-duration: 150ms;

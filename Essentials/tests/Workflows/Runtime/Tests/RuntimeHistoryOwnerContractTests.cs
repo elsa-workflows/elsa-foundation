@@ -176,6 +176,26 @@ public sealed class RuntimeHistoryOwnerContractTests
         Assert.Same(delta, earlier.CheckpointValueCapture);
     }
 
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public void Value_capture_fingerprint_preserves_exact_opaque_work_and_evidence_before_payload_conversion(bool evidence, bool withSources)
+    {
+        RuntimeCheckpointCommit Commit(string opaque)
+        {
+            var delta = new RuntimeCheckpointValueCapture("checkpoint", evidence ? "work" : opaque, evidence ? [opaque] : []);
+            var projection = ActivityExecutionInspectionProjection.FromState(State(), "checkpoint", At) with { CheckpointValueCapture = delta };
+            var changes = new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], [],
+                activityExecutionInspections: [new(projection.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, projection, new Dictionary<string, string>())]);
+            return new("commit", new("checkpoint", "name", "run", At, [], new Dictionary<string, string>()), changes, [], new Dictionary<string, string>())
+                { HistorySourceFacts = withSources ? [SourceFact("source")] : null };
+        }
+        var first = Commit("\ud800"); var second = Commit("\ud801");
+        Assert.Null(first.ExpectedBookmarkResume);
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(second));
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(Commit("\ud800")));
+    }
+
     private static RuntimeHistorySourceFact SourceFact(string subject) => new(RuntimeHistorySourceFactKind.ActivityContinuationStarted, subject, At);
 
     private static RuntimeCheckpointCommit Legacy() => new("commit", new("checkpoint", "name", "waiter", At, [], new Dictionary<string, string>()),

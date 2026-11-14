@@ -59,6 +59,8 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
   if (await autosave.getAttribute("aria-checked") === "true") await autosave.click();
   await page.keyboard.press("Escape");
   await page.locator('.wf-sequence-step[data-id="message"]').press("Enter");
+  const expandInspector = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+  if (info.project.name.startsWith("narrow") && await expandInspector.isVisible()) await expandInspector.press("Enter");
   const text = page.getByRole("textbox", { name: "Text", exact: true });
   await expect(text).toBeVisible(); await text.fill("Unsaved template text"); await text.press("Tab");
   await actions.click(); await page.getByRole("menuitem", { name: "Save as template", exact: true }).click();

@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -49,10 +52,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <param name="CreatedAt">When the schedule was first written.</param>
 public sealed record RecurringTriggerSchedule(
     string ScheduleId,
-    string ArtifactId,
-    string ExecutableNodeId,
-    string StimulusType,
-    string StimulusHash,
+    string? ArtifactId,
+    string? ExecutableNodeId,
+    string? StimulusType,
+    string? StimulusHash,
     RecurringScheduleKind Kind,
     string Expression,
     DateTimeOffset NextOccurrence,
@@ -61,6 +64,26 @@ public sealed record RecurringTriggerSchedule(
     string? SlotId = null,
     bool IsActive = true)
 {
+    /// <summary>Resource-owned recurrence. Null preserves the existing workflow-owned document and identity.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecurringTriggerOwner? Resource { get; init; }
+
+    /// <summary>Last recorded admission failure for the held occurrence. Null means no recorded reason, including legacy state.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RecurringTriggerScheduleFailureReason? FailureReason { get; init; }
+
+    public static string BuildResourceId(PersistenceScope scope, string triggerId, string? tenantId)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentException.ThrowIfNullOrWhiteSpace(triggerId);
+        return "resource-recurring:v1:" + RuntimeDeliveryFingerprint.Compute("elsa.runtime.resource-schedule.v1",
+            new { scope = scope.Value, triggerId, tenant = new { present = tenantId is not null, value = tenantId } });
+    }
+
+    public static RecurringTriggerSchedule ForResource(RecurringTriggerOwner owner, RecurringScheduleKind kind,
+        string expression, DateTimeOffset nextOccurrence, DateTimeOffset createdAt) =>
+        new(BuildResourceId(owner.Scope, owner.TriggerId, owner.TenantId), null, null, null, null, kind, expression, nextOccurrence.ToUniversalTime(), createdAt)
+        { Resource = owner };
     /// <summary>
     /// Builds the deterministic, collision-free schedule id for a trigger node in an artifact, using the same
     /// escaping as <c>WorkflowTriggerBinding.BuildId</c> so a separator inside an id cannot forge a different
@@ -112,9 +135,11 @@ public sealed record RecurringTriggerSchedule(
     /// <c>KeyedWorkflowStartIdentityTests</c> pins it.
     /// </remarks>
     public string BuildOccurrenceKey() =>
-        SlotId is null
+        Resource is { } owner
+            ? $"recurring-resource:v1:{ScheduleId}:{owner.Generation.ToString(CultureInfo.InvariantCulture)}:{NextOccurrence.UtcTicks.ToString(CultureInfo.InvariantCulture)}"
+            : SlotId is null
             ? $"recurring:{ScheduleId}:{NextOccurrence.UtcTicks}"
-            : $"recurring:{Escape(SlotId)}:{Escape(ExecutableNodeId)}:{Escape(StimulusHash)}:{NextOccurrence.UtcTicks}";
+            : $"recurring:{Escape(SlotId)}:{Escape(ExecutableNodeId!)}:{Escape(StimulusHash!)}:{NextOccurrence.UtcTicks}";
 
     /// <summary>
     /// Whether <paramref name="other"/> is the same trigger in another publication of the same slot: the same slot (which

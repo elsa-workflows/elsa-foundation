@@ -18,6 +18,7 @@ internal static class ActivityHistoryPreflight
         {
             var nativeStore = services.GetService<IWorkflowExecutionStateStore>();
             var native = nativeStore is null ? null : await nativeStore.FindAsync(workflowId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (native?.HistoryCapturePolicy is not { } policy) return null;
             // Short-circuit before any diagnostic reader for legacy runs or a missing source/capture module.
             if (services.GetService<IRuntimeHistorySourceExtension>() is null || !RuntimeHistorySourceFacts.IsFinalProfile(policy) ||
@@ -35,10 +36,12 @@ internal static class ActivityHistoryPreflight
         }
         catch (Exception exception) when (IsMalformed(exception))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeHistoryIntegrityException(workflowId, "the callback could not interpret its admitted history policy", exception);
         }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsUnavailable(exception))
+        catch (Exception exception) when (IsUnavailable(exception))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
                 "Callback history source metadata is unavailable.", exception);
         }
