@@ -44,8 +44,8 @@ public sealed class StandaloneScheduleSourcesTests
         var cron = Trigger(type: "cron", settings: Json("{\"expression\":\"0 9 * * *\",\"timezone\":\"Europe/Amsterdam\"}"));
         var failure = Assert.Throws<TriggerOperationException>(() => planner.Plan(Scope, null, Write(cron), null, Now));
         Assert.Equal("unavailable", failure.Code);
-        Assert.Equal(Scope.Persistence.Value, failure.Metadata["scope"]);
-        Assert.Equal(cron.Id, failure.Metadata["triggerId"]);
+        Assert.Equal(Scope.Persistence.Value, failure.Fields!["scope"]);
+        Assert.Equal(cron.Id, failure.Fields!["triggerId"]);
         Assert.IsType<NotSupportedException>(failure.InnerException);
     }
 
