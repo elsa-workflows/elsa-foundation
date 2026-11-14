@@ -31,8 +31,9 @@ internal static class CreationChecks
             if (recover) p.B.IntermediateCatchEvent("gate", message, bindingRef: "gate");
             if (recover) p.Chain("start", "gate", "raise", "hold", "end");
             else p.Chain("start", "raise", "hold", "end");
-            registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work>
-            { ["hold"] = new MessageWork("child-release", "order"), ["gate"] = new MessageWork("child-go", "order") }));
+            var childWork = new Dictionary<string, Work> { ["hold"] = new MessageWork("child-release", "order") };
+            if (recover) childWork["gate"] = new MessageWork("child-go", "order");
+            registry.Add(new BpmnProcess(p.Build(), childWork));
             p = new ProcessDraft("identity-wait");
             p.B.StartEvent("start").IntermediateCatchEvent("hold", message, bindingRef: "hold").EndEvent("end");
             p.Chain("start", "hold", "end");
