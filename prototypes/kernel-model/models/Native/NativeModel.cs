@@ -117,18 +117,20 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 7 freezes private recovery capabilities; old invocations keep their child-only policy.</summary>
-    public int StateVersion => 7;
+    /// <summary>Version 10 gates the optional admitted-input machine checkpoint; old policies remain unchanged.</summary>
+    public int StateVersion => 10;
     public object UpgradeState(string state, int fromVersion)
     {
-        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
         if (fromVersion < 4 && LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
         if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
         if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
-        if (native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
+        if (fromVersion < 7 && native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
+        if (native.InterventionPolicy < 0 || native.InterventionPolicy > (fromVersion < 8 ? 2 : fromVersion < 9 ? 3 : 4) ||
+            fromVersion < 8 && NativeStatefulRecovery.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported stateful recovery data.");
         return native;
     }
 
@@ -194,7 +196,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             if (model.HandlesMetadata(message)) turn.Hold(message);
             else Accept(message);
         if (_retryAccepted) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
-        else await DrainAsync();
+        else { await DrainAsync(); DrainInputs(); }
         FinishSignals();
         if (turn.Inbox.Any(model.HandlesMetadata)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
@@ -310,6 +312,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         if (work.RetrySource is not null)
         {
             frame.RetrySource = work.RetrySource; frame.OperationKey = work.OperationKey;
+            frame.RecoveryStateful = _s.Retries!.Values.Single(r => r.Source.Id == work.RetrySource && r.Successor == work.Frame).Source.RecoveryStateful;
             frame.RecoveryInputs = (JsonObject)work.RecoveryInputs!.DeepClone(); frame.RecoveryMaterial = (JsonObject)work.RecoveryMaterial!.DeepClone();
             if (!JsonNode.DeepEquals(frame.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf)))
                 throw new InvalidOperationException("Scheduled retry material is unavailable.");
@@ -360,7 +363,15 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     private async ValueTask ResumeAsync(Work work)
     {
-        if (!_s.Waits.Remove(work.Wait!, out var wait) || !_s.Frames.TryGetValue(wait.Frame, out var frame)) return;
+        if (!_s.Waits.TryGetValue(work.Wait!, out var wait) || !_s.Frames.TryGetValue(wait.Frame, out var frame)) return;
+        if (frame.RecoveryStateful && frame.Id != work.Frame) throw new InvalidOperationException("Invalid native qualified resume ownership.");
+        var node = _wf.Nodes[frame.Node];
+        if (frame.RecoveryStateful && (!RecoverableKind(node) || !typeof(IStateful).IsAssignableFrom(node.Type) ||
+            !JsonNode.DeepEquals(frame.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf))))
+            throw new InvalidOperationException("Suspended recovery material is unavailable.");
+        _s.Waits.Remove(work.Wait!);
+        // The first valid delivery owns this occurrence. Already queued duplicates cannot keep a fault runnable.
+        if (frame.RecoveryStateful) _s.Agenda.RemoveAll(w => w.Resume && w.Frame == frame.Id);
         Unregister(work.Wait!, wait, cancel: false);
         foreach (var (id, other) in _s.Waits.Where(w => w.Value.Frame == frame.Id).ToList())     // an activity resumes once
         {
@@ -369,7 +380,6 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         }
         if (wait.Kind == "child") turn.Record($"r:{work.Wait}:{wait.Key}:{work.Payload?["Child"]}");
         _s.Frames.Remove(frame.Id);
-        var node = _wf.Nodes[frame.Node];
         if (node.Background)
         {
             var finished = Values.To<JobFinished>(work.Payload)!;
@@ -377,8 +387,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             else if (Json.Read<BackgroundResult>(finished.Result!) is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
         }
-        var activity = (IStateful)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
-        Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
+        var activity = (IStateful)(frame.RecoveryStateful ? Hydrator.Create(node, (JsonObject)frame.RecoveryInputs!.DeepClone()) : Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame))));
+        Apply(frame, await activity.ResumeAsync(Context(frame), frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State, work.Payload));
     }
 
     private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey);
@@ -483,7 +493,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         }
         if (!_s.Frames.TryGetValue(frame.Parent, out var parent)) return;
         var node = _wf.Nodes[parent.Node];
-        var composite = (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, parent)));
+        var composite = (CompositeActivity)RestoreActivity(parent, node);
         composite.OnChildCompleted(new CompositeContext(this, parent, node), new ChildCompleted(frame.Id, frame.Node, outcome, result, frame.Tag));
     }
 
@@ -518,7 +528,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             return;
         }
         var node = _wf.Nodes[parent.Node];
-        var composite = (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, parent)));
+        var composite = (CompositeActivity)RestoreActivity(parent, node);
         composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
     }
 

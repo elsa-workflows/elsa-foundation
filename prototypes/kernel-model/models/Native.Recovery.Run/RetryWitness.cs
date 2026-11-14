@@ -30,6 +30,11 @@ internal static class RetryWitness
         var workflow = Build();
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
         void Apply(Act a) { world.Apply(a); if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
+        void Release(SubscriptionRow subscription, string id)
+        {
+            var accepted = world.Store.AddEventAsync(Events.Route(new(subscription.Key, id, null, world.Time + 120_000), subscription)).Result;
+            Check(accepted.Added && accepted.Target == target, "Retry release missed the registered creation.");
+        }
         void Drain(bool cut = false)
         {
             for (var i = 0; i < 100; i++)
@@ -57,7 +62,7 @@ internal static class RetryWitness
         var scopes = Json.Write(State().LexicalScopes);
         Check(source.Intervention is not null && RetryLeaf.Invocations.Count == 1, "R12: retry witness did not begin with an ordinary intervention");
         var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:change");
-        Apply(new("add", M: Events.Deliver(new("event:change", "change", null, world.Time + 120_000), wait))); Drain();
+        Release(wait, "change"); Drain();
         Check(State().Variables["sourceValue"]!.ToString() == "99", "R15: pinned-input witness did not change its source value");
         if (cut == "reload-before") { Reload(); Drain(); }
         var request = new NativeRetry("operator-1", source.Id, source.Intervention!.Id, "dependency repaired");
@@ -65,7 +70,7 @@ internal static class RetryWitness
         if (cut == "legacy-v5")
         {
             // Deliberately seeded old-schema context, separately counted; not a historical writer/binary claim.
-            var old = State(); old.InterventionPolicy = 0; old.Frames[source.Id].RecoveryMaterial = null;
+            var old = State(); StatefulPolicy.RemoveNewStatefulPins(old); old.InterventionPolicy = 0; old.Frames[source.Id].RecoveryMaterial = null;
             var upgraded = new NativeModel(new()).UpgradeState(Json.Write(old), 5);
             world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(upgraded) };
             Reload(); Drain();
@@ -81,7 +86,7 @@ internal static class RetryWitness
         if (cut == "sibling-before")
         {
             var sibling = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:finish");
-            Apply(new("add", M: Events.Deliver(new("event:finish", "finish-early", null, world.Time + 120_000), sibling)));
+            Release(sibling, "finish-early");
         }
         Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(request), ReplyTo: ReplyTo.Of("outside", "retry", world.Time + 120_000), TargetCreation: 1)));
         if (Refusals.Contains(cut))
@@ -149,9 +154,9 @@ internal static class RetryWitness
             world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().TakeLast(3).Select(r => r.Result).SequenceEqual(new[] { "Duplicate", "Conflict", "NotEligible" }),
             "R17: replay, conflict or stale source created another successor or changed its receipt");
         if (world.Store.Subscriptions.SingleOrDefault(s => s.Instance == target.Id && s.Key == "event:finish") is { } finish)
-        { Apply(new("add", M: Events.Deliver(new("event:finish", "finish", null, world.Time + 120_000), finish))); Drain(); }
+        { Release(finish, "finish"); Drain(); }
         var tail = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:tail");
-        Apply(new("add", M: Events.Deliver(new("event:tail", "tail", null, world.Time + 120_000), tail))); Drain();
+        Release(tail, "tail"); Drain();
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && State().LexicalScopes is null && State().Frames.Count == 0 && RetryLeaf.Invocations.Count == 2,
             "R19: successful recovery repeated its iteration or leaked completed ancestor resources");
         Console.WriteLine($"PASS recovery:successor,{mode},parallel-parent={direct},cut={cut}");

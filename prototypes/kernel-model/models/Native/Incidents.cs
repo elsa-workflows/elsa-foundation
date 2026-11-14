@@ -37,7 +37,7 @@ internal static class NativeInterventions
 {
     internal static int Policy(NativeState state) => state.InterventionEnabled ? state.InterventionPolicy == 0 ? 1 : state.InterventionPolicy : 0;
     internal static bool Present(NativeState state) => state.InterventionEnabled || state.InterventionPolicy != 0 || NativeRetries.Present(state) || state.Frames.Values.Any(f =>
-        f.Intervention is not null || f.RecoveryInputs is not null || f.OperationKey is not null);
+        f.Intervention is not null || f.RecoveryInputs is not null || f.OperationKey is not null || f.RecoveryStateful);
     internal static bool RootShape(NativeState state, Frame frame) => Policy(state) >= 2 && frame.Parent is null && frame.Tag is null && frame.Scope is null && frame.LexicalScope is null &&
         !state.Frames.Values.Any(f => f.Id != frame.Id) && state.Agenda.Count == 0;
     internal static bool RootDescriptor(Frame frame) => frame.Parent is null && frame.Tag is null && frame.Scope is null && frame.LexicalScope is null && frame.RecoveryMaterial?["root"] is JsonValue value &&
@@ -60,10 +60,11 @@ internal static class NativeInterventions
         }
         if (!state.Started || state.Mode is not (Modes.Balanced or Modes.Durable))
             throw new InvalidOperationException("Invalid native intervention profile state.");
-        if (state.InterventionPolicy is < 0 or > 2) throw new NotSupportedException("Unsupported native intervention policy.");
+        if (state.InterventionPolicy is < 0 or > 4) throw new NotSupportedException("Unsupported native intervention policy.");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var f in state.Frames.Values)
         {
+            NativeStatefulRecovery.Validate(state, f);
             if ((f.RecoveryInputs is null) != (f.OperationKey is null) || f.OperationKey is { Length: 0 })
                 throw new InvalidOperationException("Invalid native pinned-input ownership.");
             if (f.Intervention is not { } incident) continue;
@@ -85,7 +86,7 @@ internal sealed partial class Burst
         if (turn.Instance.Creation <= 0 || _s.Mode is not (Modes.Balanced or Modes.Durable))
             throw new NotSupportedException("Native intervention requires a qualified Balanced/Durable invocation.");
         _s.InterventionEnabled = true;
-        _s.InterventionPolicy = 2;
+        _s.InterventionPolicy = 4;
     }
 
     private bool InterventionParent(Frame frame) => frame.Parent is { } id && _s.Frames.TryGetValue(id, out var parent) &&
@@ -98,9 +99,10 @@ internal sealed partial class Burst
     {
         // Existing Snapshot/Create owns binding materialization. The bounded profile requires every input bound;
         // CLR constructor defaults and activation failures are not silently promoted to pinned recovery material.
-        if (!_s.InterventionEnabled || !typeof(ILeaf).IsAssignableFrom(node.Type) || node.Background || !InterventionBoundary(frame) ||
+        if (!_s.InterventionEnabled || !RecoverableKind(node) || node.Background || !InterventionBoundary(frame) ||
             Hydrator.Of(node.Type).Any(p => !node.Inputs.ContainsKey(p.Name))) return null;
         var snapshot = Hydrator.Snapshot(node, b => Evaluate(b, scope));
+        frame.RecoveryStateful = typeof(IStateful).IsAssignableFrom(node.Type);
         frame.RecoveryMaterial = NativeRecoveryMaterial.Describe(_wf);
         frame.RecoveryInputs = (JsonObject)snapshot.DeepClone();
         frame.OperationKey = CreationProtocol.Origin(turn.Instance.Ref.Id, turn.Instance.Creation) + "/activity/" + frame.Id;

@@ -38,16 +38,21 @@ internal static class PolicyWitness
             if (kind is "sequence" or "parallel" or "foreach")
             {
                 // Deliberately constructed v6 migration context, not a historical writer/binary guarantee.
-                var legacy = State(); legacy.InterventionPolicy = 0;
+                var legacy = State(); StatefulPolicy.RemoveNewStatefulPins(legacy); legacy.InterventionPolicy = 0;
                 var upgraded = new NativeModel(new()).UpgradeState(Json.Write(legacy), 6);
                 world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(upgraded) };
             }
             workflow.InterventionRequested = kind == "disabled"; // latest request must neither enable nor replace saved policy
             Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1; Apply(new("take", Actor().Id)); Drain();
             var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:start");
-            Apply(new("add", M: Events.Deliver(new("event:start", "release", null, world.Time + 120_000), wait))); Drain();
+            var release = Events.Route(new("event:start", "release", null, world.Time + 120_000), wait);
+            var accepted = world.Store.AddEventAsync(release).Result;
+            if (!accepted.Added || accepted.Target != target) throw new InvalidOperationException("Policy release missed the registered creation.");
+            world.Oracle.Note(release.Message);
+            if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
+            Drain();
             var state = State(); var expected = kind is "sequence" or "parallel";
-            if (state.InterventionPolicy != (kind == "unmarked" ? 2 : 0) || RootLeaf.Calls.Count != 1 ||
+            if (state.InterventionPolicy != (kind == "unmarked" ? 4 : 0) || RootLeaf.Calls.Count != 1 ||
                 (expected ? world.Store.Instances[target.Id].Status != InstanceStatus.Running || !state.Frames.Values.Any(f => f.Node == "leaf" && f.Intervention is not null)
                     : world.Store.Instances[target.Id].Status != InstanceStatus.Finished || state.Frames.Count != 0))
                 throw new InvalidOperationException("R29: latest host or new parent support silently changed an existing invocation policy");
