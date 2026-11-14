@@ -206,10 +206,10 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         var native = Native; var frame = native.Frames.Values.Single(f => f.Node == "machine");
         Apply(new("crash", _owner));
         frame.State = JsonSerializer.SerializeToNode(new { Active = new[] { "Working" }, Pending = (object?)null, Version = version });
-        var row = _world.Store.Instances[_target.Id]; _world.Store.Instances[_target.Id] = row with { State = Json.Write(native) };
+        var row = _world.Store.Instances[_target.Id]; _world.Store.Instances[_target.Id] = row with { State = RemoveScopes(native) };
         Apply(new("tick", 20_000)); _owner = 1 - _owner; Apply(new("take", Actor.Id)); Drain(); _frame = frame.Id;
         Signal("old-unmatched", "unknown"); Drain();
-        Check(Machine?.Version == 3 && Machine.Visits is [{ State: "Working" }] && Machine.VisitSerial == 1,
+        Check(Machine?.Version == 4 && Machine.Visits is [{ State: "Working" }] && Machine.VisitSerial == 1,
             "N8: unhandled input did not persist the literal reader migration");
         var visits = Json.Write(Machine!.Visits); Reload();
         Signal("next-unmatched", "unknown"); Drain();
@@ -218,6 +218,13 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
             Trace().Count(p => p[1] == "next-unmatched" && p[2] == "unhandled") == 1,
             "N8: consumed reader visits were reallocated or its outcome repeated");
         Console.WriteLine($"PASS identity-consumption:literal-v{version},{mode}");
+    }
+    // Seed a genuinely scope-less old shape rather than mixing the new writer resource graph into the fixture.
+    private static string RemoveScopes(NativeState state)
+    {
+        var json = JsonSerializer.SerializeToNode(state)!;
+        json.AsObject().Remove("LexicalScopes");
+        return json.ToJsonString();
     }
     private void Refuse(string name)
     {
