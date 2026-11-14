@@ -63,7 +63,7 @@ public sealed record RuntimeCheckpointCommit(
                 State.Status: WorkflowExecutionStatus.Running } native ||
             native.State.StartedAt is not { } startedAt || startedAt > Checkpoint.OccurredAt || native.State.CreatedAt != startedAt ||
             native.State.ParentWorkflowExecutionId is not null ||
-            native.State.TenantId != expected.TenantId || native.State.Partition?.Value != expected.Scope.Value ||
+            native.State.TenantId != expected.TenantId || native.State.Partition?.Value != (expected.Partition?.Value ?? expected.Scope.Value) ||
             native.State.Authority is not { } authority ||
             !WorkflowExecutionAuthoritySnapshot.Matches(expected.Authority, authority.SystemIdentity,
                 authority.RootInitiator, authority.Metadata))
@@ -72,12 +72,16 @@ public sealed record RuntimeCheckpointCommit(
             origin.WorkerExecutionId != WorkflowExecutionId ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, native.State.PinnedExecutable)))
             throw new InvalidOperationException("The native worker's model invocation differs from its admission condition.");
+        if (expected.IngressOrigin is { } ingress && native.State.ModelWorkOrigin?.IngressOrigin?.IsEquivalentTo(ingress) != true)
+            throw new InvalidOperationException("An ingress model worker must retain its source-bound parent invocation.");
     }
 
     /// <summary>Reject a model decision that could alias native state or escape its execution fence.</summary>
     public void EnsureModelStateShape()
     {
         if (ModelState is not { } model) return;
+        if (model.State.IngressOrigin is { } ingress ? ingress.Scope != model.State.Scope || model.State.Partition is null : model.State.Partition is not null)
+            throw new InvalidOperationException("Only a physically admitted ingress model retains an exact scoped partition snapshot.");
         var retainsState = model.ExpectedRevision == model.State.Revision;
         if (model.State.ExecutionId != WorkflowExecutionId || ExpectedFence is null ||
             (!retainsState && model.State.UpdatedAt != Checkpoint.OccurredAt) ||
@@ -95,11 +99,19 @@ public sealed record RuntimeCheckpointCommit(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
 
+    /// <summary>Physical accepted-source authority for the initial exact wait consumption only.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressWaitOrigin? IngressWaitOrigin { get; init; }
+
 
     /// <summary>Validate that the exact wait condition belongs to this initial trigger-claim checkpoint.</summary>
     public void EnsureExactBookmarkResumeShape()
     {
-        if (ExpectedBookmarkResume is not { } expected) return;
+        if (ExpectedBookmarkResume is not { } expected)
+        {
+            if (IngressWaitOrigin is not null) throw new InvalidOperationException("An ingress wait origin requires its initial exact bookmark condition.");
+            return;
+        }
         var activity = StateChanges.ActivityExecutions.SingleOrDefault(change => change.StateId == expected.ActivityExecutionId);
         var bookmark = StateChanges.Bookmarks.SingleOrDefault(change => change.StateId == expected.BookmarkId);
         if (expected.RegistrationCapture is null || expected.WorkflowExecutionId != WorkflowExecutionId ||

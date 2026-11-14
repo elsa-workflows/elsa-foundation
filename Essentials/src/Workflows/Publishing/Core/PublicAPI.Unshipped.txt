@@ -1355,3 +1355,46 @@ static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.o
 static Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? left, Elsa.Workflows.Publishing.Core.Models.ActivityTemplateDependencyRequest? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator !=(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
 static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
+Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore.FindOriginBoundedAsync(string! publicationId, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! expectedScope, Elsa.Workflows.Runtime.Core.Models.RuntimeSourceReadLimits! limits, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot?>
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.PublicationOriginSnapshot(string! publicationId, string! slotId, string! workflowDefinitionId, string! workflowDefinitionVersionId, string! artifactId, string? sourceReferenceId, Elsa.Workflows.Publishing.Core.Models.PublicationStatus status, System.DateTimeOffset? activatedAt, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, int storedMetadataBytes) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.PublicationId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.SlotId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.WorkflowDefinitionId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.WorkflowDefinitionVersionId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.ArtifactId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.SourceReferenceId.get -> string?
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.Status.get -> Elsa.Workflows.Publishing.Core.Models.PublicationStatus
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.ActivatedAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Publishing.Core.Models.PublicationOriginSnapshot.StoredMetadataBytes.get -> int
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.PublicationSourceSnapshotPersistenceException(string! publicationId, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, System.Exception! innerException) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.PublicationId.get -> string!
+Elsa.Workflows.Publishing.Core.Models.PublicationSourceSnapshotPersistenceException.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization.AuthorizeSelectedMaterialAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! definitionVersionId, string! sourceReferenceId, string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureAuthorization.AuthorizeWorkflowVersionAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! definitionVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCaptureContextAccessor.Current.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections
+const Elsa.Workflows.Publishing.Core.Contracts.NativeReleaseCaptureSelections.WorkflowDefinitionVersion = "elsa.workflow-definition-version" -> string!
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization
+Elsa.Workflows.Publishing.Core.Contracts.INativeReleaseCatalogCaptureAuthorization.AuthorizeActivityVersionAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! activityVersionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.ToString() -> string!
+static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator !=(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.<Clone>$() -> Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest!
+static Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.operator ==(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? left, Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? right) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest? other) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference!
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.GetHashCode() -> int
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Deconstruct(out Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, out Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.get -> Elsa.Workflows.Publishing.Core.Models.PublicationRecord!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Reference.init -> void
+Elsa.Workflows.Publishing.Core.Contracts.IPublicationActivator.ActivateMaterialAsync(Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Core.Models.PublicationActivationResult!>
+override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Equals(object? obj) -> bool
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.PublicationMaterialActivationRequest(Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void

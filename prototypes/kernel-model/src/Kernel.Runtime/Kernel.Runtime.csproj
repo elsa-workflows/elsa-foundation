@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Layer 1, the actor runtime: where a scope runs, one pass at a time, and the hints between nodes. No guarantee about messages or state. -->
+  <PropertyGroup>
+    <RootNamespace>Kernel.Runtime</RootNamespace>
+  </PropertyGroup>
+</Project>

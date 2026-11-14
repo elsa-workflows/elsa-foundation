@@ -126,6 +126,63 @@ public sealed class MemberReadPublicationRunTests
         Assert.Contains(refusal.Findings, finding => finding.Path == "reader/inputs/Value" && finding.Type == "ActivityData/UnsupportedMemberBinding");
     }
 
+    public static TheoryData<string, string> RequestReads => new()
+    {
+        // structure, read: a request member of a declared input, the same through the input's reference key, and a
+        // request member of an open request (a workflow that declares no inputs).
+        { "sequence", "request" }, { "flowchart", "request" },
+        { "sequence", "input" }, { "flowchart", "input" },
+        { "sequence", "open-request" }, { "flowchart", "open-request" }
+    };
+
+    [Theory]
+    [MemberData(nameof(RequestReads))]
+    public async Task A_published_request_or_input_member_read_commits_exactly_the_selected_member(string structure, string read)
+    {
+        using var publication = new Publication(memberReads: true, typed: true);
+
+        var executable = await publication.Compile(Root(structure, RequestRead(read, ["address", "street"])),
+            inputs: read == "open-request" ? null : [CustomerRequest]);
+
+        var reader = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "reader");
+        var binding = reader.InputBindings[nameof(MemberReader.Value)];
+        Assert.Equal(RuntimeInputBindingSource.WorkflowRequestMember, binding.Source);
+        Assert.Equal("customer", binding.WorkflowRequest!.MemberKey);
+        Assert.Equal(["address", "street"], binding.Selection!.Segments);
+        Assert.Equal(RuntimeReadSelectionMode.DeferredFit, binding.Selection.Mode);
+        Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
+
+        await using var harness = Harness();
+        var run = await harness.RunAsync(executable, new Dictionary<string, JsonElement>
+        {
+            ["customer"] = JsonSerializer.SerializeToElement(new { customerId = "c-1", address = new { street = "Main" } })
+        });
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal("Main", run.AssertCompleted("reader").InputSnapshot!.Values[nameof(MemberReader.Value)].InlineValue!.Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("request")]
+    [InlineData("input")]
+    public async Task With_member_reads_off_nothing_publishes_a_request_or_input_member_read(string read)
+    {
+        using var publication = new Publication(memberReads: false, typed: true);
+
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            publication.Compile(Root("sequence", RequestRead(read, ["address", "street"])), inputs: [CustomerRequest]).AsTask());
+
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Path == "reader/inputs/Value" && finding.Type == "ActivityData/UnsupportedMemberBinding");
+    }
+
+    // The reference key and the name differ, as they do for an input Studio has renamed.
+    private static readonly InputDefinition CustomerRequest = new("customer-ref", "customer", new TypeReference("Object"), null, "Customer", null, IsNullable: true);
+
+    private static ArgumentState RequestRead(string read, string[] path) => new(nameof(MemberReader.Value), read == "input"
+        ? new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "customer-ref", memberPath = path }), "InputMember")
+        : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = "customer", memberPath = path }), "WorkflowRequestMember"), null, null, null, null);
+
     private static ArgumentState VariableRead(string[] path) => new(nameof(MemberReader.Value), new ArgumentValue(JsonSerializer.SerializeToElement(new
     {
         referenceKey = "customer", declaringScopeId = "workflow", memberPath = path

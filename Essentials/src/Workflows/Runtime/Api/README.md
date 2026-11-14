@@ -114,6 +114,8 @@ handler CLR identities.
 
 ## Extension points
 
+Standalone trigger management is separately composed through `StandaloneTriggersApi`; enabling `WorkflowsRuntimeApi` alone does not map those endpoints. Its [feature README](StandaloneTriggers/README.md) documents discovery, routes, request shapes and composition; the [operator guide](../../../../../docs/standalone-triggers.md) owns practical examples and current qualification limits.
+
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for the API-facing stores and inspector seam, and the [Runtime domain catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the full engine and persistence surface.
 
 ## Incident health

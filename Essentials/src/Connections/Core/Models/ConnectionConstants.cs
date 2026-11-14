@@ -64,6 +64,8 @@ public static class ConnectionFaultCodes
     public const string OwnerNotSupported = "ConnectionOwnerNotSupported";
     public const string InsecureHttp = "ConnectionInsecureHttp";
     public const string Forbidden = "ConnectionForbidden";
+    public const string IdentityChanged = "ConnectionIdentityChanged";
+    public const string RevisionChanged = "ConnectionRevisionChanged";
 }
 
 public static class HttpConnectionSettingKeys

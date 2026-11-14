@@ -104,7 +104,8 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
         var content = RuntimeModelStateEfModule.Chain.Upcast<RuntimeModelExecutionEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson));
         var state = Deserialize<RuntimeModelExecutionState>(content[nameof(row.ContentJson)]!);
         if (row.Id != CompositeId(scope, executionId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
-            state.Scope.Value != scope || state.ExecutionId != executionId || state.TenantId is not null && state.TenantId != scope ||
+            state.Scope.Value != scope || state.ExecutionId != executionId ||
+            (state.IngressOrigin is { } origin ? origin.Scope.Value != scope || state.Partition is null : state.Partition is not null || state.TenantId is not null && state.TenantId != scope) ||
             row.ExecutionId != Encode(executionId) || row.ExecutionIdHash != Hash(executionId) || row.ExecutionIdOrderKey != Order(executionId) ||
             row.ArtifactIdHash != Hash(state.Executable.ArtifactId) || row.Lifecycle != (int)state.Lifecycle || row.Revision != state.Revision)
             throw new InvalidDataException("The committed model execution envelope does not match its content.");

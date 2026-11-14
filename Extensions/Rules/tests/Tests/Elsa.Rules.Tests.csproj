@@ -15,7 +15,7 @@
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../src/Workflows/Design/Elsa.Rules.Workflows.Design.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Locking/Core/Elsa.Locking.Core.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />

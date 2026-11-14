@@ -1,0 +1,33 @@
+{
+  "format": "elsa-safe-playwright-trace-v1",
+  "traceVersion": 8,
+  "sourceSha": "9d65c70a3a1095a29462f81cbdf97bc22762c373",
+  "exporterSha256": "6a786027984dc706c464ab503d8e1dfca2a0c2288d053c0033888703b25ba918",
+  "sha256": "f155f1da632e41561c2c83a8ee28318f768fee0ab6fb5eb42a6563a425cc4fad",
+  "counts": {
+    "omittedRunnerTraces": 1,
+    "actions": 1560,
+    "snapshots": 2829,
+    "omittedDiagnosticRecords": 5288,
+    "omittedAuthenticationFrames": 61,
+    "omittedUnrecordedSnapshotLinks": 8,
+    "networkSummaries": 2526,
+    "contexts": 2,
+    "renderingResources": 1448
+  },
+  "omissions": [
+    "authentication screenshots",
+    "request and dynamic response bodies",
+    "headers and cookies",
+    "API results",
+    "scripts and source files",
+    "console arguments",
+    "runner trace"
+  ],
+  "viewerInspection": "required before publication",
+  "download": {
+    "url": "https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/0692299d503a5af7e5896dad8e9ee6f4e45cbaa7/specs/1217-ai-dashboards/evidence/2026-11-13/safe-traces/native-desktop-light.zip",
+    "repositoryCommit": "0692299d503a5af7e5896dad8e9ee6f4e45cbaa7",
+    "bytes": 61862272
+  }
+}

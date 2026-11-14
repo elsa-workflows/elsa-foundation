@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Triggers;
 using System.Diagnostics;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -131,7 +132,10 @@ public sealed class RuntimeCheckpointCommitter
         if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
             throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
-        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
+        if (NativeIngressCheckpointAuthority.RequiresInitialPhysicalAdmission(commit))
+            decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
+                "Source-bound starts require their initial physical admission before execution.");
+        else if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
                 "Model decisions and native worker admission require an atomic physical checkpoint.");
         else if (commit.ExpectedBookmarkResume is not null)

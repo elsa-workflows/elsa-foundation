@@ -15,6 +15,10 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
 {
     internal DbSet<UserTaskEntity> UserTasks => Set<UserTaskEntity>();
     internal DbSet<UserTaskFormEntity> UserTaskForms => Set<UserTaskFormEntity>();
+    internal DbSet<StandaloneTriggerEntity> StandaloneTriggers => Set<StandaloneTriggerEntity>();
+    internal DbSet<TriggerSubscriptionEntity> TriggerSubscriptions => Set<TriggerSubscriptionEntity>();
+    internal DbSet<TriggerMutationEntity> TriggerMutations => Set<TriggerMutationEntity>();
+    internal DbSet<RuntimeIngressReservationEntity> IngressReservations => Set<RuntimeIngressReservationEntity>();
 
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
@@ -55,6 +59,10 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new UserTaskConfiguration());
         modelBuilder.ApplyConfiguration(new UserTaskFormConfiguration());
+        modelBuilder.ApplyConfiguration(new StandaloneTriggerConfiguration());
+        modelBuilder.ApplyConfiguration(new TriggerSubscriptionConfiguration());
+        modelBuilder.ApplyConfiguration(new TriggerMutationConfiguration());
+        modelBuilder.ApplyConfiguration(new RuntimeIngressReservationConfiguration());
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());

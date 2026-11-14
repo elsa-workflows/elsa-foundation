@@ -1,5 +1,6 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
+import { useNotificationGuard } from "./notifications";
 import { Check, Copy } from "lucide-react";
 import type { WorkflowExecutableReference } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -24,17 +25,20 @@ export function ExecutableRunStatusLine({ status, run, compact = false }: { stat
   );
 }
 
-export function CopyValueButton({ value, ariaLabel, copiedLabel, textLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; textLabel?: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
+export function CopyValueButton({ value, ariaLabel, copiedLabel, textLabel, onCopied, onCopyFailed, scope }: { scope?: object | string; value: string | null | undefined; ariaLabel: string; copiedLabel: string; textLabel?: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
+  const copyScope = React.useMemo(() => ({ scope, value, copiedLabel }), [scope, value, copiedLabel]);
+  const captureNotificationGuard = useNotificationGuard(copyScope);
   if (!value) return null;
 
   const copy = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    const canNotify = captureNotificationGuard();
     try {
       await copyTextToClipboard(value);
-      onCopied(copiedLabel);
+      if (canNotify()) onCopied(copiedLabel);
     } catch {
-      onCopyFailed(copiedLabel);
+      if (canNotify()) onCopyFailed(copiedLabel);
     }
   };
 
