@@ -73,6 +73,8 @@ public sealed class StandaloneScheduleStoreTests
         var claim = Assert.Single(await schedules.ClaimDueAsync(new("pump", Now, TimeSpan.FromMinutes(1), 10)));
         clock.Advance(TimeSpan.FromSeconds(30));
         var renewed = (await schedules.RenewClaimAsync(claim, clock.GetUtcNow(), TimeSpan.FromMinutes(2)))!;
+        clock.Advance(TimeSpan.FromSeconds(45));
+        Assert.True(claim.VisibleAfter <= clock.GetUtcNow());
         var deadline = await state.ExecuteWriteGateAsync(_ => ValueTask.FromResult(schedules.ExecuteUnderStandaloneOccurrenceClaim(claim, clock, value => value)));
         Assert.Equal(renewed.VisibleAfter, deadline);
         await schedules.SaveAsync(Resource(2));
