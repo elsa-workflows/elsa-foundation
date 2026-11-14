@@ -31,7 +31,7 @@ public sealed partial class InMemoryWorkflowActivationSwitch
             throw new InvalidDataException("The publication reservation does not name the exact prepared slot source.");
         var scope = new TriggerScope(persistence, source.TenantId);
         var bindings = _reservationBindings.ListAllByActivationAsync(slot.ActiveActivationId).AsTask().GetAwaiter().GetResult();
-        var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive)
+        var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive || _reservationPolicies.ContainsKey(binding.StimulusType))
             .GroupBy(binding => (binding.StimulusType, binding.StimulusHash)).Select(group =>
                 new RuntimeIngressReservationDescriptor(group.Key.StimulusType, group.Key.StimulusHash, group.First().Metadata)).ToArray();
         var claims = RuntimeIngressReservationRules.Prepare(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, slot.Revision, slot.Revision, descriptors);

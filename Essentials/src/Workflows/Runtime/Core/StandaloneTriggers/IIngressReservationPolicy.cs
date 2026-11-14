@@ -9,6 +9,9 @@ public interface IIngressReservationPolicy
 {
     string StimulusType { get; }
 
+    /// <summary>The standalone resource family governed by this rule, or null for publication-only rules.</summary>
+    string? TriggerTypeKey => null;
+
     /// <summary>Compares two original claims of this type; malformed routing facts must refuse the write.</summary>
     /// <exception cref="TriggerOperationException">Persisted routing facts are malformed or unavailable.</exception>
     bool Conflicts(RuntimeIngressReservationDescriptor first, RuntimeIngressReservationDescriptor second);

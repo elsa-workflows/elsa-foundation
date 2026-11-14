@@ -19,12 +19,14 @@ internal sealed class EfTriggerSourceResourceCommitStore(RuntimeDbContext contex
     private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> policies = RuntimeIngressReservationRules.Policies(reservationPolicies);
     public bool SupportsActivatedResources => resources is EfStandaloneTriggerStore store && ReferenceEquals(store.Context, context) &&
         RuntimeSchemaWriteVersion.SupportsIngress(context) && ingress.SupportsAdmission &&
-        (policies.Count == 0 || RuntimeSchemaWriteVersion.SupportsReservationSemantics(context)) &&
         activationSwitch is EfWorkflowActivationSwitch selected && RuntimeIngressReservationRules.SamePolicies(selected.ReservationPolicies, policies) && ReferenceEquals(selected.ReservationContext, context) &&
         bindings is EfWorkflowTriggerBindingStore selectedBindings && ReferenceEquals(selectedBindings.Context, context) &&
         targets?.Slots is EfWorkflowActivationAuthority authority && ReferenceEquals(authority.Context, context) &&
         targets.Executables is EfWorkflowExecutableStore material && ReferenceEquals(material.Context, context) &&
         targets.Sources is EfWorkflowExecutableSourceReferenceStore references && ReferenceEquals(references.Context, context);
+
+    public bool SupportsActivatedType(string typeKey) => SupportsActivatedResources &&
+        (!policies.Values.Any(policy => policy.TriggerTypeKey == typeKey) || RuntimeSchemaWriteVersion.SupportsReservationSemantics(context));
 
     /// <exception cref="TriggerOperationException">Stored-data/provider failure; preserves scope/resource identity and the original cause.</exception>
     /// <exception cref="OperationCanceledException">Requested cancellation propagates unchanged.</exception>
@@ -45,7 +47,7 @@ internal sealed class EfTriggerSourceResourceCommitStore(RuntimeDbContext contex
             throw new NotSupportedException("Resource and source projections require the same relational context.");
         if (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null || context.Database.GetEnlistedTransaction() is not null || Transaction.Current is not null)
             throw new InvalidOperationException("A protected source change requires its own clean transaction.");
-        if ((write.Trigger.HasActivated || write.Trigger.DesiredState == TriggerDesiredState.Enabled || reservations.Count != 0) && !SupportsActivatedResources)
+        if ((write.Trigger.HasActivated || write.Trigger.DesiredState == TriggerDesiredState.Enabled || reservations.Count != 0) && !SupportsActivatedType(write.Trigger.TypeKey))
             throw new NotSupportedException("This relational composition cannot protect activated trigger sources.");
         var claims = RuntimeIngressReservationRules.Prepare(scope, RuntimeIngressReservation.StandaloneTriggerOwner, write.Trigger.Id,
             write.Trigger.Revision, write.Trigger.ConfigurationRevision, reservations);

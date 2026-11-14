@@ -26,7 +26,7 @@ public sealed partial class EfWorkflowActivationSwitch
                 throw new InvalidDataException("The publication reservation does not name the selected logical slot.");
             scope = new(persistence, source.TenantId);
             var bindings = await _bindings.ListAllByActivationAsync(activation, ct);
-            var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive)
+            var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive || _reservationPolicies.ContainsKey(binding.StimulusType))
                 .GroupBy(binding => (binding.StimulusType, binding.StimulusHash)).Select(group =>
                     new RuntimeIngressReservationDescriptor(group.Key.StimulusType, group.Key.StimulusHash, group.First().Metadata)).ToArray();
             claims = RuntimeIngressReservationRules.Prepare(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, slot.Revision, slot.Revision, descriptors);

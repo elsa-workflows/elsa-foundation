@@ -8,6 +8,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 internal sealed class HttpIngressReservationPolicy : IIngressReservationPolicy
 {
     public string StimulusType => HttpEndpointRouting.StimulusType;
+    public string TriggerTypeKey => "http";
 
     public bool Conflicts(RuntimeIngressReservationDescriptor first, RuntimeIngressReservationDescriptor second)
     {

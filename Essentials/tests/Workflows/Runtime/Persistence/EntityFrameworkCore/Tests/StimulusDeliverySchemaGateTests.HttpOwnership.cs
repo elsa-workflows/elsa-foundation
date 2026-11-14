@@ -95,6 +95,29 @@ public sealed partial class StimulusDeliverySchemaGateTests
         Assert.NotEqual(serving, await sp.GetRequiredService<IStandaloneTriggerStore>().FindAsync(new(Scope, Scope.Value), "resource") is not null);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Admitted_SQLite_prepared_legacy_FanOut_HTTP_candidate_shares_semantic_ownership(bool publicationFirst)
+    {
+        await using var fixture = await SqliteHttpOwnership.Create(); using var operation = fixture.Open(); var sp = operation.ServiceProvider;
+        if (publicationFirst)
+        {
+            Assert.True((await PublishHttpMaterial(sp, "legacy", "legacy", "orders/{legacy}", legacyFanOut: true)).Succeeded);
+            Assert.Equal(TriggerCardinality.FanOut, Assert.Single(await sp.GetRequiredService<IWorkflowTriggerBindingStore>()
+                .ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType)).Cardinality);
+            Assert.Single((await sp.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope,
+                new(HttpEndpointRouting.StimulusType))).Items);
+            Assert.Equal("route-conflict", (await Assert.ThrowsAsync<TriggerOperationException>(() => PutHttpResource(sp, "resource", "orders/{id}"))).Code);
+        }
+        else
+        {
+            await PutHttpResource(sp, "resource", "orders/{id}");
+            var result = await PublishHttpMaterial(sp, "legacy", "legacy", "orders/{legacy}", legacyFanOut: true);
+            Assert.False(result.Succeeded); Assert.Contains("equivalent endpoint", result.Diagnostic ?? "");
+            Assert.Null((await sp.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("legacy", "Published"))?.ActiveActivationId);
+        }
+    }
+
     [Fact]
     public async Task Admitted_SQLite_legacy_FanOut_wildcard_binding_without_reservation_still_blocks_the_route()
     {
@@ -117,6 +140,27 @@ public sealed partial class StimulusDeliverySchemaGateTests
         Assert.Contains(claims, claim => claim.OwnerId == "reader" && claim.StimulusHash == HttpEndpointStimulus.Hash("orders/{key}", "GET"));
     }
 
+    [Theory]
+    [InlineData(StandaloneTriggersEfModule.SchemaFamily)] [InlineData(RuntimeTriggerBindingEfModule.SchemaFamily)]
+    public async Task Http_policy_does_not_block_Event_activation_or_pause_on_a_healthy_predecessor_profile(string lagging)
+    {
+        await using var schema = await Fixture.CreateIngressReadiness(lagging, "1.0.0"); await using var context = schema.Open();
+        IServiceCollection source = new ServiceCollection(); new WorkflowsRuntimeHttpFeature().ConfigureServices(source);
+        using var policies = source.BuildServiceProvider(); using var metadata = new NativeTargetMetadataFixture();
+        var prepared = await PrepareGatedIngressAsync(context, metadata.Publisher, policies.GetServices<IIngressReservationPolicy>());
+        Assert.True(prepared.Source.SupportsActivatedResources); Assert.True(prepared.Source.SupportsActivatedType("event"));
+        Assert.False(prepared.Source.SupportsActivatedType("http"));
+        await prepared.Source.CommitAsync(prepared.Scope, prepared.Activation, []);
+        var active = (await prepared.Resources.FindAsync(prepared.Scope, prepared.Activation.Trigger.Id))!;
+        var row = active.Trigger;
+        var paused = new StandaloneTrigger(row.Id, row.Name, row.TypeKey, row.SchemaVersion, row.Configuration, row.Revision + 1,
+            row.ConfigurationRevision, row.AssociationRevision, TriggerDesiredState.Paused, row.Origin, row.CreatedAt, Now, row.CreatedBy,
+            row.Description, true, row.TenantId);
+        await prepared.Source.CommitAsync(prepared.Scope, new("pause-event", "pause-event", "operator", row.Revision, paused, active.Subscriptions)
+            { ObservedTargets = prepared.Activation.ObservedTargets }, []);
+        Assert.Equal(TriggerDesiredState.Paused, (await prepared.Resources.FindAsync(prepared.Scope, row.Id))!.Trigger.DesiredState);
+    }
+
     private static async Task PutHttpResource(IServiceProvider sp, string id, string route, string method = "POST", long revision = 1)
     {
         var scope = new TriggerScope(Scope, Scope.Value); var resource = new StandaloneTrigger(id, "Orders", "http", 1,
@@ -128,11 +172,12 @@ public sealed partial class StimulusDeliverySchemaGateTests
         var participant = sp.GetRequiredService<ITriggerSourceResourceCommitStore>(); Assert.True(participant.SupportsActivatedResources);
         await participant.CommitAsync(scope, write, claims);
     }
-    private static async Task<WorkflowActivationResult> PublishHttpMaterial(IServiceProvider sp, string definition, string activation, string route)
+    private static async Task<WorkflowActivationResult> PublishHttpMaterial(IServiceProvider sp, string definition, string activation, string route, bool legacyFanOut = false)
     {
         var pin = new WorkflowExecutableIdentity(activation + "-artifact", definition, activation, "1", "hash");
+        var metadata = HttpMetadata(route, "POST"); if (legacyFanOut) metadata["test:legacyFanOut"] = "true";
         var executable = new WorkflowExecutable(pin, new ExecutableNode("root", "root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }),
-            new Dictionary<string, RuntimeInputBinding>(), HttpMetadata(route, "POST")), new Dictionary<string, WorkflowExecutableResumeTarget>(), Now,
+            new Dictionary<string, RuntimeInputBinding>(), metadata), new Dictionary<string, WorkflowExecutableResumeTarget>(), Now,
             new Dictionary<string, string>(), new WorkflowExecutableInputContract(1, []), [], IncidentStrategyBuiltIns.FaultReference);
         var materials = sp.GetRequiredService<IWorkflowExecutableStore>(); await materials.SaveAsync(executable);
         return await sp.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new(definition,
@@ -152,7 +197,8 @@ public sealed partial class StimulusDeliverySchemaGateTests
             var pin = executable.Identity; var metadata = executable.RootActivity.Metadata;
             var hash = HttpEndpointStimulus.Hash(metadata[HttpEndpointRouting.TemplateMetadataKey], metadata[HttpEndpointRouting.MethodMetadataKey]);
             var binding = new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, pin.ArtifactId, "root", hash), pin.ArtifactId, pin.DefinitionId,
-                pin.ArtifactVersion, pin.ArtifactHash, "root", HttpEndpointRouting.StimulusType, hash, null, metadata, Now, activationId, slotId, TriggerCardinality.Exclusive);
+                pin.ArtifactVersion, pin.ArtifactHash, "root", HttpEndpointRouting.StimulusType, hash, null, metadata, Now, activationId, slotId,
+                metadata.ContainsKey("test:legacyFanOut") ? TriggerCardinality.FanOut : TriggerCardinality.Exclusive);
             await bindings.PrepareActivationAsync(activationId, [binding], cancellationToken); await schedules.PrepareActivationAsync(activationId, [], cancellationToken); return [binding];
         }
     }

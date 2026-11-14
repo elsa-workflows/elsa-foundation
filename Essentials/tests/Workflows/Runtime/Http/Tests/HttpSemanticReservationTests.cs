@@ -53,6 +53,29 @@ public sealed class HttpSemanticReservationTests
             new(HttpEndpointRouting.StimulusType))).Items);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Native_prepared_legacy_FanOut_HTTP_candidate_shares_semantic_ownership(bool publicationFirst)
+    {
+        using var fixture = new Fixture(); using var operation = fixture.Open(); var services = operation.ServiceProvider;
+        if (publicationFirst)
+        {
+            Assert.True((await Publish(services, "legacy", "legacy", "orders/{legacy}", legacyFanOut: true)).Succeeded);
+            Assert.Equal(TriggerCardinality.FanOut, Assert.Single(await services.GetRequiredService<IWorkflowTriggerBindingStore>()
+                .ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType)).Cardinality);
+            Assert.Single((await services.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope.Persistence,
+                new(HttpEndpointRouting.StimulusType))).Items);
+            Assert.Equal("route-conflict", (await Assert.ThrowsAsync<TriggerOperationException>(() => Put(services, "resource", "orders/{id}"))).Code);
+        }
+        else
+        {
+            await Put(services, "resource", "orders/{id}");
+            var result = await Publish(services, "legacy", "legacy", "orders/{legacy}", legacyFanOut: true);
+            Assert.False(result.Succeeded); Assert.Contains("equivalent endpoint", result.Diagnostic ?? "");
+            Assert.Null((await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("legacy", "Published"))?.ActiveActivationId);
+        }
+    }
+
     [Fact]
     public async Task Native_legacy_binding_without_reservation_or_explicit_cardinality_still_blocks_equivalent_ownership()
     {
@@ -183,10 +206,10 @@ public sealed class HttpSemanticReservationTests
             [new(HttpEndpointRouting.StimulusType, Identity(route, method), Metadata(route, method))]);
     }
 
-    private static async Task<WorkflowActivationResult> Publish(IServiceProvider services, string definition, string activation, string route, string? alternativeRoute = null, long expectedRevision = 0)
+    private static async Task<WorkflowActivationResult> Publish(IServiceProvider services, string definition, string activation, string route, string? alternativeRoute = null, long expectedRevision = 0, bool legacyFanOut = false)
     {
         var identity = new WorkflowExecutableIdentity(activation + "-artifact", definition, activation, "1", "hash");
-        var metadata = Metadata(route, "POST"); if (alternativeRoute is not null) metadata["test:alternateRoute"] = alternativeRoute;
+        var metadata = Metadata(route, "POST"); if (legacyFanOut) metadata["test:legacyFanOut"] = "true"; if (alternativeRoute is not null) metadata["test:alternateRoute"] = alternativeRoute;
         var root = new ExecutableNode("root", "root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }),
             new Dictionary<string, RuntimeInputBinding>(), metadata);
         var executable = new WorkflowExecutable(identity, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now,
@@ -238,7 +261,8 @@ public sealed class HttpSemanticReservationTests
                 var hash = Identity(route, metadata[HttpEndpointRouting.MethodMetadataKey]);
                 return new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, pin.ArtifactId, "root", hash), pin.ArtifactId,
                     pin.DefinitionId, pin.ArtifactVersion, pin.ArtifactHash, "root", HttpEndpointRouting.StimulusType, hash, null,
-                    Metadata(route, metadata[HttpEndpointRouting.MethodMetadataKey]), Now, activationId, slotId, TriggerCardinality.Exclusive);
+                    Metadata(route, metadata[HttpEndpointRouting.MethodMetadataKey]), Now, activationId, slotId,
+                    metadata.ContainsKey("test:legacyFanOut") ? TriggerCardinality.FanOut : TriggerCardinality.Exclusive);
             }).ToArray();
             await bindings.PrepareActivationAsync(activationId, prepared, cancellationToken);
             if (schedules is not null) await schedules.PrepareActivationAsync(activationId, [], cancellationToken);

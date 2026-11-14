@@ -12093,3 +12093,5 @@ Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.SealSavedStartAsync
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.StimulusType.get -> string!
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.Conflicts(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeIngressReservationDescriptor! first, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeIngressReservationDescriptor! second) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.TriggerTypeKey.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerSourceResourceCommitStore.SupportsActivatedType(string! typeKey) -> bool

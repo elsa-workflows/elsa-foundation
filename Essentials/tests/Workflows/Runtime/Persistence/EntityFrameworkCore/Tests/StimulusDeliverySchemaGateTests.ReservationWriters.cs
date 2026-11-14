@@ -24,12 +24,13 @@ public sealed partial class StimulusDeliverySchemaGateTests
         await using var fixture = await Fixture.CreateIngressReadiness(lagging, "1.0.0");
         await using var context = fixture.Open(); using var metadata = new NativeTargetMetadataFixture();
         var prepared = await PrepareGatedIngressAsync(context, metadata.Publisher, [new ReadinessPolicy()]);
-        Assert.False(prepared.Source.SupportsActivatedResources);
+        Assert.True(prepared.Source.SupportsActivatedResources);
+        Assert.False(prepared.Source.SupportsActivatedType("event"));
         await Assert.ThrowsAsync<NotSupportedException>(() => prepared.Source.CommitAsync(prepared.Scope, prepared.Activation, []).AsTask());
         Assert.Empty(await context.RuntimePostCommitOutbox.AsNoTracking().ToArrayAsync());
         Assert.Equal(TriggerDesiredState.Paused, (await prepared.Resources.FindAsync(prepared.Scope, prepared.Activation.Trigger.Id))!.Trigger.DesiredState);
         await fixture.Finalize();
-        Assert.True(prepared.Source.SupportsActivatedResources);
+        Assert.True(prepared.Source.SupportsActivatedType("event"));
         await prepared.Source.CommitAsync(prepared.Scope, prepared.Activation, []);
         Assert.False((await prepared.Ingress.AdmitAsync(prepared.Request)).Replayed);
         Assert.Equal("1.1.0", (await context.StandaloneTriggers.AsNoTracking().SingleAsync()).SchemaVersion);
@@ -167,6 +168,7 @@ public sealed partial class StimulusDeliverySchemaGateTests
     private sealed class ReadinessPolicy : IIngressReservationPolicy
     {
         public string StimulusType => "test/readiness";
+        public string TriggerTypeKey => "event";
         public bool Conflicts(RuntimeIngressReservationDescriptor first, RuntimeIngressReservationDescriptor second) =>
             throw new InvalidOperationException("Readiness discovery must not execute a source policy.");
     }
