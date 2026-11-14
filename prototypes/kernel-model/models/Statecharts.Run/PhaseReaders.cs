@@ -6,7 +6,8 @@ using Kernel.Statecharts.Native;
 internal static class PhaseReaders
 {
     internal static string[] Names => ["phase-reader:pending-prefix", "phase-reader:completed-prefix", "phase-reader:future-version",
-        "phase-reader:invalid-running-index", "phase-reader:duplicate-running-step", "phase-reader:invalid-legacy-cursor"];
+        "phase-reader:invalid-running-index", "phase-reader:duplicate-running-step", "phase-reader:invalid-legacy-cursor",
+        "phase-reader:mixed-legacy-progress", "phase-reader:mixed-current-cursor"];
     internal static void Run()
     {
         var chart = new Chart(new(new("Working", [new("Working", [new("Leaf", [new("Leaf", Exit: "finished")])], Exit: "held"), new("Done", Final: true)]),
@@ -40,6 +41,8 @@ internal static class PhaseReaders
         Refuse(pending with { Progress = pending.Progress! with { Running = new() { ["bad"] = 4 } } }, Names[3]);
         Refuse(pending with { Progress = pending.Progress! with { Running = new() { ["a"] = 1, ["b"] = 1 } } }, Names[4]);
         Refuse(legacy with { Cursor = 0 }, Names[5]);
-        Console.WriteLine("6/6 phase reader fixtures passed; distinct from the48 normal workflow schedules.");
+        Refuse(legacy with { Progress = pending.Progress }, Names[6]);
+        Refuse(pending with { Cursor = 2, Child = "old-child" }, Names[7]);
+        Console.WriteLine("8/8 phase reader fixtures passed; distinct from the48 normal workflow schedules.");
     }
 }

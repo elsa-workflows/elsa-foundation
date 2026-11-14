@@ -85,6 +85,7 @@ public sealed class StateMachine : CompositeActivity, ISignalledComposite
     {
         if (state.Version == 1)
         {
+            if (state.Progress is not null) throw new InvalidOperationException("Invalid serial statechart checkpoint.");
             if (state.Pending is null)
             {
                 if (state.Cursor != 0 || state.Child is not null || state.Progress is not null)
@@ -100,6 +101,7 @@ public sealed class StateMachine : CompositeActivity, ISignalledComposite
             state = state with { Version = 2, Cursor = 0, Child = null, Progress = progress };
         }
         if (state.Version != 2) throw new NotSupportedException("Unsupported statechart phase checkpoint version.");
+        if (state.Cursor != 0 || state.Child is not null) throw new InvalidOperationException("Invalid statechart phase checkpoint.");
         if (state.Pending is null && state.Progress is not null)
             throw new InvalidOperationException("Invalid statechart phase checkpoint.");
         if (state.Pending is { } pending)
