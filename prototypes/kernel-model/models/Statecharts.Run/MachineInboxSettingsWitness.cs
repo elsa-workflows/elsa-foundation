@@ -15,8 +15,7 @@ internal static class MachineInboxSettingsWitness
                 [new("go", 0, "A", "B", VisitMode.Reenter, "go")]);
             var machine = Wf.Node<StateMachine>("machine", ("StructuralDefinition", Binding.Literal(def)), ("InputInbox", Binding.Var("settings")))
                 .With(Wf.Sequence("phase", Wf.Set("change", "settings", "incompatible-after-entry"), Wf.Node<ChartDependency>("dependency", ("Local", Binding.Literal(17)))));
-            var wf = Wf.Workflow("machine-inbox", machine); wf.InterventionRequested = true;
-            wf.Variables["settings"] = Values.From(new { Capacity = 2, ReceiptCapacity = 8, RetentionMilliseconds = 120000L });
+            var wf = new Workflow("machine-inbox", machine, new Dictionary<string, System.Text.Json.Nodes.JsonNode?> { ["settings"] = Values.From(new { Capacity = 2, ReceiptCapacity = 8, RetentionMilliseconds = 120000L }) }); wf.InterventionRequested = true;
             Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
             var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
             Check(h.State.Variables["settings"]?.ToString() == "incompatible-after-entry", "Q17: settings fixture did not change its ordinary bound value");
