@@ -206,6 +206,12 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return response.StatusCode == HttpStatusCode.NotFound ? null : await ReadAsync(response, path, null);
     }
 
+    public async Task<JsonNode> DeleteAsync(string path)
+    {
+        using var response = await client.DeleteAsync(path);
+        return await ReadAsync(response, path, null);
+    }
+
     public async Task<JsonNode> PostAsync(string path, object value, HttpStatusCode? expected = null, string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(value) };
@@ -219,6 +225,15 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     {
         using var response = await client.PostAsJsonAsync(path, value);
         if (response.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.Conflict))
+            throw Failure($"Owned-host request {path} returned HTTP {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        return (response.StatusCode, await response.Content.ReadFromJsonAsync<JsonNode>() ?? throw Failure("An owned-host API returned no document"));
+    }
+
+    /// <summary>Returns durable command admission or a terminal refusal; admission alone is not semantic consumption.</summary>
+    internal async Task<(HttpStatusCode Status, JsonNode Body)> PostCommandOutcomeAsync(string path, object value)
+    {
+        using var response = await client.PostAsJsonAsync(path, value);
+        if (response.StatusCode is not (HttpStatusCode.Accepted or HttpStatusCode.Conflict))
             throw Failure($"Owned-host request {path} returned HTTP {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         return (response.StatusCode, await response.Content.ReadFromJsonAsync<JsonNode>() ?? throw Failure("An owned-host API returned no document"));
     }

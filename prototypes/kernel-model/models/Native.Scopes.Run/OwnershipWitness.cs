@@ -109,7 +109,8 @@ internal sealed class OwnershipWitness(string mode, bool nested, string kind)
     private void Release(string name)
     {
         var wait = Waits().Single(s => s.Key == "event:" + name);
-        Add(Events.Deliver(new(wait.Key, "release-" + ++_serial, null, _world.Time + 120_000), wait));
+        var accepted = _world.Store.AddEventAsync(Events.Route(new(wait.Key, "release-" + ++_serial, null, _world.Time + 120_000), wait)).Result;
+        Check(accepted.Added && accepted.Target == _target, "Scope release missed its registered creation.");
     }
     private void Signal(string frame, string name, string? value = null) => Add(new("signal-" + ++_serial, _target, CompositeSignal.Kind, Json.Write(new CompositeSignal(frame, name, value)), TargetCreation: 1));
     private void Add(Message message) => Apply(new("add", M: message));

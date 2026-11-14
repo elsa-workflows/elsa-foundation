@@ -176,7 +176,7 @@ public sealed class SqlServerEngine : Engine
 
     public override string Poll =>
         $"""
-         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         SELECT TOP ({"{3}"}) t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m{(ReadPast ? " WITH (READPAST)" : "")} ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq"
@@ -213,11 +213,11 @@ public sealed class SqlServerEngine : Engine
         {
             return await db.Database.ExecuteSqlRawAsync(
                 """
-                INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo")
-                VALUES (@id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, 0, @keep, 0, @reply)
+                INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo")
+                VALUES (@scope, @id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, 0, @keep, 0, @reply)
                 """,
                 [
-                    new SqlParameter("@id", m.Id), new SqlParameter("@partition", m.Partition), new SqlParameter("@target", m.Target), new SqlParameter("@kind", m.Kind),
+                    new SqlParameter("@scope", m.InboxScope), new SqlParameter("@id", m.Id), new SqlParameter("@partition", m.Partition), new SqlParameter("@target", m.Target), new SqlParameter("@kind", m.Kind),
                     Text("@payload", m.Payload), Text("@sender", m.Sender), Text("@start", m.Start), new SqlParameter("@due", m.Due),
                     new SqlParameter("@keep", System.Data.SqlDbType.BigInt) { Value = Value(m.KeepUntil) }, Text("@reply", m.ReplyTo),
                 ], cancellationToken) == 1;
@@ -300,7 +300,7 @@ public sealed class MySqlEngine : Engine
 
     public override string Poll => Sql(
         $"""
-         SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         SELECT t.now AS "Now", m."Id", m."IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
          FROM (SELECT {Now} AS now) t
          LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = 0 AND m."Due" <= t.now + {"{2}"}
          ORDER BY m."Seq" LIMIT {"{3}"}
@@ -342,11 +342,11 @@ public sealed class MySqlEngine : Engine
         // INSERT IGNORE: a duplicate key is not an error and changes no row.
         await db.Database.ExecuteSqlRawAsync(Sql(
             """
-            INSERT IGNORE INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo")
-            VALUES (@id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, 0, @keep, 0, @reply)
+            INSERT IGNORE INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo")
+            VALUES (@scope, @id, @partition, @target, @kind, @payload, @sender, @start, @due, 0, 0, 0, @keep, 0, @reply)
             """),
             [
-                new MySqlParameter("@id", m.Id), new MySqlParameter("@partition", m.Partition), new MySqlParameter("@target", m.Target), new MySqlParameter("@kind", m.Kind),
+                new MySqlParameter("@scope", m.InboxScope), new MySqlParameter("@id", m.Id), new MySqlParameter("@partition", m.Partition), new MySqlParameter("@target", m.Target), new MySqlParameter("@kind", m.Kind),
                 new MySqlParameter("@payload", Value(m.Payload)), new MySqlParameter("@sender", Value(m.Sender)), new MySqlParameter("@start", Value(m.Start)),
                 new MySqlParameter("@due", m.Due), new MySqlParameter("@keep", Value(m.KeepUntil)), new MySqlParameter("@reply", Value(m.ReplyTo)),
             ], cancellationToken) == 1;

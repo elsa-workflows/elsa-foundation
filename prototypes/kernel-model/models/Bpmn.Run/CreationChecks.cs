@@ -80,6 +80,23 @@ internal static class CreationChecks
                 await store.AddAsync(new("identity-recreate", new(child), Kinds.Start,
                     Start: BpmnModel.Spec("identity-wait", history: history) with { Creation = new(2, 1, "replacement") }));
                 await Drain();
+                Check(store.Instances[child] is { Retired: true, Creation: 1 },
+                    "BC4: outside creation reused a retired owner-issued child address");
+                // A public recreation at this address is forbidden. Install a synthetic second creation
+                // through the trusted test store to exercise the target guard on the real captured cancel.
+                await owner.Worker.DisposeAsync();
+                var retired = store.Instances[child];
+                var replacement = BpmnModel.Spec("identity-wait", history: history) with { Creation = new(2, 1, "replacement") };
+                var synthetic = retired with { Creation = 2, Retired = false, Revision = retired.Revision + 1, Model = replacement.Model,
+                    Definition = replacement.Definition, State = Json.Write(new BpmnState()), Status = InstanceStatus.Running,
+                    StartIntent = CreationProtocol.Fingerprint(replacement) };
+                var lease = await store.TakeAsync(0, "identity-fixture", TimeSpan.FromSeconds(30)) ?? throw new Exception("fixture fence unavailable");
+                var installed = await store.CommitAsync(new(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(30), false,
+                    [new(child, synthetic, retired.Revision, [], [], [], [], [], null)], [], []));
+                Check(installed.Landed, "BC4: trusted synthetic replacement failed to install");
+                await store.ReleaseAsync(0, lease.Epoch);
+                owner = new Owner("identity-after-fixture", 0, capture, registry, () => 100);
+                await owner.StartAsync();
                 var before = store.Instances[child];
                 await store.AddAsync(cancel with { Id = "identity-late-cancel" });
                 await Drain();

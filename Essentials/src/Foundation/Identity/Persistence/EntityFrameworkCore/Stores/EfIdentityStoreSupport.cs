@@ -97,6 +97,24 @@ public static class EfIdentityStoreSupport
         }
     }
 
+    public static string ExternalIdentityId(string tenantId, string provider, string providerSubject, string? issuer = null) =>
+        issuer is null
+            ? CompoundKey(tenantId, provider, providerSubject)
+            : IdentityEntityFrameworkKey.FramedRecordId("external-login/issuer/v1", Normalize(tenantId), Normalize(provider), issuer, providerSubject);
+
+    public static string ExternalSubjectLookup(string tenantId, string providerSubject, string? issuer = null) =>
+        issuer is null
+            ? Lookup(tenantId, providerSubject)
+            : IdentityEntityFrameworkKey.FramedRecordId("external-subject/issuer/v1", Normalize(tenantId), issuer, providerSubject);
+
+    public static void ValidateIssuer(string? issuer)
+    {
+        if (issuer is null) return;
+        ArgumentException.ThrowIfNullOrWhiteSpace(issuer);
+        if (issuer.Length > IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength)
+            throw new ArgumentException("The issuer exceeds the Identity key length limit.", nameof(issuer));
+    }
+
     public static byte[] ExternalOrderKey(string provider, string providerSubject)
     {
         ArgumentNullException.ThrowIfNull(provider);
@@ -189,18 +207,22 @@ public static class EfIdentityStoreSupport
         string tenantId,
         string provider,
         string providerSubject,
-        string? expectedUserId = null)
+        string? expectedUserId = null,
+        string? issuer = null)
     {
         IdentityEntityFrameworkAdapterSupport.EnsureReadable(entity.SchemaVersion);
         EnsureIdentity(entity.TenantId, tenantId, "external-login tenant");
         EnsureIdentity(entity.Provider, provider, "external-login provider");
-        EnsureIdentity(entity.ProviderSubject, providerSubject, "external-login subject");
+        ValidateIssuer(issuer);
+        EnsureNullableExact(entity.Issuer, issuer, "external-login issuer");
+        if (issuer is null) EnsureIdentity(entity.ProviderSubject, providerSubject, "external-login subject");
+        else EnsureExact(entity.ProviderSubject, providerSubject, "external-login subject");
         if (expectedUserId is not null)
             EnsureIdentity(entity.UserId, expectedUserId, "external-login owner");
-        EnsureExact(entity.Id, CompoundKey(tenantId, provider, providerSubject), "external-login record key");
+        EnsureExact(entity.Id, ExternalIdentityId(tenantId, provider, providerSubject, issuer), "external-login record key");
         EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "external-login tenant lookup key");
         EnsureExact(entity.ProviderLookupKey, Lookup(tenantId, provider), "external-login provider lookup key");
-        EnsureExact(entity.ProviderSubjectLookupKey, Lookup(tenantId, providerSubject), "external-login subject lookup key");
+        EnsureExact(entity.ProviderSubjectLookupKey, ExternalSubjectLookup(tenantId, providerSubject, issuer), "external-login subject lookup key");
         EnsureExact(entity.UserLookupKey, Lookup(tenantId, entity.UserId), "external-login owner lookup key");
         EnsureExact(entity.ExternalOrderKey, ExternalOrderKey(provider, providerSubject), "external-login order key");
     }

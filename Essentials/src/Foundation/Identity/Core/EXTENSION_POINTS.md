@@ -6,7 +6,9 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 | Contract | Default impl | Override when |
 |---|---|---|
-| `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances. |
+| `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances and live `IAuthenticationProviderSource` contributions. Duplicate provider/tenant identities fail closed. |
+| `ITokenSubjectResolver` | `DefaultTokenSubjectResolver` (`Elsa.Foundation.Identity`) | A provider uses a different trusted projection. A replacement must preserve canonical tenant/user and exact external tenant/provider/validated-issuer/subject isolation and refuse ambiguous claims. |
+| `ICanonicalUserSignInService` | No default in the abstractions | A canonical interactive authority issues sessions for already admitted users. Capability defaults refuse durable sessions and eligibility; registration and session enforcement are introduced with that authority. |
 | `IOwnershipModeProvider` | `OptionsOwnershipModeProvider` (`Elsa.Foundation.Identity`) | Ownership mode is resolved from tenant configuration or another dynamic source. |
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
 | `IPermissionCatalog` | `CompositePermissionCatalog` (`Elsa.Foundation.Identity`) | The application replaces the whole catalog surface with `ReplacePermissionCatalog<T>()`. To *add* permissions, contribute an `IPermissionContributor` (below); the composite aggregates the active provider's contributions into one immutable snapshot. |
@@ -147,3 +149,23 @@ Register once with
 antiforgery issuance. Keeping `FormHtml` retains the standard POST fields. The login endpoint consumes
 the callback; credential/CSRF/return-url validation remains endpoint-owned. No event or contributor is
 registered. See the [branding guide](../../../../../Studio/docs/branding.md#replace-login-presentation).
+
+`IPrincipalFactory` projects an already admitted `(tenant, Elsa user ID, optional provider metadata)` from
+stored user, role and membership authority. It does not accept an external principal or provision unknown users.
+Policies that admit new external users are separate from this projection.
+
+Issuer-qualified external identities use `ExternalIdentityKey` and explicit qualified store capabilities.
+Issuer and subject are opaque ordinal values. A store lacking qualified support refuses the operation; it must
+not fall back to an issuer-less legacy link. Admission and revision-coordination defaults likewise refuse support.
+
+The token service retains `TokenIssueRequest`'s canonical-user/provider fields. Non-user issuance additionally
+requires a validated `SubjectIssuer`. Existing canonical-user UTF-8 v1 store keys are preserved; issuer-qualified
+external entries use a v2 domain encoding exact UTF-16 code units, also used as their public first-party subject, with the original subject retained
+as trusted provenance. First-party validation checks its signed token id against the persisted scoped subject;
+refresh checks the payload's scope before redemption and retains the live canonical-user eligibility check.
+Issuer-less external credentials cannot acquire missing origin by inference.
+
+`IAuthenticationSessionStore` is an optional committed tenant-local authority contract. Its registration,
+persistence and cookie/token session enforcement are staged separately; adding the contract does not enable
+session persistence or change the base token-only composition. `TokenIssueRequest.SessionId` is server-only
+input for that later integration, never an upstream claim.

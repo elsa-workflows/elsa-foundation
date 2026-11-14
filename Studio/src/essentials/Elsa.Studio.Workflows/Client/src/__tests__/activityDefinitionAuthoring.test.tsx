@@ -31,6 +31,26 @@ afterEach(async () => {
 });
 
 describe("Activity Definition authoring", () => {
+  it("retains the create form and entered name when its host rerenders after first collection history initialization", async () => {
+    const rendered = renderPage({
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url.startsWith("/design/activities/definitions?")) return page([]);
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    click(buttonByText(rendered.container, "Create activity"));
+    await waitForText(rendered.container, "Graph composition");
+    change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Retain my activity");
+
+    rendered.rerender();
+
+    expect(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")?.value).toBe("Retain my activity");
+    expect(buttonByText(rendered.container, "Create definition")).toBeTruthy();
+    await rendered.unmount();
+  });
+
   it("autosaves a presentation-only provider edit with the exact revision and retained implementation", async () => {
     const capture: { current: StudioActivityDefinitionImplementationEditorProps["onChange"] | null } = { current: null };
     const initial = { ...fullDraft({ revision: 3, payload: { edit: 0 } }), activityPresentation: [{ nodeId: "root", displayName: "Original" }] };
@@ -2575,11 +2595,12 @@ function renderPage(options: {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (options.seedDraft) queryClient.setQueryData(activityDesignKeys.fullDefinitionDraft(options.seedDraft.draftId), options.seedDraft);
   const contributions = options.contributions ?? [graphContribution()];
-  flushSync(() => root.render(
+  const rerender = () => flushSync(() => root.render(
     <QueryClientProvider client={queryClient}>
       <ActivityDefinitionsPage context={context} activityEditors={() => contributions} runtime={options.runtime} />
     </QueryClientProvider>
   ));
+  rerender();
   const unmount = async () => {
     if (!mountedAuthoringRoots.delete(unmount)) return;
     flushSync(() => root.unmount());
@@ -2589,7 +2610,8 @@ function renderPage(options: {
   mountedAuthoringRoots.add(unmount);
   return {
     container,
-    unmount
+    unmount,
+    rerender
   };
 }
 
