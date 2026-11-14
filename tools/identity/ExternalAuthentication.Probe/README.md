@@ -1,8 +1,9 @@
 # Owned external authentication Probe
 
-**Source-preparation status: unqualified and unrun.** This prefix introduces the Probe, shared controls and
-Studio browser driver. It has not restored dependencies, built, run tests, started servers/providers/browsers,
-created databases, captured tools or produced qualification receipts. Current execution remains on hold.
+Qualification is recorded against exact clean source commits, toolchain identities and output hashes.
+The original source-only checkpoint did not execute these runners; its limits are historical. Local execution
+requires the owner's current authorization and owned disposable resources. A successful build is supporting
+evidence, not provider, deployment or visual acceptance.
 
 The Probe composes the prepared normal Identity/API/OIDC/IAM/session adapters, shared controlled-provider
 fixture and explicit OpenIddict test wiring. It does not implement an alternative authentication authority.
@@ -14,7 +15,7 @@ Controlled fixture credentials in test source are public fixture values, not pro
 ## Source and evidence controls
 
 The three control-test sources define thirteen cases: five build-provenance cases, six evidence cases and
-both deadline/cancellation process-cleanup cases. No case has been executed on this stack.
+both deadline/cancellation process-cleanup cases. Actual executions belong to their source-bound receipts.
 
 - `ui-build-provenance.mjs` binds ordered producer commands, successful acknowledgements, source commit/tree,
   actual tool paths/versions/hashes and output bytes. Clean-source checks disable the shared Git filesystem
