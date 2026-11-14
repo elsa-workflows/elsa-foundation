@@ -22,10 +22,11 @@ internal static class NativeGraphReaders
             """);
         void Check(bool ok, string reason) { if (!ok) throw new InvalidOperationException("N8: " + reason); }
         void Pass(int i) => Console.WriteLine("PASS " + Names[i]);
+        var before = Json.Write(old);
         var migrated = StateMachine.Restore(old, chart);
         Check(migrated.Version == 3 && migrated.LegacyPending && migrated.Selection is null && migrated.Visits!.Length == 2 && migrated.PlannedVisits is [{ State: "Done" }] &&
             migrated.Progress!.Done.SequenceEqual([true, false, false, false]) && migrated.Progress.Running.Single().Key == "old-child" &&
-            Json.Write(old) == Json.Write(Json.Read<MachineState>(Json.Write(old))) && old.Visits is null && old.Version == 2, "v2 migration lost progress/provenance or mutated input"); Pass(0);
+            Json.Write(old) == before && old.Visits is null && old.Version == 2, "v2 migration lost progress/provenance or mutated input"); Pass(0);
         var idle = StateMachine.Restore(old with { Pending = null, Progress = null }, chart);
         Check(idle.Visits!.Length == 2 && idle.PlannedVisits is null && !idle.LegacyPending && idle.Version == 3, "v2 idle migration failed"); Pass(1);
         var visits = new StateVisit[] { new("Working", "literal-reader/state/1"), new("Leaf", "literal-reader/state/2") };

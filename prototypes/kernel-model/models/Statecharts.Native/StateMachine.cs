@@ -19,6 +19,9 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
     {
         if ((ChartDefinition is null) == (StructuralDefinition is null))
             throw new ArgumentException("Exactly one statechart definition profile is required.");
+        var input = StructuralDefinition is null ? nameof(ChartDefinition) : nameof(StructuralDefinition);
+        if (context.Node.Inputs.GetValueOrDefault(input) is not LiteralBinding)
+            throw new ArgumentException("Statechart definition must be literal for this prototype.");
         var graph = StructuralDefinition is { } definition ? new SelectionChart(definition.Nodes, definition.Rules) : new Chart(ChartDefinition!).Compiled;
         foreach (var id in graph.Activities)
             if (context.Children.Count(n => n.Id == id) != 1) throw new ArgumentException("Unknown statechart activity reference: " + id);

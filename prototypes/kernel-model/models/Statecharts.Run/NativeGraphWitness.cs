@@ -49,7 +49,7 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         where phase == "transition" || p.Name is not ("internal" or "internal-preempts-container")
         from reverse in new[] { false, true } select (m, n, phase, reverse, p);
     private static string Name(string m, bool n, string p, bool r, Profile profile) => $"native-graph:{profile.Name},{m},nested={n},{p},reverse={r}";
-    private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action"];
+    private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action", "dynamic-profile"];
     internal static IEnumerable<string> Names => Cases().Select(c => Name(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile))
         .Concat(Refusals.Select(n => "native-refusal:" + n)).Concat(NativeGraphReaders.Names);
     internal static void Run()
@@ -196,18 +196,21 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
     }
     private void Refuse(string name)
     {
-        _expectedRefusal = name is "missing-profile" or "both-profiles" ? "Exactly one statechart definition profile" : "Unknown statechart activity reference: absent";
+        _expectedRefusal = name switch { "missing-profile" or "both-profiles" => "Exactly one statechart definition profile",
+            "dynamic-profile" => "Statechart definition must be literal", _ => "Unknown statechart activity reference: absent" };
         var nodes = Simple().Select(n => n.Id == "Review" ? n with { Entry = "proof" } : n).ToArray();
         var rules = new[] { R("rule", 0, "Checking", "Changes") };
         if (name == "unknown-entry") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Entry = "absent" } : n).ToArray();
         if (name == "unknown-exit") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Exit = "absent" } : n).ToArray();
         if (name == "unknown-action") rules[0] = rules[0] with { Action = "absent" };
-        var machine = Wf.Node<StateMachine>("machine").With(Wf.Set("proof", "ran", "yes"));
+        NativeGuardProbe.Calls = 0;
+        var machine = Wf.Node<StateMachine>("machine").With(Wf.Node<NativeGuardProbe>("proof"));
         if (name != "missing-profile") machine.Inputs.Add("StructuralDefinition", Binding.Literal(new StructuralDefinition(nodes, rules)));
         if (name == "both-profiles") machine.Inputs.Add("ChartDefinition", Binding.Literal(new Definition(new("A", [new("A")]), [])));
-        NativeWorkflows.Registry.Add(Wf.Workflow("native-refusal", machine));
+        if (name == "dynamic-profile") machine.Inputs["StructuralDefinition"] = Binding.Var("graph");
+        NativeWorkflows.Registry.Add(Wf.Workflow("native-refusal", machine, ("graph", new StructuralDefinition(nodes, rules))));
         Apply(new("take", Actor.Id)); Add(new("start", _target, Kinds.Start, Start: NativeModel.Spec("native-refusal", mode))); Drain();
-        Check(_refusalSeen && !Native.Variables.ContainsKey("ran"), "N7: invalid graph/profile ran authored work or missed precise refusal: " + name);
+        Check(_refusalSeen && NativeGuardProbe.Calls == 0, "N7: invalid graph/profile ran authored work or missed precise refusal: " + name);
         Console.WriteLine("PASS native-refusal:" + name);
     }
     private void Signal(string id, string name) => Add(new(id, _target, CompositeSignal.Kind, Json.Write(new CompositeSignal(_frame, name, "deny")), TargetCreation: 1));
@@ -236,4 +239,14 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         throw new InvalidOperationException("N0: native graph drain exceeded its bound");
     }
     private void Reload() { Apply(new("crash", _owner)); Apply(new("tick", 20_000)); _owner = 1 - _owner; Apply(new("take", Actor.Id)); Drain(); }
+}
+
+// A real ordinary activity probe: a late validation guard cannot hide execution by parking before a checkpoint.
+[External]
+internal sealed class NativeGuardProbe : Kernel.Native.Activity
+{
+    public NativeGuardProbe() { }
+    internal static int Calls;
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    { Calls++; return ValueTask.FromResult(Complete()); }
 }
