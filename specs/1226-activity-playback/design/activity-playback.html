@@ -1,0 +1,117 @@
+<style>
+#execution-path-playback { display:grid; gap:calc(var(--font-size-base) * 1); }
+#execution-path-playback .playback-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:calc(var(--font-size-base) * .5); padding-inline-end:90px; }
+#execution-path-playback .transport { display:flex; flex-wrap:wrap; align-items:center; gap:calc(var(--font-size-base) * .5); }
+#execution-path-playback .pace { display:flex; align-items:center; gap:calc(var(--font-size-base) * .5); }
+#execution-path-playback .position-label { display:flex; justify-content:space-between; gap:calc(var(--font-size-base) * .5); }
+#execution-path-playback .flow { display:grid; justify-items:center; gap:calc(var(--font-size-base) * .35); }
+#execution-path-playback .branch { display:grid; grid-template-columns:1fr 1fr; gap:calc(var(--font-size-base) * 1.5); width:100%; max-width:520px; align-items:start; }
+#execution-path-playback .branch-lane { display:grid; justify-items:center; gap:calc(var(--font-size-base) * .35); }
+#execution-path-playback .connector { display:flex; color:var(--muted-foreground); }
+#execution-path-playback .connector.traversed { color:var(--viz-series-1); }
+#execution-path-playback .skipped { display:grid; justify-items:center; gap:calc(var(--font-size-base) * .25); color:var(--muted-foreground); }
+#execution-path-playback .selected-detail { min-height:2.5em; }
+</style>
+<div id="execution-path-playback">
+  <div class="playback-heading"><h3>Execution-path playback</h3><span class="text-small text-muted">Illustrative run</span></div>
+  <div class="transport" role="group" aria-label="Recorded execution playback">
+    <button class="btn" type="button" data-action="previous"><i data-lucide="skip-back" aria-hidden="true"></i> Previous</button>
+    <button class="btn btn-primary" type="button" data-action="play">Play</button>
+    <button class="btn" type="button" data-action="next">Next <i data-lucide="skip-forward" aria-hidden="true"></i></button>
+    <label class="pace">Pace <select class="form-select" aria-label="Playback pace"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+  </div>
+  <div>
+    <div class="position-label"><label class="form-label" for="execution-path-position">Recorded activity <span data-position class="tabular-nums">1 / 5</span></label><span data-time class="tabular-nums text-small">09:41:00</span></div>
+    <input id="execution-path-position" class="form-range" type="range" min="0" max="4" step="1" value="0" aria-label="Position in recorded execution" aria-valuetext="Receive request, step 1 of 5">
+  </div>
+  <div class="flow" role="group" aria-label="Recorded path: receive request, check policy, manager review, send confirmation, complete. Automatic approval branch was not taken.">
+    <button class="btn" type="button" data-step="0" aria-pressed="true">Receive request</button>
+    <span class="connector" data-edge="0"><i data-lucide="arrow-down" aria-hidden="true"></i></span>
+    <button class="btn" type="button" data-step="1" aria-pressed="false">Check policy</button>
+    <div class="branch">
+      <div class="branch-lane">
+        <span class="connector" data-edge="1"><i data-lucide="arrow-down" aria-hidden="true"></i></span>
+        <button class="btn" type="button" data-step="2" aria-pressed="false">Manager review</button>
+        <span class="text-small text-muted">Approval required</span>
+        <span class="connector" data-edge="2"><i data-lucide="arrow-down" aria-hidden="true"></i></span>
+      </div>
+      <div class="branch-lane">
+        <span class="connector"><i data-lucide="arrow-down" aria-hidden="true"></i></span>
+        <div class="skipped"><span>Automatic approval</span><span class="text-small">Branch not taken</span></div>
+      </div>
+    </div>
+    <button class="btn" type="button" data-step="3" aria-pressed="false">Send confirmation</button>
+    <span class="connector" data-edge="3"><i data-lucide="arrow-down" aria-hidden="true"></i></span>
+    <button class="btn" type="button" data-step="4" aria-pressed="false">Complete request</button>
+  </div>
+  <hr>
+  <p class="selected-detail" aria-live="polite" data-detail>Receive request · Request captured</p>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('execution-path-playback');
+  const steps = [
+    { name:'Receive request', time:'09:41:00', detail:'Request captured' },
+    { name:'Check policy', time:'09:41:01', detail:'Approval required → manager review' },
+    { name:'Manager review', time:'10:33:12', detail:'Approved · 52-minute wait compressed' },
+    { name:'Send confirmation', time:'10:33:13', detail:'Confirmation sent' },
+    { name:'Complete request', time:'10:33:14', detail:'Run completed' }
+  ];
+  const saved = window.openai?.widgetState?.modelContent || {};
+  let index = Number.isInteger(saved.step) ? Math.max(0, Math.min(4, saved.step)) : 0;
+  let speed = [0.5,1,2,4].includes(Number(saved.speed)) ? Number(saved.speed) : 1;
+  let playing = false;
+  let timer = null;
+  const previous = root.querySelector('[data-action="previous"]');
+  const next = root.querySelector('[data-action="next"]');
+  const play = root.querySelector('[data-action="play"]');
+  const range = root.querySelector('input');
+  const pace = root.querySelector('select');
+  function render() {
+    root.querySelector('[data-position]').textContent = `${index+1} / ${steps.length}`;
+    root.querySelector('[data-time]').textContent = steps[index].time;
+    root.querySelector('[data-detail]').textContent = `${steps[index].name} · ${steps[index].detail}`;
+    range.value = String(index);
+    range.setAttribute('aria-valuetext', `${steps[index].name}, step ${index+1} of ${steps.length}`);
+    pace.value = String(speed);
+    previous.disabled = index === 0;
+    next.disabled = index === steps.length-1;
+    play.textContent = playing ? 'Pause' : index === steps.length-1 ? 'Replay' : 'Play';
+    root.querySelectorAll('[data-step]').forEach(button => {
+      const step = Number(button.dataset.step);
+      button.setAttribute('aria-pressed', String(step === index));
+      button.setAttribute('aria-label', `${steps[step].name}, recorded activity ${step+1}${step < index ? ', visited' : ''}`);
+    });
+    root.querySelectorAll('[data-edge]').forEach(edge => edge.classList.toggle('traversed', Number(edge.dataset.edge) < index));
+  }
+  function save() {
+    window.openai?.setWidgetState?.({modelContent:{step:index,speed},privateContent:null})?.catch?.(() => {});
+  }
+  function schedule() {
+    clearTimeout(timer);
+    if (!playing) return;
+    timer = setTimeout(() => {
+      index = Math.min(steps.length-1, index+1);
+      if (index === steps.length-1) playing = false;
+      render();
+      save();
+      schedule();
+    }, 1400 / speed);
+  }
+  function select(step) { playing=false; clearTimeout(timer); index=step; render(); save(); }
+  previous.addEventListener('click', () => select(Math.max(0,index-1)));
+  next.addEventListener('click', () => select(Math.min(steps.length-1,index+1)));
+  range.addEventListener('input', () => select(Number(range.value)));
+  root.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => select(Number(button.dataset.step))));
+  play.addEventListener('click', () => { if (!playing && index===steps.length-1) index=0; playing=!playing; render(); save(); schedule(); });
+  pace.addEventListener('change', () => { speed=Number(pace.value); render(); save(); schedule(); });
+  window.addEventListener('openai:set_globals', event => {
+    const state=event.detail?.globals?.widgetState?.modelContent;
+    if (!state) return;
+    if (Number.isInteger(state.step)) index=Math.max(0,Math.min(4,state.step));
+    if ([0.5,1,2,4].includes(Number(state.speed))) speed=Number(state.speed);
+    render();
+  });
+  render();
+})();
+</script>
