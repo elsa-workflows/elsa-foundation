@@ -13,6 +13,12 @@ public sealed record WorkerOptions
     /// <summary>How many idle instances are kept in memory. Above it the least recently used are dropped, and loaded by key again when a message comes.</summary>
     public int MaxInstances { get; init; } = int.MaxValue;
 
+    /// <summary>
+    /// Decision 4: how long an Ephemeral instance may wait in memory, unwritten, for its own short timers and jobs, when
+    /// its start spec does not say (an HTTP route says: its timeout). Past it the instance is written.
+    /// </summary>
+    public TimeSpan ShortWait { get; init; } = TimeSpan.FromSeconds(5);
+
     /// <summary>How many partitions the database has: needed to place a child in another one.</summary>
     public int Partitions { get; init; } = 1;
     /// <summary>How many owners may be lost with a message on trial before it is parked.</summary>
@@ -39,6 +45,12 @@ public sealed record WorkerOptions
 
     public Func<long>? WallClock { get; init; }     // read only under Flaw.WallClockTimers
     public Flaw Flaws { get; init; }
+
+    /// <summary>Called when an instance is kept in memory, unwritten (decision 4), with its revision there. For tests.</summary>
+    public Action<string, long>? OnKeptInMemory { get; init; }
+
+    /// <summary>Called when an instance held in memory leaves it without a row, with the status it left with. For tests.</summary>
+    public Action<string, InstanceStatus?>? OnLeftMemory { get; init; }
 
     /// <summary>
     /// Where a background job's body runs. Null (the default): it starts inline, in the pass that started it, as the
@@ -87,7 +99,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
     private long _safeUntil;    // local monotonic deadline, measured from the start of a successful take or commit
     private long _expiredGeneration = -1; // monotonically latched by an off-turn callback; only the owner resets state
-    private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp, _woken;
+    private bool _taking, _polling, _loading, _flushing, _meeting, _caughtUp, _woken, _releasing;
+    private readonly object _turnSync = new(); // serialize asynchronous turn completion with stand-down fencing
     private string _refusal = "";
     private readonly HashSet<Delivery> _trial = [];     // the suspects being tried now, with nothing else in flight (finding F2)
     private readonly HashSet<long> _mine = [];      // the epochs this process has held: what it marked then did not kill it
@@ -115,6 +128,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool Owns => Epoch != 0;
     public long Evicted { get; private set; }
     public int Idle => _slots.Values.Count(s => s.Loaded && !s.Busy && s.Inbox.Count == 0 && s.Replies.Count == 0);    // for tests
+
+    /// <summary>The instances held in memory only, never written (decision 4). For tests.</summary>
+    public IEnumerable<string> Unwritten => _slots.Where(s => s.Value.Unwritten).Select(s => s.Key);
 
     /// <summary>The reply addresses of the callers this owner holds, for tests of decision 6.</summary>
     public IEnumerable<string> Callers => _slots.Values.SelectMany(s => s.Replies);
@@ -160,6 +176,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
+    public TimeSpan ShortWait => _options.ShortWait;
 
     /// <summary>A turn cancelled a job. Its ticket may be in memory, or still on its way in with a poll.</summary>
     internal void Cancelling(string ticket)
@@ -168,6 +185,53 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (_items.TryGetValue(ticket, out var held)) held.Taken = true;
     }
     void ITurnServices.Cancelling(string ticket) => Cancelling(ticket);
+
+    internal ITurnServices ServicesFor(Slot slot)
+    {
+        var services = new TurnServices(this, slot, _generation, slot.TurnFence);
+        slot.UndoTurn = services.Invalidate;
+        return services;
+    }
+
+    private sealed class TurnServices(Worker worker, Slot slot, long generation, long fence) : ITurnServices
+    {
+        private readonly HashSet<string> _reservations = [];
+        public long Now => worker.Now;
+        public bool CreationIdentityAvailable => worker.CreationIdentityAvailable;
+        public bool CommitClockAvailable => worker.CommitClockAvailable;
+        public int Partitions => worker.Partitions;
+        public TimeSpan ShortWait => worker.ShortWait;
+        public bool Has(Flaw flaw) => worker.Has(flaw);
+        public void Cancelling(string ticket)
+        {
+            lock (worker._turnSync)
+                if (generation == worker._generation && fence == slot.TurnFence)
+                {
+                    if (!worker._cancelling.Contains(ticket)) _reservations.Add(ticket);
+                    worker.Cancelling(ticket);
+                }
+        }
+        public void Invalidate()
+        {
+            foreach (var id in _reservations)
+            {
+                worker._cancelling.Remove(id);
+                if (!worker._items.TryGetValue(id, out var item)) continue;
+                if (item.Key is not null && item.Message.Kind == Kinds.Job)
+                {
+                    // The old job may already have discarded its result while reserved. Reticket it after commit.
+                    item.Taken = true;
+                    item.Cancel?.Cancel();
+                    var replacement = new Delivery(item.Message, item.Seq) { Key = item.Key, Ticket = true, Durable = item.Durable, Marked = item.Marked, ObservedOrder = item.ObservedOrder, ObservedAt = item.ObservedAt };
+                    worker._items[id] = replacement;
+                    slot.Inbox.Remove(item);
+                    Insert(slot, replacement);
+                }
+                else item.Taken = false;
+            }
+            _reservations.Clear();
+        }
+    }
 
     /// <summary>A job's ticket: derived from instance and key, so a later turn can delete it without holding it.</summary>
     public static string TicketId(string instance, string key, long creation = 0) => creation > 0
@@ -803,6 +867,67 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
+    /// <summary>A message held in memory and never written: one that needs no delete when it is cancelled.</summary>
+    private bool InMemoryOnly(string id) => _items.TryGetValue(id, out var held) && !held.Durable;
+
+    // A never-written parked instance has no durable jobs to resume. Retire its volatile tickets atomically with
+    // the faulted row so a new owner does not launch fresh work for a run that was already parked.
+    private void RetireVolatileJobs(TurnOutcome unit)
+    {
+        if (unit.Row is not { } row) return;
+        var tickets = _items.Values.Where(i => !i.Durable && i.Key is not null && i.Message.Target.Id == unit.Instance).ToList();
+        var keys = tickets.Select(i => i.Key!).ToHashSet(StringComparer.Ordinal);
+        if (row.Jobs is { } jobs)
+        {
+            var remaining = Json.Read<List<string>>(jobs).Where(k => !keys.Contains(k)).ToList();
+            unit.Row = row with { Jobs = remaining.Count == 0 ? null : Json.Write(remaining) };
+        }
+        foreach (var ticket in tickets)
+        {
+            if (!unit.Cancelled.Contains(ticket.Message.Id)) unit.Cancelled.Add(ticket.Message.Id);
+            Cancelling(ticket.Message.Id);
+        }
+    }
+
+    /// <summary>Decision 4: instances in memory whose short wait is over, and that no turn or commit has now.</summary>
+    private IEnumerable<KeyValuePair<string, Slot>> Outgrown()
+    {
+        var now = Now;
+        return _slots.Where(s => s.Value.Unwritten && (!s.Value.Busy || s.Value.Driving) && now >= s.Value.Until);
+    }
+
+    /// <summary>
+    /// Decision 4: an outcome that writes an instance held in memory until now writes what it waits for in memory too:
+    /// its timers and job tickets become rows in the same commit, so a crash after it loses none of them.
+    /// </summary>
+    private void Promote(TurnOutcome unit)
+    {
+        if (unit.Slot is not { Unwritten: true }) return;
+        // Whoever wrote the outcome (a turn, a command, a park) saw the row in memory: it is not in the table, so it is
+        // inserted, not updated at its revision.
+        if (unit.Row is not null) unit.Expected = null;
+        if (Has(Flaw.ForgetShortWaits)) return;
+        // Held ones too: a held result is still in flight in the row's jobs. A finished job is written as its ticket, so a
+        // later owner runs it again and puts its result first (F7), instead of a result row ordered behind a cancel.
+        var prior = _items.Values.Where(i => !i.Durable && i.Message.Target.Id == unit.Instance && !unit.Consumed.Contains(i)
+                     && !unit.Cancelled.Contains(i.Message.Id)).OrderBy(i => i.InboxOrder).ThenByDescending(i => i.CompletedOrder).ToList();
+        foreach (var item in prior)
+        {
+            unit.Promoted.Add(item.Message.Id);
+        }
+        unit.Sent.InsertRange(0, prior.Select(item => item.Original ?? item.Message));
+    }
+
+    /// <summary>Decision 4: an instance kept in memory ended there, and its turn leaves nothing that is a row.</summary>
+    private bool EndsInMemory(TurnOutcome unit) =>
+        unit.Slot is { Unwritten: true } && !unit.InMemory && unit.Row is null && unit.Journal is null && !unit.Delete
+        && !unit.Consumed.Exists(i => i.Durable) && unit.Sent.TrueForAll(m => unit.Volatile.Contains(m.Id)) && unit.Cancelled.TrueForAll(InMemoryOnly);
+
+    private void ForgetInMemory(string instance)
+    {
+        foreach (var item in _items.Values.Where(i => !i.Durable && i.Message.Target.Id == instance).ToList()) Forget(item);   // its timers go, its jobs are cancelled
+    }
+
     private void Fail(List<TurnOutcome> units)
     {
         if (!Has(Flaw.NoResetAfterFailedCommit))
@@ -963,10 +1088,16 @@ internal sealed class Slot
     public Message? Starting;     // semantic creation envelope, including a failed initial turn; excludes transport retry identity
     public object? State;           // the live state between turns, equal to Row.State
     public bool Loaded, Busy;
+    public bool Driving;            // a model turn, as distinct from a queued commit, is in flight
+    public long TurnFence;          // invalidates an uncommitted turn during graceful stand-down
+    public Action? UndoTurn;        // unwind only the invalidated turn's provisional cancellations
     public long Used;               // when a turn last started or it was loaded: the least recent idle one goes first
     public readonly List<Delivery> Inbox = [];
     public object? Ambient;                         // from the starter on this node; gone with this memory
     public readonly HashSet<string> Replies = [];   // callers waiting for what the instance emits
+    public bool Unwritten;                          // decision 4: Row is in memory only, never written
+    public long Until;                              // and may stay so until then
+    public object? Pending;                         // the history its turns in memory left, the actor type's
 }
 
 internal sealed record JobTicket(string Model, string Key, string? Arguments);
