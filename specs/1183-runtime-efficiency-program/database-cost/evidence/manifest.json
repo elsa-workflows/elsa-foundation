@@ -1,0 +1,51 @@
+{
+  "baseProductionCommit": "e4446f73c5ce907bcc07067ee4e3f54b2d0d2a1c",
+  "control": "Final measurement fixtures with suppression assignment bypassed; original automatic savepoint behavior.",
+  "candidate": "Owned checkpoint transaction AutoSavepointsEnabled=false, restoring the captured prior setting in finally.",
+  "files": {
+    "candidate-all.trx": {
+      "bytes": 17987,
+      "sha256": "6366b9e6a95698c0563828c301a7db713ce43e7f62a661fd8c24f6b75d8e133c"
+    },
+    "candidate-runs.json.gz": {
+      "bytes": 424104,
+      "sha256": "17dc624eafe9486ccbe10a6521430ecd754f26ed1af1ed03fa4f14f938985d29"
+    },
+    "candidate-summary.md": {
+      "bytes": 54942,
+      "sha256": "8dbedff58ccc305644e2bdb0098239deb8cb86f6bffc52963db881ca7a64decf"
+    },
+    "comparison.json": {
+      "bytes": 20689,
+      "sha256": "00ef575b531c2f84587ba9779be120952ece198d4453a7aafbaa556b138743d0"
+    },
+    "control-all.trx": {
+      "bytes": 18134,
+      "sha256": "e20beeb51a6cb077fd22358ac2687b18414ef38d73bfdd41831bf1f60642564b"
+    },
+    "control-runs.json.gz": {
+      "bytes": 424398,
+      "sha256": "66344ab32ca5a4934e61d15912731bf9ed63cac39e59dffde7c02c1c3c076226"
+    },
+    "control-summary.md": {
+      "bytes": 54973,
+      "sha256": "3cca5c5e09f9eaac7d93e8618b999a00ad1aaacd65abe044daa5a3fd59dfe67f"
+    },
+    "savepoint-control.trx": {
+      "bytes": 30292,
+      "sha256": "a492ef4b715f8b6df191282386f802bb18eeaf1a3d5d2b8a31164f5b1a4a20c4"
+    },
+    "savepoint-green.trx": {
+      "bytes": 16835,
+      "sha256": "11dfad862261de8eefbc1aeb0c0ac549374fa42d37e9333c07f11aa2313882f1"
+    },
+    "savepoint-providers.trx": {
+      "bytes": 28694,
+      "sha256": "3205f5b5e97fcf858502de26063e1b4e3586afbf3b39b45b7b5be7608409a996"
+    },
+    "savepoint-red-corrected.trx": {
+      "bytes": 30292,
+      "sha256": "71450f141520942a99aef75a5ba28185c01a652e082587d921c8339652a07b04"
+    }
+  }
+}

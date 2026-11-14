@@ -148,6 +148,7 @@ internal static class CommandCostScenarios
     private static int Activities(string workflow, int writeLines) => workflow switch
     {
         ReferenceWorkflowRuns.WriteLineSequence => writeLines + 1,
+        ReferenceWorkflowRuns.SingleWriteLine => 1,
         ReferenceWorkflowRuns.HttpReference => 4,
         ReferenceWorkflowRuns.ForkJoinResume => 3,
         ReferenceWorkflowRuns.SuspendingSequence100 => 103,

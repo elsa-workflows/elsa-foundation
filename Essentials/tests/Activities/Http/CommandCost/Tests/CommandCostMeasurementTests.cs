@@ -59,7 +59,7 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
         var runs = new List<CommandCostRun>();
         foreach (var mode in CommandCostMode.All)
         {
-            foreach (var workflow in ReferenceWorkflowRuns.Workflows)
+            foreach (var workflow in ReferenceWorkflowRuns.Workflows.Append(ReferenceWorkflowRuns.SingleWriteLine))
                 runs.Add(await CommandCostScenarios.MeasureAsync(database, workflow, mode));
             foreach (var writeLines in CommandCostReport.WriteLineSeries.Where(count => count != 10))
                 runs.Add(await CommandCostScenarios.MeasureAsync(database, ReferenceWorkflowRuns.WriteLineSequence, mode, writeLines));
