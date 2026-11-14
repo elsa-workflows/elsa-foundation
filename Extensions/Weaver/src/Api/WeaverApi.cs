@@ -491,6 +491,10 @@ public static class WeaverApi
             ["resourceId"] = surface.ResourceId ?? string.Empty,
             ["selection"] = JsonSerializer.Serialize(surface.Selection)
         };
+        // Legacy resource providers retain their session-surface fallback. Only an explicit current
+        // POST surface supplies this API-owned observation input; no caller input dictionary is merged.
+        if (request.ActiveSurface is { } currentSurface)
+            surfaceInputs[HostSupportContextSource.CurrentRouteInput] = currentSurface.Route;
         try
         {
             collected = await context.RequestServices.GetRequiredService<IWeaverContextCollector>().CollectAsync(session.Policy,
