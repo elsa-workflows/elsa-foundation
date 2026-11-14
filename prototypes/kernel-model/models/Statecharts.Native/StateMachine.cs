@@ -48,6 +48,7 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
         Record(context, messageId, "evaluated", signal.Name);
         if (plan.Selected.Length == 0)
         {
+            context.SetState(state);
             Record(context, messageId, "unhandled", signal.Name);
             return;
         }
