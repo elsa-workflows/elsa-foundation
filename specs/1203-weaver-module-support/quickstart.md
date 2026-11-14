@@ -81,6 +81,8 @@ The twelve recipes do not establish the subsequent RuntimeUrl validation/redacti
 
 Run the complete normal composed Studio/backend browser gate and the complete existing qualifier, extended with leaf 0 cases on both actual adapters. A standalone diagnostic or passing mock is insufficient. Keep normal workflow validation, atomic working-state batches, whole-batch undo, explicit Save/Publish and read-only/source-owned behavior intact.
 
+The separate [normal-host protocol profile](../../tools/ux-acceptance/WEAVER-SEMANTIC.md) connects the shipped Copilot adapter and real SDK to an owned external service under the FR-022 clarification. The service derives its response only from actual admitted context. All twenty turns must join browser submission, admission, SDK delivery, independent native inventory and the completed recorded/rendered answer. The actual open-panel question/answer captures require independent inspection; protocol success cannot establish visual approval or live-model reasoning. Keep the [provider-unavailable native inventory profile](../../tools/ux-acceptance/WEAVER-INVENTORY.md), ordinary composed suite and both-adapter package witness as separate gates. This profile and its authored controls remain UNRUN until exact-source verification.
+
 From committed final source with a new absolute output directory outside the checkout and a unique local version:
 
 ```sh
