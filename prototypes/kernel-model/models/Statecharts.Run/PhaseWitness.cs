@@ -89,6 +89,8 @@ internal sealed class PhaseWitness(string mode, bool nested, string phase, strin
             Reload(); Release("parent-" + first); Drain();
             Check(Has(first + "-parent-entry") && Has("review-entry"), "P4: entry lost parent completion");
         }
+        if (phase == "exit")
+            Check(!Has("review-exit") && !Waiting("parent-" + first), "P4: ancestor exit ran before its waiting descendant");
         Check(Waiting("release-" + first), "P1: selected regional work did not reach its ordinary wait");
         Check(both ? Waiting("release-" + Other) : Has(Other + "-done"), "P1: independent regional work was serialized");
         if (!both && phase == "exit")
@@ -136,7 +138,25 @@ internal sealed class PhaseWitness(string mode, bool nested, string phase, strin
         Add(Events.Deliver(new("event:" + name, "release-" + ++_serial, null, _world.Time + 120_000), wait));
     }
     private void Add(Message message) => Apply(new("add", M: message));
-    private void Apply(Act action) { _world.Apply(action); if (_world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
+    private void Apply(Act action)
+    {
+        _world.Apply(action);
+        if (_world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
+        foreach (var region in new[] { "E", "L" })
+            Check(Entries().Count(e => e.StartsWith("c:", StringComparison.Ordinal) && e.EndsWith(":" + region + "-write", StringComparison.Ordinal)) <= 1,
+                "P5: completed regional work was repeated");
+        if (_frame.Length == 0) return;
+        var native = State;
+        if (!native.Frames.TryGetValue(_frame, out var machine))
+        {
+            Check(Has("E-done") && Has("L-done"), "P5: machine ended before both regional children completed");
+            return;
+        }
+        var pending = machine.State!.Deserialize<MachineState>()!;
+        var owned = native.Frames.Values.Where(f => f.Parent == _frame).Select(f => f.Id)
+            .Concat(native.Agenda.Where(w => !w.Resume && w.Parent == _frame).Select(w => w.Frame)).ToHashSet();
+        Check(owned.SetEquals(pending.Progress?.Running.Keys.AsEnumerable() ?? []), "P5: committed phase progress lost an ordinary child frame");
+    }
     private void Drain()
     {
         for (var i = 0; i < 300; i++)
