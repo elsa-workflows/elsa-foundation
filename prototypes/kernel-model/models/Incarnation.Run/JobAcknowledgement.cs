@@ -24,7 +24,7 @@ internal static class JobAcknowledgement
         Require(store.Instances.ContainsKey(target.Id) && worker.Instances.Single().Row is null && worker.Instances.Single().Busy,
             "fixture did not hold the actual first commit acknowledgement");
         await worker.PollAsync();
-        Require(calls == 0 && (caughtUp || worker.Messages.Any(m => m.Id == Worker.TicketId(target.Id, "work", qualified ? 1 : 0))),
+        Require(calls == 0 && (caughtUp || worker.Messages.Any(m => m.Id == InboxKey.Ticket(target.Id, "work", qualified ? 1 : 0))),
             "job did not wait behind the staged owner checkpoint");
         wire.Reply.TrySetResult(); await flush;
         for (var i = 0; i < 100 && calls == 0; i++)

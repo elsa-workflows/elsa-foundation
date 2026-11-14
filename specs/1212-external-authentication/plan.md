@@ -8,9 +8,9 @@
 
 Deliver #3579 within parity #2771, preserving the #2848 identity isolation already merged through #4018. Add host-wide connection management, explicit overrides, real OIDC admission/sign-in, non-provisioning preview, links/sessions/recovery and Studio together. Finish with actual provider, restart/multi-node, review/merge and resulting-main proof. A stage or draft PR does not finish the objective.
 
-## Current preparation boundary
+## Current delivery boundary
 
-This is the first main-based source slice, carrying design/specification and the agreed ADR0085 amendments. The original implementation is preserved at `44235fe38b7284fde98ba23227bac5f87e07dd66`; its historical results do not qualify the new stack. Source must be resubmitted in reviewable dependent slices, with current-main token contracts/refresh eligibility retained. Only source preparation is currently authorized: no builds, tests, installs/restores, pushes or merges. Later acceptance and exact review-cap history remain open.
+This is the first main-based source slice, carrying design/specification and the agreed ADR0085 amendments. The original implementation is preserved at `44235fe38b7284fde98ba23227bac5f87e07dd66`; its historical results do not qualify the new stack. Source must be resubmitted in reviewable dependent slices, with current-main token contracts/refresh eligibility retained. The original source-preparation phase excluded execution and publication. On 14 November the owner authorized latest-main reconciliation, reviewable sizing, stack publication, reviews, CI, merge and resulting-main verification. Cloud infrastructure remains excluded. Standing authority covers reasonable retries/reviews without resetting R1–R13 history; required checks, human holds and branch protection remain intact.
 
 ## Technical context
 
