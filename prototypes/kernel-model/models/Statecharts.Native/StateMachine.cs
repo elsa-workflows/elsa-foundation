@@ -37,6 +37,7 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
         if (node.Inputs.GetValueOrDefault(input) is not LiteralBinding)
             throw new ArgumentException("Statechart definition must be literal for this prototype.");
         var graph = structure is { } definition ? new SelectionChart(definition.Nodes, definition.Rules, definition.Defaults) : new Chart(chart!).Compiled;
+        if (graph.HasInternalRules) throw new NotSupportedException("Native internal-progress integration is not qualified.");
         foreach (var id in graph.Activities)
             if (node.Children.Count(n => n.Id == id) != 1) throw new ArgumentException("Unknown statechart activity reference: " + id);
         return graph;

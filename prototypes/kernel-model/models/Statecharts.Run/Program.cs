@@ -7,6 +7,8 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--internal"]) { InternalProgressWitness.Run(); return; }
+if (args is ["--internal-list"]) { foreach (var n in InternalProgressWitness.Names.Concat(InternalProgressWitness.ReaderNames)) Console.WriteLine(n); return; }
 if (args is ["--clr-readers"]) { ClrBoundaryReaders.Run(); ClrLegacyWitness.Run(); return; }
 if (args is ["--clr"]) { ClrFaultWitness.Run(); return; }
 if (args is ["--clr-list"]) { foreach (var n in ClrFaultWitness.Names) Console.WriteLine(n); return; }
