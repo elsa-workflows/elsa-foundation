@@ -8,12 +8,12 @@ using static MachineInboxHarness;
 internal static class ClrFaultWitness
 {
     private static string[] Places => ["root", "sequence", "parallel", "entry", "exit", "action", "nested-entry", "nested-exit", "nested-action"];
-    private static string[] Kinds => ["activation", "leaf", "start", "resume"];
+    private static string[] FaultKinds => ["activation", "leaf", "start", "resume"];
     private static string[] Cuts => ["steady", "lost-before", "lost-answer", "cancel"];
-    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from p in Places from k in Kinds from c in Cuts select $"clr-recovery:{m},place={p},kind={k},cut={c}";
+    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from p in Places from k in FaultKinds from c in Cuts select $"clr-recovery:{m},place={p},kind={k},cut={c}";
     internal static void Run()
     {
-        foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var p in Places) foreach (var k in Kinds) foreach (var c in Cuts) Run(m, p, k, c);
+        foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var p in Places) foreach (var k in FaultKinds) foreach (var c in Cuts) Run(m, p, k, c);
     }
     internal static void Red() => Run(Modes.Balanced, "entry", "leaf", "steady");
     private static void Run(string mode, string place, string kind, string cut)
