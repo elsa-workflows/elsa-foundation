@@ -2919,6 +2919,11 @@
         },
         {
           "type": "external",
+          "id": "Cronos",
+          "version": "0.13.0"
+        },
+        {
+          "type": "external",
           "id": "Elsa.Specifications.PackageManifest.Generator",
           "version": "0.0.1-preview.8"
         },
