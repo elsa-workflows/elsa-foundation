@@ -64,6 +64,17 @@ bash tools/architecture/restore-ci-project-graph.sh
 
 Use barriers and deterministic faults rather than sleeps for race assertions. For behavior changes, retain a failing pre-fix or mutation run and the corrected pass. Invalid cases must fail for the intended cause, not a startup/locator failure.
 
+The separate `Weaver causal controls` CI job runs the [bounded driver](../../tools/studio/Weaver.Conformance.Probe/causal_proof.py) in a disposable clean checkout of the PR head. After restoring its two selected .NET test projects and installing the pinned Studio dependencies, the equivalent command is:
+
+```sh
+nice -n 10 python3 tools/studio/Weaver.Conformance.Probe/causal_proof.py \
+  --scope all --output /absolute/new-private-weaver-causal-proof
+```
+
+It runs nine serial recipes: policy, receipt integrity, ordinal module-code identity, SQLite write admission, two Studio origin-removal paths and three R15 result-admission/disclosure paths. Each requires a passing baseline, exact expected assertion failures with no extra/omitted/skipped rows, and a passing restored run. The .NET recipes also require changed owner-binary hashes. A build/setup failure or unrelated assertion is a failed attempt, not evidence of a regression bite. Retain the raw reports, command metadata, original/mutated source identities and final restoration receipt. The CI job binds `WEAVER_CAUSAL_EXPECTED_HEAD` to the checked-out full PR SHA; a malformed or mismatched value refuses before mutation.
+
+The driver has a forty-minute total budget and six-minute command limits. It restores source and terminates owned POSIX process groups on handled failures; detached descendants and restoration after SIGKILL/host loss remain unproven, hence the disposable-checkout requirement. These scoped controls do not replace discovery comparisons, complete suites, other normalization channels, composed/package/provider evidence or resulting-main verification. Raw evidence stays private until inspected for a safe export.
+
 ## Real composed and independent package journeys
 
 Run the complete normal composed Studio/backend browser gate and the complete existing qualifier, extended with leaf 0 cases on both actual adapters. A standalone diagnostic or passing mock is insufficient. Keep normal workflow validation, atomic working-state batches, whole-batch undo, explicit Save/Publish and read-only/source-owned behavior intact.
