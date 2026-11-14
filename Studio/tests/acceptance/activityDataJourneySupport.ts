@@ -70,7 +70,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const selections: { definitionId: string; binding: Binding; offered: Binding; admission: Context; before: Context["request"] }[] = [];
   const runtime: { definitionId: string; workflowExecutionId: string; expected: string; committed: string; consumer: Execution; producers: Execution[] }[] = [];
   const observations: string[] = [];
-  const transportControls: { kind: "cancelled"; request: unknown; failure: string }[] = [];
+  const transportControls: { kind: "cancelled" | "cancelled-context-response"; request: unknown; failure: string }[] = [];
   const contextResponses = createActivityDataResponseCollector(`${base}/design/workflows/activity-data/context`, contexts, transportControls);
   let compositionObservation: { features: FeatureFact[]; mandatoryClosure: string[]; expressionTypes: string[]; syntaxChoices: string[] } | undefined;
   let writes = 0;

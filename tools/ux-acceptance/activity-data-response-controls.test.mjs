@@ -28,7 +28,7 @@ test("same-request cancellation is transport, never supported admission evidence
   const f = fixture(); f.collector.observe(response({ failure: "net::ERR_ABORTED", completion: new Error("aborted"), unreadable: true }));
   await setImmediate(); await f.collector.settle();
   assert.deepEqual(f.contexts, []);
-  assert.deepEqual(f.transport, [{ kind: "cancelled", request: packet, failure: "net::ERR_ABORTED" }]);
+  assert.deepEqual(f.transport, [{ kind: "cancelled-context-response", request: packet, failure: "net::ERR_ABORTED" }]);
 });
 
 test("uncancelled missing bodies and malformed JSON stay sticky without detached rejection", async () => {

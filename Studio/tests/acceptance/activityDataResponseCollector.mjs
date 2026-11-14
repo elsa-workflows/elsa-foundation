@@ -23,7 +23,7 @@ export function createActivityDataResponseCollector(contextUrl, contexts, transp
       const completionError = await response.finished();
       const failure = request.failure()?.errorText;
       if (failure === "net::ERR_ABORTED") {
-        transportControls.push({ kind: "cancelled", request: requestBody, failure });
+        transportControls.push({ kind: "cancelled-context-response", request: requestBody, failure });
         return;
       }
       if (completionError || failure) {
