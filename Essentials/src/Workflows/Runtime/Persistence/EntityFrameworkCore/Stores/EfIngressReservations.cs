@@ -62,12 +62,16 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
         if (context.Database.CurrentTransaction is null) throw new InvalidOperationException("Reservation mutation requires its owning source transaction.");
         var scopeHash = Hash(scope.Persistence.Value); var ownerHash = Hash(ownerId);
         var tenantKey = Encode(JsonSerializer.Serialize(scope.TenantId));
-        var ownedRows = await context.IngressReservations.Where(row => row.ScopeHash == scopeHash && row.TenantKey == tenantKey &&
-            row.OwnerKind == ownerKind && row.OwnerHash == ownerHash).ToArrayAsync(ct);
+        // A logical publication slot is owned by its physical scope, even when a replacement captures a new tenant.
+        // Standalone resource identities remain tenant-scoped and cannot reconcile another tenant's claims.
+        var publicationOwner = ownerKind == RuntimeIngressReservation.PublicationSlotOwner;
+        var owned = context.IngressReservations.Where(row => row.ScopeHash == scopeHash && row.OwnerKind == ownerKind && row.OwnerHash == ownerHash);
+        if (!publicationOwner) owned = owned.Where(row => row.TenantKey == tenantKey);
+        var ownedRows = await owned.ToArrayAsync(ct);
         foreach (var row in ownedRows)
         {
             var old = Read(row, scope.Persistence);
-            if (old.OwnerKind != ownerKind || old.OwnerId != ownerId || old.Scope.TenantId != scope.TenantId)
+            if (old.OwnerKind != ownerKind || old.OwnerId != ownerId || !publicationOwner && old.Scope.TenantId != scope.TenantId)
                 throw new InvalidDataException("The reservation owner projection differs from its actual source and tenant.");
         }
         var ids = claims.Select(item => item.ReservationId).ToHashSet(StringComparer.Ordinal);
@@ -140,3 +144,15 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
     }
 }
 
+internal sealed partial class EfRuntimeIngressDeliveryStore
+{
+    partial void GetReservationAdmissionFence(RuntimeIngressAdmissionRequest request, ref Func<CancellationToken, ValueTask>? fence)
+    {
+        var expected = request.Reservation ?? throw new InvalidDataException("A routed source has no reservation.");
+        fence = async token =>
+        {
+            RuntimeIngressReservationRules.CheckAdmission(request, expected);
+            await new EfIngressReservationStore(context, access).FenceAsync(expected, token);
+        };
+    }
+}
