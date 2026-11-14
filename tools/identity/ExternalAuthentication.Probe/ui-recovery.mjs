@@ -50,18 +50,28 @@ export async function exercisePreviewDenial({ page, admin, backend, expect, capt
   for (const name of ["subject", "roles", "permissions"]) expect(afterSession[name]).toEqual(beforeSession[name]);
 }
 
-export async function exerciseConnectionConflict({ page, admin, componentUrl, expect, capture, confirm }) {
+export async function exerciseConnectionConflict({ page, admin, backend, componentUrl, expect, capture, confirm }) {
   await page.getByLabel("Display name", { exact: true }).fill("Studio company edited");
   // Assess against the current revision first; the other window commits while this confirmation stays open.
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Save changes", exact: true })).toBeVisible();
+  const catalogUrl = backend + "/_elsa/identity/external-connections";
+  const before = await (await admin.request.get(catalogUrl)).json();
   const second = await admin.newPage();
   try {
     await second.goto(componentUrl("connections"));
     await second.locator(".external-auth-row").filter({ has: second.getByText("Studio company", { exact: true }) }).click();
     await second.getByLabel("Display order", { exact: true }).fill("7");
-    await second.getByRole("button", { name: "Save changes", exact: true }).click(); await confirm(second, "Save changes");
-    await expect(second.getByLabel("Display order", { exact: true })).toHaveValue("7"); await second.waitForLoadState("networkidle");
+    await second.getByRole("button", { name: "Save changes", exact: true }).click();
+    const savedResponse = second.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/_elsa/identity/external-connections/commands"));
+    await confirm(second, "Save changes");
+    const saved = await savedResponse;
+    expect(saved.status()).toBe(200); expect((await saved.json()).saved).toBe(true);
+    await expect(second.locator(".external-auth-notice")).toContainText("Connection updated.");
+    // A filled input or an already-idle page does not acknowledge a committed mutation.
+    const after = await (await admin.request.get(catalogUrl)).json();
+    expect(after.revision).not.toBe(before.revision);
+    expect(after.connections.find(item => item.document.key === "studio-company").document.displayOrder).toBe(7);
   } finally { await second.close(); }
   const response = page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/_elsa/identity/external-connections/commands"));
   await confirm(page, "Save changes");
