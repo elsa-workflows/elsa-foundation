@@ -566,9 +566,81 @@ def require_effects(section, root, *, source):
 
 
 def restart_manifest_gaps(section, source=None):
-    # Deliberately fail closed until T038 delivers its real durable/old-writer
-    # validator. A fabricated passed section cannot stand in for that implementation.
-    return ["T038 source-bound story1 upgrade/recovery qualification remains required"]
+    """Structure only. Acceptance also requires both native deep readers below."""
+    if not isinstance(section, dict):
+        return ["T038 source-bound story1 upgrade/recovery qualification remains required"]
+    records = section.get("records")
+    if (section.get("status") != "passed" or section.get("scope") != "complete-package-witness-effects-restarts"
+            or section.get("source") != source or section.get("evidenceCategory") != EVIDENCE_CATEGORY
+            or section.get("liveProvider") is not False or section.get("qualified") is not False
+            or section.get("independentPackageWitness") is not False
+            or section.get("caseIDs") != list(RESTART_REQUIREMENTS) or not isinstance(records, list)
+            or len(records) != len(RESTART_REQUIREMENTS)
+            or [row.get("id") if isinstance(row, dict) else None for row in records] != list(RESTART_REQUIREMENTS)
+            or not all(row.get("status") == "passed" and row.get("source") == source
+                       and row.get("evidenceCategory") == EVIDENCE_CATEGORY and row.get("liveProvider") is False
+                       and row.get("qualified") is False and row.get("independentPackageWitness") is False
+                       and isinstance(row.get("record"), dict) for row in records)):
+        return ["All thirty source-bound effects upgrade/recovery cases must pass exactly once without self-promotion"]
+    return []
+
+
+def restart_source_bindings():
+    from upgrade_journeys import upgrade_bindings
+    bindings, upgrade = effect_restart_bindings(), upgrade_bindings()
+    _need(all(key not in bindings or bindings[key] == value for key, value in upgrade.items()),
+          "classed and upgrade source bindings disagree")
+    return dict(bindings, **upgrade)
+
+
+def require_effect_restarts(section, root, *, source):
+    """The complete T038 gate: a passed index never substitutes for native evidence."""
+    from upgrade_journeys import LEGACY_RESTART_CASES, require_legacy_effect_restarts
+    _need(not restart_manifest_gaps(section, source), "incomplete effects upgrade/recovery matrix")
+    _need(section.get("bindings") == restart_source_bindings(), "effects restart source inputs differ")
+    _need(set(CLASSED_RESTART_CASES).isdisjoint(LEGACY_RESTART_CASES)
+          and set(CLASSED_RESTART_CASES) | set(LEGACY_RESTART_CASES) == set(RESTART_REQUIREMENTS),
+          "native readers do not cover the exact restart inventory")
+    indexed = {row["id"]: row for row in section["records"]}
+    require_classed_effect_restarts([indexed[key] for key in CLASSED_RESTART_CASES], root, source=source)
+    require_legacy_effect_restarts([indexed[key] for key in LEGACY_RESTART_CASES], root, source=source)
+    return section["records"]
+
+
+def append_effect_restarts(run, records, *, complete=False):
+    """Keep partial/failed native records visible; only a complete deep read marks this section passed."""
+    section = run.report.get(RESTART_SECTION)
+    if section is None:
+        section = {"status": "running", "scope": "complete-package-witness-effects-restarts", "source": run.source,
+                   "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False, "qualified": False,
+                   "independentPackageWitness": False, "bindings": restart_source_bindings(),
+                   "caseIDs": list(RESTART_REQUIREMENTS), "records": []}
+        run.report[RESTART_SECTION] = section
+    _need(section.get("status") in ("running", "failed") and section.get("source") == run.source
+          and section.get("bindings") == restart_source_bindings(), "do not resume/replace accepted or foreign restart observations")
+    existing = {row["id"] for row in section["records"]}
+    _need(isinstance(records, list) and all(isinstance(row, dict) and row.get("id") in RESTART_REQUIREMENTS for row in records),
+          "foreign effects restart record")
+    identities = [row["id"] for row in records]
+    _need(len(identities) == len(set(identities)) and existing.isdisjoint(identities), "duplicate effects restart observations")
+    section["records"] += copy.deepcopy(records)
+    order = {key: index for index, key in enumerate(RESTART_REQUIREMENTS)}
+    section["records"].sort(key=lambda row: order[row["id"]])
+    if any(row.get("status") != "passed" for row in section["records"]):
+        section["status"] = "failed"
+    run.save()
+    if complete:
+        prospective = copy.deepcopy(section)
+        prospective["status"] = "passed"
+        try:
+            require_effect_restarts(prospective, run.root, source=run.source)
+        except Exception as error:
+            section.update(status="failed", failure={"type": type(error).__name__, "message": str(error)[:1000]})
+            run.save()
+            raise
+        section["status"] = "passed"
+        run.save()
+    return section
 
 
 def _restart_http(root, ref, origin, method, path, status=200):

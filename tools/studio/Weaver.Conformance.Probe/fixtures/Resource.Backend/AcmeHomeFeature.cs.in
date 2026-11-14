@@ -73,6 +73,7 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
+        WidgetPreparationProbe.MapEndpoints(endpoints);
         endpoints.MapGet(WidgetEffects.ExecutionsEndpoint, async (HttpContext http, WidgetEffectOwner owner, CancellationToken ct) =>
         {
             try

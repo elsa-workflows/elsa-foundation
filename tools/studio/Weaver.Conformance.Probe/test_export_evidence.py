@@ -27,6 +27,167 @@ class ExportEvidenceTests(unittest.TestCase):
     def report(self, value):
         (self.root / "report.json").write_text(json.dumps(value))
 
+    def protocol(self, name="first", *, earlier=(), observed=None, later=()):
+        observed = observed or [{"kind": "copilot.request", "data": {"commandId": name}}]
+        encode = lambda rows: b"".join((json.dumps(row) + "\n").encode() for row in rows)
+        prefix, window, tail = encode(earlier), encode(observed), encode(later)
+        path = self.root / "protocol.jsonl"
+        path.write_bytes(prefix + window + tail)
+        captured = self.root / (name + "-window.jsonl")
+        captured.write_bytes(window)
+        raw = {"sourcePath": str(path), "offset": len(prefix), "nextOffset": len(prefix + window),
+               "incompleteTailBytes": 0, "observedBytesSha256": hashlib.sha256(window).hexdigest(), "records": observed}
+        identity = path.stat()
+        trace = dict(raw, commandId=name, rawTrace=self.ref(name + "-raw.json", raw),
+                     window={"path": str(captured), "sha256": hashlib.sha256(window).hexdigest()},
+                     sourceIdentity={"device": identity.st_dev, "inode": identity.st_ino},
+                     sourceSizeAtObservation=raw["nextOffset"], capturedAt=1.0)
+        return trace, self.ref(name + "-trace.json", trace), prefix + window
+
+    def test_exports_actual_protocol_prefix_window_and_receipts_without_rewriting_native_identity(self):
+        trace, reference, expected = self.protocol(earlier=[{"kind": "factory.loaded"}], later=[{"kind": "later.append"}])
+        self.report({"status": "failed", "trace": reference})
+        index = export_evidence(self.root, self.destination)
+        self.assertEqual({"report.json", "first-trace.json", "first-raw.json", "first-window.jsonl", "protocol.jsonl"}, set(index["files"]))
+        self.assertEqual(expected, (self.destination / "protocol.jsonl").read_bytes())
+        self.assertEqual(trace, json.loads((self.destination / "first-trace.json").read_text()))
+        self.assertEqual("failed", index["qualificationStatus"])
+        self.assertFalse(index["privateRuntimeStateIncluded"])
+        self.assertEqual(hashlib.sha256(expected).hexdigest(), index["files"]["protocol.jsonl"])
+
+    def test_exports_longest_observed_prefix_of_a_shared_actual_source(self):
+        first = {"kind": "copilot.request", "data": {"commandId": "first"}}
+        second = {"kind": "copilot.request", "data": {"commandId": "second"}}
+        _, one, _ = self.protocol(observed=[first])
+        _, two, expected = self.protocol("second", earlier=[first], observed=[second], later=[{"kind": "later.append"}])
+        self.report({"traces": [one, two]})
+        index = export_evidence(self.root, self.destination)
+        self.assertEqual(expected, (self.destination / "protocol.jsonl").read_bytes())
+        self.assertIn("first-window.jsonl", index["files"])
+        self.assertIn("second-window.jsonl", index["files"])
+
+    def test_refuses_changed_or_substituted_actual_protocol_evidence(self):
+        for fault in ("source-bytes", "source-truncated", "source-replaced", "source-symlink", "source-parent-symlink",
+                      "window-bytes", "raw-receipt-bytes", "raw-records", "command-records", "identity", "foreign-source", "missing-window"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                original_root, original_destination = self.root, self.destination
+                self.root, self.destination = Path(directory) / "run", Path(directory) / "export"
+                self.root.mkdir()
+                try:
+                    trace, _, _ = self.protocol()
+                    path = self.root / "protocol.jsonl"
+                    if fault == "source-bytes": path.write_bytes(path.read_bytes().replace(b"copilot.request", b"copilot.changed"))
+                    elif fault == "source-truncated": path.write_bytes(b"")
+                    elif fault == "source-replaced":
+                        replacement = self.root / "replacement.jsonl"
+                        replacement.write_bytes(path.read_bytes()); replacement.replace(path)
+                    elif fault == "source-symlink":
+                        original = self.root / "original.jsonl"
+                        path.rename(original); path.symlink_to(original)
+                    elif fault == "source-parent-symlink":
+                        alias = self.root / "alias"
+                        alias.symlink_to(self.root, target_is_directory=True)
+                        trace["sourcePath"] = str(alias / path.name)
+                        raw = json.loads(Path(trace["rawTrace"]["path"]).read_text())
+                        raw["sourcePath"] = trace["sourcePath"]
+                        trace["rawTrace"] = self.ref("first-raw.json", raw)
+                    elif fault == "window-bytes": Path(trace["window"]["path"]).write_bytes(b"changed")
+                    elif fault == "raw-receipt-bytes": Path(trace["rawTrace"]["path"]).write_bytes(b"{}")
+                    elif fault == "raw-records":
+                        raw = json.loads(Path(trace["rawTrace"]["path"]).read_text())
+                        raw["records"] = []
+                        trace["rawTrace"] = self.ref("first-raw.json", raw)
+                    elif fault == "command-records": trace["records"] = []
+                    elif fault == "identity": trace["sourceIdentity"]["inode"] += 1
+                    elif fault == "foreign-source":
+                        foreign = self.root.parent / "foreign.jsonl"
+                        foreign.write_bytes(path.read_bytes())
+                        trace["sourcePath"] = str(foreign)
+                        raw = json.loads(Path(trace["rawTrace"]["path"]).read_text())
+                        raw["sourcePath"] = str(foreign)
+                        trace["rawTrace"] = self.ref("first-raw.json", raw)
+                    elif fault == "missing-window": trace.pop("window")
+                    reference = self.ref("first-trace.json", trace)
+                    self.report({"trace": reference})
+                    with self.assertRaises(ValueError):
+                        export_evidence(self.root, self.destination)
+                    self.assertFalse(self.destination.exists())
+                finally:
+                    self.root, self.destination = original_root, original_destination
+
+    def test_refuses_credentials_in_source_prefix_or_captured_jsonl_before_writing_any_export(self):
+        for channel in ("prefix", "window", "nested-body", "jwt"):
+            with self.subTest(channel=channel), tempfile.TemporaryDirectory() as directory:
+                original_root, original_destination = self.root, self.destination
+                self.root, self.destination = Path(directory) / "run", Path(directory) / "export"
+                self.root.mkdir()
+                try:
+                    private = {"kind": "factory.observation", "data": {"accessToken": "generated-own-credential"}}
+                    if channel == "nested-body": private["data"] = {"rawBody": json.dumps({"password": "generated-own-credential"})}
+                    elif channel == "jwt": private["data"] = {"text": "eyJabcdefghijk.eyJabcdefghijk.abcdefghijk"}
+                    trace, reference, _ = self.protocol(earlier=[private] if channel == "prefix" else (),
+                                                        observed=None if channel == "prefix" else [dict(private, data=dict(private["data"], commandId="first"))])
+                    self.report({"trace": reference})
+                    with self.assertRaisesRegex(ValueError, "Credential"):
+                        export_evidence(self.root, self.destination)
+                    self.assertFalse(self.destination.exists())
+                finally:
+                    self.root, self.destination = original_root, original_destination
+
+    def test_refuses_credentials_in_a_direct_jsonl_reference(self):
+        path = self.root / "protocol.jsonl"
+        path.write_text(json.dumps({"data": {"accessToken": "generated-own-credential"}}) + "\n")
+        self.report({"trace": {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}})
+        with self.assertRaisesRegex(ValueError, "Credential"):
+            export_evidence(self.root, self.destination)
+        self.assertFalse(self.destination.exists())
+
+    def test_a_module_payload_cannot_select_a_protocol_source(self):
+        trace, _, _ = self.protocol()
+        body = self.ref("module.json", {"payload": trace})
+        self.report({"owner": body})
+        index = export_evidence(self.root, self.destination)
+        self.assertEqual({"report.json", "module.json"}, set(index["files"]))
+
+    def test_duplicate_sensitive_keys_cannot_hide_credentials_in_protocol_or_nested_body(self):
+        duplicate = '{"accessToken":"synthetic-test-only","accessToken":"[redacted]"}'
+        for channel in ("source-prefix", "nested-body", "direct-reference"):
+            with self.subTest(channel=channel), tempfile.TemporaryDirectory() as directory:
+                original_root, original_destination = self.root, self.destination
+                self.root, self.destination = Path(directory) / "run", Path(directory) / "export"
+                self.root.mkdir()
+                try:
+                    if channel == "direct-reference":
+                        path = self.root / "response.json"
+                        path.write_text(duplicate)
+                        reference = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                    elif channel == "nested-body":
+                        _, reference, _ = self.protocol(observed=[{"kind": "copilot.request", "data": {"commandId": "first", "rawBody": duplicate}}])
+                    else:
+                        trace, _, _ = self.protocol()
+                        path = self.root / "protocol.jsonl"
+                        prefix = (duplicate + "\n").encode()
+                        path.write_bytes(prefix + path.read_bytes())
+                        raw = json.loads(Path(trace["rawTrace"]["path"]).read_text())
+                        raw["offset"] += len(prefix); raw["nextOffset"] += len(prefix)
+                        trace.update(offset=raw["offset"], nextOffset=raw["nextOffset"], sourceSizeAtObservation=raw["nextOffset"],
+                                     rawTrace=self.ref("first-raw.json", raw))
+                        reference = self.ref("first-trace.json", trace)
+                    self.report({"trace": reference})
+                    with self.assertRaisesRegex(ValueError, "Duplicate JSON keys"):
+                        export_evidence(self.root, self.destination)
+                    self.assertFalse(self.destination.exists())
+                finally:
+                    self.root, self.destination = original_root, original_destination
+
+    def test_private_typed_canary_binding_prevents_export_of_an_earlier_source_prefix(self):
+        canary = "a1" * 24
+        _, reference, _ = self.protocol(earlier=[{"kind": "factory.observation", "data": {"message": "Unsupported diagnostic " + canary}}])
+        self.report({"status": "failed", "canarySearch": {"found": 1, "sha256": hashlib.sha256(canary.encode()).hexdigest()}, "trace": reference})
+        with self.assertRaisesRegex(ValueError, "Private typed canary"):
+            export_evidence(self.root, self.destination)
+        self.assertFalse(self.destination.exists())
+
     def test_exports_nested_actual_refs_and_preserves_failed_child(self):
         body = self.ref("owner.json", {"revision": "r1"})
         receipt = self.ref("case.json", {"status": "failed", "ownerAfter": body})

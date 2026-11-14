@@ -230,13 +230,17 @@ class CompleteWitnessTests(unittest.TestCase):
     test merely because a newly mandatory section is absent. Production has no bypass.
     """
     def setUp(self):
-        for name in ("manifest_gaps", "restart_manifest_gaps", "require_effects"):
+        for name in ("manifest_gaps", "restart_manifest_gaps", "require_effects", "require_effect_restarts"):
             mocked = patch("effects_journeys." + name, return_value=[])
             mocked.start(); self.addCleanup(mocked.stop)
         self.base = QualificationTests("test_complete_synthetic_receipts_validate_without_status_or_file_mutation")
         self.base.setUp()
         self.addCleanup(self.base.tearDown)
         self.report = complete_witness_report(self.base)
+        # Python evaluates arguments before the isolated new-reader mocks. Keep
+        # explicit synthetic placeholders; production still requires native sections.
+        self.report["moduleEffectsQualification"] = {"syntheticReaderDispatch": True}
+        self.report["moduleEffectsRestartQualification"] = {"syntheticReaderDispatch": True}
 
     def rejected(self, change):
         report = copy.deepcopy(self.report)
@@ -270,6 +274,15 @@ class CompleteWitnessTests(unittest.TestCase):
         self.assertEqual([], witness_gaps(self.report))
         self.assertIsNone(validate_complete_witness(self.report, self.base.root, self.base.controls))
         self.assertEqual(before, self.report)
+
+    def test_complete_gate_calls_the_effects_restart_reader_and_propagates_its_native_refusal(self):
+        # The old 107-case data isolates final dispatch; it cannot supply new native proof.
+        marker = {"syntheticReaderDispatch": True}
+        self.report["moduleEffectsRestartQualification"] = marker
+        with patch("effects_journeys.require_effect_restarts", side_effect=RuntimeError("protected old-writer bytes changed")) as reader:
+            with self.assertRaisesRegex(EvidenceError, "protected old-writer bytes changed"):
+                validate_complete_witness(self.report, self.base.root, self.base.controls)
+        reader.assert_called_once_with(marker, self.base.root.resolve(), source=self.report["source"])
 
     def test_no_total_stage_count_is_required(self):
         manifest_stages = [stage for stage in self.report["stages"] if stage["name"] in autonomy_stages()]

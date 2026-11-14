@@ -295,6 +295,8 @@ def validate_complete_witness(report, root, allowed_controls):
         require_restart_inventory(report[RESTART_QUALIFICATION], root, source=report["source"])
         from effects_journeys import SECTION as EFFECT_SECTION, require_effects
         require_effects(report[EFFECT_SECTION], root, source=report["source"])
+        from effects_journeys import RESTART_SECTION as EFFECT_RESTART_SECTION, require_effect_restarts
+        require_effect_restarts(report[EFFECT_RESTART_SECTION], root, source=report["source"])
     except EvidenceError:
         raise
     except (RuntimeError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:

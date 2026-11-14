@@ -386,6 +386,21 @@
     "The final API phase completed all eight compiler stages and four locked restores, then guard-build exceeded its separate 300-second cap. No guard test/TRX/final receipt exists.",
     "Initial export refused four inert CLR FIFOs left after the killed build. A narrowly reviewed recovery preserved their exact metadata and all regular proof bytes; original refusal remains retained."
   ],
+  "laterCommittedHeadCi": {
+    "head": "6ade0c238406f9ed9a57e71d946c6802a788bec7",
+    "run": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43562849596",
+    "job": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43562849596/job/132377978129",
+    "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+    "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-build -p:WarningsNotAsErrors=NU1603 --logger trx --results-directory /home/runner/work/_temp/shard/try1/0 --blame-hang-timeout 10m --blame-hang-dump-type none",
+    "filter": null,
+    "passed": 622,
+    "failed": 0,
+    "skipped": 0,
+    "total": 622,
+    "artifact": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43562849596/artifacts/14111398496",
+    "artifactContents": "test-outcomes.json; CI did not upload the raw TRX",
+    "scope": "Later successful whole-project CI, including the source roster of five PublicApiFilesGuardTests. This does not change the failed worker phase, prove a separate list-tests comparison or qualify subsequent source, remaining T042 gates or the Program."
+  },
   "rawCustody": {
     "location": "Private local evidence archive; not published to the repository",
     "archiveBytes": 956233963,
