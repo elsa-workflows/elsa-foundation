@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\..\..\src\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Studio\Dashboard\Persistence\EntityFrameworkCore\Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
