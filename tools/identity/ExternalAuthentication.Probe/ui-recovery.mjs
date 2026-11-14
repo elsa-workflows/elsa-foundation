@@ -42,16 +42,16 @@ export async function recoverFailedTest({ page, expect, capture, metadata, confi
 }
 
 export async function exercisePreviewDenial({ page, admin, backend, expect, capture, confirm, control, exchangeCount }) {
-  const beforeExchanges = await exchangeCount(); const before = await (await admin.request.get(backend + "/__probe/state")).json();
+  await exchangeCount(); const before = await (await admin.request.get(backend + "/__probe/state")).json();
   const beforeSession = await (await admin.request.get(backend + "/_elsa/identity/session")).json();
   await control("deny-preview");
   await page.getByRole("button", { name: "Preview sign-in", exact: true }).click(); await confirm(page, "Preview provider sign-in", "Continue to provider");
   await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("provider sign-in was cancelled");
   await expect.poll(() => [...new URL(page.url()).searchParams.keys()].some(key => key.startsWith("externalPreview"))).toBe(false);
   await capture(page, "preview-provider-denied", { action: "owned-provider-denial-return" });
-  const exchanges = await exchangeCount() - beforeExchanges; const after = await (await admin.request.get(backend + "/__probe/state")).json();
+  await exchangeCount(); const after = await (await admin.request.get(backend + "/__probe/state")).json();
   for (const name of ["users", "links", "sessions", "tokenRequests"]) expect(after[name]).toBe(before[name]);
-  expect(after.tokens).toBe(before.tokens + exchanges * 2);
+  expect(after.tokens).toBe(before.tokens + (after.credentialExchanges - before.credentialExchanges) * 2);
   const afterSession = await (await admin.request.get(backend + "/_elsa/identity/session")).json();
   for (const name of ["subject", "roles", "permissions"]) expect(afterSession[name]).toEqual(beforeSession[name]);
 }

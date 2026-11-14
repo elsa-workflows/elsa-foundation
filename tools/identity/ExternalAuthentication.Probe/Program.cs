@@ -174,13 +174,30 @@ await using var app = builder.Build();
 app.UsePathBase("/backend"); app.UseRouting();
 if (settings.StudioUrl is not null) app.UseCors("owned-studio");
 app.UseAuthentication(); app.UseAuthorization();
+var tokenAccounting = new ProbeTokenAccounting();
+string? AccountingSubject(HttpContext context)
+{
+    var tenant = context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value;
+    var user = context.User.FindFirst(IdentityClaimTypes.UserId)?.Value;
+    return tenant is null || user is null ? null : $"{tenant.Length}:{tenant}{user}";
+}
+app.Use(async (context, next) =>
+{
+    if (!HttpMethods.IsGet(context.Request.Method) || context.Request.Path != "/_elsa/identity/token")
+    { await next(context); return; }
+    await tokenAccounting.ExchangeAsync(async () =>
+    {
+        await next(context);
+        return context.Response.StatusCode == StatusCodes.Status200OK ? AccountingSubject(context) : null;
+    }, context.RequestAborted);
+});
 ApiCapabilitiesApi.MapApiCapabilitiesApi(app);
 FoundationIdentityApi.MapFoundationIdentityApi(app); AspNetCoreIdentityApi.MapAspNetCoreIdentityApi(app);
 if (settings.ManagedApi) ExternalAuthenticationApi.MapExternalAuthenticationApi(app);
 app.MapGet("/resource", () => Results.Ok()).RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
 object? metadata = null;
 app.MapGet("/__probe", () => Results.Json(metadata)).AllowPublic("qualification-probe", "Owned development probe exposes only public route/provider metadata.");
-app.MapGet("/__probe/state", async (HttpContext context) =>
+app.MapGet("/__probe/state", (HttpContext context) => tokenAccounting.SnapshotAsync(AccountingSubject(context), async credentialExchanges =>
 {
     await using var scope = app.Services.CreateAsyncScope();
     scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
@@ -198,8 +215,8 @@ app.MapGet("/__probe/state", async (HttpContext context) =>
     }
     return Results.Json(new { Users = await iam.Users.CountAsync(context.RequestAborted), Links = await iam.ExternalIdentities.CountAsync(context.RequestAborted),
         Tokens = await tokens.Set<global::OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync(context.RequestAborted),
-        Sessions = sessionCount, company.TokenRequests });
-}).RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
+        Sessions = sessionCount, company.TokenRequests, CredentialExchanges = credentialExchanges });
+}, context.RequestAborted)).RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
 if (settings.UiRecovery)
 {
     var controlKey = await File.ReadAllTextAsync(OwnedFile("ui-control-key.txt"));

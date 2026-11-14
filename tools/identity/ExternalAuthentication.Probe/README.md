@@ -32,6 +32,13 @@ both deadline/cancellation process-cleanup cases. Actual executions belong to th
   fixture only. Failed metadata testing remains distinct from structural configuration readiness; the preserved
   c575 correction is carried without claiming it has passed here.
 
+The owned probe serializes ordinary interactive token exchanges with `__probe/state` snapshots. Each snapshot
+includes the completed exchange counter for the requesting canonical tenant/user, paired with the persisted
+token count. Preview checks still require exactly two rows per observed ordinary exchange and no extra
+credentials; exchanges by another subject, failed exchanges and direct preview writes receive no allowance.
+Browser response checks separately require the existing administrator subject. This avoids counting a normal
+exchange in both a database baseline and a later independently sampled browser delta.
+
 ## Browser and owning dependencies
 
 The module's `Client/scripts/browser.mjs` now imports these actual helpers and its `test:browser` package entry
