@@ -58,6 +58,18 @@ internal static class StatefulPolicy
     }
     private static IEnumerable<(string Name, Action Run)> Readers()
     {
+        foreach (var queued in new[] { false, true }) foreach (var foreign in new[] { false, true }) yield return ($"root-waits,queued={queued},foreign={foreign}", () =>
+        {
+            var s = new NativeState { Started = true, InterventionEnabled = true, InterventionPolicy = 3 };
+            var source = new Frame { Id = "old", Node = "leaf", RecoveryStateful = true, RecoveryInputs = new(), RecoveryMaterial = new() { ["root"] = "leaf" }, OperationKey = "op", Intervention = new("incident", new("dependency", "repair")) };
+            s.Retries = new() { ["retry"] = new(new("retry", "old", "incident", "repair"), source, "fresh") };
+            s.Frames.Add("fresh", new() { Id = "fresh", Node = "leaf", RetrySource = "old", RecoveryStateful = true, RecoveryInputs = new(), RecoveryMaterial = (JsonObject)source.RecoveryMaterial.DeepClone(), OperationKey = "op" });
+            s.Waits.Add("w", new("fresh", "event", "event:go")); if (foreign) s.Waits.Add("foreign", new("absent", "event", "event:foreign"));
+            if (queued) s.Agenda.Add(new() { Resume = true, Frame = "fresh", Wait = "w" });
+            try { NativeInterventions.Validate(s); }
+            catch (InvalidOperationException e) when (foreign && e.Message == "Invalid native staged root obligation.") { return; }
+            if (foreign) throw new InvalidOperationException("R40: suspended root accepted a foreign wait");
+        });
         foreach (var mismatch in new[] { false, true }) yield return ("nonroot-resume-owner-" + mismatch, () =>
         {
             var s = new NativeState { Started = true, InterventionEnabled = true, InterventionPolicy = 3 };
