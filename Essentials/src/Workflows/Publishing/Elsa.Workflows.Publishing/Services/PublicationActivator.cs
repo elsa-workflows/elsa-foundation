@@ -62,10 +62,13 @@ public sealed class PublicationActivator(
         ArgumentNullException.ThrowIfNull(request.Reference);
         var candidate = request.Candidate;
         if (candidate.ArtifactId != request.Material.Identity.ArtifactId ||
+            request.Reference.ArtifactId != request.Material.Identity.ArtifactId ||
+            request.Reference.Scope != WorkflowExecutableReferenceScope.Published ||
+            !request.Reference.IsLive(timeProvider.GetUtcNow()) ||
             candidate.WorkflowDefinitionId != request.Reference.DefinitionId ||
             candidate.WorkflowDefinitionVersionId != request.Reference.DefinitionVersionId ||
             candidate.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(candidate.PublicationId))
-            throw new ArgumentException("The material publication candidate must match its logical source, artifact and activation reference.", nameof(request));
+            throw new ArgumentException("The material publication candidate must match its live published source, logical identity, artifact and activation reference.", nameof(request));
         return await ActivateCoreAsync(candidate, token => activationCoordinator.ActivateMaterialAsync(
             new(candidate.WorkflowDefinitionId, request.Material, request.Reference, candidate.SlotName,
                 candidate.PublicationId, Source, candidate.ExpectedSlotRevision), token), materialRequest: true, cancellationToken);

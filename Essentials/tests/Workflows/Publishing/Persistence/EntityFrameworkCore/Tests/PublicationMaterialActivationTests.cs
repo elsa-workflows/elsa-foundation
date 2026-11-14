@@ -69,12 +69,29 @@ public sealed class PublicationMaterialActivationTests
         Assert.NotNull((await host.References.FindAsync(first.Publication.SourceReferenceId!))!.DeletedAt);
     }
 
-    [Fact]
-    public async Task Material_candidate_with_different_source_identity_is_rejected_before_journal_or_runtime_mutation()
+    [Theory]
+    [InlineData("definition")]
+    [InlineData("version")]
+    [InlineData("candidate-artifact")]
+    [InlineData("reference-artifact")]
+    [InlineData("candidate-reference")]
+    [InlineData("scope")]
+    [InlineData("retired")]
+    public async Task Material_candidate_with_different_source_identity_is_rejected_before_journal_or_runtime_mutation(string mismatch)
     {
         await using var host = await Harness.OpenAsync();
         var request = host.Request(await host.ModelAsync("model"), "publication-invalid", "version-1");
-        request = request with { Reference = request.Reference with { DefinitionId = "other-definition" } };
+        request = mismatch switch
+        {
+            "definition" => request with { Reference = request.Reference with { DefinitionId = "other-definition" } },
+            "version" => request with { Reference = request.Reference with { DefinitionVersionId = "other-version" } },
+            "candidate-artifact" => request with { Candidate = request.Candidate with { ArtifactId = "other-artifact" } },
+            "reference-artifact" => request with { Reference = request.Reference with { ArtifactId = "other-artifact" } },
+            "candidate-reference" => request with { Candidate = request.Candidate with { SourceReferenceId = "other-reference" } },
+            "scope" => request with { Reference = request.Reference with { Scope = WorkflowExecutableReferenceScope.TestRun } },
+            "retired" => request with { Reference = request.Reference with { DeletedAt = DateTimeOffset.UtcNow.AddSeconds(-1) } },
+            _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
+        };
 
         await Assert.ThrowsAsync<ArgumentException>(() => host.Activator().ActivateMaterialAsync(request).AsTask());
 
