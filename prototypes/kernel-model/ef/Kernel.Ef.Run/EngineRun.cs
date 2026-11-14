@@ -438,7 +438,7 @@ static class EngineRun
                 counter.Reset();
                 var clock = Stopwatch.StartNew();
                 var start = new Message($"m{++n}", InstanceRef.In(0, $"blob{n}"), Kinds.Start, Start: Blob.Spec(bytes, StateSizeBenchmark.Turns));
-                chars = await StateSizeBenchmark.TrialAsync(owner, tally, start, bytes, () => Drain(owner, poll: false), () =>
+                chars = await StateSizeBenchmark.TrialAsync(owner, tally, start, bytes, target.Shaper?.Level ?? start.Start!.History, () => Drain(owner, poll: false), () =>
                 {
                     clock.Stop();
                     counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);

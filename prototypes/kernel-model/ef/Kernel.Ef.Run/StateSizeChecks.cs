@@ -6,8 +6,10 @@ internal static class StateSizeChecks
     public static async Task<int> RunAsync()
     {
         var failures = 0;
+        var checks = 0;
         async Task Check(string name, Func<Task> check)
         {
+            checks++;
             try { await check(); Console.WriteLine("pass  " + name); }
             catch (Exception error) { failures++; Console.WriteLine($"FAIL  {name}: {error.Message}"); }
         }
@@ -15,11 +17,14 @@ internal static class StateSizeChecks
         {
             if (!condition) throw new InvalidOperationException(why);
         }
-        async Task Trial(bool activate, int turns, bool drain, bool rejected, History history = History.Full, bool removeJournal = false, int pad = 0)
+        async Task Trial(bool activate, int turns, bool drain, bool rejected, History history = History.Full,
+            bool removeJournal = false, int pad = 0, History? level = null, History? corruptHistory = null,
+            bool extraJournal = false, bool corruptEntries = false)
         {
             var memory = new InMemoryStore(1, () => 0);
             var store = new Tally(memory);
-            var type = new Leveled(null, pad).Over(new WorkflowInstance([new Blob()]));
+            var shape = new Leveled(level, pad);
+            var type = shape.Over(new WorkflowInstance([new Blob()]));
             var owner = new Worker("size-check", 0, store, type);
             if (activate)
             {
@@ -39,10 +44,19 @@ internal static class StateSizeChecks
             var chars = 0;
             try
             {
-                chars = await StateSizeBenchmark.TrialAsync(owner, store, start, 1024, Drain, () =>
+                chars = await StateSizeBenchmark.TrialAsync(owner, store, start, 1024, shape.Level ?? start.Start!.History, Drain, () =>
                 {
                     measured = true;
                     if (removeJournal) memory.Journal.Remove((0, 1));
+                    if (corruptHistory is { } wrong)
+                    {
+                        memory.Instances["0/blob"] = memory.Instances["0/blob"] with { History = wrong };
+                        memory.Journal.Clear();
+                        if (wrong != History.Minimal)
+                            for (var i = 1; i <= 10; i++) memory.Journal[(0, i)] = new(0, i, "0/blob", i, "[]");
+                    }
+                    if (extraJournal) memory.Journal[(0, 1)] = new(0, 1, "0/blob", 1, "[]");
+                    if (corruptEntries) memory.Journal[(0, 1)] = memory.Journal[(0, 1)] with { Entries = "[\"unexpected\"]" };
                 });
             }
             catch (InvalidOperationException) { refused = true; }
@@ -61,6 +75,16 @@ internal static class StateSizeChecks
         await Check("positive trial: Minimal history still proves ten commits", () => Trial(true, 10, true, false, History.Minimal));
         await Check("positive trial: persisted padded state size", () => Trial(true, 10, true, false, pad: 1024));
         await Check("positive trial: Minimal padded state size", () => Trial(true, 10, true, false, History.Minimal, pad: 1024));
+        await Check("positive trial: State history", () => Trial(true, 10, true, false, History.State));
+        await Check("positive trial: target overrides Full with Minimal", () => Trial(true, 10, true, false, level: History.Minimal));
+        await Check("positive trial: target overrides Minimal with Full", () => Trial(true, 10, true, false, History.Minimal, level: History.Full));
+        await Check("positive trial: target overrides Full with State", () => Trial(true, 10, true, false, level: History.State));
+        await Check("negative control: requested Full replaced by Minimal and no journal", () => Trial(true, 10, true, true, level: History.Full, corruptHistory: History.Minimal));
+        await Check("negative control: requested Minimal replaced by Full and ten journal rows", () => Trial(true, 10, true, true, History.Minimal, level: History.Minimal, corruptHistory: History.Full));
+        await Check("negative control: Minimal has an unexpected journal row", () => Trial(true, 10, true, true, History.Minimal, extraJournal: true));
+        await Check("negative control: State is missing a journal revision", () => Trial(true, 10, true, true, History.State, removeJournal: true));
+        await Check("negative control: Full has unexpected journal content", () => Trial(true, 10, true, true, corruptEntries: true));
+        await Check("negative control: State has unexpected journal content", () => Trial(true, 10, true, true, History.State, corruptEntries: true));
         await Check("CLI sizes: positive kilobytes, checked bytes", () =>
         {
             Require(StateSizeBenchmark.ParseSizes("1,10,100,1000").SequenceEqual(new[] { 1024, 10240, 102400, 1024000 }), "valid sizes changed");
@@ -73,7 +97,7 @@ internal static class StateSizeChecks
             }
             return Task.CompletedTask;
         });
-        Console.WriteLine($"size checks: {9 - failures} passed, {failures} failed");
+        Console.WriteLine($"size checks: {checks - failures} passed, {failures} failed");
         return failures == 0 ? 0 : 1;
     }
 }

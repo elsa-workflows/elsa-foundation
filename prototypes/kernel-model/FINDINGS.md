@@ -1197,8 +1197,10 @@ which is unexplained, and it did not recur here.
 
 **Per-trial acceptance checks (13 November integration).** Each of the three trials must have its start accepted,
 land exactly ten commits writing ten instance rows, and persist a Finished row at revision 10 with `Left=0` and the
-requested payload length. At Full or State history its persisted journal must also contain exactly revisions 1–10;
-Minimal omits those rows by contract and is checked by the landed commits plus the persisted final row. The clock
+requested payload length. The effective requested history (the target override, when present, otherwise the start
+specification) is carried separately into verification and must match the persisted row. At Full or State history
+its persisted journal must contain exactly revisions 1–10, each with `[]` because Blob records no entries;
+Minimal must contain no journal rows. The clock
 and command counts are captured before the verification reads. A refused or incomplete trial fails the run instead
 of printing a successful per-commit number. `sizes=` is validated for positive integer kilobytes and checked byte
 multiplication before constructing the target, starting a proxy or resetting the database. This is CLI input
@@ -1207,7 +1209,11 @@ validation, not a kernel state-size limit.
 `$EFR x size-check` runs the real in-memory Worker: ten-commit Full and Minimal positives, including padded states;
 owner-declined start, accepted start with commits omitted, nine commits, and a missing persisted journal revision as negative controls;
 and invalid size inputs. The extracted original trial accepted all four incomplete outcomes in the red baseline.
-After the checks, all nine groups pass. Fresh SQLite cost runs at 1/10/100/1,000 KB pass with both fences (three
+After the 13 November checks, all nine groups passed. The 14 November repair adds ten groups, including target
+overrides at all three levels, and ten-real-commit negative controls that replace requested Full with Minimal plus
+zero journal rows and requested Minimal with Full plus ten journal rows. Both wrong-policy controls were accepted
+before the independent oracle. Additional controls reject an unexpected Minimal journal row and incorrect Full or
+State entries. Fresh SQLite cost runs at 1/10/100/1,000 KB passed with both fences (three
 trials per size, ten commits each); their counted work remains 7.7 per commit. A Minimal-history 1 KB run also
 passes. Zero, negative, overflow and mixed invalid CLI inputs exit 2 while an existing database sentinel remains
 unchanged. A follow-up `sizes=1 pad=1024` run originally printed 1,044 characters while SQLite held 2,077; the
