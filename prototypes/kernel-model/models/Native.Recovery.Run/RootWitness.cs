@@ -6,7 +6,7 @@ using Kernel.Sim.Native;
 
 internal static class RootWitness
 {
-    private static string[] Cuts => ["steady", "reload-fault", "reload-staged", "lost-before-apply", "lost-answer"];
+    private static string[] Cuts => ["steady", "reload-fault", "reload-staged", "lost-before-apply", "lost-answer", "cancel-fault", "terminate-staged"];
     internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from r in new[] { true, false } from e in new[] { false, true } from c in Cuts
         select $"recovery:root-iteration,{m},root={r},external={e},cut={c}";
     internal static void Run(bool? onlyRoot = null, bool full = false)
@@ -84,13 +84,27 @@ internal static class RootWitness
             if (!root) Check(Values.To<ForEachState>(current.Frames[source.Parent!].State)!.Index == 0 && work!.Scope!["CurrentItem"]!.ToString() == "7" && work.Scope["CurrentIndex"]!.ToString() == "0",
                 "R25: retry advanced or changed the failed iteration before success");
         }
+        void Cancel(bool staged)
+        {
+            Apply(new("add", M: new("cancel", target, staged ? Kinds.Terminate : NativeKinds.Cancel, TargetCreation: 1))); Drain();
+            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && RootLeaf.Calls.Count == 1,
+                "R31: root/iteration cancellation executed or reopened failed work");
+            var history = Json.Write(State().Retries); NativeWorkflows.Registry.Remove(workflow.Id);
+            Apply(new("add", M: new("query", target, ReceiptQuery.Kind, Json.Write(new ReceiptQuery("unknown", "probe")), ReplyTo: ReplyTo.Of("outside", "query", world.Time + 120_000), TargetCreation: 1))); Drain();
+            Apply(new("add", M: new("stale", target, NativeKinds.Continue, TargetCreation: 1))); Drain();
+            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && RootLeaf.Calls.Count == 1 && Json.Write(State().Retries) == history &&
+                world.Deliveries.Select(d => d.Reply.Item).OfType<Admission>().LastOrDefault()?.Result == "UnknownInvocation",
+                "R31: cancelled root/iteration metadata hydrated authored material, changed history or resumed work");
+        }
         Apply(new("take", Actor().Id)); Apply(new("add", M: new("start", target, Kinds.Start, Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "root-proof") }))); Drain();
         var state = State(); var source = state.Frames.Values.SingleOrDefault(f => f.Node == "leaf");
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Running && source?.Intervention is not null && RootLeaf.Calls.Count == 1,
             root ? "R22: opted-in root fault ended the run instead of retaining intervention" : "R23: direct ForEach fault lost its continuing iteration");
+        if (cut == "cancel-fault") { Cancel(false); Console.WriteLine($"PASS recovery:root-iteration,{mode},root={root},external={external},cut={cut}"); return; }
         if (cut == "reload-fault") { workflow.InterventionRequested = false; Reload(); Drain(); }
         var first = new NativeRetry("root-retry-1", source!.Id, source.Intervention!.Id, "first repair");
         Stage(first, 1, cut.StartsWith("lost-", StringComparison.Ordinal));
+        if (cut == "terminate-staged") { Cancel(true); Console.WriteLine($"PASS recovery:root-iteration,{mode},root={root},external={external},cut={cut}"); return; }
         if (cut == "reload-staged") Reload();
         Drain();
         var again = State().Frames.Values.Single(f => f.Node == "leaf");
