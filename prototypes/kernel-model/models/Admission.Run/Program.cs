@@ -177,7 +177,7 @@ sealed class Witness(string mode, bool nested, Cut cut, AdmissionFlaw defect = A
         Add(new(id, _instance, NativeKinds.Resume, Json.Write(new ResumeStimulus(name))));
         return id;
     }
-    private void Add(Message message) => Apply(new("add", M: message));
+    private void Add(Message message) => Apply(new("add", M: CreationFixture.Pin(message)));
     private void Apply(Act act)
     {
         var receipts = Replies.Length;
