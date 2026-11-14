@@ -83,6 +83,13 @@ The [selection and phase contract](contracts/selection.md) remains an engineerin
 and native phases above qualify a bounded subset. Ordinary trigger/rearming, automatic/completion arbitration, loop
 recovery and complete source grouping remain open; neither the engine nor its phase proof closes Q1.
 
+The private [internal-progress protocol](../../prototypes/kernel-model/models/Statecharts.Run/README.md#internal-progress-protocol)
+extends that same compiled selector with explicit automatic/completion categories, once-per-visit local completion,
+phase gates, ready ordering and an experimental sticky causal limit. Its pure configuration/JSON fixtures do not
+qualify actual native internal progress, ordinary guard/loop incidents, recovery or durable restart. Native hydration
+explicitly refuses those new categories until that integration is qualified. This supplies no product limit,
+source-owner agreement, ordinary-trigger rearming or change to the full StateMachine/Studio scope.
+
 The bounded [selection reference model](selection-model/README.md) makes candidate and phase-plan rules
 executable. Its tests are algorithm evidence only; actual runtime integration and the remaining Q1 rules stay open.
 
