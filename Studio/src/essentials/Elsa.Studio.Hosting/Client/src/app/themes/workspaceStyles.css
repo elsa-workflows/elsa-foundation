@@ -266,7 +266,7 @@ html[data-workspace-style] .settings-radio-card[aria-checked="true"] {
 
 @media (max-width: 600px) {
   html[data-workspace-style] :is(.topbar, .sidebar) { padding: 8px 12px; }
-  html[data-workspace-style] .content { padding: 16px; }
+  html[data-workspace-style] .content { padding: 12px; }
   html[data-workspace-style] .topbar .breadcrumb { display: none; }
 }
 
