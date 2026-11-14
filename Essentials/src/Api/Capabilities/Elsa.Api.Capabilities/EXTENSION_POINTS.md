@@ -26,6 +26,11 @@ the event contribution pattern. Handlers append the same declaration type and ob
 
 ## Known implementations
 
+- **Cross-domain:** `WeaverEffectsApiCapabilitySource` in Weaver API contributes `elsa.api.weaver.effects`
+  contract1 for the actual selected effects variation. It uses the same internal Weaver admission and shared schema
+  observation as execution, keeping a dormant declaration while held or unobserved. Registered by `AddWeaverApi`
+  through `AddApiCapabilitySource`; legacy `elsa.api.weaver` is independent. See the
+  [Weaver API contribution note](../../../../../Extensions/Weaver/src/Api/README.md#cross-domain-contributions).
 - **Cross-domain:** `StructuredLogsApiCapabilitySource` in Diagnostics Structured Logs contributes the
   `elsa.api.structured-logs` contract with the host-configured recent, sources and stream paths. Registered by
   `StructuredLogsFeature` through `AddApiCapabilitySource`; it keeps configuration-owned routes out of static links.

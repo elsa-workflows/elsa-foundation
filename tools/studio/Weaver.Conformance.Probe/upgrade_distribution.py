@@ -148,6 +148,7 @@ def _prepare_operator(distribution):
                               if path.is_file() and not {"obj", "bin"}.intersection(path.relative_to(source).parts)},
               "closure": closure, "binaryProvenance": binaries, "publishedFiles": files,
               "publishedFilesManifest": _ref(manifest), "publishedFilesSha256": published_files_digest(files), "frontendAudit": _ref(audit),
+              "guardControls": _ref(source / "guard-controls.json"),
               "tests": {"status": "not-run"}}
     distribution.report["upgradeOperator"] = record
     distribution.save()
@@ -164,6 +165,7 @@ def upgrade_operator_command(run, prepared, name, database):
     database = Path(database)
     check(database.is_absolute() and database.is_file() and not database.is_symlink()
           and database == database.resolve() and database.is_relative_to(root)
+          and str(database) == str(database).rstrip()
           and not any(character in str(database) for character in (';', '"', '\r', '\n')),
           "Operator requires an existing canonical owned runtime database path")
     published = Path(operator["published"])

@@ -25,8 +25,10 @@ The root driver supplies a single bounded JSON document on stdin. For example:
 For `release`, omit `reason`; retain the operator identity and null version. For
 `status`, omit both reason and operator; retain family Weaver. The console
 rejects another command, provider, connection, module selection, family or
-version-specific hold before invoking `EfToolingHost.RunAsync`. Duplicate JSON
-members, noncanonical/symlink paths, nonprivate runtime directories and overlap
+version-specific hold before invoking `EfToolingHost.RunAsync`. The envelope
+version must be an Int32 JSON number matching the existing tooling version.
+Duplicate JSON members, noncanonical/symlink paths, trailing database-path
+whitespace, nonprivate runtime directories and overlap
 with its immutable publish also refuse. The SQLite database must already exist
 under the private runtime root. Requests are limited to 64 KiB, depth eight and a
 sixty-second cancellation deadline. Tooling handles all remaining closed-contract
@@ -37,3 +39,9 @@ The root driver owns actual invocation, stdout/stderr/exit receipts, process
 closeout, hold/status verification and the native wait loop. All new source and
 controls remain UNRUN at this source checkpoint. Operator preparation does not
 promote any case or witness.
+
+`guard-controls.json` supplies six UNRUN malformed-version inputs for a future
+root-owned operator run. Its retained reference is exposed as
+`prepared[generation]["operator"]["guardControls"]`. These inputs require the
+fixed guard-refusal response and exit code 2, including for fractional and
+out-of-range numeric versions; they are not native proof or executed results.

@@ -225,6 +225,19 @@ class UpgradeConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "owned runtime database"):
             upgrade_operator_command(self.run, self.prepared, "old", alias)
 
+    def test_operator_command_rejects_existing_trailing_whitespace_paths_without_selecting_trimmed_twin(self):
+        self.prepare(); self.operator()
+        trimmed = self.content / "state/trailing.db"; trimmed.write_bytes(b"untouched trimmed twin")
+        for suffix in (" ", "\t", "\u00a0"):
+            with self.subTest(suffix=repr(suffix)):
+                database = Path(str(trimmed) + suffix); database.write_bytes(b"untouched exact filename")
+                self.assertTrue(database.is_file())
+                self.assertEqual(database, database.resolve())
+                with self.assertRaisesRegex(RuntimeError, "owned runtime database"):
+                    upgrade_operator_command(self.run, self.prepared, "old", database)
+                self.assertEqual(b"untouched exact filename", database.read_bytes())
+                self.assertEqual(b"untouched trimmed twin", trimmed.read_bytes())
+
     def test_operator_command_refuses_changed_binary_manifest_or_substituted_command(self):
         selected = self.prepare(); record = self.operator()
         database = Path(selected["database"]); database.write_bytes(b"metadata only")
