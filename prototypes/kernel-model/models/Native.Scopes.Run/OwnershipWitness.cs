@@ -7,11 +7,11 @@ using Kernel.Sim.Native;
 
 internal sealed class OwnershipWitness(string mode, bool nested, string kind)
 {
-    private static string[] Kinds => ["fault-absorbed", "sibling-cancel", "kernel-terminate", "native-cancel", "borrow-parent"];
-    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from n in new[] { false, true } from k in Kinds select $"lexical:ownership,{k},{m},nested={n}";
+    private static string[] Scenarios => ["fault-absorbed", "sibling-cancel", "kernel-terminate", "native-cancel", "borrow-parent"];
+    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from n in new[] { false, true } from k in Scenarios select $"lexical:ownership,{k},{m},nested={n}";
     internal static void Run()
     {
-        foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var n in new[] { false, true }) foreach (var k in Kinds)
+        foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var n in new[] { false, true }) foreach (var k in Scenarios)
             new OwnershipWitness(m, n, k).Execute();
         Console.WriteLine("20/20 native lexical ownership/fault/cancellation schedules passed; not incident/retry recovery.");
     }
