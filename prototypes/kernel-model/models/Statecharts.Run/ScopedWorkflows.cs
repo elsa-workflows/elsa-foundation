@@ -47,7 +47,7 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
     }
     private void StartNode(Node machine)
     {
-        var root = nested ? Wf.Flowchart("outer", [machine, Wf.Set("returned", "returned", true)], [new("machine", "returned")]) : machine;
+        var root = nested ? Wf.Flowchart("outer", [machine, Wf.Set("returned", "returned", true)], [new(machine.Id, "returned")]) : machine;
         NativeWorkflows.Registry.Add(Wf.Workflow("scoped-workflow", root, ("outer", 99)));
         Apply(new("take", Actor.Id));
         Add(new("start", _target, Kinds.Start, Start: NativeModel.Spec("scoped-workflow", mode))); Drain();
@@ -217,14 +217,15 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
     }
 }
 
-internal sealed class ScopedFailure : CodeActivity
+internal sealed class ScopedFailure : Kernel.Native.Activity
 {
     public ScopedFailure() { }
-    protected override void Execute(ActivityContext context) => context.Fault(new("scope-proof", "expected"));
+    protected override Transition Execute(ActivityContext context) => Fault("scope-proof", "expected");
 }
 internal sealed class CatchScopedFailure : CompositeActivity
 {
     public CatchScopedFailure() { }
     protected override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
+    protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
     protected override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
 }
