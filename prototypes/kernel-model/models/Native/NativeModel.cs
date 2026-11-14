@@ -313,6 +313,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             frame.RecoveryInputs = (JsonObject)work.RecoveryInputs!.DeepClone(); frame.RecoveryMaterial = (JsonObject)work.RecoveryMaterial!.DeepClone();
             if (!JsonNode.DeepEquals(frame.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf)))
                 throw new InvalidOperationException("Scheduled retry material is unavailable.");
+            if (!InterventionBoundary(frame)) throw new InvalidOperationException("Scheduled retry boundary is unsupported.");
         }
         var scope = new FrameScope(this, frame);
         if (node.Background)
