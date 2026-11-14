@@ -3,8 +3,9 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NativeBlockCommands, type NativeBlockValidation } from "../graph-authoring/NativeBlockCommands";
-import type { NativeBlockContext } from "../graph-authoring/nativeBlocks";
-import { sequenceActivity, sequenceNode, writeLine, leafNode } from "./fixtures";
+import { planExtractNativeBlock, type NativeBlockContext } from "../graph-authoring/nativeBlocks";
+import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
+import { sequenceActivity, sequenceNode, writeLine, leafNode, setVariableActivity } from "./fixtures";
 
 let root: Root, container: HTMLDivElement;
 let context: NativeBlockContext;
@@ -89,4 +90,22 @@ it.each(["catalog", "expression support", "same-primary selection"])("rechecks %
   render();
   expect(guardedCommit()).toBe(false);
   finish(); await settle(); expect(committed).toBe(false);
+});
+
+it("refuses result-crossing preview when the composing host has no language preservation support", async () => {
+  const consumer = leafNode("after");
+  consumer.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
+    language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+    parameters: { prior: { kind: "ActivityResult", producerNodeId: "one", projectionKey: "$result" } }
+  } } }];
+  (context.document.rootActivity.structure!.payload.activities as ReturnType<typeof leafNode>[]).push(consumer);
+  context = { ...context, catalog: [...context.catalog, setVariableActivity] };
+  expect(planExtractNativeBlock({ ...context, expressionScopePreservation: { revision: "available", allowsVariableAddition: () => true } },
+    { selectedNodeIds: ["one", "two"], nodeId: "block", activityVersionId: sequenceActivity.activityVersionId, displayName: "Grouped" }).status).toBe("ready");
+  context = { ...context, expressionScopePreservation: composeExpressionScopePreservation([]) }; render();
+  const before = structuredClone(context.document);
+  click("Extract block…"); name("Grouped"); click("Preview change"); await settle();
+  expect(container.querySelector("[role=alert]")?.textContent).toContain("Adding a result variable cannot preserve");
+  expect(button("Apply change").disabled).toBe(true);
+  expect(validate).not.toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled(); expect(context.document).toEqual(before);
 });

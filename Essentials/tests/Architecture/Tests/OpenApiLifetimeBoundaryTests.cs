@@ -40,7 +40,7 @@ public sealed class OpenApiLifetimeBoundaryTests
             .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == "Elsa.Activities.Design.Api")
             .ToArray();
 
-        Assert.Equal(39, endpoints.Length);
+        Assert.Equal(40, endpoints.Length);
         var dataContext = Assert.Single(endpoints.OfType<RouteEndpoint>(), endpoint => endpoint.RoutePattern.RawText ==
             "/design/activities/drafts/{draftId}/activity-data/context");
         Assert.Equal([HttpMethods.Post], dataContext.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods);
@@ -48,6 +48,12 @@ public sealed class OpenApiLifetimeBoundaryTests
             Assert.Single(dataContext.Metadata.GetOrderedMetadata<IAcceptsMetadata>()).RequestType);
         Assert.Contains(dataContext.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata =>
             metadata.StatusCode == 200 && metadata.Type == typeof(Elsa.Activities.Design.Api.Models.ActivityDataSelectionContextResponse));
+        var candidate = Assert.Single(endpoints.OfType<RouteEndpoint>(), endpoint => endpoint.RoutePattern.RawText ==
+            "/design/activities/drafts/{draftId}/candidate-validation");
+        Assert.Equal(typeof(Elsa.Activities.Design.Api.Commands.ValidateReusableActivityCandidate),
+            Assert.Single(candidate.Metadata.GetOrderedMetadata<IAcceptsMetadata>()).RequestType);
+        Assert.Contains(candidate.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata =>
+            metadata.StatusCode == 200 && metadata.Type == typeof(Elsa.Activities.Design.Api.Models.ActivityCandidateValidationView));
         Assert.All(endpoints, endpoint =>
         {
             var marker = Assert.Single(endpoint.Metadata.OfType<EndpointLifetimeMetadata>());

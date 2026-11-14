@@ -63,19 +63,34 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       result = current;
       return current.instance.status;
     }).toBe("Completed");
-    const executions = await api<{ items: { execution: { activityExecutionId: string; authoredActivityId: string; status: string; startedAt?: string | null } }[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions`);
+    const executions = await api<{ items: { execution: { activityExecutionId: string; executableNodeId: string; authoredActivityId: string; activityType: string; status: string; startedAt?: string | null } }[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions`);
     expect(result!.instance.status).toBe("Completed");
-    const values: { authoredActivityId: string; activityExecutionId: string; value: string }[] = [];
+    // Reusable child templates have relative authored IDs. Resolve their exact published placement
+    // through the normal inspection API; retain both raw identity and origin in the proof.
+    const activities = [];
     for (const { execution } of executions.items) {
-      if (execution.status !== "Completed" || !Object.hasOwn(expectedText, execution.authoredActivityId)) continue;
+      let fixtureNodeId = execution.authoredActivityId;
+      let boundaryOrigin: { kind: string; id: string }[] | undefined;
+      if (execution.authoredActivityId === "root" && execution.executableNodeId !== "root") {
+        const layout = await api<{ activityExecutionId: string; nodes: { executableNodeId: string }[]; boundaryOrigin: { kind: string; id: string }[] }>(`/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions/${execution.activityExecutionId}/layout`);
+        expect(layout.nodes.some(node => node.executableNodeId === execution.executableNodeId)).toBe(true);
+        boundaryOrigin = layout.boundaryOrigin;
+        const placement = [...boundaryOrigin].reverse().find(segment => segment.kind === "NestedPlacement");
+        expect(placement).toBeTruthy(); fixtureNodeId = placement!.id;
+      }
+      activities.push({ ...execution, fixtureNodeId, boundaryOrigin });
+    }
+    const values: { authoredActivityId: string; activityExecutionId: string; value: string }[] = [];
+    for (const execution of activities) {
+      if (execution.status !== "Completed" || !Object.hasOwn(expectedText, execution.fixtureNodeId)) continue;
       const resource = `/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions/${execution.activityExecutionId}`;
       const detail = await api<{ valueSnapshots: { inputKey: string; evidenceId: string }[] }>(resource);
-      const evidence = detail.valueSnapshots.find(value => value.inputKey === "text"); expect(evidence).toBeTruthy();
+      const evidence = detail.valueSnapshots.find(value => value.inputKey === (profile === "expression-results" && execution.fixtureNodeId === "after" ? "Expression" : "text")); expect(evidence).toBeTruthy();
       const payload = await api<{ payload: { preview: string } }>(`${resource}/value-evidence/${evidence!.evidenceId}/payload`);
-      expect(payload.payload.preview).toBe(expectedText[execution.authoredActivityId]);
+      expect(payload.payload.preview).toBe(expectedText[execution.fixtureNodeId]);
       values.push({ authoredActivityId: execution.authoredActivityId, activityExecutionId: execution.activityExecutionId, value: payload.payload.preview });
     }
-    return { runId: started.workflowExecutionId, publication, activities: executions.items.map(item => item.execution), values };
+    return { runId: started.workflowExecutionId, versionId: version.id, publication, activities, values };
   }
   async function publishActivity(draft: GraphDraft, expectedHead: string | null) {
     const preflight = await api<{ isPublishable: boolean; minimumVersion: string; reviewToken: string; definitionHeadVersionId: string | null; diagnostics: unknown[] }>(`/design/activities/drafts/${draft.draftId}/publication-preflight`, "POST", { expectedDraftRevision: draft.revision, expectedDefinitionHeadVersionId: expectedHead });
@@ -104,14 +119,15 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
   try {
     for (const host of (profile === "expression-results" ? ["workflow"] as const : ["workflow", "activity"] as const)) for (const kind of (profile === "expression-results" ? ["sequence"] as const : ["sequence", "flowchart"] as const)) {
       const terminal = host === "activity" && kind === "sequence";
-      const content = body(kind, terminal), name = `Pack order ${host} ${kind}`;
+      const content = body(kind, terminal);
+      let name = `Pack order ${host} ${kind}`;
       if (profile === "expression-results") {
         const children = content.state.rootActivity.structure!.payload.activities as Node[];
         children[0] = { nodeId: "one", activityVersionId: versions.inline, inputs: [{ referenceKey: "Expression", value: { expressionType: "Object", value: 42 } }], outputs: [] };
-        children[2].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
-          language: "JavaScript", source: "args.prior + 1", resultType: { alias: "String", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+        children[2] = { nodeId: "after", activityVersionId: versions.inline, outputs: [], inputs: [{ referenceKey: "Expression", value: { expressionType: "JavaScript", value: {
+          language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
           parameters: { prior: { kind: "ActivityResult", producerNodeId: "one", projectionKey: "$result", producerScopeId: "scope:root" } }
-        } } }];
+        } } }] };
       }
       let definitionId: string, draftId: string, baselineVersion: string | undefined;
       let before: unknown;
@@ -143,7 +159,8 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       await page.goto(route); await canvas();
       await expect(row("one")).toBeVisible();
       await row("one").click();
-      await row(terminal ? "complete" : "two").click({ modifiers: [kind === "sequence" ? "Shift" : multipleKey] });
+      if (kind === "sequence") await row("one").press("Shift+ArrowDown");
+      else await row("two").click({ modifiers: [multipleKey] });
       await expect(page.locator('.wf-sequence-step[aria-pressed="true"], .react-flow__node[aria-pressed="true"]')).toHaveCount(2);
       await capture(page, info, `${host}-${kind}-selection`);
       await page.getByRole("button", { name: "Extract block…", exact: true }).click();
@@ -154,6 +171,19 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       await expect(dialog.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled();
       await expect(dialog).toContainText(name);
       await capture(page, info, `${host}-${kind}-preview`);
+      const beforeCancel = host === "workflow" ? await api(`/design/workflows/drafts/${draftId}`) : await api(`/design/activities/drafts/${draftId}`);
+      const undoButton = page.getByRole("button", { name: host === "workflow" ? "Undo" : "Undo Activity Graph edit", exact: true });
+      const couldUndo = await undoButton.isEnabled();
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.getByRole("button", { name: "Extract block…", exact: true })).toBeFocused();
+      expect(host === "workflow" ? await api(`/design/workflows/drafts/${draftId}`) : await api(`/design/activities/drafts/${draftId}`)).toEqual(beforeCancel);
+      expect(await undoButton.isEnabled()).toBe(couldUndo);
+      await page.getByRole("button", { name: "Extract block…", exact: true }).click();
+      await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+      await dialog.getByRole("textbox", { name: "Summary", exact: true }).fill("Grouped order steps");
+      await dialog.getByRole("button", { name: "Preview change", exact: true }).click();
+      await expect(dialog.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled();
       await dialog.getByRole("button", { name: "Apply change", exact: true }).click(); await expect(dialog).toBeHidden();
       const saved = async () => host === "workflow" ? api<Content>(`/design/workflows/drafts/${draftId}`) : api<GraphDraft>(`/design/activities/drafts/${draftId}`);
       let persisted: Content | GraphDraft | undefined;
@@ -183,6 +213,28 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       await expect(row(blockId)).toBeVisible();
       await capture(page, info, `${host}-${kind}-reopened`);
       await expect.poll(async () => (await saved()).activityPresentation.some(value => value.nodeId === blockId && value.displayName === name)).toBe(true);
+      if (kind === "sequence") {
+        await row(blockId).click();
+        await page.getByRole("button", { name: `Open ${name} (${profile === "expression-results" ? 3 : 2} steps)`, exact: true }).click();
+        const expand = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+        if (await expand.isVisible()) await expand.click();
+        await page.getByRole("tab", { name: "Details", exact: true }).click();
+        const displayName = page.getByRole("textbox", { name: "Display name", exact: true });
+        name = `Renamed ${name}`;
+        await displayName.fill(name); await displayName.press("Tab");
+        await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === blockId)?.displayName).toBe(name);
+        await expect(page.locator(".wf-breadcrumb")).toContainText(name);
+        await row("one").click();
+        await displayName.fill("First packed step"); await displayName.press("Tab");
+        await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === "one")?.displayName).toBe("First packed step");
+        await page.getByRole("button", { name: host === "workflow" ? "Undo" : "Undo Activity Graph edit", exact: true }).click();
+        await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === "one")?.displayName ?? null).toBe(null);
+        await expect(page.locator(".wf-breadcrumb")).toContainText(name);
+        await page.getByRole("button", { name: host === "workflow" ? "Redo" : "Redo Activity Graph edit", exact: true }).click();
+        await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === "one")?.displayName).toBe("First packed step");
+        await page.locator(".wf-breadcrumb").getByRole("button", { name: "Root", exact: true }).click();
+        await canvas(); await expect(row(blockId)).toBeVisible();
+      }
       // Exercise the blank-container and inverse commands through the same host authority/history path.
       await row(blockId).click();
       await page.getByRole("button", { name: `Create ${kind === "sequence" ? "Sequence" : "Flowchart"} block`, exact: true }).click();
@@ -233,7 +285,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       if (!terminal) for (const run of [item.before, item.after]) {
         const activities = (run as { activities: Record<string, unknown>[] }).activities;
         for (const id of ["one", "two", "after", ...(host === "activity" ? ["caller-after"] : [])]) {
-          const matched = activities.filter(value => value.authoredActivityId === id);
+          const matched = activities.filter(value => value.fixtureNodeId === id);
           expect(matched).toHaveLength(1); expect(matched[0].status).toBe("Completed");
         }
       }
@@ -241,11 +293,24 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       // ordered trailing step; their full execution records are retained for independent inspection.
       if (terminal) for (const run of [item.before, item.after]) {
         const activities = (run as { activities: Record<string, unknown>[] }).activities;
-        expect(activities.filter(value => value.authoredActivityId === "complete")).toHaveLength(1);
-        expect(activities.find(value => value.authoredActivityId === "complete")?.status).toBe("Completed");
-        expect(activities.filter(value => value.authoredActivityId === "after").every(value => value.startedAt == null && value.status === "Cancelled")).toBe(true);
-        expect(activities.find(value => value.authoredActivityId === "caller-after")?.status).toBe("Completed");
+        expect(activities.filter(value => value.fixtureNodeId === "one")).toHaveLength(1);
+        expect(activities.find(value => value.fixtureNodeId === "one")?.status).toBe("Completed");
+        expect(activities.filter(value => value.fixtureNodeId === "complete")).toHaveLength(1);
+        expect(activities.find(value => value.fixtureNodeId === "complete")?.status).toBe("Completed");
+        expect(activities.find(value => value.fixtureNodeId === "complete")?.activityType).toBe("Elsa.Activities.Graph.Runtime.Activities.Complete");
+        expect(activities.filter(value => value.fixtureNodeId === "after").every(value => value.startedAt == null && value.status === "Cancelled")).toBe(true);
+        expect(activities.find(value => value.fixtureNodeId === "caller-after")?.status).toBe("Completed");
       }
+      const readOnlyRoute = host === "workflow"
+        ? `/workflows/definitions?backend=legacy&definition=${definitionId}&version=${(item.after as { versionId: string }).versionId}`
+        : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`;
+      await page.goto(readOnlyRoute); await canvas(); await expect(row(blockId)).toBeVisible();
+      for (const action of ["Create Sequence block", "Create Flowchart block", "Extract block…", "Ungroup…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();
+      await row(blockId).click();
+      await page.getByRole("button", { name: `Open ${name} (${profile === "expression-results" ? 3 : 2} steps)`, exact: true }).click();
+      await expect(row("one")).toBeVisible(); await expect(page.locator(".wf-breadcrumb")).toContainText(name);
+      if (terminal) await expect(row("complete")).toContainText("Ends reusable activity");
+      await capture(page, info, `${host}-${kind}-readonly`);
     }
   } catch (error) { failures.push(error); } finally {
     const cleanup: { kind: string; id: string; status: string }[] = [];
