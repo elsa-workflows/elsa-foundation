@@ -6,7 +6,7 @@ type Content = { state: { rootActivity: Node; variables: unknown[]; inputs: unkn
 type GraphDraft = { draftId: string; definitionId: string; revision: number; provider: { payload: { rootActivity: Node } }; activityPresentation: Content["activityPresentation"] };
 
 /** Normal API setup and publication, real composed editors and runtime; no simulated browser responses. */
-export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Capture) {
+export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Capture, profile: "commands" | "expression-results" = "commands") {
   const backend = process.env.ELSA_WORKBENCH_URL!;
   const multipleKey: "Meta" | "Control" = await page.evaluate(() => /Mac/.test(navigator.platform) ? "Meta" : "Control");
   const workflowIds: string[] = [], runIds: string[] = [], activityIds: string[] = [];
@@ -28,7 +28,8 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
     sequence: await version("Elsa.Activities.Sequence.Activities.Sequence"),
     flowchart: await version("Elsa.Activities.Flowchart.Activities.Flowchart"),
     line: await version("Elsa.Activities.Primitives.Activities.WriteLine"),
-    complete: await version("Elsa.Activities.Graph.Runtime.Activities.Complete")
+    complete: await version("Elsa.Activities.Graph.Runtime.Activities.Complete"),
+    inline: await version("Elsa.Activities.Primitives.Activities.Inline")
   };
   const line = (nodeId: string): Node => ({ nodeId, activityVersionId: versions.line, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: nodeId } }], outputs: [] });
   const complete: Node = { nodeId: "complete", activityVersionId: versions.complete, inputs: [{ referenceKey: "outcome", value: { expressionType: "Literal", value: "done" } }], outputs: [] };
@@ -50,6 +51,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
     workflowIds.push(value.definition.id);
     return { definitionId: value.definition.id, draftId: value.draft.id };
   }
+  const expectedText: Record<string, string> = profile === "expression-results" ? { two: "two", after: "43" } : { one: "one", two: "two", after: "after", "caller-after": "caller-after" };
   async function runWorkflow(draftId: string) {
     const version = await api<{ id: string }>(`/design/workflows/drafts/${draftId}/promote`, "POST", { operationKey: crypto.randomUUID() });
     const publication = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${version.id}/publish`, "POST", {});
@@ -65,12 +67,12 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
     expect(result!.instance.status).toBe("Completed");
     const values: { authoredActivityId: string; activityExecutionId: string; value: string }[] = [];
     for (const { execution } of executions.items) {
-      if (execution.status !== "Completed" || !["one", "two", "after", "caller-after"].includes(execution.authoredActivityId)) continue;
+      if (execution.status !== "Completed" || !Object.hasOwn(expectedText, execution.authoredActivityId)) continue;
       const resource = `/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions/${execution.activityExecutionId}`;
       const detail = await api<{ valueSnapshots: { inputKey: string; evidenceId: string }[] }>(resource);
       const evidence = detail.valueSnapshots.find(value => value.inputKey === "text"); expect(evidence).toBeTruthy();
       const payload = await api<{ payload: { preview: string } }>(`${resource}/value-evidence/${evidence!.evidenceId}/payload`);
-      expect(payload.payload.preview).toBe(execution.authoredActivityId);
+      expect(payload.payload.preview).toBe(expectedText[execution.authoredActivityId]);
       values.push({ authoredActivityId: execution.authoredActivityId, activityExecutionId: execution.activityExecutionId, value: payload.payload.preview });
     }
     return { runId: started.workflowExecutionId, publication, activities: executions.items.map(item => item.execution), values };
@@ -99,9 +101,17 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
   }
   const row = (id: string) => page.locator(`.wf-sequence-step[data-id="${id}"], .react-flow__node[data-id="${id}"]`).first();
   try {
-    for (const host of ["workflow", "activity"] as const) for (const kind of ["sequence", "flowchart"] as const) {
+    for (const host of (profile === "expression-results" ? ["workflow"] as const : ["workflow", "activity"] as const)) for (const kind of (profile === "expression-results" ? ["sequence"] as const : ["sequence", "flowchart"] as const)) {
       const terminal = host === "activity" && kind === "sequence";
       const content = body(kind, terminal), name = `Pack order ${host} ${kind}`;
+      if (profile === "expression-results") {
+        const children = content.state.rootActivity.structure!.payload.activities as Node[];
+        children[0] = { nodeId: "one", activityVersionId: versions.inline, inputs: [{ referenceKey: "Expression", value: { expressionType: "Object", value: 42 } }], outputs: [] };
+        children[2].inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
+          language: "JavaScript", source: "args.prior + 1", resultType: { alias: "String", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+          parameters: { prior: { kind: "ActivityResult", producerNodeId: "one", projectionKey: "$result", producerScopeId: "scope:root" } }
+        } } }];
+      }
       let definitionId: string, draftId: string, baselineVersion: string | undefined;
       let before: unknown;
       let baselinePayload: unknown;
@@ -149,8 +159,15 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       await expect.poll(async () => { persisted = await saved(); return persisted.activityPresentation.some(value => value.displayName === name); }).toBe(true);
       const blockId = persisted!.activityPresentation.find(value => value.displayName === name)!.nodeId;
       item.blockId = blockId; item.saved = persisted;
+      if (profile === "expression-results") {
+        const draft = persisted as Content;
+        expect(draft.state.rootActivity.structure!.payload.variables).toHaveLength(1);
+        const consumer = (draft.state.rootActivity.structure!.payload.activities as Node[]).find(node => node.nodeId === "after")!;
+        const expression = (consumer.inputs[0] as { value: { value: { source: string; parameters: { prior: { kind: string } } } } }).value.value;
+        expect(expression.source).toBe("args.prior + 1"); expect(expression.parameters.prior.kind).toBe("Variable");
+      }
       await expect(row(blockId)).toBeVisible();
-      await page.getByRole("button", { name: `Open ${name} (2 steps)`, exact: true }).click();
+      await page.getByRole("button", { name: `Open ${name} (${profile === "expression-results" ? 3 : 2} steps)`, exact: true }).click();
       await expect(row("one")).toBeVisible(); await expect(page.locator(".wf-breadcrumb")).toContainText(name);
       if (terminal) await expect(row("complete")).toContainText("Ends reusable activity");
       await capture(page, info, `${host}-${kind}-nested`);

@@ -75,6 +75,23 @@ export function SequenceDesigner({
   const [rovingNodeId, setRovingNodeId] = useState(() => selectedNodeId ?? nodes[0]?.id ?? null);
   const previousSelectedNodeId = useRef(selectedNodeId);
   const selectionAnchor = useRef<string | null>(selectedNodeId);
+  const selectionSignature = JSON.stringify([selectedNodeId, nodes.filter(node => node.selected).map(node => node.id)]);
+  const observedSelection = useRef(selectionSignature);
+  const emittedSelection = useRef<string | null>(null);
+  if (observedSelection.current !== selectionSignature) {
+    // History and scope navigation restore selection independently of this mounted component.
+    // Reconstruct a range's opposite endpoint; keep the pointer anchor for our own gestures.
+    if (emittedSelection.current !== selectionSignature) {
+      const selected = nodes.filter(node => node.selected);
+      selectionAnchor.current = selectedNodeId === selected[0]?.id ? selected.at(-1)?.id ?? selectedNodeId : selected[0]?.id ?? selectedNodeId;
+    }
+    observedSelection.current = selectionSignature;
+    emittedSelection.current = null;
+  }
+  const selectMany = (ids: string[], primary: string) => {
+    emittedSelection.current = JSON.stringify([ids.includes(primary) ? primary : ids.at(-1) ?? null, nodes.filter(node => ids.includes(node.id)).map(node => node.id)]);
+    onSelectMany?.(ids, primary);
+  };
 
   useEffect(() => {
     const selectionChanged = previousSelectedNodeId.current !== selectedNodeId;
@@ -96,14 +113,14 @@ export function SequenceDesigner({
     if (event?.shiftKey) {
       const anchor = nodes.findIndex(item => item.id === selectionAnchor.current);
       const start = anchor < 0 ? index : anchor;
-      onSelectMany(nodes.slice(Math.min(start, index), Math.max(start, index) + 1).map(item => item.id), node.id);
+      selectMany(nodes.slice(Math.min(start, index), Math.max(start, index) + 1).map(item => item.id), node.id);
     } else if (event?.ctrlKey || event?.metaKey) {
       selectionAnchor.current = node.id;
       const ids = nodes.filter(item => item.id === node.id ? !item.selected : item.selected).map(item => item.id);
-      onSelectMany(ids, node.id);
+      selectMany(ids, node.id);
     } else {
       selectionAnchor.current = node.id;
-      onSelectMany([node.id], node.id);
+      selectMany([node.id], node.id);
     }
   };
 

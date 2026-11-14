@@ -36,3 +36,11 @@ it("selects a newly created block when its document projection arrives after the
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(selected()).toEqual(["new-block"]); expect(primary).toBe("new-block");
 });
+
+it("keeps modifier selection when the real host click follows React Flow's selection event", () => {
+  flushSync(() => { current.onNodesChange([{ type: "select", id: "one", selected: true }]); current.inspectSelectedNode("one"); });
+  flushSync(() => { current.onNodesChange([{ type: "select", id: "two", selected: true }]); current.inspectSelectedNode("two"); });
+  expect(selected()).toEqual(["one", "two"]); expect(primary).toBe("two");
+  flushSync(() => { current.onNodesChange([{ type: "select", id: "two", selected: false }]); current.inspectSelectedNode("two"); });
+  expect(selected()).toEqual(["one"]); expect(primary).toBe("one");
+});

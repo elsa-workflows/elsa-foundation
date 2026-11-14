@@ -134,7 +134,7 @@ test.afterEach(async ({ page, playwright }, info) => {
 
 test.beforeEach(async ({ page }, info) => {
   const reportedAppearance = info.title === "feature filtering and settings dialogs";
-  const authoredNamesTheme = ["explicit authored activity names survive publication and execution", "named blocks across graph authoring"].includes(info.title)
+  const authoredNamesTheme = ["explicit authored activity names survive publication and execution", "named blocks across graph authoring", "named blocks preserve declared expression results"].includes(info.title)
     ? info.project.use.colorScheme === "dark" ? "builtin:graphite" : "builtin:porcelain"
     : undefined;
   await page.addInitScript(({ mode, reportedAppearance, authoredNamesTheme }) => {
@@ -709,4 +709,9 @@ test("explicit authored activity names survive publication and execution", async
 test("named blocks across graph authoring", async ({ page }, info) => {
   test.setTimeout(240_000);
   await namedBlocksJourney(page, info, capture);
+});
+
+test("named blocks preserve declared expression results", async ({ page }, info) => {
+  test.setTimeout(240_000);
+  await namedBlocksJourney(page, info, capture, "expression-results");
 });

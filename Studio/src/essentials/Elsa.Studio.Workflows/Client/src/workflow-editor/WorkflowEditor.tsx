@@ -1780,7 +1780,8 @@ export function WorkflowEditor({
               },
               onNodeClick: (_, node) => {
                 closeActivityContextMenu();
-                selectEditorNode(node.id);
+                if (runCanvas.attached) selectEditorNode(node.id);
+                else canvas.inspectSelectedNode(node.id);
               },
               onNodeContextMenu: isUnsupportedDesigner || editorDoc.pinned ? undefined : (event, node) => {
                 event.preventDefault();

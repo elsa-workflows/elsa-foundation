@@ -84,7 +84,7 @@ export function NativeBlockCommands(props: {
       if (final.status !== "ready") { setPlan(null); refuseStale(); return; }
       if (result.state !== "validated") { setPlan(null); setMessages(result.messages.length ? result.messages : ["The resource or its authority changed. Preview again."]); return; }
       committingRef.current = true; setCommitting(true);
-      await current.current.apply(final.document, final.selection, () => request.current === id);
+      await current.current.apply(final.document, final.selection, () => request.current === id && applyNativeBlockPlan(current.current.context, checked).status === "ready");
       committingRef.current = false; setCommitting(false);
       if (id === request.current) close();
     } catch { if (id === request.current) setMessages(["The change was not applied. Refresh the resource and preview again."]); }

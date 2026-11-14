@@ -1066,7 +1066,7 @@ export function ActivityGraphImplementationEditor({
             onDragLeave: interactions.onCanvasDragLeave,
             onDrop: interactions.onCanvasDrop,
             onPaneClick: () => setSelectedNodeId(null),
-            onNodeClick: (_, node) => setSelectedNodeId(node.id),
+            onNodeClick: (_, node) => interactions.inspectSelectedNode(node.id),
             onNodeDragStop: interactions.commitLayout,
             nodesConnectable: interactions.canCreateActivityFromPort,
             nodesDraggable: !readOnly,

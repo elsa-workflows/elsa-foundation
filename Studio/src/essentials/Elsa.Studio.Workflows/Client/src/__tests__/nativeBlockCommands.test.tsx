@@ -72,3 +72,21 @@ it("keeps a failed normal validation visible and refuses Apply", async () => {
   click("Extract block…"); name("Review"); click("Preview change"); await settle();
   expect(container.querySelector("[role=alert]")?.textContent).toContain("required binding"); expect(button("Apply change").disabled).toBe(true); expect(apply).not.toHaveBeenCalled();
 });
+
+it.each(["catalog", "expression support", "same-primary selection"])("rechecks %s at a deferred host commit boundary", async change => {
+  let guardedCommit!: () => boolean, finish!: () => void;
+  let committed = false;
+  apply.mockImplementation((_document, _selection, isCurrent: () => boolean) => new Promise<void>(resolve => {
+    guardedCommit = isCurrent;
+    finish = () => { if (!isCurrent()) { resolve(); return; } committed = true; resolve(); };
+  }));
+  click("Extract block…"); name("Review"); click("Preview change"); await settle();
+  click("Apply change"); await settle();
+  expect(guardedCommit()).toBe(true);
+  if (change === "catalog") context = { ...context, catalog: [] };
+  if (change === "expression support") context = { ...context, expressionScopePreservation: { revision: "replacement", allowsVariableAddition: () => true } };
+  if (change === "same-primary selection") context = { ...context, sourceKey: "resource:1/selection:two" };
+  render();
+  expect(guardedCommit()).toBe(false);
+  finish(); await settle(); expect(committed).toBe(false);
+});

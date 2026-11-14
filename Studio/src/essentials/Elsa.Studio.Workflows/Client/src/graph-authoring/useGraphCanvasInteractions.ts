@@ -155,6 +155,8 @@ export interface GraphCanvasInteractionsResult {
   stampCanvasNode: GraphCanvasStamp;
   /** Canvas selection is a set; the inspector retains a distinct primary node. */
   selectNodes(nodeIds: string[], primaryNodeId?: string | null): void;
+  /** React Flow clicks inspect only nodes still selected after its selection-change event. */
+  inspectSelectedNode(nodeId: string): void;
   onNodesChange(changes: NodeChange<Node<WorkflowNodeData>>[]): void;
   onEdgesChange(changes: EdgeChange<WorkflowEdge>[]): void;
   onNodesDelete(deletedNodes: Node<WorkflowNodeData>[]): void;
@@ -299,6 +301,12 @@ export function useGraphCanvasInteractions({
     setNodes(current => current.map(node => ({ ...node, selected: selectedIdsRef.current.has(node.id) })));
     select(primary);
   }, [nodes, select, setNodes]);
+
+  const inspectSelectedNode = useCallback((nodeId: string) => {
+    if (!selectedIdsRef.current.has(nodeId)) return;
+    selectionPrimaryRef.current = nodeId;
+    select(nodeId);
+  }, [select]);
 
   // Rebuilds and inspector edits retain the entire set. An external inspector/navigation selection
   // starts a new set; selecting a primary through this hook does not collapse a canvas gesture.
@@ -940,6 +948,7 @@ export function useGraphCanvasInteractions({
     queueCanvasNodeFocus,
     stampCanvasNode,
     selectNodes,
+    inspectSelectedNode,
     onNodesChange,
     onEdgesChange,
     onNodesDelete,

@@ -21,6 +21,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'named blocks preserve declared expression results': ['reference'] + [f'workflow-sequence-{state}' for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped')],
     'named blocks across graph authoring': ['reference'] + [f'{host}-{kind}-{state}' for host in ('workflow', 'activity') for kind in ('sequence', 'flowchart') for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped')],
     "explicit authored activity names survive publication and execution": ["reference", "authored-definition", "authored-executable", "authored-run"],
     'saved dashboard period comparison and membership': ['reference', 'comparison-excluded', 'comparison-excluded-empty', 'comparison-included', 'comparison-included-periods', 'comparison-included-values', 'comparison-included-values-end', 'comparison-saved-reopened', 'comparison-reopened-periods', 'comparison-reopened-values', 'comparison-reopened-values-end', 'comparison-current-drill'],
