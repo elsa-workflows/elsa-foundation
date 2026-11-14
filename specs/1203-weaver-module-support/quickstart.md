@@ -75,6 +75,8 @@ It defines eleven serial recipes: policy, receipt integrity, ordinal module-code
 
 The driver has a forty-minute total budget and six-minute command limits. It restores source and terminates owned POSIX process groups on handled failures; detached descendants and restoration after SIGKILL/host loss remain unproven, hence the disposable-checkout requirement. These scoped controls do not replace discovery comparisons, complete suites, other normalization channels, composed/package/provider evidence or resulting-main verification. Raw evidence stays private until inspected for a safe export.
 
+The eleven recipes do not establish the subsequent RuntimeUrl validation/redaction corrections. Retain separate pre-fix or mutation failures and restored passes for the existing `WeaverProviderLogRedactionTests` endpoint controls, including raw dot-segment refusal and overlapping URL/token redaction. An auth-recipe pass or ordinary positive security run cannot stand in for that causal evidence.
+
 ## Real composed and independent package journeys
 
 Run the complete normal composed Studio/backend browser gate and the complete existing qualifier, extended with leaf 0 cases on both actual adapters. A standalone diagnostic or passing mock is insufficient. Keep normal workflow validation, atomic working-state batches, whole-batch undo, explicit Save/Publish and read-only/source-owned behavior intact.
