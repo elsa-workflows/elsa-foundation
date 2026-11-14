@@ -167,7 +167,19 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
   const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const initialReturnTo = initialSelection.current.returnTo;
   const requestedInspectorTab = searchParams.get("tab");
-  useStudioWorkspaceTitle(workflowExecutionId ? `Run ${workflowExecutionId.length > 10 ? `${workflowExecutionId.slice(0, 8)}…` : workflowExecutionId}` : null, "Execution");
+  const [runTitleState, setRunTitleState] = useState({ id: workflowExecutionId, title: "Run" });
+  const runTitle = runTitleState.id === workflowExecutionId ? runTitleState.title : "Run";
+  const setRunTitle = useCallback((title: string) => {
+    setRunTitleState({ id: workflowExecutionId, title });
+  }, [workflowExecutionId]);
+  useStudioWorkspaceTitle(
+    runTitle !== "Run"
+      ? runTitle
+      : workflowExecutionId
+        ? `Run ${workflowExecutionId.length > 10 ? `${workflowExecutionId.slice(0, 8)}…` : workflowExecutionId}`
+        : null,
+    "Execution"
+  );
   const initialInspectorTab = requestedInspectorTab === "issues"
     ? "issues"
     : requestedInspectorTab === "details"
@@ -180,7 +192,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
 
   return (
     <WorkflowsPageFrame
-      title="Run"
+      title={runTitle}
       workbench
       context={workflowExecutionId ? (
         <div className="wf-page-context">
@@ -190,7 +202,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, weaver, expressionEdi
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} weaver={weaver} expressionEditors={expressionEditors} backendSession={backendSession} runRelatedLinks={runRelatedLinks} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} onRunTitleChange={setRunTitle} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );

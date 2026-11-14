@@ -13,6 +13,10 @@
     {
       "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
       "reason": "Runs SDK commands (dotnet build, dotnet msbuild) through Support/ChildProcess.cs, never a host process."
+    },
+    {
+      "project": "Extensions/Integrations/tests/Tests/Elsa.Integrations.Tests.csproj",
+      "reason": "Runs SDK commands (dotnet msbuild) to evaluate the connector template's Compile items, never a host process."
     }
   ],
   "projects": [
