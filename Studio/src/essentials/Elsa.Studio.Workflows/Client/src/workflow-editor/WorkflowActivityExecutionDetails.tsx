@@ -218,7 +218,7 @@ export function WorkflowActivityExecutionDetails({
           <div className="wf-activity-overview-title">
             <span className="wf-activity-overview-eyebrow">Selected activity</span>
             <div className="wf-activity-copy-line">
-              <h4>{activityLabel}</h4>
+              <h4 title={activityLabel}>{activityLabel}</h4>
               <CopyValueButton
                 scope={copyScope}
                 value={activityLabel}

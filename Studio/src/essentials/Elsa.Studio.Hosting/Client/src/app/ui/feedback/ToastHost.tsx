@@ -4,6 +4,7 @@ import { notificationToastDurationMs, type StudioNotificationController, type St
 import { notificationController } from "../../notifications";
 import { focusIfConnected, NotificationLevelIcon, notificationLevelLabel, runNotificationAction } from "./notificationShared";
 import { useNoticeTimer } from "./useNoticeTimer";
+import { notifyToastLayoutChange } from "../focusedContentVisibility";
 
 const maxVisibleToasts = 3;
 const zeroWidthSpace = "\u200B";
@@ -51,6 +52,16 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
   const [announcements, setAnnouncements] = useState<Announcements>(() => ({ polite: "", assertive: "", seen: entries, suppressed }));
   const hostRef = useRef<HTMLDivElement>(null);
   const focusedRemovalIndex = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    const owner = host?.ownerDocument ?? document;
+    const changed = () => notifyToastLayoutChange(owner);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(changed) : null;
+    if (host) observer?.observe(host);
+    changed();
+    return () => { observer?.disconnect(); changed(); };
+  }, [visible.length]);
 
   // Announce the newest entry that is new or changed in place, not every render. Derived while
   // rendering so the live region updates in the same commit as the toast. Opening or closing the
