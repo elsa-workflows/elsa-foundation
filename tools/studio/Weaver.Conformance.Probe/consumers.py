@@ -170,7 +170,7 @@ def references(run, products, externals):
                      for package, version in values.items())
 
 
-def backend_features(published):
+def backend_features(published, *, effects=True):
     published = Path(published)
     features = {name: {} for name in (
         "Primitives", "FileSystemDistributedLocking", "Events", "Mediator", "Tasks", "Serialization",
@@ -182,6 +182,8 @@ def backend_features(published):
         "WorkflowsRuntimeResumption", "Weaver", "WeaverApi", COMMON_EFFECTS_FEATURE,
         "WeaverWorkflows", "WeaverWorkflowsRuntime", "ModularityApi",
     )}
+    if not effects:
+        features.pop(COMMON_EFFECTS_FEATURE)
     for feature, database in (
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "iam.db"),
         ("StudioPreferencesEntityFrameworkCore", "preferences.db"),
@@ -233,7 +235,7 @@ DURABLE_STORE_FEATURE = "WeaverEntityFrameworkCore"
 DURABLE_STORE_DEPENDENCY = "Secrets"
 
 
-def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=15):
+def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=15, effects=True):
     """Configure the packaged EF session store on SQLite in the backend's runtime JSON, without rebuilding it.
 
     The caller must stop its own backend first and start a new generation afterwards; this helper never starts or stops
@@ -253,14 +255,17 @@ def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=
     check(DURABLE_STORE_FEATURE not in features and DURABLE_STORE_DEPENDENCY not in features
           and DURABLE_EFFECTS_FEATURE not in features,
           "The durable store is configured once per run, over a baseline that did not select it")
-    check(COMMON_EFFECTS_FEATURE in features, "The durable overlay replaces the ordinary in-memory effects selection")
-    features.pop(COMMON_EFFECTS_FEATURE)
-    features[DURABLE_EFFECTS_FEATURE] = {}
+    if effects:
+        check(COMMON_EFFECTS_FEATURE in features, "The durable overlay replaces the ordinary in-memory effects selection")
+        features.pop(COMMON_EFFECTS_FEATURE)
+        features[DURABLE_EFFECTS_FEATURE] = {}
+    else:
+        check(COMMON_EFFECTS_FEATURE not in features, "A legacy durable overlay cannot select new effects behavior")
     features[DURABLE_STORE_DEPENDENCY] = {"EncryptionKey": encryption_key}
     features[DURABLE_STORE_FEATURE] = {"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(database), "LeaseSeconds": lease_seconds}
     write_json(path, document)
     path.chmod(0o600)
-    selected = {"feature": DURABLE_STORE_FEATURE, "effectsFeature": DURABLE_EFFECTS_FEATURE,
+    selected = {"feature": DURABLE_STORE_FEATURE, "effectsFeature": DURABLE_EFFECTS_FEATURE if effects else None,
                 "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
                 "database": str(database), "leaseSeconds": lease_seconds}
     profile["durableWeaverStore"] = dict(selected)
@@ -344,6 +349,49 @@ def consumer_files(profile):
     return {p.relative_to(published).as_posix(): {"path": str(p), "sha256": sha(p)} for p in sorted(files)}
 
 
+def consumer_binary_provenance(profile, closure):
+    """Join the actual published deps target to explicitly retained restored assets.
+
+    Used by the immutable upgrade generations in addition to the existing product
+    archive checks. Neither assembly names nor a cache directory alone establish
+    which package's managed/native bytes were published.
+    """
+    published = profile["published"].resolve()
+    deps_path = published / (Path(profile["assembly"]).stem + ".deps.json")
+    graph = json.loads(Path(closure["assets"]["path"]).read_text())
+    deps = json.loads(deps_path.read_text())
+    target = deps["targets"][deps["runtimeTarget"]["name"]]
+    cache = Path(closure["packageFolders"][0]).resolve()
+    archives = {entry["identity"].casefold(): entry["archive"] for entry in closure["cachedArchives"]}
+    libraries = {identity.casefold(): value for identity, value in graph["libraries"].items()}
+    records = []
+    for identity, library in target.items():
+        key = identity.casefold()
+        if key not in libraries:
+            check(identity.split("/", 1)[0] == Path(profile["assembly"]).stem,
+                  "Published dependency is absent from the package-only restore graph")
+            continue  # The independently built application entry point is not a package.
+        check(key in archives, "Published dependency has no explicitly retained archive")
+        for category in ("runtime", "native", "runtimeTargets"):
+            for asset in library.get(category, {}):
+                if Path(asset).name == "_._":
+                    continue
+                relative = Path(asset)
+                check(not relative.is_absolute() and ".." not in relative.parts, "Unsafe published dependency asset")
+                restored = cache / libraries[key]["path"] / relative
+                check(restored.resolve().is_relative_to(cache) and restored.is_file(), "Published dependency has no cached asset")
+                choices = {candidate for candidate in (published / relative, published / relative.name) if candidate.is_file()}
+                check(len(choices) == 1, "Published dependency asset is missing or ambiguous: " + asset)
+                actual = choices.pop()
+                check(actual.resolve().is_relative_to(published) and sha(actual) == sha(restored),
+                      "Published dependency bytes differ from the retained restored archive: " + asset)
+                records.append({"identity": identity, "category": category, "asset": asset,
+                                "archive": archives[key], "restored": {"path": str(restored), "sha256": sha(restored)},
+                                "published": {"path": str(actual), "sha256": sha(actual)}})
+    check(records, "Published dependency provenance is empty")
+    return {"deps": {"path": str(deps_path), "sha256": sha(deps_path)}, "assets": closure["assets"], "files": records}
+
+
 def freeze_consumer_baseline(run):
     """Call after real startup and before adding resource packages, not during preparation."""
     for name, profile in run.profiles.items():
@@ -363,13 +411,15 @@ def capture_consumer_after(run):
     run.save()
 
 
-def prepare_consumers(run):
+def prepare_consumers(run, *, names=("backend", "studio"), legacy=False):
     """Restore, locked-restore, build and publish two external application-owned compositions.
 
     Requires genuine product feed/SDK and the passed protocol author receipt including
     its actual selected assets graph and explicitly retained cached archives.
     No application process is started and no resource package is referenced or staged at baseline.
     """
+    check(names and len(set(names)) == len(names) and set(names).issubset({"backend", "studio"}), "Unknown or duplicate consumer profile")
+    check(not legacy or names == ("backend",), "Legacy preparation is a backend-only package consumer")
     protocol_author = run.report.get("authors", {}).get("protocol", {})
     check(protocol_author.get("status") == "passed", "Supply a passed independently packed protocol author receipt before preparing consumers")
     protocol = protocol_author["packed"]["package"]
@@ -385,6 +435,8 @@ def prepare_consumers(run):
         ("backend", "BackendConsumer", BACKEND_PACKAGES, BACKEND_EXTERNAL, BACKEND_SHARED, "__BACKEND_REFERENCES__"),
         ("studio", "StudioConsumer", STUDIO_PACKAGES, STUDIO_EXTERNAL, STUDIO_SHARED, "__STUDIO_REFERENCES__"),
     ):
+        if name not in names:
+            continue
         owned_name = name + suffix
         source = run.materialize(owned_name + "-consumer", relative, {token: references(run, products, externals)})
         attempt_record["profiles"][name] = {"source": str(source), "status": "preparing"}
@@ -401,7 +453,7 @@ def prepare_consumers(run):
         settings["Nuplane"]["HostProvidedPackages"] = list(shared)
         if name == "backend":
             settings["ConnectionStrings"]["Tokens"] = "Data Source=" + str(published / "state" / "tokens.db")
-            features = backend_features(published)
+            features = backend_features(published, effects=not legacy)
         else:
             features = {feature: {} for feature in ("StudioApi", "DashboardStudio", "FeatureManagement", "WorkflowsStudio", "WeaverWorkflowsStudio")}
         write_json(source / "appsettings.json", settings)
@@ -468,6 +520,7 @@ def prepare_consumers(run):
             "consumerDirectory": str(source), "publishedDirectory": str(published)}
         attempt_record["profiles"][name].update(status="published", published=str(published))
         run.save()
-    select_protocol_profile(run, "copilot")
+    if "backend" in names:
+        select_protocol_profile(run, "copilot")
     attempt_record["status"] = "published"
     run.save()

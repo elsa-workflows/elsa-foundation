@@ -143,7 +143,9 @@ def _pack(run, tag, source, env, package_id, version, *, register=True):
         for name in names:
             if name.endswith((".js", ".css", ".json", ".props", ".targets")):
                 contents = archive.read(name)
-                check(str(REPO).encode() not in contents and str(run.sdk).encode() not in contents, "Module archive embeds source/SDK paths")
+                sdk = getattr(run, "sdk", None)
+                check(str(REPO).encode() not in contents and (sdk is None or str(sdk).encode() not in contents),
+                      "Module archive embeds source/SDK paths")
     if register:
         run.module_packages[package_id] = metadata
         run.report["modules"] = dict(run.module_packages)

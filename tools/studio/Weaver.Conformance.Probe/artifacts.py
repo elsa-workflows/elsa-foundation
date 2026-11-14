@@ -68,6 +68,54 @@ def package_identity(path: Path) -> dict:
                 "path": str(path), "dependencies": dependencies}
 
 
+def pack_product_projects(run, producer, roots, source_revision):
+    """Pack a real archived product closure. Caller owns its isolated feed and version.
+
+    Shared by the ordinary distribution and the backend-only historical writer;
+    neither the archive nor project references are rewritten to manufacture a format.
+    """
+    producer = Path(producer).resolve()
+    projects = {path.stem: path for path in producer.rglob("*.csproj")
+                if not {"obj", "bin", "node_modules"}.intersection(path.parts)}
+    selected, seen = [], set()
+
+    def visit(path):
+        path = path.resolve()
+        if path in seen:
+            return
+        seen.add(path)
+        check(path.is_relative_to(producer), "Producer project escaped source snapshot")
+        for entry in ET.parse(path).iter("ProjectReference"):
+            value = entry.attrib["Include"].replace("\\", "/")
+            check("$(" not in value and ";" not in value, "Resolve nonliteral producer reference explicitly: " + value)
+            visit(path.parent / value)
+        selected.append(path)
+
+    for package in roots:
+        check(package in projects, "No actual product project for " + package)
+        visit(projects[package])
+    solution = ET.Element("Solution")
+    for project in selected:
+        ET.SubElement(solution, "Project", Path=project.relative_to(producer).as_posix())
+    slnx = producer / "Weaver.Candidates.slnx"
+    ET.ElementTree(solution).write(slnx, encoding="unicode")
+    properties = ["-p:Version=" + run.version, "-p:SourceRevisionId=" + source_revision]
+    run.run("product-build", [run.dotnet, "build", str(slnx), "-c", "Release", *properties], producer)
+    for index, project in enumerate(selected):
+        if any((node.text or "").strip().lower() == "false" for node in ET.parse(project).iter("IsPackable")):
+            continue
+        run.run("pack-" + str(index) + "-" + project.stem,
+                [run.dotnet, "pack", str(project), "-c", "Release", "--no-build", *properties, "-o", str(run.feed)], producer)
+    packages = {}
+    for path in run.feed.glob("*.nupkg"):
+        value = package_identity(path)
+        check(value["id"] not in packages, "Duplicate candidate identity")
+        check(value["version"] == run.version, "Candidate version mismatch")
+        packages[value["id"]] = value
+    check(set(roots).issubset(packages), "Product archive set incomplete")
+    return packages, selected
+
+
 class ConformanceRun:
     def __init__(self, output: Path, version: str):
         check(output != REPO and REPO not in output.parents, "Output must be outside the checkout")
@@ -80,7 +128,7 @@ class ConformanceRun:
         self.profiles = {}
         self.dotnet = shutil.which("dotnet")
         check(self.dotnet, "dotnet must be available on PATH (including any build-slot wrapper)")
-        self.source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
+        self.source = subprocess.check_output(["git", "-c", "core.fsmonitor=false", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
         self.report = {"status": "preparing", "source": self.source, "version": version,
                        "evidenceCategory": "deterministic-provider-protocol",
                        "liveProvider": False, "independentPackageWitness": False,
@@ -93,9 +141,9 @@ class ConformanceRun:
         write_json(self.root / "report.json", self.report)
 
     def assert_immutable_inputs(self):
-        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
+        head = subprocess.check_output(["git", "-c", "core.fsmonitor=false", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
         check(head == self.source, "Source changed during qualification; use a fresh committed run")
-        check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"],
+        check(not subprocess.check_output(["git", "-c", "core.fsmonitor=false", "status", "--porcelain", "--untracked-files=all"],
                                          cwd=REPO, text=True).strip(),
               "Qualification inputs are no longer committed and clean")
         current = {str(p.relative_to(REPO)): sha(p) for p in TOOL.rglob("*")
@@ -114,7 +162,8 @@ class ConformanceRun:
 
     def pin(self, package, *, scope=None):
         """Read the owning central graph; an unscoped lookup must agree across graphs."""
-        sources = {"backend": REPO / "Directory.Packages.props", "studio": REPO / "Studio/Directory.Packages.props"}
+        source_root = getattr(self, "package_source_root", REPO)
+        sources = {"backend": source_root / "Directory.Packages.props", "studio": source_root / "Studio/Directory.Packages.props"}
         check(scope is None or scope in sources, "Unknown central pin scope: " + str(scope))
         values = []
         for path in ([sources[scope]] if scope is not None else sources.values()):
@@ -124,7 +173,8 @@ class ConformanceRun:
         return values[0]
 
     def config(self, target):
-        original = next(p for p in REPO.iterdir() if p.name.lower() == "nuget.config")
+        source_root = getattr(self, "package_source_root", REPO)
+        original = next(p for p in source_root.iterdir() if p.name.lower() == "nuget.config")
         root = ET.parse(original).getroot()
         sources = root.find("packageSources")
         check(sources is not None, "Normal NuGet sources required")
@@ -142,13 +192,13 @@ class ConformanceRun:
         for package in sorted(candidate_ids):
             ET.SubElement(group, "package", pattern=package)
         ET.ElementTree(root).write(target / "NuGet.Config", encoding="unicode")
-        shutil.copy2(REPO / "global.json", target / "global.json")
+        shutil.copy2(source_root / "global.json", target / "global.json")
 
     def produce(self):
         self.assert_immutable_inputs()
         producer = self.root / "producer"
         producer.mkdir()
-        self.run("archive", ["git", "archive", "--format=tar", "--output=" + str(self.root / "source.tar"), self.source], REPO)
+        self.run("archive", ["git", "-c", "core.fsmonitor=false", "archive", "--format=tar", "--output=" + str(self.root / "source.tar"), self.source], REPO)
         self.run("extract", ["tar", "-xf", str(self.root / "source.tar"), "-C", str(producer)], REPO)
         self.run("frontend-install", ["pnpm", "install", "--frozen-lockfile"], producer / "Studio")
         self.run("frontend-build", ["pnpm", "build"], producer / "Studio")
@@ -162,47 +212,7 @@ class ConformanceRun:
         check(len(tarballs) == 1, "Expected exactly one retained SDK archive")
         self.sdk = tarballs[0]
 
-        projects = {p.stem: p for p in producer.rglob("*.csproj")
-                    if not {"obj", "bin", "node_modules"}.intersection(p.parts)}
-        selected = []
-        seen = set()
-
-        def visit(path):
-            path = path.resolve()
-            if path in seen:
-                return
-            seen.add(path)
-            check(path.is_relative_to(producer), "Producer project escaped source snapshot")
-            tree = ET.parse(path).getroot()
-            for entry in tree.iter("ProjectReference"):
-                value = entry.attrib["Include"].replace("\\", "/")
-                check("$(" not in value and ";" not in value, "Resolve nonliteral producer reference explicitly: " + value)
-                visit((path.parent / value).resolve())
-            selected.append(path)
-
-        for package in BACKEND_PACKAGES + STUDIO_PACKAGES:
-            check(package in projects, "No actual product project for " + package)
-            visit(projects[package])
-        solution = ET.Element("Solution")
-        for project in selected:
-            ET.SubElement(solution, "Project", Path=project.relative_to(producer).as_posix())
-        slnx = producer / "Weaver.Candidates.slnx"
-        ET.ElementTree(solution).write(slnx, encoding="unicode")
-        properties = ["-p:Version=" + self.version, "-p:SourceRevisionId=" + self.source]
-        self.run("product-build", [self.dotnet, "build", str(slnx), "-c", "Release", *properties], producer)
-        for index, project in enumerate(selected):
-            tree = ET.parse(project).getroot()
-            if any((node.text or "").strip().lower() == "false" for node in tree.iter("IsPackable")):
-                continue
-            self.run("pack-" + str(index) + "-" + project.stem,
-                     [self.dotnet, "pack", str(project), "-c", "Release", "--no-build", *properties,
-                      "-o", str(self.feed)], producer)
-        for path in self.feed.glob("*.nupkg"):
-            value = package_identity(path)
-            check(value["id"] not in self.packages, "Duplicate candidate identity")
-            check(value["version"] == self.version, "Candidate version mismatch")
-            self.packages[value["id"]] = value
-        check(set(BACKEND_PACKAGES + STUDIO_PACKAGES).issubset(self.packages), "Product archive set incomplete")
+        self.packages, selected = pack_product_projects(self, producer, BACKEND_PACKAGES + STUDIO_PACKAGES, self.source)
         self.report["packages"] = self.packages
         self.report["producer"] = {"source": self.source, "projectCount": len(selected),
                                    "sdk": {"path": str(self.sdk), "sha256": sha(self.sdk)},
@@ -219,7 +229,7 @@ class ConformanceRun:
                   "__CSHELLS_VERSION__": self.pin("CShells.Abstractions"),
                   "__AI_ABSTRACTIONS_VERSION__": self.pin("Microsoft.Extensions.AI.Abstractions"),
                   "__DI_ABSTRACTIONS_VERSION__": self.pin("Microsoft.Extensions.DependencyInjection.Abstractions", scope="backend"),
-                  "__SDK_TGZ__": str(self.sdk), "__REQUIRED_SDK_VERSION__": "*"}
+                  "__SDK_TGZ__": str(getattr(self, "sdk", "")), "__REQUIRED_SDK_VERSION__": "*"}
         values.update(replacements or {})
         template = FIXTURES / relative
         check(template.is_dir(), "Missing fixture producer: " + relative)
