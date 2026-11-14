@@ -61,7 +61,7 @@ internal sealed partial class PublishedNativeFixture : IAsyncDisposable
     public int SelectedMaterialReads { get; private set; }
     public Dictionary<string, string> OriginalSources { get; } = new(StringComparer.Ordinal);
 
-    public static async Task<PublishedNativeFixture> Create(bool graphOwner = false)
+    public static async Task<PublishedNativeFixture> Create(bool graphOwner = false, bool primitiveOwner = false, bool releaseVerification = false, bool placementOwner = true)
     {
         var f = new PublishedNativeFixture(); Directory.CreateDirectory(f._directory); var access = new Accessor();
         var services = new ServiceCollection(); services.AddOptions();
@@ -73,7 +73,19 @@ internal sealed partial class PublishedNativeFixture : IAsyncDisposable
         services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = "sqlite", ConnectionString = f.Connection("activities") });
         services.AddScoped<IWorkflowExecutableHasher, Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher>();
         var profile = new WorkflowReleaseRuntimeFeature(); profile.ConfigureServices(services); profile.PostConfigureServices(services);
+        if (!placementOwner)
+            services.Remove(services.Single(value => !value.IsKeyedService && value.ServiceType == typeof(Elsa.Workflows.Publishing.Releases.Core.IReleaseOccurrenceInspector)
+                && value.ImplementationType?.FullName == "Elsa.Workflows.Publishing.Releases.Runtime.RuntimePlacementReleaseInspector"));
         if (graphOwner) new Elsa.Activities.Graph.Releases.GraphActivitiesReleaseVerificationFeature().ConfigureServices(services);
+        if (primitiveOwner)
+        {
+            new Elsa.Activities.Primitives.Releases.ActivitiesPrimitivesReleaseVerificationFeature().ConfigureServices(services);
+        }
+        if (primitiveOwner || releaseVerification)
+        {
+            var transport = new Elsa.Workflows.Publishing.Releases.WorkflowReleaseTransportFeature(); transport.ConfigureServices(services); transport.PostConfigureServices(services);
+            var verification = new Elsa.Workflows.Publishing.Releases.WorkflowReleaseVerificationFeature(); verification.ConfigureServices(services); verification.PostConfigureServices(services);
+        }
         f._services = services.BuildServiceProvider(); f._scope = f._services.CreateScope(); var sp = f._scope.ServiceProvider; f.Codec = sp.GetRequiredService<IReleaseRuntimeArtifactCodec>();
         await sp.GetRequiredService<WorkflowsDesignDbContext>().Database.EnsureCreatedAsync();
         await sp.GetRequiredService<ActivitiesDesignDbContext>().Database.EnsureCreatedAsync();

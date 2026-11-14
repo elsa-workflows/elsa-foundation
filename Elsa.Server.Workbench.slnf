@@ -22,7 +22,7 @@
       "Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
       "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
       "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj",
-      "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj",
+      "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj",
       "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
       "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj",
       "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj",
