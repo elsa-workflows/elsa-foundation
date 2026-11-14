@@ -114,6 +114,20 @@ it("activates the real compact engine, focuses the picker, and cancels without a
   const outside = document.createElement("button"); document.body.append(outside); outside.focus();
   await vi.waitFor(() => expect(container.querySelector(".cm-editor")).toBeNull()); outside.remove();
 });
+it("keeps keyboard focus on the compact insertion action until the author activates it", async () => {
+  const button = insertButton();
+  flushSync(() => button.focus());
+  // Focusing an action must not mount an autofocus editor and redirect its eventual Enter key.
+  expect(container.querySelector(".studio-code-editor-preview")).not.toBeNull();
+  expect(document.activeElement).toBe(button);
+  expect(document.querySelector(".wf-property-editor-dialog")).toBeNull();
+  expect(request).not.toHaveBeenCalled(); expect(changes).toBe(0);
+  await open(); expect(content()).not.toBeNull();
+  key(document.querySelector<HTMLElement>(".wf-data-chooser-panel")!, "Escape");
+  await vi.waitFor(() => expect(document.querySelector(".wf-data-chooser-panel")).toBeNull());
+  await vi.waitFor(() => expect(document.activeElement).toBe(button));
+  expect(stored()).toBe("0"); expect(changes).toBe(0);
+});
 it("inserts one portable edit through real picker focus and both editor/designer history", async () => {
   click(container.querySelector<HTMLButtonElement>(".studio-code-editor-preview")!);
   await vi.waitFor(() => expect(content()).not.toBeNull()); content().focus(); key(content(), "a", true);
