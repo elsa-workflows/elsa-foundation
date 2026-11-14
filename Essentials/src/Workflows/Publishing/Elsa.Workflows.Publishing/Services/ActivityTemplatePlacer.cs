@@ -94,8 +94,7 @@ public sealed class ActivityTemplatePlacer(
         IEnumerable<string> outerRequestMembers,
         IReadOnlyDictionary<string, IReadOnlyCollection<string>>? outerVariableDeclarations = null,
         ActivityNode? authoredRoot = null,
-        IActivityStructureService? structures = null,
-        bool outerRequestIsOpen = false)
+        IActivityStructureService? structures = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(outerRequestMembers);
@@ -104,7 +103,6 @@ public sealed class ActivityTemplatePlacer(
         var visible = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         var requests = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
         var authored = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
-        var openRequests = new HashSet<string>(StringComparer.Ordinal);
         if (authoredRoot is not null && structures is not null)
         {
             var pending = new Stack<ActivityNode>();
@@ -119,8 +117,8 @@ public sealed class ActivityTemplatePlacer(
         }
 
         var initialScopes = declarations.ContainsKey(VariableReference.WorkflowScopeId) ? new[] { VariableReference.WorkflowScopeId } : [];
-        var work = new Stack<(ExecutableNode Node, IReadOnlyCollection<string> Requests, IReadOnlyCollection<string> Scopes, bool InClosedBody, bool RequestIsOpen)>();
-        work.Push((root, outerRequestMembers.ToArray(), initialScopes, false, outerRequestIsOpen));
+        var work = new Stack<(ExecutableNode Node, IReadOnlyCollection<string> Requests, IReadOnlyCollection<string> Scopes, bool InClosedBody)>();
+        work.Push((root, outerRequestMembers.ToArray(), initialScopes, false));
         while (work.TryPop(out var current))
         {
             var node = current.Node;
@@ -128,8 +126,6 @@ public sealed class ActivityTemplatePlacer(
                 !requests.TryAdd(node.ExecutableNodeId, current.Requests.ToArray()))
                 throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/ConsumerAmbiguous", "The compiled consumer identity is not unique.");
 
-            if (current.RequestIsOpen) openRequests.Add(node.ExecutableNodeId);
-            var childRequestIsOpen = current.RequestIsOpen;
             var childRequests = current.Requests;
             IReadOnlyCollection<string> childScopes = current.Scopes;
             var inClosedBody = current.InClosedBody;
@@ -140,7 +136,6 @@ public sealed class ActivityTemplatePlacer(
                 if (node.ActivityContract is null)
                     throw Rejected(node.AuthoredActivityId, "ActivityDataSelection/InputDeclarationUnavailable", "The closed boundary has no pinned input contract.");
                 childRequests = node.ActivityContract.Inputs.Keys.ToArray();
-                childRequestIsOpen = false;
                 childScopes = [node.ExecutableNodeId];
                 inClosedBody = true;
                 // Before placement, the graph owner uses its explicit template-local graph scope.
@@ -167,11 +162,11 @@ public sealed class ActivityTemplatePlacer(
                 childScopes = new[] { node.ExecutableNodeId }.Concat(childScopes).Distinct(StringComparer.Ordinal).ToArray();
             }
             foreach (var child in node.ChildSlots.SelectMany(x => x.Activities).Reverse())
-                work.Push((child, childRequests, childScopes, inClosedBody, childRequestIsOpen));
+                work.Push((child, childRequests, childScopes, inClosedBody));
         }
         return new(new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(declarations),
             new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(visible),
-            new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(requests), openRequests);
+            new ReadOnlyDictionary<string, IReadOnlyCollection<string>>(requests));
 
         void AddDeclaration(string scope, IReadOnlyCollection<string> keys, string origin)
         {

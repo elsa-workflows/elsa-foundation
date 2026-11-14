@@ -21,6 +21,14 @@ Use `--phases-list` to discover56 cases and `--phases` to execute them. Forty-ei
 
 Eight literal checkpoint-reader fixtures are listed separately from those workflows. Version2 progress preserves the serial format's completed prefix and exact pending child; unknown versions, invalid ownership indices and mixed shapes are refused. These fixtures are not historical-writer/binary or product-migration evidence. The sibling assembly grant is solely for this focused reader witness.
 
+## General structural planner
+
+`--selection-list` discovers 68 logical graph/visit fixtures and `--selection` runs them. The private compiled engine supports hierarchical and regional conflicts, action-without-exit, explicit self/parent re-entry, compound-parent preservation, whole-parallel re-entry, targeted/default regional entry and nested finals. It validates complete entered configurations, rejects activity work on structural roots and regions, and returns exited/source visit identities and structural phase dependencies. Input matching and guard results are supplied by the host; the engine does not admit inputs, discover cohorts, allocate physical visits or own values.
+
+The existing public `Chart` constructors adapt the legacy sibling-only definition to that same engine; there is no second selector. The original20 and phase56 native schedules exercise this adapter. Full-graph fixtures are logical data, not actual native state-local scopes or support through a new public authored schema. That bridge remains mandatory before full hierarchy/product claims.
+
+`--selection-export` produces JSON for the [Node reference comparison](../../../../specs/1210-state-machine/selection-model/README.md). Twenty-eight common profiles compare candidate/selected sets, exited visits, source visits and phase dependencies. Two explicitly proposed child-to-ancestor re-entry cases are exercised only by the private .NET profile and excluded from that comparison. This is neither full SCXML compliance nor production architecture approval.
+
 ## Limits
 
 The witness covers business inputs, value-equality guards, and transitions between distinct sibling states in one region, including compound siblings. The top-level final leaf completes the native container. Other transition topologies are rejected when the chart is constructed. Automatic/completion transitions, full SCXML, suspended guard evaluation, a public admission API, retention, activity-fault recovery and successful-sibling preservation after fault are outside the witness. `NativeModel.Fail` still owns generic fault propagation/cancellation; this change adds no recovery mechanism. The trace reports committed state and the in-flight plan separately. These experiments supply evidence for #3815's M0 and do not settle placement, source-wave closure, provider or product/Studio adoption.
