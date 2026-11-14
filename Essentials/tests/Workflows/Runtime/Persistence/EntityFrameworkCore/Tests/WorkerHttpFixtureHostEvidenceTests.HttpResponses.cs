@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CShells;
+using CShells.Features;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Models;
@@ -23,15 +25,18 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
     [Fact]
     public async Task Workflow_owned_response_observes_the_other_hosts_committed_instruction_and_replays_without_another_root()
     {
-        await using var routing = await StartHostAsync(standaloneHttp: true, automaticResumption: false);
+        await using var routing = await StartHostAsync(standaloneHttp: true, automaticResumption: false, suppressHttpPrompt: true);
         var shellA = await routing.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         var fixture = await PrepareStandaloneHttpAsync(shellA.ServiceProvider, mode: "WorkflowResponse", targetExecutable: HttpResultExecutable(response: true));
-        await using var worker = await StartHostAsync(standaloneHttp: true);
-        var shellB = await worker.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-        Assert.NotSame(shellA.ServiceProvider, shellB.ServiceProvider);
         using var request = StandaloneRequest("peer-response", new { text = "detached-input" });
         var exchange = routing.Client.SendAsync(request);
-        var accepted = await AwaitResponseSourceAsync(shellB.ServiceProvider, fixture.Scope);
+        var accepted = await AwaitResponseSourceAsync(shellA.ServiceProvider, fixture.Scope);
+        await AssertRoutingHostDeferredAsync(shellA.ServiceProvider, accepted.OutboxItemId);
+        await using var worker = await StartHostAsync(standaloneHttp: true, automaticResumption: false);
+        var shellB = await worker.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        Assert.NotSame(shellA.ServiceProvider, shellB.ServiceProvider);
+        await using (var proof = shellB.ServiceProvider.CreateAsyncScope())
+            Assert.IsType<RuntimePostCommitOutboxProcessor>(proof.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
         await AwaitHttpTargetAcceptanceAsync(shellB.ServiceProvider, accepted.OutboxItemId);
         using var response = await exchange;
         Assert.Equal(HttpStatusCode.Created, response.StatusCode); Assert.Equal("peer-response-body", await response.Content.ReadAsStringAsync());
@@ -52,14 +57,18 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
     [Fact]
     public async Task Missing_workflow_response_without_a_caller_key_returns_the_real_accepted_delivery_id()
     {
-        await using var routing = await StartHostAsync(standaloneHttp: true, automaticResumption: false);
+        await using var routing = await StartHostAsync(standaloneHttp: true, automaticResumption: false, suppressHttpPrompt: true);
         var shellA = await routing.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         var fixture = await PrepareStandaloneHttpAsync(shellA.ServiceProvider, mode: "WorkflowResponse", targetExecutable: HttpResultExecutable(response: false));
-        await using var worker = await StartHostAsync(standaloneHttp: true);
-        var shellB = await worker.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         using var request = StandaloneRequest("removed", new { text = "missing-response" }); request.Headers.Remove("Idempotency-Key");
         var exchange = routing.Client.SendAsync(request);
-        var accepted = await AwaitResponseSourceAsync(shellB.ServiceProvider, fixture.Scope);
+        var accepted = await AwaitResponseSourceAsync(shellA.ServiceProvider, fixture.Scope);
+        await AssertRoutingHostDeferredAsync(shellA.ServiceProvider, accepted.OutboxItemId);
+        await using var worker = await StartHostAsync(standaloneHttp: true, automaticResumption: false);
+        var shellB = await worker.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        Assert.NotSame(shellA.ServiceProvider, shellB.ServiceProvider);
+        await using (var proof = shellB.ServiceProvider.CreateAsyncScope())
+            Assert.IsType<RuntimePostCommitOutboxProcessor>(proof.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
         await AwaitHttpTargetAcceptanceAsync(shellB.ServiceProvider, accepted.OutboxItemId);
         using var response = await exchange; Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(); Assert.Equal("ResponseMissing", problem.GetProperty("code").GetString());
@@ -73,14 +82,17 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
     [Fact]
     public async Task Response_timeout_without_a_caller_key_preserves_accepted_work_for_later_execution()
     {
-        await using var routing = await StartHostAsync(standaloneHttp: true, automaticResumption: false, responseTimeoutSeconds: 0.2);
+        await using var routing = await StartHostAsync(standaloneHttp: true, automaticResumption: false, responseTimeoutSeconds: 0.2, suppressHttpPrompt: true);
         var shellA = await routing.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         var fixture = await PrepareStandaloneHttpAsync(shellA.ServiceProvider, mode: "WorkflowResponse");
         using var request = StandaloneRequest("removed", new { text = "timeout-input" }); request.Headers.Remove("Idempotency-Key");
         using var response = await routing.Client.SendAsync(request); Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>(); var id = problem.GetProperty("deliveryId").GetString()!;
-        await using var worker = await StartHostAsync(standaloneHttp: true);
+        await AssertRoutingHostDeferredAsync(shellA.ServiceProvider, id);
+        await using var worker = await StartHostAsync(standaloneHttp: true, automaticResumption: false);
         var shellB = await worker.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        await using (var proof = shellB.ServiceProvider.CreateAsyncScope())
+            Assert.IsType<RuntimePostCommitOutboxProcessor>(proof.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
         await AwaitHttpTargetAcceptanceAsync(shellB.ServiceProvider, id);
         await using var operation = shellB.ServiceProvider.CreateAsyncScope(); var services = operation.ServiceProvider;
         var source = (await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(id))!;
@@ -89,6 +101,54 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         var execution = (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(recipient.StartIdentity.WorkflowExecutionId))!;
         Assert.Equal(WorkflowExecutionStatus.Running, execution.Status);
         Assert.Single(await services.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(execution.WorkflowExecutionId));
+    }
+
+    // Fault injection only defers host A's prompt. Admission, schema checks, transport observation and all
+    // stores remain real; host B uses the ordinary processor and physical claims to create the root.
+    private static async Task AssertRoutingHostDeferredAsync(IServiceProvider shell, string sourceId)
+    {
+        await using var operation = shell.CreateAsyncScope(); var services = operation.ServiceProvider;
+        await services.GetRequiredService<HttpPromptSuppressionEvidence>().Observed.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        var source = (await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(sourceId))!;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, source.Status);
+        Assert.DoesNotContain(source.SubscriptionDelivery!.Progress, item => item.Phase == RuntimeRecipientPhase.TargetAccepted);
+        Assert.Empty(await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
+    }
+
+    [ShellFeature(Name, DependsOn = new object[] { "WorkflowsRuntimeApi", "WorkflowsRuntimeEntityFrameworkCore", "ActivitiesHttp" })]
+    public sealed class HttpPromptSuppressionFeature : IShellFeature
+    {
+        public const string Name = "HttpResponseTestsDeferRoutingHostPrompt";
+        public void ConfigureServices(IServiceCollection services)
+        {
+            var original = Assert.Single(services.Where(item => item.ServiceType == typeof(IRuntimePostCommitOutboxProcessor)));
+            Assert.NotNull(original.ImplementationFactory);
+            services.Remove(original);
+            services.AddSingleton<HttpPromptSuppressionEvidence>();
+            services.AddScoped<IRuntimePostCommitOutboxProcessor>(provider => new DeferredHttpPromptProcessor(
+                (IRuntimePostCommitOutboxProcessor)original.ImplementationFactory!(provider),
+                provider.GetRequiredService<HttpPromptSuppressionEvidence>()));
+        }
+    }
+
+    private sealed class HttpPromptSuppressionEvidence
+    {
+        public TaskCompletionSource Observed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class DeferredHttpPromptProcessor(IRuntimePostCommitOutboxProcessor inner, HttpPromptSuppressionEvidence evidence)
+        : IRuntimePostCommitOutboxProcessor
+    {
+        public bool SupportsSourceKind(RuntimeDeliverySourceKind kind) => inner.SupportsSourceKind(kind);
+        public bool SupportsSubscriptionDelivery(RuntimeDeliverySourceKind kind, string deliveryKind, int version) =>
+            inner.SupportsSubscriptionDelivery(kind, deliveryKind, version);
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            evidence.Observed.TrySetResult();
+            return ValueTask.FromResult(new RuntimePostCommitOutboxProcessResult([]));
+        }
     }
 
     private static async Task<RuntimePostCommitOutboxItem> AwaitResponseSourceAsync(IServiceProvider shell, TriggerScope scope)
@@ -124,7 +184,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         } : new Dictionary<string, RuntimeInputBinding> { ["text"] = Literal("text", "completed-without-response") };
         var node = new ExecutableNode("business-root", "business-root", alias, response ? "1.2.0" : "1.0.0",
             WellKnownRuntimeActivityConsumers.ClrActivity, contract.DescriptorPayload,
-            ClrActivityContractTestBuilder.CompleteInputBindings(contract, values), new Dictionary<string, string>(), contract);
+            ClrActivityContractTestBuilder.CompleteInputBindings(contract, values), new Dictionary<string, string>(), activityContract: contract);
         return new(new("http-result-material", "business", "version", "1", response ? "reply" : "no-reply"), node,
             new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }

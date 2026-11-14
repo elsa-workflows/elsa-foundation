@@ -215,10 +215,11 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
             File.Delete(path);
     }
 
-    private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false, bool automaticResumption = true, double? responseTimeoutSeconds = null)
+    private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false, bool automaticResumption = true, double? responseTimeoutSeconds = null, bool suppressHttpPrompt = false)
     {
         var baseFeatures = SelectedFeatureIds.Where(id => automaticResumption || id != "WorkflowsRuntimeResumption").ToArray();
         var selectedFeatures = standaloneHttp ? baseFeatures.Concat(["FoundationIdentityAbstractions", "ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : baseFeatures;
+        if (suppressHttpPrompt) selectedFeatures = selectedFeatures.Append(HttpPromptSuppressionFeature.Name).ToArray();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -267,7 +268,8 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
                 typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
                 typeof(Elsa.Http.HttpFeature).Assembly,
-                typeof(TasksFeature).Assembly)
+                typeof(TasksFeature).Assembly,
+                typeof(HttpPromptSuppressionFeature).Assembly)
             .WithConfigurationProvider(configuration));
 
         var app = builder.Build();
