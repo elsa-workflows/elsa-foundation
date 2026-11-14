@@ -46,4 +46,8 @@
         <None Update="Fixtures/SchemaUpcasters/**/*.json" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
+  </ItemGroup>
+
 </Project>
