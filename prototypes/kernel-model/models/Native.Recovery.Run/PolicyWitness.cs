@@ -52,7 +52,7 @@ internal static class PolicyWitness
             if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
             Drain();
             var state = State(); var expected = kind is "sequence" or "parallel";
-            if (state.InterventionPolicy != (kind == "unmarked" ? 3 : 0) || RootLeaf.Calls.Count != 1 ||
+            if (state.InterventionPolicy != (kind == "unmarked" ? 4 : 0) || RootLeaf.Calls.Count != 1 ||
                 (expected ? world.Store.Instances[target.Id].Status != InstanceStatus.Running || !state.Frames.Values.Any(f => f.Node == "leaf" && f.Intervention is not null)
                     : world.Store.Instances[target.Id].Status != InstanceStatus.Finished || state.Frames.Count != 0))
                 throw new InvalidOperationException("R29: latest host or new parent support silently changed an existing invocation policy");
