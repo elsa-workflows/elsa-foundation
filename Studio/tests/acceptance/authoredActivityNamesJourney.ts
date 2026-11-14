@@ -47,10 +47,10 @@ export async function authoredActivityNamesJourney(page: Page, info: TestInfo, c
     }
     await capture(page, info, "authored-definition");
     const saved = await api<{ activityPresentation: unknown[] }>(`/design/workflows/drafts/${created.draft.id}`);
-    const submitted = await api<{ version: { id: string } }>("/design/workflows/definitions/submit", "POST", {
-      definitionId: created.definition.id, name: "Authored name publication", state, activityPresentation: saved.activityPresentation
-    });
-    const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${submitted.version.id}/publish`, "POST", {});
+    const version = await api<{ id: string; definition: { id: string }; activityPresentation: unknown[] }>(`/design/workflows/drafts/${created.draft.id}/promote`, "POST", { operationKey: crypto.randomUUID() });
+    expect(version.definition.id).toBe(created.definition.id);
+    expect(version.activityPresentation).toEqual(saved.activityPresentation);
+    const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${version.id}/publish`, "POST", {});
     await page.goto(`/workflows/executables/${published.artifactId}?backend=legacy&ref=${published.sourceReferenceId}`);
     const canvas = page.getByRole("region", { name: "Executable canvas", exact: true });
     for (const [index, name] of names.entries()) await expect(canvas.locator(`[data-id="named-${index}"] .wf-sequence-title`)).toHaveText(name);
