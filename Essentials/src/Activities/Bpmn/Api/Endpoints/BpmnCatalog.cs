@@ -20,7 +20,7 @@ internal sealed record BpmnPublicationView(string SourceReferenceId, string Sour
 
 internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore sources, IWorkflowExecutableStore materials,
     IPersistenceAccessContextAccessor access, BpmnApiCaller caller,
-    IRuntimeRecoveryContinuationCodec continuations, TimeProvider clock, IRuntimeModelExecutionReader? executions = null)
+    IRuntimeRecoveryContinuationCodec continuations, TimeProvider clock, IRuntimeModelExecutionReader? executions = null, IWorkflowActivationAuthority? activationSlots = null)
 {
     private const string PublicationsPurpose = "bpmn-publication-catalog-v1";
     private const string ExecutionsPurpose = "bpmn-execution-catalog-v1";
@@ -40,9 +40,17 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
                 request.ArtifactId is not null && source.ArtifactId != request.ArtifactId ||
                 !await caller.CanReadAsync(source, cancellationToken)) continue;
             var material = await materials.FindMaterialAsync(source.ArtifactId, cancellationToken);
-            if (material?.Model is not { } model || model.Protocol != Protocol ||
-                material.Identity.ArtifactId != source.ArtifactId || material.Identity.DefinitionId != source.DefinitionId ||
-                material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion) continue;
+            if (material?.Model is not { } model || model.Protocol != Protocol || material.Identity.ArtifactId != source.ArtifactId) continue;
+            if (source.PublicationScope is not null)
+            {
+                if (activationSlots is null) continue;
+                var slot = (await activationSlots.ListByDefinitionAsync(source.DefinitionId, cancellationToken))
+                    .SingleOrDefault(item => item.SlotId == source.SlotId);
+                if (slot is null || !WorkflowExecutableSourceReferenceComparer.MatchesPublication(source, slot, context.Scope,
+                    context.Caller.TenantId, clock.GetUtcNow(), WorkflowActivationSource.Publishing)) continue;
+            }
+            else if (material.Identity.DefinitionId != source.DefinitionId || material.Identity.DefinitionVersionId != source.DefinitionVersionId ||
+                material.Identity.ArtifactVersion != source.ArtifactVersion) continue;
             items.Add(new(source.SourceReferenceId, source.SourceId, source.SourceVersion, material.Identity, material.IncarnationId,
                 model.Profile, source.ActivityPresentation?.FirstOrDefault()?.DisplayName, source.CreatedAt, source.PublishedAt));
         }

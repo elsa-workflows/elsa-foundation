@@ -111,7 +111,7 @@ public sealed partial class BpmnDirectExecutionTests
         await store.SaveAsync(worker);
         var workerMaterial = (await store.FindMaterialAsync(worker.Identity.ArtifactId))!;
         var now = DateTimeOffset.UtcNow;
-        var logicalDefinition = mappedInput ? "worker-logical-definition" : worker.Identity.DefinitionId;
+        const string logicalDefinition = "worker-logical-definition";
         var reference = new WorkflowExecutableSourceReference("unused", worker.Identity.ArtifactId, "WorkflowDefinition",
             worker.Identity.DefinitionVersionId, worker.Identity.ArtifactVersion, logicalDefinition, worker.Identity.DefinitionVersionId,
             worker.Identity.ArtifactVersion, now, now, WorkflowExecutableReferenceScope.Published, TenantId: "actual-tenant");

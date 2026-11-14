@@ -65,7 +65,13 @@ public sealed class DirectBpmnStudioPublicationTests
         Assert.Equal(metadata, imported["processNode"]!["structure"]!["payload"]!["elements"]![1]!["properties"]!["elsa.direct.binding"]!.GetValue<string>());
         var started = await host.PostAsync("/bpmn/executions", new { sourceReferenceId = published["sourceReferenceId"]!.GetValue<string>(), requestId = "start-direct" });
         var path = "/bpmn/executions/" + started["executionId"]!.GetValue<string>();
-        var waiting = await host.GetAsync(path);
+        // Authored starts acknowledge their physically fenced queue commit before ordinary resumption.
+        // Observe the real model state rather than treating queue acceptance as an execution checkpoint.
+        JsonNode? waiting = null;
+        var stateDeadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (DateTimeOffset.UtcNow < stateDeadline && (waiting = await host.FindAsync(path)) is null)
+            await Task.Delay(100);
+        Assert.NotNull(waiting);
         var work = Assert.Single((await host.GetAsync(path + "/work"))["items"]!.AsArray())!;
         Assert.Equal("human", work["elementId"]!.GetValue<string>());
         var inspection = await host.GetAsync(path + "/inspection");

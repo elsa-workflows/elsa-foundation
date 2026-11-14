@@ -119,6 +119,58 @@ public sealed class BpmnAuthoredDirectPublisherTests
     }
 
     [Theory]
+    [InlineData(false, "current")]
+    [InlineData(true, "current")]
+    [InlineData(false, "scope")]
+    [InlineData(true, "scope")]
+    [InlineData(false, "replacement")]
+    [InlineData(true, "replacement")]
+    [InlineData(false, "slot-address")]
+    [InlineData(true, "slot-address")]
+    [InlineData(false, "missing-authority")]
+    [InlineData(true, "missing-authority")]
+    public async Task Authored_worker_selection_proves_the_actual_logical_slot_for_closed_and_input_models(bool inputs, string change)
+    {
+        var fixture = new Fixture();
+        fixture.UseService(ServiceMetadata().ToJsonString());
+        if (inputs) fixture.Version.State = fixture.Version.State with
+        {
+            Inputs = [new("text", "text", new("String"), null, "Text", null, false, IsRequired: true)]
+        };
+        const string definition = "logical-worker", publication = "worker-publication";
+        fixture.WorkerSlot = new(WorkflowActivationSlotIdentity.Create(definition, "blue"), definition, "blue", publication,
+            WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow);
+        fixture.WorkerSource = fixture.WorkerSource! with
+        {
+            SourceReferenceId = WorkflowActivationReferenceIdentity.Create(publication), DefinitionId = definition,
+            DefinitionVersionId = "logical-version", ActivationId = publication, SlotId = fixture.WorkerSlot.SlotId,
+            PublicationScope = new("scope")
+        };
+        var metadata = ServiceMetadata(); metadata["sourceReferenceId"] = fixture.WorkerSource.SourceReferenceId;
+        fixture.UseService(metadata.ToJsonString());
+        if (change == "scope") fixture.WorkerSource = fixture.WorkerSource with { PublicationScope = new("other") };
+        if (change == "replacement") fixture.WorkerSlot = fixture.WorkerSlot with { ActiveActivationId = "later" };
+        if (change == "slot-address")
+        {
+            fixture.WorkerSource = fixture.WorkerSource with { SlotId = "forged" };
+            fixture.WorkerSlot = fixture.WorkerSlot with { SlotId = "forged" };
+        }
+        if (change == "missing-authority") fixture.WorkerSlot = null;
+        if (change == "current")
+        {
+            await fixture.Publish();
+            Assert.Equal("worker-definition", Assert.Single(fixture.Model!.ServiceBindings!).Executable.DefinitionId);
+            Assert.Equal(1, fixture.Publications);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => fixture.Publish());
+            Assert.Equal(0, fixture.Publications);
+            Assert.DoesNotContain("prepare", fixture.Calls);
+        }
+    }
+
+    [Theory]
     [InlineData("missing")]
     [InlineData("invisible")]
     [InlineData("wrong-type")]
@@ -435,6 +487,9 @@ public sealed class BpmnAuthoredDirectPublisherTests
         Assert.Equal(0, fixture.Publications);
     }
 
+    private sealed class Scope : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new("scope")); }
+
     private sealed class Fixture : IWorkflowDefinitionVersionStore, IWorkflowDefinitionStore,
         IWorkflowDefinitionVersionLayoutStore, IActivityDefinitionLookup, IPermissionAuthorizationService, IBpmnModelRuntime,
         IWorkflowExecutableSourceReferenceReader
@@ -461,6 +516,7 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public Func<PublicationMaterialActivationRequest, Task>? BeforeSave { get; set; }
         public Action? AfterSave { get; set; }
         public WorkflowActivationSlot? Slot { get; set; }
+        public WorkflowActivationSlot? WorkerSlot { get; set; }
         public string ResolvedSlotName { get; set; } = "default";
         public int PolicyResolutions { get; private set; }
         public BpmnModelDefinition? Model { get; private set; }
@@ -514,14 +570,16 @@ public sealed class BpmnAuthoredDirectPublisherTests
             });
             return new BpmnAuthoredDirectPublisher(this, this, this, this, validator, this, this, this, TimeProvider.System,
                 activator, Journal ?? Stub<IPublicationRecordStore>((_, _) => ValueTask.FromResult(RetainedPublication)),
-                Stub<IWorkflowActivationAuthority>((_, _) => ValueTask.FromResult(Slot)),
+                Stub<IWorkflowActivationAuthority>((method, _) => method.Name == "ListByDefinitionAsync"
+                    ? ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationSlot>>(WorkerSlot is null ? [] : [WorkerSlot])
+                    : (object)ValueTask.FromResult(Slot)),
                 Stub<IPublicationPolicyStore>((_, _) => ValueTask.FromResult<PublicationPolicy?>(null)),
                 Stub<IPublicationPolicyResolver>((_, args) =>
                 {
                     PolicyResolutions++;
                     return new ResolvedPublicationAction((string)args![0]!, (string)args[1]!,
                         PublicationAction.Replace, ResolvedSlotName, PublicationPolicySource.Host, 0);
-                }))
+                }), new Scope())
                 .PublishAsync("version-1", "operation", principal, default, intent, expectedSlotRevision, expectedPublicationId);
         }
 

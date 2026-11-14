@@ -509,9 +509,20 @@ internal sealed partial class BpmnModelRuntime(IWorkflowExecutableStore material
         while (true)
         {
             var page = await sources.ListByArtifactPageAsync(query, cancellationToken);
-            if (page.Items.Any(source => source.Scope == WorkflowExecutableReferenceScope.Published && source.TenantId == caller.TenantId &&
-                source.IsLive(clock.GetUtcNow()) && (allowInputs || source.DefinitionId == executable.DefinitionId &&
-                source.DefinitionVersionId == executable.DefinitionVersionId && source.ArtifactVersion == executable.ArtifactVersion))) return worker;
+            foreach (var source in page.Items)
+            {
+                if (source.ArtifactId != executable.ArtifactId || source.Scope != WorkflowExecutableReferenceScope.Published ||
+                    source.TenantId != caller.TenantId || !source.IsLive(clock.GetUtcNow())) continue;
+                if (source.PublicationScope is not null)
+                {
+                    var slot = activationSlots is null ? null : (await activationSlots.ListByDefinitionAsync(source.DefinitionId, cancellationToken))
+                        .SingleOrDefault(item => item.SlotId == source.SlotId);
+                    if (slot is not null && WorkflowExecutableSourceReferenceComparer.MatchesPublication(source, slot,
+                        access.Current.RequireScope(admitPrivileged: true), caller.TenantId, clock.GetUtcNow())) return worker;
+                }
+                else if (allowInputs || source.DefinitionId == executable.DefinitionId &&
+                    source.DefinitionVersionId == executable.DefinitionVersionId && source.ArtifactVersion == executable.ArtifactVersion) return worker;
+            }
             if (page.NextContinuationToken is null) break;
             if (!seen.Add(page.NextContinuationToken)) throw new BpmnModelValidationException("The worker publication source page did not advance.");
             query = new(executable.ArtifactId, continuationToken: page.NextContinuationToken);

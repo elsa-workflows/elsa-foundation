@@ -22,7 +22,7 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
     IWorkflowExecutableSourceReferenceReader sources, TimeProvider clock,
     IPublicationActivator? activator = null, IPublicationRecordStore? publications = null,
     IWorkflowActivationAuthority? slots = null, IPublicationPolicyStore? policies = null,
-    IPublicationPolicyResolver? policyResolver = null)
+    IPublicationPolicyResolver? policyResolver = null, IPersistenceAccessContextAccessor? access = null)
 {
     internal const string PublishPermission = "bpmn:publish";
     // Existing workflow publication permission; the domain bridge does not depend on its API assembly.
@@ -74,8 +74,7 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
             var pin = service.Binding.Executable;
             if (source is null || source.SourceReferenceId != service.SourceReferenceId || source.TenantId != caller.TenantId ||
                 source.Scope != WorkflowExecutableReferenceScope.Published || !source.IsLive(clock.GetUtcNow()) ||
-                source.ArtifactId != pin.ArtifactId || !inputCapable && (source.DefinitionId != pin.DefinitionId ||
-                    source.DefinitionVersionId != pin.DefinitionVersionId || source.ArtifactVersion != pin.ArtifactVersion) ||
+                source.ArtifactId != pin.ArtifactId || !await WorkerSourceMatchesAsync(source, pin, inputCapable, caller, cancellationToken) ||
                 !(await authorization.AuthorizeAsync(new(principal, WorkflowReadPermission, caller.TenantId, source), cancellationToken)).Succeeded)
                 throw new BpmnModelResourceMissingException();
         }
@@ -147,4 +146,17 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
         { Publication = new(publication.PublicationId, publication.WorkflowDefinitionId, publication.WorkflowDefinitionVersionId,
             publication.SlotName, revision, publication.Status.ToString()) };
     }
+    private async ValueTask<bool> WorkerSourceMatchesAsync(WorkflowExecutableSourceReference source, WorkflowExecutableIdentity worker,
+        bool inputCapable, BpmnModelCaller caller, CancellationToken cancellationToken)
+    {
+        // Ordinary producer-bound sources retain their legacy contract. Only the checked material-neutral
+        // writer can assert PublicationScope; its logical identity is proved by the actual current slot.
+        if (source.PublicationScope is null) return inputCapable || source.DefinitionId == worker.DefinitionId &&
+            source.DefinitionVersionId == worker.DefinitionVersionId && source.ArtifactVersion == worker.ArtifactVersion;
+        var slot = slots is null ? null : (await slots.ListByDefinitionAsync(source.DefinitionId, cancellationToken))
+            .SingleOrDefault(item => item.SlotId == source.SlotId);
+        return slot is not null && access is not null && WorkflowExecutableSourceReferenceComparer.MatchesPublication(source, slot,
+            access.Current.RequireScope(admitPrivileged: true), caller.TenantId, clock.GetUtcNow());
+    }
+
 }
