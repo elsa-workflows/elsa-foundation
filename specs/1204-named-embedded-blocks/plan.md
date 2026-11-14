@@ -25,9 +25,9 @@ Keep #3610 as the canonical request and **Program**, preserving its original suc
 | Epic | Features | Leaves, in dependency order |
 |---|---|---|
 | Design/prototype #3738 | Design/prototype #3742 | Establishment #3748 → prototype Spike #3749 |
-| Authoring/extraction #3739 | Presentation #3743; native refactoring #3744; BPMN #3745 | Presentation #3750 and native transformations #3751 → shared commands #3752 → BPMN #3753 |
+| Authoring/extraction #3739 | Presentation #3743; native refactoring #3744; BPMN #3745 | Presentation #3750 and native transformations #3751 → shared commands #3752 → T004 BPMN in Feature #3745 |
 | Reusable promotion #3740 | Promotion #3746 | Analysis #3754 → review/publish/replace #3755 |
-| Integrated qualification #3741 | Acceptance #3747 | Composed/runtime qualification and delivery #3756 |
+| Integrated qualification #3741 | Acceptance #3747 | T007 composed/runtime qualification and delivery in Program #3610 |
 
 [Tasks](tasks.md) links every issue, dependency and acceptance row. Each leaf has one winning claim and one scoped PR. Execute one implementation leaf at a time. New issues start needs-triage; board readiness never silently promotes an issue or bypasses the 20-ready cap. Reports/checkpoints stay on the existing issue/PR. The program record links the scheduling surface without duplicating requirements.
 
@@ -44,6 +44,7 @@ Run beside active work, displace none, retain consolidation's priority one and r
 - Flowchart extraction accepts a linear region with one entry, one normal exit, unconditional Done routing and no crossing join/branch policy. Redirect boundary edges and a selected start node to the composite; preserve surviving connection metadata. Refuse unsupported outcomes/control targets before mutation.
 - BPMN extraction accepts a same-lane linear region of supported native bound tasks/ordinary subprocesses with unconditional flows. Bind a real nested BPMN process; retain internal elements/flows/ActivityNodes and synthesize plain internal start/end events. Refuse gateways, special events/boundaries/listeners, transactions, event subprocesses, compensation, unsupported loop/direct-model bindings and cross-lane regions.
 - Preserve parent declarations, exact child versions, authorized references, settings and layout. Necessary reference changes use typed traversal, never arbitrary string replacement. Preserve inner layout and position the outer node at the selected region; inverse translation moves restored children relative to the current block position.
+- Preserve admitted sibling result reads across the new native boundary through explicit ordinary Set steps and fresh variables on the original enclosing container, as described in [data boundaries](data-model.md#refactoring-preview). Keep expression source unchanged, retain existing captures, and refuse unproved scope/optional/resource-level transfers. Compose expression-module preservation support through the host for any added variables; missing support refuses, and its revision participates in preview staleness checks. Include the full proposed document in normal host validation before one history edit. Ungroup retains these ordinary transfers; Undo of extraction restores the original document.
 - Apply structure/layout/presentation as one history edit with coherent selection/scope/focus on Undo/Redo. Ungroup requires the inverse profile and no local declarations or boundary settings that would be lost.
 
 ### Presentation and lifecycle

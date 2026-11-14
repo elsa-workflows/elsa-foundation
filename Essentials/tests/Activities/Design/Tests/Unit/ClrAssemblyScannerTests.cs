@@ -727,6 +727,21 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains("BaseOutcome", portNames);
     }
 
+    [Theory]
+    [InlineData(typeof(Inline))]
+    [InlineData(typeof(Elsa.Activities.Graph.Runtime.Activities.Complete))]
+    public void NativeBlockCompletionProof_UsesExplicitProductionOutcomeMetadata(Type activityType)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+        var model = Assert.Single(CreateScanner().Scan(folder.Path), item => item.ActivityTypeKey == activityType.FullName);
+        var facet = Assert.Single(model.DesignFacets, item => item.Kind == "elsa.outcomes");
+        Assert.Equal("1", facet.SchemaVersion);
+        var completion = Assert.Single(facet.Payload.GetProperty("ports").EnumerateArray());
+        Assert.Equal("Done", completion.GetProperty("name").GetString());
+        Assert.Equal("outcome", completion.GetProperty("type").GetString());
+        Assert.False(facet.Payload.TryGetProperty("dynamicOutcomes", out _));
+    }
+
     [Fact]
     public void PaletteHints_AreReadWithoutExecutingAttributeConstructors()
     {
