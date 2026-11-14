@@ -851,6 +851,9 @@
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Capture/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Capture/Tests/Elsa.Workflows.Publishing.Releases.Capture.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/NativeCapture/">
+    <Project Path="Essentials/tests/Workflows/Publishing/Releases/NativeCapture/Tests/Elsa.Workflows.Publishing.Releases.NativeCapture.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Runtime/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj" />
   </Folder>

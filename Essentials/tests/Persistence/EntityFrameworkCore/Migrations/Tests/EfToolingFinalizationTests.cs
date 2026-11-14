@@ -137,23 +137,37 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
         Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
         var families = status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray().ToArray();
-        Assert.Equal(17, families.Length);
+        Assert.Equal(18, families.Length);
+        Assert.Equal(
+            [
+                "BookmarkState", "RuntimeActivationSlot", "RuntimeActivityExecution", "RuntimeArtifact",
+                "RuntimeBackgroundActivityWork", "RuntimeModelState", "RuntimeOperationalState", "RuntimePostCommitOutbox",
+                "RuntimeSchedulerPoison", "RuntimeSchedulerWork", "RuntimeTriggerBinding", "RuntimeWorkflowAlteration",
+                "RuntimeWorkflowDispatch", "RuntimeWorkflowExecution", "RuntimeWorkflowTestScope", "Secrets",
+                "StandaloneTriggers", "UserTasks"
+            ],
+            families.Select(family => family.GetProperty("family").GetString()).Order(StringComparer.Ordinal));
         var tasks = families.Single(family => family.GetProperty("family").GetString() == "UserTasks");
         Assert.Equal(["1.0.0"], tasks.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         Assert.Equal(JsonValueKind.Null, tasks.GetProperty("finalizedVersion").ValueKind);
         var model = families.Single(family => family.GetProperty("family").GetString() == "RuntimeModelState");
         Assert.Equal(JsonValueKind.Null, model.GetProperty("finalizedVersion").ValueKind);
-        Assert.Equal(["1.0.0"], model.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(["1.0.0", "1.1.0"], model.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         var queue = families.Single(family => family.GetProperty("family").GetString() == "RuntimeSchedulerWork");
-        Assert.Equal(["1.0.0", "2.0.0", "3.0.0"], queue.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(["1.0.0", "2.0.0", "3.0.0", "4.0.0"], queue.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         var secrets = families.Single(family => family.GetProperty("family").GetString() == SecretsEfModule.SchemaFamily);
         Assert.Single(secrets.GetProperty("holds").EnumerateArray());
         var runtime = families.Single(family => family.GetProperty("family").GetString() == RuntimeArtifactEfModule.SchemaFamily);
         Assert.Equal(JsonValueKind.Null, runtime.GetProperty("finalizedVersion").ValueKind);
-        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], runtime.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(["1.0.0", "1.1.0"], runtime.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         var background = families.Single(family => family.GetProperty("family").GetString() == RuntimeBackgroundActivityWorkEfModule.SchemaFamily);
         Assert.Equal(JsonValueKind.Null, background.GetProperty("finalizedVersion").ValueKind);
         Assert.Equal([RuntimeBackgroundActivityWorkEfModule.SchemaVersion], background.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        var standalone = families.Single(family => family.GetProperty("family").GetString() == "StandaloneTriggers");
+        Assert.Equal("Workflows.Runtime", standalone.GetProperty("module").GetString());
+        Assert.Equal(["1.0.0"], standalone.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(JsonValueKind.Null, standalone.GetProperty("finalizedVersion").ValueKind);
+        Assert.Empty(standalone.GetProperty("holds").EnumerateArray());
     }
 
     /// <summary>

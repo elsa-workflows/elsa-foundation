@@ -25,10 +25,29 @@ internal static class RuntimeSchemaWriteVersion
         return family.WriteVersion;
     }
 
+    /// <summary>All writers in the protected EF ingress profile must be ready before any responsibility is accepted.</summary>
+    internal static bool SupportsIngress(RuntimeDbContext context) =>
+        CanWrite(context, RuntimePostCommitOutboxEfModule.SchemaFamily, RuntimePostCommitOutboxEfModule.SchemaVersion) &&
+        CanWrite(context, RuntimeSchedulerWorkEfModule.SchemaFamily, RuntimeSchedulerWorkEfModule.IngressSchemaVersion) &&
+        CanWrite(context, RuntimeWorkflowExecutionEfModule.SchemaFamily, RuntimeWorkflowExecutionEfModule.IngressSchemaVersion) &&
+        CanWrite(context, RuntimeModelStateEfModule.SchemaFamily, RuntimeModelStateEfModule.IngressSchemaVersion) &&
+        CanWrite(context, RuntimeArtifactEfModule.SchemaFamily, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion) &&
+        CanWrite(context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion);
+
+    private static bool CanWrite(RuntimeDbContext context, string familyName, string minimum)
+    {
+        var gate = FindGate(context);
+        if (gate is not null && gate.StateOf(familyName) is null) return false;
+        try { _ = For(context, familyName, minimum); return true; }
+        catch (EfSchemaWriteRefusedException) { return false; }
+    }
+
     private static EfSchemaModuleGate? FindGate(RuntimeDbContext context) =>
         context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
             .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
 
     internal static string Artifact(RuntimeDbContext context, string? storedVersion = null) =>
         For(context, RuntimeArtifactEfModule.SchemaFamily, RuntimeArtifactEfModule.SchemaVersion, storedVersion);
+    internal static string Operational(RuntimeDbContext context, string? storedVersion = null) =>
+        For(context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.SchemaVersion, storedVersion);
 }

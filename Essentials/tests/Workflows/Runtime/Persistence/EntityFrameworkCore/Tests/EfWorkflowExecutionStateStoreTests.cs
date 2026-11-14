@@ -571,6 +571,35 @@ public sealed class EfWorkflowExecutionStateStoreTests
         catch (Exception exception) when (exception is InvalidOperationException) { return exception; }
     }
 
+    [Fact]
+    public async Task Stored_ingress_header_preserves_independent_tenant_scope_without_recreating_source_authority_or_downgrading_schema()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("physical-scope");
+        var now = DateTimeOffset.UtcNow;
+        var origin = new RuntimeIngressCommandOrigin("accepted-source", new string('a', 64), new string('b', 64), new("physical-scope"), "recipient");
+        var state = State("ingress-root", "actual-tenant", now) with { Status = WorkflowExecutionStatus.Running, CompletedAt = null,
+            Partition = new("physical-scope"), RunKind = WorkflowRunKind.PublishedRun, IngressOrigin = origin,
+            Authority = new("standalone-trigger", "initiator"),
+            PinnedSource = new("reference", "Published", "publication", "1", "definition", "version", "1", "activation", "slot") };
+        await Assert.ThrowsAsync<NotSupportedException>(() => fixture.Store.SaveAsync(state).AsTask());
+        Assert.Null(await fixture.Store.FindAsync(state.WorkflowExecutionId));
+
+        // Seed an already physically admitted header: later continuations must not depend on retaining its source row.
+        var id = EfWorkflowExecutionStateStore.CreateIdForAtomicParticipant("physical-scope", state.WorkflowExecutionId);
+        fixture.Context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntityForWriteVersion(state, "physical-scope", id, 1,
+            RuntimeWorkflowExecutionEfModule.IngressSchemaVersion));
+        await fixture.Context.SaveChangesAsync(); fixture.Context.ChangeTracker.Clear();
+        Assert.Equal("actual-tenant", (await fixture.Store.FindAsync(state.WorkflowExecutionId))!.TenantId);
+        await fixture.Store.SaveAsync(state with { UpdatedAt = now.AddSeconds(1) });
+        Assert.Equal(RuntimeWorkflowExecutionEfModule.IngressSchemaVersion, (await fixture.Context.WorkflowExecutionStates.AsNoTracking().SingleAsync()).SchemaVersion);
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.SaveAsync(state with { TenantId = "changed-tenant" }).AsTask());
+        var row = await fixture.Context.WorkflowExecutionStates.SingleAsync();
+        row.SchemaVersion = RuntimeWorkflowExecutionEfModule.SchemaVersion;
+        await fixture.Context.SaveChangesAsync(); fixture.Context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.FindAsync(state.WorkflowExecutionId).AsTask());
+    }
+
     private static WorkflowExecutionState State(string id, string tenant, DateTimeOffset timestamp) => new(id, new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Completed, null, timestamp.AddMinutes(-1), timestamp.AddMinutes(-1), timestamp, timestamp, null, null, tenant, new Dictionary<string, string>());
 
     private sealed class AllowStructureInspectionContext : IActivityInspectionContextAsync
