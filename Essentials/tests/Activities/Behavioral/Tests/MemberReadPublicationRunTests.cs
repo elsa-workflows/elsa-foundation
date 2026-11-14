@@ -128,11 +128,9 @@ public sealed class MemberReadPublicationRunTests
 
     public static TheoryData<string, string> RequestReads => new()
     {
-        // structure, read: a request member of a declared input, the same through the input's reference key, and a
-        // request member of an open request (a workflow that declares no inputs).
+        // structure, read: a request member of a declared input and the same through the input's reference key.
         { "sequence", "request" }, { "flowchart", "request" },
-        { "sequence", "input" }, { "flowchart", "input" },
-        { "sequence", "open-request" }, { "flowchart", "open-request" }
+        { "sequence", "input" }, { "flowchart", "input" }
     };
 
     [Theory]
@@ -142,7 +140,7 @@ public sealed class MemberReadPublicationRunTests
         using var publication = new Publication(memberReads: true, typed: true);
 
         var executable = await publication.Compile(Root(structure, RequestRead(read, ["address", "street"])),
-            inputs: read == "open-request" ? null : [CustomerRequest]);
+            inputs: [CustomerRequest]);
 
         var reader = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "reader");
         var binding = reader.InputBindings[nameof(MemberReader.Value)];
@@ -160,6 +158,20 @@ public sealed class MemberReadPublicationRunTests
 
         run.AssertWorkflowCompleted();
         Assert.Equal("Main", run.AssertCompleted("reader").InputSnapshot!.Values[nameof(MemberReader.Value)].InlineValue!.Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("sequence")]
+    [InlineData("flowchart")]
+    public async Task An_undeclared_request_member_read_is_refused_by_the_publication_compiler(string structure)
+    {
+        using var publication = new Publication(memberReads: true, typed: true);
+
+        var error = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            publication.Compile(Root(structure, RequestRead("request", ["address", "street"]))).AsTask());
+
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(error.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Path == "reader/inputs/Value" && finding.Type == "ActivityData/UnknownInput");
     }
 
     [Theory]
