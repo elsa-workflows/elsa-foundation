@@ -1,4 +1,8 @@
 #nullable enable
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsHistory.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! selectedStore) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistoryBatches.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBatch!>?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistoryBatches.init -> void
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryIntegrityException
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter
