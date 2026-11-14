@@ -10,7 +10,7 @@
 
 ## Delivery state
 
-Source preparation resumed on 12 November 2026. The owner closed the original whole-feature PR #3806 for resubmission as reviewable spec slices. This first slice carries decisions/specification only; no backend, API or Studio implementation is installed by it. Builds, tests, pushes and merges remain outside the current source-preparation authorization. The parent feature stays open until final-source and resulting-main qualification; historical implementation evidence is not current-stack acceptance.
+Source preparation resumed on 12 November 2026. The owner closed the original whole-feature PR #3806 for resubmission as reviewable spec slices. This first slice carries decisions/specification only; no backend, API or Studio implementation is installed by it. The original preparation phase excluded execution and publication. On 14 November the owner authorized latest-main reconciliation, reviewable sizing, stack publication, reviews, CI, merge and resulting-main verification; cloud infrastructure remains excluded. The parent feature stays open until final-source and resulting-main qualification; historical implementation evidence is not current-stack acceptance.
 
 ## User Scenarios & Testing
 
