@@ -1,4 +1,5 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 
 export type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export type Binding = { expressionType: string; value: unknown };
@@ -202,8 +203,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       const features = catalog.features.map(({ id, enabled, runtimeAvailable, dependencies }) => ({ id, enabled, runtimeAvailable, dependencies }));
       const mandatoryClosure = resolvedFeatureClosure(features);
       expect(mandatoryClosure.filter(id => optionalBackendFeatures.includes(id)), "Optional backend features absent from actual resolved dependency closure").toEqual([]);
-      const descriptors = await api<{ items: { typeName: string }[] }>("/expressions/descriptors");
-      const expressionTypes = descriptors.items.map(item => item.typeName);
+      const descriptors = await api<ExpressionDescriptorsResponse>("/expressions/descriptors");
+      expect(descriptors.items, "Actual expression descriptor response items").toBeDefined();
+      const expressionTypes = descriptors.items!.map(item => item.type);
       expect(expressionTypes).toContain("Literal"); expect(expressionTypes.filter(name => /JavaScript|Liquid/i.test(name))).toEqual([]);
       await page.getByRole("button", { name: /^Text expression syntax/ }).click();
       const options = page.getByRole("listbox").getByRole("option"); await expect(options.first()).toBeVisible();
