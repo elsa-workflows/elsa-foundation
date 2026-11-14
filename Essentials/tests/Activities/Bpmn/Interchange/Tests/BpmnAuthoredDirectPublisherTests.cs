@@ -29,7 +29,8 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 /// <summary>Projection and authorization controls; actual host execution is a separate integration gate.</summary>
 public sealed class BpmnAuthoredDirectPublisherTests
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    // Match the normal JsonPayloadSerializer writer: missing nullable defaults are omitted.
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 
     [Theory]
     [InlineData(false)]
@@ -46,6 +47,22 @@ public sealed class BpmnAuthoredDirectPublisherTests
         var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
         Assert.Contains("explicit-null defaults", error.Message);
         Assert.Equal(0, fixture.Publications);
+    }
+
+    [Fact]
+    public async Task Authored_null_default_case_aliases_are_refused_before_nullable_deserialization()
+    {
+        var fixture = new Fixture();
+        var source = JsonSerializer.SerializeToNode(fixture.Version.State, Web)!.AsObject();
+        source.Remove("inputs");
+        source["Inputs"] = JsonSerializer.SerializeToNode(new[] { new
+        {
+            referenceKey = "value", name = "value", displayName = "Value", type = new { alias = "String" },
+            isNullable = false, isRequired = true, DefaultValue = (string?)null
+        } }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        fixture.Version.StateSource = source.ToJsonString();
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+        Assert.Contains("explicit-null defaults", error.Message); Assert.Equal(0, fixture.Publications);
     }
 
     [Fact]

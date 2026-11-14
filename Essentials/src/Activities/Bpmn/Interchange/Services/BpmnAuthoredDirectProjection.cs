@@ -109,16 +109,16 @@ internal static class BpmnAuthoredDirectProjection
         {
             if (string.IsNullOrWhiteSpace(version.StateSource))
             {
-                if (version.State.Inputs.Any(input => input.DefaultValue is { ValueKind: JsonValueKind.Null }))
+                if (version.State?.Inputs?.Any(input => input.DefaultValue is { ValueKind: JsonValueKind.Null }) == true)
                     throw UnsupportedNullDefault();
                 return version.State;
             }
             // Inspect immutable source before nullable deserialization loses default presence.
             // No-default declarations must omit this member; a null member is ambiguous in v1.
             using var source = JsonDocument.Parse(version.StateSource);
-            if (source.RootElement.TryGetProperty("inputs", out var inputs) && inputs.ValueKind == JsonValueKind.Array &&
-                inputs.EnumerateArray().Any(input => input.ValueKind == JsonValueKind.Object &&
-                    input.TryGetProperty("defaultValue", out var value) && value.ValueKind == JsonValueKind.Null))
+            var inputs = ReadMember(source.RootElement, "inputs");
+            if (inputs.ValueKind == JsonValueKind.Array && inputs.EnumerateArray().Any(input =>
+                    ReadMember(input, "defaultValue").ValueKind == JsonValueKind.Null))
                 throw UnsupportedNullDefault();
             return JsonSerializer.Deserialize<WorkflowDefinitionState>(version.StateSource, Strict);
         }
@@ -127,6 +127,11 @@ internal static class BpmnAuthoredDirectProjection
             throw new BpmnModelValidationException($"Authored BPMN version '{version.Id}' has invalid or unsupported source JSON.", exception);
         }
     }
+
+    private static JsonElement ReadMember(JsonElement value, string name) => value.ValueKind == JsonValueKind.Object
+        ? value.EnumerateObject().Where(property => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            .Select(property => property.Value).LastOrDefault()
+        : default;
 
     private static BpmnModelValidationException UnsupportedNullDefault() =>
         new("The foundation-inputs-v1 profile does not support explicit-null defaults or ambiguous null default members; omit defaultValue when no default is intended.");
