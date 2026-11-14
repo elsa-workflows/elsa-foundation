@@ -7,8 +7,8 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
-if (args is ["--phases-list"]) { foreach (var name in PhaseWitness.Names) Console.WriteLine(name); return; }
-if (args is ["--phases"]) { PhaseWitness.RunAll(); return; }
+if (args is ["--phases-list"]) { foreach (var name in PhaseWitness.Names.Concat(PhaseReaders.Names)) Console.WriteLine(name); return; }
+if (args is ["--phases"]) { PhaseWitness.RunAll(); PhaseReaders.Run(); return; }
 if (args.Length != 0) throw new ArgumentException("Use --phases-list or --phases, or no argument for the original20 schedules.");
 
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
