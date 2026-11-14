@@ -68,7 +68,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
     internal async ValueTask<TriggerPreview> PreviewAsync(string triggerId, JsonElement request, CancellationToken ct)
     {
         RequireControls();
-        var command = request.GetProperty("command"); var kind = Kind(command);
+        var command = Property(request, "command"); var kind = Kind(command);
         var resource = await RequireResourceAsync(triggerId, Permission(kind), ct);
         if (Number(request, "expectedRevision") != resource.Trigger.Revision) throw Changed();
         var (source, _) = await ResolveAsync(Text(command, "deliveryId"), triggerId, ct);
@@ -89,7 +89,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
     internal async ValueTask<TriggerChangeResult> ApplyAsync(string triggerId, JsonElement request, CancellationToken ct)
     {
         RequireControls();
-        var command = request.GetProperty("command"); var kind = Kind(command); var requestId = RequestId(request);
+        var command = Property(request, "command"); var kind = Kind(command); var requestId = RequestId(request);
         var resource = await RequireResourceAsync(triggerId, Permission(kind), ct);
         var (source, _) = await ResolveAsync(Text(command, "deliveryId"), triggerId, ct);
         var fingerprint = Fingerprint(new { Operation = "ApplyTriggerChange", TriggerId = triggerId, ExpectedRevision = Number(request, "expectedRevision"), Command = command });
@@ -98,7 +98,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         if (replay is not null)
         {
             if (replay.RequestFingerprint != fingerprint || replay.Kind != kind) throw Changed();
-            expected = [];
+            return ControlResult(replay, true);
         }
         else
         {
@@ -116,9 +116,12 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         var result = await ingress!.ControlAsync(new(access.Scope, source.OutboxItemId, source.SourceFingerprint,
             source.SubscriptionDelivery.SelectionFingerprint, triggerId, access.Subject, requestId, fingerprint, kind, expected)
             { ExpectedTriggerRevision = Number(request, "expectedRevision") }, ct);
-        return new(requestId, result.Replayed ? "AlreadyApplied" : "Applied", Number(request, "expectedRevision"), null,
-            Effects: result.Receipt.Recipients.Select(outcome => (object)new { recipientId = outcome.RecipientId, outcome = Outcome(kind, outcome.Outcome),
-                message = "The source control receipt was committed; it does not assert workflow completion." }).ToArray());
+        return ControlResult(result.Receipt, result.Replayed);
+
+        TriggerChangeResult ControlResult(RuntimeIngressControlReceipt receipt, bool replayed) =>
+            new(requestId, replayed ? "AlreadyApplied" : "Applied", Number(request, "expectedRevision"), null,
+                Effects: receipt.Recipients.Select(outcome => (object)new { recipientId = outcome.RecipientId, outcome = Outcome(kind, outcome.Outcome),
+                    message = "The source control receipt was committed; it does not assert workflow completion." }).ToArray());
     }
 
     private async ValueTask<TriggerDeliveryView> ViewAsync(RuntimePostCommitOutboxItem source, StandaloneTrigger trigger, CancellationToken ct)
@@ -216,7 +219,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
     private static IReadOnlyList<RuntimeIngressRecipientExpectation> Select(RuntimePostCommitOutboxItem source, string triggerId, JsonElement command)
     {
         if (Number(command, "expectedDeliveryRevision") != Revision(source, triggerId)) throw Changed();
-        var values = command.GetProperty("recipients").EnumerateArray().ToArray();
+        var values = Array(Property(command, "recipients")).EnumerateArray().ToArray();
         if (values.Length is < 1 or > 500) throw Invalid("Choose between 1 and 500 recipients.");
         var result = new List<RuntimeIngressRecipientExpectation>();
         foreach (var value in values)

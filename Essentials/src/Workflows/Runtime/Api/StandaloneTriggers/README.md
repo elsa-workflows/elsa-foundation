@@ -46,3 +46,9 @@ Delivery controls share change preview/apply and require the latest delivery/rec
 The API owns no durable delivery store or second queue. It reads/writes through the actual selected physical participant, and unavailable capabilities refuse explicitly. Replacing internal projection services or API DTOs is not a public extension path; module authors use the [Core source/model/store contracts](../../Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
 
 Schedule change review uses the installed module's pure `IStandaloneSchedulePlanner` and the actual owned cursor. It shows current and proposed UTC instants, timezone, offset and preserve/replace/pause/remove action when available. Missing or incompatible readers/planners produce an explicit unavailable preview. Review does not reserve a firing or change a cursor; apply rechecks the resource through the normal physical writer.
+
+## Cross-domain contributions
+
+`TriggerPermissionContributor` contributes seven management/delivery grants to Foundation Identity's `IPermissionContributor`; `StandaloneTriggerCapabilitySource` contributes conditional links through API Capabilities' `IApiCapabilitySource`. `StandaloneTriggersApiFeature` owns both registrations. Neither contribution starts intake.
+
+Resource views omit descriptor-sensitive configuration values and identify their exact paths in `configurationRedactions`. Saving configuration preserves omitted protected fields; an explicitly supplied value (including null where the owning validator permits it) replaces the retained value. Impact-changing configuration/enable edits require read access to affected targets at preview and apply. Resource-owned stop/revoke operations retain safe redacted impact.

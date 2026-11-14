@@ -120,7 +120,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
     internal async ValueTask<object> MappingContextAsync(string id, JsonElement request, CancellationToken ct)
     {
         var aggregate = await RequireResourceAsync(id, ct);
-        var selector = Selector(request.GetProperty("target"));
+        var selector = Selector(Property(request, "target"));
         var target = await TargetAsync(selector.DefinitionId, selector.SlotName, ct);
         var descriptor = types.Find(aggregate.Trigger.TypeKey);
         var languages = (expressionHandlers ?? []).Select(handler => handler.Language).Distinct(StringComparer.OrdinalIgnoreCase)
@@ -128,19 +128,19 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
             .Select(language => new { language, displayName = language, available = expressionEvaluator is not null,
                 reason = expressionEvaluator is null ? "The portable expression evaluator is unavailable." : null }).ToArray();
         return new { sourceSchema = new { fields = descriptor?.SourceFields ?? [] }, target,
-            supportedExpressions = languages, findings = Array.Empty<TriggerFinding>() };
+            supportedExpressions = languages, findings = System.Array.Empty<TriggerFinding>() };
     }
 
     internal async ValueTask<object> MappingPreviewAsync(string id, JsonElement request, CancellationToken ct)
     {
         var resource = await RequireResourceAsync(id, ct);
         if (Number(request, "expectedRevision") != resource.Trigger.Revision) throw Conflict();
-        var selector = Selector(request.GetProperty("target"));
+        var selector = Selector(Property(request, "target"));
         var target = await TargetAsync(selector.DefinitionId, selector.SlotName, ct);
         if (target.InputContract is null) throw new TriggerOperationException("unavailable", "The selected serving input contract is unavailable.");
         if (OptionalText(request, "contractRevision") is { } expected && expected != target.ContractRevision) throw Conflict();
-        var mappings = ReadMappings(request.GetProperty("mappings"));
-        var result = await mapper.MapAsync(target.InputContract, mappings, request.GetProperty("sample").Clone(), ct);
+        var mappings = ReadMappings(Property(request, "mappings"));
+        var result = await mapper.MapAsync(target.InputContract, mappings, Property(request, "sample").Clone(), ct);
         var fields = target.InputContract.Inputs.Select(input => new { inputName = input.Name,
             state = result.NormalizedInputs.ContainsKey(input.Name) ? (mappings.Any(mapping => mapping.InputName == input.Name) ? "Mapped" : "Defaulted") : "Omitted",
             value = result.NormalizedInputs.TryGetValue(input.Name, out var normalized) ? (JsonElement?)normalized : null });
@@ -151,12 +151,15 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
     private async ValueTask<TriggerView> ViewAsync(TriggerAggregate aggregate, CancellationToken ct)
     {
         var trigger = aggregate.Trigger; var eligible = 0;
+        var reviewable = true;
+        foreach (var subscription in aggregate.Subscriptions)
+            if (!await CanReadTargetAsync(subscription.DefinitionId, subscription.SlotName, ct)) reviewable = false;
         foreach (var subscription in aggregate.Subscriptions)
             if (subscription.Enabled && await IsEligibleAsync(subscription, ct)) eligible++;
         var available = committer.CanActivateType(trigger.TypeKey, trigger.SchemaVersion);
         var findings = new List<TriggerFinding>();
         if (!available) findings.Add(new("RuntimeSourceUnavailable", "The installed authoring metadata does not provide this type's protected runtime source."));
-        var configuration = trigger.Configuration;
+        var (configuration, redactions) = RedactConfiguration(trigger);
         TriggerHttpView? http = null;
         var projectionReady = true;
         if (configuration.TryGetProperty("http", out var httpConfiguration))
@@ -175,11 +178,11 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
         return new(trigger.Id, trigger.Name, trigger.Description, trigger.TypeKey, trigger.SchemaVersion.ToString(CultureInfo.InvariantCulture), trigger.Revision,
             configuration, trigger.Origin, trigger.DesiredState.ToString(), state, aggregate.Subscriptions.Count, eligible,
             findings,
-            [new("SaveConfiguration", manageable && !trigger.Origin.ConfigurationReadOnly && (!needsPhysical || available)),
-             new("AddSubscription", manageable && (!needsPhysical || available)), new("EnableTrigger", operable && available && eligible > 0 && http?.ReservationState is not ("Unavailable" or "Conflict")),
+            [new("SaveConfiguration", manageable && reviewable && !trigger.Origin.ConfigurationReadOnly && (!needsPhysical || available)),
+             new("AddSubscription", manageable && (!needsPhysical || available)), new("EnableTrigger", operable && reviewable && available && eligible > 0 && http?.ReservationState is not ("Unavailable" or "Conflict")),
              new("PauseTrigger", operable && (!needsPhysical || stoppable)), new("DeleteTrigger", manageable && (!needsPhysical || stoppable)),
              new("ReadDeliveries", deliveries?.SupportsInspection == true && await access.HasAsync(TriggerPermissions.DeliveriesRead, trigger, ct))],
-            trigger.CreatedAt, trigger.UpdatedAt, http, schedule);
+            trigger.CreatedAt, trigger.UpdatedAt, http, schedule, redactions);
     }
 
     private async ValueTask<TriggerSubscriptionView> SubscriptionViewAsync(StandaloneTrigger trigger, TriggerSubscription subscription, CancellationToken ct)
@@ -197,7 +200,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
                 new("", ""), [], subscription.Grant is null ? new("Absent") : new(subscription.Grant.Status.ToString(), subscription.Grant.Revision),
                 "ValidationPending", [new("TargetDetailsRestricted", "Workflow details require ordinary workflow read permission.")], null,
                 [new("SaveSubscription", false, "TargetDetailsRestricted"), new("RemoveSubscription", manageHidden && stoppable && !subscription.Origin.ConfigurationReadOnly),
-                 new("EnableSubscription", operateHidden && committer.CanActivateType(trigger.TypeKey, trigger.SchemaVersion) && await IsEligibleAsync(subscription, ct)), new("PauseSubscription", operateHidden && stoppable),
+                 new("EnableSubscription", false, "TargetDetailsRestricted"), new("PauseSubscription", operateHidden && stoppable),
                  new("GrantInvocation", false, "TargetDetailsRestricted"), new("RevokeInvocation", authorizeHidden && stoppable && !subscription.Origin.ConfigurationReadOnly)],
                 new { trigger.Name, effectiveState = trigger.DesiredState.ToString(), http = HttpSummary(trigger) });
         }
@@ -247,9 +250,21 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
     private static TriggerOperationException Validation(string message) => new("validation", message);
     private static void CheckLimit(int limit) { if (limit is < 1 or > 100) throw Validation("Page size must be between 1 and 100."); }
     internal static string Text(JsonElement value, string name) => OptionalText(value, name) is { Length: > 0 } text ? text : throw Validation($"'{name}' is required.");
-    internal static string? OptionalText(JsonElement value, string name) => value.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String ? property.GetString() : null;
-    internal static long Number(JsonElement value, string name) => value.TryGetProperty(name, out var property) && property.TryGetInt64(out var number) ? number : throw Validation($"'{name}' must be an integer.");
-    private static bool Flag(JsonElement value, string name) => value.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.True;
+    internal static bool TryProperty(JsonElement value, string name, out JsonElement property)
+    {
+        if (value.ValueKind != JsonValueKind.Object) throw Validation("Expected a JSON object.");
+        return value.TryGetProperty(name, out property);
+    }
+    internal static JsonElement Property(JsonElement value, string name) => TryProperty(value, name, out var property)
+        ? property : throw Validation($"'{name}' is required.");
+    internal static JsonElement Array(JsonElement value) => value.ValueKind == JsonValueKind.Array ? value : throw Validation("Expected a JSON array.");
+    internal static JsonElement Object(JsonElement value) => value.ValueKind == JsonValueKind.Object ? value : throw Validation("Expected a JSON object.");
+    internal static string? OptionalText(JsonElement value, string name) => !TryProperty(value, name, out var property) || property.ValueKind == JsonValueKind.Null
+        ? null : property.ValueKind == JsonValueKind.String ? property.GetString() : throw Validation($"'{name}' must be a string.");
+    internal static long Number(JsonElement value, string name) => TryProperty(value, name, out var property) && property.ValueKind == JsonValueKind.Number && property.TryGetInt64(out var number)
+        ? number : throw Validation($"'{name}' must be an integer.");
+    private static bool Flag(JsonElement value, string name) => !TryProperty(value, name, out var property) ? false : property.ValueKind switch
+        { JsonValueKind.True => true, JsonValueKind.False => false, _ => throw Validation($"'{name}' must be a boolean.") };
     internal static string RequestId(JsonElement request)
     { var id = Text(request, "requestId"); if (id.Length > 128 || id.Any(char.IsControl)) throw Validation("The request identity is invalid."); return id; }
     private static int SchemaVersion(JsonElement request) => int.TryParse(OptionalText(request, "schemaVersion"), NumberStyles.None,
@@ -257,9 +272,9 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
     private static TriggerTargetSelector Selector(JsonElement value) => new(Text(value, "definitionId"), OptionalText(value, "slotName") ?? "default");
     private static JsonElement Configuration(JsonElement request)
     {
-        var configuration = request.GetProperty("configuration");
+        var configuration = Property(request, "configuration");
         if (configuration.ValueKind != JsonValueKind.Object || configuration.TryGetProperty("http", out _)) throw Validation("Configuration must be an object without reserved HTTP metadata.");
-        if (!request.TryGetProperty("http", out var http)) return configuration.Clone();
+        if (!TryProperty(request, "http", out var http)) return configuration.Clone();
         return Combine(configuration, "http", http);
     }
     private static JsonElement Combine(JsonElement value, string name, JsonElement property) => JsonSerializer.SerializeToElement(

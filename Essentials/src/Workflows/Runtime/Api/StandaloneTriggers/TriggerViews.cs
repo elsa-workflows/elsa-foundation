@@ -15,7 +15,9 @@ internal sealed record TriggerScheduleView(long Generation, string Timezone, Dat
 internal sealed record TriggerView(string Id, string Name, string? Description, string TypeKey, string SchemaVersion,
     long Revision, JsonElement Configuration, TriggerManagementOrigin Origin, string DesiredState, string EffectiveState,
     int SubscriptionCount, int EligibleSubscriptionCount, IReadOnlyList<TriggerFinding> Findings,
-    IReadOnlyList<TriggerAction> Actions, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, TriggerHttpView? Http = null, TriggerScheduleView? Schedule = null);
+    IReadOnlyList<TriggerAction> Actions, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, TriggerHttpView? Http = null, TriggerScheduleView? Schedule = null,
+    IReadOnlyList<TriggerConfigurationRedaction>? ConfigurationRedactions = null);
+internal sealed record TriggerConfigurationRedaction(IReadOnlyList<string> Path, string Reason = "Protected");
 internal sealed record TriggerTargetSelector(string DefinitionId, string SlotName = "default");
 internal sealed record TriggerServing(long? SlotRevision, string? PublicationId, string? VersionId, string? Version,
     string ModelKey, string? InputContractRevision);

@@ -11,11 +11,11 @@ internal sealed partial class TriggerManagement
 {
     internal async ValueTask<TriggerPreview> PreviewAsync(string id, JsonElement request, CancellationToken ct)
     {
-        if (IsDeliveryControl(request.GetProperty("command")))
+        if (IsDeliveryControl(Property(request, "command")))
             return await RequireDeliveryControls().PreviewAsync(id, request, ct);
         var aggregate = await RequireResourceAsync(id, ct);
         if (Number(request, "expectedRevision") != aggregate.Trigger.Revision) throw Conflict();
-        var command = request.GetProperty("command");
+        var command = Property(request, "command");
         var fingerprint = Fingerprint(command);
         var impact = new List<TriggerImpact>(); var findings = new List<TriggerFinding>();
         try
@@ -45,9 +45,9 @@ internal sealed partial class TriggerManagement
 
     internal async ValueTask<TriggerChangeResult> ApplyAsync(string id, JsonElement request, CancellationToken ct)
     {
-        if (IsDeliveryControl(request.GetProperty("command")))
+        if (IsDeliveryControl(Property(request, "command")))
             return await RequireDeliveryControls().ApplyAsync(id, request, ct);
-        var command = request.GetProperty("command"); var requestId = RequestId(request);
+        var command = Property(request, "command"); var requestId = RequestId(request);
         var fingerprint = Fingerprint(new { Operation = "ApplyTriggerChange", TriggerId = id, ExpectedRevision = Number(request, "expectedRevision"), Command = command });
         var replay = await store.FindMutationAsync(access.Scope, access.Subject, requestId, ct);
         if (replay is not null)
@@ -79,6 +79,7 @@ internal sealed partial class TriggerManagement
     {
         var trigger = aggregate.Trigger; var kind = Text(command, "kind");
         await AuthorizeCommandAsync(trigger, command, ct);
+        await RequireChangeReviewAsync(aggregate, command, ct);
         if (kind is "EnableTrigger" or "EnableSubscription" && !committer.CanActivateType(trigger.TypeKey, trigger.SchemaVersion))
             throw new TriggerOperationException("unavailable", "This type's protected runtime source is not installed.");
         var rows = aggregate.Subscriptions.ToList(); var name = trigger.Name; var description = trigger.Description;
@@ -88,7 +89,7 @@ internal sealed partial class TriggerManagement
             throw Validation("This configuration is managed by its source.");
         if (kind == "SaveConfiguration")
         {
-            name = Text(command, "name"); description = OptionalText(command, "description"); configuration = Configuration(command);
+            name = Text(command, "name"); description = OptionalText(command, "description"); configuration = PreserveProtectedConfiguration(trigger, Configuration(command));
             await ValidateConfigurationAsync(trigger.TypeKey, trigger.SchemaVersion, configuration, ct);
             if (Fingerprint(configuration) != Fingerprint(trigger.Configuration))
             {
@@ -101,11 +102,11 @@ internal sealed partial class TriggerManagement
         {
             var old = kind == "SaveSubscription" ? FindSubscription(rows, command) : null;
             if (old?.Origin.ConfigurationReadOnly == true) throw Validation("This association is managed by its source.");
-            var selector = Selector(command.GetProperty("target"));
+            var selector = Selector(Property(command, "target"));
             await RequireTargetReadAsync(selector.DefinitionId, selector.SlotName, ct);
             await access.RequireAsync("workflows/runtime:execute", new TriggerTargetResource(selector.DefinitionId, selector.SlotName), ct);
             var target = await targets.DescribeAsync(access.Scope, selector.DefinitionId, selector.SlotName, ct) ?? throw Validation("Choose a known authorized workflow.");
-            var mappings = ReadMappings(command.GetProperty("mappings")); var enabled = Flag(command, "enabled");
+            var mappings = ReadMappings(Property(command, "mappings")); var enabled = Flag(command, "enabled");
             var subscriptionId = old?.Id ?? "subscription-" + Fingerprint(new { trigger.Id, trigger.Revision, Command = command })[..32];
             if (rows.Any(row => row.Id != old?.Id && row.DefinitionId == selector.DefinitionId && row.SlotName == selector.SlotName))
                 throw new TriggerOperationException("conflict", "This trigger already has an association for the selected workflow slot.");
@@ -141,7 +142,7 @@ internal sealed partial class TriggerManagement
                 var grant = row.Grant; var enabled = row.Enabled;
                 if (kind is "GrantInvocation" or "RevokeInvocation")
                 {
-                    var expectedGrant = command.TryGetProperty("expectedGrantRevision", out var property) && property.ValueKind != JsonValueKind.Null ? property.GetInt64() : (long?)null;
+                    var expectedGrant = TryProperty(command, "expectedGrantRevision", out var property) && property.ValueKind != JsonValueKind.Null ? Number(command, "expectedGrantRevision") : (long?)null;
                     if (expectedGrant != grant?.Revision) throw Conflict();
                     if (kind == "GrantInvocation")
                     {
@@ -283,7 +284,7 @@ internal sealed partial class TriggerManagement
     private async ValueTask<IReadOnlyList<TriggerTargetObservation>> ObserveTargetsAsync(TriggerAggregate aggregate, JsonElement command, CancellationToken ct)
     {
         var selectors = aggregate.Subscriptions.Select(row => new TriggerTargetSelector(row.DefinitionId, row.SlotName)).ToList();
-        if (command.TryGetProperty("target", out var target)) selectors.Add(Selector(target));
+        if (TryProperty(command, "target", out var target)) selectors.Add(Selector(target));
         var observations = new List<TriggerTargetObservation>();
         foreach (var selector in selectors.Distinct())
         {
@@ -313,23 +314,23 @@ internal sealed partial class TriggerManagement
     internal static IReadOnlyList<TriggerInputMapping> ReadMappings(JsonElement array)
     {
         if (array.ValueKind != JsonValueKind.Array) throw Validation("Mappings must be a list.");
-        var mappings = array.EnumerateArray().Select(item => new TriggerInputMapping(Text(item, "inputName"), Binding(item.GetProperty("binding")))).ToArray();
+        var mappings = Array(array).EnumerateArray().Select(item => new TriggerInputMapping(Text(item, "inputName"), Binding(Property(item, "binding")))).ToArray();
         if (mappings.Select(mapping => mapping.InputName).Distinct(StringComparer.Ordinal).Count() != mappings.Length) throw Validation("Mapped input names must be distinct.");
         return mappings;
     }
     private static TriggerValueBinding Binding(JsonElement value) => Text(value, "kind") switch
     {
-        "Literal" => new TriggerLiteralBinding(value.GetProperty("value")),
-        "SourceField" => new TriggerSourceBinding(value.GetProperty("path").EnumerateArray().Select(item => item.GetString() ?? throw Validation("Source paths contain string segments.")).ToArray()),
+        "Literal" => new TriggerLiteralBinding(Property(value, "value")),
+        "SourceField" => new TriggerSourceBinding(Array(Property(value, "path")).EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString()! : throw Validation("Source paths contain string segments.")).ToArray()),
         "Expression" => Expression(value),
         _ => throw Validation("The input binding kind is unsupported.")
     };
     private static TriggerExpressionBinding Expression(JsonElement value)
     {
-        var template = value.GetProperty("template");
-        var resultType = JsonSerializer.Deserialize<TypeReference>(template.GetProperty("resultType"), StandaloneTriggersApi.Json) ?? throw Validation("Choose an expression result type.");
-        return new(Text(template, "language"), Text(template, "source"), resultType, template.GetProperty("options"), Text(template, "capabilityProfile"),
-            value.GetProperty("parameters").EnumerateObject().ToDictionary(item => item.Name, item => Binding(item.Value), StringComparer.Ordinal));
+        var template = Property(value, "template");
+        var resultType = JsonSerializer.Deserialize<TypeReference>(Property(template, "resultType"), StandaloneTriggersApi.Json) ?? throw Validation("Choose an expression result type.");
+        return new(Text(template, "language"), Text(template, "source"), resultType, Property(template, "options"), Text(template, "capabilityProfile"),
+            Object(Property(value, "parameters")).EnumerateObject().ToDictionary(item => item.Name, item => Binding(item.Value), StringComparer.Ordinal));
     }
     internal static JsonElement MappingJson(TriggerInputMapping mapping)
     {

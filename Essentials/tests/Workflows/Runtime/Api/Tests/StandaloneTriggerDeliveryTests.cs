@@ -72,6 +72,7 @@ public sealed class StandaloneTriggerDeliveryTests
         var replay = await fixture.Management.ApplyAsync("trigger-a", request, default);
         Assert.Equal("AlreadyApplied", replay.Disposition); Assert.Equal(first.Revision, replay.Revision);
         Assert.Single(fixture.Port.Item.SubscriptionDelivery!.ControlFacts!.Receipts);
+        Assert.Equal(1, fixture.Port.ControlCalls);
         Assert.Equal(0, fixture.Store.Writes);
     }
 
@@ -190,10 +191,14 @@ public sealed class StandaloneTriggerDeliveryTests
         {
             ControlCalls++; LastRequest = request; var delivery = Item.SubscriptionDelivery!; var facts = delivery.ControlFacts ?? new([], []);
             var old = facts.Receipts.SingleOrDefault(receipt => receipt.ActorId == request.ActorId && receipt.RequestId == request.RequestId);
-            if (old is not null) return ValueTask.FromResult(new RuntimeIngressControlResult(Item, old, true));
+            if (old is not null)
+            {
+                if (old.ContentFingerprint != request.ComputeContentFingerprint()) throw new TriggerOperationException("conflict", "Changed control content.");
+                return ValueTask.FromResult(new RuntimeIngressControlResult(Item, old, true));
+            }
             var receipt = new RuntimeIngressControlReceipt(request.ActorId, request.RequestId, request.RequestFingerprint, request.Kind,
                 DateTimeOffset.UnixEpoch.AddDays(1), request.Recipients.Select(recipient => new RuntimeIngressRecipientControlResult(recipient.RecipientId,
-                    RuntimeIngressControlOutcome.RetryScheduled)).ToArray());
+                    RuntimeIngressControlOutcome.RetryScheduled)).ToArray()) { ContentFingerprint = request.ComputeContentFingerprint() };
             Item = Item.WithSubscriptionDelivery(delivery.WithControlFacts(new(facts.Receipts.Append(receipt).ToArray(), facts.Transport)));
             return ValueTask.FromResult(new RuntimeIngressControlResult(Item, receipt, false));
         }
