@@ -52,7 +52,7 @@ internal sealed class RetryLeaf : Kernel.Native.Activity<int>
     internal static readonly List<(string Frame, string Operation, int Value)> Invocations = [];
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
-        Invocations.Add((context.Frame, context.OperationKey, Value));
+        Invocations.Add((context.FrameId, context.OperationKey, Value));
         return ValueTask.FromResult(Invocations.Count == 1 ? Fault("dependency", "repair required") : Complete(Value));
     }
 }
