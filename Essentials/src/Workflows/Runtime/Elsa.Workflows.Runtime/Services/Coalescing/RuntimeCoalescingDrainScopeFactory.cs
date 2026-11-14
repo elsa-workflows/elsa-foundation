@@ -133,7 +133,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 Checkpoint: checkpoint,
                 StateChanges: foldedState,
                 PostCommitIntents: remainingIntents,
-                Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
+                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)) { HistoryBatches = session.FoldHistoryBatchesWith() };
         }
 
         public ValueTask DisposeAsync()
