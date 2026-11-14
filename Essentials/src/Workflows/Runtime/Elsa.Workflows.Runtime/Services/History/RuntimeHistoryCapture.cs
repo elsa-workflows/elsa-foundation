@@ -106,6 +106,26 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         }
     }
 
+    private static string SerializeEvidenceReference(string evidenceId)
+    {
+        // Ordinary JSON serialization substitutes malformed UTF-16. Refuse before emitting a false link.
+        if (!IsWellFormedUtf16(evidenceId))
+            throw new InvalidOperationException("The evidence identifier cannot be represented as an exact JSON reference.");
+        return JsonSerializer.Serialize(new[] { evidenceId });
+    }
+
+    private static bool IsWellFormedUtf16(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (!char.IsSurrogate(value[index])) continue;
+            if (!char.IsHighSurrogate(value[index]) || index + 1 == value.Length || !char.IsLowSurrogate(value[index + 1]))
+                return false;
+            index++;
+        }
+        return true;
+    }
+
     private static bool IsFlush(RuntimeCheckpointCommit commit) => commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
 
     private static RuntimeHistoryBatch Build(RuntimeCheckpointCommit commit, RuntimeHistoryCapturePolicy policy)
@@ -165,6 +185,10 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                             (deletesBookmarks ? "ActivityResumeClaimed" : "ActivityResumeRetried") : "ActivityAttemptClaimed") : null
             };
             if (name is null) continue;
+            // Parent outcome/inbox acknowledgement also upserts already-terminal children.
+            // Their status is unchanged; only the callback owner has this terminal transition.
+            if (a.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Recovered &&
+                selectedActivity is not null && a.InvocationId != selectedActivity) continue;
             Add(name, RuntimeHistoryEventCategory.ActivityLifecycle, change.StateId, a,
                 metadata: new Dictionary<string, string> { ["history.status"] = a.Status.ToString() });
         }
@@ -274,7 +298,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                     ?? throw new InvalidOperationException("A checkpoint value contribution references unavailable exact evidence.")).ToArray();
                 foreach (var value in contributed.Where(value => outputsOnly is null || (value.Subject != ActivityExecutionInspectionValueSubject.ActivityInput) == outputsOnly))
                 {
-                    var metadata = new Dictionary<string, string> { ["history.valueEvidenceIds"] = JsonSerializer.Serialize(new[] { value.EvidenceId }) };
+                    var metadata = new Dictionary<string, string> { ["history.valueEvidenceIds"] = SerializeEvidenceReference(value.EvidenceId!) };
                     if (policy.Version >= 2)
                     {
                         if (value.Phase is { } phase) metadata["history.valuePhase"] = phase;
@@ -299,11 +323,12 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 if (fact.ReasonCode is { } reason) metadata["history.reasonCode"] = reason;
                 if (fact.OutcomeNames.Count > 0)
                 {
-                    var outcomes = JsonSerializer.Serialize(fact.OutcomeNames);
-                    if (outcomes.Length <= 2048) metadata["history.outcomeNames"] = outcomes;
+                    var representable = fact.OutcomeNames.All(IsWellFormedUtf16);
+                    var outcomes = representable ? JsonSerializer.Serialize(fact.OutcomeNames) : null;
+                    if (outcomes is { Length: <= 2048 }) metadata["history.outcomeNames"] = outcomes;
                     else
                     {
-                        metadata["history.outcomeCaptureState"] = "size-omitted";
+                        metadata["history.outcomeCaptureState"] = representable ? "size-omitted" : "unrepresentable";
                         metadata["history.outcomeCount"] = fact.OutcomeNames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
                         metadata["history.outcomeContentHash"] = RuntimeHistoryIdentity.CreateBinding(fact.OutcomeNames);
                     }
