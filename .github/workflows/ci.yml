@@ -1570,6 +1570,11 @@ jobs:
       - name: Verify causal driver refusal controls
         run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_causal_proof.py'
 
+      - name: Restore the owning causal-test projects
+        run: |
+          dotnet restore Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
+          dotnet restore Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
+
       - name: Prove scoped runtime assertions fail and recover
         run: >-
           python3 tools/studio/Weaver.Conformance.Probe/causal_proof.py
