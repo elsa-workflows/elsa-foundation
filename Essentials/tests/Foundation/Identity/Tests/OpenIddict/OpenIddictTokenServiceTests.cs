@@ -1,13 +1,16 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Authentication;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.OpenIddict;
 using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
+using OpenIddict.Server;
 using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
@@ -36,7 +39,9 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         Assert.Equal("at+jwt", jwt.Typ);
         Assert.Equal("RS256", jwt.Alg);
         Assert.Equal(new OpenIddictIdentityOptions().Issuer, jwt.Issuer);
-        Assert.Equal("user-7", jwt.Subject);
+        Assert.StartsWith("elsa:v2:provider:", jwt.Subject);
+        Assert.Equal("user-7", jwt.GetClaim(IdentityClaimTypes.ExternalSubject).Value);
+        Assert.Equal(OpenIddictIdentityFixture.TestIssuer, jwt.GetClaim(IdentityClaimTypes.SubjectIssuer).Value);
         Assert.Equal("tenant-x", jwt.GetClaim(IdentityClaimTypes.TenantId).Value);
         Assert.Equal("openiddict", jwt.GetClaim(IdentityClaimTypes.Provider).Value);
         Assert.Equal("v1", jwt.GetClaim(IdentityClaimTypes.Normalized).Value);
@@ -59,7 +64,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         {
             var principal = (await _fixture.TokenService.ValidateAsync(new(accessToken))).Principal!;
             Assert.Equal("canonical-elsa-user", Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
-            Assert.Equal("external-subject", principal.FindFirst("sub")!.Value);
+            Assert.Equal("canonical-elsa-user", principal.FindFirst("sub")!.Value);
         }
         var nonUser = await _fixture.IssueAsync("external-subject", "tenant-a", "user-tasks:read");
         Assert.Empty((await _fixture.TokenService.ValidateAsync(new(nonUser.AccessToken))).Principal!.FindAll(IdentityClaimTypes.UserId));
@@ -76,7 +81,8 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         Assert.True(result.Principal!.Identity!.IsAuthenticated);
         Assert.Equal("tenant-y", result.Principal.FindFirst(IdentityClaimTypes.TenantId)?.Value);
         Assert.Contains("identity/users:manage", result.Principal.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value));
-        Assert.Contains("user-8", result.Principal.FindAll("sub").Select(x => x.Value));
+        Assert.Equal("user-8", result.Principal.FindFirst(IdentityClaimTypes.ExternalSubject)?.Value);
+        Assert.StartsWith("elsa:v2:provider:", result.Principal.FindFirst("sub")!.Value);
         Assert.Equal(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme, result.Principal.Identity!.AuthenticationType);
     }
 
@@ -111,7 +117,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var accessEntry = (await manager.FindByIdAsync(new JsonWebToken(issued.AccessToken).GetClaim("oi_tkn_id").Value))!;
         var refreshEntry = (await manager.FindByReferenceIdAsync(issued.RefreshToken!))!;
 
-        await expiring.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", OpenIddictIdentityFixture.TestProvider, "user-expired"));
+        await expiring.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", OpenIddictIdentityFixture.TestProvider, "user-expired", OpenIddictIdentityFixture.TestIssuer));
 
         Assert.True(await manager.HasStatusAsync(accessEntry, OpenIddictConstants.Statuses.Valid), "an expired entry must not be written");
         Assert.True(await manager.HasStatusAsync(refreshEntry, OpenIddictConstants.Statuses.Revoked));
@@ -149,7 +155,8 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
 
         Assert.NotEqual(issued.RefreshToken, refreshed.RefreshToken);
         var jwt = new JsonWebToken(refreshed.AccessToken);
-        Assert.Equal("user-9", jwt.Subject);
+        Assert.Equal(new JsonWebToken(issued.AccessToken).Subject, jwt.Subject);
+        Assert.Equal("user-9", jwt.GetClaim(IdentityClaimTypes.ExternalSubject).Value);
         Assert.Equal("tenant-z", jwt.GetClaim(IdentityClaimTypes.TenantId).Value);
         Assert.Contains("identity/roles:manage", jwt.Claims.Where(x => x.Type == IdentityClaimTypes.Permission).Select(x => x.Value));
         Assert.True((await _fixture.TokenService.ValidateAsync(new TokenValidationRequest(refreshed.AccessToken))).Succeeded);
@@ -227,7 +234,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var refreshed = await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(issued.RefreshToken!));
 
         Assert.Empty(_users.Asked);
-        Assert.Equal("external-subject", new JsonWebToken(refreshed.AccessToken).Subject);
+        Assert.Equal("external-subject", new JsonWebToken(refreshed.AccessToken).GetClaim(IdentityClaimTypes.ExternalSubject).Value);
     }
 
     [Fact]
@@ -248,14 +255,15 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     {
         var first = await IssueProviderSubjectAsync("idp-1", "shared-sub");
         var second = await IssueProviderSubjectAsync("idp-2", "shared-sub");
-        Assert.Equal("shared-sub", new JsonWebToken(first.AccessToken).Subject);
-        Assert.Equal("shared-sub", new JsonWebToken(second.AccessToken).Subject);
+        Assert.NotEqual(new JsonWebToken(first.AccessToken).Subject, new JsonWebToken(second.AccessToken).Subject);
+        Assert.Equal("shared-sub", new JsonWebToken(first.AccessToken).GetClaim(IdentityClaimTypes.ExternalSubject).Value);
+        Assert.Equal("shared-sub", new JsonWebToken(second.AccessToken).GetClaim(IdentityClaimTypes.ExternalSubject).Value);
         // The bearer names the provider that scopes it, beside the issuing module, so a bearer-only sign-out finds its key.
         Assert.Equal("idp-1", new JsonWebToken(first.AccessToken).GetClaim(IdentityClaimTypes.SubjectProvider).Value);
         Assert.Equal("openiddict", new JsonWebToken(first.AccessToken).GetClaim(IdentityClaimTypes.Provider).Value);
         Assert.False(new JsonWebToken((await IssueUserAsync("user-1")).AccessToken).TryGetClaim(IdentityClaimTypes.SubjectProvider, out _), "a user is keyed by its id, not a provider");
 
-        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp-1", "shared-sub"));
+        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp-1", "shared-sub", OpenIddictIdentityFixture.TestIssuer));
 
         await AssertDeadAsync(first);
         await AssertAliveAsync(second);
@@ -270,7 +278,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var subjectB = await IssueProviderSubjectAsync("idp", "sub-1", "tenant-b");
 
         await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForUser("tenant-a", "user-1"));
-        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp", "sub-1"));
+        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp", "sub-1", OpenIddictIdentityFixture.TestIssuer));
 
         await AssertDeadAsync(userA);
         await AssertDeadAsync(subjectA);
@@ -283,7 +291,8 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     {
         var user = await IssueUserAsync("same-id");
         var providerSubject = await IssueProviderSubjectAsync("idp", "same-id");
-        Assert.Equal(new JsonWebToken(user.AccessToken).Subject, new JsonWebToken(providerSubject.AccessToken).Subject);
+        Assert.NotEqual(new JsonWebToken(user.AccessToken).Subject, new JsonWebToken(providerSubject.AccessToken).Subject);
+        Assert.Equal("same-id", new JsonWebToken(providerSubject.AccessToken).GetClaim(IdentityClaimTypes.ExternalSubject).Value);
 
         // The user signs out (or is disabled): the provider's subject keeps its tokens, and the other way round.
         await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForUser("tenant-a", "same-id"));
@@ -291,7 +300,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         await AssertAliveAsync(providerSubject);
 
         var again = await IssueUserAsync("same-id");
-        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp", "same-id"));
+        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp", "same-id", OpenIddictIdentityFixture.TestIssuer));
         await AssertAliveAsync(again);
     }
 
@@ -302,7 +311,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var viaCookie = await IssueUserAsync("user-1");
         var viaProvider = await _fixture.TokenService.IssueAsync(new("provider-sub", "tenant-a", ["identity/users:read"]) { CanonicalUserId = "user-1", Provider = "idp" });
         var refreshed = await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(viaProvider.RefreshToken!));
-        Assert.Equal("provider-sub", new JsonWebToken(refreshed.AccessToken).Subject);
+        Assert.Equal("user-1", new JsonWebToken(refreshed.AccessToken).Subject);
 
         await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForUser("tenant-a", "user-1"));
 
@@ -317,10 +326,10 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var other = await IssueProviderSubjectAsync("idp-2", "shared-sub");
 
         var refreshed = await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(issued.RefreshToken!));
-        Assert.Equal("shared-sub", new JsonWebToken(refreshed.AccessToken).Subject);
+        Assert.Equal(new JsonWebToken(issued.AccessToken).Subject, new JsonWebToken(refreshed.AccessToken).Subject);
         Assert.Empty(_users.Asked);
 
-        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp-1", "shared-sub"));
+        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject("tenant-a", "idp-1", "shared-sub", OpenIddictIdentityFixture.TestIssuer));
         await AssertDeadAsync(new TokenIssueResult(refreshed.AccessToken, refreshed.ExpiresAt, refreshed.RefreshToken));
         await AssertAliveAsync(other);
     }
@@ -347,10 +356,120 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var stored = await manager.GetSubjectAsync(entry);
 
         Assert.NotEqual("raw-sub", stored);
-        Assert.StartsWith("elsa:v1:provider:", stored);
+        Assert.StartsWith("elsa:v2:provider:", stored);
         Assert.Empty(manager.FindBySubjectAsync("raw-sub").ToBlockingEnumerable());
         var user = (await manager.FindByReferenceIdAsync((await IssueUserAsync("u")).RefreshToken!))!;
         Assert.StartsWith("elsa:v1:user:", await manager.GetSubjectAsync(user));
+    }
+
+    [Fact]
+    public async Task Equal_provider_and_subject_under_different_issuers_remain_isolated()
+    {
+        var first = await IssueProviderSubjectAsync("idp", "shared-sub");
+        var second = await _fixture.TokenService.IssueAsync(new("shared-sub", "tenant-a", [])
+        { Provider = "idp", SubjectIssuer = "https://other.example/" });
+        Assert.NotEqual(new JsonWebToken(first.AccessToken).Subject, new JsonWebToken(second.AccessToken).Subject);
+
+        await _fixture.TokenService.RevokeSubjectAsync(TokenSubject.ForProviderSubject(
+            "tenant-a", "idp", "shared-sub", OpenIddictIdentityFixture.TestIssuer));
+        await AssertDeadAsync(first);
+        await AssertAliveAsync(second);
+    }
+
+    [Fact]
+    public async Task Issuer_less_non_user_request_is_refused_before_creating_entries()
+    {
+        var manager = _fixture.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var count = await manager.CountAsync();
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await _fixture.TokenService.IssueAsync(new("sub", "tenant-a", []) { Provider = "idp" }));
+        Assert.Equal(count, await manager.CountAsync());
+    }
+
+    [Fact]
+    public async Task Canonical_user_key_preserves_the_current_main_UTF8_format()
+    {
+        var issued = await IssueUserAsync("用户", "tenant-é");
+        var manager = _fixture.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var entry = (await manager.FindByReferenceIdAsync(issued.RefreshToken!))!;
+        Assert.Equal("elsa:v1:user:91b66231f58c916e322b295c1a094de0a0d0a04a6bccbef75701badde67ba396", await manager.GetSubjectAsync(entry));
+    }
+
+    [Fact]
+    public async Task Legacy_scoped_user_token_keeps_its_authority_and_projects_the_canonical_id()
+    {
+        var issued = await IssueUserAsync("canonical-user");
+        var legacy = Resign(issued, claims =>
+        {
+            claims.RemoveAll(claim => claim.Type is IdentityClaimTypes.TokenSubjectKey or "sub" || claim.Type == ClaimTypes.NameIdentifier);
+            claims.Add(new Claim("sub", "upstream-subject"));
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, "upstream-subject"));
+        });
+        var result = await _fixture.TokenService.ValidateAsync(new(legacy));
+        Assert.True(result.Succeeded, result.Failure);
+        Assert.Equal("canonical-user", result.Principal!.FindFirst("sub")!.Value);
+        Assert.Equal("canonical-user", result.Principal.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+    }
+
+    [Fact]
+    public async Task Unscoped_legacy_user_entry_is_refused_even_when_its_signature_is_valid()
+    {
+        var issued = await IssueUserAsync("canonical-user");
+        var manager = _fixture.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var entry = (await manager.FindByIdAsync(new JsonWebToken(issued.AccessToken).GetClaim("oi_tkn_id").Value))!;
+        var descriptor = new OpenIddictTokenDescriptor();
+        await manager.PopulateAsync(descriptor, entry);
+        descriptor.Subject = "canonical-user";
+        await manager.UpdateAsync(entry, descriptor);
+        var legacy = Resign(issued, claims => claims.RemoveAll(claim => claim.Type == IdentityClaimTypes.TokenSubjectKey));
+        Assert.False((await _fixture.TokenService.ValidateAsync(new(legacy))).Succeeded);
+    }
+
+    [Fact]
+    public async Task Signed_scope_claim_must_match_the_persisted_access_entry()
+    {
+        var issued = await IssueUserAsync("canonical-user");
+        var manager = _fixture.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var entry = (await manager.FindByIdAsync(new JsonWebToken(issued.AccessToken).GetClaim("oi_tkn_id").Value))!;
+        var descriptor = new OpenIddictTokenDescriptor();
+        await manager.PopulateAsync(descriptor, entry);
+        descriptor.Subject = "another-subject";
+        await manager.UpdateAsync(entry, descriptor);
+        Assert.False((await _fixture.TokenService.ValidateAsync(new(issued.AccessToken))).Succeeded);
+    }
+
+    [Fact]
+    public async Task Refresh_scope_mismatch_is_refused_without_redemption_or_new_entries()
+    {
+        var issued = await IssueProviderSubjectAsync("idp", "subject");
+        var manager = _fixture.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var entry = (await manager.FindByReferenceIdAsync(issued.RefreshToken!))!;
+        var descriptor = new OpenIddictTokenDescriptor();
+        await manager.PopulateAsync(descriptor, entry);
+        descriptor.Subject = "another-subject";
+        await manager.UpdateAsync(entry, descriptor);
+        var count = await manager.CountAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _fixture.TokenService.RefreshAsync(new(issued.RefreshToken!)));
+        Assert.True(await manager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid));
+        Assert.Equal(count, await manager.CountAsync());
+        Assert.Empty(_users.Asked);
+    }
+
+    [Fact]
+    public async Task Issuer_less_legacy_refresh_payload_is_refused_without_redemption()
+    {
+        var issued = await IssueProviderSubjectAsync("idp", "subject");
+        var manager = _fixture.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var entry = (await manager.FindByReferenceIdAsync(issued.RefreshToken!))!;
+        var descriptor = new OpenIddictTokenDescriptor();
+        await manager.PopulateAsync(descriptor, entry);
+        descriptor.Payload = JsonSerializer.Serialize(new
+        { TenantId = "tenant-a", Scopes = Array.Empty<string>(), SubjectId = "subject", Provider = "idp" });
+        await manager.UpdateAsync(entry, descriptor);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _fixture.TokenService.RefreshAsync(new(issued.RefreshToken!)));
+        Assert.True(await manager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid));
     }
 
     [Fact]
@@ -386,7 +505,7 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
 
     /// <summary>Issues a pair for a provider's own subject, which is no Elsa user.</summary>
     private ValueTask<TokenIssueResult> IssueProviderSubjectAsync(string provider, string subject, string tenant = "tenant-a") =>
-        _fixture.TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, ["identity/users:read"]) { Provider = provider });
+        _fixture.TokenService.IssueAsync(new TokenIssueRequest(subject, tenant, ["identity/users:read"]) { Provider = provider, SubjectIssuer = OpenIddictIdentityFixture.TestIssuer });
 
     private async Task AssertDeadAsync(TokenIssueResult issued)
     {
@@ -399,6 +518,25 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
     {
         Assert.True((await _fixture.TokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken))).Succeeded, "the bearer should still validate");
         Assert.NotNull((await _fixture.TokenService.RefreshAsync(new TokenRefreshRequest(issued.RefreshToken!))).AccessToken);
+    }
+
+    // Uses the fixture's signing authority to construct historical claim shapes with a real signature.
+    private string Resign(TokenIssueResult issued, Action<List<Claim>> change)
+    {
+        var jwt = new JsonWebToken(issued.AccessToken);
+        var claims = jwt.Claims.Where(claim => claim.Type is not ("iss" or "iat" or "nbf" or "exp")).ToList();
+        change(claims);
+        var server = _fixture.Services.GetRequiredService<IOptionsMonitor<OpenIddictServerOptions>>().CurrentValue;
+        return server.JsonWebTokenHandler.CreateToken(new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(claims, "openiddict"),
+            Issuer = jwt.Issuer,
+            IssuedAt = DateTime.UtcNow,
+            NotBefore = DateTime.UtcNow.AddMinutes(-1),
+            Expires = issued.ExpiresAt.UtcDateTime,
+            SigningCredentials = server.SigningCredentials[0],
+            TokenType = "at+jwt"
+        });
     }
 
     /// <summary>Flips a character in the payload segment so the signature no longer matches.</summary>

@@ -23,7 +23,9 @@ public sealed class AspNetCoreIdentityUserManager(IUserStore users, IExternalIde
 
     public async ValueTask<UserRecord> LinkExternalIdentityAsync(LinkExternalIdentityRequest request, CancellationToken cancellationToken = default)
     {
-        var existing = await externalIdentities.FindBySubjectAsync(request.TenantId, request.Provider, request.ProviderSubject, cancellationToken);
+        var existing = request.Issuer is null
+            ? await externalIdentities.FindBySubjectAsync(request.TenantId, request.Provider, request.ProviderSubject, cancellationToken)
+            : await externalIdentities.FindByKeyAsync(new(request.TenantId, request.Provider, request.Issuer, request.ProviderSubject), cancellationToken);
         if (existing is not null && !string.Equals(existing.UserId, request.UserId, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("External identity is already linked to another user.");
 
@@ -37,7 +39,7 @@ public sealed class AspNetCoreIdentityUserManager(IUserStore users, IExternalIde
             request.UserId,
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow,
-            request.LinkPolicy), cancellationToken);
+            request.LinkPolicy) { Issuer = request.Issuer }, cancellationToken);
 
         return user;
     }

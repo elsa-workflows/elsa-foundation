@@ -8,7 +8,7 @@ internal sealed record NativeRetry(string Id, string Source, string Incident, st
 {
     internal const string Kind = "native.retry-intervention";
 }
-internal sealed record RetryChild(string Source, string Successor, string Node, string? Tag, IReadOnlyDictionary<string, JsonNode?>? Scope = null);
+internal sealed record RetryChild(string Source, string Successor, string Node, string? Tag, IReadOnlyDictionary<string, JsonNode?>? Scope = null, string? Parent = null, string? LexicalScope = null, InvocationInbox? Inbox = null);
 internal sealed record NativeRetryReceipt(NativeRetry Request, Frame Source, string Successor, string Resolution = "Retried");
 internal sealed record NativeRetryResult(string Id, string Result, string? Successor = null);
 
@@ -130,7 +130,9 @@ internal sealed partial class Burst
             {
                 var parentNode = _wf.Nodes[parent.Node];
                 var scheduling = source.Scope?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal);
-                prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag, scheduling));
+                var inbox = _s.Inboxes?.GetValueOrDefault(parent.Id);
+                prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag, scheduling, parent.Id, source.LexicalScope,
+                    inbox is null ? null : Json.Read<InvocationInbox>(Json.Write(inbox))));
             }
         }
         catch (Exception error) when (error is InvalidOperationException or System.Text.Json.JsonException) { return Result("ParentObligationUnavailable"); }

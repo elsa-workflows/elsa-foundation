@@ -60,66 +60,42 @@ public sealed class IdentityProviderModuleTests
     }
 
     [Fact]
-    public async Task PrincipalFactoryLinksExternalIdentityAndProducesNormalizedSession()
+    public async Task PrincipalFactoryProjectsStoredRolesWithoutProvisioningAnExternalLink()
     {
         var services = new ServiceCollection();
         services.AddFoundationIdentityApi();
         services.AddFoundationAspNetCoreIdentity();
         using var provider = services.BuildServiceProvider();
-        var principalFactory = provider.GetRequiredService<IPrincipalFactory>();
-        var sessionService = provider.GetRequiredService<IAuthSessionService>();
-        var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
-        [
-            new Claim(ClaimTypes.Name, "Ada Lovelace"),
-            new Claim(ClaimTypes.Email, "ada@example.com"),
-            new Claim("groups", "admins")
-        ], "external"));
-
-        var principal = await principalFactory.CreateAsync(new PrincipalFactoryContext(
-            "tenant-a",
-            "entra",
-            "external-ada",
-            externalPrincipal,
-            [
-                new ClaimMappingRule("admins", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "admin" }, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }, 1, false)
-            ],
-            []));
-        var session = await sessionService.GetAsync(principal);
+        await provider.GetRequiredService<IRoleStore>().SaveAsync(new RoleRecord(
+            "admin", "tenant-a", "Admin", null, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }, false));
+        await provider.GetRequiredService<IUserStore>().SaveAsync(new UserRecord(
+            "ada", "tenant-a", "ada", "ada@example.com", "Ada Lovelace", UserStatus.Active, ResourceOwnership.External,
+            new HashSet<string> { "admin" }, new HashSet<string>()));
+        var principal = await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(new("tenant-a", "ada", "entra"));
+        var session = await provider.GetRequiredService<IAuthSessionService>().GetAsync(principal);
 
         Assert.Equal("authenticated", session.Status);
-        Assert.NotNull(session.Subject);
+        Assert.Equal("ada", session.Subject);
         Assert.Equal("Ada Lovelace", session.DisplayName);
         Assert.Equal("tenant-a", session.TenantId);
         Assert.Equal("entra", session.Provider);
         Assert.Contains("admin", session.Roles);
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, session.Permissions);
-
-        var externalIdentities = provider.GetRequiredService<IExternalIdentityStore>();
-        var linkedIdentity = await externalIdentities.FindBySubjectAsync("tenant-a", "entra", "external-ada");
-        Assert.Equal(session.Subject, linkedIdentity?.UserId);
+        Assert.Empty(await provider.GetRequiredService<IExternalIdentityStore>().ListForUserAsync("tenant-a", "ada"));
     }
 
     [Fact]
-    public async Task ExternalPrincipalFactory_EmitsTheCanonicalElsaUserIdEvenWhenTheProviderSubjectComesFirst()
+    public async Task ExternalOriginContextNeverReplacesTheCanonicalElsaUserId()
     {
         var services = new ServiceCollection();
-        services.AddFoundationIdentityApi();
         services.AddFoundationAspNetCoreIdentity();
         using var provider = services.BuildServiceProvider();
-        var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
-        [
-            new Claim(ClaimTypes.NameIdentifier, "provider-subject-ada"),
-            new Claim(IdentityClaimTypes.UserId, "forged-user"),
-            new Claim(ClaimTypes.Name, "Ada Lovelace")
-        ], "external"));
-
-        var principal = await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(new PrincipalFactoryContext(
-            "tenant-a", "entra", "provider-subject-ada", externalPrincipal, [], []));
-
-        var linked = await provider.GetRequiredService<IExternalIdentityStore>().FindBySubjectAsync("tenant-a", "entra", "provider-subject-ada");
-        Assert.NotNull(linked);
-        Assert.Equal(linked.UserId, Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
-        Assert.NotEqual("provider-subject-ada", linked.UserId);
+        var context = await SavedContextAsync(provider, "entra", "canonical-ada", "ada@example.com");
+        context = context with { ExternalIdentity = new ExternalIdentityKey("tenant-a", "entra", "https://validated.example/", "provider-subject-ada") };
+        var principal = await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(context);
+        Assert.Equal("canonical-ada", Assert.Single(principal.FindAll(IdentityClaimTypes.UserId)).Value);
+        Assert.Equal("canonical-ada", Assert.Single(principal.FindAll(ClaimTypes.NameIdentifier)).Value);
+        Assert.Equal("canonical-ada", Assert.Single(principal.FindAll("sub")).Value);
     }
 
     [Fact]
@@ -130,7 +106,7 @@ public sealed class IdentityProviderModuleTests
         using var provider = services.BuildServiceProvider();
 
         var principal = await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(
-            CreateContext("entra", "external-ada", "ada@example.com"));
+            await SavedContextAsync(provider, "entra", "external-ada", "ada@example.com"));
         var identity = Assert.Single(principal.Identities);
 
         Assert.Equal("Elsa.Foundation.Identity", identity.AuthenticationType);
@@ -139,30 +115,26 @@ public sealed class IdentityProviderModuleTests
     }
 
     [Fact]
-    public async Task ExternalPrincipalFactory_PropagatesNormalizationFailureWithoutReturningPrincipal()
+    public async Task ExternalPrincipalFactoryRefusesAnUnadmittedUserWithoutProvisioning()
     {
         var services = new ServiceCollection();
         services.AddFoundationAspNetCoreIdentity();
-        services.AddScoped<IClaimsNormalizer, ThrowingClaimsNormalizer>();
         using var provider = services.BuildServiceProvider();
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(
-                CreateContext("entra", "external-ada", "ada@example.com")));
-
-        Assert.Equal("normalization failed", exception.Message);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(new("tenant-a", "missing", "entra")));
+        Assert.Null(await provider.GetRequiredService<IUserStore>().FindAsync("tenant-a", "missing"));
     }
 
     [Fact]
-    public async Task DuplicateEmailAcrossProvidersCreatesSeparateLinkedUsers()
+    public async Task DuplicateSavedEmailsDoNotMergeExplicitCanonicalUsers()
     {
         var services = new ServiceCollection();
         services.AddFoundationAspNetCoreIdentity();
         using var provider = services.BuildServiceProvider();
         var principalFactory = provider.GetRequiredService<IPrincipalFactory>();
 
-        var first = await principalFactory.CreateAsync(CreateContext("entra", "entra-subject", "same@example.com"));
-        var second = await principalFactory.CreateAsync(CreateContext("github", "github-subject", "same@example.com"));
+        var first = await principalFactory.CreateAsync(await SavedContextAsync(provider, "entra", "entra-user", "same@example.com"));
+        var second = await principalFactory.CreateAsync(await SavedContextAsync(provider, "github", "github-user", "same@example.com"));
 
         Assert.NotEqual(
             first.FindFirst(ClaimTypes.NameIdentifier)?.Value,
@@ -193,7 +165,7 @@ public sealed class IdentityProviderModuleTests
         var tokenService = provider.GetRequiredService<ITokenService>();
         var sessionService = provider.GetRequiredService<IAuthSessionService>();
 
-        var issued = await tokenService.IssueAsync(new TokenIssueRequest("user-1", "tenant-a", [DefaultIdentityPermissionKeys.IdentityUsersRead]) { Provider = "local" });
+        var issued = await tokenService.IssueAsync(new TokenIssueRequest("user-1", "tenant-a", [DefaultIdentityPermissionKeys.IdentityUsersRead]) { Provider = "local", SubjectIssuer = "https://validated.example/" });
         var validated = await tokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
         Assert.True(validated.Succeeded, validated.Failure);
         var session = await sessionService.GetAsync(Assert.IsType<ClaimsPrincipal>(validated.Principal));
@@ -203,7 +175,7 @@ public sealed class IdentityProviderModuleTests
         var revokedValidation = await tokenService.ValidateAsync(new TokenValidationRequest(refreshed.AccessToken));
 
         Assert.Equal("authenticated", session.Status);
-        Assert.Equal("user-1", session.Subject);
+        Assert.StartsWith("elsa:v2:provider:", session.Subject);
         Assert.Equal("tenant-a", session.TenantId);
         Assert.Equal("local", session.Provider);
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, session.Permissions);
@@ -252,41 +224,18 @@ public sealed class IdentityProviderModuleTests
             ExternalIdentityLinkPolicy.Auto));
 
         var principalFactory = provider.GetRequiredService<IPrincipalFactory>();
-        var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
-        [
-            new Claim(ClaimTypes.Name, "Role Editor"),
-            new Claim(ClaimTypes.Email, "editor@example.com")
-        ], "entra"));
-
-        var principal = await principalFactory.CreateAsync(new PrincipalFactoryContext(
-            "tenant-a",
-            "entra",
-            "editor-subject",
-            externalPrincipal,
-            [],
-            []));
+        var principal = await principalFactory.CreateAsync(new PrincipalFactoryContext("tenant-a", "user-42", "entra"));
 
         var permissions = principal.FindAll(IdentityClaimTypes.Permission).Select(c => c.Value).ToList();
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersManage, permissions);
         Assert.Contains(principal.FindAll(IdentityClaimTypes.Role), c => c.Value == "role-editor");
     }
 
-    private static PrincipalFactoryContext CreateContext(string provider, string providerSubject, string email)
+    private static async Task<PrincipalFactoryContext> SavedContextAsync(IServiceProvider provider, string authority, string userId, string email)
     {
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(
-        [
-            new Claim(ClaimTypes.Name, providerSubject),
-            new Claim(ClaimTypes.Email, email)
-        ], provider));
-
-        return new PrincipalFactoryContext("tenant-a", provider, providerSubject, principal, [], []);
-    }
-
-    private sealed class ThrowingClaimsNormalizer : IClaimsNormalizer
-    {
-        public ValueTask<ClaimsNormalizationResult> NormalizeAsync(
-            ClaimsNormalizationContext context,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromException<ClaimsNormalizationResult>(new InvalidOperationException("normalization failed"));
+        await provider.GetRequiredService<IUserStore>().SaveAsync(new UserRecord(
+            userId, "tenant-a", userId, email, userId, UserStatus.Active, ResourceOwnership.External,
+            new HashSet<string>(), new HashSet<string>()));
+        return new PrincipalFactoryContext("tenant-a", userId, authority);
     }
 }
