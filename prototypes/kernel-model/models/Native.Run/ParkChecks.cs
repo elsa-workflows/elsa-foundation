@@ -176,6 +176,18 @@ public static class ParkChecks
                 await CheckPark(world, owner, before, Kinds.Resume);
                 Require(world.Store.Instances["0/probe"].StateVersion == version, "dropping a late event must not deserialize or downgrade the checkpoint");
             });
+        foreach (var qualified in new[] { false, true })
+        {
+            await Case($"poison job and terminate ({qualified})", () => JobPoisonChecks.RunAsync(false, qualified));
+            await Case($"throwing result and terminate ({qualified})", () => JobPoisonChecks.RunAsync(true, qualified));
+            await Case($"forged result cannot retire ticket ({qualified})", () => ParkMetadataChecks.CopyAsync(qualified));
+            await Case($"late metadata and completion ({qualified})", () => ParkMetadataChecks.MetadataAsync(qualified, false));
+            await Case($"late metadata and exhausted ticket ({qualified})", () => ParkMetadataChecks.MetadataAsync(qualified, true));
+        }
+        await Case("refused held result", JobPoisonChecks.RefusedHoldAsync);
+        await Case("cold future metadata", JobPoisonChecks.FutureMetadataAsync);
+        foreach (var options in new[] { (true, true, false), (true, false, false), (false, true, false), (false, true, true) })
+            await Case($"cancellation rollback {options}", () => JobPoisonChecks.CancellationAsync(options.Item1, options.Item2, options.Item3));
         Console.WriteLine($"park: {cases - failures} passed, {failures} failed");
         return failures == 0 ? 0 : 1;
     }
