@@ -20,6 +20,13 @@ internal static class RootPolicyReader
             RecoveryInputs = (JsonObject)source.RecoveryInputs!.DeepClone(), RecoveryMaterial = (JsonObject)source.RecoveryMaterial!.DeepClone() });
         return state;
     }
+    private static NativeState Materialized()
+    {
+        var state = RootStaged(); var work = state.Agenda.Single(); state.Agenda.Clear();
+        state.Frames.Add("fresh", new() { Id = "fresh", Node = "leaf", RetrySource = "f", OperationKey = work.OperationKey,
+            RecoveryInputs = work.RecoveryInputs, RecoveryMaterial = work.RecoveryMaterial });
+        return state;
+    }
     private static IEnumerable<(string Name, Action Run)> Cases()
     {
         yield return ("unused-policy", () => Check(!Json.Write(new NativeState()).Contains("InterventionPolicy", StringComparison.Ordinal), "unused policy changed legacy shape"));
@@ -37,6 +44,15 @@ internal static class RootPolicyReader
             Refuse(() => NativeInterventions.Validate(state), change is "other-frame" or "other-work" ? "Invalid native staged root obligation." : "Invalid native root retry lineage.");
         });
         yield return ("completed-root-history", () => { var state = RootStaged(); state.Agenda.Clear(); NativeInterventions.Validate(state); });
+        yield return ("materialized-root-codec", () => NativeInterventions.Validate(Materialized()));
+        foreach (var change in new[] { "wrong-root", "other-frame", "other-work" }) yield return ("materialized-" + change, () =>
+        {
+            var state = Materialized();
+            if (change == "wrong-root") { state.Retries!["operator"].Source.RecoveryMaterial!["root"] = "other"; state.Frames["fresh"].RecoveryMaterial!["root"] = "other"; }
+            if (change == "other-frame") state.Frames.Add("other", new() { Id = "other", Node = "other" });
+            if (change == "other-work") state.Agenda.Add(new() { Frame = "other", Node = "other" });
+            Refuse(() => NativeInterventions.Validate(state), change == "wrong-root" ? "Invalid native root retry lineage." : "Invalid native staged root obligation.");
+        });
         yield return ("v6-staged-policy", () =>
         {
             var json = Json.Write(RecoveryReader.Staged()); var copy = (NativeState)new NativeModel(new()).UpgradeState(json, 6); NativeInterventions.Validate(copy);
@@ -57,7 +73,7 @@ internal static class RootPolicyReader
             ("other-root", s => s.Frames.Add("other", new() { Id = "other", Node = "other" })),
             ("other-work", s => s.Agenda.Add(new() { Frame = "other", Node = "other" }))
         }) yield return (change.Name, () => { var state = Held(); change.Apply(state); Refuse(() => NativeInterventions.Validate(state), "Invalid native intervention ownership."); });
-        yield return ("old-policy-staged-root", () => { var state = RootStaged(); state.InterventionPolicy = 0; Refuse(() => NativeInterventions.Validate(state), "Invalid native retry lineage."); });
+        yield return ("old-policy-staged-root", () => { var state = RootStaged(); state.InterventionPolicy = 0; Refuse(() => NativeInterventions.Validate(state), "Invalid native root retry lineage."); });
         foreach (var kind in new[] { "valid", "index", "item", "missing-index", "missing-item", "tag", "node", "finished", "null-items" }) yield return ("iteration-" + kind, () =>
         {
             var definition = Wf.ForEach("loop", Binding.Literal(new[] { 7, 9 }), Wf.Node<RootLeaf>("leaf"));

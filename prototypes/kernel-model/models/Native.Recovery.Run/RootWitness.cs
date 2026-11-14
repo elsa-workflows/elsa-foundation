@@ -81,18 +81,21 @@ internal static class RootWitness
             var source = current.Retries![request.Id].Source;
             Check(work is not null && work.Frame != source.Id && work.Parent == source.Parent && work.Attempt == 0 && RootLeaf.Calls.Count == calls,
                 "R24: root/iteration retry did not commit its exact fresh obligation before execution");
-            if (!root) Check(Values.To<ForEachState>(current.Frames[source.Parent!].State)!.Index == 0 && work!.Scope!["CurrentItem"]!.ToString() == "7" && work.Scope["CurrentIndex"]!.ToString() == "0",
+            if (!root) Check(Values.To<ForEachState>(current.Frames[source.Parent!].State)!.Index == 0 && work!.Scope is { } scheduling && scheduling.GetValueOrDefault("CurrentItem")?.ToString() == "7" && scheduling.GetValueOrDefault("CurrentIndex")?.ToString() == "0",
                 "R25: retry advanced or changed the failed iteration before success");
         }
         void Cancel(bool staged)
         {
+            // The already ordered wake precedes this control. Durable external work first commits its new attempt;
+            // other leaves may fault once more before termination. Neither path may execute again after it ends.
+            var permitted = staged && !(external && mode == Modes.Durable) ? 2 : 1;
             Apply(new("add", M: new("cancel", target, staged ? Kinds.Terminate : NativeKinds.Cancel, TargetCreation: 1))); Drain();
-            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && RootLeaf.Calls.Count == 1,
+            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && RootLeaf.Calls.Count == permitted,
                 "R31: root/iteration cancellation executed or reopened failed work");
             var history = Json.Write(State().Retries); NativeWorkflows.Registry.Remove(workflow.Id);
             Apply(new("add", M: new("query", target, ReceiptQuery.Kind, Json.Write(new ReceiptQuery("unknown", "probe")), ReplyTo: ReplyTo.Of("outside", "query", world.Time + 120_000), TargetCreation: 1))); Drain();
             Apply(new("add", M: new("stale", target, NativeKinds.Continue, TargetCreation: 1))); Drain();
-            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && RootLeaf.Calls.Count == 1 && Json.Write(State().Retries) == history &&
+            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && RootLeaf.Calls.Count == permitted && Json.Write(State().Retries) == history &&
                 world.Deliveries.Select(d => d.Reply.Item).OfType<Admission>().LastOrDefault()?.Result == "UnknownInvocation",
                 "R31: cancelled root/iteration metadata hydrated authored material, changed history or resumed work");
         }

@@ -40,8 +40,9 @@ internal static class NativeInterventions
         f.Intervention is not null || f.RecoveryInputs is not null || f.OperationKey is not null);
     internal static bool RootShape(NativeState state, Frame frame) => Policy(state) >= 2 && frame.Parent is null && frame.Tag is null && frame.Scope is null && frame.LexicalScope is null &&
         !state.Frames.Values.Any(f => f.Id != frame.Id) && state.Agenda.Count == 0;
-    internal static bool Root(NativeState state, Frame frame) => RootShape(state, frame) && frame.RecoveryMaterial?["root"] is JsonValue value &&
+    internal static bool RootDescriptor(Frame frame) => frame.Parent is null && frame.Tag is null && frame.Scope is null && frame.LexicalScope is null && frame.RecoveryMaterial?["root"] is JsonValue value &&
         value.TryGetValue<string>(out var node) && node == frame.Node;
+    internal static bool Root(NativeState state, Frame frame) => RootShape(state, frame) && RootDescriptor(frame);
 
     internal static void Validate(NativeState state, bool cancelled = false)
     {

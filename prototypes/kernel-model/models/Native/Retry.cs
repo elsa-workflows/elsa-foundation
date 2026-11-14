@@ -46,11 +46,20 @@ internal static class NativeRetries
         bool Borrowed(string? current, string? original) => current == original || cancelled && s.LexicalScopes is null && current is null;
         var successors = new HashSet<string>(StringComparer.Ordinal); var sources = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (id, r) in s.Retries ?? [])
+        {
             if (r is null || r.Request is null || string.IsNullOrEmpty(id) || id != r.Request.Id || r.Source is null || r.Source.Id != r.Request.Source ||
                 r.Source.Intervention?.Id != r.Request.Incident || r.Source.RecoveryInputs is null || r.Source.RecoveryMaterial is null || string.IsNullOrEmpty(r.Source.OperationKey) ||
-                r.Source.Parent is null && NativeInterventions.Policy(s) < 2 ||
                 r.Resolution != "Retried" || string.IsNullOrEmpty(r.Successor) || r.Successor == r.Source.Id || !successors.Add(r.Successor) || !sources.Add(r.Source.Id) || s.Frames.ContainsKey(r.Source.Id))
                 throw new InvalidOperationException("Invalid native retry lineage.");
+            if (r.Source.Parent is not null) continue;
+            if (NativeInterventions.Policy(s) < 2 || !NativeInterventions.RootDescriptor(r.Source))
+                throw new InvalidOperationException("Invalid native root retry lineage.");
+            var queued = s.Agenda.Where(w => w.Frame == r.Successor).ToArray(); s.Frames.TryGetValue(r.Successor, out var current);
+            if (queued.Length == 0 && current is null) continue; // completed/superseded forensic receipts need no live root
+            var staged = queued.Length == 1 && current is null && s.Frames.Count == 0 && s.Agenda.Count == 1 && !queued[0].Resume && queued[0].RetrySource == r.Source.Id;
+            var retained = queued.Length == 0 && current is not null && s.Frames.Count == 1 && s.Agenda.Count == 0 && current.RetrySource == r.Source.Id;
+            if (!staged && !retained) throw new InvalidOperationException("Invalid native staged root obligation.");
+        }
         NativeRetryReceipt Lineage(string source, string successor) => (s.Retries?.Values.SingleOrDefault(r => r.Source.Id == source && r.Successor == successor))
             ?? throw new InvalidOperationException("Missing native retry lineage.");
         foreach (var f in s.Frames.Values)
