@@ -15,6 +15,8 @@ public interface IPublicationRecordStore
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<PublicationOriginSnapshot?>(new Elsa.Workflows.Runtime.Core.Models.RuntimeSourceReadException("publication_source_profile_unsupported", true));
 
+    /// <summary>Creates a record or accepts an exactly equal retained snapshot.</summary>
+    /// <exception cref="PublicationRecordAlreadyExistsException">The identity already contains a different snapshot; no write took place.</exception>
     ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
     ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default);
 
