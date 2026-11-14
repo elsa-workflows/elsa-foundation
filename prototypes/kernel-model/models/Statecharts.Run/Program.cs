@@ -11,6 +11,12 @@ if (args is ["--native-guards"]) { NativeGuardWitness.Run(); return; }
 if (args is ["--native-checkpoints"]) { NativeCheckpointWitness.Run(); return; }
 if (args is ["--native-prelude"]) { NativePreludeWitness.Run(); return; }
 if (args is ["--native-control-cuts"]) { NativeControlCutWitness.Run(); return; }
+if (args is ["--native-loops"]) { NativeLoopWitness.Run(); return; }
+if (args is ["--native-held-loops"]) { NativeHeldLoopWitness.Run(); return; }
+if (args is ["--native-internal-phases"]) { NativeInternalPhaseWitness.Run(); return; }
+if (args is ["--native-internal-regions"]) { NativeInternalRegionalWitness.Run(); return; }
+if (args is ["--native-internal-structure"]) { NativeInternalStructureWitness.Run(); return; }
+if (args is ["--native-priority"]) { NativePriorityWitness.Run(); return; }
 if (args is ["--native-internal"]) { NativeInternalSuite.Run(); return; }
 if (args is ["--native-internal-list"]) { foreach (var n in NativeInternalSuite.Names) Console.WriteLine(n); return; }
 if (args is ["--internal"]) { InternalProgressWitness.Run(); return; }
