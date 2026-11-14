@@ -123,5 +123,128 @@ class RetryPolicyTests(unittest.TestCase):
         self.assertIs(runs[1]["retryOnFailure"], True)
 
 
+class DiscoveryRetentionTests(unittest.TestCase):
+    def run_case(self, entry, *, retain=True, discovery_exit=0, initial_outcome="Passed", start_error=False,
+                 discovery_timeout=False):
+        calls = []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / "out"
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"projects": [], "quarantine": []}))
+            argv = ["run_shard.py", "--entry", json.dumps(entry), "--out", str(out),
+                    "--head", "a" * 40, "--manifest", str(manifest), "--parallel", "1"]
+            if retain:
+                argv.append("--retain-discovery")
+
+            def fake_dotnet(arguments, **kwargs):
+                calls.append((arguments, kwargs["env"].copy()))
+                self.assertIn("--no-build", arguments)
+                if "--list-tests" in arguments:
+                    self.assertEqual(kwargs["timeout"], run_shard.DISCOVERY_TIMEOUT_SECONDS)
+                    if start_error:
+                        raise FileNotFoundError("private-launch-path")
+                    kwargs["stdout"].write(b"exact discovery\r\n\xff\n")
+                    kwargs["stderr"].write(b"exact diagnostic\r\n")
+                    if discovery_timeout:
+                        raise subprocess.TimeoutExpired(arguments, kwargs["timeout"])
+                    return subprocess.CompletedProcess(arguments, discovery_exit)
+                target = Path(arguments[arguments.index("--results-directory") + 1])
+                outcome = initial_outcome if target.parent.name == "try1" else "Passed"
+                test_results._trx(str(target), [("Fake.Native", "Leg", outcome, "00:00:01")])
+                return subprocess.CompletedProcess(arguments, 0 if outcome == "Passed" else 1)
+
+            with patch.object(sys, "argv", argv), patch.object(run_shard.subprocess, "run", fake_dotnet), \
+                    patch.dict(run_shard.os.environ, {"INHERITED_SECRET": "private-inherited-value",
+                                                     run_shard.SECRETS_CONNECTION: "private-connection-value"}):
+                code = run_shard.main()
+            retained = []
+            for receipt in sorted((out / "discovery").glob("*/receipt.json")):
+                retained.append((json.loads(receipt.read_text()),
+                                 receipt.with_name("stdout.log").read_bytes(),
+                                 receipt.with_name("stderr.log").read_bytes()))
+            outcomes = json.loads((out / "test-outcomes.json").read_text())
+            trx_paths = sorted(str(path.relative_to(out)) for path in out.glob("try*/*/*.trx"))
+            return code, calls, retained, outcomes, trx_paths
+
+    def test_discovery_retains_exact_bytes_and_matches_each_initial_run_without_recording_environment_values(self):
+        entry = {"shard": "fake", "split": [{"project": "picked.csproj", "group": "picked",
+                 "filter": "FullyQualifiedName~Fake"}], "suites": [
+                 {"suite": "native", "project": "native.csproj", "require": "FAKE_REQUIRED"}],
+                 "secrets": True, "secretsProject": "secrets.csproj"}
+        code, calls, retained, _, trx_paths = self.run_case(entry)
+        self.assertEqual(code, 0)
+        self.assertEqual((len(calls), len(retained), len(trx_paths)), (6, 3, 3))
+        for index, (receipt, stdout, stderr) in enumerate(retained):
+            discovery, discovery_env = calls[index]
+            execution, execution_env = calls[index + 3]
+            expected = execution[:7] + ["--list-tests"]
+            if "--filter" in execution:
+                expected += execution[execution.index("--filter"):]
+            self.assertEqual(discovery, expected)
+            self.assertEqual(discovery_env, execution_env)
+            self.assertEqual(discovery_env["INHERITED_SECRET"], "private-inherited-value")
+            self.assertEqual(receipt["command"], discovery)
+            self.assertEqual(receipt["project"], execution[2])
+            self.assertEqual(receipt["headSha"], "a" * 40)
+            self.assertEqual((receipt["shard"], receipt["runIndex"], receipt["exitCode"]), ("fake", index, 0))
+            self.assertEqual(stdout, b"exact discovery\r\n\xff\n")
+            self.assertEqual(stderr, b"exact diagnostic\r\n")
+            self.assertNotIn("private-", json.dumps(receipt))
+            self.assertNotIn("env", receipt)
+        self.assertEqual(retained[0][0]["filter"], "FullyQualifiedName~Fake")
+        self.assertEqual(retained[1][0]["requiredVariableNames"], ["FAKE_REQUIRED"])
+        self.assertEqual(calls[1][1]["FAKE_REQUIRED"], "1")
+        self.assertEqual(retained[2][0]["requiredVariableNames"], [])
+        self.assertEqual(calls[2][1][run_shard.SECRETS_CONNECTION], "private-connection-value")
+
+    def test_failed_discovery_keeps_passing_tests_red_and_preserves_trx(self):
+        code, calls, retained, outcomes, trx_paths = self.run_case(
+            {"shard": "fake", "whole": ["fake.csproj"]}, discovery_exit=17)
+        self.assertEqual((code, len(calls), len(trx_paths)), (1, 2, 1))
+        self.assertEqual(retained[0][0]["exitCode"], 17)
+        self.assertEqual(retained[0][1], b"exact discovery\r\n\xff\n")
+        self.assertEqual(outcomes["failedTwice"], [])
+
+    def test_launch_failure_retains_safe_receipt_and_fails_shard(self):
+        code, _, retained, _, _ = self.run_case({"shard": "fake", "whole": ["fake.csproj"]}, start_error=True)
+        self.assertEqual(code, 1)
+        receipt, stdout, stderr = retained[0]
+        self.assertIsNone(receipt["exitCode"])
+        self.assertEqual(receipt["errorKind"], "FileNotFoundError")
+        self.assertNotIn("private-launch-path", json.dumps(receipt))
+        self.assertEqual((stdout, stderr), (b"", b""))
+
+    def test_discovery_timeout_retains_partial_bytes_and_keeps_passing_tests_red(self):
+        code, calls, retained, outcomes, trx_paths = self.run_case(
+            {"shard": "fake", "whole": ["fake.csproj"]}, discovery_timeout=True)
+        self.assertEqual((code, len(calls), len(trx_paths)), (1, 2, 1))
+        receipt, stdout, stderr = retained[0]
+        self.assertIsNone(receipt["exitCode"])
+        self.assertEqual(receipt["errorKind"], "TimeoutExpired")
+        self.assertEqual(receipt["timeoutSeconds"], 600)
+        self.assertEqual(stdout, b"exact discovery\r\n\xff\n")
+        self.assertEqual(stderr, b"exact diagnostic\r\n")
+        self.assertEqual(outcomes["failedTwice"], [])
+
+    def test_discovery_failure_is_not_cleared_by_successful_test_retry(self):
+        code, calls, retained, outcomes, trx_paths = self.run_case(
+            {"shard": "fake", "whole": ["fake.csproj"]}, discovery_exit=17, initial_outcome="Failed")
+        self.assertEqual((code, len(calls), len(retained), len(trx_paths)), (1, 3, 1, 2))
+        self.assertEqual(outcomes["passedOnRetry"], ["Fake.Native.Leg"])
+
+    def test_discovery_does_not_repeat_for_focused_retry(self):
+        code, calls, retained, outcomes, trx_paths = self.run_case(
+            {"shard": "fake", "whole": ["fake.csproj"]}, initial_outcome="Failed")
+        self.assertEqual((code, len(calls), len(retained), len(trx_paths)), (0, 3, 1, 2))
+        self.assertEqual(calls[-1][0][-2:], ["--filter", "FullyQualifiedName=Fake.Native.Leg"])
+        self.assertEqual(outcomes["passedOnRetry"], ["Fake.Native.Leg"])
+
+    def test_discovery_is_opt_in(self):
+        code, calls, retained, _, _ = self.run_case({"shard": "fake", "whole": ["fake.csproj"]}, retain=False)
+        self.assertEqual((code, len(calls), retained), (0, 1, []))
+        self.assertNotIn("--list-tests", calls[0][0])
+
+
 if __name__ == "__main__":
     unittest.main()

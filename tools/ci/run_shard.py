@@ -14,9 +14,14 @@ composition proof is one more run against the PostgreSQL the job started.
 Unless a container suite sets retryOnFailure=false, every test that failed in try1 runs once more, in try2/<index>/
 (FR-004). test_results.py then decides the shard; a failed single-attempt test still fails the shard.
 
+With --retain-discovery, each initial run first retains unparsed discovery stdout/stderr and a command/exit receipt
+under discovery/<index>/. Discovery uses the same project, configuration, filter and environment as that run, without
+building. Discovery has a ten-minute process timeout; failure or timeout fails the shard even if its tests pass.
+The actual tests and their retry/outcome path still run. These receipts do not compare case counts.
+
 Usage:
   run_shard.py --entry <matrix-entry-json> --out <dir> --head <sha> [--parallel N] [--manifest <file>]
-               [--summary <file>] [--dry-run]
+               [--summary <file>] [--retain-discovery] [--dry-run]
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_results  # noqa: E402
 
 HANG_TIMEOUT = "10m"
+DISCOVERY_TIMEOUT_SECONDS = 10 * 60
 SECRETS_CONNECTION = "ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING"
 
 
@@ -51,13 +57,46 @@ def runs_of(entry: dict) -> list[dict]:
     return runs
 
 
-def command(run: dict, results: str, filter_expression: str) -> list[str]:
-    arguments = ["dotnet", "test", run["project"], "-c", "Release", "--no-build", "-p:WarningsNotAsErrors=NU1603",
-                 "--logger", "trx", "--results-directory", results,
-                 "--blame-hang-timeout", HANG_TIMEOUT, "--blame-hang-dump-type", "none"]
+def command(run: dict, results: str, filter_expression: str, *, list_tests: bool = False) -> list[str]:
+    arguments = ["dotnet", "test", run["project"], "-c", "Release", "--no-build", "-p:WarningsNotAsErrors=NU1603"]
+    arguments += ["--list-tests"] if list_tests else [
+        "--logger", "trx", "--results-directory", results,
+        "--blame-hang-timeout", HANG_TIMEOUT, "--blame-hang-dump-type", "none"]
     if filter_expression:
         arguments += ["--filter", filter_expression]
     return arguments
+
+
+def retain_discovery(runs: list[dict], output: str, shard: str, head: str) -> bool:
+    succeeded = True
+    for index, run in enumerate(runs):
+        directory = os.path.join(output, "discovery", str(index))
+        os.makedirs(directory, exist_ok=True)
+        arguments = command(run, directory, run["filter"], list_tests=True)
+        env = run.get("env", {})
+        receipt = {"schema": 1, "shard": shard, "headSha": head, "runIndex": index,
+                   "project": run["project"], "group": run.get("group", ""), "filter": run["filter"],
+                   "command": arguments, "requiredVariableNames": sorted(name for name in env if name != SECRETS_CONNECTION),
+                   "timeoutSeconds": DISCOVERY_TIMEOUT_SECONDS, "exitCode": None}
+        receipt_path = os.path.join(directory, "receipt.json")
+        # Clear any previous receipt before starting, so interruption cannot leave an old successful exit.
+        with open(receipt_path, "w", encoding="utf-8") as handle:
+            json.dump(receipt, handle, indent=2)
+        with open(os.path.join(directory, "stdout.log"), "wb") as stdout, \
+                open(os.path.join(directory, "stderr.log"), "wb") as stderr:
+            try:
+                result = subprocess.run(arguments, check=False, env={**os.environ, **env}, stdout=stdout, stderr=stderr,
+                                        timeout=DISCOVERY_TIMEOUT_SECONDS)
+                receipt["exitCode"] = result.returncode
+            except (OSError, subprocess.TimeoutExpired) as error:
+                # The exception message can contain private paths; retain only its type.
+                receipt["errorKind"] = type(error).__name__
+        with open(receipt_path, "w", encoding="utf-8") as handle:
+            json.dump(receipt, handle, indent=2)
+        if receipt["exitCode"] != 0:
+            succeeded = False
+            print(f"Discovery failed for run {index}; see its retained receipt.", flush=True)
+    return succeeded
 
 
 def execute(commands: list[tuple[list[str], dict]], parallel: int, dry_run: bool) -> None:
@@ -81,6 +120,7 @@ def main() -> int:
     parser.add_argument("--parallel", type=int, default=os.cpu_count() or 2)
     parser.add_argument("--manifest", default=test_results.MANIFEST)
     parser.add_argument("--summary")
+    parser.add_argument("--retain-discovery", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -95,6 +135,10 @@ def main() -> int:
     with open(os.path.join(args.out, "runs.json"), "w", encoding="utf-8") as handle:
         # The Secrets connection string stays out of the recorded runs.
         json.dump([{key: value for key, value in run.items() if key != "env"} for run in runs], handle, indent=2)
+
+    discovery_ok = True
+    if args.retain_discovery and not args.dry_run:
+        discovery_ok = retain_discovery(runs, args.out, entry["shard"], args.head)
 
     execute([(command(run, os.path.join(args.out, "try1", str(index)), run["filter"]), run.get("env", {}))
              for index, run in enumerate(runs)], args.parallel, args.dry_run)
@@ -113,7 +157,8 @@ def main() -> int:
 
     evaluate = argparse.Namespace(shard_dir=args.out, shard=entry["shard"], head=args.head, manifest=args.manifest,
                                   summary=args.summary, outcomes=os.path.join(args.out, "test-outcomes.json"))
-    return test_results.evaluate(evaluate)
+    test_exit = test_results.evaluate(evaluate)
+    return test_exit if test_exit else (0 if discovery_ok else 1)
 
 
 if __name__ == "__main__":
