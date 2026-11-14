@@ -73,7 +73,46 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         Assert.Equal(ActivityExecutionStatus.Scheduled, (await _activityStore.FindAsync(WorkflowExecutionId, IntrinsicExecutionId))!.Status);
     }
 
-    private static ExecutableNode OutputExpressionNode(bool formatted)
+    [Theory]
+    [InlineData(DurableValueStorage.Inline)]
+    [InlineData(DurableValueStorage.Custom)]
+    public async Task SetOutput_withholds_an_encryption_required_expression_before_converting_its_payload(DurableValueStorage storage)
+    {
+        const string sentinel = "withheld-output-expression";
+        _outputExpressionEvaluator.Result = JsonSerializer.SerializeToElement(new { secret = sentinel });
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, storage, isSensitive: true, requiresEncryption: true);
+
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
+            ExecuteAsync(OutputExpressionNode(false, policy), 7, false).AsTask());
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved(WorkflowIntrinsicInputKeys.Value).Message, exception.Message);
+        Assert.DoesNotContain(sentinel, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(await _durableStore.ListAllDurableValueStatesAsync(WorkflowExecutionId),
+            state => state.Metadata.ContainsKey(RuntimeMetadataKeys.OutputName));
+    }
+
+    [Theory]
+    [InlineData(DurableValueStorage.Inline)]
+    [InlineData(DurableValueStorage.Custom)]
+    public async Task Set_keeps_the_destination_type_on_an_encryption_required_expression_marker_without_converting(DurableValueStorage storage)
+    {
+        const string sentinel = "withheld-variable-expression";
+        _outputExpressionEvaluator.Result = JsonSerializer.SerializeToElement(new { secret = sentinel });
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, storage, isSensitive: true, requiresEncryption: true);
+
+        var commit = await ExecuteAsync(OutputExpressionNode(false, policy, WorkflowIntrinsicKind.Set), 7, false);
+
+        var value = commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["counter"];
+        Assert.Equal(IntType, value.Type);
+        Assert.Equal(ValuePresence.Withheld, value.Presence);
+        Assert.Equal(WithheldValueKind.PolicyRequiresEncryption, value.WithheldValue!.Kind);
+        Assert.Null(value.InlineValue);
+        Assert.Null(value.ExternalReference);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(commit.StateChanges), StringComparison.Ordinal);
+    }
+
+    private static ExecutableNode OutputExpressionNode(bool formatted, ValueProtectionPolicy? policy = null,
+        WorkflowIntrinsicKind kind = WorkflowIntrinsicKind.SetOutput)
     {
         var sourceType = new ValueTypeDescriptor(formatted ? "String" : "Elsa.Any");
         var plan = new ValueConversionPlan(ValueConversionPlan.CurrentSchemaVersion,
@@ -82,15 +121,17 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
             ValueConversionOperation.Profile, new ValueConversionProfileReference("elsa.json", "1"), limits: null, options: null);
         var bindings = new Dictionary<string, RuntimeInputBinding>
         {
-            ["name"] = new("name", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
-                RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(new ValueTypeDescriptor("String"),
-                    JsonSerializer.SerializeToElement("Count"), ValueProtectionPolicy.InstanceInline)),
-            ["value"] = new("value", IntType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
+            ["value"] = new("value", IntType, policy ?? ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
                 expression: new RuntimeExpressionBinding("JavaScript", "7", new RuntimeValueTypeDescriptor("alias", sourceType.Alias, null)),
                 conversionPlan: plan)
         };
-        return new ExecutableNode("set-output", "set-output", "elsa.intrinsic.setoutput", "1.0.0", "intrinsic",
-            JsonSerializer.SerializeToElement(new { }), bindings, new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.SetOutput);
+        if (kind == WorkflowIntrinsicKind.SetOutput)
+            bindings["name"] = new RuntimeInputBinding("name", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(new ValueTypeDescriptor("String"),
+                    JsonSerializer.SerializeToElement("Count"), ValueProtectionPolicy.InstanceInline));
+        return new ExecutableNode("expression", "expression", $"elsa.intrinsic.{kind.ToString().ToLowerInvariant()}", "1.0.0", "intrinsic",
+            JsonSerializer.SerializeToElement(new { }), bindings, new Dictionary<string, string>(), intrinsicKind: kind,
+            intrinsicVariable: kind == WorkflowIntrinsicKind.Set ? new RuntimeVariableReference("counter", "workflow") : null);
     }
 
     private sealed class OutputExpressionEvaluator : IPortableExpressionEvaluator

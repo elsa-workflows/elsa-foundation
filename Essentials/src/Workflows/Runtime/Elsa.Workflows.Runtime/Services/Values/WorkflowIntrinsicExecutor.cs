@@ -644,7 +644,11 @@ public sealed class WorkflowIntrinsicExecutor(
             var envelope = evaluated.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
                 ? ValueEnvelope.Null(expressionType, evaluated.EffectivePolicy)
                 : ValueEnvelope.Inline(expressionType, evaluated.Value, evaluated.EffectivePolicy);
-            if (binding.ConversionPlan is { } plan)
+            // As for non-expression sources, storage withholds encryption-required values without
+            // inspecting or converting their payload. Keep the destination contract on that marker.
+            if (evaluated.EffectivePolicy.RequiresEncryption)
+                envelope = envelope.Retype(binding.TargetType);
+            else if (binding.ConversionPlan is { } plan)
                 envelope = _valueConversionExecutor.Convert(envelope, plan);
             if (validateAssignmentPayload)
                 ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
