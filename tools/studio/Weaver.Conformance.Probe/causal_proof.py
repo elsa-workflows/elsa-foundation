@@ -1,10 +1,12 @@
-"""Nine concrete, serial source controls for #3831/T044. Not a consumer witness.
+"""Eleven concrete, serial source controls for #3831/T044. Not a consumer witness.
 
 Run only in a disposable clean checkout with its .NET graph restored and Studio
 dependencies installed. Raw reports/logs are private evidence; no environment
 values are recorded. Each recipe builds/runs baseline, mutation, and restoration.
 The normalization control covers ordinal declared-code identity only; it does not
 qualify every owner callback, forwarding/retention path, or typed channel.
+The two Copilot auth controls are source-authored; their causal runtime evidence
+must be established separately on the exact candidate, within the same budgets.
 """
 from __future__ import annotations
 
@@ -72,6 +74,17 @@ WRITE_FAILURES = ("proposal-result-code", "execution-result", "message-result-co
     "paused-history", "empty-code")
 OPTIONAL_ROWS = tuple(f'(failure: "{failure}", expired: {expired})' for expired in ("False", "True")
     for failure in ("refresh-throws", "refresh-stalls", "snapshot-unavailable", "snapshot-throws"))
+COPILOT_FACTORY_ROWS = tuple(f"(useLoggedInUser: {logged_in}, supplyGitHubToken: {token})"
+    for logged_in in ("False", "True") for token in ("False", "True"))
+COPILOT_AUTH_ROWS = (
+    '(external: True, providerAuth: "configured", expectedMode: "external-runtime")',
+    '(external: True, providerAuth: "environment", expectedMode: "external-runtime")',
+    '(external: True, providerAuth: "logged-in", expectedMode: "external-runtime")',
+    '(external: True, providerAuth: "all", expectedMode: "external-runtime")',
+    '(external: False, providerAuth: "configured", expectedMode: "configured-token")',
+    '(external: False, providerAuth: "environment", expectedMode: "environment")',
+    '(external: False, providerAuth: "logged-in", expectedMode: "logged-in-user")',
+)
 
 # These are exact source fragments, exact selected rows, and the intended assertion.
 # A moved assertion/changed test contract requires source review and a recipe update.
@@ -136,6 +149,21 @@ RECIPES = (
         OPTIONAL_ROWS, tuple(row for row in OPTIONAL_ROWS if '"snapshot-' in row), TESTS + "WeaverTypedResultAdmissionTests.cs", 121,
         "else Assert.Null(result?.Error); // Unknown optional representation keeps truthful old core state.",
         r"Assert\.Null\(\).*(?:Value|Actual):\s*WeaverError"),
+    Recipe("copilot-external-constructor-auth", "dotnet", "Extensions/Weaver/src/GitHubCopilot/Services/GitHubCopilotSdkClientFactory.cs",
+        "options.Connection = RuntimeConnection.ForUri(request.RuntimeUrl, request.RuntimeConnectionToken);",
+        "options.UseLoggedInUser = request.UseLoggedInUser; options.Connection = RuntimeConnection.ForUri(request.RuntimeUrl, request.RuntimeConnectionToken);",
+        "Elsa.Weaver.Tests.GitHubCopilotServerStateTests.External_runtime_client_constructs_with_connection_auth_without_local_provider_auth",
+        COPILOT_FACTORY_ROWS, COPILOT_FACTORY_ROWS, TESTS + "GitHubCopilotServerStateTests.cs", 51,
+        "await using var client = factory.Create(request);",
+        r"^\s*System\.ArgumentException\s*:\s*GitHubToken and UseLoggedInUser cannot be combined with RuntimeConnection\.ForUri \(the existing runtime manages its own auth\)\.",
+        owner_dll="Elsa.Weaver.GitHubCopilot.dll"),
+    Recipe("copilot-external-auth-mode", "dotnet", "Extensions/Weaver/src/GitHubCopilot/Services/WeaverGitHubCopilotProvider.cs",
+        '        if (!string.IsNullOrWhiteSpace(value.RuntimeUrl))\n        {\n            authMode = "external-runtime";\n            return null;\n        }\n\n', "",
+        "Elsa.Weaver.Tests.WeaverGitHubCopilotProviderTests.Diagnostics_external_runtime_auth_precedes_unused_provider_auth_and_preserves_local_modes",
+        COPILOT_AUTH_ROWS, COPILOT_AUTH_ROWS[:4], TESTS + "WeaverGitHubCopilotProviderTests.cs", 131,
+        'Assert.Equal(expectedMode == "environment" ? "environment:" + environmentName : expectedMode, diagnostics.Metadata["authMode"]);',
+        r'Assert\.Equal\(\).*Expected:\s*"external-runtime".*Actual:\s*"(?:configured-token"|environment:|logged-in-user")',
+        owner_dll="Elsa.Weaver.GitHubCopilot.dll"),
 )
 
 
