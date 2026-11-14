@@ -58,6 +58,16 @@ internal static class StatefulPolicy
     }
     private static IEnumerable<(string Name, Action Run)> Readers()
     {
+        foreach (var mismatch in new[] { false, true }) yield return ("nonroot-resume-owner-" + mismatch, () =>
+        {
+            var s = new NativeState { Started = true, InterventionEnabled = true, InterventionPolicy = 3 };
+            s.Frames.Add("p", new() { Id = "p", Node = "parent" });
+            s.Frames.Add("f", new() { Id = "f", Parent = "p", Node = "leaf", RecoveryStateful = true, RecoveryInputs = new(), RecoveryMaterial = new(), OperationKey = "logical" });
+            s.Waits.Add("wait", new("f", "event", "event:go")); s.Agenda.Add(new() { Resume = true, Frame = mismatch ? "p" : "f", Wait = "wait" });
+            try { NativeInterventions.Validate(s); }
+            catch (InvalidOperationException e) when (mismatch && e.Message == "Invalid native qualified resume ownership.") { return; }
+            if (mismatch) throw new InvalidOperationException("R40: non-root resume activated a different frame's wait");
+        });
         foreach (var p in new[] { 0, 1, 2 }) yield return ("v7-policy-" + p, () =>
         {
             var s = new NativeState { Started = true, InterventionEnabled = p != 0, InterventionPolicy = p }; var json = Json.Write(s);

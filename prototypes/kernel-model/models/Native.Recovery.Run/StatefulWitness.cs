@@ -95,8 +95,7 @@ internal static class StatefulWitness
         Console.WriteLine($"PASS recovery:stateful,{mode},parent={parent},startFault={startFault}");
     }
 }
-internal sealed record ProbePrivate(string Marker);
-internal sealed class StatefulProbe : StatefulActivity<int, ProbePrivate, string>
+internal sealed class StatefulProbe : StatefulActivity<int, JsonObject, string>
 {
     public StatefulProbe() { }
     [Input] public int Value { get; set; }
@@ -106,11 +105,11 @@ internal sealed class StatefulProbe : StatefulActivity<int, ProbePrivate, string
     protected override ValueTask<Transition> ExecuteAsync(StartContext<string> context)
     {
         Calls.Add(("start", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), null)); Data["kept"] = -1;
-        return ValueTask.FromResult(Calls.Count == 1 && StartFault ? Fault("stateful-dependency", "repair") : Suspend(new ProbePrivate(Calls.Count == 1 ? "first" : "fresh"), new EventTrigger("go"), new EventTrigger("other")));
+        return ValueTask.FromResult(Calls.Count == 1 && StartFault ? Fault("stateful-dependency", "repair") : Suspend(new JsonObject { ["Marker"] = Calls.Count == 1 ? "first" : "fresh" }, new EventTrigger("go"), new EventTrigger("other")));
     }
-    protected override ValueTask<Transition> ResumeAsync(ResumeContext<ProbePrivate, string> context)
+    protected override ValueTask<Transition> ResumeAsync(ResumeContext<JsonObject, string> context)
     {
-        Calls.Add(("resume", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), context.Trigger)); Data["kept"] = -2;
+        Calls.Add(("resume", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), context.Trigger)); Data["kept"] = -2; context.State["Marker"] = "authored-mutation";
         return ValueTask.FromResult(Calls.Count == 2 && !StartFault ? Fault("stateful-dependency", "repair") : Complete(Value));
     }
 }
