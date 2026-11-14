@@ -2,7 +2,7 @@
 
 `StandaloneEventTriggerAuthoringFeature` supplies configuration metadata independently of the Event execution adapter.
 
-The [transport contract](../../../../../specs/1217-standalone-triggers/contracts/transports.md) owns Event resource/API examples, mappings, grants, serving-slot behavior and recovery instructions. The implementation described here still requires composed producer, storage, restart and Studio qualification.
+The [transport contract](../../../../../../specs/1217-standalone-triggers/contracts/transports.md) owns Event resource/API examples, mappings, grants, serving-slot behavior and recovery instructions. The implementation described here still requires composed producer, storage, restart and Studio qualification.
 
 ## Composition and ordinary Events
 
@@ -63,6 +63,6 @@ This example assumes the host already composes Runtime, the selected protected s
 
 `ActivitiesPrimitivesFeature` separately contributes the canonical `Elsa.Event.Broadcast` workflow-source capability beside its actual PublishEvent handler/decoder. Activation requires the selected physical provider to support that handler's combined saved cohort. This installs no fake external producer port. Authoring metadata alone does not enable a resource.
 
-`AddStandaloneEventIngress<TSource>` delegates to Core's `AddStandaloneTriggerIngress<TSource>` with type/schema `event/1` and a module-owned source family (default `Elsa.Event.External`). Both submission/context contracts live in Core; source modules do not depend on concrete Runtime admission or physical stores. See the [owning contract catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
+`AddStandaloneEventIngress<TSource>` delegates to Core's `AddStandaloneTriggerIngress<TSource>` with type/schema `event/1` and a module-owned source family (default `Elsa.Event.External`). Both submission/context contracts live in Core; source modules do not depend on concrete Runtime admission or physical stores. See the [owning contract catalog](../../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
 
-See [spec 1217](../../../../../specs/1217-standalone-triggers/contracts/transports.md) for the Runtime source and delivery contract.
+See [spec 1217](../../../../../../specs/1217-standalone-triggers/contracts/transports.md) for the Runtime source and delivery contract.

@@ -269,3 +269,14 @@ composition, a reusable public output and an activity-bearing BPMN node.
   retention, automatic iteration, releases and deployment remain outside this scope.
 - Existing Studio/module contribution, save/history, authorization, conversion, durable execution and
   activity-owned structure mechanisms are reused. Draft/provisional constitutional material is not ratified here.
+
+
+### Owner clarification14Nov — workflow inputs stay explicit
+
+For new authoring/publication, a request source must identify exactly one declared workflow input by its
+name. An empty declared-input list is closed; Studio must not propose undeclared request names, infer
+public inputs from references, or relax runtime start validation. Declared Object/JSON inputs retain
+nested literal member selection, including dots and empty names. Existing unsupported whole/member
+references remain authored content with a declare-input problem and explicit Replace/Clear; inspection,
+save or failed publication must not rewrite or delete them. Reusable boundary input identity and stored
+legacy executable artifacts retain their existing contracts. Decision: [#4309 owner resume](https://github.com/elsa-workflows/elsa-foundation/issues/4309#issuecomment-6871062664).

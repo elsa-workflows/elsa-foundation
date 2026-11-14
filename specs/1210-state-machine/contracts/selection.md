@@ -96,6 +96,7 @@ These rules define behavior, not physical activity/frame storage.
 | Compound-parent transition to its descendant, re-entry mode | Exit that parent and its active descendants; enter a fresh parent and the explicit target path. | Visits above that parent. |
 | Parallel-parent transition to a descendant | Require explicit whole-parent re-entry: exit all active regions and the parent; enter a fresh parent, follow the target in its region, and enter other regions at their initial states. | Only visits above the parallel parent (OD49). |
 | Transition leaving a containing state | Exit every active descendant in the exited scope and then its containing visit. | Visits outside the exit boundary. |
+| Child-to-ancestor target, proposed engineering profile | Require whole-target-ancestor re-entry: exit the ancestor and its active descendants, then enter it and its explicit initial configuration, including every parallel region. | Visits above the target ancestor. |
 
 Entering a compound state selects its explicit initial child unless the explicit target path selects a child.
 Entering a parallel state enters every region, each at its explicit target or initial state (OD26).
@@ -105,6 +106,13 @@ choices (OD15, OD41); a destination equal to a source does not implicitly decide
 
 No initial-release destination restores the historical substates of an exited state (OD46). This restriction
 does not affect durable recovery of the current invocation's existing configuration.
+
+The child-to-ancestor row is a new engineering proposal, not an accepted owner choice. It uses the external
+transition-domain boundary described by W3C SCXML's `getTransitionDomain`/`findLCCA`
+[algorithms](https://www.w3.org/TR/scxml/); this is no full SCXML compatibility commitment. The private .NET
+compiled planner exercises this profile separately. The Node reference still rejects that shape, and the
+native public prototype-definition adapter remains sibling-restricted until native/schema integration is
+qualified. Those current limits do not reduce the required product hierarchy.
 
 ## Execute the selected work
 
