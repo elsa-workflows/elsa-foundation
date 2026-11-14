@@ -29,8 +29,21 @@ internal static class RecoveryReader
             ("changed-operation", s => s.Agenda[0].OperationKey = "different", "Invalid native successor work provenance."),
             ("changed-input", s => s.Agenda[0].RecoveryInputs!["value"] = 99, "Invalid native successor work provenance."),
             ("changed-material", s => s.Agenda[0].RecoveryMaterial!["different"] = true, "Invalid native successor work provenance."),
+            ("changed-iteration", s => s.Agenda[0].Scope!["CurrentItem"] = 99, "Invalid native successor work provenance."),
+            ("dropped-lexical", s => s.Agenda[0].LexicalScope = null, "Invalid native successor work provenance."),
+            ("changed-lexical", s => s.Agenda[0].LexicalScope = "other", "Invalid native successor work provenance."),
             ("copied-attempt", s => s.Agenda[0].Attempt = 2, "Invalid native successor work provenance.")
         }) yield return (entry.Name, () => { var state = Staged(); entry.Apply(state); Refuse(() => NativeInterventions.Validate(state), entry.Error); });
+        yield return ("successor-frame-codec", () => { var state = Materialized(); LexicalScopes.Validate(state); NativeInterventions.Validate(state); });
+        foreach (var change in new[] { "iteration", "drop-lexical", "other-lexical" })
+            yield return ("frame-" + change, () =>
+            {
+                var state = Materialized(); var frame = state.Frames["fresh"];
+                if (change == "iteration") frame.Scope!["CurrentItem"] = 99;
+                else frame.LexicalScope = change == "drop-lexical" ? null : "other";
+                LexicalScopes.Validate(state);
+                Refuse(() => NativeInterventions.Validate(state), "Invalid native successor frame provenance.");
+            });
         foreach (var change in new (string Name, Action<NativeState> Apply, string Error)[]
         {
             ("no-profile", s => s.InterventionEnabled = false, "Native recovery data requires its opted-in profile."),
@@ -55,9 +68,18 @@ internal static class RecoveryReader
     private static NativeState Staged()
     {
         var state = Valid(); var source = state.Frames["f"]; source.RecoveryMaterial = new(); state.Frames.Remove("f");
+        source.Scope = new() { ["CurrentItem"] = Values.From(7) }; source.LexicalScope = "borrowed";
+        state.LexicalScopes = new() { ["borrowed"] = new("p", null, new()), ["other"] = new("p", null, new()) };
         state.Retries = new() { ["operator"] = new(new("operator", "f", "incident", "repaired"), source, "fresh") };
-        state.Agenda.Add(new() { Frame = "fresh", Node = "leaf", Parent = "p", RetrySource = "f", OperationKey = source.OperationKey,
+        state.Agenda.Add(new() { Frame = "fresh", Node = "leaf", Parent = "p", RetrySource = "f", OperationKey = source.OperationKey, LexicalScope = "borrowed", Scope = new() { ["CurrentItem"] = Values.From(7) },
             RecoveryInputs = (JsonObject)source.RecoveryInputs!.DeepClone(), RecoveryMaterial = new() });
+        return state;
+    }
+    private static NativeState Materialized()
+    {
+        var state = Staged(); var work = state.Agenda.Single(); state.Agenda.Clear();
+        state.Frames.Add("fresh", new() { Id = "fresh", Node = work.Node!, Parent = work.Parent, RetrySource = work.RetrySource, Scope = work.Scope, LexicalScope = work.LexicalScope,
+            RecoveryInputs = work.RecoveryInputs, RecoveryMaterial = work.RecoveryMaterial, OperationKey = work.OperationKey });
         return state;
     }
     private static void Check(bool ok, string reason) { if (!ok) throw new InvalidOperationException("R10: " + reason); }
