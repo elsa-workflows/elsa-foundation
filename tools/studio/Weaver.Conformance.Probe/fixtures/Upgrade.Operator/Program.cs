@@ -16,6 +16,7 @@ try
     if (!database.StartsWith(rootPrefix, StringComparison.Ordinal) || ownedRoot == publish
         || ownedRoot.StartsWith(publish + Path.DirectorySeparatorChar, StringComparison.Ordinal)
         || publish.StartsWith(rootPrefix, StringComparison.Ordinal)
+        || database.Length != database.TrimEnd().Length
         || database.IndexOfAny([';', '"', '\r', '\n']) >= 0)
         throw new InvalidDataException("Runtime database must be outside the immutable publish.");
 
@@ -33,7 +34,9 @@ try
     using var document = await JsonDocument.ParseAsync(request, new JsonDocumentOptions { MaxDepth = 8 }, deadline.Token);
     NoDuplicates(document.RootElement);
     var json = document.RootElement;
-    if (json.GetProperty("version").GetInt32() != EfToolingContract.Version
+    var requestVersion = json.GetProperty("version");
+    if (requestVersion.ValueKind != JsonValueKind.Number || !requestVersion.TryGetInt32(out var envelopeVersion)
+        || envelopeVersion != EfToolingContract.Version
         || json.GetProperty("command").GetString() is not ("hold" or "release" or "status")
         || json.GetProperty("provider").GetString() != "Sqlite"
         || json.GetProperty("connection").GetString() != "Data Source=" + database)
