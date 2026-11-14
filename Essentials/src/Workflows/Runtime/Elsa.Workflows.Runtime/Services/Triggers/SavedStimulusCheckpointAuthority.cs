@@ -36,6 +36,8 @@ internal static class SavedStimulusCheckpointAuthority
         var envelope = SavedStimulusStartSeal.Read(source, state.WorkflowExecutionId);
         var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
         if (!origin.IsEquivalentTo(start.StimulusDeliveryOrigin) ||
+            state.HistoryCaptureEnabledAtAdmission != start.HistoryCaptureEnabledAtAdmission ||
+            !(start.HistoryCapturePolicy?.IsEquivalentTo(state.HistoryCapturePolicy) ?? state.HistoryCapturePolicy is null) ||
             !NativeIngressTargetEvidence.Equal(state.Authority, start.Authority) || state.CorrelationId != start.CorrelationId ||
             state.DispatchNestingDepth != start.DispatchNestingDepth || state.CreatedAt != envelope.EnqueuedAt || state.StartedAt != envelope.EnqueuedAt ||
             state.PinnedSource != start.PinnedSource || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(state.PinnedExecutable, start.PinnedExecutable))

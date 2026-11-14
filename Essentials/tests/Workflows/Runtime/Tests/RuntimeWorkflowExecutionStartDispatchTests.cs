@@ -106,6 +106,48 @@ public sealed partial class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal("version-1", payload.PinnedExecutable.DefinitionVersionId);
         Assert.Equal("1.0.0", payload.PinnedExecutable.ArtifactVersion);
         Assert.Equal("sha256:test", payload.PinnedExecutable.ArtifactHash);
+        Assert.Null(payload.HistoryCapturePolicy);
+        Assert.Null(payload.HistoryCaptureEnabledAtAdmission);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DispatchAsync_Pins_the_actual_admission_capture_choice_in_queued_work(bool enabled)
+    {
+        await ActivateAsync();
+        var policy = new RuntimeHistoryCapturePolicy("test-history", 3, true, ["WorkflowStarted"]);
+        var resolutions = 0;
+        var dispatcher = new WorkflowStartDispatcher(_store, _references, _agentProvider,
+            new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now))
+        {
+            HistoryAdmission = () => { resolutions++; return (enabled ? policy : null, enabled); }
+        };
+
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
+
+        var payload = Assert.Single(_agentProvider.Agent.Envelopes).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.Equal(1, resolutions);
+        Assert.Equal(enabled, payload.HistoryCaptureEnabledAtAdmission);
+        if (enabled) Assert.True(policy.IsEquivalentTo(payload.HistoryCapturePolicy));
+        else Assert.Null(payload.HistoryCapturePolicy);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_Does_not_resolve_capture_before_start_validation()
+    {
+        var resolutions = 0;
+        var dispatcher = new WorkflowStartDispatcher(_store, _references, _agentProvider,
+            new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now))
+        {
+            HistoryAdmission = () => { resolutions++; return (null, false); }
+        };
+
+        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>
+            dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("missing-artifact", "runtime-test")).AsTask());
+
+        Assert.Equal(0, resolutions);
+        Assert.Empty(_agentProvider.Agent.Envelopes);
     }
 
     [Theory]

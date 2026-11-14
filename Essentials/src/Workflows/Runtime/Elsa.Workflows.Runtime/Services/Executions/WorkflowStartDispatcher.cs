@@ -10,6 +10,10 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
+    // The optional composition qualifies the selected capture/writer/reader chain at actual admission.
+    // No resolver is installed until that complete production path is available.
+    internal Func<(RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
+
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
         IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&
         ReferenceEquals(material, _executableStore) && ReferenceEquals(executions, _workflowExecutionStateStore);
@@ -520,6 +524,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var requestedAt = _timeProvider.GetUtcNow();
         var enqueuedAt = retainedDispatch?.CreatedAt ?? requestedAt;
         var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope, persistenceMode);
+        var history = HistoryAdmission?.Invoke() ?? (null, null);
         if (savedOrigin is not null)
         {
             var protectedMetadata = metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -543,7 +548,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata) { StimulusDeliveryOrigin = savedOrigin });
+            triggerMetadata: request.TriggerMetadata)
+        {
+            HistoryCapturePolicy = history.Item1,
+            HistoryCaptureEnabledAtAdmission = history.Item2,
+            StimulusDeliveryOrigin = savedOrigin
+        });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload, savedOrigin);
 

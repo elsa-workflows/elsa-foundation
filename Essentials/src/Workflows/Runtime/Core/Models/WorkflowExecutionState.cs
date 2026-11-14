@@ -21,6 +21,14 @@ public sealed record WorkflowExecutionState(
 {
     private int _dispatchNestingDepth;
 
+    /// <summary>Capture policy pinned at admission; null retains legacy uncaptured execution.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCapturePolicy? HistoryCapturePolicy { get; init; }
+
+    /// <summary>Known admission capture choice; null means legacy or unknown, not today's host setting.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? HistoryCaptureEnabledAtAdmission { get; init; }
+
     /// <summary>
     /// The durable classification pinned when this execution starts. States written before run-kind tracking
     /// deserialize to <see cref="WorkflowRunKind.Unknown"/> and remain distinguishable as legacy history.
