@@ -225,9 +225,9 @@ internal sealed class ScopedFailure : Kernel.Native.Activity
 internal sealed class CatchScopedFailure : CompositeActivity
 {
     public CatchScopedFailure() { }
-    protected override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
-    protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
-    protected override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
+    protected internal override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
 }
 
 internal sealed class ScopedEcho : Kernel.Native.Activity<JsonNode?>
