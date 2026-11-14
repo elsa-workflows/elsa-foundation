@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Kernel.Durable;
 using Kernel.Native;
 using Kernel.Runtime;
@@ -6,49 +7,200 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
-internal static class NativeGraphWitness
+// Actual native workflow writes/reloads. These visit records do not establish lexical state-local scopes.
+internal sealed class NativeGraphWitness(string mode, bool nested, string phase, bool reverse, NativeGraphWitness.Profile profile)
 {
-    internal static string[] Names => ["native-graph:self-entry-wait"];
+    internal sealed record Profile(string Name, GraphNode[] Nodes, GraphRule[] Rules, string[] Selected, string[] Next, string[] Kept, bool Final = false);
+    private static GraphRule R(string id, int order, string source, string? target, VisitMode mode = VisitMode.Reenter, string? when = null) =>
+        new(id, order, source, target, mode, "go", When: when);
+    private static GraphNode[] Simple() => [new("root", NodeKind.Root, Initial: "Review"), new("Review", NodeKind.Compound, "root", "Checking"),
+        new("Checking", NodeKind.Atomic, "Review"), new("Changes", NodeKind.Atomic, "Review"), new("InnerFinal", NodeKind.Final, "Review"),
+        new("Other", NodeKind.Compound, "Review", "Deep"), new("Deep", NodeKind.Atomic, "Other"), new("Done", NodeKind.Final, "root")];
+    private static GraphNode[] Parallel(bool single = false) => [new("root", NodeKind.Root, Initial: "P"), new("P", NodeKind.Parallel, "root"),
+        new("E", NodeKind.Region, "P", "E0"), new("E0", NodeKind.Atomic, "E"), new("E1", NodeKind.Atomic, "E"),
+        .. single ? [] : new GraphNode[] { new("L", NodeKind.Region, "P", "L0"), new("L0", NodeKind.Atomic, "L"), new("L1", NodeKind.Atomic, "L") },
+        new("Outside", NodeKind.Atomic, "root"), new("Done", NodeKind.Final, "root")];
+    private static IEnumerable<Profile> Profiles()
+    {
+        yield return new("atomic-self", Simple(), [R("self", 0, "Checking", "Checking")], ["self"], ["Review", "Checking"], ["Review"]);
+        yield return new("compound-self", Simple(), [R("self", 0, "Review", "Review")], ["self"], ["Review", "Checking"], []);
+        yield return new("child-first", Simple(), [R("parent", 0, "Review", "Done"), R("child", 1, "Checking", "Changes")], ["child"], ["Review", "Changes"], ["Review"]);
+        yield return new("false-child-fallback", Simple(), [R("parent", 0, "Review", "Done"), R("child", 1, "Checking", "Changes", when: "allow")], ["parent"], ["Done"], [], true);
+        yield return new("compound-preserve", Simple(), [R("p", 0, "Review", "Changes", VisitMode.Preserve)], ["p"], ["Review", "Changes"], ["Review"]);
+        yield return new("compound-reenter", Simple(), [R("p", 0, "Review", "Changes")], ["p"], ["Review", "Changes"], []);
+        yield return new("internal", Simple(), [R("i", 0, "Checking", null, VisitMode.Internal)], ["i"], ["Review", "Checking"], ["Review", "Checking"]);
+        yield return new("cousin", Simple(), [R("c", 0, "Checking", "Deep")], ["c"], ["Review", "Other", "Deep"], ["Review"]);
+        yield return new("nested-final", Simple(), [R("f", 0, "Checking", "InnerFinal")], ["f"], ["Review", "InnerFinal"], ["Review"]);
+        yield return new("top-final", Simple(), [R("f", 0, "Review", "Done")], ["f"], ["Done"], [], true);
+        yield return new("proposed-ancestor-compound", Simple(), [R("a", 0, "Checking", "Review")], ["a"], ["Review", "Checking"], []);
+        yield return new("parallel-target", Parallel(), [R("p", 0, "P", "E1")], ["p"], ["P", "E1", "L0"], []);
+        yield return new("single-parallel-target", Parallel(true), [R("p", 0, "P", "E1")], ["p"], ["P", "E1"], []);
+        yield return new("parallel-self", Parallel(), [R("p", 0, "P", "P")], ["p"], ["P", "E0", "L0"], []);
+        yield return new("compatible-regions", Parallel(), [R("e", 0, "E0", "E1"), R("l", 1, "L0", "L1")], ["e", "l"], ["P", "E1", "L1"], ["P"]);
+        yield return new("local-preempts-container", Parallel(), [R("e", 0, "E0", "E1"), R("l", 1, "L0", "Outside")], ["e"], ["P", "E1", "L0"], ["P", "L0"]);
+        yield return new("container-preempts-local", Parallel(), [R("e", 1, "E0", "E1"), R("l", 0, "L0", "Outside")], ["l"], ["Outside"], []);
+        yield return new("internal-preempts-container", Parallel(), [R("e", 0, "E0", null, VisitMode.Internal), R("l", 1, "L0", "Outside")], ["e"], ["P", "E0", "L0"], ["P", "E0", "L0"]);
+        yield return new("container-preempts-internal", Parallel(), [R("e", 1, "E0", null, VisitMode.Internal), R("l", 0, "L0", "Outside")], ["l"], ["Outside"], []);
+        yield return new("proposed-ancestor-parallel", Parallel(), [R("a", 0, "E0", "P")], ["a"], ["P", "E0", "L0"], []);
+    }
+    private static IEnumerable<(string Mode, bool Nested, string Phase, bool Reverse, Profile Profile)> Cases() =>
+        from m in new[] { Modes.Balanced, Modes.Durable } from n in new[] { false, true }
+        from p in Profiles() from phase in new[] { "exit", "transition", "entry" }
+        where phase == "transition" || p.Name is not ("internal" or "internal-preempts-container")
+        from reverse in new[] { false, true } select (m, n, phase, reverse, p);
+    private static string Name(string m, bool n, string p, bool r, Profile profile) => $"native-graph:{profile.Name},{m},nested={n},{p},reverse={r}";
+    internal static IEnumerable<string> Names => Cases().Select(c => Name(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile));
     internal static void Run()
     {
-        var graph = new { Nodes = new GraphNode[] { new("root", NodeKind.Root, Initial: "Review"),
-            new("Review", NodeKind.Compound, "root", "Checking"), new("Checking", NodeKind.Atomic, "Review"),
-            new("Done", NodeKind.Final, "root") },
-            Rules = new GraphRule[] { new("restart", 0, "Checking", "Checking", VisitMode.Reenter, "restart", "work") } };
-        var machine = Wf.Node<StateMachine>("machine", ("StructuralDefinition", Binding.Literal(graph)))
-            .With(Wf.Sequence("work", Wf.Event("wait", "release"), Wf.Set("done", "worked", "yes")));
-        NativeWorkflows.Registry.Add(Wf.Workflow("native-graph-proof", machine));
-        var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
-        var target = InstanceRef.In(0, "native-graph"); var actor = world.Of(0, 0);
-        void Apply(Act act)
-        {
-            world.Apply(act);
-            var error = world.Check();
-            if (world.Store.Instances.TryGetValue(target.Id, out var row) && row.Status == InstanceStatus.Faulted)
-                throw new InvalidOperationException("N1: full graph was not hydrated through the native StateMachine: " + error);
-            if (error is not null) throw new InvalidOperationException(error);
-        }
-        void Drain()
-        {
-            for (var i = 0; i < 100; i++)
-            {
-                Apply(new("poll", actor.Id)); if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
-                if (actor.Worker.Ready.Contains(target.Id)) Apply(new("turn", actor.Id, S: target.Id));
-                else if (!actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
-                if (actor.Worker.NeedsFlush) Apply(new("flush", actor.Id));
-                if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
-            }
-            throw new InvalidOperationException("N0: native graph drain exceeded its bound");
-        }
-        Apply(new("take", actor.Id));
-        Apply(new("add", M: new("start", target, Kinds.Start, Start: NativeModel.Spec("native-graph-proof", Modes.Durable)))); Drain();
-        if (world.Store.Instances[target.Id].Status != InstanceStatus.Running)
-            throw new InvalidOperationException("N1: full graph was not hydrated through the native StateMachine");
-        var state = Json.Read<NativeState>(world.Store.Instances[target.Id].State);
-        var frame = state.Frames.Values.Single(f => f.Node == "machine").Id;
-        Apply(new("add", M: new("restart", target, CompositeSignal.Kind, Json.Write(new CompositeSignal(frame, "restart"))))); Drain();
-        if (!world.Store.Subscriptions.Any(s => s.Instance == target.Id && s.Key == "event:release"))
-            throw new InvalidOperationException("N1: native full-graph self reaction did not reach ordinary work");
-        Console.WriteLine("PASS " + Names[0]);
+        foreach (var c in Cases()) new NativeGraphWitness(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile).Execute();
+        Console.WriteLine($"{Names.Count()}/{Names.Count()} actual native graph schedules passed; no physical lexical-scope/recovery/source-wave guarantee.");
     }
+
+    private readonly World _world = new(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
+    private readonly InstanceRef _target = InstanceRef.In(0, "native-graph");
+    private int _owner, _serial;
+    private string _frame = "";
+    private string? _pendingJson;
+    private StateVisit[]? _before, _next;
+    private string _event = "";
+    private long _visitSerial;
+    private Actor Actor => _world.Of(_owner, 0);
+    private NativeState Native => Json.Read<NativeState>(_world.Store.Instances[_target.Id].State);
+    private MachineState? Machine => Native.Frames.TryGetValue(_frame, out var f) ? f.State!.Deserialize<MachineState>() : null;
+    private static bool Same(IEnumerable<string> a, IEnumerable<string> b) => a.ToHashSet(StringComparer.Ordinal).SetEquals(b);
+    private static void Check(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
+    private IEnumerable<string> Entries() => _world.Store.Journal.Values.OrderBy(j => j.Position).Where(j => j.Instance == _target.Id).SelectMany(j => Json.Read<string[]>(j.Entries));
+    private IEnumerable<string?[]> Trace() => Entries().Where(e => e.StartsWith("statechart:", StringComparison.Ordinal)).Select(e => JsonSerializer.Deserialize<string?[]>(e[11..])!);
+    private Dictionary<string, int> Completed() => Entries().Where(e => e.StartsWith("c:", StringComparison.Ordinal)).Select(e => e[(e.LastIndexOf(':') + 1)..])
+        .GroupBy(id => id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+
+    private void Execute()
+    {
+        var children = new List<Node>();
+        string Work(string id, string workPhase)
+        {
+            var mark = Wf.Set(id + "-mark", id, "done");
+            children.Add(workPhase == phase ? Wf.Sequence(id, Wf.Event(id + "-wait", "gate-" + id), mark) : Wf.Sequence(id, mark));
+            return id;
+        }
+        var graph = new StructuralDefinition(profile.Nodes.Select(n => n.Kind is NodeKind.Root or NodeKind.Region ? n : n with
+        { Entry = Work("entry-" + n.Id, "entry"), Exit = Work("exit-" + n.Id, "exit") }).ToArray(),
+            profile.Rules.Select(r => r with { Action = Work("action-" + r.Id, "transition") }).ToArray());
+        var machine = Wf.Node<StateMachine>("machine", ("StructuralDefinition", Binding.Literal(graph))).With(children.ToArray());
+        var root = nested ? Wf.Flowchart("outer", [machine, Wf.Set("returned", "returned", "yes")], [new("machine", "returned")]) : machine;
+        NativeWorkflows.Registry.Add(Wf.Workflow("native-graph-proof", root));
+        Apply(new("take", Actor.Id));
+        Add(new("start", _target, Kinds.Start, Start: NativeModel.Spec("native-graph-proof", mode) with { Creation = new(1, 0, "native-graph") })); Drain();
+        _frame = Native.Frames.Values.Single(f => f.Node == "machine").Id;
+        Settle();
+        React();
+        if (profile.Name is "atomic-self" or "compound-self" or "parallel-self" or "internal") React();
+        Console.WriteLine("PASS " + Name(mode, nested, phase, reverse, profile));
+    }
+
+    private void React()
+    {
+        _before = Machine!.Visits!.ToArray();
+        var beforeCounts = Completed(); var beforeSerial = Machine.VisitSerial;
+        _pendingJson = null; _next = null; _event = "selected-" + ++_serial;
+        Signal(_event, "go"); Drain();
+        var pending = Machine;
+        Check(pending?.Pending is not null, "N2: selected native phase was not durably pending");
+        Check(pending!.Selection is { } selected && Same(selected.Selected, profile.Selected), "N2: native selection differs from authored rules");
+        _pendingJson = Json.Write(pending.Selection); _next = pending.PlannedVisits!.ToArray();
+        Check(Same(_next.Select(v => v.State), profile.Next), "N2: native planned configuration changed");
+        CheckVisits(_before, _next);
+        Check(pending.VisitSerial >= beforeSerial, "N3: visit serial moved backwards");
+        Signal("later-" + _event, "unhandled"); Drain();
+        Check(!Trace().Any(p => p[1] == "later-" + _event && p[2] == "evaluated"), "N4: later input crossed pending native work");
+        Reload(); Settle();
+        if (profile.Final)
+        {
+            Check(Machine is null && _world.Store.Instances[_target.Id].Status == InstanceStatus.Finished, "N6: final entry did not complete after its work");
+            if (nested) Check(Native.Variables["returned"]!.ToString() == "yes", "N6: enclosing Flowchart did not resume");
+        }
+        else
+        {
+            Check(Machine?.Pending is null && Machine is not null && Same(Machine.Active, profile.Next), "N2: native result did not settle");
+            Check(Json.Write(Machine!.Visits) == Json.Write(_next), "N3: native committed next visits changed");
+            Check(Trace().Count(p => p[1] == "later-" + _event && p[2] == "unhandled") == 1, "N4: queued later input was lost or repeated");
+            Reload(); Check(Json.Write(Machine!.Visits) == Json.Write(_next), "N3: settled visit identities changed on reload");
+        }
+        Check(Trace().Count(p => p[1] == _event && p[2] == "handled") == 1, "N5: selected reaction was repeated or lost");
+        var plan = Json.Read<GraphPlan>(_pendingJson!); var afterCounts = Completed();
+        foreach (var id in childrenFor(plan))
+            Check(afterCounts.GetValueOrDefault(id) - beforeCounts.GetValueOrDefault(id) == 1, "N5: completed native phase activity repeated or disappeared");
+        _before = null; _next = null; _pendingJson = null;
+        static IEnumerable<string> childrenFor(GraphPlan plan) => plan.Steps.Select(s => s.Activity! + "-mark");
+    }
+
+    private void CheckVisits(StateVisit[] before, StateVisit[] next)
+    {
+        foreach (var v in next)
+        {
+            var prior = before.SingleOrDefault(p => p.State == v.State);
+            Check(profile.Kept.Contains(v.State, StringComparer.Ordinal) ? prior?.Occurrence == v.Occurrence : before.All(p => p.Occurrence != v.Occurrence),
+                "N3: native visit was preserved or re-entered incorrectly");
+        }
+        Check(next.Select(v => v.Occurrence).Distinct(StringComparer.Ordinal).Count() == next.Length, "N3: native visits alias");
+    }
+    private void Inspect()
+    {
+        if (_frame.Length == 0) return;
+        var state = Machine;
+        if (state is null)
+        {
+            if (_pendingJson is not null) Check(!Waiting().Any(), "N6: machine completed while required entry work still waited");
+            return;
+        }
+        Check(state.VisitSerial >= _visitSerial, "N3: persisted native visit serial moved backwards"); _visitSerial = state.VisitSerial;
+        if (_before is null || state.Pending is null) return;
+        Check(Json.Write(state.Visits) == Json.Write(_before), "N3: pending native source visits changed");
+        if (_pendingJson is not null)
+        {
+            Check(Json.Write(state.Selection) == _pendingJson && Json.Write(state.PlannedVisits) == Json.Write(_next), "N5: selected native work was replanned across a phase/reload");
+            Check(!Trace().Any(p => p[1] == "later-" + _event && p[2] == "evaluated"), "N4: later input crossed pending native work");
+        }
+        var current = state.Visits!.ToDictionary(v => v.State, v => v.Occurrence, StringComparer.Ordinal);
+        foreach (var step in state.Selection!.Steps.Where(w => w.Phase != "entry"))
+            Check(step.Visit == current[step.State], "N3: persisted action/exit source visit changed");
+        var owned = Native.Frames.Values.Where(f => f.Parent == _frame).Select(f => f.Id)
+            .Concat(Native.Agenda.Where(w => !w.Resume && w.Parent == _frame).Select(w => w.Frame));
+        Check(owned.ToHashSet().SetEquals(state.Progress!.Running.Keys), "N5: pending native work lost an ordinary child");
+    }
+    private string[] Waiting() => _world.Store.Subscriptions.Where(s => s.Instance == _target.Id && s.Key.StartsWith("event:gate-", StringComparison.Ordinal)).Select(s => s.Key).ToArray();
+    private void Settle()
+    {
+        for (var i = 0; i < 40; i++)
+        {
+            var waits = Waiting(); if (waits.Length == 0) { Check(Machine?.Pending is null, "N5: native phase stranded without a wait"); return; }
+            if (_before is not null) Reload();
+            var key = (reverse ? waits.OrderDescending(StringComparer.Ordinal) : waits.Order(StringComparer.Ordinal)).First();
+            var wait = _world.Store.Subscriptions.Single(s => s.Instance == _target.Id && s.Key == key);
+            Add(Events.Deliver(new(key, "release-" + ++_serial, null, _world.Time + 120_000), wait)); Drain();
+        }
+        throw new InvalidOperationException("N0: native graph phase exceeded its bounded work");
+    }
+    private void Signal(string id, string name) => Add(new(id, _target, CompositeSignal.Kind, Json.Write(new CompositeSignal(_frame, name, "deny")), TargetCreation: 1));
+    private void Add(Message message) => Apply(new("add", M: message));
+    private void Apply(Act act)
+    {
+        _world.Apply(act); var error = _world.Check();
+        if (_world.Store.Instances.TryGetValue(_target.Id, out var row) && row.Status == InstanceStatus.Faulted)
+            throw new InvalidOperationException("N1: full graph was not hydrated through the native StateMachine: " + error);
+        if (error is not null) throw new InvalidOperationException("Kernel: " + error);
+        if (_world.Store.Instances.ContainsKey(_target.Id)) Inspect();
+    }
+    private void Drain()
+    {
+        for (var i = 0; i < 300; i++)
+        {
+            Apply(new("poll", Actor.Id)); if (Actor.Worker.NeedsLoad) Apply(new("load", Actor.Id));
+            if (Actor.Worker.Ready.Contains(_target.Id)) Apply(new("turn", Actor.Id, S: _target.Id));
+            else if (!Actor.Worker.NeedsFlush && !Actor.Worker.NeedsMeet) return;
+            if (Actor.Worker.NeedsFlush) Apply(new("flush", Actor.Id)); if (Actor.Worker.NeedsMeet) Apply(new("meet", Actor.Id));
+        }
+        throw new InvalidOperationException("N0: native graph drain exceeded its bound");
+    }
+    private void Reload() { Apply(new("crash", _owner)); Apply(new("tick", 20_000)); _owner = 1 - _owner; Apply(new("take", Actor.Id)); Drain(); }
 }
