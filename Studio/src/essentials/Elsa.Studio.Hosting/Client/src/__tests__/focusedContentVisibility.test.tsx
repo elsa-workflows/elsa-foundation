@@ -16,8 +16,11 @@ function Content({ children }: { children: React.ReactNode }) {
   const { contentRef } = useCompactNavigation();
   return <div ref={contentRef}>{children}</div>;
 }
-function Fixture({ controller, nested }: { controller: StudioNotificationController; nested?: boolean }) {
-  const fields = <Content><Content><StudioField label="Primary"><input defaultValue="Retained token" /></StudioField></Content></Content>;
+function Fixture({ controller, nested, supporting }: { controller: StudioNotificationController; nested?: boolean; supporting?: "hint" | "error" | "child" }) {
+  const fields = <Content><Content><StudioField label="Primary" description={supporting === "hint" ? "Keep this instruction readable." : undefined}
+    error={supporting === "error" ? "Choose a different value." : undefined}>
+    <input defaultValue="Retained token" />{supporting === "child" ? <small>Keep the contributed instruction readable.</small> : null}
+  </StudioField></Content></Content>;
   return <>
     <main id="focus-scrollport" style={{ overflowY: "auto", paddingBlockEnd: "20px" }}>
       {nested ? <div id="inner-scrollport" style={{ overflowY: "auto" }}>{fields}</div> : fields}
@@ -38,7 +41,7 @@ afterEach(async () => {
 });
 
 /** Model browser clipping/clamping, including a last field with no initial scroll extent. */
-async function mount(nested?: "start" | "end") {
+async function mount(nested?: "start" | "end", supporting?: "hint" | "error" | "child") {
   const resizeObservers: Array<{ targets: Set<Element>; callback: ResizeObserverCallback }> = [];
   vi.stubGlobal("ResizeObserver", class {
     targets = new Set<Element>();
@@ -67,7 +70,9 @@ async function mount(nested?: "start" | "end") {
     if (this.matches(".studio-toast-dismiss")) return new DOMRect(340, 0, 28, 28);
     if (this.matches("#inner-scrollport")) return new DOMRect(0, (nested === "start" ? 180 : 320) - offset, 390, 300);
     const fieldTop = baseTop - offset - (nested ? innerScroll : 0);
+    if (this.matches(".studio-form-field")) return new DOMRect(20, fieldTop, 350, fieldHeight + (supporting ? 36 : 0));
     if (this.matches(".studio-form-control")) return new DOMRect(20, fieldTop, 350, fieldHeight);
+    if (this.matches("small")) return new DOMRect(20, fieldTop + fieldHeight + 4, 350, 32);
     if (this.matches(".studio-form-legend, .studio-field-label")) return new DOMRect(35, fieldTop, 100, 16);
     if (this.matches("input")) return new DOMRect(30, fieldTop + 20, 330, controlHeight);
     return new DOMRect(0, 180, 390, 380);
@@ -76,9 +81,10 @@ async function mount(nested?: "start" | "end") {
     return (this.isConnected ? [this.getBoundingClientRect()] : []) as unknown as DOMRectList;
   });
   const controller = createNotificationController();
-  await update(() => root.render(<Fixture controller={controller} nested={Boolean(nested)} />));
+  await update(() => root.render(<Fixture controller={controller} nested={Boolean(nested)} supporting={supporting} />));
   const scrollport = port()!;
-  const extra = () => (nested ? 420 : 0) + Math.max(0, (parseFloat(scrollport.style.paddingBlockEnd) || 20) - 20);
+  const extra = () => (nested ? 420 : 0) + (supporting ? 36 : 0)
+    + Math.max(0, (parseFloat(scrollport.style.paddingBlockEnd) || 20) - 20);
   Object.defineProperties(scrollport, {
     clientHeight: { configurable: true, get: () => 380 },
     clientWidth: { configurable: true, get: () => 390 },
@@ -106,6 +112,7 @@ async function mount(nested?: "start" | "end") {
   };
   await update(() => { field.focus(); field.setSelectionRange(2, 7); });
   return { controller, field, frame, scrollport, inner, assertUncovered,
+    setSupporting: (next: "hint" | "error") => root.render(<Fixture controller={controller} nested={Boolean(nested)} supporting={next} />),
     setToastHeight: (height: number) => { toastHeight = height; },
     setFieldHeight: (height: number) => { fieldHeight = height; },
     setControlHeight: (height: number) => { controlHeight = height; },
@@ -122,6 +129,28 @@ it("reveals the complete last field when a notice appears after focus, without d
   f.assertUncovered();
   expect(f.scrollport.style.paddingBlockEnd).toBe("100px");
   expect(f.scrollport.scrollTop).toBe(80);
+});
+
+for (const supporting of ["hint", "error", "child"] as const) it(`keeps a last field's ${supporting} message above persistent notices`, async () => {
+  const f = await mount(undefined, supporting);
+  await update(() => { f.controller.api.notify({ level: "error", title: "Persistent notice" }); });
+  f.assertUncovered();
+  const message = container.querySelector("small")!, host = container.querySelector(".studio-toast-host")!;
+  expect(message.getBoundingClientRect().bottom).toBeLessThanOrEqual(host.getBoundingClientRect().top - 8);
+  expect(f.field.getAttribute("aria-describedby")?.split(/\s+/)).toContain(message.id);
+});
+
+it("reveals a still-focused field when validation replaces its supporting text", async () => {
+  const f = await mount(undefined, "hint");
+  await update(() => { f.controller.api.notify({ level: "error", title: "Persistent notice" }); });
+  f.assertUncovered();
+  // A pointer can scroll to a validation trigger without changing the retained editor focus.
+  f.scrollport.scrollTop = 0;
+  await update(() => f.setSupporting("error"));
+  expect(container.querySelector("small")?.textContent).toBe("Choose a different value.");
+  f.assertUncovered();
+  expect(container.querySelector("small")!.getBoundingClientRect().bottom)
+    .toBeLessThanOrEqual(container.querySelector(".studio-toast-host")!.getBoundingClientRect().top - 8);
 });
 
 it("responds to wrapped persistent notices and restores scroll styles without taking focus from toast actions", async () => {

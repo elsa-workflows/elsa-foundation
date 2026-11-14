@@ -1,3 +1,4 @@
+import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
 import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
 import { dashboardComparisonJourney } from "./dashboardComparisonJourney";
@@ -130,12 +131,19 @@ test.afterEach(async ({ page, playwright }, info) => {
 
 test.beforeEach(async ({ page }, info) => {
   const reportedAppearance = info.title === "feature filtering and settings dialogs";
-  await page.addInitScript(({ mode, reportedAppearance }) => {
+  const authoredNamesTheme = info.title === "explicit authored activity names survive publication and execution"
+    ? info.project.use.colorScheme === "dark" ? "builtin:graphite" : "builtin:porcelain"
+    : undefined;
+  await page.addInitScript(({ mode, reportedAppearance, authoredNamesTheme }) => {
     if (reportedAppearance) localStorage.setItem("elsa-studio-theme", "classic");
+    else if (authoredNamesTheme) localStorage.setItem("elsa-studio-theme", authoredNamesTheme);
     else localStorage.removeItem("elsa-studio-theme");
-    localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
+    if (authoredNamesTheme) {
+      localStorage.removeItem("elsa-studio-workspace-style");
+      localStorage.removeItem("elsa-studio-color-scheme");
+    } else localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
     localStorage.setItem("elsa-studio-theme-mode", mode);
-  }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
+  }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance, authoredNamesTheme });
   const errors: string[] = [];
   browserErrors.set(page, errors);
   ownedCleanups.set(page, []);
@@ -147,6 +155,19 @@ test.beforeEach(async ({ page }, info) => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
     await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
+  }
+  if (authoredNamesTheme) {
+    await expect(page.locator("html")).toHaveAttribute("data-theme", authoredNamesTheme);
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", authoredNamesTheme);
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
+    await expect(page.locator("html")).toHaveAttribute("data-theme-mode", info.project.use.colorScheme ?? "light");
+    await info.attach("authored-name-appearance", { body: JSON.stringify({
+      theme: await page.locator("html").getAttribute("data-theme"),
+      colorScheme: await page.locator("html").getAttribute("data-color-scheme"),
+      workspaceStyle: await page.locator("html").getAttribute("data-workspace-style"),
+      mode: await page.locator("html").getAttribute("data-theme-mode"),
+      viewport: page.viewportSize()
+    }), contentType: "application/json" });
   }
   await expect(page.getByRole("heading", { name: /^No active workflow definitions in All workflows$/ })).toBeVisible();
   await capture(page, info, "reference");
@@ -669,4 +690,8 @@ test("execution navigation keeps keyboard focus and exact evidence", async ({ pa
 
 test("timeline selection retains its tab and exact occurrence", async ({ page }, info) => {
   await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("explicit authored activity names survive publication and execution", async ({ page }, info) => {
+  await authoredActivityNamesJourney(page, info, capture);
 });
