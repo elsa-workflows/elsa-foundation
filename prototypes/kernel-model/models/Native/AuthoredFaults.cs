@@ -5,7 +5,11 @@ namespace Kernel.Native;
 
 internal sealed partial class Burst
 {
-    private static Exception AuthoredCause(Exception error) => error is TargetInvocationException { InnerException: { } inner } ? inner : error;
+    private static Exception AuthoredCause(Exception error)
+    {
+        while (error is TargetInvocationException { InnerException: { } inner }) error = inner;
+        return error;
+    }
     private bool HandlesAuthoredFault(Frame frame, Exception error) => NativeInterventions.Policy(_s) >= 5 && frame.RecoveryInputs is not null &&
         !(AuthoredCause(error) is OperationCanceledException && cancellationToken.IsCancellationRequested);
 

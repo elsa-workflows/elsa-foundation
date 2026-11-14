@@ -3,6 +3,7 @@ using Kernel.Durable;
 using Kernel.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
+using Kernel.Workflows;
 using static MachineInboxHarness;
 
 internal static class ClrFaultWitness
@@ -38,6 +39,7 @@ internal static class ClrFaultWitness
         else root = place switch { "sequence" => Wf.Sequence("sequence", Mark("before"), dependency, Mark("after")),
             "parallel" => Wf.Parallel("parallel", null, dependency, Wf.Sequence("sibling", Mark("sibling-mark"), Wf.Event("sibling-wait", "sibling"))), _ => dependency };
         var wf = Wf.Workflow("machine-inbox", root); wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        Check(new WorkflowInstance([new ClrPreviousModel()]).Withholds(h.World.Store.Instances[h.Target.Id], new GateServices()), "X23: version10 host would execute new CLR-policy state");
         var frame = chart ? h.State.Frames.Values.Single(f => f.Node == "machine").Id : "";
         if (chart) { h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain(); }
         void Resume() { h.Send(NativeKinds.Resume, new ResumeStimulus("release"), false); h.Drain(); }

@@ -69,3 +69,14 @@ public class ClrBoundaryTurn : DispatchProxy
     };
     private object? Set(NativeState state) { Native = state; return null; }
 }
+
+internal sealed class ClrPreviousModel : IExecutionModel
+{
+    public string Key => NativeModel.ModelKey;
+    public int StateVersion => 10;
+    public Type StateType => typeof(NativeState);
+    public object CreateState(StartSpec s) => throw new InvalidOperationException("X23: old model invoked");
+    public object UpgradeState(string s, int v) => throw new InvalidOperationException("X23: old model invoked");
+    public ValueTask TurnAsync(ITurn t, CancellationToken c) => throw new InvalidOperationException("X23: old model invoked");
+    public ValueTask<object?> ExecuteJobAsync(IJob j, CancellationToken c) => throw new InvalidOperationException("X23: old model invoked");
+}
