@@ -66,8 +66,15 @@ internal static class JobCreationRace
             foreach (var pinned in new[] { true, false })
             {
                 var replay = oldTicket with { TargetCreation = pinned ? 1 : null };
-                Require(await store.AddAsync(replay), "old ticket marker still exists; dispatch would not be exercised");
-                await Pump(() => bodies.Count > 2 || !store.Messages.ContainsKey(replay.Id));
+                // Outside Add cannot mint tickets. Reinstall the captured real carrier as a trusted
+                // storage fixture to exercise the driver's independent creation check at dispatch.
+                try { await store.AddAsync(replay); throw new InvalidOperationException("J1: outside ingress accepted a ticket"); }
+                catch (ArgumentException) { }
+                var fence = store.Partitions[target.Partition];
+                var injected = await store.CommitAsync(new(target.Partition, fence.Epoch, fence.Position, TimeSpan.FromSeconds(30), false,
+                    [new(target.Id, null, null, [], [], [replay], [], [], null)], [], []));
+                Require(injected.Landed && store.Messages.ContainsKey(replay.InboxKey), "ticket fixture did not land");
+                await Pump(() => bodies.Count > 2 || !store.Messages.ContainsKey(replay.InboxKey));
                 Require(bodies.Count == 2 && store.Instances[target.Id] == replacement, "stale/missing-identity job executed against the new creation");
             }
             Require(Worker.TicketId("0/a@1!b", "x", 2) != Worker.TicketId("0/a", "b@2!x", 1), "qualified job IDs alias actor/key punctuation");

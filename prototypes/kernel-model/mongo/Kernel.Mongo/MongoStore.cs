@@ -149,6 +149,7 @@ public sealed class MongoStore : IKernelStore
     {
         CreationProtocol.RejectUnsupported(batch);
         CommitClockFacts.RejectUnsupported(batch);
+        if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {
@@ -228,12 +229,12 @@ public sealed class MongoStore : IKernelStore
                 if (turn.Consumed.Count > 0)
                 {
                     checks.Add((models.Count, true, turn.Consumed.Count, false));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Consumed)) }, { "done", false } }));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Consumed.Select(InboxId))) }, { "done", false } }));
                 }
                 if (turn.Done.Count > 0)
                 {
                     checks.Add((models.Count, false, turn.Done.Count, false));
-                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Done)) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("done", true))));
+                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Done.Select(InboxId))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("done", true))));
                 }
                 foreach (var message in turn.Sent)
                 {
@@ -251,7 +252,7 @@ public sealed class MongoStore : IKernelStore
                 {
                     // Its turn ran: still there, not done, and no longer on trial. A count, like a consume.
                     checks.Add((models.Count, false, held.Count, false));
-                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(held)) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("trial", 0L))));
+                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(held.Select(InboxId))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("trial", 0L))));
                 }
                 if (turn.Journal is not null)
                 {
@@ -264,9 +265,9 @@ public sealed class MongoStore : IKernelStore
                 }
             }
             if (batch.Seen.Count > 0)
-                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Seen))), new BsonDocument("$set", new BsonDocument("seen", batch.Epoch))));
+                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Seen.Select(InboxId)))), new BsonDocument("$set", new BsonDocument("seen", batch.Epoch))));
             if (batch.Trial.Count > 0)
-                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Trial))), new BsonDocument("$set", new BsonDocument { { "seen", batch.Epoch }, { "trial", batch.Epoch } })));
+                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Trial.Select(InboxId)))), new BsonDocument("$set", new BsonDocument { { "seen", batch.Epoch }, { "trial", batch.Epoch } })));
 
             if (models.Count > 0)
             {
@@ -377,17 +378,33 @@ public sealed class MongoStore : IKernelStore
         return new Polled(docs.Skip(1).Select(ToStored).ToList(), docs[0]["now"].AsInt64);
     }
 
-    public async ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
+    public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
         CreationProtocol.RejectUnsupported(message);
-        // Nothing fences an outside add, so its key comes from the target partition's inbox clock: one document per
-        // partition, apart from the partition document so that adds never conflict with the owner's commits.
-        BsonDocument[] tick = [new("$set", new BsonDocument("clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$clock", 0L }), NowUs }), 1L })))];
-        var clock = await _clocks.FindOneAndUpdateAsync(new BsonDocument("_id", message.Target.Partition), Builders<BsonDocument>.Update.Pipeline(tick),
+        Kinds.RequireApplicationSend(message.Kind);
+        return InsertAsync(message.AsOrdinary(), cancellationToken);
+    }
+
+    public async ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
+    {
+        CreationProtocol.RejectUnsupported(delivery.Message);
+        // The existing per-partition outside-add clock is persistent, increasing and outside caller control.
+        var seq = await NextOutsideSeq(delivery.Message.Target.Partition, cancellationToken);
+        var message = delivery.At(seq);
+        var fresh = ToDocument(message, seq, 0);
+        var key = new BsonDocument("_id", fresh["_id"]);
+        fresh.Remove("_id");
+        var saved = await _messages.FindOneAndUpdateAsync(key, new BsonDocument("$setOnInsert", fresh),
             new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
+        return new EventAcceptance(saved["seq"].AsInt64 == seq, new(saved["target"].AsString));
+    }
+
+    private async ValueTask<bool> InsertAsync(Message message, CancellationToken cancellationToken)
+    {
+        var seq = await NextOutsideSeq(message.Target.Partition, cancellationToken);
         try
         {
-            await _messages.InsertOneAsync(ToDocument(message, clock["clock"].AsInt64, 0), cancellationToken: cancellationToken);
+            await _messages.InsertOneAsync(ToDocument(message, seq, 0), cancellationToken: cancellationToken);
             return true;
         }
         catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey)
@@ -396,13 +413,23 @@ public sealed class MongoStore : IKernelStore
         }
     }
 
+    private async ValueTask<long> NextOutsideSeq(int partition, CancellationToken cancellationToken)
+    {
+        // Nothing fences an outside add, so its key comes from the target partition's inbox clock: one document per
+        // partition, apart from the partition document so that adds never conflict with the owner's commits.
+        BsonDocument[] tick = [new("$set", new BsonDocument("clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$clock", 0L }), NowUs }), 1L })))];
+        var clock = await _clocks.FindOneAndUpdateAsync(new BsonDocument("_id", partition), Builders<BsonDocument>.Update.Pipeline(tick),
+            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
+        return clock["clock"].AsInt64;
+    }
+
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         if (ids.Count == 0) return [];
         var docs = await _instances.Find(new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids))), new FindOptions { BatchSize = ids.Count + 1 }).ToListAsync(cancellationToken);
         return docs.Select(d => new InstanceRow(d["_id"].AsString, d["model"].AsString, d["definition"].AsString, (InstanceStatus)d["status"].AsInt32, d["state"].AsString,
             d["revision"].AsInt64, Str(d["parent"]), Str(d["fault"]), Str(d["jobs"]), (History)d.GetValue("history", 0).AsInt32, d.GetValue("suspended", false).AsBoolean,
-            Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32)).ToList();
+            Str(d.GetValue("children", BsonNull.Value)), d.GetValue("stateVersion", 1).AsInt32, CustomHandles: Str(d.GetValue("customHandles", BsonNull.Value)))).ToList();
     }
 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
@@ -423,6 +450,41 @@ public sealed class MongoStore : IKernelStore
         var docs = await _subscriptions.Find(new BsonDocument("key", key)).Sort(new BsonDocument("instance", 1)).ToListAsync(cancellationToken);
         return docs.Select(d => new SubscriptionRow(d["key"].AsString, d["instance"].AsString, d["wait"].AsString,
             d.GetValue("start", BsonNull.Value) is { IsBsonNull: false } start ? Json.Read<StartSpec>(start.AsString) : null)).ToList();
+    }
+
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) =>
+        FindMatches(new BsonDocument("_id", new BsonDocument { { "k", published.Key }, { "id", published.Id } }), null, cancellationToken);
+
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default)
+    {
+        // Until this provider supports qualified rows, only generation-zero tickets can match.
+        waits = waits.Where(w => !CreationProtocol.Qualified(w)).ToArray();
+        return waits.Count == 0 ? new ValueTask<IReadOnlyList<EventRoute>>([]) : FindMatches(new BsonDocument
+        {
+            { "key", new BsonDocument("$in", new BsonArray(waits.Select(s => s.Key).Distinct())) },
+            { "$expr", new BsonDocument("$gte", new BsonArray { "$keepUntil", NowMs }) },
+        }, waits, cancellationToken);
+    }
+
+    private async ValueTask<IReadOnlyList<EventRoute>> FindMatches(BsonDocument filter, IReadOnlyList<SubscriptionRow>? waits, CancellationToken token)
+    {
+        var pipeline = new List<BsonDocument>
+        {
+            new("$match", filter),
+            new("$lookup", new BsonDocument { { "from", _subscriptions.CollectionNamespace.CollectionName }, { "localField", "key" },
+                { "foreignField", "key" }, { "as", "wait" } }),
+            new("$unwind", "$wait"),
+        };
+        if (waits is not null) pipeline.Add(new("$match", new BsonDocument("wait._id", new BsonDocument("$in", new BsonArray(waits.Select(SubscriptionId))))));
+        pipeline.Add(new("$sort", new BsonDocument { { "id", 1 }, { "wait.instance", 1 }, { "wait.wait", 1 } }));
+        var rows = await (await _events.AggregateAsync<BsonDocument>(pipeline, cancellationToken: token)).ToListAsync(token);
+        return rows.Select(e =>
+        {
+            var w = e["wait"].AsBsonDocument;
+            var spec = Str(w["start"]);
+            return new EventRoute(new(e["key"].AsString, e["id"].AsString, Str(e["payload"]), e["keepUntil"].AsInt64),
+                new(w["key"].AsString, w["instance"].AsString, w["wait"].AsString, spec is null ? null : Json.Read<StartSpec>(spec)));
+        }).ToList();
     }
 
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
@@ -544,14 +606,23 @@ public sealed class MongoStore : IKernelStore
     private static BsonDocument ToDocument(InstanceRow row, int partition) => new()
     {
         { "_id", row.Id }, { "partition", partition }, { "model", row.Model }, { "definition", row.Definition }, { "status", (int)row.Status },
-        { "state", row.State }, { "jobs", (BsonValue?)row.Jobs ?? BsonNull.Value }, { "revision", row.Revision },
+        { "state", row.State }, { "jobs", (BsonValue?)row.Jobs ?? BsonNull.Value }, { "customHandles", (BsonValue?)row.CustomHandles ?? BsonNull.Value }, { "revision", row.Revision },
         { "parent", (BsonValue?)row.Parent ?? BsonNull.Value }, { "fault", (BsonValue?)row.Fault ?? BsonNull.Value },
         { "history", (int)row.History }, { "suspended", row.Suspended }, { "children", (BsonValue?)row.Children ?? BsonNull.Value }, { "stateVersion", row.StateVersion },
     };
 
+    private static BsonDocument InboxId(InboxKey key)
+    {
+        BsonValue wire = key.HasIssuedOrigin && DurableKeyJson.HasUnpairedSurrogate(key.Id)
+            ? new BsonBinaryData(DurableKeyJson.CodeUnits(key.Id)) : new BsonString(key.Id);
+        var id = new BsonDocument { { "id", wire }, { "scope", key.Scope } };
+        if (key.Match is not null) id.Add("match", key.Match);
+        return id;
+    }
+
     private static BsonDocument ToDocument(Message m, long seq, long seen) => new()
     {
-        { "_id", m.Id }, { "partition", m.Target.Partition }, { "seq", seq }, { "target", m.Target.Id }, { "kind", m.Kind },
+        { "_id", InboxId(m.InboxKey) }, { "partition", m.Target.Partition }, { "seq", seq }, { "target", m.Target.Id }, { "kind", m.Kind },
         { "payload", (BsonValue?)m.Payload ?? BsonNull.Value }, { "sender", (BsonValue?)m.Sender ?? BsonNull.Value },
         { "start", m.Start is null ? BsonNull.Value : Json.Write(m.Start) }, { "due", m.Due ?? 0L }, { "seen", seen }, { "attempts", 0 }, { "trial", 0L },
         { "keepUntil", m.KeepUntil is { } keep ? keep : BsonNull.Value }, { "done", false }, { "replyTo", (BsonValue?)m.ReplyTo ?? BsonNull.Value },
@@ -560,10 +631,12 @@ public sealed class MongoStore : IKernelStore
     private static Stored ToStored(BsonDocument d)
     {
         var due = d["due"].AsInt64;
-        var message = new Message(d["_id"].AsString, new InstanceRef(d["target"].AsString), d["kind"].AsString, Str(d["payload"]), Str(d["sender"]),
+        var key = d["_id"].AsBsonDocument;
+        var wire = key["id"];
+        var message = new Message(wire.IsBsonBinaryData ? DurableKeyJson.FromCodeUnits(wire.AsBsonBinaryData.Bytes) : wire.AsString, new InstanceRef(d["target"].AsString), d["kind"].AsString, Str(d["payload"]), Str(d["sender"]),
             d["start"].IsBsonNull ? null : Json.Read<StartSpec>(d["start"].AsString), due == 0 ? null : due, d["keepUntil"].IsBsonNull ? null : d["keepUntil"].AsInt64,
             Str(d.GetValue("replyTo", BsonNull.Value)));
-        return new Stored(message, d["seq"].AsInt64, d["seen"].AsInt64, d["attempts"].AsInt32, d["trial"].AsInt64);
+        return new Stored(message.WithInboxScope(key["scope"].ToInt64(), Str(key.GetValue("match", BsonNull.Value))), d["seq"].AsInt64, d["seen"].AsInt64, d["attempts"].AsInt32, d["trial"].AsInt64);
     }
 
     private static BsonDocument SubscriptionId(SubscriptionRow s) => new() { { "k", s.Key }, { "i", s.Instance }, { "w", s.Wait } };

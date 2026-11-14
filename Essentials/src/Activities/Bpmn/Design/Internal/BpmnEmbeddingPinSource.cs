@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 namespace Elsa.Activities.Bpmn.Internal;
 
 internal sealed class BpmnEmbeddingPinSource(IWorkflowExecutableStore materials, IWorkflowExecutableSourceReferenceStore sources,
-    TimeProvider clock) : IExecutableCompilationSource
+    TimeProvider clock, IPersistenceAccessContextAccessor? access = null, IWorkflowActivationAuthority? activationSlots = null) : IExecutableCompilationSource
 {
     public async ValueTask<ExecutableCompilationContribution> GetContributionAsync(ExecutableCompilationContext context, CancellationToken cancellationToken = default)
     {
@@ -23,13 +23,23 @@ internal sealed class BpmnEmbeddingPinSource(IWorkflowExecutableStore materials,
                 string.IsNullOrWhiteSpace(literal.GetString()))
                 throw Refused(node, "requires a literal published BPMN model source reference.");
             var source = await sources.FindAsync(literal.GetString()!, cancellationToken);
-            if (source is null || source.TenantId != context.TenantId || source.SourceKind != "BpmnModel" || !source.IsLive(clock.GetUtcNow()))
+            if (source is null || source.SourceReferenceId != literal.GetString() || source.TenantId != context.TenantId || source.SourceKind != "BpmnModel" || source.Scope != WorkflowExecutableReferenceScope.Published || !source.IsLive(clock.GetUtcNow()))
                 throw Refused(node, "requires an accessible live published BPMN model source.");
             var material = await materials.FindMaterialAsync(source.ArtifactId, cancellationToken);
             if (material?.Model is not { Profile: BpmnModelProtocol.Profile or BpmnModelProtocol.NativeWorkProfile } model ||
-                model.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) || material.Identity.DefinitionId != source.DefinitionId ||
-                material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion)
+                model.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) || material.Identity.ArtifactId != source.ArtifactId)
                 throw Refused(node, "requires a qualified published BPMN human-work or native-service profile.");
+            if (source.PublicationScope is not null)
+            {
+                var slot = activationSlots is null ? null : (await activationSlots.ListByDefinitionAsync(source.DefinitionId, cancellationToken))
+                    .SingleOrDefault(item => item.SlotId == source.SlotId);
+                if (slot is null || access is null || !WorkflowExecutableSourceReferenceComparer.MatchesPublication(source, slot,
+                    access.Current.RequireScope(admitPrivileged: true), context.TenantId, clock.GetUtcNow()))
+                    throw Refused(node, "requires the current scoped BPMN publication and its actual slot authority.");
+            }
+            else if (material.Identity.DefinitionId != source.DefinitionId || material.Identity.DefinitionVersionId != source.DefinitionVersionId ||
+                material.Identity.ArtifactVersion != source.ArtifactVersion)
+                throw Refused(node, "requires the exact legacy BPMN producer pin.");
             var pin = new BpmnEmbeddingPin(source.SourceReferenceId, material.Identity, material.IncarnationId);
             metadata.Add(new(node.ExecutableNodeId, BpmnEmbeddingJson.PinKey, BpmnEmbeddingJson.Serialize(pin)));
             dependencies.Add(new(node.ExecutableNodeId, material.Identity.ArtifactId, material.Identity.ArtifactHash));
