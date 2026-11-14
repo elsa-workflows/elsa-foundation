@@ -32,11 +32,12 @@ public sealed partial class EfSchedulerWorkQueueStoreTests
         await fixture.Context.SaveChangesAsync();
         var captured = state with { TestContext = new(state.TestEntry!.ContextId, state.TestEntry.ContextFingerprint,
             [], [], [state.TestEntry.ExecutableNodeId]) };
-        var json = JsonSerializer.Serialize(captured);
+        var json = RuntimeArtifactJson.Serialize(captured);
         await fixture.Context.WorkflowExecutionStates.ExecuteUpdateAsync(update => update.SetProperty(row => row.ContentJson, json));
         fixture.Context.ChangeTracker.Clear();
         var row = await fixture.Context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
-        Assert.Throws<NotSupportedException>(() => EfWorkflowExecutionStateStore.ReadChecked(row, "tenant-a", state.WorkflowExecutionId));
+        var exception = Assert.Throws<InvalidDataException>(() => EfWorkflowExecutionStateStore.ReadChecked(row, "tenant-a", state.WorkflowExecutionId));
+        Assert.IsType<NotSupportedException>(exception.InnerException);
     }
 
     [Theory]
