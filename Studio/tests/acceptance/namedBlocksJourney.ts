@@ -34,7 +34,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
   const line = (nodeId: string): Node => ({ nodeId, activityVersionId: versions.line, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: nodeId } }], outputs: [] });
   const complete: Node = { nodeId: "complete", activityVersionId: versions.complete, inputs: [{ referenceKey: "outcome", value: { expressionType: "Literal", value: "done" } }], outputs: [] };
   const body = (kind: "sequence" | "flowchart", terminal: boolean): Content => {
-    const activities = [line("one"), terminal ? complete : line("two"), line("after")];
+    const activities = [line("one"), terminal ? complete : line("two"), line("after"), ...(kind === "flowchart" ? [{ ...complete, nodeId: "terminal-inspection" }] : [])];
     return { state: { rootActivity: { nodeId: "root", activityVersionId: versions[kind], inputs: [], outputs: [], structure: {
       kind: `elsa.${kind}.structure`, schemaVersion: "1.0.0", payload: kind === "sequence" ? { activities, variables: [] } : {
         activities, variables: [], startNodeId: "one", nodeMetadata: {}, connectionMetadata: {}, connections: [
@@ -43,7 +43,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         ]
       }
     } }, variables: [], inputs: [], outputs: [] }, layout: [
-      { nodeId: "one", x: 80, y: 100 }, { nodeId: terminal ? "complete" : "two", x: 380, y: 100 }, { nodeId: "after", x: 680, y: 100 }
+      { nodeId: "one", x: 80, y: 100 }, { nodeId: terminal ? "complete" : "two", x: 380, y: 100 }, { nodeId: "after", x: 680, y: 100 }, ...(kind === "flowchart" ? [{ nodeId: "terminal-inspection", x: 380, y: 340 }] : [])
     ], activityPresentation: [] };
   };
   async function createWorkflow(name: string, content: Content) {
@@ -86,9 +86,11 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       const resource = `/runtime/workflows/instances/${started.workflowExecutionId}/activity-executions/${execution.activityExecutionId}`;
       const detail = await api<{ valueSnapshots: { inputKey: string; evidenceId: string }[] }>(resource);
       const evidence = detail.valueSnapshots.find(value => value.inputKey === (profile === "expression-results" && execution.fixtureNodeId === "after" ? "Expression" : "text")); expect(evidence).toBeTruthy();
-      const payload = await api<{ payload: { preview: string } }>(`${resource}/value-evidence/${evidence!.evidenceId}/payload`);
-      expect(payload.payload.preview).toBe(expectedText[execution.fixtureNodeId]);
-      values.push({ authoredActivityId: execution.authoredActivityId, activityExecutionId: execution.activityExecutionId, value: payload.payload.preview });
+      const payload = await api<{ payload: { kind: string; preview?: string; value?: unknown } }>(`${resource}/value-evidence/${evidence!.evidenceId}/payload`);
+      const numeric = profile === "expression-results" && execution.fixtureNodeId === "after";
+      if (numeric) { expect(payload.payload.kind).toBe("number"); expect(payload.payload.value).toBe(43); }
+      else expect(payload.payload.preview).toBe(expectedText[execution.fixtureNodeId]);
+      values.push({ authoredActivityId: execution.authoredActivityId, activityExecutionId: execution.activityExecutionId, value: numeric ? String(payload.payload.value) : payload.payload.preview! });
     }
     return { runId: started.workflowExecutionId, versionId: version.id, publication, activities, values };
   }
@@ -115,6 +117,24 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
     }
   }
   const row = (id: string) => page.locator(`.wf-sequence-step[data-id="${id}"], .react-flow__node[data-id="${id}"]`).first();
+  async function collapseInspector() {
+    const button = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
+    if (await button.isVisible()) await button.click();
+  }
+  async function showInspector() {
+    const button = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+    if (await button.isVisible()) await button.click();
+    const tab = page.getByRole("tab", { name: "Inspector", exact: true });
+    if (await tab.isVisible()) await tab.click();
+    const configuration = page.getByRole("tab", { name: "Configuration", exact: true });
+    if (await configuration.isVisible()) await configuration.click();
+    await page.getByRole("tab", { name: "Details", exact: true }).click();
+  }
+  async function terminalAffordance() {
+    const terminal = row("terminal-inspection");
+    await expect(terminal).toContainText("Ends reusable activity");
+    await expect(terminal.locator(".react-flow__handle.source")).toHaveCount(0);
+  }
   const failures: unknown[] = [];
   try {
     for (const host of (profile === "expression-results" ? ["workflow"] as const : ["workflow", "activity"] as const)) for (const kind of (profile === "expression-results" ? ["sequence"] as const : ["sequence", "flowchart"] as const)) {
@@ -158,6 +178,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       const route = host === "workflow" ? `/workflows/definitions?backend=legacy&definition=${definitionId}` : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`;
       await page.goto(route); await canvas();
       await expect(row("one")).toBeVisible();
+      if (kind === "flowchart") await terminalAffordance();
       await row("one").click();
       if (kind === "sequence") await row("one").press("Shift+ArrowDown");
       else await row("two").click({ modifiers: [multipleKey] });
@@ -216,17 +237,16 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       if (kind === "sequence") {
         await row(blockId).click();
         await page.getByRole("button", { name: `Open ${name} (${profile === "expression-results" ? 3 : 2} steps)`, exact: true }).click();
-        const expand = page.getByRole("button", { name: "Expand inspector panel", exact: true });
-        if (await expand.isVisible()) await expand.click();
-        await page.getByRole("tab", { name: "Details", exact: true }).click();
+        await showInspector();
         const displayName = page.getByRole("textbox", { name: "Display name", exact: true });
         name = `Renamed ${name}`;
         await displayName.fill(name); await displayName.press("Tab");
         await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === blockId)?.displayName).toBe(name);
         await expect(page.locator(".wf-breadcrumb")).toContainText(name);
-        await row("one").click();
+        await collapseInspector(); await row("one").click(); await showInspector();
         await displayName.fill("First packed step"); await displayName.press("Tab");
         await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === "one")?.displayName).toBe("First packed step");
+        await collapseInspector();
         await page.getByRole("button", { name: host === "workflow" ? "Undo" : "Undo Activity Graph edit", exact: true }).click();
         await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === "one")?.displayName ?? null).toBe(null);
         await expect(page.locator(".wf-breadcrumb")).toContainText(name);
@@ -289,6 +309,9 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
           expect(matched).toHaveLength(1); expect(matched[0].status).toBe("Completed");
         }
       }
+      if (kind === "flowchart") for (const run of [item.before, item.after]) {
+        expect((run as { activities: { fixtureNodeId: string }[] }).activities.filter(value => value.fixtureNodeId === "terminal-inspection")).toHaveLength(0);
+      }
       // The two terminal runs must prove an actual nearest graph exit and absence of the otherwise
       // ordered trailing step; their full execution records are retained for independent inspection.
       if (terminal) for (const run of [item.before, item.after]) {
@@ -301,16 +324,42 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         expect(activities.filter(value => value.fixtureNodeId === "after").every(value => value.startedAt == null && value.status === "Cancelled")).toBe(true);
         expect(activities.find(value => value.fixtureNodeId === "caller-after")?.status).toBe("Completed");
       }
-      const readOnlyRoute = host === "workflow"
-        ? `/workflows/definitions?backend=legacy&definition=${definitionId}&version=${(item.after as { versionId: string }).versionId}`
-        : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`;
-      await page.goto(readOnlyRoute); await canvas(); await expect(row(blockId)).toBeVisible();
+      let currentDraftName: string | undefined;
+      if (host === "workflow") {
+        // The supported read-only editor is a captured Test Run snapshot, not a version URL.
+        await page.getByRole("button", { name: "Save", exact: true }).click();
+        await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+        await page.getByRole("button", { name: "Test Run", exact: true }).click();
+        const update = page.getByRole("button", { name: "Update test", exact: true });
+        if (await update.isVisible()) await update.click();
+        await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+        const runtime = page.getByRole("region", { name: "Test run summary", exact: true });
+        await expect(runtime.locator(".wf-runtime-heading .wf-status-badge")).toHaveText("Completed");
+        await runtime.getByRole("button", { name: "Technical details", exact: true }).click();
+        const snapshotRunId = await runtime.locator('[aria-label^="Run ID: "]').getAttribute("title");
+        expect(snapshotRunId).toBeTruthy(); runIds.push(snapshotRunId!);
+        await page.getByRole("group", { name: "Execution controls", exact: true }).getByRole("button", { name: "Return to editing", exact: true }).click();
+        await collapseInspector(); await row(blockId).click(); await showInspector();
+        currentDraftName = `Current draft ${name}`;
+        const input = page.getByRole("textbox", { name: "Display name", exact: true });
+        await input.fill(currentDraftName); await input.press("Tab");
+        await expect.poll(async () => (await saved()).activityPresentation.find(value => value.nodeId === blockId)?.displayName).toBe(currentDraftName);
+        await page.getByRole("tab", { name: "Runtime", exact: true }).click();
+        await page.getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
+        await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toContainText("Captured snapshot · read only");
+      } else await page.goto(`/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`);
+      await canvas(); await expect(row(blockId)).toBeVisible();
       for (const action of ["Create Sequence block", "Create Flowchart block", "Extract block…", "Ungroup…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();
+      if (kind === "flowchart") {
+        await terminalAffordance();
+        await capture(page, info, `${host}-${kind}-terminal-readonly`);
+      }
       await row(blockId).click();
       await page.getByRole("button", { name: `Open ${name} (${profile === "expression-results" ? 3 : 2} steps)`, exact: true }).click();
       await expect(row("one")).toBeVisible(); await expect(page.locator(".wf-breadcrumb")).toContainText(name);
       if (terminal) await expect(row("complete")).toContainText("Ends reusable activity");
       await capture(page, info, `${host}-${kind}-readonly`);
+      if (currentDraftName) expect((await saved()).activityPresentation.find(value => value.nodeId === blockId)?.displayName).toBe(currentDraftName);
     }
   } catch (error) { failures.push(error); } finally {
     const cleanup: { kind: string; id: string; status: string }[] = [];
