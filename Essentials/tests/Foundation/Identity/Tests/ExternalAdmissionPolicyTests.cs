@@ -50,6 +50,22 @@ public sealed class ExternalAdmissionPolicyTests
         Assert.Equal(1, host.Writes);
     }
 
+    [Theory]
+    [InlineData(129)]
+    [InlineData(256)]
+    public async Task Jit_supports_the_full_configured_role_boundary(int count)
+    {
+        var ids = Enumerable.Range(0, count).Select(index => $"role-{index}").ToArray();
+        await using var host = Create("jit", ids);
+        foreach (var id in ids) await host.Role(id, "workflows:read");
+        var assessment = await host.Service.AssessAsync(await host.Context());
+        Assert.Equal(ExternalAdmissionFailure.None, assessment.Failure);
+        Assert.Equal(count, assessment.RoleIds.Count);
+        var admitted = await host.Service.AdmitAsync(await host.Context());
+        Assert.Equal(ExternalAdmissionFailure.None, admitted.Failure);
+        Assert.Equal(count, (await host.Users.FindAsync("default", admitted.UserId!))!.RoleIds.Count);
+    }
+
     [Fact]
     public async Task Integrator_provisioning_assigns_saved_roles_once_and_later_sign_ins_preserve_manual_memberships()
     {

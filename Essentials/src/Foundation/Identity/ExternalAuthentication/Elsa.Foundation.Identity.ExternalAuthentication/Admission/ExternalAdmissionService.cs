@@ -85,7 +85,7 @@ internal sealed class ExternalAdmissionService(IServiceScopeFactory scopes, ICon
             if (string.IsNullOrWhiteSpace(decision.ExistingUserId)) return Reject(ExternalAdmissionFailure.PolicyRejected);
             return await Existing(await users.FindAsync(context.Identity.TenantId, decision.ExistingUserId, token), roles, memberships, context, true, token);
         }
-        if (decision.Kind != ExternalAdmissionKind.NewUser || decision.RoleIds is null || decision.RoleIds.Count > 128) return Reject(ExternalAdmissionFailure.PolicyRejected);
+        if (decision.Kind != ExternalAdmissionKind.NewUser || decision.RoleIds is null || decision.RoleIds.Count > 256) return Reject(ExternalAdmissionFailure.PolicyRejected);
         var selected = decision.RoleIds.ToHashSet(StringComparer.Ordinal);
         var permitted = policy.DefaultRoleIds.ToHashSet(StringComparer.Ordinal);
         if (!selected.IsSubsetOf(permitted) || selected.Any(role => options.Value.AllowedRoleIds.Count > 0 && !options.Value.AllowedRoleIds.Contains(role, StringComparer.Ordinal)))
