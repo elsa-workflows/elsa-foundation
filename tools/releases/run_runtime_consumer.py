@@ -44,6 +44,7 @@ def source_state(repo: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="New owned output directory; default is a retained temporary directory.")
+    parser.add_argument("--graph-owner", action="store_true", help="Also pack and resolve the optional compiler-free Graph owner.")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
     initial_source = source_state(repo)
@@ -69,6 +70,9 @@ def main() -> None:
             visit(project.parent / reference.attrib["Include"].replace("\\", "/"))
         projects.append(project)
     visit(root_project)
+    graph_project = repo / "Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj"
+    if args.graph_owner:
+        visit(graph_project)
     for project in projects:
         run("dotnet", "pack", str(project), "--configuration", "Release", "--output", str(feed), cwd=repo)
     packages = {package_identity(path)[0]: (package_identity(path)[1], path) for path in feed.glob("*.nupkg")}
@@ -85,9 +89,23 @@ def main() -> None:
         ET.SubElement(properties, key).text = value
     references = ET.SubElement(consumer_project, "ItemGroup")
     ET.SubElement(references, "PackageReference", Include=root_project.stem, Version=versions[root_project.stem])
+    if args.graph_owner:
+        ET.SubElement(references, "PackageReference", Include=graph_project.stem, Version=versions[graph_project.stem])
     ET.SubElement(references, "PackageReference", Include="Microsoft.Extensions.DependencyInjection", Version=di_version)
     ET.ElementTree(consumer_project).write(consumer / "Consumer.csproj", encoding="unicode")
-    shutil.copyfile(repo / "tools/releases/RuntimeConsumer/Program.cs.template", consumer / "Program.cs")
+    program = (repo / "tools/releases/RuntimeConsumer/Program.cs.template").read_text()
+    if args.graph_owner:
+        program = program.replace("// OPTIONAL_OWNER_REGISTRATION", "new Elsa.Activities.Graph.Releases.GraphActivitiesReleaseVerificationFeature().ConfigureServices(services);")
+        program = program.replace("// OPTIONAL_OWNER_ASSERTIONS", """
+var graphOwner = scope.ServiceProvider.GetServices<IReleaseOccurrenceInspector>().Single(value => value.Identity.Name == "elsa.graph-release-profile");
+if (!graphOwner.SupportedSites.Contains(new(ReleaseRuntimeSiteKinds.TemplateOverlay, WellKnownRuntimeActivityConsumers.GraphActivity, 1)))
+    throw new InvalidOperationException("The installed Graph owner did not resolve its consumer-specific overlay claim.");
+var unrelated = await graphOwner.InspectAsync(new(content.Members[0].Key, [], "root", null,
+    new(ReleaseRuntimeSiteKinds.Descriptor, "fixture.unrelated", 1), JsonSerializer.SerializeToElement(new { nodeId = "root" })), content);
+if (unrelated.Status != ReleaseSemanticStatus.Unsupported || !unrelated.Diagnostics.Any(value => value.Code == "graph_site_unsupported"))
+    throw new InvalidOperationException("The installed Graph owner accepted another consumer's site.");
+""")
+    (consumer / "Program.cs").write_text(program)
     # An isolated cache prevents an older package with the same ID/version from satisfying this witness.
     # Copy only public source locations from the committed producer configuration, never credentials.
     config = ET.Element("configuration")
@@ -141,6 +159,7 @@ def main() -> None:
         "consumerLibraries": sorted(libraries), "outcome": "passed" if unchanged else "incomplete",
         "scope": "Runtime package closure, template hash/codec/owner and bounds only",
         "semanticValidation": "template owner only; mandatory module sites remain unverified", "promotion": "not attempted",
+        "graphOwnerRegistration": args.graph_owner,
     }
     (output / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"result": str(output / "result.json"), "outcome": result["outcome"]}))
