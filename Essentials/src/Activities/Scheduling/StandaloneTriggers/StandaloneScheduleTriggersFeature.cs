@@ -40,6 +40,11 @@ internal sealed class ScheduleResourcePlanner(IRecurringScheduleCalculator calcu
         RecurringTriggerSchedule? current, DateTimeOffset now)
     {
         try { return PlanCore(scope, previous, write, current, now); }
+        catch (NotSupportedException exception)
+        {
+            throw new TriggerOperationException("unavailable", "The selected recurring calculator does not support this resource schedule profile.",
+                new Dictionary<string, string> { ["scope"] = scope.Persistence.Value, ["triggerId"] = write.Trigger.Id }, exception);
+        }
         catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException or JsonException or
             FormatException or OverflowException or KeyNotFoundException or InvalidOperationException or ArgumentException)
         {

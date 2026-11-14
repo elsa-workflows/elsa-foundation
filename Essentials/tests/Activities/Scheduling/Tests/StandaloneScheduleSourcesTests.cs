@@ -19,10 +19,10 @@ public sealed class StandaloneScheduleSourcesTests
             revision, configuration, 1, state, new(TriggerManagementKind.Studio), Now, Now, "creator", tenantId: Scope.TenantId);
     private static TriggerStoreWrite Write(StandaloneTrigger trigger) => new("request", "fingerprint", "operator", trigger.Revision - 1, trigger, []);
 
-    private static ServiceProvider Services(IStandaloneTriggerIngressFactory? factory = null)
+    private static ServiceProvider Services(IStandaloneTriggerIngressFactory? factory = null, IRecurringScheduleCalculator? calculator = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IRecurringScheduleCalculator, RecurringScheduleCalculator>();
+        services.AddSingleton<IRecurringScheduleCalculator>(calculator ?? new RecurringScheduleCalculator());
         services.AddSingleton<IPersistenceAccessContextAccessor>(new Access());
         services.AddSingleton<TimeProvider>(new Clock());
         services.AddSingleton<IRuntimeIngressDeliveryStore, UnsupportedDelivery>();
@@ -33,6 +33,26 @@ public sealed class StandaloneScheduleSourcesTests
         });
         new StandaloneScheduleTriggersFeature().ConfigureServices(services);
         return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public void Utc_only_calculator_replacement_keeps_legacy_planning_and_refuses_timezone_profile_with_context()
+    {
+        using var services = Services(calculator: new UtcOnlyCalculator()); using var operation = services.CreateScope();
+        var planner = Assert.Single(operation.ServiceProvider.GetServices<IStandaloneSchedulePlanner>());
+        Assert.Equal(Now.AddMinutes(5), planner.Plan(Scope, null, Write(Trigger()), null, Now).Replacement!.NextOccurrence);
+        var cron = Trigger(type: "cron", settings: Json("{\"expression\":\"0 9 * * *\",\"timezone\":\"Europe/Amsterdam\"}"));
+        var failure = Assert.Throws<TriggerOperationException>(() => planner.Plan(Scope, null, Write(cron), null, Now));
+        Assert.Equal("unavailable", failure.Code);
+        Assert.Equal(Scope.Persistence.Value, failure.Metadata["scope"]);
+        Assert.Equal(cron.Id, failure.Metadata["triggerId"]);
+        Assert.IsType<NotSupportedException>(failure.InnerException);
+    }
+
+    // Uses the public interface's default timezone refusal, as an existing UTC-only module does.
+    private sealed class UtcOnlyCalculator : IRecurringScheduleCalculator
+    {
+        public DateTimeOffset? ComputeNext(RecurringScheduleKind kind, string expression, DateTimeOffset after) => after.AddMinutes(5);
     }
 
     [Fact]
