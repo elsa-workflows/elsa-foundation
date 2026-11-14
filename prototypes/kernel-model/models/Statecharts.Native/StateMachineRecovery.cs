@@ -17,8 +17,15 @@ internal sealed partial class StateMachine
         };
         if (string.IsNullOrEmpty(child.Parent) || child.Tag is not null || child.Scope is not null || value is null)
             throw new InvalidOperationException("Invalid statechart retry obligation.");
-        var graph = Compile(definition, Literal<Definition>(nameof(ChartDefinition)), Literal<StructuralDefinition>(nameof(StructuralDefinition)));
-        var state = Restore(Values.To<MachineState>(value) ?? throw new InvalidOperationException("Missing statechart retry state."), graph, child.Parent);
+        MachineState state;
+        try
+        {
+            var graph = Compile(definition, Literal<Definition>(nameof(ChartDefinition)), Literal<StructuralDefinition>(nameof(StructuralDefinition)));
+            state = Restore(Values.To<MachineState>(value) ?? throw new InvalidOperationException("Missing statechart retry state."), graph, child.Parent);
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException)
+        { throw new InvalidOperationException("Invalid statechart retry state.", error); }
+        if (state.Scopes is null || state.LegacyScopes) throw new InvalidOperationException("Statechart retry requires materialized visit scopes.");
         var progress = state.Progress;
         if (state.Pending is null || progress is null || !progress.Running.TryGetValue(child.Source, out var index) || progress.Done[index] ||
             progress.Requires[index].Any(i => !progress.Done[i]) || state.Pending.Steps[index].Activity != child.Node || progress.Running.ContainsKey(child.Successor))
