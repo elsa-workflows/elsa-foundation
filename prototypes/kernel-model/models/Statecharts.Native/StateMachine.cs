@@ -7,9 +7,10 @@ internal sealed record PhaseProgress(int[][] Requires, bool[] Done, Dictionary<s
 internal sealed record MachineState(string[] Active, Reaction? Pending, int Cursor = 0, string? Child = null,
     PhaseProgress? Progress = null, int Version = 1,
     StateVisit[]? Visits = null, StateVisit[]? PlannedVisits = null, long VisitSerial = 0,
-    GraphPlan? Selection = null, bool LegacyPending = false);
+    GraphPlan? Selection = null, bool LegacyPending = false,
+    VisitScopes? Scopes = null, bool LegacyScopes = false);
 
-internal sealed class StateMachine : CompositeActivity, ISignalledComposite
+internal sealed partial class StateMachine : CompositeActivity, ISignalledComposite
 {
     public StateMachine() { }
     [Input] public Definition? ChartDefinition { get; set; }
@@ -22,27 +23,28 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
         var input = StructuralDefinition is null ? nameof(ChartDefinition) : nameof(StructuralDefinition);
         if (context.Node.Inputs.GetValueOrDefault(input) is not LiteralBinding)
             throw new ArgumentException("Statechart definition must be literal for this prototype.");
-        var graph = StructuralDefinition is { } definition ? new SelectionChart(definition.Nodes, definition.Rules) : new Chart(ChartDefinition!).Compiled;
+        var graph = StructuralDefinition is { } definition ? new SelectionChart(definition.Nodes, definition.Rules, definition.Defaults) : new Chart(ChartDefinition!).Compiled;
         foreach (var id in graph.Activities)
             if (context.Children.Count(n => n.Id == id) != 1) throw new ArgumentException("Unknown statechart activity reference: " + id);
         return graph;
     }
 
-    protected override void Execute(CompositeContext context)
+    protected internal override void Execute(CompositeContext context)
     {
         var graph = Compile(context);
         var initial = graph.Initial();
         var work = initial.Select(id => new GraphStep("entry:" + id, "entry", id, graph.Entry(id), null, null, [])).ToArray();
         var requires = graph.Prerequisites(work.Select(w => (w.Phase, w.State)).ToArray());
         var plan = new GraphPlan([], [], initial, work.Select((w, i) => w with { After = requires[i].Select(j => work[j].Id).ToArray() }).ToArray());
-        Run(context, Begin(new([], null, Version: 3, Visits: []), plan, null, context.FrameId));
+        var scopes = new VisitScopes(context.CreateLexicalScope(graph.MachineDefaults), [], false);
+        Run(context, Begin(new([], null, Version: 4, Visits: [], Scopes: scopes), plan, null, context.FrameId));
     }
 
     public bool CanAccept(CompositeContext context) => State(context).Pending is null;
 
     public void Accept(CompositeContext context, string messageId, CompositeSignal signal)
     {
-        var state = State(context);
+        var state = MaterializeScopes(context, State(context));
         var plan = Compile(context).Select(state.Visits!, (r, _) => r.Trigger == signal.Name,
             (r, _) => r.When is null || r.When == signal.Value);
         Record(context, messageId, "evaluated", signal.Name);
@@ -55,9 +57,9 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
         Run(context, Begin(state, plan, messageId, context.FrameId));
     }
 
-    protected override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
-        var state = State(context);
+        var state = MaterializeScopes(context, State(context));
         if (state.Pending is null || !state.Progress!.Running.Remove(child.Frame, out var index))
             throw new InvalidOperationException("Statechart callback does not match its pending action.");
         state.Progress.Done[index] = true;
@@ -72,12 +74,14 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
         var next = plan.Next.Select(id => entering.Contains(id) ? new StateVisit(id, frame + "/state/" + checked(++serial)) : current[id]).ToArray();
         var indices = plan.Steps.Select((s, i) => (s.Id, i)).ToDictionary(p => p.Id, p => p.i, StringComparer.Ordinal);
         return state with { Pending = new(eventId, plan.Next, plan.Steps.Select(s => new Step(s.Phase, s.State, s.Activity)).ToArray()),
-            Cursor = 0, Child = null, Version = 3, VisitSerial = serial, PlannedVisits = next, Selection = plan, LegacyPending = false,
+            Cursor = 0, Child = null, Version = 4, Scopes = state.Scopes! with { Retired = false }, VisitSerial = serial, PlannedVisits = next, Selection = plan, LegacyPending = false,
             Progress = new(plan.Steps.Select(s => s.After.Select(id => indices[id]).ToArray()).ToArray(), new bool[plan.Steps.Length], []) };
     }
 
     private void Run(CompositeContext context, MachineState state)
     {
+        state = MaterializeScopes(context, state);
+        var graph = Compile(context);
         var reaction = state.Pending!;
         var progress = state.Progress!;
         if (!progress.Running.Keys.ToHashSet().SetEquals(context.Running))
@@ -90,9 +94,16 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
             {
                 if (progress.Done[i] || progress.Running.ContainsValue(i) || progress.Requires[i].Any(p => !progress.Done[p])) continue;
                 var step = reaction.Steps[i];
+                if (step.Phase == "entry")
+                {
+                    RetireSources(context, state);
+                    var visit = state.PlannedVisits!.Single(v => v.State == step.State);
+                    CreateVisitScope(context, graph, state.Scopes!, visit, state.PlannedVisits);
+                }
+                var source = (step.Phase == "entry" ? state.PlannedVisits! : state.Visits!).Single(v => v.State == step.State);
                 Record(context, reaction.EventId, step.Phase, step.State);
                 if (step.Activity is null) progress.Done[i] = true;
-                else progress.Running.Add(context.Schedule(context.Children.Single(child => child.Id == step.Activity)), i);
+                else progress.Running.Add(context.ScheduleInScope(context.Children.Single(child => child.Id == step.Activity), state.Scopes!.Visits[source.Occurrence]), i);
                 changed = true;
             }
         } while (changed);
@@ -102,13 +113,20 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
             context.SetState(state);
             return;
         }
-        context.SetState(new MachineState(reaction.Next, null, Version: 3, Visits: state.PlannedVisits, VisitSerial: state.VisitSerial));
+        RetireSources(context, state);
+        context.SetState(new MachineState(reaction.Next, null, Version: 4, Visits: state.PlannedVisits, VisitSerial: state.VisitSerial,
+            Scopes: state.Scopes! with { Retired = false }));
         if (reaction.EventId is { } id) Record(context, id, "handled", "");
         if (Compile(context).IsTopFinal(reaction.Next)) context.Complete();
     }
 
-    private MachineState State(CompositeContext context) => Restore(
-        context.ReadState<MachineState>() ?? throw new InvalidOperationException("Statechart has not entered."), Compile(context), context.FrameId);
+    private MachineState State(CompositeContext context)
+    {
+        var state = Restore(context.ReadState<MachineState>() ?? throw new InvalidOperationException("Statechart has not entered."), Compile(context), context.FrameId);
+        ValidateResources(context, state);
+        ValidateScopeParents(context, state, Compile(context));
+        return state;
+    }
 
     // Reader compatibility for the prototype's serial cursor. Conversion is pure during CanAccept probing;
     // its completed prefix and exact pending child are committed by the next ordinary model checkpoint.
@@ -138,7 +156,7 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
                 state = state with { Version = 2, Cursor = 0, Child = null, Progress = progress };
             }
         }
-        if (state.Version is not (2 or 3)) throw new NotSupportedException("Unsupported statechart phase checkpoint version.");
+        if (state.Version is not (2 or 3 or 4)) throw new NotSupportedException("Unsupported statechart phase checkpoint version.");
         if (state.Cursor != 0 || state.Child is not null) throw new InvalidOperationException("Invalid statechart phase checkpoint.");
         if (state.Pending is null && state.Progress is not null)
             throw new InvalidOperationException("Invalid statechart phase checkpoint.");
@@ -201,7 +219,7 @@ internal sealed class StateMachine : CompositeActivity, ISignalledComposite
             if (!selected.Steps.Select((w, i) => w.After.Select(id => byId[id]).SequenceEqual(state.Progress!.Requires[i])).All(ok => ok))
                 throw new InvalidOperationException("Selected statechart phase dependencies changed.");
         }
-        return state;
+        return RestoreScopes(state, chart, oldVersion);
     }
 
     private static void Record(CompositeContext context, string? id, string phase, string state) =>
