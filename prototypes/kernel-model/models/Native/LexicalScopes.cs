@@ -51,7 +51,7 @@ internal static class LexicalScopes
     {
         foreach (var (id, scope) in state.LexicalScopes ?? [])
         {
-            if (string.IsNullOrEmpty(id) || !state.Frames.ContainsKey(scope.Owner) || scope.Values is null)
+            if (string.IsNullOrEmpty(id) || scope is null || string.IsNullOrEmpty(scope.Owner) || !state.Frames.ContainsKey(scope.Owner) || scope.Values is null)
                 throw new InvalidOperationException("Lexical scope owner or values are missing.");
             var seen = new HashSet<string>(StringComparer.Ordinal) { id };
             for (var parent = scope.Parent; parent is not null; parent = Accessible(state, scope.Owner, parent).Parent)
@@ -72,6 +72,7 @@ internal sealed partial class Burst
 {
     internal string CreateLexicalScope(Frame owner, IReadOnlyDictionary<string, JsonNode?> values, string? parent)
     {
+        if (!_s.Frames.ContainsKey(owner.Id)) throw new InvalidOperationException("Lexical scope owner is not live.");
         if (parent is not null) _ = LexicalScopes.Accessible(_s, owner.Id, parent);
         // Clone before allocating/mutating the checkpoint, including values with nested mutable JSON.
         var declared = values.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal);
