@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
@@ -11,6 +12,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +23,42 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfDurableValueAndSchedulerStateTests
 {
+    [Fact]
+    public async Task Cleared_identity_values_survive_persisted_reads_and_a_fresh_context()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = DateTimeOffset.UtcNow;
+        var cleared = RuntimeWorkflowStateSeed.BuildIdentityChanges("workflow-null", true, null, true, null, now);
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            foreach (var change in cleared)
+                await fixture.Values.SaveAsync(change.State!);
+
+            var page = await fixture.Values.ListPageAsync(new DurableValueStatePageQuery("workflow-null", 10));
+            Assert.Equal(2, page.Items.Count);
+            Assert.All(page.Items, state =>
+            {
+                Assert.True(state.InlineValue.HasValue);
+                Assert.Equal(JsonValueKind.Null, state.InlineValue.Value.ValueKind);
+            });
+        }
+
+        await using var reopened = database.Open("tenant-a");
+        foreach (var change in cleared)
+        {
+            var stored = await reopened.Values.FindAsync("workflow-null", change.State!.DurableValueId);
+            Assert.NotNull(stored);
+            Assert.True(stored.InlineValue.HasValue);
+            Assert.Equal(JsonValueKind.Null, stored.InlineValue.Value.ValueKind);
+        }
+
+        // Updating also reads the previous persisted state before replacing it.
+        var assigned = Assert.Single(RuntimeWorkflowStateSeed.BuildIdentityChanges("workflow-null", true, "restored", false, null, now.AddSeconds(1)));
+        await reopened.Values.SaveAsync(assigned.State!);
+        var updated = await reopened.Values.FindAsync("workflow-null", assigned.State!.DurableValueId);
+        Assert.Equal("restored", updated!.InlineValue!.Value.GetString());
+    }
+
     [Fact]
     public async Task Durable_values_are_scoped_stable_and_restartable()
     {
@@ -47,6 +85,82 @@ public sealed class EfDurableValueAndSchedulerStateTests
 
         await using var restarted = database.Open("tenant-a");
         Assert.Equal("z-value", (await restarted.Values.FindAsync("workflow-a", "z-value"))!.DurableValueId);
+    }
+
+    [Fact]
+    public async Task Inline_null_keeps_its_value_presence_after_fresh_scope_find_page_and_update()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var state = new DurableValueState("null-value", "workflow-a", "message", new("json", null, null),
+            DurableValueLifecycle.Instance, DurableValueStorage.Inline, JsonSerializer.SerializeToElement<string?>(null),
+            null, null, DateTimeOffset.UtcNow, new Dictionary<string, string> { ["source"] = "null-control" });
+        string original;
+        await using (var first = database.Open("tenant-a"))
+        {
+            await first.Values.SaveAsync(state);
+            original = (await first.Context.DurableValueStates.AsNoTracking().SingleAsync()).ContentJson;
+            Assert.Equal(JsonValueKind.Null, JsonDocument.Parse(original).RootElement.GetProperty("inlineValue").ValueKind);
+        }
+        await using (var reopened = database.Open("tenant-a"))
+        {
+            var found = (await reopened.Values.FindAsync("workflow-a", "null-value"))!;
+            Assert.True(found.InlineValue.HasValue); Assert.Equal(JsonValueKind.Null, found.InlineValue.Value.ValueKind);
+            var paged = Assert.Single((await reopened.Values.ListPageAsync(new("workflow-a"))).Items);
+            Assert.Equal(JsonValueKind.Null, paged.InlineValue!.Value.ValueKind);
+            await reopened.Values.SaveAsync(found);
+            Assert.Equal(original, (await reopened.Context.DurableValueStates.AsNoTracking().SingleAsync()).ContentJson);
+        }
+        await using var final = database.Open("tenant-a");
+        Assert.Equal(JsonValueKind.Null, (await final.Values.FindAsync("workflow-a", "null-value"))!.InlineValue!.Value.ValueKind);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Inline_values_keep_legacy_case_alias_and_last_member_semantics(bool lastNull)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Values.SaveAsync(Value("value", "workflow-a"));
+        var row = await fixture.Context.DurableValueStates.SingleAsync();
+        var content = JsonNode.Parse(row.ContentJson)!.AsObject();
+        content["inlineValue"] = lastNull ? JsonNode.Parse("123") : null;
+        content["InlineValue"] = lastNull ? null : JsonNode.Parse("456");
+        row.ContentJson = content.ToJsonString(); await fixture.Context.SaveChangesAsync();
+        var found = (await fixture.Values.FindAsync("workflow-a", "value"))!;
+        Assert.True(found.InlineValue.HasValue);
+        if (lastNull) Assert.Equal(JsonValueKind.Null, found.InlineValue.Value.ValueKind);
+        else Assert.Equal(456, found.InlineValue.Value.GetInt32());
+    }
+
+    [Theory]
+    [InlineData(DurableValueStorage.None)]
+    [InlineData(DurableValueStorage.External)]
+    [InlineData(DurableValueStorage.Custom)]
+    public async Task Non_inline_storage_keeps_a_null_wire_member_as_absence(DurableValueStorage storage)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var external = storage == DurableValueStorage.External ? new DurableValueExternalReference("fixture", "opaque", new Dictionary<string, string>()) : null;
+        var state = new DurableValueState("value", "workflow", "value", new("json", null, null),
+            storage == DurableValueStorage.None ? DurableValueLifecycle.None : DurableValueLifecycle.Instance,
+            storage, null, external, null, DateTimeOffset.UtcNow, new Dictionary<string, string>());
+        await using (var first = database.Open("tenant-a")) await first.Values.SaveAsync(state);
+        await using var reopened = database.Open("tenant-a");
+        var found = (await reopened.Values.FindAsync("workflow", "value"))!;
+        Assert.Equal(storage, found.Storage); Assert.False(found.InlineValue.HasValue);
+        Assert.Equal(external?.Locator, found.ExternalReference?.Locator);
+    }
+
+    [Fact]
+    public async Task Inline_storage_with_a_missing_wire_member_still_refuses_corrupt_content()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Values.SaveAsync(Value("value", "workflow-a"));
+        var row = await fixture.Context.DurableValueStates.SingleAsync();
+        var content = JsonNode.Parse(row.ContentJson)!.AsObject(); Assert.True(content.Remove("inlineValue"));
+        row.ContentJson = content.ToJsonString(); await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Values.FindAsync("workflow-a", "value").AsTask());
     }
 
     [Fact]
