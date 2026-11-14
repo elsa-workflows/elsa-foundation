@@ -7,9 +7,10 @@ $helper = (Resolve-Path "$PSScriptRoot/_Assertions.ps1").Path.Replace("'", "''")
 $results = @()
 foreach ($succeeded in @($true, $false)) {
     $name = if ($succeeded) { 'success' } else { 'integrity-refusal' }
-    $receipt = (Join-Path $directory "$name-cleanup.txt").Replace("'", "''")
+    $receipt = Join-Path $directory "$name-cleanup.txt"
+    $receiptLiteral = $receipt.Replace("'", "''")
     $literal = if ($succeeded) { '$true' } else { '$false' }
-    $command = ". '$helper'; try {} finally { [IO.File]::WriteAllText('$receipt', 'cleanup-and-receipt-retained') }; Assert-ProofSucceeded -Succeeded $literal"
+    $command = ". '$helper'; try {} finally { [IO.File]::WriteAllText('$receiptLiteral', 'cleanup-and-receipt-retained') }; Assert-ProofSucceeded -Succeeded $literal"
     $start = [Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
@@ -27,7 +28,7 @@ foreach ($succeeded in @($true, $false)) {
         $expected = if ($succeeded) { 0 } else { 1 }
         if ($process.ExitCode -ne $expected) { throw "$name returned $($process.ExitCode), expected $expected" }
         if (-not $succeeded -and $output -notmatch 'Activity data proof failed; inspect the retained receipt') { throw 'The negative case did not reach the actual final assertion' }
-        if ((Get-Content $receipt -Raw) -cne 'cleanup-and-receipt-retained') { throw 'The command did not retain cleanup evidence' }
+        if ((Get-Content -LiteralPath $receipt -Raw) -cne 'cleanup-and-receipt-retained') { throw 'The command did not retain cleanup evidence' }
         $results += @{name=$name;exitCode=$process.ExitCode;cleanupRetained=$true}
     } finally { $process.Dispose() }
 }
