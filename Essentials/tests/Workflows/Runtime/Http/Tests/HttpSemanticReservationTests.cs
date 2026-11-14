@@ -99,6 +99,80 @@ public sealed class HttpSemanticReservationTests
         Assert.Single(receipts, item => item is not null);
     }
 
+    [Fact]
+    public async Task Native_candidate_with_two_equivalent_templates_is_refused_before_any_slot_serves()
+    {
+        using var fixture = new Fixture(); using var operation = fixture.Open(); var services = operation.ServiceProvider;
+        var result = await Publish(services, "definition", "ambiguous", "orders/{id}", alternativeRoute: "orders/{name}");
+        Assert.False(result.Succeeded); Assert.Contains("ambiguous exclusive", result.Diagnostic ?? "");
+        Assert.Null((await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("definition", "Published"))?.ActiveActivationId);
+        Assert.Empty(await services.GetRequiredService<IWorkflowTriggerBindingStore>().ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType));
+        Assert.Empty((await services.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope.Persistence,
+            new(HttpEndpointRouting.StimulusType))).Items);
+    }
+
+    [Fact]
+    public async Task Native_same_publication_slot_can_rename_its_parameter_and_reconcile_the_old_claim()
+    {
+        using var fixture = new Fixture(); using var operation = fixture.Open(); var services = operation.ServiceProvider;
+        var first = await Publish(services, "definition", "first", "orders/{id}"); Assert.True(first.Succeeded);
+        var second = await Publish(services, "definition", "second", "orders/{name}", expectedRevision: first.Slot.Revision);
+        Assert.True(second.Succeeded, second.Diagnostic);
+        var claim = Assert.Single((await services.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope.Persistence,
+            new(HttpEndpointRouting.StimulusType))).Items);
+        Assert.Equal(first.Slot.SlotId, claim.OwnerId); Assert.Equal(second.Slot.Revision, claim.OwnerRevision);
+        Assert.Equal("orders/{name}", claim.Metadata[HttpEndpointRouting.TemplateMetadataKey]);
+        Assert.Single(await services.GetRequiredService<IWorkflowTriggerBindingStore>().ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType));
+    }
+
+    [Fact]
+    public async Task Native_other_scope_is_excluded_before_decoding_its_malformed_legacy_binding_metadata()
+    {
+        using var fixture = new Fixture(); var other = new PersistenceScope("foreign-semantic-http");
+        using (var foreign = fixture.Open(other))
+        {
+            Assert.True((await Publish(foreign.ServiceProvider, "foreign", "foreign", "orders/{id}")).Succeeded);
+            var bindings = foreign.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>();
+            var binding = Assert.Single(await bindings.ListAllByStimulusTypeAsync(HttpEndpointRouting.StimulusType));
+            // Deliberate legacy corruption in another physical namespace must not be interpreted by this scope.
+            await bindings.SaveAsync(binding with { Metadata = Metadata("orders/{", "POST") });
+        }
+        using var operation = fixture.Open();
+        await Put(operation.ServiceProvider, "resource", "orders/{name}");
+        Assert.Single((await operation.ServiceProvider.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope.Persistence,
+            new(HttpEndpointRouting.StimulusType))).Items);
+        using var verifyForeign = fixture.Open(other);
+        Assert.Single((await verifyForeign.ServiceProvider.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(other,
+            new(HttpEndpointRouting.StimulusType))).Items);
+    }
+
+    [Fact]
+    public async Task Native_competing_publication_and_resource_leave_only_the_actual_winner()
+    {
+        using var fixture = new Fixture(); var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var publication = Task.Run(async () =>
+        {
+            using var operation = fixture.Open(); await start.Task;
+            var result = await Publish(operation.ServiceProvider, "definition", "publication", "orders/{id}");
+            if (!result.Succeeded) Assert.Contains("equivalent endpoint", result.Diagnostic ?? "");
+            return result.Succeeded;
+        });
+        var resource = Task.Run(async () =>
+        {
+            using var operation = fixture.Open(); await start.Task;
+            try { await Put(operation.ServiceProvider, "resource", "orders/{name}"); return true; }
+            catch (TriggerOperationException error) when (error.Code == "route-conflict") { return false; }
+        });
+        start.SetResult(); Assert.Single(await Task.WhenAll(publication, resource), accepted => accepted);
+        using var verify = fixture.Open();
+        var reservations = await verify.ServiceProvider.GetRequiredService<IRuntimeIngressReservationReader>().ListInScopeAsync(Scope.Persistence,
+            new(HttpEndpointRouting.StimulusType));
+        Assert.Single(reservations.Items);
+        var serving = (await verify.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>().FindAsync("definition", "Published"))?.ActiveActivationId is not null;
+        var stored = await verify.ServiceProvider.GetRequiredService<IStandaloneTriggerStore>().FindAsync(Scope, "resource");
+        Assert.NotEqual(serving, stored is not null);
+    }
+
     private static async Task Put(IServiceProvider services, string id, string route, string method = "POST", long revision = 1)
     {
         var resource = new StandaloneTrigger(id, "Orders", "http", 1, JsonSerializer.SerializeToElement(new
@@ -109,18 +183,19 @@ public sealed class HttpSemanticReservationTests
             [new(HttpEndpointRouting.StimulusType, Identity(route, method), Metadata(route, method))]);
     }
 
-    private static async Task<WorkflowActivationResult> Publish(IServiceProvider services, string definition, string activation, string route)
+    private static async Task<WorkflowActivationResult> Publish(IServiceProvider services, string definition, string activation, string route, string? alternativeRoute = null, long expectedRevision = 0)
     {
         var identity = new WorkflowExecutableIdentity(activation + "-artifact", definition, activation, "1", "hash");
+        var metadata = Metadata(route, "POST"); if (alternativeRoute is not null) metadata["test:alternateRoute"] = alternativeRoute;
         var root = new ExecutableNode("root", "root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }),
-            new Dictionary<string, RuntimeInputBinding>(), Metadata(route, "POST"));
+            new Dictionary<string, RuntimeInputBinding>(), metadata);
         var executable = new WorkflowExecutable(identity, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now,
             new Dictionary<string, string>(), new WorkflowExecutableInputContract(1, []), [], IncidentStrategyBuiltIns.FaultReference);
         var materials = services.GetRequiredService<IWorkflowExecutableStore>(); await materials.SaveAsync(executable);
         var material = (await materials.FindMaterialAsync(identity.ArtifactId))!;
         return await services.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new(definition, material,
             new("candidate", identity.ArtifactId, "definition", activation, "1", definition, activation, "1", Now, Now,
-                WorkflowExecutableReferenceScope.Published) { TenantId = Scope.TenantId }, "Published", activation, WorkflowActivationSource.Publishing, 0));
+                WorkflowExecutableReferenceScope.Published) { TenantId = Scope.TenantId }, "Published", activation, WorkflowActivationSource.Publishing, expectedRevision));
     }
 
     private static string Identity(string route, string method) => "original:" + route + ":" + method;
@@ -142,10 +217,10 @@ public sealed class HttpSemanticReservationTests
             services.RemoveAll<IWorkflowTriggerIndexer>(); services.AddScoped<IWorkflowTriggerIndexer, Indexer>();
             provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }
-        internal IServiceScope Open()
+        internal IServiceScope Open(PersistenceScope? partition = null)
         {
             var scope = provider.CreateScope(); scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>()
-                .Bind(PersistenceAccessContext.Scoped(Scope.Persistence)); return scope;
+                .Bind(PersistenceAccessContext.Scoped(partition ?? Scope.Persistence)); return scope;
         }
         public void Dispose() => provider.Dispose();
     }
@@ -156,13 +231,18 @@ public sealed class HttpSemanticReservationTests
             string activationId, string slotId, CancellationToken cancellationToken = default)
         {
             var pin = executable.Identity; var metadata = executable.RootActivity.Metadata;
-            var hash = Identity(metadata[HttpEndpointRouting.TemplateMetadataKey], metadata[HttpEndpointRouting.MethodMetadataKey]);
-            var binding = new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, pin.ArtifactId, "root", hash), pin.ArtifactId,
-                pin.DefinitionId, pin.ArtifactVersion, pin.ArtifactHash, "root", HttpEndpointRouting.StimulusType, hash, null, metadata, Now,
-                activationId, slotId, TriggerCardinality.Exclusive);
-            await bindings.PrepareActivationAsync(activationId, [binding], cancellationToken);
+            var routes = new List<string> { metadata[HttpEndpointRouting.TemplateMetadataKey] };
+            if (metadata.TryGetValue("test:alternateRoute", out var alternate)) routes.Add(alternate);
+            var prepared = routes.Select(route =>
+            {
+                var hash = Identity(route, metadata[HttpEndpointRouting.MethodMetadataKey]);
+                return new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, pin.ArtifactId, "root", hash), pin.ArtifactId,
+                    pin.DefinitionId, pin.ArtifactVersion, pin.ArtifactHash, "root", HttpEndpointRouting.StimulusType, hash, null,
+                    Metadata(route, metadata[HttpEndpointRouting.MethodMetadataKey]), Now, activationId, slotId, TriggerCardinality.Exclusive);
+            }).ToArray();
+            await bindings.PrepareActivationAsync(activationId, prepared, cancellationToken);
             if (schedules is not null) await schedules.PrepareActivationAsync(activationId, [], cancellationToken);
-            return [binding];
+            return prepared;
         }
     }
 }
