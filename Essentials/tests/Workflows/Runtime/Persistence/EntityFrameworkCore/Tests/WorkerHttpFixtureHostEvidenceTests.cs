@@ -229,11 +229,13 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 [$"CShells:Shells:{ShellName}:Configuration:WebRouting:Path"] = "",
                 [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
                 [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey,
-                [$"CShells:Shells:{ShellName}:Features:ActivitiesHttp:SyncRequestTimeout"] = TimeSpan.FromSeconds(responseTimeoutSeconds ?? 30).ToString("c", System.Globalization.CultureInfo.InvariantCulture)
             }.Concat(selectedFeatures.Select(id => KeyValuePair.Create(
                 $"CShells:Shells:{ShellName}:Features:{id}",
                 (string?)null))))
             .Build();
+        if (standaloneHttp)
+            configuration[$"CShells:Shells:{ShellName}:Features:ActivitiesHttp:SyncRequestTimeout"] =
+                TimeSpan.FromSeconds(responseTimeoutSeconds ?? 30).ToString("c", System.Globalization.CultureInfo.InvariantCulture);
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
