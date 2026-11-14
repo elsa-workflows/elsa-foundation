@@ -132,7 +132,8 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
             var services = operation.ServiceProvider;
             await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100));
             var source = (await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(sourceId))!;
-            if (Assert.Single(source.SubscriptionDelivery!.Progress).Phase == RuntimeRecipientPhase.TargetAccepted) return;
+            if (Assert.Single(source.SubscriptionDelivery!.Progress).Phase == RuntimeRecipientPhase.TargetAccepted &&
+                source.Status == RuntimePostCommitOutboxStatus.Delivered) return;
             await Task.Delay(50);
         }
         Assert.Fail("The retained HTTP recipient did not obtain its actual target acceptance receipt.");
