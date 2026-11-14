@@ -163,6 +163,16 @@ public static class ParkChecks
             await Case($"ended metadata and genuine completion (qualified={qualified})", () => ParkMetadataChecks.MetadataAsync(qualified, false));
             await Case($"ended metadata and exhausted raw ticket (qualified={qualified})", () => ParkMetadataChecks.MetadataAsync(qualified, true));
         }
+        foreach (var sqlite in new[] { false, true })
+            // Qualified persistent providers are a separate, still-unmerged prototype lane.
+            foreach (var qualified in sqlite ? new[] { false } : new[] { false, true })
+            {
+                foreach (var metadata in new[] { false, true })
+                    await Case($"exact persisted sibling after copied raw job (sqlite={sqlite}, qualified={qualified}, metadata={metadata})",
+                        () => ParkTicketChecks.CopyAsync(sqlite, qualified, metadata));
+                await Case($"held metadata job has a pure unique snapshot (sqlite={sqlite}, qualified={qualified})",
+                    () => ParkTicketChecks.HoldAsync(sqlite, qualified));
+            }
         await Case("suspension preserves the wait", async () =>
         {
             var world = new World();
