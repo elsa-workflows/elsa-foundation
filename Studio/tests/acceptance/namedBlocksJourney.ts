@@ -100,6 +100,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
     }
   }
   const row = (id: string) => page.locator(`.wf-sequence-step[data-id="${id}"], .react-flow__node[data-id="${id}"]`).first();
+  const failures: unknown[] = [];
   try {
     for (const host of (profile === "expression-results" ? ["workflow"] as const : ["workflow", "activity"] as const)) for (const kind of (profile === "expression-results" ? ["sequence"] as const : ["sequence", "flowchart"] as const)) {
       const terminal = host === "activity" && kind === "sequence";
@@ -246,14 +247,14 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         expect(activities.find(value => value.authoredActivityId === "caller-after")?.status).toBe("Completed");
       }
     }
-  } finally {
+  } catch (error) { failures.push(error); } finally {
     const cleanup: { kind: string; id: string; status: string }[] = [];
-    const failures: unknown[] = [];
     for (const [kind, ids, prefix] of [["run", runIds, "/runtime/workflows/instances"], ["workflow", workflowIds, "/design/workflows/definitions"]] as const) for (const id of ids) {
       try { await api(`${prefix}/${id}`, "DELETE"); cleanup.push({ kind, id, status: "deleted" }); }
       catch (error) { failures.push(error); cleanup.push({ kind, id, status: "failed" }); }
     }
     await info.attach("named-blocks-proof.json", { body: JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, proof, cleanup, disposableActivityDefinitionIds: activityIds }, null, 2), contentType: "application/json" });
-    if (failures.length) throw new AggregateError(failures, "Owned named-block fixture cleanup failed");
   }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length) throw new AggregateError(failures, "Named-block journey or owned fixture cleanup failed");
 }
