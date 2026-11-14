@@ -236,3 +236,66 @@ it("reveals the associated label through the inner clip when the composite frame
   expect(document.activeElement).toBe(f.field);
   expect([f.field.value, f.field.selectionStart, f.field.selectionEnd]).toEqual(["Retained token", 2, 7]);
 });
+
+
+it("bounds clearance by the natural content height across repeated reveals and a dock shrink", async () => {
+  let naturalHeight = 150, scroll = 0;
+  const controller = createNotificationController();
+  await update(() => root.render(<>
+    <main id="short-port" style={{ overflowY: "auto", paddingBlockStart: "16px", paddingBlockEnd: "16px" }}>
+      <Content><a href="#retained">Inline Settings link</a></Content>
+    </main>
+    <button className="studio-notification-bell">Notifications</button>
+    <ToastHost controller={controller} navigate={() => {}} />
+  </>));
+  const port = container.querySelector<HTMLElement>("#short-port")!;
+  const link = container.querySelector<HTMLAnchorElement>("a")!;
+  const height = () => Math.max(naturalHeight, 16 + parseFloat(port.style.paddingBlockEnd));
+  Object.defineProperties(port, {
+    clientHeight: { configurable: true, get: height },
+    clientWidth: { configurable: true, value: 390 },
+    scrollHeight: { configurable: true, get: () => 600 + parseFloat(port.style.paddingBlockEnd) },
+    scrollTop: { configurable: true, get: () => scroll, set: (value: number) => { scroll = Math.max(0, Math.min(port.scrollHeight - height(), value)); } }
+  });
+  port.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
+    port.scrollTop = typeof options === "number" ? y ?? 0 : options?.top ?? 0;
+  };
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    if (this === link) return new DOMRect(20, 220 - scroll, 180, 17);
+    if (this.matches(".studio-toast-host")) {
+      const limit = parseFloat((this as HTMLElement).style.maxHeight) || 300;
+      return new DOMRect(16, 356 - limit, 358, limit);
+    }
+    if (this.matches(".studio-toast")) {
+      const host = this.parentElement!.getBoundingClientRect();
+      return new DOMRect(16, host.top + [...this.parentElement!.children].indexOf(this) * 108, 358, 100);
+    }
+    if (this.matches(".studio-toast-dismiss")) return new DOMRect(340, 0, 28, 28);
+    return new DOMRect(0, 182, 390, this === port ? height() : naturalHeight);
+  });
+  vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (this: Element) {
+    return (this.isConnected ? [this.getBoundingClientRect()] : []) as unknown as DOMRectList;
+  });
+  await update(() => {
+    link.focus();
+    for (const title of ["One", "Two", "Three"]) controller.api.notify({ level: "error", title });
+  });
+  const assertStable = async (expectedPadding: string) => {
+    for (let i = 0; i < 6; i++) {
+      await update(() => window.dispatchEvent(new Event("resize")));
+      expect(port.clientHeight).toBe(naturalHeight);
+      expect(port.style.paddingBlockEnd).toBe(expectedPadding);
+      expect(document.activeElement).toBe(link);
+      const target = link.getBoundingClientRect(), toast = container.querySelector(".studio-toast-host")!.getBoundingClientRect();
+      expect(target.top).toBeGreaterThanOrEqual(190);
+      expect(target.bottom).toBeLessThanOrEqual(toast.top - 8);
+      expect(controller.getEntries().every(entry => entry.toasting)).toBe(true);
+    }
+  };
+  await assertStable("134px");
+  naturalHeight = 120;
+  await assertStable("104px");
+  await update(() => container.querySelector<HTMLButtonElement>(".studio-notification-bell")!.focus());
+  expect(port.style.paddingBlockEnd).toBe("16px");
+  expect(port.clientHeight).toBe(120);
+});

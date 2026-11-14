@@ -21,7 +21,8 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
       .getByRole("button", { name: /^Execution 1 (Completed|Running)/ }).press("Enter");
     await expect(chooser).toBeFocused();
     const selectedName = details.locator(".wf-activity-overview-title h4");
-    await expect(selectedName).toHaveText("Notify buyer");
+    // The editor fixture omits a chosen publication sidecar; it deliberately uses the catalog label.
+    await expect(selectedName).toHaveText(host === "instance" ? "Notify buyer" : "Write Line");
     await expect.poll(() => selectedName.evaluate(isActivityHeadingReadable)).toBe(true);
     for (let occurrence = 2; occurrence <= 10; occurrence++) {
       await next.press("Enter");

@@ -16,6 +16,7 @@ const requestedPath = window.location.pathname.startsWith("/settings") ? window.
 const focusNotices = searchParams.has("focus-notices");
 const nestedFocus = searchParams.has("nested-focus");
 const largeFrame = searchParams.has("large-frame");
+const shortFocus = searchParams.has("short-focus");
 
 /** Isolated layout contract using the real shell, nested content hooks and notification controller. */
 function FocusedSettingsFields({ controller }: { controller: StudioNotificationController }) {
@@ -29,7 +30,11 @@ function FocusedSettingsFields({ controller }: { controller: StudioNotificationC
       level: "error", title: "Persistent focus notice",
       message: "A deliberately wrapped notification exercises the real toast stack while the existing field retains keyboard focus and its unsaved value."
     })}>Show focus notice</button>
-    {nestedFocus ? <>
+    {shortFocus ? <>
+      <div style={{ height: 32 }} aria-hidden="true" /><a href="#retained">Inline Settings link</a>
+      <div style={{ height: 600 }} aria-hidden="true" />
+    </> : nestedFocus ? <>
+      <div style={{ height: 240 }} aria-hidden="true" />
       <div data-nested-focus-port style={{ height: 260, overflowY: "auto" }}>{fields}</div>
       <div style={{ height: 400 }} aria-hidden="true" />
     </> : fields}
@@ -72,7 +77,7 @@ export function SettingsFixture() {
     <ThemeProvider>
       <ShellFrame
         navigation={navigation}
-        panels={[]}
+        panels={shortFocus ? [{ id: "fixture-dock", title: "Diagnostics", component: () => <p>Dock content</p> }] : []}
         path={path}
         title="Settings"
         backendBaseUrl="https://backend.example/"

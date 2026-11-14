@@ -98,13 +98,15 @@ function createFocusObserver(document: Document) {
       return;
     }
 
+    // Measure the natural scrollport, never the padding footprint installed by a prior reveal.
+    // Removing clearance may clamp scrollTop; restore its requested position after the final padding.
+    const previousPadding = padding;
+    const previousScrollTop = previousPadding?.element.scrollTop;
+    restoreStyle(padding); padding = null;
     focused.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
     const field = focused.closest<HTMLElement>(".studio-form-control, .studio-choice-field, label") ?? focused;
     let { port, visible, innerHeight } = geometry(field);
-    if (padding && padding.element !== port) {
-      restoreStyle(padding); padding = null; clearance = 0;
-      ({ port, visible, innerHeight } = geometry(field));
-    }
+    if (previousPadding && previousPadding.element !== port) clearance = 0;
     if (!port || visible.bottom <= visible.top) { release(); return; }
 
     let boundedControl = false;
@@ -130,7 +132,7 @@ function createFocusObserver(document: Document) {
     // An unfittable native editor retains its normal caret/scroll behavior; never hide a notice.
     if (target.bottom - target.top > availableHeight) { release(); return; }
     const ownerBounds = port.getBoundingClientRect();
-    const top = Math.max(visible.top, ownerBounds.top + port.clientTop + gap);
+    let top = Math.max(visible.top, ownerBounds.top + port.clientTop + gap);
 
     const host = document.querySelector<HTMLElement>(".studio-toast-host");
     restoreStyle(toastLimit); toastLimit = null;
@@ -154,36 +156,44 @@ function createFocusObserver(document: Document) {
       }
     }
 
-    let bottom = Math.min(visible.bottom, ownerBounds.top + port.clientTop + port.clientHeight - gap);
-    let obstructedColumn = false;
-    if (host) {
-      const hostBounds = host.getBoundingClientRect();
-      for (const toast of host.querySelectorAll<HTMLElement>(".studio-toast")) {
-        const bounds = toast.getBoundingClientRect();
-        const top = Math.max(bounds.top, hostBounds.top, visible.top);
-        const end = Math.min(bounds.bottom, hostBounds.bottom, visible.bottom);
-        if (end > top && overlapsHorizontally(target, bounds) && view.getComputedStyle(toast).visibility !== "hidden") {
-          obstructedColumn = true;
-          bottom = Math.min(bottom, top - gap);
+    const safeBottom = (bounds: Bounds) => {
+      const owner = port!.getBoundingClientRect();
+      let bottom = Math.min(visible.bottom, owner.top + port!.clientTop + port!.clientHeight - gap);
+      let obstructedColumn = false;
+      if (host) {
+        const hostBounds = host.getBoundingClientRect();
+        for (const toast of host.querySelectorAll<HTMLElement>(".studio-toast")) {
+          const toastBounds = toast.getBoundingClientRect();
+          const start = Math.max(toastBounds.top, hostBounds.top, visible.top);
+          const end = Math.min(toastBounds.bottom, hostBounds.bottom, visible.bottom);
+          if (end > start && overlapsHorizontally(bounds, toastBounds) && view.getComputedStyle(toast).visibility !== "hidden") {
+            obstructedColumn = true;
+            bottom = Math.min(bottom, start - gap);
+          }
         }
       }
-    }
-
-    const reserve = obstructedColumn && (target.bottom > bottom || clearance > 0)
-      ? Math.max(0, ownerBounds.top + port.clientTop + port.clientHeight - bottom) : 0;
+      return { bottom, obstructedColumn };
+    };
+    const obstruction = safeBottom(target);
+    let bottom = obstruction.bottom;
+    const style = view.getComputedStyle(port);
+    const base = parseFloat(style.paddingBlockEnd) || 0;
+    const contentHeight = Math.max(0, port.clientHeight - (parseFloat(style.paddingBlockStart) || 0) - base);
+    const reserve = obstruction.obstructedColumn && (target.bottom > bottom || clearance > 0)
+      ? Math.min(contentHeight, Math.max(0, ownerBounds.top + port.clientTop + port.clientHeight - bottom)) : 0;
     if (reserve > 0) {
-      padding ??= saveStyle(port, "padding-block-end");
-      const scrollTop = port.scrollTop;
-      restoreStyle(padding);
-      const base = parseFloat(view.getComputedStyle(port).paddingBlockEnd) || 0;
+      padding = previousPadding?.element === port ? previousPadding : saveStyle(port, "padding-block-end");
+      const scrollTop = previousPadding?.element === port ? previousScrollTop! : port.scrollTop;
       port.style.setProperty("padding-block-end", `${base + reserve}px`, "important");
       scrollInstantly(port, scrollTop);
-      clearance = reserve;
-    } else if (padding) {
-      restoreStyle(padding); padding = null; clearance = 0;
     }
+    clearance = reserve;
 
+    // Native reveals and restoring the natural padding can both move the focused content.
+    ({ visible } = geometry(field));
+    top = Math.max(visible.top, port.getBoundingClientRect().top + port.clientTop + gap);
     target = boundedControl ? controlBounds(focused) : fieldBounds(field);
+    ({ bottom } = safeBottom(target));
     const oversized = target.bottom - target.top > bottom - top;
     let delta = 0;
     if (oversized || target.top < top) delta = target.top - top;
