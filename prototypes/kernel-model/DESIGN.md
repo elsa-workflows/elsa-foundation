@@ -527,5 +527,7 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
 - **Reply addresses** carry the caller's deadline (round 4); an owner on another node still cannot tell a waiting node
   it was lost.
 - **Delete and keys:** a start after a delete creates a new instance with the same id.
-- **State size**, **the notifier between nodes**, **one database**: as in draft 5.
+- **State size** (decision 10): the cost run measures it (FINDINGS 25.10, including historical tables and current
+  per-trial acceptance checks); values by reference are not part of that benchmark.
+- **The notifier between nodes**, **one database**: as in draft 5.
 - **MySQL's driver** costs four round trips per commit more than PostgreSQL's (E10).
