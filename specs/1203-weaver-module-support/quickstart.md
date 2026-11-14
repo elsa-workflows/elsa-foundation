@@ -23,6 +23,18 @@ python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*
 
 With a build-slot wrapper, submit the equivalent commands through that wrapper, which must target the required binary. The provider flag makes unavailable Docker a failure rather than a successful skip. Retain actual passes, skips, expected-negative causes and retries separately. Extend owning Secrets/Connections whole suites as their leaves land; this plan does not make them part of leaf 0 implementation.
 
+The existing remote full-tier path is:
+
+```sh
+gh workflow run ci.yml --ref <reviewed-branch> -f suite=ci -f tier=full
+```
+
+Confirm actual SQLite whole-project execution and the `ef-2` / `weaver-records` suite, whose runner arms `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1` for PostgreSQL, SQL Server and MySQL. The three native provider cases are a source inventory, not an observed count. `suite=weaver` runs the independent package witness and does not qualify this database matrix. A draft, deferred, docs-only or unaffected Full tier status does not establish container execution.
+
+The shard runner's opt-in `--retain-discovery` captures the matching initial `dotnet test --list-tests --no-build` command, source identity, output and exit before test execution. CI retains those records in `discovery-*` artifacts, with the actual raw TRXs in the existing `trx-*` artifacts. Native container, architecture and core jobs retain both under their respective `*-suite-evidence-*` / `core-suite-evidence` artifacts. Compare discovery and first-attempt execution explicitly; retain parameterized-case differences, skipped results, automatic retries and quarantine separately. A discovery command exit or summarized method outcome is not a count comparison. This capture support still needs execution on the reviewed source.
+
+Keep the current SQLite whole-suite/canonical fixture proof separate from the required native-three result. The five-row/seven-content-column frozen writer fixture checks hydrate through SQLite; the native provider scenario independently exercises migrations, protected records, admission/finalization and stamps, including the retained1.0 counter. Do not describe the native-three pass as running every SQLite fixture case on all four providers.
+
 From `Studio/`, use the existing web suite and scripts:
 
 ```sh
