@@ -81,7 +81,7 @@ internal sealed class NativeCatalogSourceMemberContributor(IReleaseRuntimeArtifa
             if (reference.Reference.Scope != WorkflowExecutableReferenceScope.Published || reference.Reference.DefinitionId != publication.DefinitionId ||
                 reference.Reference.DefinitionVersionId != publication.VersionId || reference.Reference.ArtifactId != publication.TemplateId ||
                 reference.Reference.ArtifactVersion != publication.Version || reference.Reference.PublishedAt is null || reference.Reference.ActivationId is not null ||
-                reference.Reference.ModelPublication is not null || reference.Reference.DeploymentCapture is not null || reference.Reference.TenantId != publication.TenantId) throw Refuse("native_catalog_source_association_conflict");
+                reference.Reference.TenantId != publication.TenantId) throw Refuse("native_catalog_source_association_conflict");
             if (!await runtimeAuthorization.AuthorizeTemplateAsync(scope, publication.TemplateId, publication.TemplateHash, cancellationToken)) throw Refuse("native_catalog_export_forbidden"); CheckContext();
             var template = await templates.FindBoundedAsync(publication.TemplateId, partition, ReadLimits(), cancellationToken)
                 ?? throw Refuse("native_catalog_template_missing"); ChargeRead(template.Scope, template.StoredPayloadBytes);

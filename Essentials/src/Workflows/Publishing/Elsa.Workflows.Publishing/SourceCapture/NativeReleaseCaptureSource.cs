@@ -46,8 +46,7 @@ internal sealed class NativeReleaseCaptureSource(IWorkflowVersionSnapshotReader 
             {
                 cancellationToken.ThrowIfCancellationRequested(); CheckContext(); budget.Read(candidate.Scope, candidate.StoredPayloadBytes, partition);
                 var reference = candidate.Reference;
-                if (reference.Scope != WorkflowExecutableReferenceScope.Published || reference.ModelPublication is not null) continue;
-                if (reference.DeploymentCapture is not null) throw Refuse("native_source_import_provenance_unsupported");
+                if (reference.Scope != WorkflowExecutableReferenceScope.Published) continue;
                 if (reference.TenantId != scope.TenantId) throw Refuse("native_source_publication_tenant_mismatch");
                 if (reference.DefinitionId != version.DefinitionId || reference.DefinitionVersionId != version.VersionId ||
                     reference.SourceKind != "WorkflowDefinitionVersion" || reference.SourceId != version.VersionId || reference.SourceVersion != version.Version || reference.ArtifactVersion != version.Version ||
