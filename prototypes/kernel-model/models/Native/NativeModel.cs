@@ -107,7 +107,7 @@ public sealed class Work
     [JsonIgnore] internal bool Gone;       // only under NativeFlaw.InFlightInMemory
 }
 
-public sealed record WaitEntry(string Frame, string Kind, string Key);
+public sealed record WaitEntry(string Frame, string Kind, string Key, long Creation = 0);
 
 // ---- the model -----------------------------------------------------------------------------------------------------
 
@@ -152,7 +152,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         var args = Json.Read<BackgroundArgs>(job.Arguments!);
         var node = registry.Get(args.Workflow).Nodes[args.Node];
         var activity = (ILeaf)Hydrator.Create(node, args.Inputs);
-        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken));
+        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken, job.Creation));
         return new BackgroundResult(t.Kind, t.Result, t.Outcome, t.Fault);
     }
 }
@@ -160,6 +160,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 /// <summary>One turn: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
 internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken, InstanceStatus? ended = null)
 {
+    internal long Creation => turn.Instance.Creation;
     private readonly NativeState _s = (NativeState)turn.State;
     private Workflow _wf => model.Registry.Get(turn.Instance.Definition); // metadata-only turns never resolve authored definitions
     private InstanceStatus _status = InstanceStatus.Running;
@@ -345,7 +346,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
     }
 
-    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken);
+    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -385,7 +386,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 break;
             case ChildTrigger c:
                 var child = turn.Start(NativeModel.Spec(c.Workflow, c.Mode, c.Input as JsonObject));
-                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id);
+                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id, turn.ChildAddress(child).Creation);
                 turn.Record($"s:{frame.Id}:{child.Id}");
                 break;
         }
@@ -397,7 +398,9 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         {
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
-            case "child" when cancel: turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel); break;
+            case "child" when cancel:
+                turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel, options: new SendOptions(TargetCreation: wait.Creation > 0 ? wait.Creation : null));
+                break;
             case "timer" when cancel && wait.Key.Length > 0: turn.Recall(wait.Key); break;      // its row goes with this commit
         }
     }
@@ -594,6 +597,7 @@ public sealed partial class CompositeContext
 
     public Node Node { get; }
     public string FrameId => _frame.Id;
+    public long Creation => _burst.Creation;
     public IReadOnlyList<Node> Children => Node.Children;
     public IReadOnlyList<string> Running => _burst.Running(_frame.Id);
     internal bool Flawed(NativeFlaw flaw) => _burst.Flawed(flaw);

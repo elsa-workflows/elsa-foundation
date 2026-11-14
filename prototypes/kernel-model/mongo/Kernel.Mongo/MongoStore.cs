@@ -147,6 +147,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(batch);
         CommitClockFacts.RejectUnsupported(batch);
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
@@ -378,6 +379,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(message);
         // Nothing fences an outside add, so its key comes from the target partition's inbox clock: one document per
         // partition, apart from the partition document so that adds never conflict with the owner's commits.
         BsonDocument[] tick = [new("$set", new BsonDocument("clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$clock", 0L }), NowUs }), 1L })))];
@@ -462,8 +464,11 @@ public sealed class MongoStore : IKernelStore
     }
 
     /// <summary>A subscription of kind start, upserted by its id, so registering it twice keeps one.</summary>
-    public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) =>
+    public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
+    {
+        CreationProtocol.RejectUnsupported(subscription);
         await _subscriptions.ReplaceOneAsync(new BsonDocument("_id", SubscriptionId(subscription)), ToDocument(subscription, 0), new ReplaceOptions { IsUpsert = true }, cancellationToken);
+    }
 
     public async ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
     {

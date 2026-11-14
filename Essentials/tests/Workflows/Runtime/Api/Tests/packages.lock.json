@@ -246,6 +246,9 @@
       "elsa.foundation.identity.core": {
         "type": "Project"
       },
+      "elsa.http.core": {
+        "type": "Project"
+      },
       "elsa.mediator.core": {
         "type": "Project",
         "dependencies": {
@@ -315,6 +318,17 @@
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.http": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Http.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.inspection.core": {

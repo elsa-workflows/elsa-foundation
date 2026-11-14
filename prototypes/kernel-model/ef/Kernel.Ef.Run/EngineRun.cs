@@ -941,6 +941,7 @@ sealed class Locks(Target target) : DbTransactionInterceptor
 /// <summary>Counts what every store call came to: landed, fenced, or failed and with which of the engine's errors.</summary>
 sealed class Tally(IKernelStore inner) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly ConcurrentDictionary<string, int> _counts = new();
     private readonly ConcurrentDictionary<string, string> _samples = new();
