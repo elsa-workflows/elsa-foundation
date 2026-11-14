@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import json
 import os
 import re
+import secrets
 from pathlib import Path
 import shutil
 import signal
@@ -15,7 +16,10 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import urllib.error
 import zipfile
+
+import weaver_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
@@ -57,6 +61,8 @@ CAPTURES['native dashboard questions and sharing'] += (
        'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
 )
 JOURNEYS = set(CAPTURES)
+# The Weaver inventory is opt-in. The inherited dashboard/native baseline and its no-inference profile stay unchanged.
+CAPTURES.update(weaver_inventory.CAPTURES)
 ADDITIONAL_ARTIFACTS = {
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
@@ -143,10 +149,10 @@ def recorded_browser_contexts(path):
     return contexts
 
 
-def verdict(report, artifacts, journeys=None):
+def verdict(report, artifacts, journeys=None, projects=None):
     """An exit code alone cannot certify that every intended journey actually ran."""
     journeys = JOURNEYS if journeys is None else set(journeys)
-    if not journeys or not journeys <= JOURNEYS:
+    if not journeys or not journeys <= JOURNEYS | weaver_inventory.JOURNEYS:
         raise ValueError("Unknown or empty journey inventory")
     rows = []
     def walk(suites):
@@ -156,7 +162,10 @@ def verdict(report, artifacts, journeys=None):
                     rows.append((test.get('projectName'), spec.get('title'), test))
             walk(suite.get('suites', []))
     walk(report.get('suites', []))
-    expected = {(project, journey) for project in PROJECTS for journey in journeys}
+    projects = PROJECTS if projects is None else set(projects)
+    if not projects or not projects <= PROJECTS:
+        raise ValueError('Unknown or empty project inventory')
+    expected = {(project, journey) for project in projects for journey in journeys}
     actual = [(project, title) for project, title, _ in rows]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError(f'Incomplete acceptance inventory: expected {sorted(expected)}, got {actual}')
@@ -168,7 +177,11 @@ def verdict(report, artifacts, journeys=None):
             raise ValueError(f'{project} / {title}: not a single successful execution')
         attachments = results[0].get('attachments', [])
         names = {item.get('name') for item in attachments}
-        required = {'trace'} | ADDITIONAL_ARTIFACTS.get(title, set()) | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        interaction = 'trace' if title not in weaver_inventory.JOURNEYS else 'weaver-interaction.json'
+        required = {interaction} | ADDITIONAL_ARTIFACTS.get(title, set()) | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        if title in weaver_inventory.JOURNEYS:
+            required.add('weaver-inventory.json')
+            required.add('safe-export.json')
         if not required <= names:
             raise ValueError(f'{project} / {title}: missing artifacts {sorted(required - names)}')
         for item in attachments:
@@ -181,6 +194,9 @@ def verdict(report, artifacts, journeys=None):
             trace = next(item['path'] for item in attachments if item.get('name') == 'trace')
             if len(recorded_browser_contexts(trace)) < 2:
                 raise ValueError(f'{project} / {title}: independent owner and reader contexts are missing from the combined trace')
+        if title in weaver_inventory.JOURNEYS:
+            manifest = next(item['path'] for item in attachments if item.get('name') == 'safe-export.json')
+            weaver_inventory.export_manifest_verdict(manifest, artifacts, project=project)
     return len(rows)
 
 
@@ -230,7 +246,7 @@ def free_port():
 
 
 @contextmanager
-def host(directory, dll, url, ready_path, log, env):
+def host(directory, dll, url, ready_path, log, env, *, on_readiness=None):
     # No dotnet run / launch profile: its project directory and URL could target an existing development store.
     with log.open('w') as output:
         process = subprocess.Popen(['dotnet', str(directory / dll), '--contentRoot', str(directory), '--urls', url],
@@ -239,6 +255,8 @@ def host(directory, dll, url, ready_path, log, env):
             deadline = time.monotonic() + 180
             while True:
                 if process.poll() is not None:
+                    if on_readiness:
+                        on_readiness({'status': 'process-exited', 'exitCode': process.returncode})
                     raise RuntimeError(f'{dll} exited; see {log}')
                 # An HTTP 200 alone can come from a listener that won the released-port race.
                 # ASP.NET logs this only after it has bound every address; the process is ours and still alive.
@@ -246,8 +264,13 @@ def host(directory, dll, url, ready_path, log, env):
                 if bound:
                     try:
                         with urllib.request.urlopen(url + ready_path, timeout=2) as response:
+                            if on_readiness:
+                                on_readiness(weaver_inventory.readiness_fact(response.status, response.read(65536)))
                             if response.status == 200 and process.poll() is None:
                                 break
+                    except urllib.error.HTTPError as error:
+                        if on_readiness:
+                            on_readiness(weaver_inventory.readiness_fact(error.code, error.read(65536)))
                     except (OSError, TimeoutError):
                         pass
                 if time.monotonic() > deadline:
@@ -262,8 +285,8 @@ def host(directory, dll, url, ready_path, log, env):
             stop_group(process, graceful_timeout=45)
 
 
-def prepare_host(project, destination):
-    output = project.parent / 'bin/Debug/net10.0'
+def prepare_host(project, destination, configuration='Debug'):
+    output = project.parent / f'bin/{configuration}/net10.0'
     shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages", "appsettings*.json", "shells*.json"))
     # Older local outputs may contain stores. Never seed acceptance from them.
     for file in destination.rglob('*'):
@@ -290,23 +313,139 @@ def supplies_pr_head(root, source_sha, head):
     return result.returncode == 0 and len(parents) == 2 and parents[1] == head
 
 
-def run(output, journey=None, studio_root=None):
+def run_weaver_inventory(output, data, backend_project, studio_project, env, sha, studio_sha, report):
+    """One fresh host pair per appearance; each owned backend is stopped and restarted across the root switch."""
+    report.update(stage='weaver-inventory', hostProfile='normal shipped hosts; opt-in native inventory; no live provider',
+                  modelEvidence='not observed; shipped provider disabled', providerAnswers='unavailable; unanswered questions retained',
+                  t045Acceptance='incomplete', storyAcceptance='incomplete',
+                  evidenceDisclosure='allowlisted safe projections only; raw traces, logs, auth and protocol originals stay outside the export root',
+                  downloadableVisualEvidence='safe-export manifests and named captures; requires independent inspection',
+                  independentUXAcceptance='incomplete; source run assertions never establish visual approval')
+    completed = []
+    for project in sorted(PROJECTS):
+        owned = data / project
+        owned.mkdir()
+        backend, studio = owned / 'workbench', owned / 'studio'
+        prepare_host(backend_project, backend)
+        prepare_host(studio_project, studio)
+        backend_url, studio_url = f'http://localhost:{free_port()}', f'http://localhost:{free_port()}'
+        settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
+        shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
+        settings['Cors']['AllowedOrigins'] = [studio_url]
+        shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']['AllowedReturnUrlOrigins'] = [studio_url]
+        # Normal shipped host: retain its warmup/admin seeding; no qualification feature or test bootstrap.
+        shells['CShells']['Shells']['default']['Features']['WeaverGitHubCopilot']['Enabled'] = False
+        settings.setdefault('Elsa', {}).setdefault('ExtensionBuilder', {})['Enabled'] = False
+        # Synthetic run-owned host key stays on the two server processes; native browser auth remains unchanged.
+        management_key = secrets.token_urlsafe(32)
+        settings['Elsa'].setdefault('ModuleManagement', {})['ApiKey'] = management_key
+        evidence = output / project
+        evidence.mkdir()
+        private = owned / 'private-evidence'
+        private.mkdir(mode=0o700)
+        (backend / 'appsettings.json').write_text(json.dumps(settings))
+        (backend / 'shells.json').write_text(json.dumps(shells))
+        # Studio is independently enabled later through its native Apply API.
+        studio_shells = json.loads((studio / 'shells.json').read_text(encoding='utf-8-sig'))
+        studio_shells['CShells']['Shells']['Default']['Features'].pop('ExtensionBuilderStudio', None)
+        (studio / 'shells.json').write_text(json.dumps(studio_shells))
+        with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', private / 'studio.log',
+                  dict(env, HOME=str(owned), DOTNET_CLI_HOME=str(owned), Studio__BackendBaseUrl=backend_url,
+                       Studio__BackendModuleManagementApiKey=management_key)):
+            for phase, title in [('baseline', weaver_inventory.BASELINE), ('enabled', weaver_inventory.ENABLED)]:
+                report.update(stage='weaver-native-' + phase, activeInventory={'project': project, 'phase': phase})
+                phase_output = evidence / phase
+                private_phase = private / phase
+                private_phase.mkdir(mode=0o700)
+                if phase == 'enabled':
+                    settings['Elsa']['ExtensionBuilder']['Enabled'] = True
+                    (backend / 'appsettings.json').write_text(json.dumps(settings))
+                backend_process = None
+                with host(backend, 'Elsa.Workbench.dll', backend_url, '/health/ready', private_phase / 'backend.log',
+                          dict(env, HOME=str(owned), DOTNET_CLI_HOME=str(owned)),
+                          on_readiness=lambda value: report.update(nativeReadiness=value)) as backend_process:
+                    browser_env = dict({key: value for key, value in os.environ.items()
+                                        if not key.startswith('UX_WEAVER_') and key != 'UX_ACCEPTANCE_PROFILE'},
+                        UX_ACCEPTANCE_OWNED='1', UX_ACCEPTANCE_PROFILE='weaver-inventory',
+                        UX_WEAVER_PHASE=phase, ELSA_STUDIO_URL=studio_url, ELSA_WORKBENCH_URL=backend_url,
+                        UX_BACKEND_URL=backend_url, UX_ACCEPTANCE_OUT=str(private_phase), UX_SOURCE_SHA=sha,
+                        UX_STUDIO_SOURCE_SHA=studio_sha)
+                    args = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts',
+                            '--project', project, '--grep', re.escape(title).replace(r'\ ', ' ')]
+                    public_report = None
+                    try:
+                        command(args, private_phase / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
+                    finally:
+                        if (private_phase / 'playwright.json').is_file():
+                            # Failure evidence uses the identical fail-closed allowlist; no raw trace/report/log is copied.
+                            public_report = weaver_inventory.safe_export(private_phase / 'playwright.json', private,
+                                phase_output, source=sha, project=project, title=title, phase=phase,
+                                forbidden_values=[management_key, str(owned)])
+                    if public_report is None:
+                        raise ValueError('The private browser run produced no report; no evidence was exported')
+                    count = verdict(public_report, phase_output, [title], [project])
+                if backend_process.returncode != 0:
+                    raise ValueError('Owned backend did not stop cleanly; a forced stop cannot qualify restart')
+                completed.append({'project': project, 'phase': phase, 'executed': count,
+                                  'backendExit': backend_process.returncode, 'backendPid': backend_process.pid,
+                                  'backendUrl': backend_url, 'studioUrl': studio_url})
+                report['inventoryExecutions'] = completed
+    report['executed'] = sum(item['executed'] for item in completed)
+    if report['executed'] != len(PROJECTS) * 2:
+        raise ValueError('Incomplete normal-host inventory appearance/phase matrix')
+
+
+def run(output, journey=None, studio_root=None, profile='default'):
     output.mkdir(parents=True, exist_ok=False)
+    if profile == 'weaver-inventory':
+        output.chmod(0o700) # Actual provider traces are private evidence; never publish raw traces.
     studio_root = (studio_root or ROOT).resolve()
     sha, dirty = source_state(ROOT)
     studio_sha, studio_dirty = source_state(studio_root)
-    head = os.environ.get('UX_PR_HEAD_SHA', sha)
-    report = {'sourceSha': sha, 'headSha': head, 'dirty': bool(dirty),
+    supplied_head = os.environ.get('UX_PR_HEAD_SHA', sha)
+    # Untrusted provenance input must never reach the failure report or finally's printed JSON.
+    head = supplied_head.lower() if re.fullmatch(r'[0-9a-fA-F]{40}', supplied_head) else None
+    report = {'sourceSha': sha, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
-              'journeys': [journey] if journey else sorted(JOURNEYS)}
+              'profile': profile, 'journeys': sorted(weaver_inventory.JOURNEYS) if profile == 'weaver-inventory' else [journey] if journey else sorted(JOURNEYS)}
+    if head is not None:
+        report['headSha'] = head
     try:
+        if head is None:
+            report.update(stage='source-provenance', errorCode='invalid_pr_head_sha')
+            raise ValueError('Invalid PR head: a full 40-hex revision is required')
         if dirty or studio_dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
+        if profile == 'weaver-inventory' and (journey or studio_root != ROOT.resolve()):
+            raise ValueError('Weaver inventory owns both actual host sources and its complete appearance/phase matrix')
         backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
         studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
+        if profile == 'weaver-inventory':
+            # Build logs, native host data, screenshots and traces originate outside the publishable output root.
+            with tempfile.TemporaryDirectory(prefix='elsa-ux-weaver-inventory-') as temporary:
+                private = Path(temporary)
+                for stage, args, cwd in [
+                    ('build-workbench', ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=false', '-m:2', '-nr:false', '-v:q', '-nologo'], ROOT),
+                    ('build-frontend', ['pnpm', 'build'], studio_root / 'Studio'),
+                    ('build-studio', ['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], ROOT),
+                ]:
+                    report['stage'] = stage
+                    log = private / (stage + '.log')
+                    try:
+                        command(args, log, cwd=cwd)
+                    except Exception as error:
+                        report['nativeFailure'] = weaver_inventory.failure_fact(error, stage, log)
+                        raise
+                run_weaver_inventory(output, private, backend_project, studio_project,
+                    dict(clean_environment(), **{'Logging__LogLevel__Microsoft.Hosting.Lifetime': 'Information'}), sha, studio_sha, report)
+            if (sha, dirty) != source_state(ROOT):
+                raise ValueError('Source changed during inventory acceptance')
+            report.update(status='passed', stage='complete-native-observations',
+                          providerAnswers='unavailable; no semantic answers verified', t045Acceptance='incomplete', storyAcceptance='incomplete')
+            return
         command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
         report['stage'] = 'isolated-field-gallery'
@@ -351,7 +490,7 @@ def run(output, journey=None, studio_root=None):
                 with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                           dict(env, Studio__BackendBaseUrl=backend_url)):
                     report['stage'] = 'journeys'
-                    browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
+                    browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', UX_ACCEPTANCE_PROFILE='default', ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha)
                     browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
@@ -365,7 +504,16 @@ def run(output, journey=None, studio_root=None):
             raise ValueError('Dirty source run is preliminary evidence, not final acceptance')
         report.update(status='passed', stage='complete')
     except Exception as error:
-        report['error'] = str(error)
+        if profile == 'weaver-inventory':
+            report['error'] = 'Weaver inventory failed or is incomplete; private diagnostic text was not exported'
+            report['errorKind'] = type(error).__name__ if type(error).__name__ in {
+                'ValueError', 'RuntimeError', 'TimeoutError', 'InterruptedError', 'CalledProcessError'} else 'Exception'
+            report['privateErrorSha256'] = weaver_inventory.hashlib.sha256(str(error).encode()).hexdigest()
+            report.setdefault('nativeFailure', weaver_inventory.failure_fact(error, report['stage']))
+        else:
+            report['error'] = str(error)
+        if profile == 'weaver-inventory':
+            raise RuntimeError(report['error']) from None
         raise
     finally:
         report['finishedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -378,8 +526,9 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--studio-root', type=Path, help='Optional clean committed Studio checkout; both frontend/backend revisions are recorded and fenced')
     parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one complete journey across all four projects; the default still requires every journey')
+    parser.add_argument('--profile', choices=['default', 'weaver-inventory'], default='default', help='Explicitly opt in to the normal-host Weaver inventory; inherited UX baseline is unchanged')
     args = parser.parse_args()
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned hosts will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve(), args.journey, args.studio_root)
+    run(args.output.resolve(), args.journey, args.studio_root, args.profile)
