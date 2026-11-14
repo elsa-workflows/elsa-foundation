@@ -1,9 +1,8 @@
 # Resulting-main qualification
 
-Qualification is **NOT RUN**. Carrier [#3806](https://github.com/elsa-workflows/elsa-foundation/pull/3806)
-is closed and the local replacement stack is unqualified. This source-only inventory prepares future gates;
-it does not authorize execution, publication, formal review or merge. Actual results,
-including exact commits, run/artifact links and limitations, belong in its gate-evidence comment titled
+Resulting-main qualification is **NOT RUN** at this publication checkpoint. Carrier [#3806](https://github.com/elsa-workflows/elsa-foundation/pull/3806)
+is closed; its replacement is a reviewable stack with source-bound local qualification recorded separately in [evidence.md](evidence.md). On14November the owner authorized publication, reviews, CI, merge and resulting-main verification; cloud infrastructure is excluded. Actual results,
+including exact commits, run/artifact links and limitations, belong in the final PR’s gate-evidence comment titled
 “Resulting-main qualification”, following [post-merge gates](../../docs/contributing/merging.md#post-merge-gates).
 This inventory does not claim that the following checks passed.
 

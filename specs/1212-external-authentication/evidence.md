@@ -1,16 +1,14 @@
-# Historical external authentication evidence
+# External authentication qualification evidence
 
-**Prepared stack: NOT QUALIFIED.** No build, test, control, provider, browser, package or CI execution has
-occurred during source preparation. Results below preserve carrier `44235fe38b7284fde98ba23227bac5f87e07dd66`
-and its explicitly recorded earlier heads. Closed PR3806 is not a merge candidate. Counts, commands, contracts
-and artifact paths may be obsolete. No historical pass, exception or review disposition transfers to a new head.
-Some temporary custody has been cleaned; reacquire missing evidence only after execution/resource authorization.
+## 14 November publication checkpoint
 
-Current scope is provisioning policies assigning saved existing Elsa roles, without external group mappings or
-session grants. #4018 separately delivered #2848; do not reopen or close that prerequisite again. R1–R5 remain
-consumed and R6 reserved; decomposition supplies no implicit review-cap reset. The corrected managed UI journey
-and PostgreSQL baseline still need qualification. All current-source and resulting-main gates remain open in
-[resulting-main-qualification.md](resulting-main-qualification.md).
+The owner authorized latest-main reconciliation, reviewable PR sizing, publication, reviews, CI, merge and resulting-main verification on 14 November 2026. Cloud infrastructure is excluded. The current source stack is based on main `3e6d0257af01c4fd3e6637fecb3d5967bb94ad59`; source-specific current checks and independent review rounds are recorded on its PRs. No hosted-CI, merge or resulting-main success is asserted by this checkpoint.
+
+Local qualification at preceding source `952dfb87f1e1175326ac5c8a077211b6528e71a7`, frozen main `577a0956930efac71165944d52ef0e8c90b4e49a`, passed the required affected local scopes: exact Identity prefixes02–15 (613 through960 cases), Studio62 module/1,093 Hosting tests, thirteen controls and Probe, architecture622/archive58/maps, standard Studio80 journeys/59 gallery cases, managed recovery and eight availability/permission profiles, two actual Keycloak modes, four SQLite/PostgreSQL managed/baseline process modes, Workbench, genuine backend23 and Studio/support36 archives, separate public consumers and independent local author UX inspection of65 originals. One earlier opt-in shared-EF pool-stress test remained skipped; unchanged historical EF/provider/Studio scopes retain their actual source attribution. This is local preceding-source evidence, not a fresh pass on rebased source or a hosted/shared acceptance claim.
+
+The EF initialization repair completes relational metadata before EF publishes its cached model; a deterministic first-reader interleaving reproduced the original exception. Qualification also repaired current-permission preview guards, role bounds, stale-editor recovery and feedback focus. Regression/mutation failures, fixes, superseded runs, deliberate package negative controls and operator cancellations remain distinct in retained source-bound receipts. The migration sizing change extracts identical full generated target bodies into immutable provider-specific definitions; two inert prerequisites keep every PR around3k lines while active four-provider migrations/schema stamps remain coherent. Current relational target-model equivalence is checked for every provider.
+
+Provisioning policy assigns saved existing Elsa roles to new users; external group mappings/session grants are excluded. #4018 separately delivered #2848. The owner’s standing authority covers reasonable retries/reviews without resetting R1–R13 history. Closed carrier#3806 remains preserved. Main-red#4177 is a live report until the current required gate is green and its cause understood. Only the final delivery slice closes#3579; complete delivery requires the separate [resulting-main gate](resulting-main-qualification.md).
 
 ---
 
