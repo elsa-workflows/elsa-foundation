@@ -162,7 +162,7 @@ run background jobs, read kept events, publish) is a message in that commit. A n
 ## Persistence
 
 The kernel depends on one storage contract, `IKernelStore` (`src/Kernel.Durable/Store.cs`), stated by what each operation
-guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 61 semantic cases (57 before round 4),
+guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 65 semantic cases (57 before round 4),
 a concurrent stress test with injected connection failures and the provider's own connection killer, and the cost runs.
 
 | Operation | Guarantee |
@@ -381,6 +381,14 @@ the native model (merge):
   native): the opt-out rides on the caller's reply address, and that caller gets the turn's output when the turn ends.
 - **Respond, then continue; wait first** (a timer, a background job): the request stays open, the instance stays in
   memory, up to the request's deadline.
+- **Short waits in memory** (decision 4, FINDINGS 25.6). An Ephemeral instance whose turn sends only itself timers due
+  within its short wait, or job tickets, and takes no message that is a row, stays in memory unwritten (`Slot.Unwritten`).
+  The short wait is `StartSpec.ShortWait`, which an HTTP route sets to its timeout, else `WorkerOptions.ShortWait` (5 s).
+  If it ends there, nothing is ever written. It is written, at the revision it has, by a turn that does anything else,
+  by the end of the short wait, and before anything that is a row or a command reaches it. That commit also writes
+  its timers, job tickets and held messages as rows, and the history of its turns in memory in its journal row; its
+  journal therefore starts at that revision. An unwritten instance is never evicted; an owner standing down writes it
+  first; a crash loses it, as an Ephemeral run always was, now for up to its short wait.
 - **A request that resumes a waiting workflow** adds a delivery carrying its reply address; the owner, on any node,
   sends what the turn emits, and the end, over the runtime's transport (`IReplyTransport`), which is not durable.
 - **The reply address carries the caller's deadline** (decision 6, FINDINGS 25.3): `ReplyTo.Of(node, request,
@@ -397,6 +405,16 @@ the native model (merge):
 One journal row per commit, in the commit, at the history level (Full, State, Minimal: no row). Projectors on any
 node expand the journal into view rows in position order, moving their own row only from where they read it, and pass
 a position that is missing below the partition's position: it was deleted, not written late (F15).
+
+**The viewer's read path** (decision 11, FINDINGS 25.8). `Viewer.ReadAsync` shows one run from its view plus its
+journal tail. It reads the projector's cursor first, then the view, then the instance's journal rows past the cursor
+(`IKernelStore.ReadJournalOfAsync`, on the index on (partition, instance)), and merges them in memory. A round that
+commits between the reads can be present in both. Within a run the merge counts only revisions above the view's.
+A delete clears the view, and later rows at the same key count from the new run's first revision. The viewer makes three logical store reads and no call to an owner. The tail read takes one committed
+snapshot for the instance, including visible delete markers. Store wrappers forward that query. `Projector.CatchUpAsync`
+covers the committed positions observed after the request. If a page skips one of those positions, or another
+projector advances through part of that range, catch-up reads one later bound to cover the responsible deletes.
+Requests waiting for the next catch-up round share its work. Live watching (a push stream) is not built.
 
 ## Invariants (what the simulation checks)
 
@@ -437,7 +455,9 @@ resume at an HttpEndpoint, both requests, 12 / 9 (16 / 12).
 
 - The model's activities do nothing and its history is one journal row per commit. A projector round is set-based
   (decision 8, FINDINGS 25.7): 3 round trips on PostgreSQL (17 before, one statement per instance), 7 engine calls on
-  SQLite (18); SQL Server and MySQL still write one statement per view.
+  SQLite (18). SQL Server and MySQL apply one statement per nonzero journal event in position order, batching at
+  most 200 statements / 1,000 parameters per command to preserve provider collation across delete/recreate.
+  Their earlier one-statement-per-view path and measured command tradeoff are recorded in FINDINGS 25.8.
 - MySQL's driver sends four more round trips per transaction than PostgreSQL's (E10).
 
 ## Trade-offs
@@ -500,11 +520,11 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
   graph check (FINDINGS section 26). G4 has no mutation of its own: that it bites is not shown.
 - **Graph engine:** main's Flowchart conformance corpus and join tests pass against the extracted engine (41), with
   main's two determinism byte-locks byte-identical.
-- **Store conformance suite:** 61 cases, 59 required. The suite covers semantic send order across revisions (#4459)
-  and journaled creations and rollback across MySQL batch boundaries ([ENGINES E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358)).
-  The earlier 59-case suite passed the applicable required cases in memory, SQLite, PostgreSQL, SQL Server, MySQL
-  and MongoDB. FINDINGS 25.2 records the required idempotent subscription cases and FINDINGS 25.7 records the
-  original per-engine projector chunk results.
+- **Store conformance suite:** 65 cases, 63 required and two reference. It covers semantic send order across revisions (#4459),
+  journaled creations and rollback across MySQL batch boundaries ([ENGINES E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358)),
+  and committed viewer reads. The earlier 59-case suite passed the applicable required cases in memory, SQLite,
+  PostgreSQL, SQL Server, MySQL and MongoDB. FINDINGS 25.2 records the required idempotent subscription cases;
+  FINDINGS 25.7 and 25.8 qualify the original per-engine projector and viewer results separately from integration.
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and
   SQLite. With the fence broken on purpose every engine fails (26 to 611 violations).

@@ -95,6 +95,12 @@ Immediate native `Fault` under callActivity (no hold) remains **B3** (`Test-Bpmn
 
 G2.5 re-run on the milestone's final main commit is **not** this slice. Named tests exist on `1769c5b5a` plus this slice's new class; they were not all re-executed here. G3 overhead (`docs/reports/exec-core-g3-overhead-counts.md`) and G1 inventory (`docs/reports/exec-core-g1-mechanism-inventory.md`) are unchanged. No extraction.
 
+**Runnable example** for the G2 hosted cells: `Essentials/tests/Activities/Bpmn/Hosting/Tests/` — `RunBpmnChildFaultHeldRetryTests` (#3993, plane (a) A3, no restart), `RunBpmnPendingParentResultCrashTests` (#3992, plane (a) A1 after crash), `RunBpmnChildCancelTests` (#4028, A4), `CallActivityNativeChildCrashTests` / `CallActivityNativeChildOutcomeTests` (plane (b)). There is no separate sample app.
+
+**Supported profile** is the Limit above plus [unified-execution.md](../program-goals/unified-execution.md) (SQLite, built-in host, Root native parent, existing BPMN human/service-task paths) and [S8 unsupported / open](exec-core-migration-rollback.md#6-unsupported--open). Do not infer other providers or Sequence/Flowchart parents.
+
+**G-e (recorded #3993 post-restart timeout):** not a G2.2 path. Causal write-up in [G3 G-e](exec-core-g3-overhead-counts.md#g-e--recorded-3993-post-restart-timeout-causal).
+
 ## Findings
 
 No production defect was observed on A2. Matching coded boundary completes the model and resumes `RunBpmn` with `Done`; the worker is `Completed` / `BusinessError`, not `Faulted`, and there is no parent or model incident. Unmatched (no boundary) faults the model and the Root parent once with blocking `ActivityReturnedFault` / `bpmn.model-faulted`, which is the declared spec 1017 FR-013 profile rather than silent success. That parent incident is the model-fault mapping (same surface as A3 `FinalFault`), not a technical fault of the native worker. Native-work profile publish refuses a recover `userTask`; the matching Fact uses the admitted coded-boundary → end shape. `/design/activities/definitions?search=Elsa.Finish` is empty (persisted CLR rows); Finish is submitted from `/design/activities/catalog` as an intrinsic. B2 is a limitation (no native-root business-error path across `DispatchWorkflow`), not a discovered mis-mapping. B4 findings above are unchanged.

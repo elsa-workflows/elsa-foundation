@@ -34,6 +34,19 @@ public static class RepoLayoutContractTests
                 "Studio exclusion is not proven: the repository must contain Studio projects and no Studio project may enter backend maps. " +
                 $"Found {studioProjects.Length} Studio projects and included {includedStudio.Length}.");
 
+        var templateProjects = Directory.Exists(repo.Absolute("Extensions"))
+            ? Directory.EnumerateFiles(repo.Absolute("Extensions"), "*.csproj", SearchOption.AllDirectories)
+                .Where(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/').Contains("/templates/", StringComparison.Ordinal))
+                .Select(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/'))
+                .ToArray()
+            : [];
+        var includedTemplates = actualProjects.Where(path => path.Contains("/templates/", StringComparison.Ordinal)).ToArray();
+        if (templateProjects.Length == 0 || includedTemplates.Length > 0)
+            throw new InvalidOperationException(
+                "dotnet-new template exclusion is not proven: the repository must contain scaffold .csproj files under " +
+                "Extensions/<capability>/templates/ and none of them may enter backend maps. " +
+                $"Found {templateProjects.Length} template projects and included {includedTemplates.Length}.");
+
         var sourceFiles = RepoLayout.SourceFiles(repo);
         if (!sourceFiles.Any(path => path.StartsWith("Essentials/src/", StringComparison.Ordinal)) ||
             !sourceFiles.Any(path => path.StartsWith("Essentials/apps/", StringComparison.Ordinal)) ||

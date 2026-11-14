@@ -20,10 +20,14 @@ sealed class Leveled(History? level, int pad)
 
     private sealed class Shaped(IActorType inner, Leveled shape) : IActorType
     {
+        public bool SingleMessage(Message message) => inner.SingleMessage(message);
+        public bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) => inner.SingleMessage(model, row, delivery);
         public bool Withholds(InstanceRow row, ITurnServices services) => inner.Withholds(row, services);
         public TurnOutcome? Command(TurnInput input) => shape.Shape(inner.Command(input));
         public async ValueTask<TurnOutcome> TurnAsync(TurnInput input) => shape.Shape(await inner.TurnAsync(input))!;
         public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error) => shape.Shape(inner.Park(row, actor, taken, spec, error))!;
+        public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error, object? pending) => shape.Shape(inner.Park(row, actor, taken, spec, error, pending))!;
+        public TurnOutcome Write(InstanceRow row, object? state, object? pending) => shape.Shape(inner.Write(row, state, pending))!;
         public ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken cancellationToken) => inner.ExecuteJobAsync(model, job, cancellationToken);
     }
 

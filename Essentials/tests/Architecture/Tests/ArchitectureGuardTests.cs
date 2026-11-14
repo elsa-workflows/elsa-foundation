@@ -611,6 +611,11 @@ public sealed partial class ArchitectureGuardTests
         if (project.Name == "Elsa.Primitives")
             return "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj";
 
+        // Beside Elsa.Integrations.Sdk under src/Sdk/, using a matching folder name so the two packable
+        // libraries share a container (#2577). The name-derived path would otherwise be src/Sdk/Testing/.
+        if (project.Name == "Elsa.Integrations.Sdk.Testing")
+            return "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.Testing/Elsa.Integrations.Sdk.Testing.csproj";
+
         // Optional modules live under Extensions/<Bucket>/<src|tests>/ rather than in Essentials/src
         // (#1815). The name-to-path derivation is the same one the src/ rules below use; only the root
         // differs, and the src|tests split sits inside the extension rather than at the top of the tree.

@@ -50,8 +50,9 @@ internal static class StartAndCancelChecks
         var subscription = BpmnModel.MessageStart("order-start", "by-payment", "paid", "order", new JsonObject { ["value"] = "configured" });
         await Events.SubscribeAsync(store, subscription, 1);
         var paid = new EventRow(subscription.Key, "42", """{"value":"published"}""", 1000);
-        await Events.PublishAsync(store, paid);
-        var target = Events.Deliver(paid, subscription).Target.Id;
+        string? accepted = null;
+        await Events.PublishAsync(store, paid, matched: (_, receipt) => accepted = receipt.Target.Id);
+        var target = accepted ?? throw new Exception("The start match was not accepted.");
         await Recover("start-recovery");
         await Drain();
         // Registrar catch-up and publisher redelivery both target the one original instance after takeover.

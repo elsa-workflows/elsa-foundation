@@ -61,10 +61,10 @@ public sealed class Context(ProvidedStore provided)
 
     public async Task<Stored?> Row(int partition, string id) => (await All(partition)).FirstOrDefault(m => m.Message.Id == id);
 
-    public Task<Committed> Commit(Lease lease, int partition, IReadOnlyList<TurnCommit> turns, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null, bool handOver = false, TimeSpan? leaseFor = null) =>
+    public Task<Committed> Commit(Lease lease, int partition, IReadOnlyList<TurnCommit> turns, IReadOnlyList<InboxKey>? seen = null, IReadOnlyList<InboxKey>? trial = null, bool handOver = false, TimeSpan? leaseFor = null) =>
         S.CommitAsync(new CommitBatch(partition, lease.Epoch, lease.Position, leaseFor ?? LeaseOf(partition, lease.Epoch), handOver, turns, seen ?? [], trial ?? [])).AsTask();
 
-    public Task<Committed> Commit(int partition, long epoch, long position, IReadOnlyList<TurnCommit> turns, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null) =>
+    public Task<Committed> Commit(int partition, long epoch, long position, IReadOnlyList<TurnCommit> turns, IReadOnlyList<InboxKey>? seen = null, IReadOnlyList<InboxKey>? trial = null) =>
         S.CommitAsync(new CommitBatch(partition, epoch, position, LeaseOf(partition, epoch), false, turns, seen ?? [], trial ?? [])).AsTask();
 
     /// <summary>A commit that must land. Transient failures are tried again, as the kernel does.</summary>
@@ -121,13 +121,13 @@ public static class Make
     public static InstanceRow Row(string id, long revision, string state = "{}", InstanceStatus status = InstanceStatus.Running) =>
         new(id, "m", "d", status, state, revision, null);
 
-    public static TurnCommit Turn(string instance, InstanceRow? row = null, long? expected = null, IReadOnlyList<string>? consumed = null, IReadOnlyList<string>? done = null,
+    public static TurnCommit Turn(string instance, InstanceRow? row = null, long? expected = null, IReadOnlyList<InboxKey>? consumed = null, IReadOnlyList<InboxKey>? done = null,
         IReadOnlyList<Message>? sent = null, IReadOnlyList<SubscriptionRow>? subscribed = null, IReadOnlyList<SubscriptionRow>? unsubscribed = null, string? journal = "[]",
-        bool unsubscribe = false, IReadOnlyList<string>? held = null) =>
+        bool unsubscribe = false, IReadOnlyList<InboxKey>? held = null) =>
         new(instance, row, expected, consumed ?? [], done ?? [], sent ?? [], subscribed ?? [], unsubscribed ?? [], journal, unsubscribe, held);
 
     /// <summary>A delete of an ended instance at its revision, as the kernel writes it: its waits go too, and its own journal row says so.</summary>
-    public static TurnCommit Delete(string instance, long expected, IReadOnlyList<string>? consumed = null) =>
+    public static TurnCommit Delete(string instance, long expected, IReadOnlyList<InboxKey>? consumed = null) =>
         new(instance, null, expected, consumed ?? [], [], [], [], [], "[\"deleted\"]", Unsubscribe: true, Delete: true);
 
     /// <summary>A new instance, created with a journal row: the commonest turn.</summary>
@@ -142,10 +142,83 @@ public static class Semantics
 
     public static IReadOnlyList<Case> Cases { get; } =
     [
+        new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),
+        new("actor addressing: requested spellings resolve under the provider actor collation in one snapshot", Level.Required, async c =>
+        {
+            var ids = new[] { "0/First", "0/first", "0/New", "0/new" };
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New(ids[0])]));
+            var routes = (await c.S.LoadActorsAsync(ids)).ToDictionary(r => r.Requested, StringComparer.Ordinal);
+            Context.That(routes.Count == 4 && routes[ids[0]].Row?.Id == ids[0] && routes[ids[2]].Row is null && routes[ids[3]].Row is null,
+                "load lost a requested spelling, known row or missing candidate");
+            Context.Equal(c.Provided.CaseEquivalentTopic ? ids[0] : ids[1], routes[ids[1]].Canonical, "existing alias");
+            Context.Equal(c.Provided.CaseEquivalentTopic ? ids[0] : null, routes[ids[1]].Row?.Id, "stored actor spelling");
+            Context.Equal(c.Provided.CaseEquivalentTopic ? ids[2] : ids[3], routes[ids[3]].Canonical, "first missing candidate");
+        }),
+        new("child issuance: the parent pins both exact targets through provider takeover", Level.Required, IssuedChildren.AcrossTakeover),
+        new("inbox identity: cold termination consumes all original UTF-16 job tickets and the checkpoint registry", Level.Required, OpaqueTickets.ColdTerminate),
+        new("inbox identity: one workflow drives exact UTF-16 ticket twins through takeover and selective recall", Level.Required, OpaqueTickets.ThroughWorker),
+        new("inbox identity: ticket tuple, ordinary wire ID and actor send are independently consumable", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var one = InboxKey.Ticket("0/a!b", "c");
+            var two = InboxKey.Ticket("0/a", "b!c");
+            Context.That(one.Id == two.Id && one != two, "fixture requires two tickets with one logical wire ID");
+            var ordinary = Make.M(one.Id, 0) with { KeepUntil = long.MaxValue };
+            var issued = ordinary.AsIssued() with { KeepUntil = null };
+            Context.That(await c.S.AddAsync(issued), "outside add must accept a copied message under ordinary origin");
+            var first = ordinary.WithInboxScope(one.Scope) with { KeepUntil = null };
+            var second = ordinary.WithInboxScope(two.Scope) with { KeepUntil = null };
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a", [first, second, issued])]));
+            var keys = (await c.All(0)).Select(m => m.Message.InboxKey).ToHashSet();
+            Context.That(keys.SetEquals([ordinary.InboxKey, one, two, issued.InboxKey]), "poll lost an origin or its ticket tuple");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/a", consumed: [one, issued.InboxKey], done: [ordinary.InboxKey])]));
+            Context.That(!await c.S.AddAsync(issued) && (await c.All(0)).Select(m => m.Message.InboxKey).SequenceEqual([two]),
+                "consumption lost ordinary replay or removed another ticket");
+            if (c.Provided.LargestInboxId is { } id)
+            {
+                var outside = Make.M(id, 0);
+                var ticket = outside.WithInboxScope(InboxKey.Ticket("0/a", id[4..]).Scope);
+                Context.That(await c.S.AddAsync(outside) && !await c.S.AddAsync(outside), "maximum ordinary wire ID did not deduplicate");
+                await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", sent: [ticket])]));
+                var matching = (await c.All(0)).Where(m => m.Message.Id == id).Select(m => m.Message.InboxKey).ToHashSet();
+                Context.That(matching.SetEquals([outside.InboxKey, ticket.InboxKey]), "maximum wire ID did not survive round trip in both scopes");
+                await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Turn("0/a", consumed: [outside.InboxKey, ticket.InboxKey])]));
+                Context.That(await c.S.AddAsync(outside), "maximum wire ID was not recalled");
+            }
+        }),
+        new("inbox identity: opaque issued handles use ordinal comparison", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var variants = new[] { "Render", "render", "rénder", "render ", "x\ud800", "x\ufffd", "x\ud801", "x\0", "QQBC" }.Select(k => InboxKey.Ticket("0/job", k)).ToArray();
+            // A representable issued ID may equal the exact base64 text of an escaped wire ID.
+            variants = [.. variants, new InboxKey(Convert.ToBase64String(DurableKeyJson.CodeUnits(variants[4].Id)), variants[4].Scope)];
+            var tickets = variants.Select(k => Make.M(k.Id, 0).WithInboxScope(k.Scope)).ToArray();
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/job", tickets)]));
+            Context.That((await c.All(0)).Select(r => r.Message.InboxKey).ToHashSet().SetEquals(variants), "cold poll changed or conflated issued wire values");
+            var missing = InboxKey.Ticket("0/job", "absent");
+            await c.Refused(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/job", consumed: [variants[4], missing])]), "required delete of a missing issued key");
+            Context.That((await c.All(0)).Select(r => r.Message.InboxKey).ToHashSet().SetEquals(variants), "mixed refusal removed an issued UTF-16 twin");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/job", consumed: [variants[1]])]));
+            Context.That((await c.All(0)).Select(r => r.Message.InboxKey).ToHashSet().SetEquals(variants.Where(k => k != variants[1])), "consume matched a case, accent or trailing-space twin");
+        }),
         // ---- take and release ----------------------------------------------------------------------------------------
         new("take: a free partition", Level.Required, async c =>
         {
             var lease = await c.Take(0);
+            try { await c.S.AddAsync(new Message("supplied", new("0/a"), Kinds.Job)); throw new ConformanceException("Outside ticket accepted."); }
+            catch (ArgumentException) { }
+            Context.That(await c.Row(0, "supplied") is null, "rejected outside ticket wrote a row");
+            IKernelStore wrapped = new RecordingStore(new FaultyStore(c.S, 0, 1));
+            Context.Equal(c.S.SupportsCommitWindow, wrapped.SupportsCommitWindow, "decorators must forward conditional commit support");
+            if (!wrapped.SupportsCommitWindow)
+            {
+                var guarded = new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(10), false, [], [], [])
+                    { Window = new(lease.Now, lease.Now + 10_000) };
+                try { await c.S.CommitAsync(guarded); throw new ConformanceException("Unsupported conditional commit executed."); }
+                catch (NotSupportedException) { }
+                await c.Lands(() => c.Commit(lease, 0, []), "same fence after refusing the conditional commit");
+            }
             Context.That(lease.Epoch > 0, $"epoch {lease.Epoch} after the first take");
             Context.Equal(0L, lease.Position, "position of a new partition");
             var now = await c.Now();
@@ -614,8 +687,172 @@ public static class Semantics
             await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/w", Make.Row("0/w", 1), subscribed: [wait])]));
             var e = new EventRow("k", "e1", "p", await c.Now() + 60_000);
             await Events.PublishAsync(c.S, e);
-            Context.That(!await c.S.AddAsync(Events.Deliver(e, wait)), "the subscriber's delivery was added beside the publisher's");
-            Context.Equal(Events.Deliver(e, wait), (await c.Row(0, Events.Deliver(e, wait).Id))!.Message, "the delivered message");
+            var match = Events.Route(e, wait);
+            Context.That(!await c.S.AddEventAsync(match), "the subscriber's delivery was added beside the publisher's");
+            var stored = (await c.Row(0, match.Message.Id))!.Message;
+            Context.Equal(match.Message, stored.WithInboxScope(-2, stored.EventMatch), "the delivered message and exact match");
+            Context.That(await c.S.AddAsync(match.Message), "ordinary ingress must retain its own wire ID domain");
+            Context.That(!await c.S.AddAsync(match.Message), "ordinary replay must still deduplicate");
+            Context.Equal(2, (await c.All(0)).Count(m => m.Message.Id == match.Message.Id), "exactly one event match and one outside envelope");
+        }),
+
+        new("events: concurrent distinct matches retain the exact event and wait under an aliased wire ID", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var now = await c.Now();
+            var pairs = new[]
+            {
+                ("ka", "e", "0/a", "b:c"),
+                ("ka", "e", "0/a:b", "c"),
+                ("kb", "e", "0/a", "b:c"),
+                ("ka", "e:0/a", "0/x", "w:0/x:q"),
+            };
+            var routes = pairs.Select(p => Events.Route(new(p.Item1, p.Item2, "p", now + 60_000), new(p.Item1, p.Item3, p.Item4))).ToArray();
+            var last = Events.Route(new("ka", "e:0/a:0/x:w", "p", now + 60_000), new("ka", "0/x", "q"));
+            routes = [..routes, last];
+            var added = await Task.WhenAll(routes.Concat(routes).Select(match => c.S.AddEventAsync(match).AsTask()));
+            Context.Equal(routes.Length, added.Count(x => x), "one insert per full tuple, including concurrent replays");
+            var rows = (await c.All(0)).Select(r => r.Message).ToList();
+            Context.Equal(routes.Length, rows.Count, "all event matches are present");
+            foreach (var match in routes)
+            {
+                var wanted = EventMatch.Decode(match.Message.EventMatch!);
+                var actual = rows.Single(r => r.EventMatch == match.Message.EventMatch);
+                Context.Equal((wanted.Event, wanted.Wait), Events.Delivered(actual)!.Value, "an ambiguous wire is decoded by its persisted match");
+                Context.Equal(match.Message.Id, actual.Id, "unchanged wire representation");
+            }
+            await c.Lands(() => c.Commit(0, lease.Epoch, 0, [Make.Turn("0/a", consumed: [rows[0].InboxKey])]));
+            Context.Equal(routes.Length - 1, (await c.All(0)).Count, "consume only the selected tuple");
+            var deleted = rows[0];
+            Context.That(await c.S.AddEventAsync(routes.Single(r => r.Message.EventMatch == deleted.EventMatch)), "consumed delivery can be rematched");
+            if (c.Provided.LargeEventKey)
+            {
+                var random = new Random(4229);
+                string Wide(int bytes) => Convert.ToBase64String(Enumerable.Range(0, bytes).Select(_ => (byte)random.Next(256)).ToArray());
+                var key = Wide(950);
+                var e = new EventRow(key, Wide(800), null, now + 60_000);
+                var wait = new SubscriptionRow(key, "0/w", Wide(800));
+                await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.Turn("0/w", Make.Row("0/w", 1), subscribed: [wait])]));
+                await Events.PublishAsync(c.S, e);
+                var routed = Events.Route(e, wait);
+                Context.That((await c.All(0)).Any(m => m.Message.EventMatch == routed.Message.EventMatch) && !await c.S.AddEventAsync(routed),
+                    "admissible event, subscription and wire inputs exceed a combined B-tree key and still route once");
+            }
+            if (c.Provided.LargestInboxId is { } max)
+            {
+                // Use full Unicode characters; the existing input limits are measured in UTF-16 units on SQL Server
+                // and Unicode scalar values on MySQL. The wire prefix and subscription consume nine ASCII characters.
+                var units = max.EnumerateRunes().Count();
+                var suffix = string.Concat(Enumerable.Repeat(max.EndsWith("🌐", StringComparison.Ordinal) ? "🌐" : "界", units - 9));
+                var key = string.Concat(Enumerable.Repeat("k", 60));
+                var large = Events.Route(new(key, suffix, null, now + 60_000), new(key, "0/a", "w"));
+                Context.Equal(units, large.Message.Id.EnumerateRunes().Count(), "full wire ID test setup");
+                Context.That(await c.S.AddEventAsync(large) && !await c.S.AddEventAsync(large), "maximum wire ID event did not deduplicate");
+                var got = (await c.All(0)).Single(m => m.Message.EventMatch == large.Message.EventMatch);
+                Context.Equal(large.Message.Id, got.Message.Id, "maximum event ID round trip");
+            }
+        }),
+
+        new("events: a stale exact match cannot mutate a replacement even under case-insensitive storage", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var until = await c.Now() + 60_000;
+            EventDelivery For(string key) => Events.Route(new(key, "e", null, until), new(key, "0/a", "w"));
+            await c.S.AddEventAsync(For("one"));
+            var stale = (await c.All(0)).Single().Message.InboxKey;
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/a", consumed: [stale], journal: null)]));
+            await c.S.AddEventAsync(For("ONE"));
+            var replacement = (await c.All(0)).Single();
+            var mixed = Make.Turn("0/sibling", Make.Row("0/sibling", 1), sent: [Make.M("other-send", 0)]);
+            foreach (var staleTurn in new[] { Make.Turn("0/a", consumed: [stale]), Make.Turn("0/a", done: [stale]), Make.Turn("0/a", held: [stale]) })
+            {
+                await c.Refused(() => c.Commit(lease, 0, [mixed, staleTurn]));
+                var cold = c.Provided.NewClient();
+                var inbox = (await cold.PollAsync(0, long.MaxValue, TimeSpan.FromDays(1), 100)).Messages;
+                Context.Equal(replacement, inbox.Single(), "cold client loaded the exact replacement and no sibling send");
+                Context.Equal(0, (await cold.LoadAsync(["0/sibling"])).Count, "failed mixed batch rolled back sibling row");
+                Context.Equal(0, (await cold.ReadJournalAsync(0, 0, 100)).Count, "failed mixed batch rolled back sibling journal");
+            }
+            // Providers may ignore a mark of a missing row. Neither a no-op nor a count failure may mark its replacement.
+            foreach (var trial in new[] { false, true })
+            {
+                try { await c.Commit(lease, 0, [], seen: trial ? [] : [stale], trial: trial ? [stale] : []); }
+                catch (StoreException) { }
+                Context.Equal(replacement, (await c.All(0)).Single(), "stale mark did not alter a replacement");
+            }
+            Context.Equal(replacement, (await c.All(0)).Single(), "all five stale operations left the replacement untouched");
+        }),
+
+        new("events: published and caught-up matches use the provider's canonical stored rows", Level.Required, async c =>
+        {
+            var now = await c.Now();
+            var spec = new StartSpec("probe", "initial");
+            var start = new SubscriptionRow("CaseKey", "", "Wait", spec);
+            if (!c.S.CreationIdentityAvailable)
+            {
+                var unsupported = start with { Start = spec with { Parent = "0/parent", ParentCreation = 2 } };
+                try { await Events.SubscribeAsync(c.S, unsupported, 1); throw new ConformanceException("Start registration accepted an unsupported parent creation."); }
+                catch (StoreException e) when (e.Failure == Failure.Definite) { }
+                var lease = await c.Take(0);
+                await c.Refused(() => c.Commit(lease, 0, [Make.Turn("0/guard", Make.Row("0/guard", 1), subscribed: [unsupported])]), "batch with unsupported parent creation");
+                Context.That((await c.S.FindSubscriptionsAsync(start.Key)).Count == 0 && (await c.S.LoadAsync(["0/guard"])).Count == 0,
+                    "refusing an unsupported registration left a wait or partial row");
+            }
+            var upperWait = c.Provided.CaseEquivalentTopic ? "WAIT" : start.Wait;
+            var alternate = c.Provided.CaseEquivalentTopic ? "casekey" : start.Key;
+            var first = new EventRow(alternate, "FirstId", "original", now + 60_000);
+            await Events.SubscribeAsync(c.S, start, 1);
+            await Events.PublishAsync(c.S, first);
+            var alternateId = c.Provided.CaseEquivalentTopic ? "FIRSTID" : first.Id;
+            await Events.PublishAsync(c.S, first with { Key = start.Key, Id = alternateId, Payload = "supplied-on-retry" });
+            var wanted = start with { Key = alternate, Wait = upperWait };
+            var many = Enumerable.Range(0, 1000).Select(i => new SubscriptionRow("absent", "", "w" + i)).Append(wanted).ToArray();
+            var stale = wanted with { Creation = 1 };
+            Context.Equal(0, (await c.S.KeptMatchesAsync([stale])).Count, "qualified stale ticket retargeted a generation-zero subscription");
+            var recovered = (await c.S.KeptMatchesAsync([.. many, stale])).Single();
+            Context.Equal(start, recovered.Wait, "the originally registered spelling, wait, and spec");
+            Context.Equal(first, recovered.Event, "the originally published event and payload");
+            await Events.CatchUpAsync(c.S, wanted, 1);
+            var routed = (await c.All(0)).Single().Message;
+            Context.Equal(first.Payload, routed.Payload, "retry did not replace the original payload");
+            Context.Equal(recovered.Delivery().Message.EventMatch, routed.EventMatch, "both sides used the stored tuple");
+            if (c.Provided.ProbeUnpairedTopicUnits)
+            {
+                var opaque = new SubscriptionRow("opaque-\ud801", "0/kept", "w-\ud800");
+                await c.S.SubscribeAsync(opaque);
+                await c.S.PublishAsync(new(opaque.Key, "kept", null, now + 60_000));
+                var canonical = (await c.S.PublishedMatchesAsync(new(opaque.Key, "kept", null, now + 60_000))).Single();
+                var recoveredOpaque = (await c.S.KeptMatchesAsync([opaque])).Single();
+                Context.Equal(canonical, recoveredOpaque, "kept lookup must match the ordinary publisher's exact canonical row");
+                if (c.S is InMemoryStore) Context.Equal(opaque, canonical.Wait, "memory preserves isolated UTF-16 units");
+            }
+        }),
+
+        new("events: a retained start receipt pins its generated actor across deletion and replay", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var until = await c.Now() + 60_000;
+            var e = new EventRow("alpha", "same", "payload", until);
+            var a = Events.Route(e, new("alpha", "", "wait", new("probe", "alpha")));
+            var b = Events.Route(e with { Key = "beta" }, new("beta", "", "wait", new("probe", "beta")));
+            var receiptA = await c.S.AddEventAsync(a);
+            var receiptB = await c.S.AddEventAsync(b);
+            Context.That(receiptA.Added && receiptB.Added && receiptA.Target != receiptB.Target &&
+                receiptA.Target.EventStartAddress && receiptB.Target.EventStartAddress, "distinct starts with the same logical wire");
+            var inbox = (await c.All(0)).Select(m => m.Message).ToList();
+            var first = inbox.Single(m => m.Target == receiptA.Target);
+            var second = inbox.Single(m => m.Target == receiptB.Target);
+            await c.Lands(() => c.Commit(lease, 0, [Make.Turn(first.Target.Id, Make.Row(first.Target.Id, 1), done: [first.InboxKey]),
+                Make.Turn(second.Target.Id, Make.Row(second.Target.Id, 1), done: [second.InboxKey])]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [new(first.Target.Id, null, 1, [], [], [], [], [], "[]", Delete:true)]));
+            var cold = c.Provided.NewClient();
+            var replay = await cold.AddEventAsync(a);
+            Context.That(!replay.Added && replay.Target == receiptA.Target && (await cold.LoadAsync([first.Target.Id])).Count == 0,
+                "within the window a replay returns the original deleted address without restarting it");
+            var another = await cold.AddEventAsync(Events.Route(e with { Id = "next" }, new("alpha", "", "wait", new("probe", "next"))));
+            Context.That(another.Added && another.Target != first.Target && another.Target != second.Target, "a new match minted a new address");
+            var ordinary = new Message("supplied", new("0/on:same:wait"), "start", Start: new("probe","named"));
+            Context.That(await cold.AddAsync(ordinary) && !await cold.AddAsync(ordinary), "the original numeric address is still admissible");
         }),
 
         // ---- journal and sweep ---------------------------------------------------------------------------------------
@@ -808,6 +1045,22 @@ public static class Semantics
             Context.That(await c.S.ProjectAsync(0, 3, 5, next), "the second round did not move");
             views = (await c.S.ReadViewsAsync(["0/a", "0/b"])).ToList();
             Context.Equal("0/a:3:3", string.Join(",", views.Select(v => $"{v.Instance}:{v.Revision}:{v.Commits}")), "view rows after a delete");
+            // Recreate at the same store key. The earlier projected revision/count must be replaced.
+            await c.Lands(() => c.Commit(0, lease.Epoch, 5, [Make.Delete("0/a", 3)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 6, [Make.New("0/a")]));
+            var fresh = new ViewRow("0/a", 1, 1);
+            Context.Equal(fresh, await Viewer.ReadAsync(c.S, 0, "0/a"), "new generation in the unprojected tail");
+            await new Projector(c.S, 0).CatchUpAsync();
+            Context.Equal(fresh, await Viewer.ReadAsync(c.S, 0, "0/a"), "delete and recreate in one projection page");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 7, [Make.Delete("0/a", 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 8, [Make.New("0/a")]));
+            var pages = new Projector(c.S, 0, take: 1);
+            await pages.RoundAsync();
+            Context.Equal(0, (await c.S.ReadViewsAsync(["0/a"])).Count, "delete at page boundary");
+            Context.Equal(fresh, await Viewer.ReadAsync(c.S, 0, "0/a"), "new generation after a projected delete");
+            await pages.CatchUpAsync();
+            Context.Equal(fresh, (await c.S.ReadViewsAsync(["0/a"])).Single(), "recreation on the next page");
+            await ProjectionIdentityChecks.RunAsync(c, lease);
         }),
         new("projection: rounds larger than a statement's chunk: 850 views in one, then 600 deletes alone", Level.Required, async c =>
         {
@@ -829,7 +1082,63 @@ public static class Semantics
             Context.That(await c.S.ProjectAsync(0, 850, 1450, await c.S.ReadJournalAsync(0, 850, 1000)), "the round of deletes did not move");
             var left = await c.S.ReadViewsAsync(ids);
             Context.Equal("250 from 0/v600", $"{left.Count} from {left.Select(v => v.Instance).Order(StringComparer.Ordinal).FirstOrDefault()}", "views after a round of 600 deletes");
+
+            // Delete and recreate all surviving keys within one projection page, across SQLite's upsert chunk.
+            var survivors = ids.Skip(600).ToList();
+            for (var at = 0; at < survivors.Count; at += 125)
+            {
+                var chunk = survivors.Skip(at).Take(125).Select(id => Make.Delete(id, 1)).ToList();
+                await c.Lands(() => c.Commit(0, lease.Epoch, 1450 + at, chunk));
+            }
+            // Single-turn recreation commands isolate the projection page from the MySQL batch-write defect recorded in FINDINGS 25.7.
+            for (var at = 0; at < survivors.Count; at++)
+                await c.Lands(() => c.Commit(0, lease.Epoch, 1700 + at, [Make.New(survivors[at])]));
+            var mixed = await c.S.ReadJournalAsync(0, 1450, 1000);
+            Context.Equal(250, mixed.Count(r => r.Revision < 0), "durable delete markers in mixed page");
+            Context.Equal(250, mixed.Count(r => r.Revision == 1), "durable creations in mixed page");
+            Context.That(await c.S.ProjectAsync(0, 1450, 1950, mixed), "mixed delete and recreate round did not move");
+            left = await c.S.ReadViewsAsync(ids);
+            Context.Equal(250, left.Count, "view count after mixed page");
+            Context.Equal(250, left.Count(v => v is { Revision: 1, Commits: 1 }), "fresh view counts across projection chunks");
+            Context.That(survivors.SequenceEqual(left.Select(v => v.Instance).Order(StringComparer.Ordinal)), "incorrect keys after mixed page");
         }),
+        new("journal: one instance's rows past a position, in order", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b")]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Turn("0/a", Make.Row("0/a", 3), expected: 2), Make.Turn("0/b", Make.Row("0/b", 2), expected: 1)]));
+            var rows = await c.S.ReadJournalOfAsync(0, "0/a", 1);
+            Context.Equal("3:2,4:3", string.Join(",", rows.Select(r => $"{r.Position}:{r.Revision}")), "0/a's rows past position 1");
+            Context.Equal(0, (await c.S.ReadJournalOfAsync(0, "0/none", 0)).Count, "rows of an instance that has none");
+        }),
+        new("viewer: the tail read is current when a round commits between its reads (decision 11)", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b")]));
+            Context.That(await c.S.ProjectAsync(0, 0, 2, await c.S.ReadJournalAsync(0, 0, 10)), "the first round did not move");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1), Make.Delete("0/b", 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 4, [Make.Turn("0/a", Make.Row("0/a", 3), expected: 2)]));
+            var cursor = (await c.S.ProjectedAsync(0)).Position;       // the viewer reads the cursor first
+            Context.That(await c.S.ProjectAsync(0, 2, 4, (await c.S.ReadJournalAsync(0, 2, 10)).Where(r => r.Position <= 4).ToList()), "the round between the reads did not move");
+            string Show(ViewRow? v) => v is null ? "none" : $"{v.Revision}:{v.Commits}";
+            foreach (var (id, expected) in new[] { ("0/a", "3:3"), ("0/b", "none") })
+            {
+                var view = Viewer.Merge(id, (await c.S.ReadViewsAsync([id])).SingleOrDefault(), await c.S.ReadJournalOfAsync(0, id, cursor));
+                Context.Equal(expected, Show(view), $"the tail read of {id}");
+            }
+            Context.Equal("3:3", Show(await Viewer.ReadAsync(c.S, 0, "0/a")), "a tail read with nothing between its reads");
+            await ViewerChecks.DeleteDuringReadAsync(c, lease);
+            await ViewerChecks.PartitionAsync(c);
+        }),
+        new("projector: catch-up requests are coalesced and leave the projection current, past one page (decision 11)", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, Enumerable.Range(0, 250).Select(i => Make.New($"0/p{i:D3}")).ToList()));     // two pages past the round under way
+            await ViewerChecks.CatchUpAsync(c);
+        }),
+        new("projector: a delete between bound and page reads cannot acknowledge a stale view", Level.Required,
+            ViewerChecks.DeleteDuringCatchUpAsync),
         new("projection: of many concurrent writes from one position, exactly one moves it", Level.Required, async c =>
         {
             var lease = await c.Take(0);

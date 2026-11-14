@@ -1080,14 +1080,16 @@ an older owner holding a newer-version checkpoint. All eight cases now pass whil
 
 **What changed.** `EfStore.ProjectAsync` writes a round's view rows set-based. It first works out, in memory, what the
 round leaves of each instance's view:
-- an instance whose delete is in the round is removed, as before (the old code wrote its views and then removed them);
-- every other instance is moved on by its commits.
+- a delete clears that key's view and count at its journal position. If a new run follows within the same round,
+  the projector replaces the view with its latest positive revision and counts only rows after the last delete;
+- keys without a delete accumulate their commits as before.
 
 On PostgreSQL the round's write is one statement, so it is one round trip and its own transaction. A data-modifying
 CTE moves the projector's row only from where the round read it. It upserts the views from `unnest` arrays, and deletes
 the removed views, both only if the row moved. On SQLite it is one transaction: the move, one multi-row upsert per 200
-views, and one delete per 500. SQL Server and MySQL still write one statement per view (`Engine.ViewAsync`), with the
-delete set-based; they are not tuned here. The contract is unchanged.
+views in each group (replace or accumulate), and one delete per 500 final deletions. At this 13 November checkpoint,
+SQL Server and MySQL wrote one statement per view (`Engine.ViewAsync`), with the delete set-based. Their subsequent
+ordered projection batches, including the cost tradeoff, are recorded in section 25.8. The contract is unchanged.
 
 **The check.** The existing case already projects a round that moves one view and removes another (an instance whose
 view an earlier round wrote). A new required case crosses every chunk of the statements: one round of 850 new
@@ -1098,6 +1100,22 @@ and 200: one commit of 850 new instances failed on MySQL's provider ("The Comman
 initialized"). A reviewer's probe found the failure from about 420 such turns in one commit, below the kernel's flush
 cap of 500 turns (`WorkerOptions.MaxBatch` counts turns, not rows). [ENGINES.md E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358)
 records the cause and the MySQL fix for #4358.
+
+**Delete and recreate at one store key (viewer integration).** Required cases check the fresh run before and after
+catch-up, on both sides of a page boundary, and across a 500-row page of 250 deletes followed by 250 creations.
+Each fresh view has revision 1 and one commit. The original projector failed the same-page and chunk cases against
+the in-memory store. The complete suite passed in memory and on SQLite in both fence modes (61 passed, one
+skipped each). Six focused projector, viewer and journal cases passed on PostgreSQL 17 (batch fence), SQL Server
+2022 (checked fence, RCSI off), MySQL 8.4 (batch fence, REPEATABLE READ) and MongoDB 8 (checked fence, replica set).
+These focused runs include the gated cancellation, shared failure and recovery checks in section 25.8.
+
+This large-page test uses individual creation commits. In a separate 13 November 2026 MySQL 8.4 run with two 125-turn creation
+commits, both commits reported success and advanced the partition to 1950. Direct SQL showed all 250 instance
+rows, but no positive journal rows and a final journal position of 1700. The server log showed the instance
+inserts and position updates. This write-batch defect occurs before projection. The subsequent isolated reproduction,
+provider rollback cause and batch-preparer correction (#4462, addressing #4358) are recorded in
+[ENGINES.md E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358).
+The exact two-commit viewer scenario was not rerun after that correction.
 
 **Gates.**
 
@@ -1156,6 +1174,264 @@ Every flaw is still caught within 20,000 seeds.
 
 **Not done:** the owner on another node still cannot tell a waiting node it was lost (504 at the deadline, as before).
 
+### 25.6 Short waits of an Ephemeral instance stay in memory (decision 4, F-N7). Run
+
+**What changed.** An Ephemeral instance that has never been written stays unwritten while its turns wait only for
+themselves. That holds for a turn when:
+- every message it sends goes to the instance itself and is a job's ticket, or is due within the short wait (a message
+  without a due time is due now);
+- it subscribes nothing, publishes nothing, and cancels or recalls only what is in memory;
+- it took no message that is a row (`DurableTurn.CanWaitInMemory`).
+
+Its row, state and those messages are then held in memory only (`Slot.Unwritten`), and it is never evicted. The short
+wait is `StartSpec.ShortWait`, which the native HTTP host sets to the request's timeout, else `WorkerOptions.ShortWait`
+(5 s).
+
+It is written, at the revision it has, in three cases:
+- **A turn that does anything else.** The turn's row is then inserted, not updated.
+- **The end of the short wait** (`Worker.Outgrown`, then `IActorType.Write`).
+- **Before anything durable reaches it.** A message that is a row, or a kernel command, finds it written first
+  (`Worker.RunTurn`). Then it is an ordinary instance for whatever the message does.
+
+The commit that writes it also writes, as rows:
+- what it still waits for in memory: timers, job tickets and held messages (`Worker.Promote`). A finished job is written
+  as its ticket, so a later owner runs it again and puts its result first (F7). Promotion preserves the current owner's
+  order among completed results, including results taken by an interrupted turn. While catching up, those results wait
+  for their ticket rows to be observed before they can run; they are not re-executed by the current owner. A later
+  owner's re-executed jobs can complete in a different order.
+- the history of its turns in memory, in the same commit's journal row (`TurnOutcome.Pending`). This holds for a park
+  too (`IActorType.Park` takes it).
+
+A park of an instance in memory whose write the store refused carries no state (`"null"`): there is no accepted row to
+fall back on. When an unwritten instance parks, its volatile jobs are retired with the faulted row, rather than creating
+new runnable tickets for a later owner; its last sealed model state and history are preserved when the row was accepted.
+Jobs already running may still complete external effects. This does not change how durable Park handles its other jobs.
+An instance that ends in memory before its deadline writes nothing at all. What it still waited for goes with it, and its
+jobs are cancelled (`Worker.ForgetInMemory`). An owner that gives its partition up (`Worker.ReleaseAsync`: a balancing
+round, a rolling deploy) writes its instances in memory first, so the next owner has them; if a commit is in flight
+then, they are lost with the memory, as in a crash.
+
+**What it loosens, said plainly.**
+The command boundary uses its explicit due time, or its stable first-observation time for an immediate command.
+An earlier durable sequence also proves that an input was accepted before that command; a timer still has to be
+due at the boundary. A late first poll therefore does not discard an earlier due durable timer. If a command matures
+while a selected trial commit's acknowledgement is delayed, the worker retains its cut before releasing the trial
+cohort. Newly arriving input cannot overtake it after that acknowledgement. These rules retain ordinary same-actor
+batching and the selected trial; they add no store call or provider state.
+
+- **Late journal start.** The instance's journal starts at the revision it is written at, not at 1. The simulation's I2
+  now allows a first revision equal to the last revision the instance had in memory (a write of it as it is) or the
+  next (a turn or a park) (`WorkerOptions.OnKeptInMemory`), for those instances only, with no gap after it. What
+  happened in memory is in that first row's entries.
+- **Lost with its process.** An unwritten instance is lost with its process, as an Ephemeral run always was, and its
+  caller is told "lost". It is held for up to its short wait, which for HTTP is the route's timeout, where before it
+  was written at its first wait: the window of that loss is longer.
+
+**Found on the way.**
+- **An outside start kept in memory.** An Ephemeral instance started by a message that is a row was first kept in
+  memory too. Its start was then consumed without a commit, so a crash would have lost it. The native simulation caught
+  it (I14). Such a turn is now always written.
+- **The review found more.** Round 1:
+  - a command or a park on an instance in memory updated a row that does not exist;
+  - a command that changes nothing dropped the running instance from memory;
+  - a held message stayed in memory only after the write;
+  - an instance that ended in memory with a recall still cost a commit, and its leftover timers were journalled later;
+  - the history was lost on the park and command paths;
+  - a finished job written as its result could be ordered behind a cancel (F7);
+  - I2's allowance was unbounded;
+  - the next wake-up was not filtered.
+
+  Round 2:
+  - I2's bound was vacuous;
+  - a stand-down lost the instances in memory.
+
+  All are fixed by the rules above.
+
+**The checks.**
+- **Ephemeral requests.** The simulation's HTTP requests are now Ephemeral for the timer and job modes too, half of
+  them, as the respond mode was.
+- **Commands reach instances in memory.** Its suspends and resumes also target instances held in memory (400 in 4,000
+  seeds).
+- **I9, rows.** An instance held in memory only has no row, unless the commit that writes it is in flight.
+- **I9, leaving memory.** An instance leaves memory without a row only when it has ended (`WorkerOptions.OnLeftMemory`).
+- **Mutations.**
+  - `Flaw.ForgetShortWaits` leaves the timers and tickets in memory when the instance is written. Caught at seed 10:
+    `END 0/h35 (job) ended as Running`.
+  - `Flaw.NoWriteFirst` gives a command to an instance in memory without writing it first. Caught at seed 2,551:
+    `I9 1/h10 left memory without a row while it was Running`.
+
+**Historical gates** (before: section 25.3, the original branch's base). These runs predate integration with the
+local lease guard and shared commit clock; they are not exact-head results:
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 13 innocent parked | 0 failed, 12 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told | 0 failed, 14 parked; 408,370 matched; 1,011 reruns, all told |
+| `$SIM --mutations --seeds 20000` | every flaw caught (two only in combination) | the same, plus `ForgetShortWaits` at seed 10 and `NoWriteFirst` at seed 2,551 |
+| `$SIM --native-mutations --seeds 20000` | 5 of 5 | 5 of 5 |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+| `$NAT cost sqlite`, case 3 Ephemeral (job; Delay) | 13 calls, 2 commits each | **0, 0** |
+| `$NAT cost postgres`, case 3 Ephemeral, checked / batch | 6 / 4 round trips, 2 commits | **0 / 0**, 0 commits |
+
+Every other row of both native cost runs is the same.
+
+**Integration checks.** After merging the lease guard, deadline handling and shared commit clock, native seed 16645
+at 1,000 actions, the 23 lease checks, the deadline witness and native smoke passed. A 2,000-seed native run at
+1,000 actions had no failures and three innocent parks. The delivery-history mutation failed N6 in 95 of 1,000 native
+seeds; the two short-wait mutations were detected in a separate 3,000-seed native run. A focused in-memory clock
+witness verifies that a fact stays unstamped during a short wait and is stamped and cached at its first durable commit.
+
+**Review corrections.** Stand-down drains every bounded promotion batch while the lease remains usable. A local
+completion at or beyond the short-wait deadline first writes the waiting instance. A targeted reply forces a
+checkpoint before release, including on an immediate terminal turn. The first wait is capped by an existing reply
+address's absolute deadline. Full history snapshots entries when recorded; State and Minimal keep no pending entries.
+Six focused controls failed on the previous integrated head and passed after these corrections; two additional
+checks cover State and Minimal retention. The integrated native simulation passed 2,000 seeds at 1,000 actions with
+one innocent park; the lease, deadline, native smoke, shared-clock, Agent, Statechart and Admission witnesses passed.
+The SQLite native cost run still measured zero calls for the Ephemeral short job and timer cases with both fences.
+
+Schedules moved. The generator draws Ephemeral for more requests and sends commands to instances in memory, and an
+instance kept in memory changes what later actions find. So the parked and native counts moved, and so did most first
+failing seeds of the mutation check. Every flaw is still caught within 20,000 seeds.
+
+**Original-round limits.** The original experiment did not change the stores or run the EF cost suite. Later integration
+changed EF's message insertion ordering: the revision 9-to-10 promotion witness on PostgreSQL 16.15, SQL Server and
+MySQL checked live and recovered order, unchanged message IDs and schema, and the measured wire trips for each engine's
+default fence. The integrated PostgreSQL witness also checked both fences: two trips in-batch and three checked. These
+focused measurements are not a general EF cost-suite result.
+
+**Not done or not run in the original experiment.**
+- A native cost row for an Ephemeral wait past its short wait. It would be written: two commits, as Balanced.
+- Paths no simulation model takes, so reasoned, not run:
+  - a message held while in memory;
+  - a turn that throws while in memory;
+  - a write of an instance in memory that the store refuses (the park with state `"null"`);
+  - an instance that ends in memory with a cancel or a recall (`EndsInMemory` with cancelled tickets, `ForgetInMemory` with leftovers).
+### 25.8 The viewer's tail read and catch-up on request (decision 11). Run
+
+**What changed.**
+- **The tail read** (`Viewer.ReadAsync`, layer 2). It reads the projector's cursor, then the instance's view, then
+  the instance's journal rows past the cursor, and merges them (`Viewer.Merge`).
+  - A round that commits between the reads leaves rows in both the view and the tail. The merge counts a tail row only
+    past the view's revision. Within a run the revision grows with journal position.
+  - A delete in the tail clears the old run's revision and commit count. A recreated run at the same key starts again.
+  - Three logical store reads, no write.
+- **A new store read.** `IKernelStore.ReadJournalOfAsync(partition, instance, after)` gives one instance's journal rows
+  past a position from one committed snapshot. The EF and MongoDB stores query the partition and instance; the
+  in-memory store scans under its lock. Every wrapper forwards this provider operation. Paging independent journal
+  snapshots could lose the old revision if a concurrent delete removed it and appended its marker beyond an earlier
+  upper bound. The integration witness commits that delete after the cursor and view reads, before the tail query.
+  MongoDB requests snapshot read concern on the find so cursor batches share a snapshot. SQL Server's RCSI-off
+  configuration uses a serializable table hint on this read. These choices retain one logical query; actual cursor
+  batches or locking costs for those configurations were not measured in the integration run. The three focused
+  semantic cases passed against a single-node MongoDB 8 replica set and SQL Server 2022 with RCSI off.
+- **Catch-up on request** (`Projector.CatchUpAsync`). It covers the positions committed through the first bound
+  read after the request. A possible deletion in that prefix requires the subsequent bound described below.
+  Requests arriving before a shared serve starts are coalesced.
+  A round already under way when a request arrives does not serve it. A failed round, or a projection that three
+  rounds in a row leave where it was (by this projector or another), fails the request. A caller's token cancels only its own wait. The timer's `RoundAsync` is unchanged.
+
+**Stable instance spelling (14 November integration).** A lookup alias accepted by a provider does not change the
+returned `ViewRow.Instance` as catch-up advances. The tail merge keeps an existing view's committed spelling; after
+a delete it takes the first fresh journal row's spelling, matching the ordered projector's new view. Complete-row
+checks cover lookup aliases before/after catch-up, interleaved aliases, recreation and page/batch boundaries. Both
+fresh MySQL and SQL Server runs rejected the old merge and passed the repair. This adds no store call or changes
+the provider's key equality.
+
+**Catch-up and a concurrent delete.** Reading the partition position and then the journal page is not one snapshot.
+A delete between them can remove an unprojected committed revision and append a delete marker beyond the earlier
+position. Filtering that marker out acknowledged the gap while leaving an obsolete projected row. Every journal
+row returned by the provider is already committed under the fence, so the round includes newer returned rows too.
+A full page stops at its last row. A short page advances to the greater of its last position and the earlier bound.
+A marker can also fall on a later page. At the default size of 100, an actual delete removed revision 2 while
+100 unrelated rows filled the page through position 102. The earlier catch-up returned revision 1 even though
+revision 2 predated the request. The current catch-up applies the marker at 103.
+
+When a page crosses a missing position in the requested prefix, catch-up remembers the gap. It also remembers
+an intervening cursor advance by another projector, whose page it did not see. Once that prefix has been crossed,
+a fresh partition bound covers the delete for every skipped revision. Memory, EF and MongoDB delete only positive
+journal revisions and append a negative marker at the same fence. Their sweeps leave journal markers in place.
+Catch-up drains that fixed second bound. Later appends and deletions beyond the original prefix do not extend it.
+
+Each round still reads the cursor and written bound together at the store interface, reads one page, and issues
+a guarded projection write if the cursor can advance. The default-size delete with 100 fillers went from one
+incorrect round to two, each with two logical reads and one guarded write. With the marker in the first page, the
+second round performs two reads and no write. The two-gap case appended on every page and finished in six rounds
+at position 255 with the writer at 260. These are logical operation counts. The earlier successful MySQL and SQL
+Server runs under both fences qualify the R15 in-page marker controls. R16's full memory and both SQLite suites
+each exercised 65 cases, with 64 passes and one inapplicable skip.
+The simulator's expected viewer result is now folded directly from journal entries, independently of `Viewer.Merge`;
+a null-for-all merge mutation is rejected, and the restored matching positive seed passes. Provider identity and
+rollback receipts above remain their earlier focused fresh-server runs, rather than a new whole-server claim.
+
+**Not built:** live watching, Studio's push stream of committed entries.
+
+**Provider identity (14 November, R13).** SQL Server and MySQL apply projection events in journal position order,
+letting the existing Views column decide whether IDs are equal. Ordinal grouping could split a database identity
+such as `0/Invoice`/`0/invoice` and reorder its delete and fresh updates. Sorting those groups by their last event
+would still discard fresh commits before a later reset. The ordered path batches at most 200 statements and 1,000
+parameters per command; each positive event uses the existing upsert with one commit, each delete removes the
+matching view at that position. The projection cursor is still guarded once, and every batch shares its transaction.
+No schema, collation, owner commit, poll or tail-query operation changed. PostgreSQL, SQLite, MongoDB and in-memory
+projection paths retain their prior grouping.
+
+Fresh MySQL 8.4.13 (`utf8mb4_0900_ai_ci`) and SQL Server 2022 (`SQL_Latin1_General_CP1_CI_AS`, RCSI) both reproduced
+the old interleaved-alias failure: revision/count `(2,4)` instead of `(4,4)` after catch-up. The required projection
+case now observes each provider's accepted case, accent and trailing-space aliases, checks several fresh updates
+after deletion, and crosses a 200-statement batch and 201-row projection page with 205 fresh revisions. MySQL
+accepted the case/accent variants but distinguished trailing spaces; SQL Server accepted case/trailing spaces but
+distinguished `café` from `cafe`. Both passed with checked and batch fences. A fresh-engine fault probe failed the
+second write batch and verified through new reads that neither the first batch nor the guarded cursor escaped
+rollback.
+
+**Projector-only command cost.** In isolated real-engine pages, on both MySQL and SQL Server, 400 distinct keys
+changed from 401 commands (cursor guard plus 400 view writes) to 3 (guard plus two batches). A page of 400 turns at
+one key changed from 2 commands to 3: batching preserves event order instead of collapsing those turns to one write.
+The two preceding projector reads and transaction begin/commit are outside these command counts and unchanged.
+For N nonzero journal events the new write portion is `ceil(N / 200)` commands. No owner hot-path round trip was
+added, and the PostgreSQL three-round-trip projector result in section 25.7 is unchanged. These are command counts,
+not new TCP or timing benchmark results; the earlier cost-harness table remains historical.
+
+**The checks.**
+- **Three new required cases.**
+  - One instance's rows past a position.
+  - The tail read when a round commits between the cursor read and the rest. Without the merge's rule the instance
+    would show 4 commits instead of 3 (reasoned from the case, not run).
+  - Catch-up requests coalesced, and the projection current afterwards across three pages (250 rows, 100 a round).
+    The integration check gates the page read so even an immediately replying store exercises overlap. A caller cancels
+    while the others finish in three rounds. A failed shared read fails its callers and a new call recovers. The deletion
+    check also requires exactly one forwarded instance-tail read and rejects a partition-page scan.
+  - The 14 November repair registers cancellation before page work and dispatches each shared serve independently
+    of the initiating caller. This adds one scheduler dispatch per coalesced serve, no store operation. Seven
+    immediately completed pages cannot hide a cancellation from page one. Both an asynchronous gate and an actual
+    synchronously blocked page-two store require the initiating call to return its cancelled task before release;
+    two uncancelled followers then complete one coalesced follow-up. The previous inline runner fails the synchronous
+    blocking check even with cancellation registered first. A mismatched instance partition is rejected before any
+    store operation, using the existing `InstanceRef` partition grammar.
+- **Coverage:** the table below records the original cases before the integration gates. The complete integration
+  suite passed in-memory and on SQLite with either fence. The per-engine integration results for the extended
+  projector and viewer cases are recorded in section 25.7.
+- **The simulation** (I6 for the viewer). After every action the tail read of every instance (the cursor, its view, its
+  rows past the cursor, merged) equals what its whole journal says, whatever the projectors have done. It runs on the
+  in-memory rows directly, in one pass over the journal; it checks the merge against every state the projectors leave,
+  not an interleaving of the reads (the conformance case does that).
+
+**Gates.**
+
+| Gate | Before (25.7) | After |
+|---|---|---|
+| Semantic suite, in-memory | 57 passed, 1 skipped | 60 passed, 1 skipped (original run, before the gated overlap check) |
+| SQLite, PostgreSQL (default fence) | 55 passed, 2 or 3 reference differ | 58 passed, the same reference cases differ |
+| SQL Server, MySQL (default) | 54 passed, 3 reference differ, 1 skipped | 57 passed, the same |
+| MongoDB | 58 passed | 61 passed |
+| `$SIM --seeds 20000` | 0 failed | 0 failed, with the new check (16.8 s on this machine) |
+| `$SIM --seeds 4000 --flaw ProjectorBlindWrite` | caught | caught, at the same seed (25) |
+
+These original per-provider gate runs predate the subscription change in section 25.2; their M6 reference differences are required cases after that change.
+
+**Not run:** the full simulation gates, because the kernel's turns, commits and schedules are unchanged. The check
+reads only, and the generator is unchanged. Also not run: the EF cost runs, because the viewer is not in the cost runs.
 ### 25.10 State size: the benchmark (decision 10, first part). Run
 
 **What changed.** The EF cost run (`$EFR x cost`) ends with a state-size table. A new benchmark model (`Blob`, in
