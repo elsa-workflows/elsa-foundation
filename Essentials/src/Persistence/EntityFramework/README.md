@@ -587,3 +587,9 @@ reads every declaring project's `nuplane.json` from the repo and fails when a mo
 engine's package id, or its pinned version drifts from the file (spec 172 D2), the same way
 `Every_module_assembly_mirrors_its_EfModule_names_into_a_ManifestExtension_efModules_declaration` guards the
 `efModules` manifest mirror above.
+
+## Relational model initialization
+
+The shared provider binding completes design-time relational metadata before EF publishes its cached model.
+This avoids the concurrent first-read factory-removal race in EF Core 10.0.10 while preserving the provider's
+model initializer and pending-model-change checks. It changes neither migration operations nor model shape.

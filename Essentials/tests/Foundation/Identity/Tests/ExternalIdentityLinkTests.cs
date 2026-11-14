@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -177,8 +178,9 @@ public sealed class ExternalIdentityLinkTests
         internal readonly IPersistenceAccessContextAccessor Access = new FixedAccess();
         internal async Task<IdentityIamSqliteDbContext> Open(params IInterceptor[] interceptors)
         {
-            var db = new IdentityIamSqliteDbContext(new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
-                .UseSqlite($"Data Source={file};Pooling=False").AddInterceptors(interceptors).Options);
+            var options = new DbContextOptionsBuilder<IdentityIamSqliteDbContext>();
+            EfRelationalProviderBinding.UseSqlite(options, $"Data Source={file};Pooling=False", IdentityIamEfModule.HistoryTableName);
+            var db = new IdentityIamSqliteDbContext(options.AddInterceptors(interceptors).Options);
             await db.Database.MigrateAsync();
             return db;
         }
