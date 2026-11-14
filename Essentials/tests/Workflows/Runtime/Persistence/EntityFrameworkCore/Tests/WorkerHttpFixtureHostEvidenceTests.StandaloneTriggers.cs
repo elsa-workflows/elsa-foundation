@@ -148,7 +148,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         return request;
     }
 
-    private static async Task<StandaloneHttpFixture> PrepareStandaloneHttpAsync(IServiceProvider shell, string policy = "RequireAll", bool unavailableSubscriber = false)
+    private static async Task<StandaloneHttpFixture> PrepareStandaloneHttpAsync(IServiceProvider shell, string policy = "RequireAll", bool unavailableSubscriber = false, string mode = "AsyncFanOut", WorkflowExecutable? targetExecutable = null)
     {
         await using var scope = shell.CreateAsyncScope();
         var services = scope.ServiceProvider;
@@ -159,7 +159,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         var persistence = services.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope();
         var triggerScope = new TriggerScope(persistence, null);
         var now = DateTimeOffset.UtcNow;
-        var original = RuntimeEventExecutableTestFixture.Create("physical-http");
+        var original = targetExecutable ?? RuntimeEventExecutableTestFixture.Create("physical-http");
         var executable = new WorkflowExecutable(original.Identity, original.RootActivity, original.ResumeTargets, original.CreatedAt,
             original.CompatibilityMetadata, new(1, [new("message", new("String"), true)]), null, original.IncidentStrategy);
         await services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
@@ -186,7 +186,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
                 new("http-grant-" + index, "physical-http-trigger", id, definition, "default", "native", "http", 1, TriggerGrantStatus.Granted, "operator", now)));
         }
         var trigger = new StandaloneTrigger("physical-http-trigger", "Physical HTTP intake", "http", 1,
-            JsonSerializer.SerializeToElement(new { method = "POST", path = "physical-intake", sourceAccess = "Anonymous", http = new { mode = "AsyncFanOut", admissionPolicy = policy } }),
+            JsonSerializer.SerializeToElement(new { method = "POST", path = "physical-intake", sourceAccess = "Anonymous", http = mode == "AsyncFanOut" ? (object)new { mode, admissionPolicy = policy } : new { mode } }),
             1, 1, 1, TriggerDesiredState.Enabled, new(TriggerManagementKind.Studio), now, now, "operator");
         var committer = services.GetRequiredService<ITriggerManagementCommitter>();
         await AssertStandaloneHttpSchemaReadyAsync(services);

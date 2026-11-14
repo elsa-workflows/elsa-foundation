@@ -215,9 +215,10 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
             File.Delete(path);
     }
 
-    private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false)
+    private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false, bool automaticResumption = true, double? responseTimeoutSeconds = null)
     {
-        var selectedFeatures = standaloneHttp ? SelectedFeatureIds.Concat(["FoundationIdentityAbstractions", "ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : SelectedFeatureIds;
+        var baseFeatures = SelectedFeatureIds.Where(id => automaticResumption || id != "WorkflowsRuntimeResumption").ToArray();
+        var selectedFeatures = standaloneHttp ? baseFeatures.Concat(["FoundationIdentityAbstractions", "ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : baseFeatures;
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -227,7 +228,8 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 [$"ConnectionStrings:{ResourceName}"] = ConnectionString,
                 [$"CShells:Shells:{ShellName}:Configuration:WebRouting:Path"] = "",
                 [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
-                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey
+                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey,
+                [$"CShells:Shells:{ShellName}:Features:ActivitiesHttp:SyncRequestTimeout"] = TimeSpan.FromSeconds(responseTimeoutSeconds ?? 30).ToString("c", System.Globalization.CultureInfo.InvariantCulture)
             }.Concat(selectedFeatures.Select(id => KeyValuePair.Create(
                 $"CShells:Shells:{ShellName}:Features:{id}",
                 (string?)null))))
