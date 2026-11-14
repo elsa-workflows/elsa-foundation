@@ -1,0 +1,65 @@
+{
+  "name": "CI Azure runner pilot",
+  "on": {
+    "workflow_dispatch": {
+      "inputs": {
+        "trusted_sha": {
+          "description": "Exact reviewed main SHA (must equal this workflow's SHA)",
+          "required": true,
+          "type": "string"
+        },
+        "runner_label": {
+          "description": "One-job label from the isolated pilot controller",
+          "required": true,
+          "type": "string"
+        }
+      }
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "concurrency": {
+    "group": "ci-azure-runner-pilot",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "pilot": {
+      "if": "github.repository == 'elsa-workflows/elsa-foundation' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.repository.fork == false",
+      "runs-on": {
+        "group": "elsa-foundation-ci-pilot",
+        "labels": "${{ inputs.runner_label }}"
+      },
+      "timeout-minutes": 10,
+      "steps": [
+        {
+          "name": "Check out the dispatched main commit",
+          "uses": "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+          "with": {
+            "ref": "${{ github.sha }}",
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Verify assignment and exercise existing source-only CI guards",
+          "env": {
+            "PILOT_EXPECTED_SHA": "${{ inputs.trusted_sha }}",
+            "PILOT_RUNNER_LABEL": "${{ inputs.runner_label }}"
+          },
+          "run": "python3 tools/ci/azure_runner_pilot.py --report-dir \"$RUNNER_TEMP/ci-azure-pilot\""
+        },
+        {
+          "name": "Retain pilot evidence, including failures",
+          "if": "always()",
+          "uses": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+          "with": {
+            "name": "ci-azure-pilot-${{ github.run_id }}-${{ github.run_attempt }}",
+            "path": "${{ runner.temp }}/ci-azure-pilot",
+            "if-no-files-found": "error",
+            "retention-days": 7
+          }
+        }
+      ]
+    }
+  }
+}

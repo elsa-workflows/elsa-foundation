@@ -149,6 +149,9 @@ jobs:
       - name: Check Studio asset gate
         run: python3 tools/ci/verify-studio-assets.py --self-test
 
+      - name: Check isolated Azure runner pilot guards
+        run: python3 -m unittest discover -s tools/ci -p 'test_azure_runner_pilot.py'
+
       - name: Check Studio image publishing guards
         run: |
           python3 tools/ci/studio_image_tags.py --self-test
