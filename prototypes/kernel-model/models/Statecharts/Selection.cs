@@ -43,6 +43,8 @@ internal sealed class SelectionChart
             .Select(n => n.Id).Order(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         foreach (var node in _nodes.Values)
         {
+            if (!IsState(node) && (node.Entry is not null || node.Exit is not null))
+                throw new ArgumentException("Structural containers cannot own state activity work.");
             if (node.Id != _root)
             {
                 var parent = _nodes[node.Parent!];
