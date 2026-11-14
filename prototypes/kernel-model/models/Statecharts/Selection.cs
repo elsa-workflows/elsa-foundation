@@ -4,15 +4,16 @@ namespace Kernel.Statecharts;
 
 internal enum NodeKind { Root, Compound, Parallel, Region, Atomic, Final }
 internal enum VisitMode { Internal, Preserve, Reenter }
+internal enum TriggerKind { Event, Automatic, Completion }
 internal sealed record GraphNode(string Id, NodeKind Kind, string? Parent = null, string? Initial = null, string? Entry = null, string? Exit = null, Dictionary<string, JsonNode?>? Defaults = null);
-internal sealed record GraphRule(string Id, int Order, string Source, string? Target, VisitMode Mode, string Trigger, string? Action = null, string? When = null);
+internal sealed record GraphRule(string Id, int Order, string Source, string? Target, VisitMode Mode, string Trigger, string? Action = null, string? When = null, TriggerKind Kind = TriggerKind.Event);
 internal sealed record StructuralDefinition(GraphNode[] Nodes, GraphRule[] Rules, Dictionary<string, JsonNode?>? Defaults = null);
 internal sealed record StateVisit(string State, string Occurrence);
 internal sealed record GraphStep(string Id, string Phase, string State, string? Activity, string? Visit, string? Transition, string[] After);
 internal sealed record GraphPlan(string[] Candidates, string[] Selected, string[] Next, GraphStep[] Steps);
 
 // Structural selection only. The host owns input admission, wave closure, physical visits, values and recovery.
-internal sealed class SelectionChart
+internal sealed partial class SelectionChart
 {
     private readonly Dictionary<string, GraphNode> _nodes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string[]> _paths = new(StringComparer.Ordinal);
@@ -21,6 +22,7 @@ internal sealed class SelectionChart
     private readonly string _root;
     internal IReadOnlyDictionary<string, JsonNode?> MachineDefaults { get; }
     internal bool HasDefaults => MachineDefaults.Count != 0 || _nodes.Values.Any(n => n.Defaults?.Count > 0);
+    internal bool HasInternalRules => _rules.Any(r => r.Kind != TriggerKind.Event);
     private static Dictionary<string, JsonNode?> Clone(IReadOnlyDictionary<string, JsonNode?>? values) =>
         values?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
     private static bool IsState(GraphNode node) => node.Kind is not (NodeKind.Root or NodeKind.Region);
@@ -73,9 +75,12 @@ internal sealed class SelectionChart
             throw new ArgumentException("Unique transition identity and explicit order required.");
         foreach (var r in _rules)
         {
-            if (string.IsNullOrEmpty(r.Id) || string.IsNullOrEmpty(r.Trigger) || !Enum.IsDefined(r.Mode) ||
+            if (string.IsNullOrEmpty(r.Id) || !Enum.IsDefined(r.Kind) ||
+                (r.Kind == TriggerKind.Event ? string.IsNullOrEmpty(r.Trigger) : r.Trigger != "") || !Enum.IsDefined(r.Mode) ||
                 !_nodes.TryGetValue(r.Source, out var source) || !IsState(source) || source.Kind == NodeKind.Final)
                 throw new ArgumentException("Invalid transition source, trigger or mode.");
+            if (r.Kind == TriggerKind.Completion && source.Kind is not (NodeKind.Compound or NodeKind.Parallel))
+                throw new ArgumentException("Completion requires a compound or parallel source.");
             if (r.Mode == VisitMode.Internal)
             {
                 if (r.Target is not null) throw new ArgumentException("Internal reactions have no target.");
