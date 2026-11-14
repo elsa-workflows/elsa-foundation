@@ -35,7 +35,7 @@ from effects_journeys import (CLASSES, EVIDENCE_CATEGORY, HOST, POLICY_CODE, PRO
                              require_called_refusal, require_normal_terminal)
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, HOST_HEADER, JourneyRuntime, atomic_json, same)
 from owner_resources import seed_personal_layout
-from restart_journeys import _await_owner, _command_trace, _prepare_owner_resolution, instant
+from restart_journeys import _await_owner, _command_trace, _prepare_owner_resolution, _settled_by, instant
 from runtime import (RUNTIME_ENVIRONMENT, RestartableServer, owned_content_root, owned_origin,
                      private_json, published_files, published_files_digest)
 from upgrade_distribution import (BASELINE_SOURCE, BASELINE_TREE, JOURNAL_HEADER, OPERATOR_ASSEMBLY, RESOURCE_FEATURE,
@@ -173,7 +173,7 @@ def _read_snapshot(root, refs, origin, owner, journal_path):
     return {**values, "journal": entries}
 
 
-def _operator(runtime, prepared, generation, command):
+def _operator(runtime, prepared, generation, command, *, request_overrides=None, guard_id=None):
     """Finite owned stdin/stdout process; never invokes finalize/force or echoes credentials."""
     item = prepared[generation]["operator"]
     database = runtime.upgrade_store["database"]
@@ -183,7 +183,11 @@ def _operator(runtime, prepared, generation, command):
                "finalization": {"family": "Weaver", "version": None}}
     if command in ("hold", "release"): request["finalization"]["operator"] = OPERATOR_ACTOR
     if command == "hold": request["finalization"]["reason"] = OPERATOR_REASON
-    output = runtime.output("operator-" + generation + "-" + command)
+    if request_overrides is not None:
+        _need(command == "status" and set(request_overrides) == {"version"} and isinstance(guard_id, str)
+              and guard_id in {control["id"] for control in _owned(runtime.run.root, item["guardControls"])["cases"]}, "only retained malformed-version guard controls may override an operator request")
+        request.update(request_overrides)
+    output = runtime.output("operator-" + generation + "-" + (guard_id or command))
     stdin = json.dumps(request, separators=(",", ":")).encode()
     stdin_path = output / "stdin.json"
     stdin_path.write_bytes(stdin); stdin_path.chmod(0o600)
@@ -195,8 +199,10 @@ def _operator(runtime, prepared, generation, command):
         env[key], caches[key] = str(target), str(target)
     record = {"generation": generation, "command": argv, "operator": item, "request": retained(stdin_path),
               "startedAt": time.time(), "timeoutSeconds": OWNED_SECONDS, "cachePaths": caches}
+    if guard_id is not None: record["guardId"] = guard_id
     stdout, stderr = output / "stdout.json", output / "stderr.log"
     process = None
+    cleanup_failure = None
     try:
         with stdout.open("xb") as out, stderr.open("xb") as err:
             stdout.chmod(0o600); stderr.chmod(0o600)
@@ -219,13 +225,16 @@ def _operator(runtime, prepared, generation, command):
                 record.update(_stop_operator(process))
             except BaseException as failure:
                 record.update(processStopped=False, cleanupFailureType=type(failure).__name__)
+                cleanup_failure = failure
         record["endedAt"] = time.time()
         if stdout.exists(): record["stdout"] = retained(stdout)
         if stderr.exists(): record["stderr"] = retained(stderr)
         record["runtimeCacheFiles"] = {key: sorted(str(path.relative_to(Path(directory))) for path in Path(directory).rglob("*") if path.is_file())
                                        for key, directory in caches.items()}
         reference = runtime.save(output, "process", record)
-    _read_operator(runtime.run.root, reference, generation=generation, command=command, database=database)
+        if cleanup_failure is not None and "failureType" not in record:
+            raise cleanup_failure
+    if guard_id is None: _read_operator(runtime.run.root, reference, generation=generation, command=command, database=database)
     return reference
 
 
@@ -243,6 +252,117 @@ def _stop_operator(process):
     _need(process.poll() is not None, "owned operator did not stop after bounded cleanup")
     result.update(processStopped=True, exitCode=process.returncode)
     return result
+
+
+def _guard_filesystem(root, database):
+    """No SQLite open: retain byte fingerprints of main/WAL/SHM and owned-content membership.
+
+    This is an owned-content observation, not a claim to a system-wide syscall
+    trace. The fixed guard response and pinned Program source establish refusal
+    before EfToolingHost; these fingerprints independently reject any mutation.
+    """
+    root, database = Path(root), Path(database)
+    _need(root.is_absolute() and root.is_dir() and not root.is_symlink() and database.parent == root / "state",
+          "guard snapshot needs the existing private runtime database")
+    tree = {}
+    for path in sorted(root.rglob("*")):
+        _need(not path.is_symlink() and len(tree) < 32768, "guard content inventory is linked/unbounded")
+        value = path.stat()
+        _need(stat.S_ISREG(value.st_mode) or stat.S_ISDIR(value.st_mode), "guard content inventory contains a special file")
+        tree[path.relative_to(root).as_posix()] = {"kind": "file" if path.is_file() else "directory", "device": value.st_dev,
+            "inode": value.st_ino, "mode": stat.S_IMODE(value.st_mode), "size": value.st_size, "modifiedNs": value.st_mtime_ns}
+    files = {}
+    for suffix in ("", "-wal", "-shm"):
+        path = Path(str(database) + suffix)
+        if not path.exists(): files[str(path)] = None; continue
+        before = path.stat()
+        _need(path.is_file() and not path.is_symlink() and before.st_size <= 64 * 1024 * 1024, "guard database file is linked/unbounded")
+        digest = sha(path)
+        after = path.stat()
+        _need((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns),
+              "database file changed during guard byte observation")
+        files[str(path)] = {"sha256": digest, "device": before.st_dev, "inode": before.st_ino, "bytes": before.st_size, "modifiedNs": before.st_mtime_ns}
+    identity = root.stat()
+    return {"format": "weaver.upgrade.operator-guard-files", "root": str(root), "observedAt": time.time(),
+            "rootIdentity": {"device": identity.st_dev, "inode": identity.st_ino}, "tree": tree, "databaseFiles": files}
+
+
+def _operator_guards(runtime, prepared):
+    result = {}
+    for generation in ("old", "current"):
+        item = prepared[generation]["operator"]
+        manifest = _owned(runtime.run.root, item["guardControls"])
+        records = []
+        for case in manifest["cases"]:
+            output = runtime.output("guard-" + generation + "-" + case["id"])
+            before = runtime.save(output, "before", _guard_filesystem(runtime.upgrade_store["contentRoot"], runtime.upgrade_store["database"]))
+            process = _operator(runtime, prepared, generation, "status", request_overrides=case["requestOverrides"], guard_id=case["id"])
+            after = runtime.save(output, "after", _guard_filesystem(runtime.upgrade_store["contentRoot"], runtime.upgrade_store["database"]))
+            observed = {"id": case["id"], "process": process, "before": before, "after": after}
+            try:
+                actual = _owned(runtime.run.root, process)
+                left, right = _owned(runtime.run.root, before), _owned(runtime.run.root, after)
+                _need(actual.get("processStopped") is True and actual.get("exitCode") == 2 and actual.get("timedOut") is not True
+                      and _owned(runtime.run.root, actual["stdout"]) == {"operatorRefused": True, "code": "operator-guard-refused"}
+                      and all(same(left[key], right[key]) for key in ("rootIdentity", "tree", "databaseFiles")),
+                      "actual guard refusal did not preserve database/owned-content files")
+            except Exception as failure:
+                raise UpgradeObservationFailure("Operator guard failed/unknown; subsequent controls are not replayed", observed) from failure
+            records.append(observed)
+        record = {"generation": generation, "manifest": item["guardControls"], "controls": records,
+                  "evidenceKind": "actual-packaged-operator-guards-before-tooling-with-unchanged-owned-content"}
+        reference = runtime.save(runtime.output("operator-guards-" + generation), "records", record)
+        _read_operator_guards(runtime.run.root, reference, item, runtime.upgrade_store)
+        result[generation] = reference
+    return {"operatorGuards": result}
+
+
+def _read_operator_guards(root, ref, operator, store):
+    value = _owned(root, ref)
+    _need(value.get("manifest") == operator["guardControls"] and value.get("evidenceKind") == "actual-packaged-operator-guards-before-tooling-with-unchanged-owned-content",
+          "operator guard evidence was replaced by an authored control manifest")
+    manifest = _owned(root, value["manifest"])
+    _need(same(manifest, strict_json((TOOL / "fixtures/Upgrade.Operator/guard-controls.json").read_text())), "operator guard request labels differ from committed malformed-version inputs")
+    expected_ids = ("version-above-int32", "version-below-int32", "version-fractional", "version-string", "version-null", "version-boolean")
+    _need(manifest.get("format") == "weaver-upgrade-operator-guard-controls" and manifest.get("version") == 1
+          and [case["id"] for case in manifest.get("cases", [])] == list(expected_ids)
+          and [record["id"] for record in value.get("controls", [])] == list(expected_ids), "missing/duplicate actual malformed-version control")
+    for case, record in zip(manifest["cases"], value["controls"]):
+        process = _owned(root, record["process"])
+        _need(same(process.get("operator"), operator) and process.get("generation") == value["generation"] and process.get("guardId") == case["id"]
+              and process.get("processStopped") is True and type(process.get("pid")) is int and process["pid"] > 0
+              and type(process.get("exitCode")) is int and process["exitCode"] == 2 and process.get("timedOut") is not True
+              and not process.get("failureType") and not process.get("cleanupFailureType")
+              and 0 <= process["endedAt"] - process["startedAt"] <= OWNED_SECONDS + 5, "guard operator did not actually stop with its fixed refusal")
+        _need(process.get("command") == [*operator["commandPrefix"], "--owned-root", store["contentRoot"], "--database", store["database"]], "guard invoked another command/root/database")
+        request = {"version": 1, "command": "status", "selection": {"kind": "modules", "modules": ["Weaver"]},
+                   "provider": "Sqlite", "connection": "Data Source=" + store["database"], "finalization": {"family": "Weaver", "version": None}, **case["requestOverrides"]}
+        _need(same(_owned(root, process["request"]), request) and _owned(root, process["stdout"]) == {"operatorRefused": True, "code": "operator-guard-refused"},
+              "guard stdin/stdout was summarized, malformed or from another cause")
+        _owned_file(root, process["stderr"])
+        _need(set(process.get("runtimeCacheFiles", {})) == {"NUGET_PACKAGES", "NUGET_HTTP_CACHE_PATH"}
+              and not any(process["runtimeCacheFiles"].values()), "guard populated a runtime package cache")
+        before, after = _owned(root, record["before"]), _owned(root, record["after"])
+        _need(before.get("format") == after.get("format") == "weaver.upgrade.operator-guard-files" and before.get("root") == after.get("root") == store["contentRoot"]
+              and all(same(before.get(key), after.get(key)) for key in ("rootIdentity", "tree", "databaseFiles"))
+              and before["observedAt"] <= process["startedAt"] <= process["endedAt"] <= after["observedAt"], "guard changed database bytes/owned-content files or has no actual stopped interval")
+        _need(set(before.get("databaseFiles", {})) == {store["database"] + suffix for suffix in ("", "-wal", "-shm")}
+              and before["databaseFiles"][store["database"]] is not None, "guard omitted main/WAL/SHM byte evidence")
+        content = Path(store["contentRoot"])
+        identity = content.stat()
+        _need(before.get("rootIdentity") == {"device": identity.st_dev, "inode": identity.st_ino}
+              and before.get("tree", {}).get("state", {}).get("kind") == "directory", "guard content inventory lost its actual private runtime root/state directory")
+        for path, entry in before["databaseFiles"].items():
+            relative = Path(path).relative_to(content).as_posix()
+            metadata = before["tree"].get(relative)
+            if entry is None:
+                _need(metadata is None, "guard omitted an existing WAL/SHM byte observation")
+            else:
+                _need(isinstance(entry.get("sha256"), str) and len(entry["sha256"]) == 64 and set(entry["sha256"]) <= set("0123456789abcdef")
+                      and isinstance(metadata, dict) and metadata.get("kind") == "file"
+                      and metadata.get("device") == entry.get("device") and metadata.get("inode") == entry.get("inode")
+                      and metadata.get("size") == entry.get("bytes"), "guard database fingerprint differs from complete owned-file inventory")
+    return value
 
 
 def _read_operator(root, ref, *, generation, command, database):
@@ -346,11 +466,11 @@ def _reopen(runtime, branch, name):
     _select_actor(runtime, branch["actor"])
     branch["refs"]["identityRecovered"] = _identity(runtime, name + "-identity-recovered")
     t = runtime.transport(name + "-recovered")
-    response, at, attempts = _await_owner(t, branch["sessionId"], tolerate=True)
-    response.require_status(200)
+    response, at, attempts = _await_owner(t, branch["sessionId"], tolerate=False)
     branch["refs"]["ownershipAttempts"] = attempts
     branch["refs"]["recoveredSession"] = response.receipt
     branch["times"]["recovered"] = at
+    response.require_status(200)
     branch["refs"]["recoveredProposals"] = t.request("GET", "/_elsa/weaver/sessions/" + branch["sessionId"] + "/proposals").require_status(200).receipt
     branch["snapshots"]["recovered"] = _snapshot(runtime, name + "-recovered-no-dispatch")
     return t
@@ -642,7 +762,7 @@ def _lane(parent_runtime, prepared, provider):
             records["client-awaiting-upgrade"]["client"] = client["o"]
             records["client-awaiting-upgrade"]["clientProposal"] = client["proposal"]
             records["client-awaiting-upgrade"]["refs"]["identityBefore"] = _identity(runtime, "client-old-identity")
-            old_restart = _restart(runtime, host, "old-release-native-owner-leases")
+            old_restart = _restart(runtime, host, "old-release-native-owner-leases", lambda: _operator_guards(runtime, selected))
             for row in records.values(): row["refs"]["oldReleaseRestart"] = old_restart
             rows_state = states["all-legacy-row-kinds", "pending"]
             _rows_before(runtime, rows_state, records["all-legacy-row-kinds"])
@@ -721,10 +841,11 @@ def _recover_client(runtime, state, row):
     runtime.sign_in()
     o, proposal = state["o"], state["proposal"]
     t = runtime.transport("current-client-owner-resolution")
-    response, observed, attempts = _await_owner(t, o["sessionId"], tolerate=True)
-    o["refs"]["recoveredSession"] = response.require_status(200).receipt
+    response, observed, attempts = _await_owner(t, o["sessionId"], tolerate=False)
+    o["refs"]["recoveredSession"] = response.receipt
     o["refs"]["ownershipAttempts"] = attempts
     o["recoveredAt"] = observed
+    response.require_status(200)
     o["refs"]["recoveredProposals"] = t.request("GET", "/_elsa/weaver/sessions/" + o["sessionId"] + "/proposals").require_status(200).receipt
     o["refs"]["policy"] = t.bootstrap().require_status(200).receipt
     path = "/_elsa/weaver/sessions/" + o["sessionId"] + "/client-invocations/" + proposal["preparedInvocation"]["invocationId"] + "/resolution"
@@ -885,6 +1006,15 @@ def _read_lane(root, row, source):
     release_restart = _read_restart(root, row["refs"]["oldReleaseRestart"], lane, by_pid)
     _need(release_restart["stoppedProcess"]["publishedDirectory"] == release_restart["startedProcess"]["publishedDirectory"]
           == restart["stoppedProcess"]["publishedDirectory"] and release_restart["readyAt"] < restart["stoppedAt"], "owed-audit supplement had no genuine old lease-release restart")
+    guards = release_restart.get("whileStopped", {}).get("operatorGuards", {})
+    _need(set(guards) == {"old", "current"}, "both packaged operator generations need real guard controls")
+    for generation_name, ref in guards.items():
+        proof = _read_operator_guards(root, ref, generations[generation_name]["operator"], store)
+        _need(proof.get("generation") == generation_name, "guard operator generation differs")
+        for control in proof["controls"]:
+            process = _owned(root, control["process"])
+            _need(release_restart["stoppedAt"] <= process["startedAt"] <= process["endedAt"] <= release_restart["startedAt"],
+                  "guard executed while a native writer process was running")
     from artifacts import package_identity
     selection = restart["whileStopped"]
     _need(selection.get("generation") == "current" and selection.get("effectsSelected") is True
@@ -992,10 +1122,7 @@ def _read_branch(root, row, branch, restart, *, admin=False, refusal=False, expi
     _need(same(owner, _restart_identity(root, refs["identityRecovered"], origin))
           and same(owner, _restart_identity(root, refs["identityAfter"], origin)), "recovery changed actual native actor/tenant")
     attempts = refs["ownershipAttempts"]
-    _need(isinstance(attempts, list) and attempts and same(attempts[-1], refs["recoveredSession"]), "missing bounded real ownership observation")
-    for ref in attempts[:-1]:
-        _, value = _restart_http(root, ref, origin, "GET", "/_elsa/weaver/sessions/" + branch["sessionId"], 409)
-        _need(value.get("error", {}).get("code") == "weaver.session.owned_elsewhere", "ownership wait hid another refusal")
+    _require_graceful_ownership(root, attempts, refs["recoveredSession"], origin, branch["sessionId"])
     recovered = _restart_proposal(root, refs["recoveredProposals"], origin, branch["sessionId"], proposal["id"], prepared)
     _need(recovered.get("status") == ("expired" if expired else "approved" if branch["approved"] else "awaitingApproval"), "recovery autodispatched/rewrote an old operation")
     decoded = {name: _read_snapshot(root, value, origin, owner, row["store"]["executionObservationFile"]) for name, value in snapshots.items()}
@@ -1061,8 +1188,7 @@ def _read_branch(root, row, branch, restart, *, admin=False, refusal=False, expi
     _, audit = _restart_http(root, refs["audit"], origin, "GET", "/_elsa/weaver/audit?take=100&sessionId=" + branch["sessionId"])
     _need(isinstance(audit.get("data"), list) and audit["data"] and all(value.get("sessionId") == branch["sessionId"] for value in audit["data"]), "missing actual authorized audit decoding")
     if expired:
-        _need(any(value.get("metadata", {}).get("proposalId") == proposal["id"] and value.get("metadata", {}).get("dispatch") == "none"
-                  and value.get("metadata", {}).get("effect") == "none" for value in audit["data"]), "expiry lacks native no-dispatch audit")
+        _require_recovery_audit(root, refs["audit"], origin, branch["sessionId"], proposal, "Expired")
     return prepared, owner
 
 
@@ -1102,6 +1228,7 @@ def _read_rows(root, row):
 def _read_client(root, row, lane, processes):
     o, proposal, origin = row["client"], row["clientProposal"], row["backendOrigin"]
     refs, session, prepared = o["refs"], o["sessionId"], proposal["preparedInvocation"]
+    _require_graceful_ownership(root, refs["ownershipAttempts"], refs["recoveredSession"], origin, session)
     owner = _restart_identity(root, row["refs"]["identityBefore"], origin)
     _need(same(owner, _restart_identity(root, row["refs"]["identityAfter"], origin)) and row.get("browserObserved") is False,
           "client HTTP fixture changed owner or falsely claimed a browser")
@@ -1127,8 +1254,9 @@ def _read_client(root, row, lane, processes):
     _, repeated = _restart_http(root, refs["repeatResolution"], origin, "POST", path)
     _, conflict = _restart_http(root, refs["conflictingResolution"], origin, "POST", path, 409)
     statement = resolved.get("data", {}).get("ownerResolution")
-    _need(isinstance(statement, dict) and statement.get("claim") == "notApplied" and same(statement, repeated.get("data", {}).get("ownerResolution"))
-          and conflict.get("error") is not None, "owner uncertainty resolution was not idempotent/conflict checked")
+    _need(isinstance(statement, dict) and statement.get("claim") == "notApplied" and statement.get("actorId") == owner["subject"]
+          and same(statement, repeated.get("data", {}).get("ownerResolution"))
+          and conflict.get("error", {}).get("code") == "weaver.invocation.resolution_conflict", "owner uncertainty resolution was not idempotent/conflict checked")
     _, retry = _restart_http(root, refs["repeatExecute"], origin, "POST", "/_elsa/weaver/proposals/" + proposal["id"] + "/execute")
     _need(retry.get("data", {}).get("executed") is False and retry["data"].get("clientInvocation") is None
           and retry["data"].get("status") == "uncertain", "unknown client operation replayed after resolution")
@@ -1138,9 +1266,35 @@ def _read_client(root, row, lane, processes):
     trace = _bind_protocol(root, row, refs["trace"], o["commandId"], old_call=True)
     _need(sum(item.get("kind") == row["provider"] + ".call" for item in trace) == 1
           and not any(item.get("kind") == row["provider"] + ".continuation" for item in trace), "client unknown outcome called/continued provider again")
-    _, audit = _restart_http(root, refs["audit"], origin, "GET", "/_elsa/weaver/audit?take=100&sessionId=" + session)
-    _need(any(item.get("kind") == "proposalResolved" and item.get("metadata", {}).get("claim") == "notApplied" for item in audit.get("data", [])),
-          "actual client-resolution audit not decoded")
+    _require_recovery_audit(root, refs["audit"], origin, session, proposal, "Uncertain", statement=statement, actor=owner["subject"])
+
+
+def _require_graceful_ownership(root, attempts, recovered, origin, session):
+    _need(isinstance(attempts, list) and len(attempts) == 1 and same(attempts[0], recovered),
+          "a graceful restart left ownership held; its first owned_elsewhere is a failed release, never a retry")
+    _, value = _restart_http(root, recovered, origin, "GET", "/_elsa/weaver/sessions/" + session)
+    _need(value.get("data", {}).get("sessionId") == session and value.get("error") is None, "graceful recovery did not immediately return the same owned session")
+
+
+def _require_recovery_audit(root, reference, origin, session, proposal, status, *, statement=None, actor=None):
+    _, value = _restart_http(root, reference, origin, "GET", "/_elsa/weaver/audit?take=100&sessionId=" + session)
+    settled, selected = _settled_by(root, reference, session, proposal["id"], status=status)
+    _need(settled == ["recovery"], "missing/duplicate/wrong-cause recovery settlement provenance")
+    rows = value["data"]
+    _need(all(item.get("metadata", {}).get("proposalId") == proposal["id"] for item in rows
+              if "settledBy" in item.get("metadata", {}) or item.get("kind") == "proposalResolved"), "recovery/resolution audit attributed to another proposal")
+    settlement = next(item for item in selected if "settledBy" in item.get("metadata", {}))
+    prepared = proposal["preparedInvocation"]
+    _need(settlement.get("metadata", {}).get("invocationId") == prepared["invocationId"], "recovery settlement invocation differs")
+    if status == "Expired":
+        _need(settlement["metadata"].get("dispatch") == "none" and settlement["metadata"].get("effect") == "none", "recovery expiry lacks exact no-dispatch/no-effect provenance")
+    if statement is not None:
+        resolutions = [item for item in selected if item.get("kind") == "proposalResolved"]
+        _need(len(resolutions) == 1 and resolutions[0].get("actorId") == actor == statement.get("actorId")
+              and resolutions[0].get("metadata", {}).get("claim") == statement.get("claim") == "notApplied"
+              and resolutions[0]["metadata"].get("status") == "Uncertain" and resolutions[0]["metadata"].get("invocationId") == prepared["invocationId"]
+              and instant(resolutions[0].get("createdAt")) >= instant(statement.get("resolvedAt")), "owner resolution audit missing/duplicate/misattributed or differs from the retained statement")
+    return selected
 
 
 def _read_availability(root, row, *, held):

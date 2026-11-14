@@ -9,7 +9,9 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 from case_records import retained
 from consumers import DURABLE_EFFECTS_FEATURE, DURABLE_STORE_FEATURE
@@ -316,6 +318,150 @@ class ReceiptControls(unittest.TestCase):
                      [{"id": name} for name in reversed(upgrade.LEGACY_RESTART_CASES)]):
             with self.subTest(rows=len(rows)), self.assertRaises(RuntimeError):
                 upgrade.require_legacy_effect_restarts(rows, self.root, source="a" * 40)
+
+    def test_operator_cancellation_kills_and_reaps_only_its_owned_group_before_retaining_failure(self):
+        output = self.root / "operator-output"
+        output.mkdir(mode=0o700)
+        process = SimpleNamespace(pid=321, returncode=None)
+        process.poll = lambda: process.returncode
+        process.communicate = Mock(side_effect=KeyboardInterrupt)
+        def reap(*, timeout):
+            self.assertEqual(5, timeout)
+            process.returncode = -9
+            return -9
+        process.wait = Mock(side_effect=reap)
+        def save(directory, name, value):
+            path = Path(directory) / (name + ".json")
+            private_json(path, value)
+            return retained(path)
+        runtime = SimpleNamespace(run=SimpleNamespace(root=self.root), upgrade_store={"database": str(self.root / "state/weaver.db")},
+                                  output=lambda _name: output, save=save)
+        prepared = {"old": {"operator": {"runtimeEnv": {}, "published": str(self.root)}}}
+        with patch.object(upgrade, "upgrade_operator_command", return_value=["owned-dotnet", "owned-operator.dll"]), \
+             patch.object(upgrade.subprocess, "Popen", return_value=process), patch.object(upgrade.os, "killpg") as kill:
+            with self.assertRaises(KeyboardInterrupt): upgrade._operator(runtime, prepared, "old", "status")
+            kill.assert_called_once_with(321, upgrade.signal.SIGKILL)
+        retained_process = json.loads((output / "process.json").read_text())
+        self.assertTrue(retained_process["processStopped"])
+        self.assertEqual(-9, retained_process["exitCode"])
+        self.assertEqual("KeyboardInterrupt", retained_process["failureType"])
+
+    def test_cleanup_never_signals_a_completed_or_nonpositive_process_group(self):
+        finished = SimpleNamespace(pid=321, returncode=0, poll=lambda: 0)
+        with patch.object(upgrade.os, "killpg") as kill:
+            self.assertEqual(0, upgrade._stop_operator(finished)["exitCode"])
+            kill.assert_not_called()
+            with self.assertRaises(RuntimeError): upgrade._stop_operator(SimpleNamespace(pid=0))
+            kill.assert_not_called()
+
+    def test_guard_fingerprints_include_main_wal_shm_and_detect_other_owned_content_creation(self):
+        content = self.root / "content"
+        state = content / "state"
+        state.mkdir(parents=True)
+        database = state / "weaver.db"
+        database.write_bytes(b"synthetic bytes, never a SQLite writer")
+        Path(str(database) + "-wal").write_bytes(b"retained WAL bytes")
+        before = upgrade._guard_filesystem(content, database)
+        self.assertEqual({str(database), str(database) + "-wal", str(database) + "-shm"}, set(before["databaseFiles"]))
+        self.assertIsNone(before["databaseFiles"][str(database) + "-shm"])
+        (content / "unexpected").write_bytes(b"unexpected operator output")
+        after = upgrade._guard_filesystem(content, database)
+        self.assertNotEqual(before["tree"], after["tree"])
+        self.assertEqual(before["databaseFiles"], after["databaseFiles"])
+        database.write_bytes(b"mutated synthetic bytes")
+        mutated = upgrade._guard_filesystem(content, database)
+        self.assertNotEqual(after["databaseFiles"], mutated["databaseFiles"])
+
+    def audit(self, status="Expired", *, resolved=False):
+        proposal = {"id": "owned-proposal", "preparedInvocation": {"invocationId": "owned-invocation"}}
+        metadata = {"proposalId": proposal["id"], "invocationId": "owned-invocation", "status": status, "settledBy": "recovery"}
+        if status == "Expired": metadata.update(dispatch="none", effect="none")
+        rows = [{"id": "settlement", "sessionId": "owned-session", "actorId": None, "kind": "proposalFailed", "metadata": metadata}]
+        statement = {"claim": "notApplied", "actorId": OWNER["subject"], "resolvedAt": "2026-11-14T10:00:01Z"}
+        if resolved:
+            rows.append({"id": "resolution", "sessionId": "owned-session", "actorId": OWNER["subject"], "kind": "proposalResolved",
+                         "createdAt": "2026-11-14T10:00:02Z", "metadata": {"proposalId": proposal["id"], "invocationId": "owned-invocation",
+                             "status": "Uncertain", "claim": "notApplied"}})
+        return proposal, rows, statement
+
+    def read_audit(self, proposal, rows, status="Expired", statement=None):
+        reference = self.http("/_elsa/weaver/audit?take=100&sessionId=owned-session", {"data": rows})
+        return upgrade._require_recovery_audit(self.root, reference, ORIGIN, "owned-session", proposal, status,
+                                               statement=statement, actor=OWNER["subject"] if statement else None)
+
+    def test_expiry_requires_exact_recovery_settlement_provenance(self):
+        proposal, rows, _ = self.audit()
+        self.assertEqual(rows, self.read_audit(proposal, rows))
+        variants = [[], rows + copy.deepcopy(rows)]
+        for changes in ({"actorId": "user"}, {"kind": "proposalApproved"}):
+            variant = copy.deepcopy(rows); variant[0].update(changes); variants.append(variant)
+        for changes in ({"settledBy": "deadline"}, {"status": "Uncertain"}, {"proposalId": "foreign"},
+                        {"invocationId": "foreign"}, {"effect": "possible"}):
+            variant = copy.deepcopy(rows); variant[0]["metadata"].update(changes); variants.append(variant)
+        for variant in variants:
+            with self.subTest(variant=variant), self.assertRaises(RuntimeError): self.read_audit(proposal, variant)
+
+    def test_client_resolution_requires_one_user_attributed_statement_after_uncertain_recovery(self):
+        proposal, rows, statement = self.audit("Uncertain", resolved=True)
+        self.assertEqual(rows, self.read_audit(proposal, rows, "Uncertain", statement))
+        variants = [rows[:1], rows + [copy.deepcopy(rows[-1])]]
+        for changes in ({"actorId": None}, {"actorId": "other"}, {"kind": "proposalFailed"}):
+            variant = copy.deepcopy(rows); variant[-1].update(changes); variants.append(variant)
+        for changes in ({"claim": "applied"}, {"status": "Expired"}, {"proposalId": "foreign"}, {"invocationId": "foreign"}):
+            variant = copy.deepcopy(rows); variant[-1]["metadata"].update(changes); variants.append(variant)
+        for variant in variants:
+            with self.subTest(variant=variant), self.assertRaises(RuntimeError): self.read_audit(proposal, variant, "Uncertain", statement)
+
+    def test_a_graceful_restart_cannot_hide_a_held_lease_behind_a_later_success(self):
+        success = self.http("/_elsa/weaver/sessions/owned-session", {"data": {"sessionId": "owned-session"}})
+        upgrade._require_graceful_ownership(self.root, [success], success, ORIGIN, "owned-session")
+        held = self.save({"status": 409, "error": {"code": "weaver.session.owned_elsewhere"}})
+        with self.assertRaises(RuntimeError): upgrade._require_graceful_ownership(self.root, [held, success], success, ORIGIN, "owned-session")
+
+    def guards(self):
+        manifest = json.loads((upgrade.TOOL / "fixtures/Upgrade.Operator/guard-controls.json").read_text())
+        operator = {"guardControls": self.save(manifest), "commandPrefix": ["owned-dotnet", "owned-operator.dll"]}
+        content = self.root / "guard-content"
+        (content / "state").mkdir(parents=True)
+        database = content / "state/weaver.db"
+        database.write_bytes(b"synthetic guard control, not an old writer")
+        store = {"contentRoot": str(content), "database": str(database)}
+        observed = upgrade._guard_filesystem(content, database)
+        controls = []
+        for index, case in enumerate(manifest["cases"]):
+            request = {"version": 1, "command": "status", "selection": {"kind": "modules", "modules": ["Weaver"]},
+                "provider": "Sqlite", "connection": "Data Source=" + str(database), "finalization": {"family": "Weaver", "version": None}, **case["requestOverrides"]}
+            stderr = self.root / ("guard-stderr-" + str(index)); stderr.write_text("")
+            process = {"operator": operator, "generation": "old", "guardId": case["id"], "processStopped": True, "pid": 200 + index,
+                "exitCode": 2, "startedAt": 101, "endedAt": 102, "command": [*operator["commandPrefix"], "--owned-root", str(content), "--database", str(database)],
+                "request": self.save(request), "stdout": self.save(manifest["expectedResponse"]), "stderr": retained(stderr),
+                "runtimeCacheFiles": {"NUGET_PACKAGES": [], "NUGET_HTTP_CACHE_PATH": []}}
+            controls.append({"id": case["id"], "process": self.save(process), "before": self.save({**observed, "observedAt": 100}),
+                             "after": self.save({**observed, "observedAt": 103})})
+        proof = {"generation": "old", "manifest": operator["guardControls"], "controls": controls,
+                 "evidenceKind": "actual-packaged-operator-guards-before-tooling-with-unchanged-owned-content"}
+        return operator, store, proof
+
+    def test_guard_reader_requires_all_six_stopped_processes_and_exact_refusal_bytes(self):
+        operator, store, proof = self.guards()
+        self.assertEqual(proof, upgrade._read_operator_guards(self.root, self.save(proof), operator, store))
+        process = json.loads(Path(proof["controls"][0]["process"]["path"]).read_text())
+        process["exitCode"] = 0
+        proof["controls"][0]["process"] = self.save(process)
+        with self.assertRaises(RuntimeError): upgrade._read_operator_guards(self.root, self.save(proof), operator, store)
+
+    def test_guard_reader_refuses_changed_database_bytes_even_with_fixed_guard_json(self):
+        operator, store, proof = self.guards()
+        after = json.loads(Path(proof["controls"][0]["after"]["path"]).read_text())
+        after["databaseFiles"][store["database"]]["sha256"] = "0" * 64
+        proof["controls"][0]["after"] = self.save(after)
+        with self.assertRaises(RuntimeError): upgrade._read_operator_guards(self.root, self.save(proof), operator, store)
+
+    def test_guard_manifest_alone_or_a_missing_control_cannot_claim_an_actual_run(self):
+        operator, store, proof = self.guards()
+        with self.assertRaises(RuntimeError): upgrade._read_operator_guards(self.root, operator["guardControls"], operator, store)
+        proof["controls"].pop()
+        with self.assertRaises(RuntimeError): upgrade._read_operator_guards(self.root, self.save(proof), operator, store)
 
 
 if __name__ == "__main__":
