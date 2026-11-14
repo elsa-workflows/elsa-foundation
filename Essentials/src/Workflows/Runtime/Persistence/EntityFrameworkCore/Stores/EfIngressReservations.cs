@@ -56,10 +56,23 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
 
     /// <summary>Stages one owner's whole exact claim set in the caller's resource/activation transaction.</summary>
     internal async ValueTask StageOwnerAsync(TriggerScope scope, string ownerKind, string ownerId,
-        IReadOnlyList<RuntimeIngressReservation> claims, CancellationToken ct)
+        IReadOnlyList<RuntimeIngressReservation> claims, CancellationToken ct,
+        IReadOnlyDictionary<string, IIngressReservationPolicy>? policies = null)
     {
         Require(scope.Persistence, ct);
         if (context.Database.CurrentTransaction is null) throw new InvalidOperationException("Reservation mutation requires its owning source transaction.");
+        policies ??= RuntimeIngressReservationRules.Policies(null);
+        RuntimeIngressReservationRules.CheckSemanticCandidates(claims, policies);
+        // The owning SERIALIZABLE transaction keeps the entire same-type predicate until commit, including absence.
+        foreach (var type in claims.Select(claim => claim.StimulusType).Distinct(StringComparer.Ordinal).Where(policies.ContainsKey))
+        {
+            var physicalScopeHash = Hash(scope.Persistence.Value); var typeHash = Hash(type);
+            var existing = await context.IngressReservations.AsNoTracking().Where(row => row.ScopeHash == physicalScopeHash &&
+                row.StimulusTypeHash == typeHash).ToArrayAsync(ct);
+            foreach (var row in existing)
+                foreach (var claim in claims.Where(claim => claim.StimulusType == type))
+                    RuntimeIngressReservationRules.CheckSemanticOwner(Read(row, scope.Persistence), claim, policies);
+        }
         var scopeHash = Hash(scope.Persistence.Value); var ownerHash = Hash(ownerId);
         var tenantKey = Encode(JsonSerializer.Serialize(scope.TenantId));
         // A logical publication slot is owned by its physical scope, even when a replacement captures a new tenant.

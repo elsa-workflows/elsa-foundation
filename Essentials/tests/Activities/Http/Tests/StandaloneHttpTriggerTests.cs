@@ -269,6 +269,7 @@ public sealed class StandaloneHttpTriggerTests
             Receipt = new(RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, selection, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1))), false);
             Port = new(Receipt);
             var collection = new ServiceCollection().AddLogging().AddPersistenceCore(scope.Persistence.Value);
+            new Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature().ConfigureServices(collection);
             collection.AddSingleton<IActivityExecutionStateStore>(Activities);
             collection.AddSingleton<IWorkflowExecutionStateStore>(Executions);
             collection.AddScoped<HttpResponseInstructionDelivery>();
@@ -278,7 +279,8 @@ public sealed class StandaloneHttpTriggerTests
             Http.Request.ContentType = "application/json"; Http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
             Http.Request.Headers["Idempotency-Key"] = "key"; Http.Response.Body = new MemoryStream();
             var accessor = new Access(scope.Persistence);
-            SourceContext = new HttpTriggerSourceContext(new HttpContextAccessor { HttpContext = Http }, accessor);
+            SourceContext = new HttpTriggerSourceContext(new HttpContextAccessor { HttpContext = Http }, accessor,
+                reservationPolicies: services.GetServices<IIngressReservationPolicy>());
             Port.ReadContext = () => SourceContext.GetAsync();
             middleware = new(new FakeRouteTable("orders"), new TestRouteMatcher(), accessor,
                 Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions { MaxRequestBodyBytes = maxBytes, SyncRequestTimeout = timeout ?? TimeSpan.FromSeconds(3) }),

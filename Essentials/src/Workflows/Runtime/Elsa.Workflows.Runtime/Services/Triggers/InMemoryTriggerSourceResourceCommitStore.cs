@@ -10,11 +10,12 @@ internal sealed class InMemoryTriggerSourceResourceCommitStore(IStandaloneTrigge
     IWorkflowActivationAuthority slots, IWorkflowActivationSwitch activationSwitch, IWorkflowTriggerBindingStore? bindings,
     InMemoryRuntimeCheckpointStoreState state, IPersistenceAccessContextAccessor access, TimeProvider clock,
     IEnumerable<IStandaloneSchedulePlanner> schedulePlanners, IRecurringTriggerScheduleStore? schedules = null,
-    TriggerManagementTargets? targets = null) : ITriggerSourceResourceCommitStore
+    TriggerManagementTargets? targets = null, IEnumerable<IIngressReservationPolicy>? reservationPolicies = null) : ITriggerSourceResourceCommitStore
 {
+    private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> policies = RuntimeIngressReservationRules.Policies(reservationPolicies);
     public bool SupportsActivatedResources => resources is InMemoryStandaloneTriggerStore store && ReferenceEquals(store.State, state) &&
         ingress.SupportsAdmission && slots is InMemoryWorkflowActivationAuthority && bindings is InMemoryWorkflowTriggerBindingStore &&
-        activationSwitch is InMemoryWorkflowActivationSwitch selected && ReferenceEquals(selected.ReservationState, state) &&
+        activationSwitch is InMemoryWorkflowActivationSwitch selected && RuntimeIngressReservationRules.SamePolicies(selected.ReservationPolicies, policies) && ReferenceEquals(selected.ReservationState, state) &&
         ReferenceEquals(selected.ReservationAuthority, slots) && ReferenceEquals(selected.ReservationBindings, bindings) &&
         ReferenceEquals(selected.ReservationReferences, targets?.Sources) &&
         targets is not null && ReferenceEquals(targets.Slots, slots) && targets.Executables is InMemoryWorkflowExecutableStore material &&
@@ -50,10 +51,13 @@ internal sealed class InMemoryTriggerSourceResourceCommitStore(IStandaloneTrigge
                             throw new TriggerOperationException("conflict", "The mutation identity already names different content.");
                         return replay;
                     }
+                    RuntimeIngressReservationRules.CheckSemanticCandidates(claims, policies);
                     foreach (var claim in claims)
                     {
+                        foreach (var prior in state.IngressReservations.Values)
+                            RuntimeIngressReservationRules.CheckSemanticOwner(prior, claim, policies);
                         if (state.IngressReservations.TryGetValue(claim.ReservationId, out var existing)) RuntimeIngressReservationRules.CheckOwner(existing, claim);
-                        if (bindings is InMemoryWorkflowTriggerBindingStore sourceBindings && sourceBindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash)
+                        if (bindings is InMemoryWorkflowTriggerBindingStore sourceBindings && RuntimeIngressReservationRules.ConflictingBindingsAsync(sourceBindings, claim, policies)
                             .AsTask().GetAwaiter().GetResult().Any(binding => !KnownOtherScope(binding)))
                             throw new TriggerOperationException("route-conflict", "A published workflow already owns this endpoint.");
                     }

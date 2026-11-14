@@ -13,11 +13,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 internal sealed class EfTriggerSourceResourceCommitStore(RuntimeDbContext context, IStandaloneTriggerStore resources,
     IRuntimeIngressDeliveryStore ingress, IWorkflowActivationSwitch activationSwitch, IWorkflowTriggerBindingStore bindings,
     IPersistenceAccessContextAccessor access, TimeProvider clock, IEnumerable<IStandaloneSchedulePlanner> schedulePlanners,
-    IRecurringTriggerScheduleStore? schedules = null, TriggerManagementTargets? targets = null) : ITriggerSourceResourceCommitStore
+    IRecurringTriggerScheduleStore? schedules = null, TriggerManagementTargets? targets = null,
+    IEnumerable<IIngressReservationPolicy>? reservationPolicies = null) : ITriggerSourceResourceCommitStore
 {
+    private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> policies = RuntimeIngressReservationRules.Policies(reservationPolicies);
     public bool SupportsActivatedResources => resources is EfStandaloneTriggerStore store && ReferenceEquals(store.Context, context) &&
         RuntimeSchemaWriteVersion.SupportsIngress(context) && ingress.SupportsAdmission &&
-        activationSwitch is EfWorkflowActivationSwitch selected && ReferenceEquals(selected.ReservationContext, context) &&
+        activationSwitch is EfWorkflowActivationSwitch selected && RuntimeIngressReservationRules.SamePolicies(selected.ReservationPolicies, policies) && ReferenceEquals(selected.ReservationContext, context) &&
         bindings is EfWorkflowTriggerBindingStore selectedBindings && ReferenceEquals(selectedBindings.Context, context) &&
         targets?.Slots is EfWorkflowActivationAuthority authority && ReferenceEquals(authority.Context, context) &&
         targets.Executables is EfWorkflowExecutableStore material && ReferenceEquals(material.Context, context) &&
@@ -75,10 +77,10 @@ internal sealed class EfTriggerSourceResourceCommitStore(RuntimeDbContext contex
                 else if (TriggerManagementTargets.Selectors(previous, write).Count != 0)
                     throw new NotSupportedException("Protected association changes require their selected relational target stores.");
                 foreach (var claim in claims)
-                    if ((await bindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash, cancellationToken)).Count != 0)
+                    if ((await RuntimeIngressReservationRules.ConflictingBindingsAsync(bindings, claim, policies, cancellationToken)).Count != 0)
                         throw new TriggerOperationException("route-conflict", "A published workflow already owns this endpoint.");
                 var reservationStore = new EfIngressReservationStore(context, access);
-                await reservationStore.StageOwnerAsync(scope, RuntimeIngressReservation.StandaloneTriggerOwner, write.Trigger.Id, claims, cancellationToken);
+                await reservationStore.StageOwnerAsync(scope, RuntimeIngressReservation.StandaloneTriggerOwner, write.Trigger.Id, claims, cancellationToken, policies);
                 var planners = schedulePlanners.Where(planner => planner.Supports(write.Trigger.TypeKey)).ToArray();
                 if (planners.Length > 1) throw new InvalidOperationException("Several modules own this schedule type.");
                 if ((write.Trigger.TypeKey is "timer" or "cron") &&

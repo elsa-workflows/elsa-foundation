@@ -20,9 +20,11 @@ public sealed class StandaloneHttpTriggerSource
 
 /// <summary>The middleware binds only an actual persisted route and the authenticated source actor in this request scope.</summary>
 internal sealed class HttpTriggerSourceContext(IHttpContextAccessor http, IPersistenceAccessContextAccessor persistence,
-    NormalizedPrincipalValidator? validator = null) : IStandaloneTriggerSourceContext<StandaloneHttpTriggerSource>
+    NormalizedPrincipalValidator? validator = null, IEnumerable<IIngressReservationPolicy>? reservationPolicies = null) : IStandaloneTriggerSourceContext<StandaloneHttpTriggerSource>
 {
-    public bool SupportsResourceAuthorization => true;
+    private readonly IIngressReservationPolicy[] policies = (reservationPolicies ?? []).Where(policy =>
+        policy.StimulusType == Elsa.Http.Core.HttpEndpointRouting.StimulusType).ToArray();
+    public bool SupportsResourceAuthorization => policies.Length == 1;
     private StandaloneTriggerInvocationContext? current;
     private HttpContext? request;
     internal void Clear() { current = null; request = null; }
@@ -75,7 +77,7 @@ internal sealed class HttpTriggerSourceContext(IHttpContextAccessor http, IPersi
     {
         cancellationToken.ThrowIfCancellationRequested();
         var reservation = current?.Reservation;
-        return ValueTask.FromResult(current?.WaitCandidate?.ObservedWaits is not null && request is not null && !request.RequestAborted.IsCancellationRequested && ReferenceEquals(request, http.HttpContext) &&
+        return ValueTask.FromResult(SupportsResourceAuthorization && current?.WaitCandidate?.ObservedWaits is not null && request is not null && !request.RequestAborted.IsCancellationRequested && ReferenceEquals(request, http.HttpContext) &&
             reservation is not null && reservation.OwnerKind == RuntimeIngressReservation.StandaloneTriggerOwner && reservation.OwnerId == trigger.Id &&
             trigger.Id == signal.TriggerId && trigger.TypeKey == StandaloneHttpTriggerSource.Descriptor.TypeKey &&
             trigger.TenantId == reservation.Scope.TenantId && current!.Scope == reservation.Scope && persistence.Current.Scope == reservation.Scope.Persistence);
