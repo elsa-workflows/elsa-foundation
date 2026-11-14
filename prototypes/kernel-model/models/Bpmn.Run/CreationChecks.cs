@@ -35,7 +35,8 @@ internal static class CreationChecks
             registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work>
             { ["hold"] = new MessageWork("replacement-release", "order") }));
             var store = new InMemoryStore(1, () => 100);
-            var owner = new Owner("identity-owner", 0, store, registry, () => 100);
+            var capture = new CaptureStore(store);
+            var owner = new Owner("identity-owner", 0, capture, registry, () => 100);
             await owner.StartAsync();
             var parent = InstanceRef.In(0, "identity-parent");
             var spec = BpmnModel.Spec("identity-parent", history: history) with
@@ -47,10 +48,10 @@ internal static class CreationChecks
                 for (var i = 0; i < 20; i++) await owner.Worker.RunAsync();
             }
             await Drain();
-            var signal = store.Messages.Values.Select(r => r.Message).Single(m => m.Kind == BpmnKinds.Signal);
+            var signal = capture.Sent.Single(m => m.Kind == BpmnKinds.Signal);
             Check(signal.TargetCreation == (qualified ? 1 : null), "BC1: scope signal lost its parent creation");
             var child = signal.Read<ScopeSignal>().Child;
-            var cancel = store.Messages.Values.Select(r => r.Message).Single(m => m.Target.Id == child && m.Kind == Kinds.Terminate);
+            var cancel = capture.Sent.Single(m => m.Target.Id == child && m.Kind == Kinds.Terminate);
             Check(cancel.TargetCreation == (qualified ? 1 : null), "BC2: call cancellation lost its child creation");
             Check(store.Instances[child].Status == InstanceStatus.Cancelled && store.Instances[parent.Id].Status == InstanceStatus.Running,
                 "BC3: called child did not cancel while its parent remained waiting");
@@ -58,7 +59,7 @@ internal static class CreationChecks
             {
                 // Replay the real earlier cancellation against a replacement at the same actor address.
                 await owner.Worker.DisposeAsync();
-                owner = new Owner("identity-reload", 0, store, registry, () => 100);
+                owner = new Owner("identity-reload", 0, capture, registry, () => 100);
                 await owner.StartAsync();
                 await store.AddAsync(new("identity-delete", new(child), Kinds.Delete, TargetCreation: 1));
                 await Drain();
