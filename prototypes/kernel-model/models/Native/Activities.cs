@@ -61,6 +61,7 @@ public sealed class CallService : Activity<string>
 // ---- composites ------------------------------------------------------------------------------------------------------
 
 /// <summary>Stateless: the next child follows from the position of the one that completed.</summary>
+[InterventionParent(1)]
 public sealed class Sequence : CompositeActivity, IInterventionParent
 {
     System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child)
@@ -112,6 +113,7 @@ public sealed record ParallelState
 }
 
 /// <summary>Fork and threshold join. It counts its branches in its own state, where Elsa 4 queried the activity-state store.</summary>
+[InterventionParent(1)]
 public sealed class Parallel : CompositeActivity, IInterventionParent
 {
     System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child)
@@ -174,8 +176,18 @@ public sealed record ForEachState
 }
 
 /// <summary>Each pass runs the body in an iteration scope that declares CurrentItem and CurrentIndex.</summary>
-public sealed class ForEach : CompositeActivity
+[InterventionParent(2)]
+public sealed class ForEach : CompositeActivity, IInterventionParent
 {
+    JsonNode? IInterventionParent.PrepareRetry(Node definition, JsonNode? state, RetryChild child)
+    {
+        var progress = Values.To<ForEachState>(state) ?? throw new InvalidOperationException("Missing iteration retry obligation.");
+        if (progress.Items is null || progress.Index < 0 || progress.Index >= progress.Items.Count || child.Tag is not null || definition.Children.Count != 1 || definition.Children[0].Id != child.Node ||
+            child.Scope is not { Count: 2 } || !child.Scope.TryGetValue("CurrentIndex", out var index) || index is not JsonValue value || !value.TryGetValue<int>(out var current) || current != progress.Index ||
+            !child.Scope.TryGetValue("CurrentItem", out var item) || !JsonNode.DeepEquals(item, progress.Items[progress.Index]))
+            throw new InvalidOperationException("Invalid iteration retry obligation.");
+        return state?.DeepClone(); // only ordinary successful completion advances Index
+    }
     [Input] public JsonArray? Items { get; set; }
 
     protected internal override void Execute(CompositeContext context)

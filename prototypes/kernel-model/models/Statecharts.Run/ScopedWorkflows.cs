@@ -178,7 +178,9 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
     private void Release(string key)
     {
         var sub = _world.Store.Subscriptions.Single(s => s.Instance == _target.Id && s.Key == "event:" + key);
-        Add(Events.Deliver(new(sub.Key, "release-" + ++_serial, null, _world.Time + 120_000), sub)); Drain();
+        var accepted = _world.Store.AddEventAsync(Events.Route(new(sub.Key, "release-" + ++_serial, null, _world.Time + 120_000), sub)).Result;
+        Check(accepted.Added && accepted.Target == _target, "Visit release missed its registered creation.");
+        Drain();
     }
     private void Signal(string name) { Add(new("signal-" + ++_serial, _target, CompositeSignal.Kind, Json.Write(new CompositeSignal(_frame, name)))); Drain(); }
     private void Reload()
@@ -225,9 +227,9 @@ internal sealed class ScopedFailure : Kernel.Native.Activity
 internal sealed class CatchScopedFailure : CompositeActivity
 {
     public CatchScopedFailure() { }
-    protected override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
-    protected override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
-    protected override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
+    protected internal override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
 }
 
 internal sealed class ScopedEcho : Kernel.Native.Activity<JsonNode?>

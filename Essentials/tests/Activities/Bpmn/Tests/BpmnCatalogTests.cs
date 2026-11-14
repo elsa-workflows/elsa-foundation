@@ -233,6 +233,44 @@ public sealed class BpmnCatalogTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.Catalog.ExecutionsAsync(new(), cancellation.Token).AsTask());
     }
 
+    [Theory]
+    [InlineData("current", true)]
+    [InlineData("scope", false)]
+    [InlineData("missing-scope", false)]
+    [InlineData("reference", false)]
+    [InlineData("slot-address", false)]
+    [InlineData("replacement", false)]
+    [InlineData("owner", false)]
+    [InlineData("missing-authority", false)]
+    public async Task Authored_catalog_rows_follow_the_actual_logical_publication_not_the_producer_identity(string change, bool visible)
+    {
+        var fixture = new Fixture(missingPublicationAuthority: change == "missing-authority");
+        const string definition = "logical-process", publication = "publication";
+        var slot = new WorkflowActivationSlot(WorkflowActivationSlotIdentity.Create(definition, "blue"), definition, "blue",
+            publication, WorkflowActivationSource.Publishing, 1, fixture.Clock.Now);
+        var source = fixture.Source() with
+        {
+            SourceReferenceId = WorkflowActivationReferenceIdentity.Create(publication), DefinitionId = definition,
+            DefinitionVersionId = "logical-version", ArtifactVersion = "2.0.0", ActivationId = publication, SlotId = slot.SlotId,
+            PublicationScope = new("tenant")
+        };
+        if (change == "scope") source = source with { PublicationScope = new("other") };
+        if (change == "missing-scope") source = source with { PublicationScope = null };
+        if (change == "reference") source = source with { SourceReferenceId = "forged-reference" };
+        if (change == "slot-address") { source = source with { SlotId = "forged-slot" }; slot = slot with { SlotId = "forged-slot" }; }
+        if (change == "replacement") slot = slot with { ActiveActivationId = "later-publication" };
+        if (change == "owner") slot = slot with { Source = null };
+        fixture.SourceItems = [source]; fixture.SlotItems = [slot];
+        var result = await fixture.Catalog.PublicationsAsync(new(), default);
+        Assert.Equal(visible ? 1 : 0, result.Items.Count);
+        if (visible)
+        {
+            Assert.Equal(source.SourceReferenceId, Assert.Single(result.Items).SourceReferenceId);
+            Assert.Equal(fixture.Material!.Identity, Assert.Single(result.Items).Executable);
+            Assert.NotEqual(source.DefinitionVersionId, fixture.Material.Identity.DefinitionVersionId);
+        }
+    }
+
     private sealed class Fixture
     {
         public readonly Clock Clock = new(); public readonly Scope Scope = new();
@@ -244,8 +282,9 @@ public sealed class BpmnCatalogTests
         public IReadOnlyList<WorkflowExecutableSourceReference> SourceItems = [];
         public IReadOnlyList<RuntimeModelExecutionState> ExecutionItems = [];
         public RuntimeExecutionMaterial? Material;
+        public IReadOnlyCollection<WorkflowActivationSlot> SlotItems = [];
         public BpmnCatalog Catalog { get; }
-        public Fixture(bool missingReader = false)
+        public Fixture(bool missingReader = false, bool missingPublicationAuthority = false)
         {
             SetPrincipal(); Material = BuildMaterial();
             var sources = Proxy<IWorkflowExecutableSourceReferenceStore>((method, args) =>
@@ -269,7 +308,9 @@ public sealed class BpmnCatalogTests
             var permissions = new Permission(c => { Authorized.Add(c); return !Denied && c.Resource is not RuntimeModelExecutionState { ExecutionId: "denied" }; });
             var caller = new BpmnApiCaller(Context, new(Options.Create(new FoundationIdentityOptions { NormalizedAuthenticationTypes = new HashSet<string>(["catalog-unit"]) })), permissions,
                 Proxy<IBpmnModelRuntime>((_, _) => throw new InvalidOperationException("Catalog must use bounded readers.")));
-            Catalog = new(sources, material, Scope, caller, new Codec(), Clock, missingReader ? null : executions);
+            Catalog = new(sources, material, Scope, caller, new Codec(), Clock, missingReader ? null : executions,
+                missingPublicationAuthority ? null : Proxy<IWorkflowActivationAuthority>((method, _) =>
+                { Assert.Equal("ListByDefinitionAsync", method); return ValueTask.FromResult(SlotItems); }));
         }
         public void SetPrincipal()
         {

@@ -50,22 +50,37 @@ shrinks to one rule: `manage` implies `read`. Unknown grants log a startup warni
 *Why:* renames are cheap before GA and expensive after; 3.9 roles then migrate almost one to one, and the docs read
 the same in both products. Porting 3.9's evaluator would add a second authority for no gain.
 
-### D3: OIDC providers from settings, with optional database overrides
+### D3: OIDC providers from settings, with optional explicit database overrides
 
 Shell settings stay the deployment baseline and are read-only in Studio. Database-backed providers are opt-in. A
-database entry fully shadows the settings entry with the same key, with no field merging. Client secrets are always
-Elsa Secrets references, never inline values.
+same-key database record does not automatically replace a deployment-defined provider. Where deployment policy permits
+it, an authorized administrator deliberately creates or promotes a complete Studio override. That full document
+shadows the baseline without field merging. A disabled effective override continues to shadow; archiving or removing
+it reveals the baseline, and restoring it reinstates the override. Studio explains the resulting effective state
+before applying the change. Logical provider keys and existing identity links survive source transitions; record IDs
+are separate. Client secrets are always Elsa Secrets references, never inline values.
+
+**Owner amendment:** Sipke selected explicit Studio overrides on 31 October 2026, recorded in
+[#3579](https://github.com/elsa-workflows/elsa-foundation/issues/3579), and authorized end-to-end delivery on
+4 November in the [delivery record](https://github.com/elsa-workflows/elsa-foundation/issues/3579#issuecomment-6627537005).
+This supersedes D3's original automatic same-key shadowing rule. The other accepted decisions remain in force.
 
 *Why:* this is Elsa 3.8's model, which operators already understand, and it keeps configuration-as-code deployments
 deterministic.
 
-### D4: IdP groups and roles map to Elsa roles
+### D4: Provisioning policies assign existing Elsa roles
 
-Admins map IdP groups or roles to Elsa roles per provider. Provider claims never become permissions directly unless a
-grant source is configured explicitly.
+Owner amendment, 4 November 2026 (#3579): an integrator's provisioning policy can assign saved existing Elsa roles
+when creating an external user. Later managed sign-ins use saved Elsa memberships and preserve manual assignments.
+Omit external group-to-role mappings for now, including session-only grants and recurring provider-managed saved
+memberships. Provider role/group names confer no automatic authority and never define Elsa permissions.
 
-*Why:* Elsa stays the only authority that turns roles into permissions, as in Elsa 3. Elsa 4's claim mapping rules
-already fit.
+This supersedes D4's planned recurring mapping for managed external connections. The existing explicitly configured
+direct-bearer normalization bridge is separate. Deployment role boundaries and the administrator's delegation
+permissions constrain provisioning choices.
+
+*Why:* Elsa owns users, role definitions and permissions; integrators can decide initial membership through the
+programmable policy without introducing a second source of ongoing membership authority.
 
 ### D5: Unknown external users are rejected by default
 
@@ -141,7 +156,7 @@ import and modules and needs its own queue, label and owner to be planned and ca
   queries (#2774), API keys (#2775), Studio sign-out (#2776), the users API (#2777), the roles and permissions API
   (#2778), escalation and last-admin guards (#2779), Studio Users (#2780) and Roles (#2781) pages, and Studio
   permission gating (#2782).
-- Phase 2 (external OIDC: provisioning on sign-in, provider registry, group-to-role mapping, Studio SSO pages) is
+- Phase 2 (external OIDC: provisioning on sign-in, provider registry, provisioning-policy roles, Studio SSO pages) is
   filed once Phase 1 is under way. Phases 3 (tenancy, Elsa 3 import), 4 (runtime operations) and 5 (Webhooks, User
   Tasks, secrets in expressions) follow.
 - The D2 rename touches every permission check and seeded role. It lands first in Phase 1 so later issues use the new

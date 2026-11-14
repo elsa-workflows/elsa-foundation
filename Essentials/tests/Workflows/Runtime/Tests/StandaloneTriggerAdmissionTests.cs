@@ -19,7 +19,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>Application-level preparation checks. Physical acceptance and recovery use the provider suites.</summary>
-public sealed class StandaloneTriggerAdmissionTests
+public sealed partial class StandaloneTriggerAdmissionTests
 {
     [Theory]
     [InlineData("RequireAll", 0)]
@@ -223,6 +223,8 @@ public sealed class StandaloneTriggerAdmissionTests
         internal InMemoryWorkflowActivationAuthority Slots { get; } = new();
         internal RecordingDelivery Delivery { get; } = new();
         internal TriggerTargetResolver Targets { get; }
+        internal StandaloneTriggerTargetDiscovery Discovery => new(Targets, sources, clock);
+        internal FakeTimeProvider Clock => clock;
         internal StandaloneTriggerAdmission Admission { get; }
         internal StandaloneTriggerSourceDescriptor Producer { get; }
         internal StandaloneTriggerInvocationContext Context { get; } = new(Scope, new("tenant"), new("source-system", "sender"));
@@ -256,7 +258,7 @@ public sealed class StandaloneTriggerAdmissionTests
                 revision, revision, state, new(TriggerManagementKind.Studio), Now, Now, "departed-creator", hasActivated: true, tenantId: "tenant");
             await resources.WriteAsync(Scope, new("request-" + revision, "fingerprint-" + revision, "operator", revision == 1 ? null : revision - 1, resource, subscriptions));
         }
-        internal async Task Publish(string definition, string input = "account")
+        internal async Task Publish(string definition, string input = "account", DateTimeOffset? expiresAt = null, bool retired = false)
         {
             var prior = await Slots.FindAsync(definition, "Published");
             var version = (prior?.Revision ?? 0) + 1;
@@ -270,7 +272,8 @@ public sealed class StandaloneTriggerAdmissionTests
             var activation = artifact + "-activation";
             var slot = WorkflowActivationSlotIdentity.Create(definition, "Published");
             await sources.SaveAsync(new(WorkflowActivationReferenceIdentity.Create(activation), artifact, "test", definition, version.ToString(),
-                definition, artifact, version.ToString(), Now, Now, WorkflowExecutableReferenceScope.Published, ActivationId: activation, SlotId: slot, TenantId: "tenant"));
+                definition, artifact, version.ToString(), Now, Now, WorkflowExecutableReferenceScope.Published, ExpiresAt: expiresAt, ActivationId: activation, SlotId: slot, TenantId: "tenant"));
+            if (retired) await sources.RetireAsync(WorkflowActivationReferenceIdentity.Create(activation), Now);
             await Slots.TryActivateAsync(new(definition, "Published", activation, WorkflowActivationSource.Publishing, prior?.Revision ?? 0, Now));
         }
         internal ValueTask<RuntimeIngressAdmissionReceipt> Admit(string account = "account-42", string key = "today") =>
