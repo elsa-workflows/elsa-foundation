@@ -229,12 +229,12 @@ public sealed class MongoStore : IKernelStore
                 if (turn.Consumed.Count > 0)
                 {
                     checks.Add((models.Count, true, turn.Consumed.Count, false));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Consumed.Select(k => InboxId(k)))) }, { "done", false } }));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Consumed.Select(InboxId))) }, { "done", false } }));
                 }
                 if (turn.Done.Count > 0)
                 {
                     checks.Add((models.Count, false, turn.Done.Count, false));
-                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Done.Select(k => InboxId(k)))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("done", true))));
+                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Done.Select(InboxId))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("done", true))));
                 }
                 foreach (var message in turn.Sent)
                 {
@@ -252,7 +252,7 @@ public sealed class MongoStore : IKernelStore
                 {
                     // Its turn ran: still there, not done, and no longer on trial. A count, like a consume.
                     checks.Add((models.Count, false, held.Count, false));
-                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(held.Select(k => InboxId(k)))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("trial", 0L))));
+                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(held.Select(InboxId))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("trial", 0L))));
                 }
                 if (turn.Journal is not null)
                 {
@@ -265,9 +265,9 @@ public sealed class MongoStore : IKernelStore
                 }
             }
             if (batch.Seen.Count > 0)
-                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Seen.Select(k => InboxId(k))))), new BsonDocument("$set", new BsonDocument("seen", batch.Epoch))));
+                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Seen.Select(InboxId)))), new BsonDocument("$set", new BsonDocument("seen", batch.Epoch))));
             if (batch.Trial.Count > 0)
-                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Trial.Select(k => InboxId(k))))), new BsonDocument("$set", new BsonDocument { { "seen", batch.Epoch }, { "trial", batch.Epoch } })));
+                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Trial.Select(InboxId)))), new BsonDocument("$set", new BsonDocument { { "seen", batch.Epoch }, { "trial", batch.Epoch } })));
 
             if (models.Count > 0)
             {

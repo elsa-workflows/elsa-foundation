@@ -135,7 +135,9 @@ internal sealed class PhaseWitness(string mode, bool nested, string phase, strin
     private void Release(string name)
     {
         var wait = _world.Store.Subscriptions.Single(s => s.Instance == _target.Id && s.Key == "event:" + name);
-        Add(Events.Deliver(new("event:" + name, "release-" + ++_serial, null, _world.Time + 120_000), wait));
+        var delivery = Events.Route(new(wait.Key, "release-" + ++_serial, null, _world.Time + 120_000), wait);
+        var accepted = _world.Store.AddEventAsync(delivery).Result;
+        Check(accepted.Added && accepted.Target == _target, "P5: regional release missed its registered creation");
     }
     private void Add(Message message) => Apply(new("add", M: message));
     private void Apply(Act action)

@@ -81,13 +81,13 @@ public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 /// subscribes apply before its unsubscribes.
 /// </summary>
 public sealed record TurnCommit(
-    string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
-    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<string>? Held = null, bool Delete = false);
+    string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<InboxKey> Consumed, IReadOnlyList<InboxKey> Done, IReadOnlyList<Message> Sent,
+    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(
     int Partition, long Epoch, long Position, TimeSpan Lease, bool HandOver, IReadOnlyList<TurnCommit> Turns,
-    IReadOnlyList<string> Seen, IReadOnlyList<string> Trial)
+    IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial)
 {
     /// <summary>How far the position moves: one per journal row.</summary>
     public int Positions => Turns.Count(s => s.Journal is not null);
@@ -157,7 +157,7 @@ public interface IKernelStore : IMembership
     ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default);
 
     /// <summary>Insert the delivery derived from an event and subscription. Repeating the match is idempotent.</summary>
-    ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default);
 
@@ -175,8 +175,8 @@ public interface IKernelStore : IMembership
     ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default);
 
     /// <summary>Read canonical persisted rows using this store's correlation and identity equality.</summary>
-    ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default);
 
@@ -215,7 +215,7 @@ public sealed class EventDelivery
 public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
 {
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null) =>
-        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
+        new(Events.RoutedMessage(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
 }
 
 public sealed record EventAcceptance(bool Added, InstanceRef Target)
@@ -247,6 +247,16 @@ public static class Events
         : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
 
     /// <summary>
+    /// The logical wire envelope for a match. A start carries its placement partition until the store
+    /// allocates the physical target and returns it with the acceptance receipt.
+    /// </summary>
+    internal static Message RoutedMessage(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
+        ? new(s.Creation > 0 ? FormattableString.Invariant($"evq:{e.Id.Length}:{e.Id}:{CreationProtocol.Origin(s.Instance, s.Creation)}:{s.Wait}")
+            : $"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
+            TargetCreation: s.Creation > 0 ? s.Creation : null)
+        : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), ""), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
+
+    /// <summary>
     /// What a delivery is for: the event's id and the wait it was delivered to, read back from the derived id (merge,
     /// friction F-N3: a model need not know the id's format). Null for a message that is no delivery.
     /// </summary>
@@ -263,32 +273,50 @@ public static class Events
             return (m.Id.Substring(start, length), m.Id[(start + length + qualifiedMarker.Length)..]);
         }
         if (m.Kind != Kinds.Event || !m.Id.StartsWith("ev:", StringComparison.Ordinal)) return null;
+        if (m.EventMatch is { } encoded)
+        {
+            var match = EventMatch.Decode(encoded);
+            return (match.Event, match.Wait);
+        }
         var marker = m.Start is null ? $":{m.Target.Id}:" : "::";
         var at = m.Id.LastIndexOf(marker, StringComparison.Ordinal);
         return at < 3 ? null : (m.Id[3..at], m.Id[(at + marker.Length)..]);
     }
 
+    /// <summary>Both sides of the match insert the same kernel-derived envelope. An HTTP waiter may attach its response handle.</summary>
+    public static EventDelivery Route(EventRow e, SubscriptionRow s, int partitions = 1, string? replyTo = null)
+    {
+        if (e.Key != s.Key) throw new ArgumentException("The event and subscription must name the same key.", nameof(s));
+        return new EventRoute(e, s).Delivery(partitions, replyTo);
+    }
+
     /// <summary>The publisher's side: insert the event, and only then read who waits for it.</summary>
-    public static async ValueTask PublishAsync(IKernelStore store, EventRow e, int partitions = 1, CancellationToken cancellationToken = default)
+    public static async ValueTask PublishAsync(IKernelStore store, EventRow e, int partitions = 1, CancellationToken cancellationToken = default, Action<EventRoute, EventAcceptance>? matched = null)
     {
         await store.PublishAsync(e, cancellationToken);
-        foreach (var subscription in await store.FindSubscriptionsAsync(e.Key, cancellationToken))
-            await store.AddAsync(Deliver(e, subscription, partitions), cancellationToken);
+        foreach (var match in await store.PublishedMatchesAsync(e, cancellationToken))
+        {
+            var accepted = await store.AddEventAsync(match.Delivery(partitions), cancellationToken);
+            matched?.Invoke(match, accepted);
+        }
     }
 
     /// <summary>
     /// The registrar's side of a start subscription: insert it, and only then read the events of its key that are still
     /// kept. Like a publisher, the registrar retries until both are done.
     /// </summary>
-    public static async ValueTask SubscribeAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default)
+    public static async ValueTask SubscribeAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default, Action<EventRoute, EventAcceptance>? matched = null)
     {
         await store.SubscribeAsync(start, cancellationToken);
-        await CatchUpAsync(store, start, partitions, cancellationToken);
+        await CatchUpAsync(store, start, partitions, cancellationToken, matched);
     }
 
-    public static async ValueTask CatchUpAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default)
+    public static async ValueTask CatchUpAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default, Action<EventRoute, EventAcceptance>? matched = null)
     {
-        foreach (var e in await store.FindEventsAsync([start.Key], cancellationToken))
-            await store.AddAsync(Deliver(e, start, partitions), cancellationToken);
+        foreach (var match in await store.KeptMatchesAsync([start], cancellationToken))
+        {
+            var accepted = await store.AddEventAsync(match.Delivery(partitions), cancellationToken);
+            matched?.Invoke(match, accepted);
+        }
     }
 }
