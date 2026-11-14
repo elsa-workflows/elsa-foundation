@@ -86,7 +86,7 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
             Edge(new(ReleaseRuntimeCodecs.TemplateKind, child.TemplateId), ReleaseEdgeRelation.Dependency, dependency.OccurrenceId);
             Edge(new(ReleaseRuntimeCodecs.ActivityVersionKind, version.VersionId), ReleaseEdgeRelation.Association, dependency.OccurrenceId);
             if (dependency.OccurrenceOverlay is not null)
-                Site(template.Root, Origin(dependency.NodeOrigin), dependency.OccurrenceId, ReleaseRuntimeSiteKinds.TemplateOverlay, dependency.OccurrenceOverlay.SchemaVersion);
+                Site(template.Root, Origin(dependency.NodeOrigin), dependency.OccurrenceId, ReleaseRuntimeSiteKinds.TemplateOverlay, template.Root.Descriptor.ConsumerKey);
         }
         var closure = new HashSet<(string Id, string Hash)>(); var active = new HashSet<string>(StringComparer.Ordinal);
         Visit(template, 0);

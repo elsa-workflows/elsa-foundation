@@ -28,7 +28,7 @@ public sealed record JobArgs(string Process, string Service, string Element, Jso
 /// kernel's side of it (a job key, a timer's message id, a subscription key, a child's id).
 /// </summary>
 public sealed record LiveWork(string Binding, string? Iteration, string Token, string Element, string Kind, string Key,
-    IReadOnlyDictionary<string, BpmnValue>? IterationValues = null);
+    IReadOnlyDictionary<string, BpmnValue>? IterationValues = null, long Creation = 0);
 
 public sealed record ConsumedEvent(string Key, string Id);
 

@@ -85,7 +85,7 @@ internal sealed partial class PublishedNativeFixture
         if (!result.IsPublished) throw new InvalidOperationException("The real source-owned CLR publication did not succeed.");
         return id;
     }
-    public async Task<string> PublishReusableGraph(string childVersion)
+    public async Task<string> PublishReusableGraph(string childVersion, string schema = "1")
     {
         const string definitionId = "actual-reusable-definition", draftId = "actual-reusable-draft", versionId = "actual-reusable-version";
         var now = DateTimeOffset.UtcNow; var db = Service<ActivitiesDesignDbContext>(); var access = new Accessor();
@@ -93,8 +93,11 @@ internal sealed partial class PublishedNativeFixture
         var definition = new ActivityDefinition { Id = definitionId, ActivityTypeKey = "fixture.ReusableGraph", Category = "Tests", CreatedAt = now, LastModifiedAt = now };
         var serializer = Service<IPayloadSerializer>();
         var child = new ActivityNode("body", childVersion, [new("text", new ArgumentValue(serializer.SerializeToElement("captured child"), "Literal"), null, null, null, null)], []);
-        var providerManifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", serializer.SerializeToElement(new
-        { rootActivity = child, variables = Array.Empty<object>(), outputMappings = Array.Empty<object>() }));
+        var providerManifest = new ActivityProviderManifest(GraphActivityProvider.Key, schema, serializer.SerializeToElement(new
+        {
+            rootActivity = child, variables = Array.Empty<object>(), outputMappings = Array.Empty<object>(),
+            outcomeMappings = schema == "2" ? new[] { new { sourceOutcomeReferenceKey = "Done", boundaryOutcomeReferenceKey = "done" } } : []
+        }));
         var contract = new Elsa.Activities.Design.Core.Models.ActivityContract("1", [], [], [new("done", "Done", true)]);
         await stores.ExecuteAsync(new CreateActivityDefinitionRequest(definition,
             new ActivityDefinitionAuthoringState { Id = "actual-reusable-authority", DefinitionId = definitionId, ContentAuthority = new(ActivityContentAuthorityKind.Design, "elsa.design"), CreatedAt = now, LastModifiedAt = now },
