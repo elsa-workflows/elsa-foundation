@@ -15,7 +15,7 @@ internal static partial class ShortWaitRaces
                 var model = new Spawner(finish: false, wait: true, finishOnTimer: terminalTimer);
                 var f = new JobCut(model);
                 await f.Add("spawn");
-                var ticket = Worker.TicketId(f.Actor.Id, "job");
+                var ticket = InboxKey.Ticket(f.Actor.Id, "job");
                 await using (var issuer = await f.Activate("issuer"))
                 {
                     await issuer.FlushAsync();

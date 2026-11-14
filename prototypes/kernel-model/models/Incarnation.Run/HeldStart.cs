@@ -34,7 +34,7 @@ internal static partial class BoundaryCases
             }
             else
             {
-                if (h.Row.Status != InstanceStatus.Running || h.Row.PendingStart is null || !h.Store.Messages.ContainsKey(h.Row.PendingStart) || Json.Read<HoldingState>(h.Row.State).Starts != 0)
+                if (h.Row.Status != InstanceStatus.Running || h.Row.PendingStart is null || !h.Store.Messages.ContainsKey(h.Row.PendingStart.Value) || Json.Read<HoldingState>(h.Row.State).Starts != 0)
                     throw new InvalidOperationException("C12: initial work was not held");
                 await h.Reload(); var before = h.Row;
                 await h.Send(Kinds.Start, start: spec, creation: pinned ? generation : null);

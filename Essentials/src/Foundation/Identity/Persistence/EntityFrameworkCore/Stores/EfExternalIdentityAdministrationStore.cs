@@ -104,6 +104,8 @@ internal sealed class EfExternalIdentityAdministrationStore(IdentityIamDbContext
         catch (EfCommitOutcomeUnknownException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey))
         { return conflict; }
+        catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
+        { throw EfIdentityStoreSupport.Failure("Unable to change the guarded external identity link.", exception); }
     }
 
     private sealed class TenantAccess(string tenantId) : IPersistenceAccessContextAccessor
