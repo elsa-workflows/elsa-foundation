@@ -267,6 +267,13 @@ internal static partial class ShortWaitRaces
     {
         private string? _mode; private int _remaining;
         public int Failures, AfterFailureAttempts;
+        public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+        public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken token = default) => inner.AddEventAsync(delivery, token);
+        public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken token = default) => inner.PublishedMatchesAsync(published, token);
+        public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken token = default) => inner.KeptMatchesAsync(waits, token);
+        public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+        public bool HasActorAliases => inner.HasActorAliases;
+        public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => inner.LoadActorsAsync(ids, cancellationToken);
         public bool CommitClockAvailable => inner.CommitClockAvailable;
         public void Arm(string mode) { _mode = mode; _remaining = mode == "definite" ? 2 : 1; }
         public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken ct = default)
