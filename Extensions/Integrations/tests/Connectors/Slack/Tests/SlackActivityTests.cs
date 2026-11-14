@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Integrations.Connectors.Slack.Activities;
 using Elsa.Integrations.Connectors.Slack.Models;
-using Elsa.Integrations.Sdk.Harness;
+using Elsa.Integrations.Sdk.Testing;
 
 namespace Elsa.Integrations.Connectors.Slack.Tests;
 
