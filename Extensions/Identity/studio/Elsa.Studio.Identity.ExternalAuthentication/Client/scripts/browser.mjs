@@ -170,6 +170,7 @@ try {
   await expect(page.getByText("Would be created", { exact: true })).toBeVisible();
   await exchangeCount();
   const afterPreview = await (await admin.request.get(backend + "/__probe/state")).json();
+  const previewAdministratorTokenExchanges = afterPreview.credentialExchanges - beforePreview.credentialExchanges;
   expect(afterPreview.users).toBe(beforePreview.users); expect(afterPreview.links).toBe(beforePreview.links);
   // The ordinary Studio redirect adapter exchanges the existing administrator cookie on API calls/reload.
   // The probe snapshots committed pairs and completed exchanges under one gate, avoiding a split baseline.
@@ -432,6 +433,7 @@ try {
     await expect(page.getByText("Would be created", { exact: true })).toBeVisible();
     await exchangeCount();
     const afterOverridePreview = await (await admin.request.get(backend + "/__probe/state")).json();
+    const overrideAdministratorExchanges = afterOverridePreview.credentialExchanges - beforeOverridePreview.credentialExchanges;
     for (const field of ["users", "links", "sessions"]) expect(afterOverridePreview[field]).toBe(beforeOverridePreview[field]);
     expect(afterOverridePreview.tokens).toBe(beforeOverridePreview.tokens + (afterOverridePreview.credentialExchanges - beforeOverridePreview.credentialExchanges) * 2);
     await page.getByRole("button", { name: "Use as override", exact: true }).click(); await confirmStudio(page, "Use as override");

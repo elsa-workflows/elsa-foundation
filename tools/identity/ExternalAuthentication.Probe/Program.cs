@@ -197,7 +197,7 @@ if (settings.ManagedApi) ExternalAuthenticationApi.MapExternalAuthenticationApi(
 app.MapGet("/resource", () => Results.Ok()).RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
 object? metadata = null;
 app.MapGet("/__probe", () => Results.Json(metadata)).AllowPublic("qualification-probe", "Owned development probe exposes only public route/provider metadata.");
-app.MapGet("/__probe/state", (HttpContext context) => tokenAccounting.SnapshotAsync(AccountingSubject(context), async credentialExchanges =>
+app.MapGet("/__probe/state", (Delegate)((HttpContext context) => tokenAccounting.SnapshotAsync(AccountingSubject(context), async credentialExchanges =>
 {
     await using var scope = app.Services.CreateAsyncScope();
     scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
@@ -216,7 +216,7 @@ app.MapGet("/__probe/state", (HttpContext context) => tokenAccounting.SnapshotAs
     return Results.Json(new { Users = await iam.Users.CountAsync(context.RequestAborted), Links = await iam.ExternalIdentities.CountAsync(context.RequestAborted),
         Tokens = await tokens.Set<global::OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken>().CountAsync(context.RequestAborted),
         Sessions = sessionCount, company.TokenRequests, CredentialExchanges = credentialExchanges });
-}, context.RequestAborted)).RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
+}, context.RequestAborted))).RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersManage);
 if (settings.UiRecovery)
 {
     var controlKey = await File.ReadAllTextAsync(OwnedFile("ui-control-key.txt"));
