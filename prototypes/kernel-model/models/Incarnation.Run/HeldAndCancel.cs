@@ -42,8 +42,7 @@ sealed partial class CreationWitness
         Drain(child); Drain();
         Require(_world.Store.Instances[child.Id].Status == InstanceStatus.Cancelled, "C10", "ordinary cancelled child remained active");
         Send(Kinds.Delete, 1, target: child); Drain(child);
-        Send(Kinds.Start, 2, start: NativeModel.Spec("cancel-child", mode) with { Creation = new(2, 1, "replacement-child") }, target: child); Drain(child);
-        var replacement = _world.Store.Instances[child.Id];
+        var replacement = InstallSyntheticReplacement(child, NativeModel.Spec("cancel-child", mode) with { Creation = new(2, 1, "replacement-child") });
         Apply(new("add", M: cancel)); Drain(child);
         Require(_world.Store.Instances[child.Id] == replacement && replacement.Status == InstanceStatus.Running,
             "C10", "old native branch cancellation reached a replacement child");
