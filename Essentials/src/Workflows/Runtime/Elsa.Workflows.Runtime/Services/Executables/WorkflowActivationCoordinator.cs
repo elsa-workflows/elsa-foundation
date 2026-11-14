@@ -50,7 +50,16 @@ public sealed partial class WorkflowActivationCoordinator(
                 $"The supplied source reference points at artifact '{command.Reference.ArtifactId}' but the executable is '{identity.ArtifactId}'.",
                 nameof(command));
 
-        var definitionId = identity.DefinitionId;
+        return await ActivateCoreAsync(new(identity.DefinitionId, identity, command.Executable, null, command.Reference,
+            command.SlotName, command.ActivationId, command.Source, command.ExpectedRevision, command.OwnershipIntent), cancellationToken);
+    }
+
+    private async ValueTask<WorkflowActivationResult> ActivateCoreAsync(
+        ActivationCandidate command,
+        CancellationToken cancellationToken)
+    {
+        var identity = command.Identity;
+        var definitionId = command.WorkflowDefinitionId;
         if (!_activationChannelOptions.Allows(command.SlotName))
             return new(
                 false,
@@ -60,7 +69,7 @@ public sealed partial class WorkflowActivationCoordinator(
                 FailedStep: WorkflowActivationStep.ChannelValidation);
 
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
-        GuardComposition(definitionId, command.SlotName, command.ActivationId);
+        GuardComposition(definitionId, command.SlotName, command.ActivationId, command.NativeWorkflow is not null);
 
         // A same-artifact request is answered from the slot, and a replacement replaces its activation, only once that
         // activation serves; a slot that a version before #2230 left half done is repaired or reported first.
@@ -87,11 +96,16 @@ public sealed partial class WorkflowActivationCoordinator(
         WorkflowActivationResult? result = null;
         try
         {
-            await rootWriteLeaseManager.ExecuteAsync(
-                identity,
-                $"activation:{command.ActivationId}:{Guid.NewGuid():N}",
-                async leaseToken => result = await RunSequenceAsync(command, reference, slotId, leaseToken),
-                cancellationToken);
+            var leaseId = $"activation:{command.ActivationId}:{Guid.NewGuid():N}";
+            if (command.Material is null)
+                await rootWriteLeaseManager.ExecuteAsync(identity, leaseId,
+                    async leaseToken => result = await RunSequenceAsync(command, reference, slotId, leaseToken), cancellationToken);
+            else
+                await rootWriteLeaseManager.ExecuteFencedAsync([identity], leaseId, async (grants, leaseToken) =>
+                {
+                    _ = await ReadStoredMaterialAsync(command.Material, leaseToken);
+                    result = await RunSequenceAsync(command, reference, slotId, leaseToken, grants);
+                }, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -132,12 +146,20 @@ public sealed partial class WorkflowActivationCoordinator(
         ArgumentException.ThrowIfNullOrWhiteSpace(command.SlotName);
         ArgumentOutOfRangeException.ThrowIfNegative(command.ExpectedRevision);
 
-        var definitionId = command.Executable.Identity.DefinitionId;
+        return await DeactivateCoreAsync(new(command.Executable.Identity.DefinitionId, command.Executable.Identity,
+            command.Executable, command.SlotName, command.Source, command.ExpectedRevision), cancellationToken);
+    }
+
+    private async ValueTask<WorkflowActivationResult> DeactivateCoreAsync(
+        DeactivationCandidate command,
+        CancellationToken cancellationToken)
+    {
+        var definitionId = command.WorkflowDefinitionId;
         var slot = await authority.FindAsync(definitionId, command.SlotName, cancellationToken);
         if (slot?.ActiveActivationId is not { } activationId)
             return new(true, WorkflowActivationOutcome.AlreadyInactive, slot ?? EmptySlot(definitionId, command.SlotName));
 
-        GuardComposition(definitionId, command.SlotName, activationId);
+        GuardComposition(definitionId, command.SlotName, activationId, command.NativeWorkflow is not null);
 
         // The slot's activation is the only one that serves it, unless a version before #2230 stopped part way and left
         // the activation it replaced, or a stray, serving beside it. Those are turned off in the same commit, whatever the
@@ -181,7 +203,7 @@ public sealed partial class WorkflowActivationCoordinator(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await NotifyTriggerObserversAsync(definitionId, activationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            await NotifyTriggerObserversAsync(definitionId, activationId, command.Identity.ArtifactId, cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -219,7 +241,7 @@ public sealed partial class WorkflowActivationCoordinator(
         if (slot?.ActiveActivationId is not { } activationId)
             return new(true, WorkflowActivationOutcome.AlreadyInactive, slot ?? EmptySlot(workflowDefinitionId, slotName));
 
-        GuardComposition(workflowDefinitionId, slotName, activationId);
+        GuardComposition(workflowDefinitionId, slotName, activationId, requireIndexer: false);
         var (current, unserved) = await CheckServingAsync(slot, cancellationToken);
         return unserved ?? new(
             true,
@@ -342,9 +364,9 @@ public sealed partial class WorkflowActivationCoordinator(
         Diagnostic: Truncate($"Activation '{slot.ActiveActivationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}' is named by the slot and does not serve: {reason}"),
         FailedStep: WorkflowActivationStep.ProjectionActivation);
 
-    private void GuardComposition(string definitionId, string slotName, string activationId)
+    private void GuardComposition(string definitionId, string slotName, string activationId, bool requireIndexer)
     {
-        if (triggerIndexer is null || triggerBindingStore is null)
+        if (triggerBindingStore is null || requireIndexer && triggerIndexer is null)
             throw new WorkflowActivationException(
                 definitionId,
                 slotName,
@@ -364,35 +386,37 @@ public sealed partial class WorkflowActivationCoordinator(
     /// over from another owner; otherwise <see langword="null"/>.
     /// </summary>
     private WorkflowActivationResult? TryResolveSameArtifactNoOp(
-        WorkflowActivationCommand command,
+        ActivationCandidate command,
         WorkflowExecutableSourceReference? activeReference,
         WorkflowActivationSlot slot)
     {
         if (slot.ActiveActivationId is not { } activeActivationId ||
             command.OwnershipIntent == WorkflowActivationOwnershipIntent.TakeOver && slot.Source is { } incumbent && !incumbent.IsSameOwnerAs(command.Source) ||
             activeReference is null ||
-            !StringComparer.Ordinal.Equals(activeReference.ArtifactId, command.Executable.Identity.ArtifactId) ||
+            !StringComparer.Ordinal.Equals(activeReference.ArtifactId, command.Identity.ArtifactId) ||
             !StringComparer.Ordinal.Equals(activeReference.TenantId, command.Reference.TenantId))
             return null;
 
         logger?.LogDebug(
             "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} is already active as {ActiveActivationId}",
             command.ActivationId,
-            command.Executable.Identity.DefinitionId,
+            command.WorkflowDefinitionId,
             command.SlotName,
             activeActivationId);
         return new(true, WorkflowActivationOutcome.AlreadyActive, slot, activeReference);
     }
 
     private async ValueTask<WorkflowActivationResult> RunSequenceAsync(
-        WorkflowActivationCommand command,
+        ActivationCandidate command,
         WorkflowExecutableSourceReference reference,
         string slotId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<WorkflowExecutableRootWriteLease>? rootWriteLeases = null)
     {
         try
         {
-            reference = await MintOrResumeSourceReferenceAsync(reference, cancellationToken);
+            reference = await MintOrResumeSourceReferenceAsync(reference, cancellationToken, command.Identity, rootWriteLeases,
+                command.Material?.NativeWorkflow is not null && _executableStore?.GetMaterialStore() is InMemoryWorkflowExecutableStore);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (SourceReferenceResumeConflictException exception)
@@ -400,7 +424,7 @@ public sealed partial class WorkflowActivationCoordinator(
             return new(
                 false,
                 WorkflowActivationOutcome.Failed,
-                await CurrentSlotAsync(command.Executable.Identity.DefinitionId, command.SlotName),
+                await CurrentSlotAsync(command.WorkflowDefinitionId, command.SlotName),
                 Diagnostic: Truncate(SafeMessage(exception)),
                 FailedStep: WorkflowActivationStep.SourceReferenceMint);
         }
@@ -411,7 +435,7 @@ public sealed partial class WorkflowActivationCoordinator(
 
         try
         {
-            await PrepareProjectionsAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+            await PrepareProjectionsAsync(command.NativeWorkflow, command.ActivationId, slotId, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (Exception exception)
@@ -422,7 +446,7 @@ public sealed partial class WorkflowActivationCoordinator(
         WorkflowActivationSlot? slotBeforeTransition;
         try
         {
-            slotBeforeTransition = await authority.FindAsync(command.Executable.Identity.DefinitionId, command.SlotName, CancellationToken.None);
+            slotBeforeTransition = await authority.FindAsync(command.WorkflowDefinitionId, command.SlotName, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -434,7 +458,7 @@ public sealed partial class WorkflowActivationCoordinator(
         {
             transition = await activationSwitch.TryActivateAsync(
                 new WorkflowActivationSlotRequest(
-                    command.Executable.Identity.DefinitionId,
+                    command.WorkflowDefinitionId,
                     command.SlotName,
                     command.ActivationId,
                     command.Source,
@@ -471,7 +495,7 @@ public sealed partial class WorkflowActivationCoordinator(
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await NotifyTriggerObserversAsync(command.Executable.Identity.DefinitionId, command.ActivationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            await NotifyTriggerObserversAsync(command.WorkflowDefinitionId, command.ActivationId, command.Identity.ArtifactId, cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -483,13 +507,19 @@ public sealed partial class WorkflowActivationCoordinator(
 
     private async ValueTask<WorkflowExecutableSourceReference> MintOrResumeSourceReferenceAsync(
         WorkflowExecutableSourceReference candidate,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WorkflowExecutableIdentity identity,
+        IReadOnlyList<WorkflowExecutableRootWriteLease>? rootWriteLeases, bool nativeFencedPublication)
     {
         var existing = await sourceReferenceStore.FindAsync(candidate.SourceReferenceId, cancellationToken);
         if (existing is null)
         {
             try
             {
+                if (rootWriteLeases is not null)
+                    return nativeFencedPublication
+                        ? await sourceReferenceStore.SaveWithRootWriteLeasesAsync(candidate, identity, rootWriteLeases, cancellationToken)
+                        : await sourceReferenceStore.SaveScopedPublicationAsync(candidate, identity, rootWriteLeases, cancellationToken);
                 await sourceReferenceStore.SaveAsync(candidate, cancellationToken);
                 return candidate;
             }
@@ -516,7 +546,8 @@ public sealed partial class WorkflowActivationCoordinator(
         var candidateAtOriginalTime = candidate with
         {
             CreatedAt = existing.CreatedAt,
-            PublishedAt = existing.PublishedAt
+            PublishedAt = existing.PublishedAt,
+            PublicationScope = rootWriteLeases is not null ? existing.PublicationScope : candidate.PublicationScope
         };
         if (!WorkflowExecutableSourceReferenceComparer.SameIdentity(existing, candidateAtOriginalTime))
         {
@@ -544,11 +575,20 @@ public sealed partial class WorkflowActivationCoordinator(
     }
 
     private async ValueTask PrepareProjectionsAsync(
-        WorkflowExecutable executable,
+        WorkflowExecutable? executable,
         string activationId,
         string slotId,
-        CancellationToken cancellationToken) =>
-        await triggerIndexer!.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        if (executable is not null)
+            await triggerIndexer!.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
+        else
+        {
+            await triggerBindingStore!.PrepareActivationAsync(activationId, [], cancellationToken);
+            if (recurringScheduleStore is not null)
+                await recurringScheduleStore.PrepareActivationAsync(activationId, [], cancellationToken);
+        }
+    }
 
     private async ValueTask NotifyTriggerObserversAsync(
         string definitionId,
@@ -580,7 +620,7 @@ public sealed partial class WorkflowActivationCoordinator(
     /// while the slot still stands where that transition left it; a writer that moved it since owns what serves.
     /// </summary>
     private async ValueTask<WorkflowActivationResult> RevertAsync(
-        WorkflowActivationCommand command,
+        ActivationCandidate command,
         WorkflowExecutableSourceReference reference,
         WorkflowActivationTransition transition,
         Exception failure)
@@ -589,7 +629,7 @@ public sealed partial class WorkflowActivationCoordinator(
             failure,
             "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at step {FailedStep}; reverting",
             command.ActivationId,
-            command.Executable.Identity.DefinitionId,
+            command.WorkflowDefinitionId,
             command.SlotName,
             WorkflowActivationStep.TriggerObserverNotification);
 
@@ -607,13 +647,13 @@ public sealed partial class WorkflowActivationCoordinator(
             await CaptureAsync(
                 failures,
                 "Observer compensation",
-                () => NotifyTriggerObserversAsync(command.Executable.Identity.DefinitionId, transition.ReplacedActivationId ?? command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
+                () => NotifyTriggerObserversAsync(command.WorkflowDefinitionId, transition.ReplacedActivationId ?? command.ActivationId, command.Identity.ArtifactId, CancellationToken.None));
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
         return new(
             false,
             WorkflowActivationOutcome.Failed,
-            await CurrentSlotAsync(command.Executable.Identity.DefinitionId, command.SlotName),
+            await CurrentSlotAsync(command.WorkflowDefinitionId, command.SlotName),
             ReplacedActivationId: transition.ReplacedActivationId,
             Diagnostic: Truncate(Join(SafeMessage(failure), compensationFailure)),
             FailedStep: WorkflowActivationStep.TriggerObserverNotification,
@@ -625,7 +665,7 @@ public sealed partial class WorkflowActivationCoordinator(
     /// at the revision the deactivation produced, so a writer that moved the slot since keeps it.
     /// </summary>
     private async ValueTask<WorkflowActivationResult> FailDeactivationAsync(
-        WorkflowDeactivationCommand command,
+        DeactivationCandidate command,
         string activationId,
         WorkflowActivationTransition transition,
         Exception failure)
@@ -634,13 +674,13 @@ public sealed partial class WorkflowActivationCoordinator(
             failure,
             "Deactivation of activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at step {FailedStep}; compensating",
             activationId,
-            command.Executable.Identity.DefinitionId,
+            command.WorkflowDefinitionId,
             command.SlotName,
             WorkflowActivationStep.TriggerObserverNotification);
 
-        var definitionId = command.Executable.Identity.DefinitionId;
+        var definitionId = command.WorkflowDefinitionId;
         var failures = new List<string>();
-        await CaptureAsync(failures, "Projection preparation", () => PrepareProjectionsAsync(command.Executable, activationId, transition.Slot.SlotId, CancellationToken.None));
+        await CaptureAsync(failures, "Projection preparation", () => PrepareProjectionsAsync(command.NativeWorkflow, activationId, transition.Slot.SlotId, CancellationToken.None));
         await CaptureAsync(failures, "Authority compensation", async () =>
         {
             var restored = await activationSwitch.TryActivateAsync(
@@ -653,7 +693,7 @@ public sealed partial class WorkflowActivationCoordinator(
                     activationId,
                     $"The deactivation slot transition could not be restored: {restored.Diagnostic}");
         });
-        await CaptureAsync(failures, "Observer compensation", () => NotifyTriggerObserversAsync(definitionId, activationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
+        await CaptureAsync(failures, "Observer compensation", () => NotifyTriggerObserversAsync(definitionId, activationId, command.Identity.ArtifactId, CancellationToken.None));
 
         var compensationFailure = failures.Count == 0 ? null : string.Join(" ", failures);
         return new(

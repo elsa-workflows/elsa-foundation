@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -57,6 +58,11 @@ public sealed class RuntimeModelExecutionState
     public DateTimeOffset UpdatedAt { get; }
     public JsonElement Payload { get; }
     public JsonElement? TerminalResult { get; }
+    /// <summary>Retained authority of a physically accepted standalone root; tenant and persistence scope remain independent.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressCommandOrigin? IngressOrigin { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowExecutionPartition? Partition { get; init; }
 }
 
 /// <summary>Retained consumption proof for one exact input, not an actor cache or queue acknowledgement.</summary>

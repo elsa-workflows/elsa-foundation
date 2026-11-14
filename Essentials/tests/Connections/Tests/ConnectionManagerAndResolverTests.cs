@@ -80,6 +80,112 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Metadata_exposes_same_read_identity_and_revision_through_create_find_list_and_update()
+    {
+        var created = await CreateConnectionAsync("observed");
+        Assert.False(string.IsNullOrWhiteSpace(created.IncarnationId));
+        Assert.True(created.Version > 0);
+        var found = await _manager.FindAsync(Tenant, "observed");
+        var listed = Assert.Single(await _manager.ListAsync(Tenant));
+        Assert.Equal(created.IncarnationId, found!.IncarnationId);
+        Assert.Equal(created.Version, found.Version);
+        Assert.Equal(created.IncarnationId, listed.IncarnationId);
+        Assert.Equal(created.Version, listed.Version);
+
+        var updated = await _manager.UpdateAsync(Tenant, "observed", new UpdateConnectionRequest { DisplayName = "Changed" });
+        Assert.Equal(created.IncarnationId, updated!.IncarnationId);
+        Assert.True(updated.Version > created.Version);
+        await using var resolved = await _resolver.ResolveAsync(new ConnectionResolveRequest
+        {
+            TenantId = Tenant, Name = "observed", ExpectedIncarnationId = updated.IncarnationId, ExpectedVersion = updated.Version
+        });
+        Assert.Equal(updated.IncarnationId, resolved.IncarnationId);
+        Assert.Equal(updated.Version, resolved.Version);
+        var revoked = await _manager.RevokeAsync(Tenant, "observed");
+        Assert.Equal(updated.IncarnationId, revoked!.IncarnationId);
+        Assert.True(revoked.Version > updated.Version);
+        Assert.Equal(revoked.Version, (await _manager.FindAsync(Tenant, "observed"))!.Version);
+    }
+
+    [Fact]
+    public async Task Retained_creation_identity_allows_rotation_but_a_stale_preview_revision_refuses()
+    {
+        var created = await CreateConnectionAsync("retained-mapping");
+        var updated = await _manager.UpdateAsync(Tenant, "retained-mapping", new UpdateConnectionRequest
+        {
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "rotated.example" }
+        });
+        await using var current = await _resolver.ResolveAsync(new ConnectionResolveRequest
+        {
+            TenantId = Tenant, Name = "retained-mapping", ExpectedIncarnationId = created.IncarnationId
+        });
+        Assert.Equal(updated!.Version, current.Version);
+        Assert.Equal("rotated.example", current.Settings[HttpConnectionSettingKeys.AllowedHosts]);
+        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => _resolver.ResolveAsync(new ConnectionResolveRequest
+        {
+            TenantId = Tenant, Name = "retained-mapping", ExpectedIncarnationId = created.IncarnationId, ExpectedVersion = created.Version
+        }).AsTask());
+        Assert.Equal(ConnectionFaultCodes.RevisionChanged, refused.Code);
+    }
+
+    [Fact]
+    public async Task Retained_mapping_refuses_delete_recreate_even_when_the_revision_repeats()
+    {
+        var created = await CreateConnectionAsync("mapping-recreated");
+        await _manager.DeleteAsync(Tenant, "mapping-recreated");
+        var replacement = await CreateConnectionAsync("mapping-recreated");
+        Assert.Equal(created.Version, replacement.Version);
+        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => _resolver.ResolveAsync(new ConnectionResolveRequest
+        {
+            TenantId = Tenant, Name = "mapping-recreated", ExpectedIncarnationId = created.IncarnationId, ExpectedVersion = created.Version
+        }).AsTask());
+        Assert.Equal(ConnectionFaultCodes.IdentityChanged, refused.Code);
+    }
+
+    [Fact]
+    public async Task Legacy_unknown_creation_identity_is_visible_and_cannot_satisfy_a_mapping_guard()
+    {
+        var repository = _scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+        Assert.True(await repository.TryAddAsync(new ConnectionDocument
+        {
+            Definition = new()
+            {
+                TenantId = Tenant, Name = "legacy-mapping", TypeName = ConnectionTypeNames.Http,
+                Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
+            }
+        }));
+        Assert.Null((await _manager.FindAsync(Tenant, "legacy-mapping"))!.IncarnationId);
+        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => _resolver.ResolveAsync(new ConnectionResolveRequest
+        {
+            TenantId = Tenant, Name = "legacy-mapping", ExpectedIncarnationId = "expected-creation"
+        }).AsTask());
+        Assert.Equal(ConnectionFaultCodes.IdentityChanged, refused.Code);
+    }
+
+    [Fact]
+    public async Task Stale_manager_update_cannot_restore_a_mapping_after_delete_recreate()
+    {
+        var original = await CreateConnectionAsync("mapping-save-race");
+        ConnectionMetadata? replacement = null;
+        _interceptor.BeforeOuterSave = async () =>
+        {
+            await _manager.DeleteAsync(Tenant, "mapping-save-race");
+            replacement = await CreateConnectionAsync("mapping-save-race");
+        };
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, "mapping-save-race",
+            new UpdateConnectionRequest { DisplayName = "Stale update" }).AsTask());
+        var current = (await _manager.FindAsync(Tenant, "mapping-save-race"))!;
+        Assert.Equal(replacement!.IncarnationId, current.IncarnationId);
+        Assert.Equal(original.Version, current.Version);
+        Assert.NotEqual(original.IncarnationId, current.IncarnationId);
+        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => _resolver.ResolveAsync(new ConnectionResolveRequest
+        {
+            TenantId = Tenant, Name = "mapping-save-race", ExpectedIncarnationId = original.IncarnationId
+        }).AsTask());
+        Assert.Equal(ConnectionFaultCodes.IdentityChanged, refused.Code);
+    }
+
+    [Fact]
     public async Task Create_Resolve_AndRejectWrongTypeOrOwner()
     {
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest

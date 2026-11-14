@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kernel.Statecharts.Run" />
+    <ProjectReference Include="../Statecharts/Kernel.Statecharts.csproj" />
+    <ProjectReference Include="../Native/Kernel.Native.csproj" />
+  </ItemGroup>
+</Project>

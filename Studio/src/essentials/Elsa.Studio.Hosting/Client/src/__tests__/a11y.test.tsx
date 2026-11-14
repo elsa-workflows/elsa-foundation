@@ -227,6 +227,13 @@ it("keeps result feedback below an embedded page title in the heading outline", 
     .toEqual([["H2", "Embedded collection"], ["H3", "Nothing here"]]);
 });
 
+it("keeps a string page title in the heading's accessible name and native tooltip", () => {
+  render(<StudioPageHeader title="Run · Order fulfillment" headingLevel={2} />);
+  const heading = container.querySelector("h2");
+  expect(heading?.textContent).toBe("Run · Order fulfillment");
+  expect(heading?.getAttribute("title")).toBe("Run · Order fulfillment");
+});
+
 describe("sidebar search filtering", () => {
   const navigation = [
     { id: "home", label: "Home", path: "/dashboard", placement: "main" as const },

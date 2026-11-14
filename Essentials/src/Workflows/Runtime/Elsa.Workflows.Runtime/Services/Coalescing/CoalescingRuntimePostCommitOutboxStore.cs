@@ -80,7 +80,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
     }
 
     private bool UsesOverlayKind(string kind) => kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork && !requiredSourceKinds.Contains(kind);
-    private bool IsOverlayContinuation(RuntimePostCommitOutboxItem item) => UsesOverlayKind(item.Intent.Kind) && item.StimulusDeliverySourceScope is null;
+    private bool IsOverlayContinuation(RuntimePostCommitOutboxItem item) => item.SourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint && UsesOverlayKind(item.DeliveryKind) && item.SourceScope is null && item.SubscriptionDeliveryProtocolVersion is null;
     private bool OwnsOverlayContinuation(RuntimeCoalescingSession session, string id) =>
         session.TryFindOutboxItem(id, out var item) && IsOverlayContinuation(item!);
 

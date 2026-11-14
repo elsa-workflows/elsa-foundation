@@ -102,6 +102,7 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
             Alias<IActivityDefinitionAuthoringStore>(services);
             Alias<IActivityDefinitionDraftStore>(services);
             Alias<IActivityDefinitionVersionPublicationStore>(services);
+            Alias<IActivityPublicationSnapshotReader>(services);
             Alias<IActivityDefinitionLayoutStore>(services);
             Alias<IActivityDraftValidationStore>(services);
             Alias<IActivityForkStore>(services);

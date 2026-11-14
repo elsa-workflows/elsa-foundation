@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Inspection.Core;
 using System.Text.Json;
 using CShells.DependencyInjection;
 using CShells.Features;
@@ -152,13 +153,13 @@ public sealed class TestWeaverAuthorityFeature : IShellFeature
     {
         services.Replace(ServiceDescriptor.Scoped<IWeaverToolAuthorizer>(_ => new WorkflowRuntimeWeaverTestHost.Authorizer()));
         // Without Identity the HTTP inspection authority cannot be built; this one admits no caller to any Run.
-        services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Api.Contracts.IActivityInspectionContextAsync, NoRunInspectionAuthority>());
+        services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync, NoRunInspectionAuthority>());
         services.Replace(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Api.Contracts.IWorkflowRuntimeOperatorAccess, NoRunInspectionAuthority>());
     }
 }
 
 /// <summary>The run endpoints' per-run authority for a caller it does not admit: no structure, values or payloads.</summary>
-internal sealed class NoRunInspectionAuthority : Elsa.Workflows.Runtime.Api.Contracts.IActivityInspectionContextAsync,
+internal sealed class NoRunInspectionAuthority : Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync,
     Elsa.Workflows.Runtime.Api.Contracts.IWorkflowRuntimeOperatorAccess
 {
     public ValueTask<bool> CanManageAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);

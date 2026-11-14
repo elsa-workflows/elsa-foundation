@@ -29,10 +29,13 @@ contract or behavior and retain the evidence on that PR. Do not mix unrelated st
    because those adapters already exist on the unpublished branch.
 2. Specify the statechart algorithm independently of storage and actor placement. Use the accepted document
    review example for traces, keeping all types and engine rules generic. Record intermediate selected phases and
-   visit identities so waiting/failure behavior can be assessed before integration.
+   visit identities so waiting/failure behavior can be assessed before integration. The
+   [selection and phase proposal](contracts/selection.md) is this slice's review surface; its traces are not run results.
 3. Prove how that algorithm composes with ordinary activity work on the selected runtime. Compare a native
    composite and an execution-model integration only against root/nested composition, normal lexical values,
    publication, durable receipts and native compensation. A prototype's existence does not settle placement.
+   The proposed [source-wave work unit](source-wave-plan.md) separates immutable publication membership from
+   transitive runnable-work closure; neither the admission probe nor matching event IDs proves that boundary.
 4. Update the technical plan and dependency-ordered implementation tasks from the observed result. Identify the
    smallest remaining shared runtime change with its actual consumers; do not inherit the historical command
    allocations, provider-capability flags or schema successors as already accepted contracts.

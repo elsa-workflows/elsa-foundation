@@ -113,10 +113,14 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 { Role: "Input", Error: null } => ActivityDataReadRoles.InputMember,
                 _ => null
             };
-            if (options.Value.MemberReads && !query.MemberPath.IsDefaultOrEmpty && memberRole is not null)
-                binding = ActivityDataMemberPath.IsWithinBounds(query.MemberPath)
-                    ? binding with { Role = memberRole, MemberPath = query.MemberPath }
-                    : binding with { Role = memberRole, Error = "InvalidMemberPath" };
+            // A member path always asks for a member read, so it is never answered with the whole read: with member
+            // reads off the member read is refused as a stored one is, and a source with no member read is invalid.
+            if (!query.MemberPath.IsDefaultOrEmpty)
+                binding = memberRole is null
+                    ? binding.Error is null ? binding with { Error = "InvalidSource" } : binding
+                    : ActivityDataMemberPath.IsWithinBounds(query.MemberPath)
+                        ? binding with { Role = memberRole, MemberPath = query.MemberPath }
+                        : binding with { Role = memberRole, Error = "InvalidMemberPath" };
             var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
             if (source is not null)
             {
@@ -247,15 +251,14 @@ internal sealed class ActivityDataSelectionAnalyzer(
             // never typed: a request can be seeded by any caller, so the runtime checks the member when it reads it.
             var requestRead = binding.Role is "WorkflowRequest" or ActivityDataReadRoles.WorkflowRequestMember;
             var memberOfInput = binding.IsMemberRead;
-            if (requestRead && context.OpenWorkflowRequest)
-                return new($"request:{binding.Key}", binding.Key, null, RequestRead(binding.Key, binding, memberOfInput),
-                    ActivityChildResultAvailability.Definite, null, null, null, null, null, null, "OpenWorkflowRequest");
             var input = requestRead
                 ? context.RequestInputs.GetValueOrDefault(binding.Key) is [var requested] ? requested : null
                 : context.InputIndex.TryFind(binding.Key, out var declared) ? declared : null;
             if (input is null)
             {
-                findings.Add(new(path, "ActivityData/UnknownInput", "The referenced boundary input is missing or ambiguous."));
+                findings.Add(new(path, "ActivityData/UnknownInput", context.WorkflowBoundary
+                    ? "The referenced workflow input is missing or ambiguous. Declare the input before reading its request value."
+                    : "The referenced boundary input is missing or ambiguous."));
                 return null;
             }
             // A workflow's inputs are its request members, keyed by name, and publication lowers a stored Input or
@@ -520,9 +523,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         return constraints.Count == 1 ? constraints[0] : new(string.Join("+", constraints.Select(item => item.Owner)),
             [.. allowed], "ActivityData/SourceRestricted", "The selected source does not satisfy all owning input restrictions.");
     }
-    private static ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
+    private ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
         ImmutableArray<ActivityDataSelectionSourceFacts> sources, IEnumerable<ValidationError> findings, bool hasMore = false) =>
-        new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore);
+        new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore)
+        {
+            MemberReadsEnabled = options.Value.MemberReads
+        };
     private sealed record Source(string Id, string DisplayName, string? ScopeId, ArgumentValue? Binding,
         ActivityChildResultAvailability Availability, TypeReference? Type, IActivityDefinitionVersion? Version, string? Projection,
         bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null)
@@ -540,8 +546,6 @@ internal sealed class ActivityDataSelectionAnalyzer(
         public HashSet<ActivityDataSelectionTarget> ConnectionTargets { get; } = [];
         public DeclaredInputIndex InputIndex { get; } = new(document.Inputs);
         public bool WorkflowBoundary { get; } = document.ResourceKind is "Workflow" or "WorkflowDefinition";
-        // Empty workflow declarations compile to the legacy null/open InputContract. Activity definitions are closed.
-        public bool OpenWorkflowRequest { get; } = (document.ResourceKind is "Workflow" or "WorkflowDefinition") && document.Inputs.IsEmpty;
         public Dictionary<string, InputDefinition[]> RequestInputs { get; } = document.Inputs
             .GroupBy(input => document.ResourceKind is "Workflow" or "WorkflowDefinition" ? input.Name : input.ReferenceKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);

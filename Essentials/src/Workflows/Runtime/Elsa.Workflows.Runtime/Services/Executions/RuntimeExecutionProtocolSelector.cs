@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
@@ -11,7 +12,7 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
     IWorkflowExecutableStore materialStore,
     IWorkflowExecutionStateStore nativeStateReader, IRuntimeCheckpointCommitStore checkpointStore,
     IPersistenceAccessContextAccessor access, IServiceProvider scopedServices, IWorkflowSchedulerWorkQueue queue,
-    IRuntimeModelExecutionReader? stateReader = null)
+    IRuntimeModelExecutionReader? stateReader = null, IRuntimeIngressDeliveryStore? ingress = null)
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private readonly HashSet<string> selected = new(StringComparer.Ordinal);
@@ -55,8 +56,10 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
         }
         if (command.InputId != work.CommandId) throw Unavailable("The model input differs from its durable command identity.");
         var scope = access.Current.Scope ?? throw Unavailable("A model execution requires a physical persistence scope.");
-        access.Current.EnsureTenantScope(command.TenantId);
         var state = await stateReader.FindAsync(work.WorkflowExecutionId, cancellationToken);
+        var ingressOrigin = state?.IngressOrigin ?? RuntimeModelIngressAuthority.ReadOrigin(command);
+        if (ingressOrigin is null) access.Current.EnsureTenantScope(command.TenantId);
+        else if (ingressOrigin.Scope != scope) throw Unavailable("The saved ingress model changed physical scope.");
         if (await nativeStateReader.FindAsync(work.WorkflowExecutionId, cancellationToken) is not null)
             throw Unavailable("The execution identity already belongs to the native protocol.");
         var material = await materialStore.FindMaterialAsync(command.Executable.ArtifactId, cancellationToken);
@@ -69,6 +72,16 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
             !WorkflowExecutionAuthoritySnapshot.Matches(state.Authority, command.Authority.SystemIdentity,
                 command.Authority.RootInitiator, command.Authority.Metadata)))
             throw Unavailable("The model input does not match its committed execution authority and material.");
+        if (state is null && ingressOrigin is not null)
+        {
+            var accepted = await (ingress ?? throw Unavailable("The physical ingress seal reader is unavailable for this model root."))
+                .ReadCommittedRecipientAsync(ingressOrigin, cancellationToken);
+            RuntimeModelIngressAuthority.ValidateInitialCommand(command, scope, work.WorkflowExecutionId, material, accepted);
+        }
+        else if (state?.IngressOrigin is not null && !state.IngressOrigin.IsEquivalentTo(RuntimeModelIngressAuthority.ReadOrigin(command)))
+            throw Unavailable("The model replay differs from its retained ingress origin.");
+        else if (state is not null && state.IngressOrigin is null && command.IngressOrigin is not null)
+            throw Unavailable("A legacy model input cannot introduce ingress authority.");
         var registration = registry.Find(model.Protocol) ?? throw Unavailable("The committed execution protocol is not installed.");
         if (!registration.InputKinds.Contains(command.InputKind)) throw Unavailable("The execution protocol does not support this input kind.");
         var driver = (IRuntimeExecutionProtocolDriver)scopedServices.GetRequiredService(registration.DriverType);

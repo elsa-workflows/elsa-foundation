@@ -22,7 +22,7 @@ export function StudioPageHeader({ title, description, eyebrow, icon, actions, t
   return <header className={["studio-page-header", className].filter(Boolean).join(" ")} {...props}>
     <div className="studio-page-header-copy">
       {eyebrow ? <span className="studio-page-eyebrow">{eyebrow}</span> : null}
-      <Heading id={titleId}>{icon ? <span aria-hidden="true">{icon}</span> : null}{title}</Heading>
+      <Heading id={titleId} title={typeof title === "string" ? title : undefined}>{icon ? <span aria-hidden="true">{icon}</span> : null}{title}</Heading>
       {description ? <p>{description}</p> : null}
       {children}
     </div>

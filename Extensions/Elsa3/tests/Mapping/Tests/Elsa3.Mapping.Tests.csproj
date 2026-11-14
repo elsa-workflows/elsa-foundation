@@ -35,7 +35,7 @@
     <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
-    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />

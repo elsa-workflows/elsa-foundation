@@ -2,6 +2,7 @@ import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
 import { setDialogs } from "../workflow-editor/dialogs";
+import { renderRegisteredRoute } from "./routeRenderingHelpers";
 import {
   button,
   click,
@@ -60,6 +61,36 @@ describe("workflow definition route browse session", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(new URLSearchParams(window.location.search).get("search")).toBe("current search");
   }, 20_000);
+
+  it.each(["hidden", "returned"] as const)("honors an empty-folder confirmation while its owning visit is %s", async visit => {
+    let finish!: (value: boolean) => void;
+    const confirmation = new Promise<boolean>(resolve => { finish = resolve; });
+    let deleted = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("folders/same-folder") && init?.method === "DELETE") { deleted = true; return new Response(null, { status: 204 }); }
+      if (url.pathname.endsWith("folders/same-folder")) return response({ folder: { id: "same-folder", name: "Selected folder", parentId: null, revision: "r1" }, ancestors: [] });
+      if (url.pathname.endsWith("definition-pages")) return response({ items: [definition()] });
+      return response({ items: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = pagedDefinitionCapabilities({ folders: true });
+    capabilities.capabilities[0].links.push({ rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true });
+    const view = await renderRegisteredRoute("/workflows/definitions?folderId=same-folder", undefined, false, capabilities, {}, true);
+    const confirm = vi.fn(() => confirmation);
+    setDialogs({ confirm, prompt: async () => null, alert: async () => undefined });
+    await waitForCondition(() => expect(button(view.container, "Delete")).not.toBeNull());
+    await click(button(view.container, "Delete"));
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    view.setVisible(false);
+    if (visit === "returned") view.setVisible(true);
+    finish(true);
+    await vi.waitFor(() => expect(deleted).toBe(true));
+    view.setVisible(true);
+    await vi.waitFor(() => expect(new URLSearchParams(window.location.search).get("folderId")).toBeNull());
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+    expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+  });
 
   it("keeps the current folder scope after a retired folder deletion completes", async () => {
     let finishDelete: ((value: Response) => void) | undefined;
