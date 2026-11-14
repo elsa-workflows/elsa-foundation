@@ -9,6 +9,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -190,6 +191,41 @@ public sealed partial class QueuedSelectedStartTests
         [ActivityInput(Key = "value")] public string Value { get; set; } = "";
         protected override ValueTask<ActivityTransition<LexicalStringResult>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(new LexicalStringResult(Value)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Rehydrated_whole_fixture_cannot_lose_unread_projection_protection(bool expression)
+    {
+        var owner = ProjectionOwner("sensitive-unused");
+        await using var harness = Build(owner, PersistenceMode.Balanced, services =>
+        {
+            ResultServices(services);
+            new Elsa.Workflows.Runtime.Resumption.WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+        });
+        await Setup(harness, owner, ResultConsumer(expression, "shown.key"));
+        await Checkpoints(harness).HandleAsync(await StageCheckpoint(harness, owner));
+        var committed = (await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(harness.ExecutionId))!;
+        await harness.SweepUntilQuietAsync();
+        var consumer = Assert.Single(await harness.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(harness.ExecutionId));
+        RuntimeActivityResultRead? Read(WorkflowExecutionState snapshot)
+        {
+            var context = new RuntimeInputBindingResolutionContext(harness.ExecutionId, consumer.InvocationId, consumer, executable: owner.Executable)
+                { WorkflowState = snapshot };
+            return expression ? RuntimeActivityResultReader.Read(new ActivityResultExpressionParameterBinding("before", "$result", true), context) :
+                RuntimeActivityResultReader.Read(new RuntimeActivityResultReference("before", "$result", "fixture-scope", true), context);
+        }
+        var restored = JsonSerializer.Deserialize<WorkflowExecutionState>(JsonSerializer.Serialize(committed))!;
+        Assert.True(Read(restored)!.Value.Policy.IsSensitive);
+        var original = restored.TestContext!;
+        var fixture = Assert.Single(original.Results);
+        var weakened = fixture with { Result = ValueEnvelope.Inline(fixture.Result.Type, fixture.Result.InlineValue!.Value, ValueProtectionPolicy.InstanceInline) };
+        restored = JsonSerializer.Deserialize<WorkflowExecutionState>(JsonSerializer.Serialize(restored with
+        {
+            TestContext = new(original.ContextId, original.ContextFingerprint, original.Frames, [weakened], original.OwnedNodeIds)
+        }))!;
+        Assert.Throws<RuntimeTestContextUnavailableException>(() => Read(restored));
     }
 
     private static Owner ProjectionOwner(string shape)
