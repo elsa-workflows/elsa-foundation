@@ -59,8 +59,8 @@ function skippedResumeReason(event: HistoryPresentationEvent) {
   if (event.name !== "DeliveryUnmatched" || event.authority !== "DeliveryObservation" || event.category !== "DeliveryObservation" || event.schemaVersion !== 1) return null;
   return skippedResumeReasons.get(event.metadata?.["history.reasonCode"] ?? "") ?? null;
 }
-export function isKnownHistoryEvent(event: Pick<RuntimeHistoryEvent, "name">) { return !!names[event.name]; }
-export function historyEventLabel(event: HistoryPresentationEvent) { return skippedResumeReason(event) ? "Resume skipped" : names[event.name] ?? (humanizeTypeName(event.name) || event.name); }
+export function isKnownHistoryEvent(event: Pick<RuntimeHistoryEvent, "name">) { return Object.hasOwn(names, event.name); }
+export function historyEventLabel(event: HistoryPresentationEvent) { return skippedResumeReason(event) ? "Resume skipped" : isKnownHistoryEvent(event) ? names[event.name] : humanizeTypeName(event.name) || event.name; }
 export function historyEventExplanation(event: HistoryPresentationEvent) {
   const skipped = skippedResumeReason(event);
   if (skipped) return skipped.explanation;

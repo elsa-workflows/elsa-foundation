@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityBookmarkHistory, HistoryInspection } from "../workflow-editor/run-history/HistoryInspection";
-import { HistoryCoverage, HistoryEventList, historyDate, historyAuthorityLabel } from "../workflow-editor/run-history/historyPresentation";
+import { HistoryCoverage, HistoryEventList, historyDate, historyAuthorityLabel, historyEventLabel, isKnownHistoryEvent } from "../workflow-editor/run-history/historyPresentation";
 import { RunHistoryTimeline } from "../workflow-editor/run-history/RunHistoryTimeline";
 import { defaultHistoryFilters } from "../workflow-editor/run-history/historyLocation";
 import { RunHistorySummary } from "../workflow-editor/run-history/RunHistorySummary";
@@ -344,6 +344,20 @@ it.each(["unsupported", "invalid"] as const)("does not invent an available range
   render(<HistoryCoverage coverage={{ ...historyCoverage, state, firstSequence: 0, lastSequence: 0, settledSequence: 0 }} />);
   const label = Array.from(container.querySelectorAll("dt")).find(item => item.textContent === "Available positions");
   expect(label?.nextElementSibling?.textContent).toBe("Not available");
+});
+
+it.each(["__proto__", "constructor", "toString"])("keeps inherited object keys as unknown event kinds (%s)", async name => {
+  const event = historyEvent(1, { name });
+  expect(isKnownHistoryEvent(event)).toBe(false);
+  const label = historyEventLabel(event);
+  expect(typeof label).toBe("string");
+  render(<HistoryEventList items={[event]} onSelect={vi.fn()} />);
+  expect(container.textContent).toContain(label);
+  api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event, readAt: "now" });
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain("event kind is unrecognized"));
+  expect(container.textContent).toContain(name);
+  expect(valueApi.getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });
 
 
