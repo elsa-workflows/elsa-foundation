@@ -119,8 +119,26 @@ public sealed class StandaloneHttpTriggerTests
         using var fixture = new Fixture(mode: "WorkflowResponse", timeout: TimeSpan.FromMilliseconds(50));
         await fixture.InvokeAsync();
         Assert.Equal(504, fixture.Http.Response.StatusCode);
+        Assert.Equal(fixture.Receipt.Item.OutboxItemId, fixture.Response().GetProperty("deliveryId").GetString());
         Assert.Equal(1, fixture.Port.Calls);
         Assert.Equal(RuntimeIngressTransportState.TimedOut, fixture.Observer.Items.Last().State);
+    }
+
+    [Fact]
+    public async Task Workflow_response_missing_instruction_returns_the_accepted_delivery_identity_without_a_caller_key()
+    {
+        using var fixture = new Fixture(mode: "WorkflowResponse");
+        fixture.Http.Request.Headers.Remove("Idempotency-Key");
+        var recipient = Assert.Single(fixture.Receipt.Item.SubscriptionDelivery!.Recipients);
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Executions.SaveAsync(new(recipient.StartIdentity.WorkflowExecutionId, recipient.Material,
+            WorkflowExecutionStatus.Completed, null, now, now, now, now, null, null, fixture.Reservation.Scope.TenantId,
+            new Dictionary<string, string>()));
+        await fixture.InvokeAsync();
+        Assert.Equal(502, fixture.Http.Response.StatusCode);
+        Assert.Equal("ResponseMissing", fixture.Response().GetProperty("code").GetString());
+        Assert.Equal(fixture.Receipt.Item.OutboxItemId, fixture.Response().GetProperty("deliveryId").GetString());
+        Assert.Equal(1, fixture.Port.Calls);
     }
 
     [Fact]

@@ -139,20 +139,20 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
         catch (HttpResponseDeadlineException)
         {
             if (accepted is not null && owner is not null) await TryRecordFailureAsync(owner.Scope, acceptedSourceId!, exchangeId, RuntimeIngressTransportState.TimedOut, 504);
-            if (!context.Response.HasStarted) await ProblemAsync(context, 504, "ResponseTimedOut", "The response deadline expired; accepted work continues.");
+            if (!context.Response.HasStarted) await ProblemAsync(context, 504, "ResponseTimedOut", "The response deadline expired; accepted work continues.", accepted is null ? null : acceptedSourceId);
         }
         catch (TriggerOperationException exception)
         {
             if (accepted is not null && owner is not null) await TryRecordFailureAsync(owner.Scope, acceptedSourceId!, exchangeId,
                 writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed, writeCompleted ? context.Response.StatusCode : 503);
-            if (!writeCompleted && !context.Response.HasStarted) await ProblemAsync(context, exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 }, exception.Code, exception.Message);
+            if (!writeCompleted && !context.Response.HasStarted) await ProblemAsync(context, exception.Code switch { "unauthorized" => 401, "forbidden" => 403, "conflict" => 409, "validation" => 400, _ => 503 }, exception.Code, exception.Message, accepted is null ? null : acceptedSourceId);
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "Standalone HTTP transport failed; accepted work, if any, remains retained.");
             if (accepted is not null && owner is not null) await TryRecordFailureAsync(owner.Scope, acceptedSourceId!, exchangeId,
                 writeCompleted ? RuntimeIngressTransportState.ReceiptUnknown : RuntimeIngressTransportState.WriteFailed, writeCompleted ? context.Response.StatusCode : null);
-            if (!writeCompleted && !context.Response.HasStarted) await ProblemAsync(context, 503, "SourceUnavailable", "The HTTP source is temporarily unavailable. Reuse the idempotency key to reconcile uncertain admission.");
+            if (!writeCompleted && !context.Response.HasStarted) await ProblemAsync(context, 503, "SourceUnavailable", "The HTTP source is temporarily unavailable. Reuse the idempotency key to reconcile uncertain admission.", accepted is null ? null : acceptedSourceId);
         }
         finally { sourceContext.Clear(); }
     }
@@ -208,7 +208,7 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
                 if (state?.Status is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Cancelled or WorkflowExecutionStatus.Faulted)
                 {
                     if (await delivery.TryDeliverAsync(context.Response, [executionId], deadline.Token)) return;
-                    await ProblemAsync(context, 502, "ResponseMissing", "The workflow ended without a committed HTTP response instruction.");
+                    await ProblemAsync(context, 502, "ResponseMissing", "The workflow ended without a committed HTTP response instruction.", source.OutboxItemId);
                     return;
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(100), time, deadline.Token);
@@ -226,8 +226,8 @@ internal sealed class StandaloneHttpTriggerMiddleware(IRouteTable routes, IRoute
         try { await RecordAsync(scope, sourceId, exchangeId, state, status, limit.Token); }
         catch (Exception exception) { logger.LogWarning(exception, "The HTTP transport observation could not be retained."); }
     }
-    private static Task ProblemAsync(HttpContext context, int status, string code, string message) =>
-        Results.Json(new { code, message }, Json, statusCode: status).ExecuteAsync(context);
+    private static Task ProblemAsync(HttpContext context, int status, string code, string message, string? deliveryId = null) =>
+        Results.Json(new { code, message, deliveryId }, Json, statusCode: status).ExecuteAsync(context);
     private static string Opaque(string sourceId, string subscriptionId) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
         $"{sourceId.Length}:{sourceId}{subscriptionId.Length}:{subscriptionId}")))[..24];
     private sealed class HttpResponseDeadlineException : Exception;

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CShells.Features;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Activities.Http.Activities;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -46,7 +47,7 @@ internal sealed class HttpTriggerConfigurationValidator : ITriggerConfigurationV
             method.GetString() is not ("GET" or "POST" or "PUT" or "PATCH" or "DELETE" or "HEAD" or "OPTIONS"))
             findings.Add(new("InvalidMethod", "Choose a supported HTTP method.", "method"));
         var path = configuration.TryGetProperty("path", out var pathValue) && pathValue.ValueKind == JsonValueKind.String ? pathValue.GetString() : null;
-        if (string.IsNullOrWhiteSpace(path) || path.Length > 2048 || path.Contains('?') || path.Contains('#') || path.Any(char.IsControl))
+        if (string.IsNullOrWhiteSpace(path) || HttpEndpointStimulus.NormalizeTemplate(path).Length == 0 || path.Length > 2048 || path.Contains('?') || path.Contains('#') || path.Any(char.IsControl))
             findings.Add(new("InvalidRoute", "Enter a route without a query, fragment or control characters.", "path"));
         else
         {
