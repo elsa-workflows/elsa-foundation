@@ -3,6 +3,7 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Workflows;
 
+if (args.SequenceEqual(["--job-retries"])) { await ShortWaitRaces.JobRetries(); return; }
 if (args.SequenceEqual(["--trial-jobs"])) { await ShortWaitRaces.TrialJobAdmission(); return; }
 if (args.SequenceEqual(["--job-progress"])) { await ShortWaitRaces.JobProgress(); return; }
 if (args.SequenceEqual(["--job-entry"])) { await ShortWaitRaces.JobEntry(); return; }
