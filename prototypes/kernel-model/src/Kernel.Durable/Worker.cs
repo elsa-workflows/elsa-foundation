@@ -146,6 +146,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _slots.Where(s => s.Value.Loaded).Select(s => (s.Key, s.Value.Row, s.Value.State is null ? null : Json.Write(s.Value.State), s.Value.Busy));
     public IEnumerable<(string Id, bool Durable, bool Taken)> Messages => _items.Values.Select(i => (i.Message.Id, i.Durable, i.Taken));
 
+    /// <summary>Test observation of a completed job result, after it has been placed in the instance inbox.</summary>
+    public bool JobResultReady(string instance, string key) => _slots.TryGetValue(instance, out var slot)
+        && slot.Inbox.Exists(i => !i.Taken && i.Message.Kind == Kinds.JobFinished && i.Message.Id == TicketId(instance, key));
+
     /// <summary>
     /// Diagnostic: capture before a ticket is removed. The task ends after its driver queues or discards the result;
     /// it does not establish that a model consumed the result or committed a logical job outcome.
