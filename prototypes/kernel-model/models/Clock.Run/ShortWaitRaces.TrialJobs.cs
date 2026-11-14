@@ -25,6 +25,8 @@ internal static partial class ShortWaitRaces
     {
         foreach (var partition in new[] { 0, 1 }) await ParkQueuedJobDuringTrial(partition);
 
+        await ParkQueuedJobDuringTrial(1, handoff: true);
+
         var store = new InMemoryStore(1, () => 100);
         var actor = InstanceRef.In(0, "suspect-job");
         var key = InboxKey.Ticket(actor.Id, "work");
@@ -62,7 +64,7 @@ internal static partial class ShortWaitRaces
             await PromotedQueuedJob(behind);
     }
 
-    private static async Task ParkQueuedJobDuringTrial(int suspectPartition)
+    private static async Task ParkQueuedJobDuringTrial(int suspectPartition, bool handoff = false)
     {
         long now = 100;
         var store = new InMemoryStore(2, () => now);
@@ -118,12 +120,20 @@ internal static partial class ShortWaitRaces
             Need(work.Count == 0, "ordinary physical job entered while unrelated trial ACK was held");
         }
         finally { wire.Reply.TrySetResult(); await flush; }
-        await owner.RunAsync();
+        if (!handoff) await owner.RunAsync();
         if (trialOwner.Trial.Any()) { trialOwner.RunTurn(suspect.Id); await trialOwner.FlushAsync(); }
-        for (var i = 0; i < 4; i++) { await owner.RunAsync(); held.RunAll(); }
+        await using var successor = handoff ? Owner("successor", 0, new(), 0, held) : null;
+        if (successor is not null)
+        {
+            await owner.DisposeAsync();
+            Need(held.Count == 0, "stand-down submitted a job from a deferred entry notification");
+            await new DurableHost([successor]).ActivateAsync(0);
+            await successor.PollAsync();
+        }
+        for (var i = 0; i < 4; i++) { await (successor ?? owner).RunAsync(); held.RunAll(); }
         Need(work.SequenceEqual([0L]) && Json.Read<List<string>>(store.Instances[jobs.Id].State) is ["work"],
             "owed genuine job did not run once after the trial");
-        Console.WriteLine($"PASS held-ACK unrelated trial blocks queued entry, then releases it partition={suspectPartition}");
+        Console.WriteLine($"PASS held-ACK unrelated trial blocks queued entry, then releases it partition={suspectPartition} handoff={handoff}");
     }
 
     private sealed class TrialReader : Model<List<string>>

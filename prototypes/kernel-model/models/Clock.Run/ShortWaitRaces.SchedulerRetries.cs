@@ -60,6 +60,12 @@ internal static partial class ShortWaitRaces
             Need(store.Messages.ContainsKey(key) && store.Partitions[0].Position == position && model.Entries.Count == 0,
                 "scheduler refusal invented a logical result, entry or commit");
         }
+        scheduler.Reject = false;
+        var beforeCancelledPass = scheduler.Attempts;
+        await owner.RunAsync(new CancellationToken(canceled: true));
+        Need(scheduler.Attempts == beforeCancelledPass && model.Entries.Count == 0 && store.Messages.ContainsKey(key),
+            "a pass cancelled before invocation resubmitted the owed ticket");
+        scheduler.Reject = true;
         if (cancel)
         {
             owner.Post(new("cancel", actor, "cancel-work"));
@@ -73,6 +79,35 @@ internal static partial class ShortWaitRaces
             model.Entries.Count(id => id == sibling.Id) == 1 && store.Messages.Count == 0, "retry retargeted, duplicated or stranded work");
         Need(Json.Read<List<string>>(store.Instances[actor.Id].State).Count == (cancel ? 0 : 1), "unexpected authored outcome");
         Console.WriteLine($"PASS repeated scheduler refusal remains bounded; owed job and neighboring actor progress cancel={cancel}");
+    }
+
+    private static async Task CancelledPassKeepsPublicationAndWake()
+    {
+        var store = new InMemoryStore(1, () => 100);
+        var held = new HeldScheduler();
+        var model = new RetriedJob();
+        var first = InstanceRef.In(0, "first");
+        var next = InstanceRef.In(0, "next");
+        var observations = new List<string>();
+        await using var owner = new Worker("owner", 0, store, new WorkflowInstance([model]),
+            new() { Monotonic = () => 100, JobScheduler = held, OnObservedDelivery = row => observations.Add(row.Message.Id) });
+        await new DurableHost([owner]).ActivateAsync(0);
+        await owner.PollAsync();
+        owner.Post(new("start-first", first, Kinds.Start, Start: new(model.Key, "def")), fresh: true);
+        await owner.RunAsync();
+        held.RunAll();
+        Need(model.Entries.SequenceEqual([first.Id]), "original admitted job did not publish");
+        await store.AddAsync(new("start-next", next, Kinds.Start, Start: new(model.Key, "def")));
+        await owner.WokenAsync(next);
+        var position = store.Partitions[0].Position;
+        var advice = await owner.RunAsync(new CancellationToken(canceled: true));
+        Need(advice == TimeSpan.Zero && owner.Owns && store.Partitions[0].Position == position &&
+            !observations.Contains("start-next"), "cancelled pass consumed a wake or changed the owner");
+        for (var i = 0; i < 5; i++) { await owner.RunAsync(); held.RunAll(); }
+        Need(observations.Contains("start-next") && model.Entries.SequenceEqual([first.Id, next.Id]) &&
+            store.Messages.Count == 0 && Json.Read<List<string>>(store.Instances[first.Id].State) is ["work"] &&
+            Json.Read<List<string>>(store.Instances[next.Id].State) is ["work"], "healthy resume lost a publication or a wake");
+        Console.WriteLine("PASS cancelled pass preserves the accepted result and the pending wake for ordinary resume");
     }
 
     private static async Task PromotionFailure(string mode)
@@ -122,6 +157,7 @@ internal static partial class ShortWaitRaces
     public static async Task JobRetries()
     {
         foreach (var cancel in new[] { false, true }) await SchedulerRetry(cancel);
+        await CancelledPassKeepsPublicationAndWake();
         foreach (var mode in new[] { "transient", "definite", "unknown-before", "unknown-after", "lost-fence" })
             await PromotionFailure(mode);
     }
