@@ -82,6 +82,16 @@ class VerdictControls(unittest.TestCase):
             if expected:
                 self.assertNotIn(expected, str(caught.exception))
 
+    def test_dotnet_command_keeps_only_the_existing_nu1603_warning_exception(self):
+        for recipe in proof.RECIPES:
+            if recipe.scope != "dotnet": continue
+            with self.subTest(recipe=recipe.id):
+                command, _, _ = proof.command(recipe, Path("/synthetic/evidence"))
+                self.assertEqual([argument for argument in command if "Warning" in argument],
+                    ["-p:WarningsNotAsErrors=NU1603"])
+                self.assertIn("--no-restore", command)
+                self.assertNotIn("--no-build", command)
+
 
 class ReportControls(unittest.TestCase):
     def setUp(self):

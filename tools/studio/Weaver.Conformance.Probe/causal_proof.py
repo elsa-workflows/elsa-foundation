@@ -276,7 +276,7 @@ def command(recipe: Recipe, output: Path) -> tuple[list[str], str, Path]:
     if recipe.scope == "dotnet":
         report = output / "results.trx"
         return ["dotnet", "test", recipe.project, "--configuration", "Release", "--no-restore", "--disable-build-servers",
-            "-p:UseSharedCompilation=false", "-nodeReuse:false", "--filter", "FullyQualifiedName=" + recipe.test,
+            "-p:UseSharedCompilation=false", "-p:WarningsNotAsErrors=NU1603", "-nodeReuse:false", "--filter", "FullyQualifiedName=" + recipe.test,
             "--logger", "trx;LogFileName=results.trx", "--results-directory", str(output)], ".", report
     report = output / "vitest.json"
     return ["pnpm", "exec", "vitest", "run", "src/app/weaver/__tests__/weaverSupportInventory.test.ts",
