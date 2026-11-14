@@ -46,8 +46,8 @@ internal static class RegionalRecovery
         var parent = State().Frames.Values.Single(f => f.Node == "machine").Id;
         void Signal(string id, string name) { Apply(new("add", M: new(id, target, CompositeSignal.Kind, Json.Write(new CompositeSignal(parent, name)), TargetCreation: 1))); Drain(); }
         if (phase != "entry") Signal("advance", "advance");
-        var first = State(); var e = first.Frames.Values.Single(f => f.Node == "e-work"); var l = first.Frames.Values.Single(f => f.Node == "l-work");
-        Check(e.Intervention is not null && l.Intervention is null && first.Waits.Values.Any(w => w.Frame == l.Id) && first.Frames[parent].State is not null,
+        var first = State(); var e = first.Frames.Values.SingleOrDefault(f => f.Node == "e-work"); var l = first.Frames.Values.SingleOrDefault(f => f.Node == "l-work");
+        Check(e?.Intervention is not null && l is not null && l.Intervention is null && first.Waits.Values.Any(w => w.Frame == l.Id) && first.Frames[parent].State is not null,
             "R51: a regional fault blocked or cancelled independent same-phase work");
         var initial = Json.Read<MachineState>(Json.Write(first.Frames[parent].State)); var scopes = Json.Write(first.LexicalScopes);
         Check(initial.Progress!.Running.Count == 2 && ChartMark.Calls.Count == 0, "R51: phase barrier advanced while required regional work remained");

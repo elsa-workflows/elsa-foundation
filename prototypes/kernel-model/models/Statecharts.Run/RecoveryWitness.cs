@@ -99,17 +99,18 @@ internal static class RecoveryWitness
         }
         else Drain(retry.Id);
         var work = State().Agenda.SingleOrDefault(w => !w.Resume && w.Node == "dependency");
+        Check(State().Retries?.ContainsKey(retry.Id) == true, "R46: phase repair did not stage its fresh child obligation");
         var successor = State().Retries![retry.Id].Successor;
-        Check(cut.StartsWith("lost-", StringComparison.Ordinal) || work is not null && work.Frame == successor && ChartDependency.Calls.Count == 1,
+        Check(cut.StartsWith("lost-", StringComparison.Ordinal) || work is not null && work.Frame == successor && work.LexicalScope == source.LexicalScope && work.OperationKey == source.OperationKey && work.Attempt == 0 && ChartDependency.Calls.Count == 1,
             "R46: phase repair did not stage its fresh child obligation");
         var expected = Json.Read<MachineState>(Json.Write(before)); var index = expected.Progress!.Running[source.Id]; expected.Progress.Running.Remove(source.Id); expected.Progress.Running.Add(successor, index);
         Check(Json.Write(expected) == Json.Write(State().Frames[machineFrame.Id].State) && Json.Write(State().LexicalScopes) == scope && marks.SequenceEqual(ChartMark.Calls),
             "R46: phase retry changed completed work, plan, visits or scope instead of only rebinding its child");
         if (cut == "terminate-staged") { Cancel(true); return; }
-        Reload(); var repeated = State().Frames.Values.Single(f => f.Node == "dependency");
-        Check(repeated.Id == successor && repeated.Intervention is not null && ChartDependency.Calls.Count == 2,
+        Reload(); var repeated = State().Frames.Values.SingleOrDefault(f => f.Node == "dependency");
+        Check(repeated?.Id == successor && repeated.Intervention is not null && ChartDependency.Calls.Count == 2,
             "R58: repeated phase fault lost its continuing physical obligation");
-        var second = new NativeRetry("repair-2", repeated.Id, repeated.Intervention!.Id, "second phase repair");
+        var second = new NativeRetry("repair-2", repeated!.Id, repeated.Intervention!.Id, "second phase repair");
         Apply(new("add", M: new("repair-2", target, NativeRetry.Kind, Json.Write(second), TargetCreation: 1))); Drain(second.Id);
         var next = State().Agenda.Single(w => !w.Resume && w.Node == "dependency");
         expected.Progress.Running.Remove(successor); expected.Progress.Running.Add(next.Frame, index);
