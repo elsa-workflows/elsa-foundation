@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
 using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -109,7 +110,7 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
                     { MaterialRevision = state.MaterialRevision, CredentialBinding = state.CredentialBinding, RedirectUri = state.RedirectUri });
         }
         var prospective = await admission.AssessAsync(context, cancellationToken);
-        if (prospective.RoleIds.Count > 128 || prospective.Permissions.Count > 1024 || options.Value.PreviewResultLifetime < TimeSpan.FromSeconds(1) ||
+        if (prospective.RoleIds.Count > 256 || prospective.Permissions.Count > 1024 || options.Value.PreviewResultLifetime < TimeSpan.FromSeconds(1) ||
             options.Value.PreviewResultLifetime > TimeSpan.FromMinutes(10)) return Refuse(ExternalFlowFailure.InvalidResult);
         var observed = Now();
         var preview = new ExternalAuthenticationPreview(state.ConnectionKey, state.ConnectionRecordId, state.MaterialRevision,
@@ -147,6 +148,13 @@ internal sealed class ExternalAuthenticationFlowService(IServiceScopeFactory sco
         if (purpose == AuthenticationArtifactPurpose.SignIn) return null;
         if (actor is null || !subjects.TryResolve(actor, out var subject) || subject.TenantId != options.Value.TenantId ||
             subject.UserId is null || !await authorizer.AuthorizeAsync(actor, token)) return null;
+        await using var scope = CreateScope();
+        var services = scope.ServiceProvider;
+        if (services.GetService<ICanonicalUserSignInService>() is not { } authority ||
+            !await authority.CanSignInAsync(new(options.Value.TenantId, subject.UserId), cancellationToken: token) ||
+            services.GetService<ICurrentSubjectPermissionAuthorizer>() is not { } permissions ||
+            (await permissions.AuthorizeAsync(new(options.Value.TenantId, subject.UserId,
+                DefaultIdentityPermissionKeys.IdentityProvidersManage), token)).Status != CurrentSubjectPermissionStatus.Granted) return null;
         return subject.UserId;
     }
 

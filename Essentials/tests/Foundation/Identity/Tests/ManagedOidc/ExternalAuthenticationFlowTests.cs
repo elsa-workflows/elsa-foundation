@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.ExternalAuthentication;
@@ -18,6 +19,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -200,6 +202,28 @@ public sealed class ExternalAuthenticationFlowTests
         Assert.Null(await scope.ServiceProvider.GetRequiredService<IExternalIdentityStore>().FindByKeyAsync(new("default", "company", harness.Server.Issuer, "opaque-Subject")));
     }
 
+    [Theory]
+    [InlineData(129)]
+    [InlineData(256)]
+    public async Task Preview_supports_the_full_configured_role_boundary(int count)
+    {
+        await using var harness = await Harness.Create();
+        await using var node = await harness.Node();
+        var ids = Enumerable.Range(0, count).Select(index => $"role-{index}").ToArray();
+        await using (var scope = Scope(node))
+            foreach (var id in ids)
+                await scope.ServiceProvider.GetRequiredService<IRoleStore>().SaveAsync(new(id, "default", id, null, new HashSet<string>(), false));
+        var options = node.GetRequiredService<IOptions<ExternalAuthenticationOptions>>().Value;
+        options.Connections[0] = options.Connections[0] with { Admission = new() { Type = "jit", DefaultRoleIds = ids } };
+        var actor = Administrator();
+        var callback = await harness.Authorize(node, AuthenticationArtifactPurpose.Preview, actor);
+        var completed = await Flow(node).CompleteAsync(callback, actor);
+        Assert.Equal(ExternalFlowFailure.None, completed.Failure);
+        var result = await Flow(node).ReadPreviewAsync("company", completed.PreviewResultHandle!, callback.BrowserBinding, actor);
+        Assert.Equal(ExternalFlowFailure.None, result.Failure);
+        Assert.Equal(count, result.Preview!.RoleIds.Count);
+    }
+
     [Fact]
     public async Task Preview_result_expires_and_new_sign_in_ignores_external_roles_when_no_roles_are_configured()
     {
@@ -262,6 +286,14 @@ public sealed class ExternalAuthenticationFlowTests
         scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
         return scope;
     }
+    private sealed class BrokerAdministratorAuthority : ICurrentSubjectPermissionAuthorizer, ICanonicalUserSignInService
+    {
+        public string AuthenticationScheme => "flow-tests";
+        public ValueTask<bool> CanSignInAsync(PrincipalFactoryContext context, bool requiresPassword = false, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken cancellationToken = default) => ValueTask.FromResult(CurrentSubjectPermissionResult.Granted);
+        public ValueTask<AuthSession?> SignInAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default) => throw new InvalidOperationException("A preview must never issue an administrator session.");
+    }
+
     private sealed class Harness : IAsyncDisposable
     {
         private readonly string directory = Path.Combine(Path.GetTempPath(), $"elsa-3579-broker-{Guid.NewGuid():n}");
@@ -301,6 +333,10 @@ public sealed class ExternalAuthenticationFlowTests
                     Secrets = new Dictionary<string, SecretReference> { ["clientSecret"] = new("client", SecretTypeNames.Text, "identity/external") }
                 });
             });
+            // This broker fixture supplies a controlled current administrator authority; HTTP tests
+            // qualify the real persisted identity adapter and permission changes under issued cookies.
+            services.Replace(ServiceDescriptor.Scoped<ICurrentSubjectPermissionAuthorizer, BrokerAdministratorAuthority>());
+            services.Replace(ServiceDescriptor.Scoped<ICanonicalUserSignInService, BrokerAdministratorAuthority>());
             services.AddNormalizedAuthenticationType("flow-tests");
             var node = services.BuildServiceProvider();
             await using var scope = Scope(node);
