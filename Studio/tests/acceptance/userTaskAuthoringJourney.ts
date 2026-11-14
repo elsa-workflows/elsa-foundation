@@ -71,8 +71,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "form-authoring");
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
-  // #4068: publication is confirmed on the page, so no toast covers the heading on a narrow screen.
-  await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1.` })).toBeVisible();
+  // Publication is transient; the published immutable form remains inspectable after confirmation.
+  await expect(page.locator(".studio-toast").filter({ hasText: "Form version published." })).toBeVisible();
+  await expect(page.locator(".studio-alert[data-tone=success]")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Form published", exact: true })).toHaveCount(0);
   const formRow = page.getByRole("row").filter({ hasText: formId });
   const formLink = formRow.getByRole("button", { name: title, exact: true });
@@ -155,7 +156,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
   await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
-  const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header label", { hasText: /^Value$/ }) });
+  const valueRow = page.locator(".wf-property-row").filter({ has: page.locator(".studio-field-label, .wf-property-row-header > span", { hasText: /^Value$/ }) });
   await valueRow.locator("button.wf-syntax-picker-trigger").click(); await page.getByRole("option", { name: /^Variable/ }).click();
   await selectVariable(page.getByRole("combobox", { name: "Variable reference", exact: true }));
   await captureInspector("output-picker", page.getByRole("combobox", { name: "Output Name", exact: true }));
@@ -196,6 +197,11 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
   await expect(runtimeTask.locator('.source[data-handleid="Reject"]')).toBeVisible();
   await page.setViewportSize(projectViewport);
+  const runTitle = page.getByRole("heading", { name: `Run · ${title}`, exact: true });
+  await expect(runTitle).toBeVisible();
+  await expect(runTitle).toHaveAccessibleName(`Run · ${title}`);
+  await expect(runTitle).toHaveAttribute("title", `Run · ${title}`);
+  expect((await runTitle.boundingBox())!.height).toBeLessThanOrEqual(36);
   const runCanvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
   const outcomeLabels = runtimeTask.locator(".wf-node-port-label").filter({ hasText: /^(Approve|Reject|Unmatched)$/ });
   const renderedOutcomeFont = () => outcomeLabels.first().evaluate(element => {
@@ -213,7 +219,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
       const box = await outcomeLabels.filter({ hasText: new RegExp(`^${label}$`) }).boundingBox();
       const pane = await runCanvas.locator(".react-flow__pane").boundingBox();
       // The zoom controls and MiniMap float over the pane, so a label under one of them is not readable.
-      const panels = await Promise.all((await runCanvas.locator(".react-flow__panel:visible").all()).map(panel => panel.boundingBox()));
+      const panels = await Promise.all((await runCanvas.locator(".react-flow__controls:visible, .react-flow__minimap:visible").all()).map(panel => panel.boundingBox()));
       const underPanel = panels.some(panel => box && panel && box.x < panel.x + panel.width && box.x + box.width > panel.x
         && box.y < panel.y + panel.height && box.y + box.height > panel.y);
       return Boolean(box && pane && !underPanel && box.x >= pane.x && box.x + box.width <= pane.x + pane.width

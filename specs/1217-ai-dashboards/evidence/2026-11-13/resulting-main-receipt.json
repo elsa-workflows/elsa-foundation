@@ -1,0 +1,210 @@
+{
+  "sourceSha": "3a90b64b9664146f51b082749914d47c488ecc53",
+  "sourceDirty": false,
+  "mode": "live",
+  "status": "passed",
+  "stage": "complete",
+  "liveQualified": true,
+  "keyboardQualified": true,
+  "requestedModel": "gpt-5.6-sol",
+  "executed": 3,
+  "restartExecuted": 1,
+  "hostLifetimes": [
+    {
+      "phase": "authoring",
+      "backendPid": 64500,
+      "studioPid": 64671,
+      "backendExit": 0,
+      "studioExit": 0
+    },
+    {
+      "phase": "provider-disabled-restart",
+      "backendPid": 69792,
+      "studioPid": 69871,
+      "backendExit": 0,
+      "studioExit": 0,
+      "sameOwnedStores": true
+    }
+  ],
+  "startedAt": "2026-11-13T20:45:15Z",
+  "finishedAt": "2026-11-13T20:49:22Z",
+  "sourceTreeEquivalence": {
+    "reviewedCodeHead": "f10bd431ca8884a1c036455a1988c991c2150dde",
+    "entireTreeDiff": "empty",
+    "independentlyVerified": true
+  },
+  "localGates": {
+    "architecture": {
+      "passed": 622,
+      "failed": 0,
+      "skipped": 0
+    },
+    "generatedMaps": "passed",
+    "classifiedTestProjects": 150,
+    "liveRunnerControls": 27,
+    "acceptanceRunnerControls": 23,
+    "safeExporterControls": 21,
+    "scope": "Guard tree at f10bd431ca is identical to this resulting-main source; real composed qualification runs at the named main commit."
+  },
+  "independentReviews": {
+    "correctness": "passed",
+    "standards": "passed source/equivalence/privacy",
+    "acceptance": "passed; current main representative originals, ARIA, actual facts, keyboard and real restart inspected"
+  },
+  "sdk": {
+    "workflow": [
+      0,
+      2,
+      3,
+      3
+    ],
+    "acme": [
+      3,
+      5,
+      6,
+      6
+    ],
+    "nativePhases": 23,
+    "nativeAdditionalSends": 0,
+    "privacyFailures": 0,
+    "physicalModelHttpRequests": "not exposed by SDK seam; forwarded SendAsync calls counted"
+  },
+  "nativeAccessHomeProof": {
+    "authorizedEditorSaved": true,
+    "editorCopied": true,
+    "shareUiAbsent": true,
+    "shareApiStatus": 403,
+    "originalDeleteStatus": 403,
+    "privateCopyDeletedByOwner": true,
+    "missingContributionNotRendered": true,
+    "knownHomeWidgetsPreserved": true,
+    "missingContributionRetainedAfterUiSaveAndReload": true,
+    "sdkBefore": 6,
+    "sdkAfter": 6
+  },
+  "keyboardEvidence": [
+    {
+      "case": "liveDashboards-live-author-38cb5-tart-with-provider-disabled-live-desktop",
+      "name": "keyboard-proof.json",
+      "tabs": 77,
+      "focusedTargets": 4,
+      "keys": {
+        "Tab": 77,
+        "Enter": 4,
+        "Escape": 2
+      },
+      "pointerEvents": [],
+      "scope": "Application controls after ordinary identity setup; browser navigation/reload and normal API fixtures are setup or persistence observations",
+      "directFocusCalls": 0
+    },
+    {
+      "case": "liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop",
+      "name": "keyboard-proof.json",
+      "tabs": 424,
+      "focusedTargets": 20,
+      "keys": {
+        "Tab": 424,
+        "Enter": 16,
+        "ControlOrMeta+A": 4,
+        "text input": 4
+      },
+      "pointerEvents": [],
+      "scope": "Application controls after ordinary identity setup; browser navigation/reload and normal API fixtures are setup or persistence observations",
+      "directFocusCalls": 0
+    },
+    {
+      "case": "liveDashboards-live-Acme-b-ed53a-finement-and-viewer-results-live-desktop",
+      "name": "reader-keyboard-proof.json",
+      "tabs": 20,
+      "focusedTargets": 6,
+      "keys": {
+        "Tab": 20,
+        "Enter": 6,
+        "Escape": 2
+      },
+      "pointerEvents": [],
+      "scope": "Application controls after ordinary identity setup; browser navigation/reload and normal API fixtures are setup or persistence observations",
+      "directFocusCalls": 0
+    },
+    {
+      "case": "liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop",
+      "name": "keyboard-proof.json",
+      "tabs": 675,
+      "focusedTargets": 40,
+      "keys": {
+        "Tab": 675,
+        "Enter": 32,
+        "ControlOrMeta+A": 8,
+        "text input": 8,
+        "Escape": 1,
+        "option type-ahead": 1
+      },
+      "pointerEvents": [],
+      "scope": "Application controls after ordinary identity setup; browser navigation/reload and normal API fixtures are setup or persistence observations",
+      "directFocusCalls": 0
+    },
+    {
+      "case": "liveDashboards-live-Workfl-eda65-finement-and-native-refresh-live-desktop",
+      "name": "reader-keyboard-proof.json",
+      "tabs": 10,
+      "focusedTargets": 1,
+      "keys": {
+        "Tab": 10,
+        "Enter": 1,
+        "Escape": 1
+      },
+      "pointerEvents": [],
+      "scope": "Application controls after ordinary identity setup; browser navigation/reload and normal API fixtures are setup or persistence observations",
+      "directFocusCalls": 0
+    },
+    {
+      "case": "liveDashboards-native-Dash-e8ef6-e-contribution-preservation-live-desktop",
+      "name": "editor-keyboard-proof.json",
+      "tabs": 76,
+      "focusedTargets": 6,
+      "keys": {
+        "Tab": 76,
+        "ControlOrMeta+A": 2,
+        "text input": 2,
+        "Enter": 4
+      },
+      "pointerEvents": [],
+      "scope": "Application controls after ordinary identity setup; browser navigation/reload and normal API fixtures are setup or persistence observations",
+      "directFocusCalls": 0
+    },
+    {
+      "case": "liveDashboards-native-Dash-e8ef6-e-contribution-preservation-live-desktop",
+      "name": "keyboard-proof.json",
+      "tabs": 16,
+      "focusedTargets": 2,
+      "keys": {
+        "Tab": 16,
+        "Enter": 2
+      },
+      "pointerEvents": [],
+      "scope": "Application controls after ordinary identity setup; browser navigation/reload and normal API fixtures are setup or persistence observations",
+      "directFocusCalls": 0
+    }
+  ],
+  "independentlyRecomputedMath": {
+    "workflowInitial": [
+      62.5,
+      50,
+      12.5
+    ],
+    "workflowRefined": [
+      75,
+      25,
+      50
+    ],
+    "workflowFreshFault": [
+      80,
+      25,
+      55
+    ],
+    "acmeRetailOwnerMs": 120000,
+    "acmeRetailReaderMs": 60000,
+    "acmeEnterpriseMs": 300000
+  },
+  "ciState": "Inspected separately. Absent/queued/cancelled Actions are not passed checks; owner explicitly authorized delayed-CI personal admin merges with exact-head match. Normal security checks pass; no failed check was waived."
+}

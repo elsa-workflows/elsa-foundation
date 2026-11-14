@@ -23,6 +23,7 @@ describe("secrets module", () => {
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({
         id: "elsa.secret-reference-editor",
+        presentsField: true,
         surfaces: expect.objectContaining({ inline: expect.any(Function) }),
         createDefaultValue: expect.any(Function)
       })

@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Activities.Primitives.Releases.ActivitiesPrimitivesReleaseVerificationFeature
+Elsa.Activities.Primitives.Releases.ActivitiesPrimitivesReleaseVerificationFeature.ActivitiesPrimitivesReleaseVerificationFeature() -> void
+virtual Elsa.Activities.Primitives.Releases.ActivitiesPrimitivesReleaseVerificationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -505,8 +505,19 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.core": {
+        "type": "Project"
+      },
+      "elsa.workflows.publishing.releases.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {

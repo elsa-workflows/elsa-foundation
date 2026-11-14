@@ -29,13 +29,14 @@ export function register(api: ElsaStudioModuleApi) {
         id: "connections", requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
         path: "/security/connections",
         label: "Connections",
-        component: () => <ConnectionsPage context={api.backend} dialogs={api.dialogs} />
+        component: () => <ConnectionsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} />
       }
     ]
   });
 
   api.expressionEditors.add({
     id: "elsa.connection-reference-editor", requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
+    presentsField: true,
     order: 100,
     supports: context => context.syntax === "Connection" || context.descriptor.uiHint === "connection-picker",
     surfaces: {

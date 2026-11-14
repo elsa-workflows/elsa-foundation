@@ -744,6 +744,7 @@
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Capture.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
@@ -780,6 +781,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
@@ -796,6 +798,23 @@
           "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.capture.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.core": {
+        "type": "Project"
+      },
+      "elsa.workflows.publishing.releases.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {
@@ -820,6 +839,7 @@
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Inspection.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
@@ -830,6 +850,13 @@
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.inspection.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.persistence.entityframeworkcore": {

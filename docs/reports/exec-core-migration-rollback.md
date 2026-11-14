@@ -251,3 +251,7 @@ BPMN's fenced re-read (`EfWorkflowExecutableSourceReferenceStore.RootWrites.cs:5
 ## Out of scope (honoured)
 
 No production change. [#4038](https://github.com/elsa-workflows/elsa-foundation/issues/4038), ETL [#3804](https://github.com/elsa-workflows/elsa-foundation/issues/3804)/[#3789](https://github.com/elsa-workflows/elsa-foundation/issues/3789), [#3650](https://github.com/elsa-workflows/elsa-foundation/issues/3650), [#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204), [#3951](https://github.com/elsa-workflows/elsa-foundation/pull/3951) untouched. No issue closed. No ApiCompat infrastructure added. `origin/main` at investigation included a later unrelated commit `ecf080a7a` (#4080); this statement is pinned to the green SHA above, not that commit. The D1 live-race tests in §7 are additive on later main.
+
+## Runnable example / supported profile / G-e
+
+This statement's §6 list **is** the supported-profile remainder for the SQLite native/BPMN milestone (together with [unified-execution.md](../program-goals/unified-execution.md) and [G2 Limit](exec-core-g2-child-outcome-mapping.md#limit-every-hosted-cell)). The runnable example is the hosted Facts under `Essentials/tests/Activities/Bpmn/Hosting/Tests/` (not a separate sample app). The recorded #3993 post-restart timeout is disposed in [G3 G-e](exec-core-g3-overhead-counts.md#g-e--recorded-3993-post-restart-timeout-causal): claim-fence wait on `#3992`, not a G2.2 held-retry path.

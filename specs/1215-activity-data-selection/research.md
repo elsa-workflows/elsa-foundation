@@ -518,8 +518,8 @@ runtime cannot be retrofitted; it refuses by failing to read.
 | Kind | Differs from the result case | Shape facts |
 |---|---|---|
 | `VariableMember` | Requires an explicit `declaringScopeId`; legacy `Variable` defaults to the workflow scope (`RuntimeInputBindingCompiler.cs:619-632`, `ParseVariableReference`). Current items are the owning structure's scoped variables. Placement remaps the scope as for `VariableRead` (`PlacedReferenceRemapper.cs:83-99`, `RemapScope`). Delivered in slice D1. | Always `DeferredFit`: a declared type yields `serialization-profile-unbound` (`ClrActivitySerializedShapeSource.cs:151-165`); variables can hold JSON from other writers. |
-| `WorkflowRequestMember` | Payload `memberKey` only; legacy dotted `Path` must be null. An open request (no declared inputs) is always deferred (`ActivityDataSelectionAnalyzer.cs:237-240`). | Always `DeferredFit`. A CLR value supplied at start is serialized with default JSON options (PascalCase) by `WorkflowExecutionStartCommandPayload.ToJsonValues` (`Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs:710-713`). That one function seeds both request inputs (`WR/Services/Executions/WorkflowStartDispatcher.cs:467`) and start-time variables (`:503`), so a CLR-seeded request **or variable** may carry `CustomerId` where an author types `customerId`: exact segments then read `Absent`. Rule chosen (slice D): exact stored names; normalising CLR seeding is a separate follow-up. |
-| `InputMember` | Authored only. Placement must lower it to `WorkflowRequestMember` with all segments; `Input` reads are lowered by `InputReadLowering` (`WP/InputReadLowering.cs`), keyed by reference key in a placed body (`ActivityTemplatePlacer.ToGraphInputRead`) and by the declared input's name at workflow level (`ExecutableNodeCompiler`, #4087, §11 item 4); D2 extends it to carry `memberPath`. | Always `DeferredFit`. |
+| `WorkflowRequestMember` | Payload `memberKey` only; legacy dotted `Path` must be null. Owner14Nov correction: the request root must name a declared workflow input; an empty declaration list is a closed v1 contract, so undeclared roots are refused before publication. | Always `DeferredFit`. A CLR value supplied at start is serialized with default JSON options (PascalCase) by `WorkflowExecutionStartCommandPayload.ToJsonValues` (`Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs:710-713`). That one function seeds both request inputs (`WR/Services/Executions/WorkflowStartDispatcher.cs:467`) and start-time variables (`:503`), so a CLR-seeded request **or variable** may carry `CustomerId` where an author types `customerId`: exact segments then read `Absent`. Rule chosen (slice D): exact stored names; normalising CLR seeding is a separate follow-up. |
+| `InputMember` | Authored only. Placement must lower it to `WorkflowRequestMember` with all segments; `Input` reads are lowered by `InputReadLowering` (`WP/InputReadLowering.cs`), keyed by reference key in a placed body (`ActivityTemplatePlacer.ToGraphInputRead`) and by the declared input's name at workflow level (`ExecutableNodeCompiler`, #4087, §11 item 4); slice D2 extends it so `InputMember` lowers to `WorkflowRequestMember` with `memberPath` unchanged, in both places. Delivered in slice D2. | Always `DeferredFit`. |
 
 None of the three can be `Known` today, so all depend on the runtime fit helper, and the issue's acceptance names
 only activity results. They belong to this leaf (T012 lists all four) but in a later slice than
@@ -535,7 +535,7 @@ runtime can run: half-enabled and reachable.
 | A. Member-read model (T011; hashing part of T013; requirement derivation of T016; model and hash part of T017) | Enum members, `RuntimeReadSelection`, constructor overload and invariants, `Selection` serialization, hash arms with throwing default, fingerprint append, inspection view, derived requirement, PublicAPI. | Nothing compiles a member binding; the resolver throws for one; no capability is advertised, so preflight, import and placement report the requirement unmet. Locally there is no front-door guard until slice B: a hand-built member executable runs up to its reader, whose input read is refused before construction (run: `MemberReadRefusalTests`). | Invariant rows; round trip; corpus goldens unchanged; distinct hashes for distinct paths, modes, types and delimiter-bearing names; old-reader controls (§11); requirement derived for member, absent for whole. | Low–medium: public shape and hash rendering. Delivered (receipt in [tasks](tasks.md)). |
 | B. Runtime selection (T014, T015, capability and guards of T016, runtime part of T017) | Selector, materializer and intrinsic integration inline and external, fit before snapshot, reason codes (one dedicated exception type, `VF-SEL` code first), capability with composition check, front-door and drain guards, and the `RequiresActivityHistory` update so request and variable member reads stop fetching activity history (§7). | Still no publication path emits member bindings; only hand-built executables reach it, and those now run correctly. | Unit rows for every outcome in §7, exact and literal names; inline/external parity; intrinsic; constructor counter and no snapshot commit on failure; retry reuse; real engine harness in a Sequence and a top-level Flowchart; guards refuse start, resume and queued work without the capability. | High: materialization order, external values, protection. Delivered: capability by composed materializer rather than a composition check, guards at activity start and bookmark resume (§8); receipt in [tasks](tasks.md). |
 | C. Publish result member reads (T012, T013, T017 for `ActivityResultMember`) | Authored parse, analyzer offer and admission, compiler branch and old-kind refusal, pin pass, linker on the selected type, remapper arms, contract text (§5). | Enables the feature for API clients; the Studio member picker (T022) stays gated in its own leaf. | Offer-equals-admission rows; refusal before any write through the real publish handler; template placement; real host publish → run in a Sequence and a top-level Flowchart, inline and external (acceptance 1). | Medium–high. Delivered behind the `MemberReads` setting, off by default (§3 "As delivered in slice C"); receipt in [tasks](tasks.md). |
-| D. Other families (T012, T013 for the rest) | `VariableMember`, `WorkflowRequestMember`, `InputMember` and its placement lowering. | Each kind refused until its row lands. | Deferred-fit rows; placement lowering keeps segments; reopen and publish. | Medium. Split: D1 `VariableMember` (delivered, receipt in [tasks](tasks.md)); the #4087 fix; D2 `WorkflowRequestMember`, `InputMember`, the code-first rename (decision 12). |
+| D. Other families (T012, T013 for the rest) | `VariableMember`, `WorkflowRequestMember`, `InputMember` and its placement lowering. | Each kind refused until its row lands. | Deferred-fit rows; placement lowering keeps segments; reopen and publish. | Medium. Split: D1 `VariableMember` (delivered, receipt in [tasks](tasks.md)); the #4087 fix (delivered); D2 `WorkflowRequestMember`, `InputMember`, the code-first rename (decision 12), delivered. |
 
 ### 11. Open decisions and what reading could not establish
 
@@ -552,7 +552,7 @@ runtime can run: half-enabled and reachable.
 | 9 | Fit for `Known` reads | Always run the fit check before the snapshot. | A second deserialization per member read; whole-value reads do not pay it. |
 | 10 | Capability and replaced materializer | Decided in slice B: advertise only while the built-in materializer is composed, so a replaced one advertises nothing and member executables are refused before they run (§8). Was: fail composition. | A custom materializer that delegates correctly to the built-in one cannot advertise; an explicit opt-in can come later. |
 | 11 | Path size bound | 64 segments (existing query bound) and 4 096 UTF-16 code units in total. | Arbitrary; a long dictionary key could exceed it where JSON itself would not. |
-| 12 | Name clash | Was: keep the code-first builder's `WorkflowRequestMember<T>` (`WorkflowValue.cs:28`), which writes the legacy dotted `WorkflowRequest` path (`WorkflowBuilder.cs:117-123`), and document it. Reversed, pending slice D2: rename the code-first type (two source files; Design Core has no PublicAPI baseline). | Same name, different wire meaning, in the same product as the new discriminant (ADR 0080 D5 plain names). |
+| 12 | Name clash | Was: keep the code-first builder's `WorkflowRequestMember<T>` (`WorkflowValue.cs:28`), which writes the legacy dotted `WorkflowRequest` path (`WorkflowBuilder.cs:117-123`), and document it. Reversed and done in slice D2: the code-first type is now `WorkflowRequestRead<T>` (`WorkflowValue.cs:28`; Design Core has no PublicAPI baseline). | Same name, different wire meaning, in the same product as the new discriminant (ADR 0080 D5 plain names). |
 
 **Where the spec disagrees with the code or with #4053/#4059.** Binding contract §1 and the data model keep an
 optional legacy scope on `ActivityResultMember` (decision 2). Binding contract §6 says an old compiler can publish an
@@ -607,6 +607,219 @@ named pass on main and pin current behaviour. Rows that slices A–C deliberatel
 None of this changes a decision or a slice boundary. It adds two obligations: slice B throws one dedicated exception
 type with the `VF-SEL` code first (§7), and slice C states the shared-store upgrade rule (§3).
 
+## Studio member picker (#4309) design note
+
+Scope: T018–T025 for member reads, on top of the #3094 whole-output chooser. Design only. Every claim below was read
+from main at `e5399c29f5`. Paths are shortened: `SC` = `Studio/src/essentials/Elsa.Studio.Workflows/Client/src`,
+`WDV` = `Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations`.
+
+### 1. How Studio learns that member reads are on
+
+**Today nothing tells it.** The one data-selection capability, `elsa.api.activity-data-selection` v1, carries only
+the two context links (`Essentials/src/Workflows/Design/Api/Capabilities/WorkflowActivityDataCapabilitySource.cs:11`,
+`Essentials/src/Activities/Design/Api/Capabilities/ActivityDataSelectionApiCapabilitySource.cs:12-13`). The
+`MemberReads` setting is read only by the analyzer (`WDV/Services/ActivityDataSelectionAnalyzer.cs:116,234`) and
+bound by the feature (`WDV/WorkflowDesignValidationsFeature.cs:53,60`). The runtime requirement
+`elsa.runtime.input-member-selection@1` is checked only by publish preflight, import and placement (§8) and is never
+shown to Studio.
+
+The capability cannot be reused with a dormant flag. A single dormant contribution makes the whole capability dormant
+(`Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Services/ApiCapabilityCatalog.cs:91-110`), which would also
+switch off whole-output Choose data.
+
+**Studio cannot safely work it out by probing.** When the setting is off, a focused query that has a member path does
+not become a member read (`ActivityDataSelectionAnalyzer.cs:116`). The source then resolves as the *whole* read, while
+its shape is described *at the member path* (`:174`, `Shape` at `:441-462`). The answer looks like a member offer but
+carries a whole-value binding. A client that stores the server's binding unchanged would silently store the wrong
+read.
+
+**The smallest server addition** (owner decision A):
+
+- *A1 (recommended).* Add a fact `MemberReads` (bool, init) to `ActivityDataSelectionAnalysis`
+  (`Essentials/src/Workflows/Design/Validations/Core/Models/ActivityDataSelectionModels.cs:80-92`). The analyzer sets
+  it from its own options. It reaches both context endpoints with no new wiring, because both return the whole
+  analysis (`Essentials/src/Workflows/Design/Api/Models/ActivityDataContextViews.cs:20-30`;
+  `Essentials/src/Activities/Design/Api/Services/ActivityDataSelectionContextService.cs:137-139`). The answer comes
+  from the component that admits the read, per document, and an older server that omits the field reads as false.
+  Studio already queries before it shows anything, so it needs no extra round trip.
+- *A2.* Add a link-free capability `elsa.api.activity-data-member-reads` v1, declared only while the setting is on, and
+  read with the existing `hasApiCapability` (`SC/api/capabilities.ts:93-96`). This matches the "existing capability
+  discovery" wording of T018. Its cost is placement: the setting lives in `WDV`, which references neither
+  `Elsa.Api.Capabilities` nor the Design API (`WDV/Elsa.Workflows.Design.Validations.csproj:10-13`), and the Design API
+  references only `Validations.Core` (`Essentials/src/Workflows/Design/Api/*.csproj:24`). One project would need a new
+  reference, or a fact interface would have to move into `Validations.Core`.
+
+Under either option the slice also fixes the off-state trap. With the setting off, a non-empty member path on a focused
+query adds `ActivityData/UnsupportedMemberBinding` and returns no source, the same refusal a stored member binding gets
+(`:234-237`). Studio also checks the kind defensively: it stores a member offer only when the returned binding's
+`expressionType` is the member kind it asked for.
+
+Whether a runtime can run the read stays out of Studio. The setting's own text says to turn it on only when every
+runtime can run member reads (`WDV/WorkflowDesignValidationsFeature.cs:52`), and publish preflight refuses an artifact
+whose requirement is unmet (§8). Studio shows that refusal as an ordinary publish blocker.
+
+### 2. What the context endpoint returns for member facts
+
+- **Discovery** (no source, empty path) lists declared inputs, visible variables and result projections
+  (`ActivityDataSelectionAnalyzer.cs:127-159`). Each source carries `id`, `displayName`, `scopeId`, `binding` (null
+  plus `reasonCode` when it cannot be chosen), `availability`, `shape` and `activityResultSource`
+  (`ActivityDataSelectionModels.cs:66-77`).
+- **The shape** is `ActivitySerializedShape`: `State` Known/Unknown/Truncated/Unavailable, `Kind`
+  Scalar/Object/Map/Collection, `Type`, nullability, presence, representation, sensitivity, `Members` (literal
+  case-sensitive `SerializedName`), `Element`, `MapValue` and `ReasonCode`
+  (`Essentials/src/Activities/Design/Core/Models/ActivitySerializedShape.cs:7-74`). `ShapeLimits` bound the whole tree
+  with one global member budget, and a literal path is never split or truncated (`:76-81`). The analyzer spends that
+  budget across the page (`ActivityDataSelectionAnalyzer.cs:170-176`).
+- **Known versus deferred:** only result members can be Known. A declared type, which covers variables, inputs and
+  request members, gives `activity.shape.serialization-profile-unbound`
+  (`Essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrActivitySerializedShapeSource.cs:151-165`, §9). Owner14Nov correction: undeclared workflow request roots are refused (`ActivityData/UnknownInput`); declared request/input and variable members remain deferred and offer literal segments.
+- **A focused member query** (`source` plus `memberPath`) returns one source whose `binding` is the member read and
+  whose `shape` is the member's (`:103-126,174`).
+- **Type fit is not reported at design time.** Neither discovery nor focused analysis compares a source or member type
+  with the target type. Discovery reason codes are availability and contract codes only
+  (`SC/activityDataSelection.ts:233-278`). A known mismatch shows up first when the conversion plan is resolved at
+  publication (`Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/ActivityResultConversionPlanLinker.cs:115-126`).
+  The only member-specific design finding is `SelectedMemberContractUnknown`, for an explicit conversion on an untyped
+  member (`ActivityDataSelectionAnalyzer.cs:66-71`). See owner decision C.
+- **Refusals lose their reason on the workflow endpoint.** It returns `invalid` / `invalid-source-or-target` with no
+  analysis whenever there are findings (`Essentials/src/Workflows/Design/Api/Services/ActivityDataContextService.cs:74-75`).
+  The activity-definition endpoint returns `invalid` with the findings (`ActivityDataSelectionContextService.cs:137-139`).
+  A refused focused query (bad path, unsupported kind, restricted role) therefore has no explanation in a workflow
+  editor. Proposal: the workflow endpoint also returns the analysis on `invalid`. This is additive in v1, and the
+  client still discloses nothing for any state it does not read.
+- **#4072 / PR #4213** makes an omitted `memberPath` mean the whole value, through a JSON constructor and an
+  `init` normalizer on `ActivityDataSelectionQuery`, and changes only that model and two endpoint test files. Studio
+  is not blocked: it always sends `memberPath` explicitly (`SC/api/activityDataSelection.ts:80-91`), and the picker
+  will keep doing so. To avoid duplicating that work, no slice here touches `ActivityDataSelectionQuery` or the
+  endpoints' `Valid` checks (`ActivityDataContextService.cs:156-163`; `ActivityDataSelectionContextService.cs:175`).
+  Slice S0 edits `ActivityDataContextEndpointTests.cs` too, so it starts after #4213 merges.
+
+**The Studio client keeps very little of this today.** `readSource` keeps only `shape.type` alias and collection kind,
+the binding and the producer identity. It drops `scopeId`, shape state, kind, members, element, map value, presence,
+nullability, representation and reason code (`SC/api/activityDataSelection.ts:206-215`, type at `:33-46`).
+`readTarget` drops the target type (`:191-204`). Findings are never read (`:179`). Every request uses the
+whole-value query with zero depth and zero members (`:85-91,138,157`).
+
+### 3. The wire
+
+`activityInputWire.ts` already keeps any structured value under a syntax other than Literal/Object/Secret as an
+object (`SC/activityInputWire.ts:332-343`). Reopen keeps `expressionType` and value (`expandActivityNode`,
+`:276-305`). So all four member kinds (`ActivityResultMember`, `VariableMember`, `WorkflowRequestMember`,
+`InputMember`) and unknown future kinds survive save, Code Apply and reopen as authored. No wire code change is
+needed.
+
+What T019 still needs is tests:
+
+- The existing unknown-kind row authors an `ActivityResultMember` with `producerScopeId: "main"`
+  (`SC/__tests__/activityInputWire.test.ts:169`), which the server now refuses (scope-free rule, §5). Replace it with
+  canonical rows for each member kind in the analyzer's exact payloads (`ActivityDataSelectionAnalyzer.cs:266,287,354,428`).
+  Include dot-bearing and empty segments.
+- Run each row through the full save → Code Apply → reopen chain, as the whole-output row does (`:152-164`), not only
+  resave (`:181`).
+- Keep a `FutureSource` row so an unknown kind stays untouched.
+
+### 4. Picker UX on existing controls
+
+**Where it lives.** The picker stays in the existing chooser: `ActivityDataBrowser` in an `AnchoredPopover` with
+`SkeletonRows` (`SC/ActivityDataChooser.tsx:15,124`), opened from Choose data (`:406`) or the syntax-picker entry
+(`SC/ActivityPropertiesPanel.tsx:608-619,948-951`). It is offered only where `offersActivityData` allows
+(`SC/activityDataSelection.ts:93-100`) and the server returns `memberReadsEnabled: true`. Without that it behaves exactly as
+today.
+
+**Source families.** Today `groupActivityOutputSources` keeps only result sources and says inputs and variables keep
+their own editors (`SC/activityDataSelection.ts:184-209`). The picker adds three groups, with results first in the
+server's order:
+
+- **Workflow inputs.** At workflow level the server offers them as `WorkflowRequest` reads keyed by name; in a body
+  they are `Input` reads (`ActivityDataSelectionAnalyzer.cs:261-268`).
+- **Request members** of declared workflow inputs, keyed by their names; no undeclared-name proposal.
+- **Variables**, nearest scope first. All visible scopes are listed, so a shadowed outer variable is present with its
+  own `scopeId` and id `variable:{scope}:{key}` (`Essentials/src/Workflows/Design/Core/Services/ScopedVariableResolver.cs:86-108,157-161`;
+  `ActivityDataSelectionAnalyzer.cs:289`). A name that appears in more than one scope shows the scope as
+  disambiguation and marks the outer one as shadowed. The read stays explicit (`declaringScopeId`), so choosing the
+  outer one is legitimate.
+
+Owner-exposed current items (ForEach) arrive as scoped variables and need no group of their own.
+
+**Nested browsing.** Expanding a source sends a focused query with the source's whole binding as `source`, the path
+so far, and small limits (for example depth 1, about 32 members). The member list comes from `shape.members` and
+always uses `serializedName`, the exact stored name. `Collection` and `Map` show `element` / `mapValue` as one
+literal step only where the server reports a shape; element indexing is not part of the path contract. Choosing a
+node stores the focused answer's `binding` unchanged, in one edit, through the existing `chooseData`
+(`SC/ActivityPropertiesPanel.tsx:990-1000`). That function needs one fix: it now returns without storing when the
+catalog has no descriptor for the binding's kind (`:992-996`). Member kinds get their own reference descriptors, as
+`activityResultExpressionDescriptor` does (`SC/activityDataSelection.ts:22-36`).
+
+**Literal segments.** When the shape is Unknown, Truncated or Unavailable, or the family is deferred (variables,
+inputs, requests), the picker offers a "Member name" text field. It adds one exact segment at a time, case-sensitive,
+with dots kept literally. The client checks the server's bounds (1–64 segments, 4096 characters) before querying.
+The help text says names are exact. For request and variable values seeded from .NET code the stored names are
+PascalCase (`CustomerId`), and a different case reads as absent (§9, #4178).
+
+**Provenance and reopen.** A member reference shows the source label, then the segments, then the type when it is
+Known, for example "Get customer › billing › city · String". A member reference editor contribution modelled on
+`activityResultReferenceContribution.tsx` renders it. Replace and Clear keep the existing focus rules
+(`SC/ActivityDataChooser.tsx:451-467`).
+
+**Reasons.** The picker shows:
+
+- The source `reasonCode` through the existing `describeUnavailableSource`.
+- Shape `State` and `ReasonCode` for "shape not known, type the member name".
+- Deferred fit ("checked when the workflow runs") for every non-result family.
+- The focused query's findings (UnsupportedMemberBinding, InvalidMemberPath, SourceRestricted, scope or availability
+  codes) once S0 returns them.
+
+A known type incompatibility is shown only if owner decision C adds a server fact. Until then the picker shows the
+member type and the target type next to each other, and publish reports the mismatch.
+
+### 5. Slice plan
+
+Each slice is about 500 lines or less, has its own tests and is merged on its own. Member authoring stays hidden until
+`memberReadsEnabled` is true, so a partial merge is inert.
+
+| Slice | Content | Proof |
+|---|---|---|
+| **S0 server (first)** | The `MemberReads` fact (A1 or A2). The off-state refusal of a focused member path. The workflow endpoint returns the analysis on `invalid`. Starts after #4213 merges. | Analyzer rows (off/on, each family, refused focused path); endpoint tests for both endpoints; contract docs. |
+| **S1 client and wire (T018, T019)** | `readSource` / `readTarget` keep the full shape tree, `scopeId`, target type and findings. Add `requestFocusedSource(source, memberPath, limits)` for both endpoints and read `memberReadsEnabled`. Canonical member wire rows. No UI. | `api/__tests__` reader rows (truncated and unknown trees, defensive drops); wire save → Code Apply → reopen rows for four kinds plus a future kind. |
+| **S2 picker model (T022 model)** | Pure functions: family grouping with shadowing, path model (exact segments, bounds, literal entry), descriptors and provenance text for member kinds, reason text. | Unit rows only. |
+| **S3 picker UI (T020–T022, T023)** | Nested browsing in `ActivityDataBrowser`; focused requests with cancel, stale and revoked handling; the defensive kind check; the `chooseData` descriptor fix; the member reference editor; workflow editor only. | Behaviour tests beside `activityInputOptionsUi.test.tsx` and `workflowInputPersistence.test.ts`: one-edit history, literal escaping, loading/empty/error/Retry, keyboard, no hidden save, protected values kept. |
+| **S4 backend e2e (T024)** | A restart-style script in `e2e-tests/` on the owned-server lifecycle (`e2e-tests/README.md:72-112`), with `MemberReads` on. For each family: catalog → save → publish → execute; Known versus deferred; a type-fit refusal with no write; consumer input and producer completion evidence. Needs only S0 and can run beside S2–S3. | The script and its run receipt. |
+| **S5 acceptance (T025)** | Extend `Studio/tests/acceptance/chooseDataJourney.ts` / `journeys.spec.ts` and the `tools/ux-acceptance/run.py` inventory (`:31`) with nested choice, a literal segment, a shadowed variable, reopen, publish and run. Add a minimal-host run and 320px captures. Evidence goes in `quickstart.md`. | The owned-host journeys in the four profiles plus minimal; independent capture review. |
+
+Order: S0 → S1 → S2 → S3 → S5, with S4 after S0 and alongside S2–S3. S0 goes first because the advertisement form
+decides S1's reader and the Studio gate, and it is the only server change.
+
+### 6. Risks and owner decisions
+
+Decided (13 Nov):
+
+- **A. Advertisement form: A1.** An init bool on `ActivityDataSelectionAnalysis`, set by the analyzer from its
+  options. It is named `MemberReadsEnabled` (wire `memberReadsEnabled`), because the analysis already has a
+  `MemberReads` list of admitted reads.
+- **B. The workflow endpoint returns findings on `invalid`**, after the same rechecks as a supported answer, as the
+  activity-definition endpoint already does.
+- **C. Design-time type fit is deferred** to #4311. The picker shows both types and publication refuses a mismatch.
+- **D. Ship with the exact-name hint**; #4178 stays open.
+- **E. A per-run override turns `MemberReads` on** for the e2e and acceptance hosts; the Workbench default in
+  `Essentials/apps/Elsa.Workbench/shells.json:200` stays off.
+
+As delivered in S0, the off-state refusal is a finding with no source, the form every refused focused source
+already takes (the stored member read is refused the same way). A member path on a focused source that has no
+member read (a scoped result read, a legacy dotted request read) is `ActivityData/InvalidSource` in either setting,
+because the same trap applied there with member reads on.
+
+Risks:
+
+- Studio storing a whole binding from an off-state focused answer. S0 closes it on the server and S3's kind check
+  closes it on the client.
+- Several focused requests per expansion on large shapes. Mitigation: small limits, and abort a request when the next
+  expansion supersedes it.
+- `ActivityPropertiesPanel.tsx` is 2287 lines. S3 keeps its change to `chooseData` and a descriptor list, with the
+  rest in the chooser module.
+
+Out of scope: activity-definition draft editors (T041), Switch and intrinsic inputs (T042), BPMN (T043), optional
+reads of conditional producers (`isOptional`), and pinning member reads inside placed bodies.
+
 ## Evidence and source seams
 
 These are source observations, not new acceptance runs. Refresh exact source locations as main advances.
@@ -653,3 +866,19 @@ its actual governance before adoption.
 [Plan](plan.md) fixes package/port ownership, [binding contract](contracts/binding-contract.md) fixes
 behavior, and [quickstart](quickstart.md) fixes evidence. Independent M2 artifact review is complete;
 normal exact-head checks/review, merge and resulting-main qualification remain delivery gates.
+
+
+### Owner correction14Nov: explicit workflow request inputs
+
+The owner selected explicit inputs and removal of the undeclared-request option on
+[#4309](https://github.com/elsa-workflows/elsa-foundation/issues/4309#issuecomment-6871062664).
+S4 exploratory proof found the previous assumption wrong: newly compiled workflows always carry an
+explicit v1 input contract, including an empty list, and runtime rejects undeclared start-input names.
+Discovery, stored whole/member/legacy-path request admission, and publication must match those declarations.
+A workflow request uses the declared input's name; reusable bodies keep their existing declared boundary
+reference keys. Declared Object/JSON input members still accept exact dotted/empty literal segments and
+remain DeferredFit. No public input is inferred from bindings and runtime validation is not relaxed.
+Studio removes the undeclared-name form and host flag. Existing unsupported references retain their exact
+payload and report an actionable declare-input problem with explicit Replace/Clear. This changes new
+source admission, not stored legacy compiled artifacts. Earlier open-request proof is historical evidence,
+not acceptance of runtime support; fresh committed-head proof and independent UX review remain required.

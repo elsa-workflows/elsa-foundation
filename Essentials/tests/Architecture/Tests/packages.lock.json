@@ -86,13 +86,13 @@
       },
       "Nuplane.Loading": {
         "type": "Direct",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "yZIC1sixa81ndOM+UCeMoypdAGgv0WWNJ7iK7azuFdWwlyePN/MzdGPghWqHiTOecIkouQL39uqTycOtU+9C5g==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "bR3r96hHBBc4HN1MXw7GJOCu+XIaK+jKeiSJoA9enw4PGF/TA7LNNvbVEok2xcy9HUukKVbatpta86sw+TWBxg==",
         "dependencies": {
-          "Nuplane": "0.0.12",
-          "Nuplane.Abstractions": "0.0.12",
-          "Nuplane.Loading.Abstractions": "0.0.12"
+          "Nuplane": "0.0.13",
+          "Nuplane.Abstractions": "0.0.13",
+          "Nuplane.Loading.Abstractions": "0.0.13"
         }
       },
       "OpenIddict.EntityFrameworkCore": {
@@ -575,8 +575,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.12",
-        "contentHash": "8D2uJaKL1v+0GPt38HafW7+JVvvb8gyb8TNBFPcU6k45u+i5X61hWNWuUs0ROCgBAfDy0Gsr0tm8uq+hQH0t5A=="
+        "resolved": "0.0.13",
+        "contentHash": "3QaKweEyDncmytmpGKT9I0zYtpRg2ZSgzzU092yo/iVeon3d7q9LBW7J79yB7kDzQMxEriP8pl1VfrmkezQxTw=="
       },
       "OpenIddict": {
         "type": "Transitive",
@@ -881,6 +881,19 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "acme.processing": {
+        "type": "Project",
+        "dependencies": {
+          "Acme.Processing.Core": "[4.0.0-dev, )",
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )"
+        }
+      },
+      "acme.processing.core": {
+        "type": "Project"
+      },
       "elsa.activities.bpmn": {
         "type": "Project",
         "dependencies": {
@@ -1082,6 +1095,13 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.graph.releases": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.graph.runtime": {
         "type": "Project",
         "dependencies": {
@@ -1116,6 +1136,14 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.primitives.releases": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.activities.runtime": {
@@ -1399,7 +1427,7 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Nuplane.Loading.Abstractions": "[0.0.12, )"
+          "Nuplane.Loading.Abstractions": "[0.0.13, )"
         }
       },
       "elsa.connections": {
@@ -1848,7 +1876,7 @@
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Git": "[4.0.0-dev, )",
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
-          "Nuplane.Admin": "[0.0.12, )"
+          "Nuplane.Admin": "[0.0.13, )"
         }
       },
       "elsa.foundation.dataprotection.entityframeworkcore": {
@@ -2009,6 +2037,12 @@
           "Elsa.Secrets.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.integrations.sdk.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Integrations.Sdk": "[4.0.0-dev, )"
+        }
+      },
       "elsa.locking.core": {
         "type": "Project"
       },
@@ -2088,7 +2122,7 @@
           "CShells": "[0.0.31, )",
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Elsa.Specifications.PackageManifests": "[0.0.1-preview.8, )",
-          "Nuplane.Admin": "[0.0.12, )"
+          "Nuplane.Admin": "[0.0.13, )"
         }
       },
       "elsa.modularity.planning": {
@@ -2213,7 +2247,7 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Secrets.Core": "[4.0.0-dev, )",
-          "Nuplane": "[0.0.12, )"
+          "Nuplane": "[0.0.13, )"
         }
       },
       "elsa.secrets.persistence.entityframeworkcore": {
@@ -2258,6 +2292,43 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.studio.dashboard.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Management": "[4.0.0-dev, )",
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
+      "elsa.studio.dashboard.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.studio.dashboard.management": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.studio.dashboard.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
       "elsa.studio.preferences.api": {
@@ -2348,6 +2419,16 @@
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
         }
       },
+      "elsa.weaver.dashboard": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )",
+          "Elsa.Weaver": "[4.0.0-dev, )",
+          "Elsa.Weaver.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.weaver.githubcopilot": {
         "type": "Project",
         "dependencies": {
@@ -2414,6 +2495,16 @@
           "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.dashboard.queries": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Studio.Dashboard.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Inspection.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.design.api": {
@@ -2565,6 +2656,7 @@
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Capture.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
@@ -2601,6 +2693,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
@@ -2617,6 +2710,71 @@
           "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.publishing.releases": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.capture": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Capture.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Persistence.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.capture.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.core": {
+        "type": "Project"
+      },
+      "elsa.workflows.publishing.releases.persistence.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Data.Sqlite": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.runtime.source": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Capture.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {
@@ -2641,6 +2799,7 @@
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Inspection.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
@@ -2683,6 +2842,13 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.inspection.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
@@ -3079,6 +3245,17 @@
           "System.Security.Cryptography.Pkcs": "9.0.13"
         }
       },
+      "Microsoft.Data.Sqlite": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "58JwZ39lCvRXHfV5O6RQfbHEDu8ZsXI7weRoVRR4jrGRxxkS+qyeuGrN2xD+9VYEICApYr0iTSL6PuU+DdsvPg==",
+        "dependencies": {
+          "Microsoft.Data.Sqlite.Core": "10.0.10",
+          "SQLitePCLRaw.bundle_e_sqlite3": "2.1.11",
+          "SQLitePCLRaw.core": "2.1.11"
+        }
+      },
       "Microsoft.EntityFrameworkCore": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
@@ -3134,35 +3311,35 @@
       },
       "Nuplane": {
         "type": "CentralTransitive",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "NEwfkfvss8zB0yiNM9yITjdw0p7xACYe9LdAImAN5EJLqZ0oHgXj8GNzY1K+4HXZMwRi4LcgIidbDpvjYJExdg==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "G8tJJPIyNYTI+RUUtzN8zT3KAysJU3LAf61Og6W0xjTRt/2Til9cWDRRNCCKzq+/NF59h8zaOkVkyTfmPvuIqQ==",
         "dependencies": {
           "Microsoft.Extensions.Resilience": "10.1.0",
           "NuGet.Frameworks": "6.13.1",
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.12",
+          "Nuplane.Abstractions": "0.0.13",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Admin": {
         "type": "CentralTransitive",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "Bqgq7FqqvfQpGRX53ihyU5lQxnRm9uIGvFHG5y6AS8Kx0+stsSccqYEskHaaNTS+DBC3LvN1DlGtAfLtBWfsqQ==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "mP+/UQ9+/ycLZ4uWEteJWK5u/3Vf6gDaVZlYu1260C21wMe1Jx0toqxgCni73UZgijn33xqN+5qjJ7bPqMiY8w==",
         "dependencies": {
-          "Nuplane": "0.0.12"
+          "Nuplane": "0.0.13"
         }
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "uCLhTsG1kPWU5fNJBEstCJuT9D0p2r0oKaFGJpauvvrmtMBeIsvE7ATqdJZONpOLOANOJ14qqRIwDqmd+cSKog==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "HC2V7HnZXL6p2SHkn7ronHT8qZhgiW9HTkULJ+Y8TfCZjdev9aD43ST44Gws7Dh2/sG5SVCiilOJx+LtR6ZGRw==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.12"
+          "Nuplane.Abstractions": "0.0.13"
         }
       },
       "OpenAI": {

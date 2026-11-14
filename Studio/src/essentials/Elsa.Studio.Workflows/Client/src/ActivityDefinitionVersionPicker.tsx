@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -29,7 +30,7 @@ export function ActivityDefinitionVersionPicker({
     : null;
 
   return <section className="ad-version-picker" aria-label="Exact immutable source version">
-    <label className="ad-dialog-field"><span>Exact immutable version</span><select value={selectedVersionId} onChange={event => onChange(event.target.value)}><option value="" disabled>Select an exact visible version</option>{selectedOption}{visible.map(item => <option key={item.version.versionId} value={item.version.versionId}>v{item.version.version} · {item.version.lifecycle} · {item.providerKey}</option>)}</select></label>
+    <StudioField className="ad-dialog-field" label={<><span>Exact immutable version</span></>}><select value={selectedVersionId} onChange={event => onChange(event.target.value)}><option value="" disabled>Select an exact visible version</option>{selectedOption}{visible.map(item => <option key={item.version.versionId} value={item.version.versionId}>v{item.version.version} · {item.version.lifecycle} · {item.providerKey}</option>)}</select></StudioField>
     {query.isPending ? <div className="ad-inline-status" role="status">Loading a bounded version page…</div> : null}
     {query.isError ? <div className="ad-inline-error" role="alert">The bounded version page could not be confirmed.</div> : null}
     {query.isSuccess && visible.length === 0 && !selectedOption ? <div className="ad-inline-status" role="status">No authorized immutable versions are available to select.</div> : null}

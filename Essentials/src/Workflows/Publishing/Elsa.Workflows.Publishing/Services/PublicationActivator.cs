@@ -45,9 +45,42 @@ public sealed class PublicationActivator(
         ArgumentNullException.ThrowIfNull(request.Candidate);
         ArgumentNullException.ThrowIfNull(request.Executable);
         ArgumentNullException.ThrowIfNull(request.Reference);
-        var candidate = request.Candidate;
-        ValidateCandidate(candidate);
+        return await ActivateCoreAsync(request.Candidate, token => activationCoordinator.ActivateAsync(
+            new WorkflowActivationCommand(request.Executable, request.Reference, request.Candidate.SlotName,
+                request.Candidate.PublicationId, Source, request.Candidate.ExpectedSlotRevision), token),
+            materialRequest: false, cancellationToken);
+    }
 
+    /// <inheritdoc />
+    public async ValueTask<PublicationActivationResult> ActivateMaterialAsync(
+        PublicationMaterialActivationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Candidate);
+        ArgumentNullException.ThrowIfNull(request.Material);
+        ArgumentNullException.ThrowIfNull(request.Reference);
+        var candidate = request.Candidate;
+        if (candidate.ArtifactId != request.Material.Identity.ArtifactId ||
+            request.Reference.ArtifactId != request.Material.Identity.ArtifactId ||
+            request.Reference.Scope != WorkflowExecutableReferenceScope.Published ||
+            !request.Reference.IsLive(timeProvider.GetUtcNow()) ||
+            candidate.WorkflowDefinitionId != request.Reference.DefinitionId ||
+            candidate.WorkflowDefinitionVersionId != request.Reference.DefinitionVersionId ||
+            candidate.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(candidate.PublicationId))
+            throw new ArgumentException("The material publication candidate must match its live published source, logical identity, artifact and activation reference.", nameof(request));
+        return await ActivateCoreAsync(candidate, token => activationCoordinator.ActivateMaterialAsync(
+            new(candidate.WorkflowDefinitionId, request.Material, request.Reference, candidate.SlotName,
+                candidate.PublicationId, Source, candidate.ExpectedSlotRevision), token), materialRequest: true, cancellationToken);
+    }
+
+    private async ValueTask<PublicationActivationResult> ActivateCoreAsync(
+        PublicationRecord candidate,
+        Func<CancellationToken, ValueTask<WorkflowActivationResult>> activate,
+        bool materialRequest,
+        CancellationToken cancellationToken)
+    {
+        ValidateCandidate(candidate);
         await publicationStore.SaveAsync(candidate, cancellationToken);
 
         WorkflowActivationResult activation;
@@ -64,18 +97,17 @@ public sealed class PublicationActivator(
                     completion.Slot,
                     completion.Failure);
 
-            activation = await activationCoordinator.ActivateAsync(
-                new WorkflowActivationCommand(
-                    request.Executable,
-                    request.Reference,
-                    candidate.SlotName,
-                    candidate.PublicationId,
-                    Source,
-                    candidate.ExpectedSlotRevision),
-                cancellationToken);
+            activation = await activate(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            throw;
+        }
+        catch (NotSupportedException exception) when (materialRequest)
+        {
+            await FailCandidateAsync(candidate,
+                new PublicationFailure(PublicationFailureCodes.PublicationActivationRefused, SafeMessage(exception.Message)),
+                CancellationToken.None);
             throw;
         }
         catch (WorkflowActivationException exception)

@@ -30,7 +30,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 /// context is deliberately used for a command so EF's transaction is the atomic boundary across
 /// the A01-A21 tables. Complex provider payloads remain opaque JSON and never become provider SQL.
 /// </summary>
-public sealed class EfActivityDesignStores(
+public sealed partial class EfActivityDesignStores(
     ActivitiesDesignDbContext db,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     IDesignAtomicWriter? atomicWriter = null,
