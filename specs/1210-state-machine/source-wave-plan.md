@@ -15,6 +15,36 @@ shared-owner gate below. Source/store pre-code review remains requested in
 [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6871030658); source installation
 implementation has not started. Implementation follows this plan's own review and applicable shared-owner agreement.
 
+## Current-source pre-code review packet
+
+A read-only reconciliation at `722d6fba94296b9e7b6aa603e7b1848040e62395` confirms that the installation boundary
+below is still absent. B5a/B5b/B6 now qualify ordinary phase recovery, the actual machine inbox and selected CLR
+failures through native policy5/schema11; none proves a publication cohort or runnable-source closure. Three
+independent peer audits of the current paths are engineering input to the pending shared-owner review, not that
+owner's agreement or product approval. Source-store/producer code remains unstarted.
+
+| Existing boundary | Required owner review before stage A code |
+|---|---|
+| `Turns.cs`, `DurableTurn.Publish`; `Worker.cs`, `MeetAsync` | The normally committed self-ticket supplies a stable attempt, but `MeetAsync` passes only `EventRow` to publication. Specify how the complete issued `InboxKey`, canonical publisher creation and current lease/fence evidence reach installation and are verified against stored intent. A completed publisher can still owe its ticket; neither sender text nor a running-status test establishes authority. |
+| `Store.cs`, `Events.PublishAsync`; `InMemoryStore.cs`, event operations | Current publish/match/individual inserts are separate. Confirm one opt-in event-family transaction compares the attempt, seals the canonical cohort (including empty), allocates its non-reusing installation and adds all initial deliveries, or refuses before writes. Define how unknown outcomes recover the same installation before ordinary ticket retirement. |
+| `SubscriptionRow`, `EventRoute`, `EventAcceptance` | Current physical wait/creation identity is not a persisted lexical consumer route or registration-generation contract; `Added/Target` does not return an existing delivery's wave assignment. Confirm the trusted registration/assignment representation and whether install-only stage A may qualify physical wait membership before lexical routing in B. Public `Events.Route` construction alone cannot attest canonical rows. |
+| Existing `EventMatch`/delivery key and sweep | Assignment cannot simply be appended to the current encoded match, because it also determines physical deduplication. A new attempt reusing a caller ID must deliver distinctly to the same live wait while an old marker remains; catch-up must still recognize an already assigned physical delivery. Agree the versioned identity/assignment boundary and independent retention roots before adding fields. |
+| Native and store-level reuse witnesses | Native `Publish` currently derives event ID from its ticket; it exposes no independent caller-ID reuse input. Keep normally produced ticket/lost-ACK tests separate from constructed store-level reuse fixtures. Starts, external ingress and catch-up participation require explicit support/refusal and remain required follow-through. |
+
+The semantic comparison needs an enumerated envelope before implementation. Proposed for owner review: a versioned,
+length-delimited comparison of canonical event key, caller/event ID, payload presence and exact bytes, and original
+retention deadline, tied to the separately verified attempt. Do not restamp the deadline on retry or put a changing
+lease epoch in semantic identity. Provider canonical equality and whether additional start/route policy belongs in
+that envelope remain part of the source owner's contract; this text selects no product fingerprint or CLR API.
+
+Stage A remains the smallest install/read experiment using normal committed native publication tickets and instance
+waits. Its acceptance must exercise fixed/empty cohorts, same-attempt duplicate/conflict, both physical install
+uncertainty cuts, atomic bounds/allocation refusal, native intent retirement/takeover, retention/reuse and honest
+capability refusal. The existing in-memory `AddEventAsync` mutex proves one delivery insert, not this transaction.
+Stages B/C still require the actual same-publication child/parent and regional recipients, delayed delivery,
+yields versus real waits, recovery and A-data/B-readiness, transitive calls/jobs/returns and selector integration.
+No passing direct `InvocationInput` witness supplies those facts.
+
 ## Question and observed gap
 
 Can independently authored ordinary triggers collect ready completions from one actual publication, survive
