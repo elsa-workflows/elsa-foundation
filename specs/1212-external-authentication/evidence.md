@@ -1,8 +1,26 @@
 # External authentication qualification evidence
 
-## 14 November publication checkpoint
+## 14 November publication and qualification checkpoints
 
 The owner authorized latest-main reconciliation, reviewable PR sizing, publication, reviews, CI, merge and resulting-main verification on 14 November 2026. Cloud infrastructure is excluded. The current source stack is based on main `3e6d0257af01c4fd3e6637fecb3d5967bb94ad59`; source-specific current checks and independent review rounds are recorded on its PRs. No hosted-CI, merge or resulting-main success is asserted by this checkpoint.
+
+R18 reconciled the remaining19 source slices against main `7f451e3d994708343aadeb79b2b33195b3cddc50`.
+Each exact own-parent diff passed three independent source-review lenses and remained below3,000 changed lines.
+Documentation#4531 and identity#4535 have merged; subsequent state changes, exact reviewed/merge SHAs and owner
+admin/account exceptions are recorded on the relevant PRs and parent#3579. CI is never inferred from a merge.
+The older-base importer CI failure is retained; the merged composition includes its separately landed repair#4491.
+
+Fresh integrated `afb8a141f60b5fe64bdb45321920df881bdcc2db` qualification is being recorded separately. Earlier
+`3c9b1c1522ec09bc4fd317549b4ead2775a9c7c8` passed local runtime/provider/process/public-consumer scopes and
+independent local UX inspection of67 qualification originals plus3 diagnostic originals. The intentionally
+stopped diagnostic run is not a qualification pass. Hosted Studio run43627566756 hit its30-minute producer ceiling
+after reaching journey71of104 and is failed, not accepted. The bounded producer ceiling is increased to45minutes
+without changing assertions, source/tool identity checks or process-group cleanup; current-source proof remains required.
+
+The preview oracle now snapshots the requesting canonical subject's completed ordinary exchange count and persisted
+token count under one gate. A deterministic mutation of the actual helper observes an in-flight half-written pair
+and fails; restored code passes. Two intervening integration defects (undefined success-receipt variables and a
+state handler that discarded its JSON result) were found, fixed and independently re-reviewed before publication.
 
 Local qualification at preceding source `952dfb87f1e1175326ac5c8a077211b6528e71a7`, frozen main `577a0956930efac71165944d52ef0e8c90b4e49a`, passed the required affected local scopes: exact Identity prefixes02–15 (613 through960 cases), Studio62 module/1,093 Hosting tests, thirteen controls and Probe, architecture622/archive58/maps, standard Studio80 journeys/59 gallery cases, managed recovery and eight availability/permission profiles, two actual Keycloak modes, four SQLite/PostgreSQL managed/baseline process modes, Workbench, genuine backend23 and Studio/support36 archives, separate public consumers and independent local author UX inspection of65 originals. One earlier opt-in shared-EF pool-stress test remained skipped; unchanged historical EF/provider/Studio scopes retain their actual source attribution. This is local preceding-source evidence, not a fresh pass on rebased source or a hosted/shared acceptance claim.
 

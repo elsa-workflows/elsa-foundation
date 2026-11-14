@@ -4,7 +4,14 @@ Delivery record #3579; program #2771; identity-isolation prerequisite #2848 was 
 
 ## Status of this carried task record
 
-The completed marks below record implementation or source-specific qualification from the original branch before #3806 was closed. They do not mean that any new stack slice has merged or passed its gates. This first slice carries specification/decision records only. At the historical 6 November checkpoint the managed UI journey was unqualified, PostgreSQL baseline was UNKNOWN and R6 was reserved. Subsequent source-bound local qualification closed those local gaps at its recorded heads. On14November the owner authorized latest-main reconciliation, sizing, publication, reviews, CI, merge and resulting-main verification, excluding cloud infrastructure. R1–R13 history remains visible; standing authority permits reasonable continuation without a review reset. Current-head gates and resulting-main proof remain distinct from preceding-source passes.
+The completed marks below record implementation or source-specific qualification from the original branch
+before #3806 was closed. They do not mean that any new stack slice has merged or passed its gates. This first
+slice carries specification/decision records only. At the historical 6 November checkpoint the managed UI
+journey was unqualified, PostgreSQL baseline was UNKNOWN and R6 was reserved. Subsequent source-bound local
+qualification closed those local gaps at its recorded heads. On 14 November the owner authorized latest-main
+reconciliation, sizing, publication, reviews, CI, merge and resulting-main verification, excluding cloud
+infrastructure. R1–R13 history remains visible; standing authority permits reasonable continuation without a
+review reset. Current-head gates and resulting-main proof remain distinct from preceding-source passes.
 
 ## Phase 1 — Setup and design
 
@@ -60,7 +67,7 @@ The completed marks below record implementation or source-specific qualification
 
 - [x] T030 Update `Identity/**/README.md`, `EXTENSION_POINTS.md`, root catalog, `docs/reference/authentication-architecture.md` and `identity-configuration.md`; remove obsolete behavior/docs and account for public API changes.
 - [ ] T031 Run affected backend/EF/Studio gates, generated-map checks, packed module/assets and separate public consumer; preserve detailed result statuses in `evidence.md`.
-- [x] T032 Historical carrier #3806 was opened with acceptance/evidence mapping, then closed by owner direction for resubmission in smaller slices. Its source is preserved; replacement draft slices began publication with #4531 on14November2026. #2848 was delivered separately through #4018 and is not closed again by this stack.
+- [x] T032 Historical carrier #3806 was opened with acceptance/evidence mapping, then closed by owner direction for resubmission in smaller slices. Its source is preserved; replacement draft slices began publication with #4531 on 14 November 2026. #2848 was delivered separately through #4018 and is not closed again by this stack.
 - [ ] T033 Run independent correctness/standards/acceptance reviews on the exact draft head; fix findings, satisfy current required checks and merge under live org rules. Record rounds on the PR/issues.
 - [ ] T034 Qualify resulting main with affected actual journeys, CI/artifact/consumer boundaries in `resulting-main-qualification.md`; reconcile issues/program/spec/docs only after proof.
 

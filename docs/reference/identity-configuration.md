@@ -7,6 +7,14 @@ running outside `Development`.
 
 For the design rationale see [`docs/plans/studio-bearer-token-issuance.md`](../plans/studio-bearer-token-issuance.md).
 
+## Upgrade: issuer-qualified external tokens
+
+External subjects are scoped by tenant, provider, validated issuer and opaque subject. Existing issuer-less
+non-user access and refresh tokens are refused after this upgrade; their users must sign in again. Canonical
+Elsa users retain their existing subject-key format. A role/group name supplied by a provider never grants Elsa
+permissions automatically: provisioning policy may assign existing saved Elsa roles when creating a user,
+while later sign-ins preserve saved memberships.
+
 ## The moving parts
 
 | Feature (shells.json key) | Role |

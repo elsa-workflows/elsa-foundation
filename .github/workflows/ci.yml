@@ -1163,7 +1163,7 @@ jobs:
     if: needs.plan-scope.outputs.studio-heavy == 'true'
     runs-on: ubuntu-latest
     # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
