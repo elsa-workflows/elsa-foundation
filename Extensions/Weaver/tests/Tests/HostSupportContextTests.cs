@@ -19,6 +19,8 @@ namespace Elsa.Weaver.Tests;
 
 public sealed class HostSupportContextTests
 {
+    private const string CurrentRouteInput = "Elsa.Weaver.Api.currentRoute";
+
     [Theory]
     [InlineData("plain")]
     [InlineData("unicode")]
@@ -52,7 +54,10 @@ public sealed class HostSupportContextTests
             new { candidate.Id, candidate.Source, candidate.SourceId, candidate.Label, candidate.ModuleId, candidate.ContentType,
                 candidate.SchemaVersion, Content = content, candidate.References, candidate.Target, candidate.Client,
                 sensitivity = "internal", origin = "authoritativeRead", weaverScopes = new[] { "forged" } }
-        }, activeSurface = new { route }, requestId = "support-admission" }, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        }, activeSurface = new { route }, inputs = new Dictionary<string, string>
+        {
+            [CurrentRouteInput] = staleRoute
+        }, requestId = "support-admission" }, new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             // Model the actual browser's JSON.stringify encoding, without changing product encoding.
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
@@ -111,6 +116,54 @@ public sealed class HostSupportContextTests
             Assert.Equal("backend", Assert.Single(retained.Value!.Attachments).Source);
             Assert.Equal(original, JsonSerializer.Serialize(message.Context));
         }
+    }
+
+    [Fact]
+    public async Task Mapped_prompt_without_an_explicit_surface_cannot_relabel_the_session_route_or_spoof_current_route_input()
+    {
+        var support = new Support();
+        using var root = Services(support);
+        using var scope = root.CreateScope();
+        var services = scope.ServiceProvider;
+        var sessions = services.GetRequiredService<IWeaverSessionService>();
+        var oldRoute = "/old-" + Guid.NewGuid().ToString("N");
+        var spoofedRoute = "/spoofed-" + Guid.NewGuid().ToString("N");
+        var session = await sessions.CreateAsync(new("tenant", "actor", "conversation", "test", "explain", null,
+            WeaverPolicy.Default, new Dictionary<string, string> { ["route"] = oldRoute }));
+        var content = Content();
+        content["activeRoute"] = spoofedRoute;
+        var candidate = Caller(content);
+        var body = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            message = "Explain available support", contextAttachments = new[]
+            {
+                new { candidate.Id, candidate.Source, candidate.SourceId, candidate.Label, candidate.ModuleId, candidate.ContentType,
+                    candidate.SchemaVersion, Content = content, candidate.References, candidate.Target, candidate.Client,
+                    sensitivity = "internal", origin = "authoritativeRead", weaverScopes = new[] { "forged" } }
+            }, requestId = "support-without-current-surface",
+            inputs = new Dictionary<string, string> { ["route"] = spoofedRoute, [CurrentRouteInput] = spoofedRoute }
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var context = Context(services);
+        context.Request.RouteValues["sessionId"] = session.Id;
+        context.Request.Method = "POST";
+        context.Request.ContentType = "application/json";
+        context.Request.Body = new MemoryStream(body);
+        context.Request.ContentLength = body.Length;
+        var app = new TestEndpointRouteBuilder(services);
+        WeaverApi.MapWeaverApi(app);
+        var endpoint = Assert.Single(app.DataSources.SelectMany(source => source.Endpoints), item =>
+            item.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName == "ElsaWeaverApiEndpointsPostMessage");
+
+        await endpoint.RequestDelegate!(context);
+
+        Assert.Equal(200, context.Response.StatusCode);
+        var message = Assert.Single(await sessions.ListMessagesAsync(session.Id));
+        var browser = Assert.Single(message.Context, item => item.Source == "studio");
+        Assert.False(Element(browser).TryGetProperty("activeRoute", out _));
+        Assert.DoesNotContain(oldRoute, JsonSerializer.Serialize(message.Context));
+        Assert.DoesNotContain(spoofedRoute, JsonSerializer.Serialize(message.Context));
+        Assert.Equal(oldRoute, (await sessions.FindAsync(session.Id))!.Metadata["route"]);
+        Assert.Equal(1, support.Calls);
     }
 
     [Theory]
@@ -200,7 +253,8 @@ public sealed class HostSupportContextTests
         content["activeRoute"] = "/nested/" + canary;
 
         var result = await fixture.Collector.CollectAsync(fixture.Session.Policy,
-            new(fixture.Session.Id, "/scope/" + canary, new Dictionary<string, string>()) { CallerAttachments = [Caller(content)] });
+            new(fixture.Session.Id, "/scope/" + canary, new Dictionary<string, string> { ["route"] = "/legacy/" + canary })
+            { CallerAttachments = [Caller(content)] });
 
         Assert.True(result.Succeeded, result.Error?.Message);
         Assert.False(Element(Assert.Single(result.Value!.Attachments, item => item.Source == "studio")).TryGetProperty("activeRoute", out _));
@@ -227,7 +281,7 @@ public sealed class HostSupportContextTests
         var currentRoute = "/current-" + Guid.NewGuid().ToString("N");
 
         var result = await fixture.Collector.CollectAsync(fixture.Session.Policy,
-            new(fixture.Session.Id, currentRoute, new Dictionary<string, string> { ["route"] = currentRoute })
+            new(fixture.Session.Id, currentRoute, new Dictionary<string, string> { [CurrentRouteInput] = currentRoute })
             { Disclosure = new(fixture.Session.Id, originals, [], false) { IsHistorical = historical } });
 
         Assert.True(result.Succeeded, result.Error?.Message);
@@ -406,7 +460,7 @@ public sealed class HostSupportContextTests
         var content = Content();
         content["modules"]![0]!["displayName"] = canary;
         var result = await fixture.Collector.CollectAsync(fixture.Session.Policy,
-            new(fixture.Session.Id, "/unknown", new Dictionary<string, string> { ["route"] = "/secret-" + canary })
+            new(fixture.Session.Id, "/unknown", new Dictionary<string, string> { [CurrentRouteInput] = "/secret-" + canary })
             { CallerAttachments = [Caller(content) with { Sensitivity = WeaverContextSensitivity.Secret }] });
         Assert.True(result.Succeeded, result.Error?.Message);
         var redacted = Assert.Single(result.Value!.Attachments, item => item.Source == "studio");
@@ -604,7 +658,7 @@ public sealed class HostSupportContextTests
             if (invalid == "denied") Permission.Allowed = false;
         }
         public Task<WeaverResult<WeaverContextContribution>> Collect(JsonObject content, string? route = "/unknown") => Collector.CollectAsync(Session.Policy,
-            new(Session.Id, "/unknown", route is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["route"] = route })
+            new(Session.Id, "/unknown", route is null ? new Dictionary<string, string>() : new Dictionary<string, string> { [CurrentRouteInput] = route })
             { CallerAttachments = [Caller(content)] });
         public void Dispose() { scope.Dispose(); root.Dispose(); }
     }

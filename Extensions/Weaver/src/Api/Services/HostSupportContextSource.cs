@@ -15,6 +15,7 @@ namespace Elsa.Weaver.Api;
 internal sealed class HostSupportContextSource(IServiceProvider services, IHttpContextAccessor accessor,
     IWeaverSessionService sessions) : IWeaverContextProvider
 {
+    internal const string CurrentRouteInput = "Elsa.Weaver.Api.currentRoute";
     private const string SourceId = "weaver.host-support";
     private const string ModuleId = "Elsa.Weaver";
     private const string Kind = "weaver.host-support";
@@ -31,7 +32,7 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
         if (request.CallerAttachments.Count != 1) return Refused("weaver.context.support_invalid");
         var caller = request.CallerAttachments.Single();
         if (caller.ModuleId != ModuleId || caller.ContentType != Kind || caller.SchemaVersion != "1"
-            || !TryStudio(caller.Content, out var studio, request.Inputs.GetValueOrDefault("route"), useCurrentRoute: true))
+            || !TryStudio(caller.Content, out var studio, request.Inputs.GetValueOrDefault(CurrentRouteInput), useCurrentRoute: true))
             return Refused("weaver.context.support_invalid");
         var session = await CurrentSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return Refused("weaver.context.support_denied");
