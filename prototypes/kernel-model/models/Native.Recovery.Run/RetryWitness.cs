@@ -21,10 +21,11 @@ internal static class RetryWitness
         var target = InstanceRef.In(0, "successor"); var owner = 0; Actor Actor() => world.Of(owner, 0);
         Workflow Build(bool replacement = false)
         {
-        var leaf = new Node("leaf", replacement ? typeof(ReplacementRetryLeaf) : typeof(RetryLeaf)); leaf.Inputs.Add("Value", Binding.Var("sourceValue"));
-        return Wf.Workflow("successor", Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.Parallel("parallel", null,
+        var leaf = new Node("leaf", replacement ? typeof(ReplacementRetryLeaf) : typeof(RetryLeaf));
+        leaf.Inputs.Add("Value", Binding.Var("sourceValue")); leaf.Inputs.Add("Iteration", Binding.Var("CurrentItem")); leaf.Inputs.Add("Local", Binding.Var("local"));
+        return Wf.Workflow("successor", Wf.Node<RetryScope>("outer").With(Wf.ForEach("iterations", Binding.Literal(new[] { 7 }), Wf.Parallel("parallel", null,
             direct ? leaf : Wf.Sequence("sequence", Wf.Set("before", "before", 1), leaf, Wf.Set("after", "after", 1)),
-            Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish")))), ("sourceValue", 17));
+            Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish"))))), ("sourceValue", 17));
         }
         var workflow = Build();
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
@@ -52,6 +53,7 @@ internal static class RetryWitness
         Apply(new("take", Actor().Id)); Apply(new("add", M: new("start", target, Kinds.Start,
             Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "successor-proof") }))); Drain();
         var source = State().Frames.Values.Single(f => f.Node == "leaf");
+        var scopes = Json.Write(State().LexicalScopes);
         Check(source.Intervention is not null && RetryLeaf.Invocations.Count == 1, "R12: retry witness did not begin with an ordinary intervention");
         var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:change");
         Apply(new("add", M: Events.Deliver(new("event:change", "change", null, world.Time + 120_000), wait))); Drain();
@@ -115,6 +117,7 @@ internal static class RetryWitness
         if (cut == "reload-staged") Reload();
         Drain(); var next = State();
         Check(RetryLeaf.Invocations.Count == 2 && RetryLeaf.Invocations[1].Frame != source.Id && RetryLeaf.Invocations[1].Operation == source.OperationKey && RetryLeaf.Invocations[1].Value == 17 &&
+            RetryLeaf.Invocations[1].Iteration == 7 && RetryLeaf.Invocations[1].Local == 23 && Json.Write(next.LexicalScopes) == scopes &&
             (direct || next.Variables["before"]!.ToString() == "1" && next.Variables["after"]!.ToString() == "1") && world.Store.Instances[target.Id].Status == InstanceStatus.Running,
             "R14: successor lost pinned identity/input or ordinary parent completion routing");
         var accepted = next.Retries![request.Id]; var count = RetryLeaf.Invocations.Count;
@@ -123,24 +126,37 @@ internal static class RetryWitness
         Check(RetryLeaf.Invocations.Count == count && State().Retries!.Count == 1 && State().Retries![request.Id].Successor == accepted.Successor &&
             world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().TakeLast(3).Select(r => r.Result).SequenceEqual(new[] { "Duplicate", "Conflict", "NotEligible" }),
             "R17: replay, conflict or stale source created another successor or changed its receipt");
+        var finish = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:finish");
+        Apply(new("add", M: Events.Deliver(new("event:finish", "finish", null, world.Time + 120_000), finish))); Drain();
+        Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && State().LexicalScopes is null && State().Frames.Count == 0 && RetryLeaf.Invocations.Count == 2,
+            "R19: successful recovery repeated its iteration or leaked completed ancestor resources");
         Console.WriteLine($"PASS recovery:successor,{mode},parallel-parent={direct},cut={cut}");
     }
 }
-internal sealed class ReplacementRetryLeaf : Kernel.Native.Activity<int>
+internal sealed class RetryScope : CompositeActivity
+{
+    public RetryScope() { }
+    protected internal override void Execute(CompositeContext context) => context.ScheduleInScope(context.Children.Single(), context.CreateLexicalScope(
+        new Dictionary<string, System.Text.Json.Nodes.JsonNode?> { ["local"] = Values.From(23) }));
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
+}
+internal sealed class ReplacementRetryLeaf : RetryLeaf
 {
     public ReplacementRetryLeaf() { }
-    [Input] public int Value { get; set; }
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
-    { RetryLeaf.Invocations.Add((context.FrameId, context.OperationKey, 999)); return ValueTask.FromResult(Complete(999)); }
+    { Invocations.Add((context.FrameId, context.OperationKey, 999, Iteration, Local)); return ValueTask.FromResult(Complete(999)); }
 }
-internal sealed class RetryLeaf : Kernel.Native.Activity<int>
+internal class RetryLeaf : Kernel.Native.Activity<int>
 {
     public RetryLeaf() { }
     [Input] public int Value { get; set; }
-    internal static readonly List<(string Frame, string Operation, int Value)> Invocations = [];
+    [Input] public int Iteration { get; set; }
+    [Input] public int Local { get; set; }
+    internal static readonly List<(string Frame, string Operation, int Value, int Iteration, int Local)> Invocations = [];
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
-        Invocations.Add((context.FrameId, context.OperationKey, Value));
+        Invocations.Add((context.FrameId, context.OperationKey, Value, Iteration, Local));
         return ValueTask.FromResult(Invocations.Count == 1 ? Fault("dependency", "repair required") : Complete(Value));
     }
 }
