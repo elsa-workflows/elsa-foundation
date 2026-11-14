@@ -1,6 +1,7 @@
 # External authentication connection catalog
 
-This optional module supplies host-wide deployment connection configuration and a live effective catalog.
+This optional module supplies host-wide deployment connection configuration, a live effective catalog and
+guarded connection lifecycle operations.
 The catalog uses the selected provider-configuration authority only when database management is enabled.
 Deployment-only reads never resolve or query the optional provider database.
 
@@ -22,14 +23,14 @@ unknown users reject by default. See the [core extension contracts](../Core/EXTE
 
 ## Registration at this stage
 
-The default registration installs `IConnectionCatalogStore`, `IConnectionRegistry`, admission assessment,
-explicit provisioning policies, options, time and activation validation. Database management requires a selected revision-aware provider-configuration store
+The default registration installs the catalog/registry, admission policies, guarded connection writer,
+delegation/readiness/recovery authorities, protected observations, options, time and activation validation. Database management requires a selected revision-aware provider-configuration store
 or an explicit custom catalog. Activation validates registration and deployment policy without querying
 schema tables before the persistence feature's migration phase.
 
-The Core package also defines contracts for guarded mutations, protocol flows and durable artifacts.
-Their default implementations and entry points are staged separately. This catalog slice does not install
-those services or advertise a usable sign-in/recovery path. Configuration selection is not runtime readiness,
+The Core package also defines contracts for protocol flows and durable artifacts. Their default implementations
+and HTTP entry points are staged separately. Missing installed protocols, canonical sessions, durable artifacts
+or callback support never count as a usable sign-in/recovery path. Configuration selection is not runtime readiness,
 provider sign-in proof or complete external-authentication delivery.
 
 ## Provisioning policy and saved roles
@@ -44,3 +45,16 @@ Integrators can contribute an `IExternalProvisioningPolicy`. Its selected role I
 within both the connection's approved boundary and deployment policy. Existing linked users retain their saved
 roles and permissions; later sign-ins do not call a provisioning policy to replace manual memberships.
 Provider groups, role names and permission claims do not grant Elsa authority automatically.
+
+## Guarded lifecycle and recovery
+
+`IConnectionWriter` authorizes before reading global catalog state. Creation starts with a disabled draft;
+promotion to an override and lifecycle transitions are explicit. Policy changes may delegate only existing
+Elsa roles whose permissions the editor can grant. Writes use the catalog revision and live IAM guards;
+unauthorized, stale or unsupported coordination does not save a partial mutation.
+
+Retiring or replacing an effective path requires a proved remaining path or eligible local recovery.
+Configuration readiness is separate from successful normal administrator sign-in evidence. Protected evidence
+is bounded and tied to current connection material, exact qualified link, credentials, callback and canonical
+session/account binding. Preview does not establish recovery evidence. Later callback/session/protocol services
+must be installed before the default runtime can establish readiness or recovery; no success placeholder is used.
