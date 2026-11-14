@@ -39,6 +39,28 @@ public sealed class PublishedNativeSourceTests
     }
 
     [Fact]
+    public async Task Multiple_selected_workflows_share_the_actual_stored_body_and_one_retention_lease()
+    {
+        await using var f = await PublishedNativeFixture.Create();
+        await f.Seed("definition-A", "version-A", "1.0.0"); var first = await f.Publish("version-A");
+        await f.Seed("definition-B", "version-B", "3.7.0"); var second = await f.Publish("version-B");
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        await f.Source().ExecuteAsync([Selection("version-A"), Selection("version-B")], new(), async (capture, token) =>
+        {
+            Assert.Equal(2, capture.Roots.Count); Assert.Single(capture.Roots.Select(root => root.Content).Distinct());
+            Assert.Equal(3, capture.Content.Members.Count);
+            var selected = capture.Roots.Select(root => f.Codec.DecodeWorkflowSelection(capture.Content.GetPayload(root.Member))).OrderBy(value => value.DefinitionVersionId).ToArray();
+            Assert.Equal(new[] { "version-A", "version-B" }, selected.Select(value => value.DefinitionVersionId));
+            foreach (var version in selected) Assert.Equal(f.OriginalSources[version.DefinitionVersionId], version.StateSource);
+            var body = f.Codec.DecodeWorkflow(capture.Content.GetPayload(capture.Roots[0].Content));
+            Assert.Equal("version-A", body.Executable.Identity.DefinitionVersionId);
+            Assert.All(selected, version => Assert.Equal(body.Executable.Identity, version.Artifact));
+            Assert.Equal(1, await f.Runtime.WorkflowExecutableRootWriteLeases.CountAsync(token));
+        });
+        Assert.Empty(await f.Runtime.WorkflowExecutableRootWriteLeases.ToListAsync());
+    }
+
+    [Fact]
     public async Task An_unpublished_second_version_does_not_inherit_a_same_behavior_publication()
     {
         await using var f = await PublishedNativeFixture.Create(); await f.Seed("definition", "v1", "1.0.0"); await f.Publish("v1");
