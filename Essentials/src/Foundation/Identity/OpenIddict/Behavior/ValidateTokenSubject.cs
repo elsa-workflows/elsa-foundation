@@ -8,7 +8,8 @@ using OpenIddict.Validation;
 namespace Elsa.Foundation.Identity.OpenIddict;
 
 /// <summary>Verifies first-party identity scope against its signed token id and persisted subject.</summary>
-internal sealed class ValidateTokenSubject(ITokenSubjectResolver subjects, IOpenIddictTokenManager tokens)
+internal sealed class ValidateTokenSubject(ITokenSubjectResolver subjects, IOpenIddictTokenManager tokens,
+    IAuthenticationSessionStore? sessions = null, ICanonicalUserSignInService? canonical = null)
     : IOpenIddictValidationHandler<OpenIddictValidationEvents.ValidateTokenContext>
 {
     public async ValueTask HandleAsync(OpenIddictValidationEvents.ValidateTokenContext context)
@@ -46,6 +47,13 @@ internal sealed class ValidateTokenSubject(ITokenSubjectResolver subjects, IOpen
 
             var entry = await tokens.FindByIdAsync(entryId, context.CancellationToken);
             if (entry is null || !string.Equals(await tokens.GetSubjectAsync(entry, context.CancellationToken), key, StringComparison.Ordinal))
+            {
+                Reject(context);
+                return;
+            }
+
+            if (!TryClaim(principal, IdentityClaimTypes.SessionId, out var sessionId) ||
+                !(await TokenSessionGuard.ValidateAsync(subject, sessionId, sessions, canonical, context.CancellationToken)).Allowed)
             {
                 Reject(context);
                 return;

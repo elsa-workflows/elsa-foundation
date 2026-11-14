@@ -4,6 +4,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 public interface IRuntimeCheckpointCommitStore
 {
+    /// <summary>Whether history, its sequence head and lifecycle projections share the checkpoint's atomic boundary.</summary>
+    bool SupportsHistory => false;
+
+    /// <summary>Qualifies the actual scoped reader used by this atomic history writer, including shared backend/context/state ownership.</summary>
+    bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => false;
+
     /// <summary>Whether model state and accepted input share this checkpoint's atomic authority.</summary>
     bool SupportsModelCheckpoint => false;
 
