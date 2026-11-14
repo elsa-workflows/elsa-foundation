@@ -23,6 +23,11 @@ internal static class BpmnInputSupport
     internal static void Validate(WorkflowExecutableInputContract modelContract, BpmnInputModelDefinition envelope,
         IWorkflowExecutableInputValidator validator)
     {
+        // The v1 contract JSON cannot distinguish an absent default from a null default.
+        // Refuse while presence is observable, before hashing or serializing the new envelope.
+        foreach (var contract in envelope.WorkerInputMappings.Select(mapping => mapping.WorkerInputContract).Prepend(modelContract))
+            if (contract?.Inputs.Any(input => input.DefaultValue is { ValueKind: JsonValueKind.Null }) == true)
+                throw Invalid("The foundation-inputs-v1 profile does not support explicit-null defaults; explicit-null input values remain supported.");
         Check(validator.ValidateKnownInputs(modelContract, []));
         var bindings = envelope.BaseDefinition.ServiceBindings ?? [];
         if (!bindings.Select(binding => binding.BindingId).ToHashSet(StringComparer.Ordinal)

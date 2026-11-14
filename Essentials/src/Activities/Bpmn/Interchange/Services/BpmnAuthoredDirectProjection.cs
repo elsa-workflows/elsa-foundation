@@ -107,14 +107,29 @@ internal static class BpmnAuthoredDirectProjection
     {
         try
         {
-            return string.IsNullOrWhiteSpace(version.StateSource) ? version.State
-                : JsonSerializer.Deserialize<WorkflowDefinitionState>(version.StateSource, Strict);
+            if (string.IsNullOrWhiteSpace(version.StateSource))
+            {
+                if (version.State.Inputs.Any(input => input.DefaultValue is { ValueKind: JsonValueKind.Null }))
+                    throw UnsupportedNullDefault();
+                return version.State;
+            }
+            // Inspect immutable source before nullable deserialization loses default presence.
+            // No-default declarations must omit this member; a null member is ambiguous in v1.
+            using var source = JsonDocument.Parse(version.StateSource);
+            if (source.RootElement.TryGetProperty("inputs", out var inputs) && inputs.ValueKind == JsonValueKind.Array &&
+                inputs.EnumerateArray().Any(input => input.ValueKind == JsonValueKind.Object &&
+                    input.TryGetProperty("defaultValue", out var value) && value.ValueKind == JsonValueKind.Null))
+                throw UnsupportedNullDefault();
+            return JsonSerializer.Deserialize<WorkflowDefinitionState>(version.StateSource, Strict);
         }
         catch (JsonException exception)
         {
             throw new BpmnModelValidationException($"Authored BPMN version '{version.Id}' has invalid or unsupported source JSON.", exception);
         }
     }
+
+    private static BpmnModelValidationException UnsupportedNullDefault() =>
+        new("The foundation-inputs-v1 profile does not support explicit-null defaults or ambiguous null default members; omit defaultValue when no default is intended.");
 
     /// <summary>Validates one owned human binding and returns whether its completion requires a claim.</summary>
     private static bool ValidateHumanBinding(BpmnElement element, string metadata)

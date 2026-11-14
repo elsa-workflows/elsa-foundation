@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using System.Text.Json;
 using Bpmn.Model;
 using Elsa.Activities.Bpmn.Core;
@@ -27,8 +28,10 @@ public sealed partial class BpmnDirectExecutionTests
 {
     // These use fresh production providers over one real SQLite database, not recording actors or injected cohorts.
     // The constructed fleet and clock qualify component boundaries; they do not establish process-host acceptance.
-    [Fact]
-    public async Task A_real_workflow_Event_reaches_a_genuine_BPMN_root_and_its_worker_consumes_the_mapped_declared_input()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_real_workflow_Event_reaches_a_genuine_BPMN_root_and_its_worker_consumes_the_mapped_declared_input(bool literalNull)
     {
         await using var host = await OpenAsync(configure: ConfigureEventPipeline,
             activityIds: Enumerable.Range(0, 32).Select(index => "event-pipeline-" + index).ToArray());
@@ -58,7 +61,7 @@ public sealed partial class BpmnDirectExecutionTests
         var model = await services.GetRequiredService<IBpmnModelRuntime>().PreparePublicationAsync(new(3,
                 JsonSerializer.SerializeToElement(process, Web), [], [new("worker", worker.Identity, "business-error", new(1, BpmnServiceFaultDisposition.FinalFault, 1))]),
             new(1, [new("text", new("String"), true)]),
-            [new("worker", new Dictionary<string, BpmnModelInputSource> { ["message"] = new("Input", "text") })], new("operator", null));
+            [new("worker", new Dictionary<string, BpmnModelInputSource> { ["message"] = literalNull ? new("Literal", value: JsonSerializer.SerializeToElement<string?>(null)) : new("Input", "text") })], new("operator", null));
         var published = await PublishPipelineTargetAsync(services, "event-model", model, "model-v1", 0);
         await CreatePipelineAssociationAsync(services, "bpmn", published, [new("text", new TriggerSourceBinding(["payload", "text"]))]);
 
@@ -84,7 +87,8 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal(BpmnDirectExecutionDriver.TriggerKind, document.Entry!.Kind);
         Assert.Equal("from-actual-workflow", document.Entry.Inputs["text"].GetString());
         var nativeWork = Assert.Single(document.Work).NativeWork!;
-        Assert.Equal("from-actual-workflow", nativeWork.Inputs!["message"].GetString());
+        if (literalNull) Assert.Equal(JsonValueKind.Null, nativeWork.Inputs!["message"].ValueKind);
+        else Assert.Equal("from-actual-workflow", nativeWork.Inputs!["message"].GetString());
         Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(modelState.ExecutionId));
 
         // All progress uses the existing source processor and ordinary model/native continuation.
@@ -94,12 +98,25 @@ public sealed partial class BpmnDirectExecutionTests
             await DrainModelAsync(host, modelState.ExecutionId);
         }
         var actualWorker = (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(nativeWork.WorkerExecutionId))!;
-        Assert.Equal(WorkflowExecutionStatus.Completed, actualWorker.Status);
+        var observedIncidents = await services.GetRequiredService<IIncidentStateStore>().ListAsync(nativeWork.WorkerExecutionId);
+        var observedActivities = await services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(nativeWork.WorkerExecutionId);
+        Assert.True(actualWorker.Status == WorkflowExecutionStatus.Completed,
+            $"Worker status {actualWorker.Status}/{actualWorker.SubStatus}; incidents: {JsonSerializer.Serialize(observedIncidents, Web)}; activities: {JsonSerializer.Serialize(observedActivities, Web)}");
         Assert.True(nativeWork.IsEquivalentTo(actualWorker.ModelWorkOrigin));
         var workerActivity = Assert.Single(await services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(nativeWork.WorkerExecutionId));
-        Assert.Equal("from-actual-workflow", workerActivity.InputSnapshot!.Values[nameof(PublishEvent.Payload)].InlineValue!.Value.GetString());
+        var workerInput = workerActivity.InputSnapshot!.Values[nameof(PublishEvent.Payload)];
+        if (literalNull)
+        {
+            Assert.Equal(ValuePresence.ExplicitNull, workerInput.Presence);
+            var durableInput = Assert.Single((await services.GetRequiredService<IDurableValueStateStore>().ListPageAsync(new(nativeWork.WorkerExecutionId))).Items,
+                value => value.Metadata.GetValueOrDefault(RuntimeMetadataKeys.InputName) == "message");
+            Assert.Equal(JsonValueKind.Null, durableInput.InlineValue!.Value.ValueKind);
+        }
+        else Assert.Equal("from-actual-workflow", workerInput.InlineValue!.Value.GetString());
         var consumedActivity = Assert.Single(await services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("waiting-for-consumption"));
-        Assert.Equal("from-actual-workflow", consumedActivity.Completion!.Result.InlineValue!.Value.Deserialize<EventResult>(Web)!.Payload!.Value.GetString());
+        var consumedPayload = consumedActivity.Completion!.Result.InlineValue!.Value.Deserialize<EventResult>(Web)!.Payload;
+        if (literalNull) Assert.Null(consumedPayload);
+        else Assert.Equal("from-actual-workflow", consumedPayload!.Value.GetString());
         Assert.Equal(RuntimeModelLifecycle.TerminalSettled, (await services.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync(modelState.ExecutionId))!.Lifecycle);
         var embeddedExecution = KeyedWorkflowStartIdentity.For(original.RequireWorkflowIntent().IdempotencyKey!, embedded.Identity.ArtifactId).WorkflowExecutionId;
         Assert.Equal(WorkflowExecutionStatus.Completed, (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(embeddedExecution))!.Status);

@@ -31,6 +31,23 @@ public sealed class BpmnAuthoredDirectPublisherTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication(bool immutableSource)
+    {
+        var fixture = new Fixture();
+        fixture.Version.State = fixture.Version.State with
+        {
+            Inputs = [new("value", "value", new("String"), null, "Value", null, false,
+                DefaultValue: JsonSerializer.SerializeToElement<string?>(null), IsRequired: true)]
+        };
+        if (immutableSource) fixture.Version.StateSource = JsonSerializer.Serialize(fixture.Version.State, Web);
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+        Assert.Contains("explicit-null defaults", error.Message);
+        Assert.Equal(0, fixture.Publications);
+    }
+
     [Fact]
     public async Task Publication_uses_the_immutable_version_and_presentation_without_mutating_authoring()
     {

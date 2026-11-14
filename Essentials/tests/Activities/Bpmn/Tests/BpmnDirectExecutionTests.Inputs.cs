@@ -17,6 +17,30 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed partial class BpmnDirectExecutionTests
 {
     [Fact]
+    public async Task Input_profile_refuses_an_explicit_null_model_default_before_persistence()
+    {
+        await using var host = await OpenAsync(); await using var scope = await ScopeAsync(host);
+        var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => runtime.PreparePublicationAsync(
+            Material().Definition.Deserialize<BpmnModelDefinition>(Web)!,
+            new(1, [new("value", new("String"), true, JsonSerializer.SerializeToElement<string?>(null))]), [],
+            new("operator", null)).AsTask());
+        Assert.Contains("explicit-null defaults", error.Message);
+    }
+
+    [Fact]
+    public void Input_profile_refuses_an_explicit_null_pinned_worker_default_before_serializing_its_envelope()
+    {
+        var definition = Material().Definition.Deserialize<BpmnModelDefinition>(Web)!;
+        var worker = new BpmnWorkerInputMapping("worker", new Dictionary<string, BpmnModelInputSource>(),
+            new(1, [new("value", new("String"), true, JsonSerializer.SerializeToElement<string?>(null))]));
+        // Contract validation precedes the inventory check, so an unsupported default cannot be hashed or serialized.
+        var error = Assert.Throws<BpmnModelValidationException>(() => BpmnInputSupport.Validate(new(1, []),
+            new(1, definition, [worker]), new Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableInputValidator()));
+        Assert.Contains("explicit-null defaults", error.Message);
+    }
+
+    [Fact]
     public async Task Closed_preparation_preserves_the_raw_material_profile_and_hash_without_minting_start_authority()
     {
         await using var host = await OpenAsync(); await using var scope = await ScopeAsync(host);

@@ -60,5 +60,6 @@ public sealed class BpmnModelInputSource
     }
     public string Kind { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; }
+    [JsonConverter(typeof(BpmnModelInputValueJsonConverter))]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public JsonElement? Value { get; }
 }
