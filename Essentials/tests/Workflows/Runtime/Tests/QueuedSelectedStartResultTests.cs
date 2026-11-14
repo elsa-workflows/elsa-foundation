@@ -177,7 +177,7 @@ public sealed partial class QueuedSelectedStartTests
         if (defect is "context" or "fingerprint" or "missing") state = state with
         {
             TestContext = new(defect == "context" ? "foreign" : original.ContextId, defect == "fingerprint" ? "foreign" : original.ContextFingerprint,
-                original.Frames, defect == "missing" ? [] : original.Results, original.OwnedNodeIds)
+                original.Frames, defect == "missing" ? [] : original.Results, original.OwnedNodeIds) { RootActivityExecutionId = original.RootActivityExecutionId }
         };
         if (defect == "root-closed") state = state with { RootVariableFrame = state.RootVariableFrame!.Close(state.RootVariableFrame.Revision) };
         if (defect is "type" or "policy") state = state with
@@ -185,7 +185,7 @@ public sealed partial class QueuedSelectedStartTests
             TestContext = new(original.ContextId, original.ContextFingerprint, original.Frames,
                 [original.Results[0] with { Result = defect == "type" ? Number(7) : ValueEnvelope.Inline(FixtureString,
                     JsonSerializer.SerializeToElement("protected-fixture"), new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, requiresEncryption: true)) }],
-                original.OwnedNodeIds)
+                original.OwnedNodeIds) { RootActivityExecutionId = original.RootActivityExecutionId }
         };
         if (defect == "workflow") state = state with { WorkflowExecutionId = "foreign" };
         if (defect == "closed") state = state with { Status = WorkflowExecutionStatus.Completed };

@@ -317,7 +317,7 @@ public sealed partial class QueuedSelectedStartTests
         var changedFrame = input ? ownerFrame with { Inputs = new Dictionary<string, ValueEnvelope> { ["secret"] = protectedValue } } :
             ownerFrame with { Frame = ownerFrame.Frame.Set("amount", protectedValue, ownerFrame.Frame.Revision) };
         var forged = state with { TestContext = new(state.TestContext.ContextId, state.TestContext.ContextFingerprint,
-            [changedFrame], [], state.TestContext.OwnedNodeIds) };
+            [changedFrame], [], state.TestContext.OwnedNodeIds) { RootActivityExecutionId = state.TestContext.RootActivityExecutionId } };
         var commit = new RuntimeCheckpointCommit("protected", new("protected", "Guard", harness.ExecutionId, owner.Clock.Now, [],
             new Dictionary<string, string>()), new(new(harness.ExecutionId, RuntimeStateChangeOperation.Upsert, forged, new Dictionary<string, string>()), null, [], [], [], [], []),
             [], new Dictionary<string, string>());
@@ -542,6 +542,7 @@ public sealed partial class QueuedSelectedStartTests
         var activity = Assert.Single(await harness.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(harness.ExecutionId));
         Assert.Equal("selected", activity.Execution.ExecutableNodeId);
         Assert.Null(activity.ParentActivityExecutionId);
+        Assert.Equal(activity.InvocationId, state.TestContext.RootActivityExecutionId);
         Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
     }
 

@@ -18,7 +18,8 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
             if (workflow.TestEntry is not null) throw new InvalidOperationException("The selected lexical owner is unavailable.");
             return null;
         }
-        if (workflow.TestEntry is not { } entry || context.ContextId != entry.ContextId ||
+        if (string.IsNullOrWhiteSpace(context.RootActivityExecutionId) ||
+            workflow.TestEntry is not { } entry || context.ContextId != entry.ContextId ||
             context.ContextFingerprint != entry.ContextFingerprint || workflow.RunKind != WorkflowRunKind.TestRun ||
             !WorkflowTestScope.ContextEquals(workflow.TestScope, entry.Scope) || workflow.TenantId != entry.Scope.TenantId ||
             workflow.Partition != entry.Scope.Partition || workflow.Authority is null ||
@@ -41,6 +42,17 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
             parent = frame.FrameId;
         }
         return context;
+    }
+
+    internal static void RequireConsumer(WorkflowExecutionState workflow, ActivityExecutionState activity)
+    {
+        if (RequireContext(workflow) is not { } context) return;
+        if (activity.Execution.WorkflowExecutionId != workflow.WorkflowExecutionId ||
+            activity.InvocationId != context.RootActivityExecutionId || activity.ParentActivityExecutionId is not null ||
+            activity.Execution.ExecutableNodeId != workflow.TestEntry!.ExecutableNodeId ||
+            workflow.Status != WorkflowExecutionStatus.Running || workflow.RootVariableFrame?.Status != VariableFrameStatus.Active ||
+            context.Frames.Any(x => x.Frame.Status != VariableFrameStatus.Active))
+            throw new InvalidOperationException("The consumer is outside the exact admitted selected invocation.");
     }
 
     internal static IReadOnlyList<VariableFrameState> EnclosingFrames(WorkflowExecutionState workflow,
@@ -66,9 +78,7 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
         if (workflow is null || RequireContext(workflow) is not { } context) return null;
         var activity = await activities.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken)
             ?? throw new InvalidOperationException("The capture producer is unavailable.");
-        if (!context.OwnedNodeIds.Contains(activity.Execution.ExecutableNodeId, StringComparer.Ordinal) ||
-            activity.ParentActivityExecutionId is not null)
-            throw new InvalidOperationException("The capture producer is outside the admitted terminal leaf.");
+        RequireConsumer(workflow, activity);
         var owner = context.Frames.LastOrDefault(x => x.IsClosedBoundary);
         if (owner is null || owner.Frame.ScopeId != scopeId) return null;
         if (!owner.Writable || owner.Frame.Status != VariableFrameStatus.Active)

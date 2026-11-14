@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -113,6 +114,27 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         }
 
         var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, schedulePayload.ExecutableNodeId, "ScheduleActivity");
+
+        if (_workflowExecutionStateStore is not null &&
+            await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is { } workflow &&
+            RuntimeTestContextOwner.RequireContext(workflow) is { } context)
+        {
+            if (schedulePayload.ActivityExecutionId != context.RootActivityExecutionId ||
+                schedulePayload.ExecutableNodeId != workflow.TestEntry!.ExecutableNodeId ||
+                schedulePayload.ParentActivityExecutionId is not null || schedulePayload.SchedulingActivityExecutionId is not null ||
+                schedulePayload.IterationFrame is not null || workItem.ExecutionScopeId is not null ||
+                schedulePayload.Reason != RuntimeScheduleActivityCommandPayload.WorkflowStartReason ||
+                schedulePayload.SchedulingProvenance is not { ParentActivityExecutionId: null, SchedulingActivityExecutionId: null,
+                    BranchId: null, IterationId: null, ExecutionPathId: null, ExecutionScopeId: null } ||
+                schedulePayload.SchedulingProvenance.SchedulingWorkflowExecutionId != workItem.WorkflowExecutionId ||
+                schedulePayload.SchedulingProvenance.SchedulingCause != RuntimeScheduleActivityCommandPayload.WorkflowStartReason ||
+                schedulePayload.SchedulingProvenance.Metadata.Count != 0 ||
+                schedulePayload.SchedulingProvenance.Attempt != workItem.Attempt ||
+                workItem.Attempt is not { AttemptNumber: 1, PreviousAttemptActivityExecutionId: null } ||
+                workItem.Attempt.FirstAttemptActivityExecutionId != context.RootActivityExecutionId ||
+                !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(workflow.PinnedExecutable, schedulePayload.PinnedExecutable))
+                throw new InvalidOperationException("The schedule is outside the exact admitted selected invocation.");
+        }
 
         var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
         if (existing is not null)

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -72,6 +73,10 @@ public sealed record RuntimeTestContextState
     public IReadOnlyList<string> OwnedNodeIds { get; }
     public long Revision { get; }
 
+    /// <summary>Exact invocation from the atomic first scheduling intent; absent on read-only preparation.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RootActivityExecutionId { get; init; }
+
     public RuntimeTestContextState Set(string frameId, string variableKey, ValueEnvelope value, long expectedFrameRevision)
     {
         var owner = Frames.SingleOrDefault(x => x.Frame.FrameId == frameId)
@@ -89,13 +94,13 @@ public sealed record RuntimeTestContextState
             throw new InvalidOperationException("The test frame write cannot weaken its declared protection policy.");
         var updated = owner with { Frame = owner.Frame.Set(variableKey, value, expectedFrameRevision) };
         return new(ContextId, ContextFingerprint, Frames.Select(x => x.Frame.FrameId == frameId ? updated : x).ToArray(),
-            Results, OwnedNodeIds, checked(Revision + 1));
+            Results, OwnedNodeIds, checked(Revision + 1)) { RootActivityExecutionId = RootActivityExecutionId };
     }
 
     public RuntimeTestContextState Close() => Frames.All(x => x.Frame.Status == VariableFrameStatus.Closed) ? this :
         new(ContextId, ContextFingerprint,
             Frames.Select(x => x with { Frame = x.Frame.Status == VariableFrameStatus.Active ? x.Frame.Close(x.Frame.Revision) : x.Frame }).ToArray(),
-            Results, OwnedNodeIds, checked(Revision + 1));
+            Results, OwnedNodeIds, checked(Revision + 1)) { RootActivityExecutionId = RootActivityExecutionId };
 
     private static IReadOnlyDictionary<string, ValueEnvelope> Snapshot(IReadOnlyDictionary<string, ValueEnvelope> values) =>
         new ReadOnlyDictionary<string, ValueEnvelope>(values.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal));

@@ -1392,6 +1392,13 @@ a supplied closed boundary replaces outer variables and request inputs. No ances
 predecessor result is manufactured. Stored values survive JSON roundtrip and new DI/actor activations;
 this is not shared-provider or host-restart qualification.
 
+The first checkpoint also binds `TestContext.RootActivityExecutionId` to its validated root scheduling
+intent. Read-only preparation leaves that property absent. Normal lexical reads, fixture reads and
+capture require that exact invocation, and a replayed schedule cannot substitute another invocation,
+parent, scheduler or provenance. Writes and closure retain the identity across JSON rehydration. A
+persisted selected context without the identity refuses execution; it cannot fall back to ordinary
+context. The existing shared persistence/transport refusal of the private interpreter remains in force.
+
 Intrinsic Set/merge/reduce operations write the declared run-owned frame, including a closed-root alias,
 with type/protection/revision checks. Supplied iteration frames stay read-only. Normal configured graph
 output capture targets the exact supplied closed frame and is committed with activity completion, without
