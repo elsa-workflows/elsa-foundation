@@ -236,11 +236,22 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         {
             if (Projection[partition] != from && !Has(Flaw.ProjectorBlindWrite)) return new(false);
             Projection[partition] = to;
-            foreach (var row in rows.Where(r => r.Revision > 0))
-                Views[row.Instance] = Views.GetValueOrDefault(row.Instance) is { } view ? new ViewRow(row.Instance, Math.Max(view.Revision, row.Revision), view.Commits + 1) : new ViewRow(row.Instance, row.Revision, 1);
-            foreach (var row in rows.Where(r => r.Revision < 0)) Views.Remove(row.Instance);
+            foreach (var change in ViewChange.From(rows))
+            {
+                if (change.Commits == 0) Views.Remove(change.Instance);
+                else
+                {
+                    int prior = change.Reset ? 0 : Views.GetValueOrDefault(change.Instance)?.Commits ?? 0;
+                    Views[change.Instance] = new(change.Instance, change.Revision, prior + change.Commits);
+                }
+            }
             return new(true);
         }
+    }
+
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(Journal.Values.Where(j => j.Partition == partition && j.Instance == instance && j.Position > after).OrderBy(j => j.Position).ToList());
     }
 
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)

@@ -6,6 +6,7 @@
     <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
     <ProjectReference Include="../Graph/Kernel.Graph.csproj" />
   </ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Kernel.Native.Scopes.Run" /><InternalsVisibleTo Include="Kernel.Statecharts.Native" /></ItemGroup>
   <ItemGroup>
     <Using Include="Kernel.Runtime" />
     <Using Include="Kernel.Durable" />
