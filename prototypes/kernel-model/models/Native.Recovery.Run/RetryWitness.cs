@@ -63,7 +63,8 @@ internal static class RetryWitness
         {
             // Deliberately seeded old-schema context, separately counted; not a historical writer/binary claim.
             var old = State(); old.Frames[source.Id].RecoveryMaterial = null;
-            world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(old), StateVersion = 5 };
+            var upgraded = new NativeModel(new()).UpgradeState(Json.Write(old), 5);
+            world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(upgraded) };
             Reload(); Drain();
         }
         if (cut.StartsWith("replace-", StringComparison.Ordinal))
