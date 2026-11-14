@@ -17,7 +17,8 @@ Unless a container suite sets retryOnFailure=false, every test that failed in tr
 With --retain-discovery, each initial run first retains unparsed discovery stdout/stderr and a command/exit receipt
 under discovery/<index>/. Discovery uses the same project, configuration, filter and environment as that run, without
 building. Discovery has a ten-minute process timeout; failure or timeout fails the shard even if its tests pass.
-The actual tests and their retry/outcome path still run. These receipts do not compare case counts.
+The actual tests and their retry/outcome path still run. Their verdict is labelled test execution only, followed by
+the discovery-aware overall shard verdict. These receipts do not compare case counts.
 
 Usage:
   run_shard.py --entry <matrix-entry-json> --out <dir> --head <sha> [--parallel N] [--manifest <file>]
@@ -157,8 +158,19 @@ def main() -> int:
 
     evaluate = argparse.Namespace(shard_dir=args.out, shard=entry["shard"], head=args.head, manifest=args.manifest,
                                   summary=args.summary, outcomes=os.path.join(args.out, "test-outcomes.json"))
-    test_exit = test_results.evaluate(evaluate)
-    return test_exit if test_exit else (0 if discovery_ok else 1)
+    test_exit = (test_results.evaluate(evaluate, label="Test execution only") if args.retain_discovery
+                 else test_results.evaluate(evaluate))
+    exit_code = test_exit if test_exit else (0 if discovery_ok else 1)
+    if args.retain_discovery:
+        discovery_status = "not run (dry-run)" if args.dry_run else ("passed" if discovery_ok else "failed")
+        text = (f"### Shard `{entry['shard']}`: {'passed' if exit_code == 0 else 'failed'}\n\n"
+                f"- Discovery command: {discovery_status}\n"
+                f"- Test execution: {'passed' if test_exit == 0 else 'failed'}\n")
+        print(text)
+        if args.summary:
+            with open(args.summary, "a", encoding="utf-8") as summary:
+                summary.write(text)
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -161,8 +161,8 @@ def decide(manifest: dict, runs: list[dict], first: list[Results], second: list[
     return verdict
 
 
-def summary_markdown(shard: str, verdict: Verdict, repo_url: str) -> str:
-    lines = [f"### Shard `{shard}`: {'passed' if verdict.ok else 'failed'}", ""]
+def summary_markdown(shard: str, verdict: Verdict, repo_url: str, label: str = "Shard") -> str:
+    lines = [f"### {label} `{shard}`: {'passed' if verdict.ok else 'failed'}", ""]
 
     def section(title: str, items: list[str]) -> None:
         if items:
@@ -178,7 +178,7 @@ def summary_markdown(shard: str, verdict: Verdict, repo_url: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def evaluate(args: argparse.Namespace) -> int:
+def evaluate(args: argparse.Namespace, *, label: str = "Shard") -> int:
     with open(args.manifest, encoding="utf-8") as handle:
         manifest = json.load(handle)
     with open(os.path.join(args.shard_dir, "runs.json"), encoding="utf-8") as handle:
@@ -187,7 +187,7 @@ def evaluate(args: argparse.Namespace) -> int:
     second = [read_trx(os.path.join(args.shard_dir, "try2", str(index))) for index in range(len(runs))]
     verdict = decide(manifest, runs, first, second)
     repo_url = f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{os.environ.get('GITHUB_REPOSITORY', 'elsa-workflows/elsa-foundation')}"
-    text = summary_markdown(args.shard, verdict, repo_url)
+    text = summary_markdown(args.shard, verdict, repo_url, label)
     print(text)
     if args.summary:
         with open(args.summary, "a", encoding="utf-8") as summary:

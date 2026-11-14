@@ -1,4 +1,6 @@
 """Inert retry controls. Fake dotnet writes TRX; no provider process starts."""
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -125,15 +127,16 @@ class RetryPolicyTests(unittest.TestCase):
 
 class DiscoveryRetentionTests(unittest.TestCase):
     def run_case(self, entry, *, retain=True, discovery_exit=0, initial_outcome="Passed", start_error=False,
-                 discovery_timeout=False):
+                 discovery_timeout=False, reports=None):
         calls = []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             out = root / "out"
             manifest = root / "manifest.json"
+            summary = root / "summary.md"
             manifest.write_text(json.dumps({"projects": [], "quarantine": []}))
             argv = ["run_shard.py", "--entry", json.dumps(entry), "--out", str(out),
-                    "--head", "a" * 40, "--manifest", str(manifest), "--parallel", "1"]
+                    "--head", "a" * 40, "--manifest", str(manifest), "--parallel", "1", "--summary", str(summary)]
             if retain:
                 argv.append("--retain-discovery")
 
@@ -154,7 +157,9 @@ class DiscoveryRetentionTests(unittest.TestCase):
                 test_results._trx(str(target), [("Fake.Native", "Leg", outcome, "00:00:01")])
                 return subprocess.CompletedProcess(arguments, 0 if outcome == "Passed" else 1)
 
-            with patch.object(sys, "argv", argv), patch.object(run_shard.subprocess, "run", fake_dotnet), \
+            stdout = io.StringIO()
+            with redirect_stdout(stdout), patch.object(sys, "argv", argv), \
+                    patch.object(run_shard.subprocess, "run", fake_dotnet), \
                     patch.dict(run_shard.os.environ, {"INHERITED_SECRET": "private-inherited-value",
                                                      run_shard.SECRETS_CONNECTION: "private-connection-value"}):
                 code = run_shard.main()
@@ -165,6 +170,8 @@ class DiscoveryRetentionTests(unittest.TestCase):
                                  receipt.with_name("stderr.log").read_bytes()))
             outcomes = json.loads((out / "test-outcomes.json").read_text())
             trx_paths = sorted(str(path.relative_to(out)) for path in out.glob("try*/*/*.trx"))
+            if reports is not None:
+                reports.extend([stdout.getvalue(), summary.read_text()])
             return code, calls, retained, outcomes, trx_paths
 
     def test_discovery_retains_exact_bytes_and_matches_each_initial_run_without_recording_environment_values(self):
@@ -244,6 +251,48 @@ class DiscoveryRetentionTests(unittest.TestCase):
         code, calls, retained, _, _ = self.run_case({"shard": "fake", "whole": ["fake.csproj"]}, retain=False)
         self.assertEqual((code, len(calls), retained), (0, 1, []))
         self.assertNotIn("--list-tests", calls[0][0])
+
+    def test_discovery_failure_never_reports_overall_pass_in_stdout_or_summary(self):
+        for failure in ({"discovery_exit": 17}, {"discovery_timeout": True}):
+            for initial_outcome in ("Passed", "Failed"):
+                with self.subTest(failure=failure, initial_outcome=initial_outcome):
+                    reports = []
+                    code, _, _, outcomes, _ = self.run_case(
+                        {"shard": "fake", "whole": ["fake.csproj"]},
+                        initial_outcome=initial_outcome, reports=reports, **failure)
+                    self.assertEqual(code, 1)
+                    for text in reports:
+                        self.assertIn("### Test execution only `fake`: passed", text)
+                        self.assertIn("### Shard `fake`: failed", text)
+                        self.assertNotIn("### Shard `fake`: passed", text)
+                        self.assertIn("Discovery command: failed", text)
+                        self.assertIn("Test execution: passed", text)
+                    self.assertEqual(set(outcomes), {"schema", "shard", "headSha", "failedTwice", "passedOnRetry",
+                                                     "quarantinedFailed", "slow", "aborted"})
+                    self.assertEqual((outcomes["schema"], outcomes["shard"], outcomes["headSha"]), (1, "fake", "a" * 40))
+                    self.assertEqual(outcomes["failedTwice"], [])
+                    self.assertEqual(outcomes["passedOnRetry"], ["Fake.Native.Leg"] if initial_outcome == "Failed" else [])
+
+    def test_passing_discovery_cannot_hide_actual_test_failure(self):
+        reports = []
+        code, _, _, _, _ = self.run_case(
+            {"shard": "fake", "suites": [{"suite": "single", "project": "fake.csproj", "retryOnFailure": False}]},
+            initial_outcome="Failed", reports=reports)
+        self.assertEqual(code, 1)
+        for text in reports:
+            self.assertIn("### Test execution only `fake`: failed", text)
+            self.assertIn("### Shard `fake`: failed", text)
+            self.assertIn("Discovery command: passed", text)
+            self.assertIn("Test execution: failed", text)
+
+    def test_flag_off_keeps_legacy_stdout_and_summary_heading(self):
+        reports = []
+        code, _, _, _, _ = self.run_case({"shard": "fake", "whole": ["fake.csproj"]}, retain=False, reports=reports)
+        self.assertEqual(code, 0)
+        for text in reports:
+            self.assertEqual(text.count("### Shard `fake`: passed"), 1)
+            self.assertNotIn("Test execution only", text)
+            self.assertNotIn("Discovery command:", text)
 
 
 if __name__ == "__main__":
