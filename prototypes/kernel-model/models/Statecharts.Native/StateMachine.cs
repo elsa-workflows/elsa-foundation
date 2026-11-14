@@ -10,22 +10,25 @@ internal sealed record MachineState(string[] Active, Reaction? Pending, int Curs
     GraphPlan? Selection = null, bool LegacyPending = false,
     VisitScopes? Scopes = null, bool LegacyScopes = false);
 
-internal sealed partial class StateMachine : CompositeActivity, ISignalledComposite
+[InterventionParent(4)]
+internal sealed partial class StateMachine : CompositeActivity, ISignalledComposite, IInterventionParent
 {
     public StateMachine() { }
     [Input] public Definition? ChartDefinition { get; set; }
     [Input] public StructuralDefinition? StructuralDefinition { get; set; }
 
-    private SelectionChart Compile(CompositeContext context)
+    private SelectionChart Compile(CompositeContext context) => Compile(context.Node, ChartDefinition, StructuralDefinition);
+
+    private static SelectionChart Compile(Node node, Definition? chart, StructuralDefinition? structure)
     {
-        if ((ChartDefinition is null) == (StructuralDefinition is null))
+        if ((chart is null) == (structure is null))
             throw new ArgumentException("Exactly one statechart definition profile is required.");
-        var input = StructuralDefinition is null ? nameof(ChartDefinition) : nameof(StructuralDefinition);
-        if (context.Node.Inputs.GetValueOrDefault(input) is not LiteralBinding)
+        var input = structure is null ? nameof(ChartDefinition) : nameof(StructuralDefinition);
+        if (node.Inputs.GetValueOrDefault(input) is not LiteralBinding)
             throw new ArgumentException("Statechart definition must be literal for this prototype.");
-        var graph = StructuralDefinition is { } definition ? new SelectionChart(definition.Nodes, definition.Rules, definition.Defaults) : new Chart(ChartDefinition!).Compiled;
+        var graph = structure is { } definition ? new SelectionChart(definition.Nodes, definition.Rules, definition.Defaults) : new Chart(chart!).Compiled;
         foreach (var id in graph.Activities)
-            if (context.Children.Count(n => n.Id == id) != 1) throw new ArgumentException("Unknown statechart activity reference: " + id);
+            if (node.Children.Count(n => n.Id == id) != 1) throw new ArgumentException("Unknown statechart activity reference: " + id);
         return graph;
     }
 
