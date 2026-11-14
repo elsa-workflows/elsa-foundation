@@ -92,7 +92,6 @@ public sealed class NativePlacementVerificationTests
 
     private static void SetDescriptor(JsonNode node, string field, string value)
     {
-        node["descriptor"]!["payload"]![field] = value;
         node["descriptorPayload"]![field] = value;
     }
 
