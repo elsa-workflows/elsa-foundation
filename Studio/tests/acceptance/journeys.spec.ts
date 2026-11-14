@@ -1,3 +1,4 @@
+import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
 import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
 import { dashboardComparisonJourney } from "./dashboardComparisonJourney";
@@ -669,4 +670,8 @@ test("execution navigation keeps keyboard focus and exact evidence", async ({ pa
 
 test("timeline selection retains its tab and exact occurrence", async ({ page }, info) => {
   await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("explicit authored activity names survive publication and execution", async ({ page }, info) => {
+  await authoredActivityNamesJourney(page, info, capture);
 });

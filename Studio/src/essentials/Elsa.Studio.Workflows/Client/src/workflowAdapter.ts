@@ -37,6 +37,8 @@ export { bpmnStructureKind } from "./bpmn/bpmnTypes";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
+  /** The label came from explicit saved presentation rather than a catalog/type fallback. */
+  hasAuthoredLabel?: boolean;
   activityVersionId: string;
   activityTypeKey?: string;
   category?: string;
@@ -972,6 +974,7 @@ function createWorkflowNode(
         catalogItem,
         catalogItem?.activityTypeKey ?? activity.activityVersionId
       ),
+      hasAuthoredLabel: !!presentation?.displayName?.trim(),
       activityVersionId: activity.activityVersionId,
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,

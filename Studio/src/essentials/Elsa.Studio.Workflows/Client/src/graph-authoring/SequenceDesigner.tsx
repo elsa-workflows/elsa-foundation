@@ -354,7 +354,7 @@ function insertionLabel(nodes: Node<WorkflowNodeData>[], index: number) {
 }
 
 function sequenceCardTitle(data: WorkflowNodeData) {
-  if (!isTechnicalActivityLabel(data.label)) return data.label;
+  if (data.hasAuthoredLabel || !isTechnicalActivityLabel(data.label)) return data.label;
   const fromType = formatShortTypeName(data.activityTypeKey);
   return fromType && !isTechnicalActivityLabel(fromType) ? fromType : "Activity";
 }

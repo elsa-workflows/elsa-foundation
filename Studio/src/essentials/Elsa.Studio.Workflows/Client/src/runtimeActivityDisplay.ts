@@ -1,5 +1,5 @@
 import type { ActivityCatalogItem, ActivityPresentationRecord } from "./workflowTypes";
-import { resolveActivityLabel } from "./activityPresentation";
+import { activityDisplayNameMaxLength, normalizeActivityPresentationValue, resolveActivityLabel } from "./activityPresentation";
 import { isTechnicalActivityLabel } from "./technicalActivityLabel";
 
 // Engine-owned operations retain friendly names when a historical catalog is unavailable.
@@ -15,12 +15,11 @@ export function resolveRuntimeActivityLabel(
   catalogItem: ActivityCatalogItem | null | undefined,
   activityType: string
 ) {
-  const authored = presentation?.displayName?.trim();
-  const usablePresentation = authored && !isTechnicalActivityLabel(authored)
-    ? presentation
-    : undefined;
-  const label = resolveActivityLabel(usablePresentation, catalogItem, activityType);
-  if (!isTechnicalActivityLabel(label) && (catalogItem || usablePresentation)) return label;
+  // Presentation records hold explicit authored names, even when their spelling resembles an identity.
+  const authored = normalizeActivityPresentationValue(presentation?.displayName, activityDisplayNameMaxLength);
+  if (authored) return authored;
+  const label = resolveActivityLabel(undefined, catalogItem, activityType);
+  if (!isTechnicalActivityLabel(label) && catalogItem) return label;
   return getIntrinsicActivityDisplay(activityType)
     ?? (isTechnicalActivityLabel(label) ? "Activity" : label);
 }
