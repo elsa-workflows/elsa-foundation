@@ -15,6 +15,9 @@ internal static class NativeStatefulRecovery
         if (!f.RecoveryStateful) return;
         if (NativeInterventions.Policy(s) < 3 || f.RecoveryInputs is null || f.RecoveryMaterial is null || string.IsNullOrEmpty(f.OperationKey) || f.Attempt != 0)
             throw new InvalidOperationException("Invalid native stateful recovery ownership.");
+        foreach (var w in s.Agenda.Where(w => w.Resume && (w.Frame == f.Id || w.Wait is not null && s.Waits.TryGetValue(w.Wait, out var owner) && owner.Frame == f.Id)))
+            if (w.Wait is null || !s.Waits.TryGetValue(w.Wait, out var wait) || w.Frame != wait.Frame || wait.Frame != f.Id)
+                throw new InvalidOperationException("Invalid native qualified resume ownership.");
     }
     internal static bool SuspendedRoot(NativeState s, Frame f) => NativeInterventions.Policy(s) >= 3 && f.RecoveryStateful && f.Intervention is null &&
         NativeInterventions.RootDescriptor(f) && s.Frames.Count == 1 && s.Waits.Values.Any(w => w.Frame == f.Id) &&

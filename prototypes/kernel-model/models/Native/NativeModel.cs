@@ -363,6 +363,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     private async ValueTask ResumeAsync(Work work)
     {
         if (!_s.Waits.TryGetValue(work.Wait!, out var wait) || !_s.Frames.TryGetValue(wait.Frame, out var frame)) return;
+        if (frame.RecoveryStateful && frame.Id != work.Frame) throw new InvalidOperationException("Invalid native qualified resume ownership.");
         var node = _wf.Nodes[frame.Node];
         if (frame.RecoveryStateful && (!RecoverableKind(node) || !typeof(IStateful).IsAssignableFrom(node.Type) ||
             !JsonNode.DeepEquals(frame.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf))))
@@ -386,7 +387,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             return;
         }
         var activity = (IStateful)(frame.RecoveryStateful ? Hydrator.Create(node, (JsonObject)frame.RecoveryInputs!.DeepClone()) : Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame))));
-        Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
+        Apply(frame, await activity.ResumeAsync(Context(frame), frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State, work.Payload));
     }
 
     private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey);
