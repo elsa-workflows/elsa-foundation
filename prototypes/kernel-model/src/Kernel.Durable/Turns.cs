@@ -84,6 +84,7 @@ public sealed class Delivery(Message message, long seq)
     public bool HasRequestAddress => RequestAddress is not null;
     internal string? RequestAddress;   // a single live response to a retryable PostRequest; never persisted
     internal bool Durable;            // it is a row
+    public bool IsDurableJobTicket => Durable && Message.InboxScope > 0 && Message.Kind is Kinds.Job or Kinds.JobFinished;
     internal bool AwaitPoll;          // promoted while catching up: poll must observe its row before marking it
     internal bool Marked;             // its row says seen at this epoch
     internal bool RecoveryOrdering;   // a previously marked row read on takeover, or a command that matured during recovery
@@ -97,6 +98,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job;
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
+    internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
     internal bool CompletedJob;       // only the Worker can turn a ticket into a result
     internal bool Ticket;             // a kernel message, not (yet) for the model
     internal bool Taken;              // a turn or a commit in flight has it
@@ -233,8 +235,8 @@ public sealed class DurableTurn
         _custom = input.Row?.CustomHandles is { } handles ? DurableKeyJson.ReadKeys(handles).ToHashSet(StringComparer.Ordinal) : [];
         Inbox = input.Taken.Skip(input.From).Select(i => i.Message).ToList();
         _jobs = input.Row?.Jobs is { } jobs ? DurableKeyJson.ReadKeys(jobs) : [];
-        foreach (var message in Inbox)
-            if (message.Kind == Kinds.JobFinished) _jobs.Remove(message.Read<JobFinished>().Key);    // its result is being handled: no longer in flight
+        foreach (var delivery in input.Taken.Skip(input.From))
+            if (CompletedTicket(delivery, out var key)) _jobs.Remove(key);
         Revision = (input.Row?.Revision ?? 0) + 1;
         Clock = new TurnClock(input.Row, Revision, input.Services);
     }
@@ -432,9 +434,19 @@ public sealed class DurableTurn
     /// <summary>A held job result is still in flight; then the row's <c>Jobs</c>.</summary>
     public string? Jobs()
     {
-        foreach (var message in Inbox)
-            if (message.Kind == Kinds.JobFinished && _held.Contains(message.InboxKey)) _jobs.Add(message.Read<JobFinished>().Key);   // a held result: still in flight
-        return _jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(_jobs);
+        var jobs = new List<string>(_jobs);
+        foreach (var delivery in _input.Taken.Skip(_input.From))
+            if (_held.Contains(delivery.Message.InboxKey) && CompletedTicket(delivery, out var key) && !jobs.Contains(key))
+                jobs.Add(key);
+        return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
+    }
+
+    private bool CompletedTicket(Delivery delivery, out string key)
+    {
+        key = "";
+        if (!delivery.IsDurableJobTicket || delivery.Message.Kind != Kinds.JobFinished) return false;
+        key = delivery.Message.Read<JobFinished>().Key;
+        return delivery.Message.Target == Actor && delivery.Message.InboxKey == InboxKey.Ticket(Id, key, _input.Creation);
     }
 
     /// <summary>What the turn consumed, held, cancelled and emitted. The row comes with <see cref="Seal"/>.</summary>
