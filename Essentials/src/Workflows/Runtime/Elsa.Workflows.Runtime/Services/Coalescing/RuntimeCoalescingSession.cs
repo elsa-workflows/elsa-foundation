@@ -41,6 +41,7 @@ public sealed class RuntimeCoalescingSession
     private bool _durableSchedulerClaimBoundaryRequested;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
+    private readonly List<RuntimeHistoryBatch> _bufferedHistoryBatches = [];
     private readonly HashSet<string> _segmentActivityIds = new(StringComparer.Ordinal);
 
     private WorkflowExecutionState? _workflowExecution;
@@ -233,6 +234,7 @@ public sealed class RuntimeCoalescingSession
 
         ApplyToOverlay(commit.StateChanges, includeOutbox: true);
         _bufferedChangeSets.Add(commit.StateChanges);
+        if (commit.HistoryBatches is { } history) _bufferedHistoryBatches.AddRange(history);
         foreach (var activityExecutionId in ActivityExecutionIdsOf(commit))
             _segmentActivityIds.Add(activityExecutionId);
     }
@@ -1226,9 +1228,16 @@ public sealed class RuntimeCoalescingSession
                 item.Metadata))
             .ToArray();
 
+    internal IReadOnlyList<RuntimeHistoryBatch>? FoldHistoryBatchesWith(RuntimeCheckpointCommit? trailing = null)
+    {
+        var groups = trailing?.HistoryBatches is { } history ? _bufferedHistoryBatches.Concat(history).ToArray() : _bufferedHistoryBatches.ToArray();
+        return groups.Length == 0 ? null : Array.AsReadOnly(groups);
+    }
+
     public void ClearBuffer()
     {
         _bufferedChangeSets.Clear();
+        _bufferedHistoryBatches.Clear();
         _segmentActivityIds.Clear();
         // These records have committed. Later delivery may advance them through another scope, so a new
         // segment must not reapply the preceding segment's snapshot over the authoritative durable lifecycle.

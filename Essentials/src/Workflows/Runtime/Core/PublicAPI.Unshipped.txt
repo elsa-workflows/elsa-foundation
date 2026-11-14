@@ -12421,3 +12421,7 @@ Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryUnavailableException
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryUnavailableException.RuntimeHistoryUnavailableException(string! workflowExecutionId, string! operation, System.Exception! innerException) -> void
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryUnavailableException.WorkflowExecutionId.get -> string!
 Elsa.Workflows.Runtime.Core.Exceptions.RuntimeHistoryUnavailableException.Operation.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsHistory.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! selectedStore) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistoryBatches.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBatch!>?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.HistoryBatches.init -> void
