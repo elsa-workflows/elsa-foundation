@@ -1,12 +1,12 @@
-"""Twelve concrete, serial source controls for #3831/T044. Not a consumer witness.
+"""Fourteen concrete, serial source controls for #3831/T044. Not a consumer witness.
 
 Run only in a disposable clean checkout with its .NET graph restored and Studio
 dependencies installed. Raw reports/logs are private evidence; no environment
 values are recorded. Each recipe builds/runs baseline, mutation, and restoration.
 The normalization control covers ordinal declared-code identity only; it does not
 qualify every owner callback, forwarding/retention path, or typed channel.
-The two Copilot auth controls and current-route control are source-authored; their causal runtime evidence
-must be established separately on the exact candidate, within the same budgets.
+The Copilot auth, current-route and URL controls are source-authored; their causal
+runtime evidence must be established on the exact candidate, within the same budgets.
 """
 from __future__ import annotations
 
@@ -86,6 +86,12 @@ COPILOT_AUTH_ROWS = (
     '(external: False, providerAuth: "logged-in", expectedMode: "logged-in-user")',
 )
 ACTIVE_ROUTE_ROWS = tuple(f'(encoding: "{encoding}")' for encoding in ("plain", "unicode", "html"))
+COPILOT_URL_ROWS = tuple(f'(component: "{component}", absolute: {absolute})'
+    for component in ("userinfo", "query", "fragment", "path", "dot-path", "escaped-dot-path", "single-dot-path",
+        "escaped-single-dot-path", "backslash-path", "empty-userinfo") for absolute in ("True", "False"))
+COPILOT_URL_FAILURES = tuple(f'(component: "{component}", absolute: True)'
+    for component in ("dot-path", "escaped-dot-path", "single-dot-path", "escaped-single-dot-path", "empty-userinfo")) \
+    + ('(component: "empty-userinfo", absolute: False)',)
 
 # These are exact source fragments, exact selected rows, and the intended assertion.
 # A moved assertion/changed test contract requires source review and a recipe update.
@@ -173,6 +179,26 @@ RECIPES = (
         'Assert.Equal(route, Element(browser).GetProperty("activeRoute").GetString());',
         r"^\s*System\.Collections\.Generic\.KeyNotFoundException\s*:\s*The given key was not present in the dictionary\.",
         owner_dll="Elsa.Weaver.Api.dll"),
+    Recipe("copilot-runtime-url-redaction", "dotnet", "Extensions/Weaver/src/GitHubCopilot/Services/WeaverGitHubCopilotProvider.cs",
+        "new[] { value.GitHubToken, value.RuntimeConnectionToken, environmentToken, value.RuntimeUrl }",
+        "new[] { value.GitHubToken, value.RuntimeConnectionToken, environmentToken }",
+        "Elsa.Weaver.Tests.WeaverProviderLogRedactionTests.Copilot_diagnostics_redacts_the_runtime_endpoint_and_an_overlapping_connection_token_from_status_and_logs",
+        ("",), ("",), TESTS + "WeaverProviderLogRedactionTests.cs", 169,
+        "Assert.DoesNotContain(endpointCanary, rendered);",
+        r'^\s*Assert\.DoesNotContain\(\).*Sub-string found.*Found:\s*"endpoint-[0-9a-f]{32}"',
+        owner_dll="Elsa.Weaver.GitHubCopilot.dll"),
+    Recipe("copilot-runtime-url-validation", "dotnet", "Extensions/Weaver/src/GitHubCopilot/Services/WeaverGitHubCopilotProvider.cs",
+        '        var authorityStart = candidate.IndexOf("://", StringComparison.Ordinal) + 3;\n'
+        "        if (candidate.IndexOfAny(['@', '?', '#', '\\\\'], authorityStart) >= 0)\n"
+        "            return false;\n"
+        "        var pathStart = candidate.IndexOf('/', authorityStart);\n"
+        "        if (pathStart >= 0 && pathStart != candidate.Length - 1)\n"
+        "            return false;\n\n", "",
+        "Elsa.Weaver.Tests.WeaverProviderLogRedactionTests.Copilot_refuses_runtime_url_components_before_sdk_factory_or_logging",
+        COPILOT_URL_ROWS, COPILOT_URL_FAILURES, TESTS + "WeaverProviderLogRedactionTests.cs", 256,
+        "Assert.False(diagnostics.IsAvailable);",
+        r"^\s*Assert\.False\(\).*Expected:\s*False\s+Actual:\s*True",
+        owner_dll="Elsa.Weaver.GitHubCopilot.dll"),
 )
 
 
