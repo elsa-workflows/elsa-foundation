@@ -358,8 +358,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                     if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
                     model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
                 }
-                var context = Context(frame);
-                Apply(frame, await InvokeAuthored(frame, () => leaf.ExecuteAsync(context)));
+                var leafContext = Context(frame);
+                Apply(frame, await InvokeAuthored(frame, () => leaf.ExecuteAsync(leafContext)));
                 break;
         }
     }
