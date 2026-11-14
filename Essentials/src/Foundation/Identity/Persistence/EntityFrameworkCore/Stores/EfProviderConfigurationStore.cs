@@ -27,6 +27,8 @@ public sealed class EfProviderConfigurationStore(
         !string.IsNullOrEmpty(context.Database.GetConnectionString()) &&
         string.Equals(context.Database.GetConnectionString(), iamContext.Database.GetConnectionString(), StringComparison.Ordinal);
 
+    /// <summary>Atomically saves a global provider configuration with the expected IAM revisions.</summary>
+    /// <exception cref="IdentityEntityFrameworkPersistenceException">The owned provider operation fails; the original infrastructure exception is retained.</exception>
     public async ValueTask<IamRevisionSaveResult> SaveWithIdentityRevisionGuardsAsync(ProviderConfigurationRecord configuration,
         string? expectedRevision, IReadOnlyList<IamRevisionGuard> guards, CancellationToken cancellationToken = default)
     {
@@ -63,6 +65,8 @@ public sealed class EfProviderConfigurationStore(
         catch (EfCommitOutcomeUnknownException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey))
         { return new(IamRevisionSaveStatus.Conflict); }
+        catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
+        { throw EfIdentityStoreSupport.Failure("Unable to save the coordinated provider configuration.", exception); }
     }
 
     public async ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(
