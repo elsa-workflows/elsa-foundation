@@ -258,6 +258,8 @@ function resolveEntry(props: StudioCodeEditorEngineProps): CodeMirrorSessionEntr
 
 function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorSessionEntry): EditorState {
   entry.editingEnabled = !!props.documentEditing;
+  // setState does not notify update listeners. An adopted owner state ends the previous local emission.
+  entry.runtime.lastEmittedValue = undefined;
   return EditorState.create({
       doc: props.document.value,
       selection: restoredSelection(props, entry),

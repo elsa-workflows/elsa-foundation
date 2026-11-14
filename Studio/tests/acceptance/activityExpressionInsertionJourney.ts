@@ -102,8 +102,11 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
     await chooser().getByRole("group", { name: "Variables", exact: true }).getByRole("option", { name: /Escaped payload/ }).press("Enter");
     const member = chooser().getByRole("textbox", { name: "Member name", exact: true });
     await expect(member).toBeEnabled(); await member.fill("a.b"); await member.press("Enter");
-    await chooser().getByRole("button", { name: "Open empty member", exact: true }).press("Enter");
+    await expect(chooser().getByRole("navigation", { name: "Member path", exact: true })).toContainText('"a.b"');
+    const empty = chooser().getByRole("button", { name: "Open empty member", exact: true });
+    await expect(empty).toBeEnabled(); await empty.press("Enter");
     await expect(chooser().getByRole("navigation", { name: "Member path", exact: true })).toContainText('""');
+    await expect(chooser().getByRole("button", { name: "Use this value", exact: true })).toBeEnabled();
     await capture(page, info, "expression-escaped-member");
     await chooser().getByRole("button", { name: "Use this value", exact: true }).press("Enter");
   }, text);

@@ -30,12 +30,13 @@ function editor() {
       render();
     }
   };
-  let mountKey = 0;
-  function render() { flushSync(() => root.render(<StrictMode><CodeMirrorStudioCodeEditor key={mountKey} {...props} /></StrictMode>)); }
+  let mountKey = 0, mounted = true;
+  function render() { if (mounted) flushSync(() => root.render(<StrictMode><CodeMirrorStudioCodeEditor key={mountKey} {...props} /></StrictMode>)); }
   render(); close = () => { flushSync(() => root.unmount()); host.remove(); };
   const view = () => EditorView.findFromDOM(host.querySelector(".cm-editor")!)!;
   return {
-    remount(profile: "compact" | "expanded") { flushSync(() => root.render(null)); mountKey++; props = { ...props, profile }; render(); },
+    park() { mounted = false; flushSync(() => root.render(null)); },
+    remount(profile: "compact" | "expanded") { flushSync(() => root.render(null)); mounted = true; mountKey++; props = { ...props, profile }; render(); },
     view, edits, payload: () => value, controller: () => controller!,
     change(next: Partial<StudioCodeEditorEngineProps>) { props = { ...props, ...next }; render(); },
     replace(payload: unknown, source = props.document.value) { value = payload; props = { ...props, document: { ...props.document, value: source }, documentEditing: { historyValue: value, onController: register } }; render(); },
@@ -79,6 +80,29 @@ it("restores a designer bookmark on external Undo/Redo before subsequent local t
   expect(e.view().state.selection.main.head).toBe(15);
   e.type("!"); flushSync(() => { undo(e.view()); });
   expect(e.payload()).toEqual(bound); expect(e.view().state.doc.toString()).toBe("a+args.customer");
+});
+it.each([
+  ["mounted", "raw typing"], ["remounted", "raw typing"],
+  ["mounted", "reused alias"], ["remounted", "reused alias"]
+])("adopts same-payload designer Undo/Redo before typing: %s / %s", (surface, operation) => {
+  const e = editor(), payload = operation === "reused alias" ? bound : { parameters: {} };
+  e.replace(payload); e.view().dispatch({ selection: { anchor: 1 } });
+  if (operation === "reused alias") expect(e.controller().apply({ expected: e.controller().capture()!, insert: "+args.customer", historyValue: payload })).toBe(true);
+  else e.type("b");
+  const after = operation === "reused alias" ? "a+args.customer" : "ab";
+  const edit = e.edits.at(-1)!;
+  if (surface === "remounted") e.park();
+  edit.before.restore(); e.replace(payload, "a");
+  if (surface === "remounted") e.remount("expanded");
+  expect(e.view().state.doc.toString()).toBe("a"); expect(e.view().state.selection.main.head).toBe(1);
+  edit.after.restore(); e.replace(payload, after);
+  const adopted = { source: e.view().state.doc.toString(), caret: e.view().state.selection.main.head };
+  e.type("!");
+  expect(e.view().state.doc.toString()).toBe(after + "!");
+  expect(adopted).toEqual({ source: after, caret: after.length });
+  expect(e.payload()).toEqual(payload);
+  flushSync(() => { expect(undo(e.view())).toBe(true); });
+  expect(e.view().state.doc.toString()).toBe(after); expect(e.view().state.selection.main.head).toBe(after.length); expect(e.payload()).toEqual(payload);
 });
 it("invalidates local history on same-source external binding replacement, then histories new typing", () => {
   const e = editor(); e.replace(bound);
