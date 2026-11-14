@@ -94,7 +94,8 @@ public sealed class WeaverTypedResultAdmissionTests
         });
         var proposal = await fixture.ProposeAsync();
         var observedCalls = observation.AsyncCalls;
-        Assert.True(observedCalls > 0);
+        if (expired) Assert.Equal(0, observedCalls); // Old unclassed preparation never needed the effects observer.
+        else Assert.True(observedCalls > 0);
         observation.RefreshThrows = failure == "refresh-throws";
         observation.RefreshStalls = failure == "refresh-stalls";
         observation.Available = failure != "snapshot-unavailable";
