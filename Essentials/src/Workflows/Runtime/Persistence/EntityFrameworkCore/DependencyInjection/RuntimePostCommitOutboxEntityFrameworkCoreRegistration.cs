@@ -44,7 +44,13 @@ public static class RuntimePostCommitOutboxEntityFrameworkCoreRegistration
             foreach (var descriptor in existingContracts)
                 services.Remove(descriptor);
 
-            services.AddScoped<EfRuntimePostCommitOutboxStore>();
+            services.AddScoped(provider =>
+            {
+                var store = ActivatorUtilities.CreateInstance<EfRuntimePostCommitOutboxStore>(provider);
+                store.StimulusAdapters = provider.GetServices<IStimulusDeliveryIntentAdapter>().ToArray();
+                store.StimulusInputValidator = provider.GetService<IWorkflowExecutableInputValidator>();
+                return store;
+            });
             var concrete = services.Last();
             var contracts = new[]
             {
