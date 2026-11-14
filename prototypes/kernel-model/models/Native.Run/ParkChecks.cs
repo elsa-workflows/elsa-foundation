@@ -149,11 +149,14 @@ public static class ParkChecks
         });
         await Case("poison job, takeover and terminate a live child", () => JobPoisonChecks.RunAsync(resultThrows: false));
         await Case("throwing job result, late sibling result and terminate after takeover", () => JobPoisonChecks.RunAsync(resultThrows: true));
+        await Case("qualified poison ticket preserves exact child and surviving sibling", () => JobPoisonChecks.RunAsync(resultThrows: false, qualified: true));
+        await Case("qualified late result retires only its own exact ticket", () => JobPoisonChecks.RunAsync(resultThrows: true, qualified: true));
         await Case("terminate a parked childless workflow with a live job", () => JobPoisonChecks.CancellationAsync(throwOnResult: true, cancelOther: false));
         await Case("a throwing turn abandons the cancellation of its sibling job", () => JobPoisonChecks.CancellationAsync(throwOnResult: true, cancelOther: true));
         await Case("a sibling result survives a refused cancellation in flight", () => JobPoisonChecks.CancellationAsync(throwOnResult: false, cancelOther: true, refuseCommit: true));
         await Case("a committed cancellation stops the sibling job", () => JobPoisonChecks.CancellationAsync(throwOnResult: false, cancelOther: true));
         await Case("a refused hold parks the taken job result and its companion delivery", JobPoisonChecks.RefusedHoldAsync);
+        await Case("future-model metadata refusal drains an exact late job without reading private state", JobPoisonChecks.FutureMetadataAsync);
         await Case("suspension preserves the wait", async () =>
         {
             var world = new World();

@@ -3,7 +3,7 @@ namespace Kernel.Native.Run;
 /// <summary>Job tickets, the parked checkpoint and the later termination of its child, through real workers.</summary>
 internal static class JobPoisonChecks
 {
-    private sealed class Probe(bool throwOnResult, bool withChild = true, bool cancelOther = false) : Kernel.Sim.Model<List<string>>
+    private class Probe(bool throwOnResult, bool withChild = true, bool cancelOther = false) : Kernel.Sim.Model<List<string>>
     {
         public override string Key => "job-park-probe";
         public readonly List<string> Started = [];
@@ -52,6 +52,57 @@ internal static class JobPoisonChecks
                 }
             }
         }
+    }
+
+    private sealed class MetadataProbe() : Probe(throwOnResult: true, withChild: false), IModelMetadata
+    {
+        public bool HandlesMetadata(Message message) => message.Kind == "metadata";
+        public ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("an old model must not read a future checkpoint");
+        public void TerminateMetadata(object state) { }
+        public bool ProtectsDeletion(object state, long now, ICommitClock clock) => false;
+    }
+
+    internal static async Task FutureMetadataAsync()
+    {
+        var time = 100L;
+        var store = new InMemoryStore(1, () => time);
+        var probe = new MetadataProbe();
+        Worker NewOwner(string name) => new(name, 0, store, new WorkflowInstance([probe]),
+            new WorkerOptions { Monotonic = () => time });
+        var owner = NewOwner("metadata-first");
+        await new DurableHost([owner]).ActivateAsync(0);
+        await store.AddAsync(new("metadata-start", new(Id), Kinds.Start,
+            Start: new StartSpec(probe.Key, "solo", Creation: new(1, 0, "future-metadata"))));
+        await owner.WokenAsync(null);
+        for (var i = 0; i < 12 && !probe.Pending.ContainsKey("other"); i++) await owner.RunAsync();
+        probe.Pending["poison"].SetResult("fault");
+        for (var i = 0; i < 12 && store.Instances[Id].Status != InstanceStatus.Faulted; i++) await owner.RunAsync();
+        Check(store.Instances[Id].Jobs == Json.Write(new[] { "other" }), "fault must leave the sibling for the metadata witness");
+        await owner.DisposeAsync();
+        // A checkpoint written by a newer model is deliberately unreadable to this model. Seed only that
+        // versioned fixture; the remaining ticket, later result, metadata command and commit use real workers.
+        var future = store.Instances[Id] with { StateVersion = 2, State = "{\"private\":\"future\"}" };
+        store.Instances[Id] = future;
+        time += 11_000;
+        owner = NewOwner("metadata-old-model");
+        await new DurableHost([owner]).ActivateAsync(0);
+        await owner.WokenAsync(null);
+        for (var i = 0; i < 12 && probe.Pending["other"].Task.IsCompleted; i++) await owner.RunAsync();
+        await store.AddAsync(new("metadata-query", new(Id), "metadata", TargetCreation: 1));
+        await owner.PollAsync();
+        await owner.FlushAsync();
+        probe.Pending["other"].SetResult("late");
+        var other = Worker.TicketId(Id, "other", 1);
+        for (var i = 0; i < 12 && store.Messages.ContainsKey(other); i++) await owner.RunAsync();
+        var after = store.Instances[Id];
+        Check(after == (future with { Jobs = null, Revision = future.Revision + 1 })
+            && !store.Messages.ContainsKey(other) && !store.Messages.ContainsKey("metadata-query")
+            && store.Journal.Values.Any(j => j.Instance == Id && j.Revision == after.Revision
+                && j.Entries == Json.Write(new object[] { new ModelMetadataUnavailable(Id, probe.Key, 2, 1) })),
+            "old-model metadata refusal must drain the exact late ticket atomically while keeping future state opaque");
+        Check(store.Ghost.Count == 0 && owner.Owns, "metadata cleanup must not lose its fence or invent a ticket");
+        await owner.DisposeAsync();
     }
 
     private const string Id = "0/probe";
@@ -151,8 +202,11 @@ internal static class JobPoisonChecks
         Check(probe.Results.SequenceEqual(["poison"]) && owner.Owns && store.Ghost.Count == 0, "the parked model must not handle the sibling result or lose the fence");
     }
 
-    internal static async Task RunAsync(bool resultThrows)
+    internal static async Task RunAsync(bool resultThrows, bool qualified = false)
     {
+        var creation = qualified ? 1L : 0L;
+        var poisonTicket = Worker.TicketId(Id, "poison", creation);
+        var otherTicket = Worker.TicketId(Id, "other", creation);
         var time = 100L;
         var store = new InMemoryStore(1, () => time);
         var probe = new Probe(resultThrows);
@@ -173,45 +227,45 @@ internal static class JobPoisonChecks
         }
 
         var owner = await Take();
-        await store.AddAsync(new Message("start", new InstanceRef(Id), Kinds.Start, Start: new StartSpec(probe.Key, "parent")));
+        await store.AddAsync(new Message("start", new InstanceRef(Id), Kinds.Start, Start: new StartSpec(probe.Key, "parent", Creation: qualified ? new(1, 0, "poison-parent") : null)));
         await Drive(owner, () => store.Instances.Count == 2 && probe.Started.Contains("other"));
         var checkpoint = store.Instances[Id];
-        var child = Json.Read<string[]>(checkpoint.Children!).Single();
-        Check(store.Instances.ContainsKey(child) && store.Messages.ContainsKey(Poison) && store.Messages.ContainsKey(Other), "jobs and child must be live initially");
+        var child = qualified ? Json.Read<CreationAddress[]>(checkpoint.Children!).Single().Id : Json.Read<string[]>(checkpoint.Children!).Single();
+        Check(store.Instances.ContainsKey(child) && store.Messages.ContainsKey(poisonTicket) && store.Messages.ContainsKey(otherTicket), "jobs and child must be live initially");
         if (resultThrows) probe.Pending["poison"].SetResult("value");
         else
         {
             owner = await Take();
-            await Drive(owner, () => store.Messages[Poison].Trial == owner.Epoch);
-            Check(store.Messages[Poison].Trial == owner.Epoch && store.Messages[Other].Trial != owner.Epoch, "only the poison ticket must be on trial at the owner's loss");
+            await Drive(owner, () => store.Messages[poisonTicket].Trial == owner.Epoch);
+            Check(store.Messages[poisonTicket].Trial == owner.Epoch && store.Messages[otherTicket].Trial != owner.Epoch, "only the poison ticket must be on trial at the owner's loss");
             owner = await Take();
-            Check(store.Messages[Poison].Attempts == 1 && store.Messages[Other].Attempts == 0, "the takeover must count exactly the lost job trial");
+            Check(store.Messages[poisonTicket].Attempts == 1 && store.Messages[otherTicket].Attempts == 0, "the takeover must count exactly the lost job trial");
         }
         var poisonStarts = probe.Started.Count(s => s == "poison");
         await Drive(owner, () => store.Instances[Id].Status == InstanceStatus.Faulted);
         var parked = store.Instances[Id];
         Check(parked.Status == InstanceStatus.Faulted && parked.State == checkpoint.State && parked.Children == checkpoint.Children, "Park must retain the committed state and child");
-        var fault = resultThrows ? "job result turn failed" : $"message {Poison} was on trial when 1 owners were lost";
+        var fault = resultThrows ? "job result turn failed" : $"message {poisonTicket} was on trial when 1 owners were lost";
         Check(parked.Fault == fault && probe.Started.Count(s => s == "poison") == poisonStarts, "Park must record its cause and never restart the poison ticket");
-        Check(!store.Messages.ContainsKey(Poison) && store.Messages.ContainsKey(Other) && !store.Subscriptions.Any(s => s.Instance == Id), "Park must consume its ticket, preserve the other ticket and remove waits");
+        Check(!store.Messages.ContainsKey(poisonTicket) && store.Messages.ContainsKey(otherTicket) && !store.Subscriptions.Any(s => s.Instance == Id), "Park must consume its ticket, preserve the other ticket and remove waits");
 
         if (resultThrows)
         {
             probe.Pending["other"].SetResult("late");
-            await Drive(owner, () => !store.Messages.ContainsKey(Other));
-            Check(!store.Messages.ContainsKey(Other), "the late result must actually be consumed before takeover");
+            await Drive(owner, () => !store.Messages.ContainsKey(otherTicket));
+            Check(!store.Messages.ContainsKey(otherTicket), "the late result must actually be consumed before takeover");
         }
 
         var beforeTerminate = store.Instances[Id];
         if (resultThrows) owner = await Take();
-        await store.AddAsync(new Message("terminate", new InstanceRef(Id), Kinds.Terminate));
+        await store.AddAsync(new Message("terminate", new InstanceRef(Id), Kinds.Terminate, TargetCreation: qualified ? creation : null));
         await owner.WokenAsync(null);
         for (var attempt = 0; attempt < 2 && store.Messages.ContainsKey("terminate"); attempt++)
         {
             await Drive(owner, () => !store.Messages.ContainsKey("terminate"));
             if (!owner.Owns && attempt == 0) owner = await Take();
         }
-        Check(!store.Messages.ContainsKey("terminate"), $"terminate repeatedly reset after Park: Jobs={store.Instances[Id].Jobs}, poison ticket present={store.Messages.ContainsKey(Poison)}, ghost={store.Ghost.LastOrDefault()}");
+        Check(!store.Messages.ContainsKey("terminate"), $"terminate repeatedly reset after Park: Jobs={store.Instances[Id].Jobs}, poison ticket present={store.Messages.ContainsKey(poisonTicket)}, ghost={store.Ghost.LastOrDefault()}");
         await Drive(owner, () => store.Instances[child].Status == InstanceStatus.Cancelled);
         var ended = store.Instances[Id];
         Check(parked.Jobs is { } remaining && Json.Read<string[]>(remaining).SequenceEqual(["other"]), "the Park commit must retain only the other job key");
@@ -221,7 +275,7 @@ internal static class JobPoisonChecks
             Check(store.Journal.Values.Count(j => j.Instance == Id && j.Revision == beforeTerminate.Revision) == 1, "history must record the late result exactly once");
         }
         Check(ended.Revision == beforeTerminate.Revision + 1 && ended.Status == InstanceStatus.Faulted && ended.State == checkpoint.State && ended.Fault == fault && ended.Jobs is null && ended.Children is null, "terminate must retain the faulted checkpoint and clear outstanding work");
-        Check(!store.Messages.ContainsKey(Other) && store.Instances[child].Status == InstanceStatus.Cancelled, "the child must terminate and the remaining ticket disappear");
+        Check(!store.Messages.ContainsKey(otherTicket) && store.Instances[child].Status == InstanceStatus.Cancelled, "the child must terminate and the remaining ticket disappear");
         Check(store.Ghost.Count == 0, "unexpected store count mismatch: " + store.Ghost.FirstOrDefault());
     }
 }

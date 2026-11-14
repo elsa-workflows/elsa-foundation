@@ -1072,6 +1072,12 @@ cancellation removes the ticket and cancels the running job's token at commit. W
 refused, Park consumes all deliveries the turn took, including any job result it proposed to hold. The subscription
 rule is in 25.9.
 
+**Pre-GA limitation, owner decision of 14 November.** Earlier prototype code may already have persisted a faulted
+row whose `Jobs` names a ticket that was consumed. This change prevents that inconsistency in new commits and drains
+real late results; it does not scan, infer missing tickets, or repair existing inconsistent rows. Such historical
+prototype rows remain unsupported and can still refuse termination. No automatic migration or legacy-data repair is
+provided. This decision adds no storage operation or round trip to the normal path.
+
 | Focused gate | Main `310cd84b91` (includes the Park, reply, lease and mutation-bit changes) | With the job-poison fix |
 |---|---|---|
 | Native.Run `park` | 8 pass | 15 pass. The original two witnesses failed on `7ff84f862c`; childless terminate and both abandoned-cancellation races failed on `27b362312b`; the refused hold failed on `7edc462ef4` |
@@ -1095,6 +1101,16 @@ The candidate changes the oracle to recognize parking by the killing job's own t
 oracle from the corresponding version. The mutation result above was rerun after `HideDeliveryHistory` moved
 to bit 48. The older broad sweeps and full mutation matrices in the original PR ran against earlier bases and were
 not repeated here. This change uses the existing commit contract; no provider-specific persistence run was made.
+
+**14 November integration onto `a80fab48ac`.** The focused Park suite now has 18 passing cases. Two additional
+qualified-creation cases exercise the exact ticket identity through poison takeover, late sibling completion and
+termination of the exact child. A third case pairs a genuine late qualified job result with metadata input against a
+future-version faulted checkpoint: the old model refuses metadata without reading private state, but drains the
+consumed job key in that same revision. The future-version fixture is explicitly seeded; subsequent messages and
+commits use real workers. The completion guard retains main's active-creation check as well as the lease-generation
+check. Native smoke and deadline checks pass, the mutation flags are distinct, and the 1,000 ordinary / 200 native
+seed controls and deliberate job-poison mutation match the counts above. These are prototype in-memory checks, not
+fresh SQL or MongoDB qualification.
 
 ### 25.9 Park removes active subscriptions (owner decision, 13 November). Run
 
