@@ -90,11 +90,11 @@ internal static class RecoveryWitness
                 if (!prepared && a.Worker.NeedsFlush) Apply(new("flush", a.Id)); if (!prepared && a.Worker.NeedsMeet) Apply(new("meet", a.Id));
             }
             Check(prepared, "R57: phase uncertainty missed control preparation"); var row = world.Store.Instances[target.Id];
-            world.Auto = false; var a = Actor(); var call = a.Calls.Count; Apply(new("flush", a.Id));
-            Check(a.Calls.Count == call + 1 && a.Calls[call].Kind == "commit", "R57: phase uncertainty missed physical commit");
-            Apply(new(cut == "lost-answer" ? "exec" : "lose", a.Id, call));
+            world.Auto = false; var actorAtCut = Actor(); var call = actorAtCut.Calls.Count; Apply(new("flush", actorAtCut.Id));
+            Check(actorAtCut.Calls.Count == call + 1 && actorAtCut.Calls[call].Kind == "commit", "R57: phase uncertainty missed physical commit");
+            Apply(new(cut == "lost-answer" ? "exec" : "lose", actorAtCut.Id, call));
             Check(cut == "lost-answer" ? State().Retries?.Count == 1 : world.Store.Instances[target.Id] == row, "R57: phase uncertainty crossed wrong physical boundary");
-            Apply(new("answer", a.Id, call, Flag: true)); Check(ChartDependency.Calls.Count == 1, "R57: unknown commit answer executed fresh phase work");
+            Apply(new("answer", actorAtCut.Id, call, Flag: true)); Check(ChartDependency.Calls.Count == 1, "R57: unknown commit answer executed fresh phase work");
             world.Auto = true; Reload();
         }
         else Drain(retry.Id);
