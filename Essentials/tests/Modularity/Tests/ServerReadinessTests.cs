@@ -11,6 +11,30 @@ namespace Elsa.Modularity.Tests;
 
 public sealed class ServerReadinessTests
 {
+#if ELSA_DASHBOARD_QUALIFICATION
+    [Fact]
+    public async Task QualificationReadinessProbeDoesNotActivateTheDefaultShell()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync(warmDefaultShell: false, startReadinessWarmup: false);
+        var gate = fixture.RouteInitialization.For(ServerReadinessFixture.DefaultShellName);
+        var probes = Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => fixture.Client.GetAsync(DashboardQualificationBootstrap.ReadinessPath)));
+        try
+        {
+            var first = await Task.WhenAny(probes, gate.WaitUntilEnteredAsync()).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Same(probes, first);
+            Assert.All(await probes, response => Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode));
+            Assert.Equal(0, gate.Attempts);
+            Assert.Null(fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName));
+        }
+        finally
+        {
+            gate.Release();
+            foreach (var response in await probes.WaitAsync(TimeSpan.FromSeconds(5))) response.Dispose();
+        }
+    }
+#endif
+
     [Fact]
     public async Task ListeningProcessReportsLiveWhileDefaultShellReadinessIsImmediateUnavailable()
     {

@@ -216,14 +216,26 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
 
         Assert.Equal(durableMembership ? ClusterProviderKind.Durable : ClusterProviderKind.InProcess, root.GetRequiredService<IClusterMembership>().ProviderKind);
         var compared = SingletonServiceTypes(root).Select(type => (Type: type, Difference: Difference(type, root, shell.ServiceProvider))).ToArray();
-        foreach (var (type, reason) in RootOnly)
+        var rootOnly = RootOnly;
+#if ELSA_DASHBOARD_QUALIFICATION
+        if (host == "Elsa.Workbench")
+        {
+            rootOnly = new Dictionary<Type, string>(RootOnly)
+            {
+                [typeof(DashboardQualificationBootstrap)] = "The qualification bootstrap is the root's hosted service and readiness state; a shell must neither reconstruct nor dispose it."
+            };
+            var bootstrap = Assert.Single(root.GetServices<DashboardQualificationBootstrap>());
+            Assert.Same(bootstrap, Assert.Single(root.GetServices<IHostedService>().OfType<DashboardQualificationBootstrap>()));
+        }
+#endif
+        foreach (var (type, reason) in rootOnly)
         {
             Assert.Contains(type, compared.Select(service => service.Type));
             Assert.True(Resolve(root, type) is { Count: 1 }, $"{host} must register exactly one root {Describe(type)}. {reason}");
             Assert.True(Resolve(shell.ServiceProvider, type) is { Count: 0 }, $"{host}'s shell must exclude {Describe(type)}. {reason}");
         }
         var notShared = compared
-            .Where(service => service.Difference is not null && !PerShell.ContainsKey(Describe(service.Type)) && !RootOnly.ContainsKey(service.Type))
+            .Where(service => service.Difference is not null && !PerShell.ContainsKey(Describe(service.Type)) && !rootOnly.ContainsKey(service.Type))
             .Select(service => $"{Describe(service.Type)} ({service.Difference})")
             .ToArray();
         Assert.True(
