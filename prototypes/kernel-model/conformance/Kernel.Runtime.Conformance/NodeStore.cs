@@ -97,7 +97,7 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
         var held = false;
         lock (_lock)
         {
-            if (commit is { Turns.Count: > 0 } && commit.Partition == _commitPartition && _nextCommit > TimeSpan.Zero)
+            if (commit is { Turns.Count: > 0 } && commit.Partition == _commitPartition && _nextCommit != TimeSpan.Zero)
             {
                 Begin(_nextCommit);
                 _nextCommit = TimeSpan.Zero;
