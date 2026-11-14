@@ -10,8 +10,10 @@ internal static class MachineInboxWitness
     internal static void Run()
     {
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var nested in new[] { false, true })
-        foreach (var phase in new[] { "entry", "exit", "action" }) foreach (var cut in new[] { "steady", "lost-before", "lost-answer", "cancel" })
+        foreach (var phase in new[] { "entry", "exit", "action" }) foreach (var cut in new[] { "steady", "lost-before", "lost-answer", "cancel", "retry-lost-before", "retry-lost-answer" })
             Run(mode, nested, phase, cut);
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var nested in new[] { false, true })
+        foreach (var phase in new[] { "exit", "action" }) foreach (var cut in new[] { "selection-lost-before", "selection-lost-answer" }) Run(mode, nested, phase, cut);
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) Legacy(mode);
     }
     private static void Run(string mode, bool nested, string phase, string cut)
@@ -36,7 +38,15 @@ internal static class MachineInboxWitness
         InvocationInbox Inbox() => h.State.Inboxes![frame];
         InvocationInput Input(string id, string name, string? value = null) => new(frame, id, name, value);
         var go = h.Send(InvocationInput.Kind, Input("go", "go"));
-        if (cut.StartsWith("lost-", StringComparison.Ordinal)) h.Cut(go, cut == "lost-answer"); else h.Drain();
+        if (cut.StartsWith("lost-", StringComparison.Ordinal)) h.Cut(go, cut == "lost-answer");
+        else if (cut.StartsWith("selection-", StringComparison.Ordinal))
+        {
+            h.Drain(go);
+            Check(h.State.Inboxes![frame].Receipts["go"].Status == "Queued", "Q16: selection cut was not after pure admission");
+            var wake = h.World.Store.Messages.Values.Single(r => !r.Done && r.Message.Target == h.Target && r.Message.Kind == NativeKinds.Continue).Message.Id;
+            h.Cut(wake, cut == "selection-lost-answer");
+        }
+        else h.Drain();
         var pending = Json.Write(h.State.Frames[frame].State); var resources = Json.Write(h.State.LexicalScopes);
         Check(ChartDependency.Calls.Count == 1 && h.State.Frames.Values.Any(f => f.Intervention is not null), "Q2: queue fixture did not reach an actual phase fault");
         Check(Inbox().Receipts["go"].Status == (phase == "entry" ? "Queued" : "Selected"), "Q2: selected receipt did not follow the pending reaction");
@@ -75,8 +85,10 @@ internal static class MachineInboxWitness
             for (var attempt = 1; attempt <= 2; attempt++)
             {
                 var source = h.State.Frames.Values.Single(f => f.Node == "dependency");
-                h.Send(NativeRetry.Kind, new NativeRetry("repair-" + attempt, source.Id, source.Intervention!.Id, "inbox phase repair")); h.Drain();
-                if (attempt == 1) Check(Json.Write(h.State.Frames[frame].State).Contains("SelectedInput", StringComparison.Ordinal) &&
+                var repair = h.Send(NativeRetry.Kind, new NativeRetry("repair-" + attempt, source.Id, source.Intervention!.Id, "inbox phase repair"));
+                if (attempt == 1 && cut.StartsWith("retry-lost-", StringComparison.Ordinal)) h.Cut(repair, cut == "retry-lost-answer");
+                else h.Drain(repair);
+                if (attempt == 1) Check(Json.Read<MachineState>(Json.Write(h.State.Frames[frame].State)) is { Version: 5, Inbox: not null, Pending: not null } &&
                     Inbox().Receipts["go"].Status == (phase == "entry" ? "Queued" : "Selected"), "Q8: retry settled the admitted event before its phase succeeded");
                 h.Reload();
             }
