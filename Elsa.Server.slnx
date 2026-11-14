@@ -485,6 +485,7 @@
   <Folder Name="/Essentials/src/Workflows/Publishing/Releases/Runtime/">
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Runtime/Core/Elsa.Workflows.Publishing.Releases.Runtime.Core.csproj" />
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/Elsa.Workflows.Publishing.Releases.Runtime.csproj" />
+    <Project Path="Essentials/src/Workflows/Publishing/Releases/Runtime/Source/Elsa.Workflows.Publishing.Releases.Runtime.Source.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Workflows/Publishing/Releases/Persistence/">
     <Project Path="Essentials/src/Workflows/Publishing/Releases/Persistence/Core/Elsa.Workflows.Publishing.Releases.Persistence.Core.csproj" />
@@ -850,8 +851,14 @@
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Capture/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Capture/Tests/Elsa.Workflows.Publishing.Releases.Capture.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/NativeCapture/">
+    <Project Path="Essentials/tests/Workflows/Publishing/Releases/NativeCapture/Tests/Elsa.Workflows.Publishing.Releases.NativeCapture.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Runtime/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Runtime/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Runtime/Source/">
+    <Project Path="Essentials/tests/Workflows/Publishing/Releases/Runtime/Source/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Source.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj" />

@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -44,7 +45,15 @@ public sealed partial class InMemoryWorkflowActivationSwitch : IWorkflowActivati
         Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointStoreState? reservationState,
         IPersistenceAccessContextAccessor? reservationAccess, IWorkflowTriggerBindingStore? triggerBindingStore = null,
         IRecurringTriggerScheduleStore? recurringScheduleStore = null)
+        : this(authority, references, timeProvider, reservationState, reservationAccess, [], triggerBindingStore, recurringScheduleStore) { }
+
+    public InMemoryWorkflowActivationSwitch(IWorkflowActivationAuthority authority,
+        IWorkflowExecutableSourceReferenceStore references, TimeProvider timeProvider,
+        Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointStoreState? reservationState,
+        IPersistenceAccessContextAccessor? reservationAccess, IEnumerable<IIngressReservationPolicy> reservationPolicies,
+        IWorkflowTriggerBindingStore? triggerBindingStore = null, IRecurringTriggerScheduleStore? recurringScheduleStore = null)
     {
+        _reservationPolicies = RuntimeIngressReservationRules.Policies(reservationPolicies);
         _authority = authority as InMemoryWorkflowActivationAuthority ?? throw Unsupported(authority);
         _references = references ?? throw new ArgumentNullException(nameof(references));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));

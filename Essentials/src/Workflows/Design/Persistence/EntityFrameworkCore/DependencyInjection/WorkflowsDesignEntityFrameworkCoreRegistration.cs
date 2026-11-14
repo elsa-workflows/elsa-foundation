@@ -63,6 +63,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         services.AddScoped<WorkflowSourceRevisions>();
         services.AddScoped<EfWorkflowDefinitionStore>(); services.AddScoped<IWorkflowDefinitionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionStore>());
         services.AddScoped<EfWorkflowDefinitionVersionStore>(); services.AddScoped<IWorkflowDefinitionVersionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionVersionStore>());
+        services.AddScoped<IWorkflowVersionSnapshotReader, EfWorkflowVersionSnapshotReader>();
         services.AddScoped<EfWorkflowDefinitionDraftStore>(); services.AddScoped<IWorkflowDefinitionDraftStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionDraftStore>());
         services.AddScoped<EfWorkflowDefinitionVersionLayoutStore>(); services.AddScoped<IWorkflowDefinitionVersionLayoutStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionVersionLayoutStore>());
         services.AddScoped<EfWorkflowDefinitionListProjectionStore>(); services.AddScoped<IWorkflowDefinitionListProjectionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionListProjectionStore>());
@@ -134,6 +135,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         typeof(EfWorkflowDefinitionListProjectionStore),
         typeof(IWorkflowDefinitionStore),
         typeof(IWorkflowDefinitionVersionStore),
+        typeof(IWorkflowVersionSnapshotReader),
         typeof(IWorkflowDefinitionDraftStore),
         typeof(IWorkflowDefinitionVersionLayoutStore),
         typeof(IWorkflowDefinitionListProjectionStore),

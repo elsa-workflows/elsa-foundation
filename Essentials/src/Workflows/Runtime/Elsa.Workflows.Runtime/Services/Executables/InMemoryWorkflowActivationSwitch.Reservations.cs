@@ -8,6 +8,8 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 
 public sealed partial class InMemoryWorkflowActivationSwitch
 {
+    private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> _reservationPolicies;
+    internal IReadOnlyDictionary<string, IIngressReservationPolicy> ReservationPolicies => _reservationPolicies;
     private readonly InMemoryRuntimeCheckpointStoreState? _reservationState;
     private readonly IPersistenceAccessContextAccessor? _reservationAccess;
     private readonly InMemoryWorkflowTriggerBindingStore? _reservationBindings;
@@ -29,14 +31,18 @@ public sealed partial class InMemoryWorkflowActivationSwitch
             throw new InvalidDataException("The publication reservation does not name the exact prepared slot source.");
         var scope = new TriggerScope(persistence, source.TenantId);
         var bindings = _reservationBindings.ListAllByActivationAsync(slot.ActiveActivationId).AsTask().GetAwaiter().GetResult();
-        var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive)
+        var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive || _reservationPolicies.ContainsKey(binding.StimulusType))
             .GroupBy(binding => (binding.StimulusType, binding.StimulusHash)).Select(group =>
                 new RuntimeIngressReservationDescriptor(group.Key.StimulusType, group.Key.StimulusHash, group.First().Metadata)).ToArray();
         var claims = RuntimeIngressReservationRules.Prepare(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, slot.Revision, slot.Revision, descriptors);
+        RuntimeIngressReservationRules.CheckSemanticCandidates(claims, _reservationPolicies);
         foreach (var claim in claims)
         {
+            foreach (var prior in _reservationState.IngressReservations.Values)
+                RuntimeIngressReservationRules.CheckSemanticOwner(prior, claim, _reservationPolicies);
             if (_reservationState.IngressReservations.TryGetValue(claim.ReservationId, out var existing)) RuntimeIngressReservationRules.CheckOwner(existing, claim);
-            var active = _reservationBindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash).AsTask().GetAwaiter().GetResult();
+            var active = RuntimeIngressReservationRules.ConflictingBindingsAsync(_reservationBindings, claim, _reservationPolicies,
+                exclude: binding => binding.SlotId == slot.SlotId || KnownOtherScope(binding, persistence)).AsTask().GetAwaiter().GetResult();
             if (active.Any(binding => binding.SlotId != slot.SlotId && !KnownOtherScope(binding, persistence)))
                 throw new TriggerOperationException("route-conflict", "Another published workflow owns this exclusive endpoint.");
         }

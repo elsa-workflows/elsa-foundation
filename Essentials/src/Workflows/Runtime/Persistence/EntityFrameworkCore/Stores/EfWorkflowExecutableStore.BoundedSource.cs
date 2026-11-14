@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-public sealed partial class EfWorkflowExecutableStore
+public sealed partial class EfWorkflowExecutableStore : IRuntimeBoundedSourceLeaseStore
 {
     public async ValueTask<RuntimeMaterialSourceSnapshot?> FindMaterialBoundedAsync(string artifactId, PersistenceScope expectedScope,
         RuntimeSourceReadLimits limits, CancellationToken cancellationToken = default)
@@ -47,4 +47,23 @@ public sealed partial class EfWorkflowExecutableStore
         return (artifact, coordination);
     }
 
+    ValueTask<WorkflowExecutableRootWriteLease?> IRuntimeBoundedSourceLeaseStore.TryAcquireAsync(string artifactId, string leaseId,
+        DateTimeOffset expiresAt, DateTimeOffset now, PersistenceScope expectedScope, RuntimeSourceReadLimits limits, CancellationToken cancellationToken)
+    {
+        Scope(expectedScope, limits);
+        return TryAcquireRootWriteLeaseCoreAsync(artifactId, leaseId, expiresAt, now, limits, expectedScope.Value, cancellationToken);
+    }
+    ValueTask<bool> IRuntimeBoundedSourceLeaseStore.RenewAsync(WorkflowExecutableRootWriteLease lease, DateTimeOffset expiresAt,
+        DateTimeOffset now, PersistenceScope expectedScope, RuntimeSourceReadLimits limits, CancellationToken cancellationToken)
+    { Scope(expectedScope, limits); return RenewRootWriteLeaseCoreAsync(lease, expiresAt, now, expectedScope.Value, limits, cancellationToken); }
+    ValueTask IRuntimeBoundedSourceLeaseStore.ReleaseAsync(WorkflowExecutableRootWriteLease lease, PersistenceScope expectedScope,
+        RuntimeSourceReadLimits limits, CancellationToken cancellationToken)
+    { Scope(expectedScope, limits); return ReleaseRootWriteLeaseCoreAsync(lease, expectedScope.Value, cancellationToken); }
+    private void Scope(PersistenceScope expectedScope, RuntimeSourceReadLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(expectedScope); ArgumentNullException.ThrowIfNull(limits); limits.Validate();
+        if (RequireScope() != expectedScope.Value) throw new RuntimeSourceReadException("runtime_source_scope_mismatch");
+        if (context.Database.ProviderName != Elsa.Persistence.EntityFramework.EfProviderNames.Sqlite)
+            throw new RuntimeSourceReadException("runtime_source_storage_profile_unsupported", true);
+    }
 }

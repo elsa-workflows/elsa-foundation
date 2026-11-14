@@ -137,7 +137,8 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
     private ReleaseActivityVersion ActivityByVersion(string id, ReleaseRuntimeContentScope scope)
     {
         var descriptor = cache.Member(content, new(ReleaseRuntimeCodecs.ActivityVersionKind, id));
-        if (descriptor.Codec != new ReleaseCodecKey(ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion, 1)) throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_codec_unsupported");
+        if (descriptor.Codec.Kind != ReleaseRuntimeCodecs.ActivityVersionKind || descriptor.Codec.Codec != ReleaseRuntimeCodecs.ActivityVersion ||
+            descriptor.Codec.CodecVersion is not (1 or 2)) throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_codec_unsupported");
         var target = cache.ActivityVersion(content, descriptor.Key);
         if (target.VersionId != id || target.Scope != scope || descriptor.OwnerVersion != new ReleaseOwnerVersion("semver", target.Version, null))
             throw ReleaseRuntimeArtifactCodec.Refuse("captured_activity_identity_conflict");
@@ -151,8 +152,11 @@ internal sealed class RuntimeInspection(ReleaseMemberKey member, RuntimeCaptured
             token.ThrowIfCancellationRequested(); var origin = NodeOrigin(node);
             if (node.Descriptor.ConsumerKey == WellKnownRuntimeActivityConsumers.ClrActivity)
             {
+                var fields = new[] { "typeAlias", "definitionId", "definitionVersionId", "version", "templateHash", "sourceReferenceId" };
                 if (node.Descriptor.SchemaVersion != "1" || node.Descriptor.Payload.ValueKind != JsonValueKind.Object ||
-                    node.Descriptor.Payload.EnumerateObject().Count() != 1 || !node.Descriptor.Payload.TryGetProperty("typeAlias", out var alias) || alias.ValueKind != JsonValueKind.String)
+                    node.Descriptor.Payload.EnumerateObject().Any(property => !fields.Contains(property.Name, StringComparer.Ordinal)) ||
+                    node.Descriptor.Payload.EnumerateObject().Count() != 1 && (node.Descriptor.Payload.EnumerateObject().Count() != fields.Length || !node.Metadata.ContainsKey("activity.templateHash")) ||
+                    !node.Descriptor.Payload.TryGetProperty("typeAlias", out var alias) || alias.ValueKind != JsonValueKind.String)
                     Unsupported("clr_descriptor_unsupported");
                 else { Type(alias.GetString()!); Site(node, origin, null, ReleaseRuntimeSiteKinds.ClrActivity, alias.GetString()!); }
             }
