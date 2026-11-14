@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Connectors\OAuth2\Elsa.Integrations.Connectors.OAuth2.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Sdk\Elsa.Integrations.Sdk\Elsa.Integrations.Sdk.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Api\Elsa.Connections.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Essentials\src\Connections\Core\Elsa.Connections.Core.csproj" />

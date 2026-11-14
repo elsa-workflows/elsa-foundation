@@ -3,8 +3,10 @@ export function isFieldUnobscured(control: Element, includeFrame: boolean | void
   const document = control.ownerDocument;
   const view = document.defaultView;
   if (!view) return false;
-  const frame = control.closest(".studio-form-control, .studio-choice-field, label") ?? control;
+  const frame = control.closest(".studio-field") ?? control.closest(".studio-form-control, label") ?? control;
   const label = frame.querySelector(".studio-field-label") ?? (control as HTMLInputElement).labels?.[0];
+  const descriptions = includeFrame ? (control.getAttribute("aria-describedby") ?? "").split(/\s+/)
+    .map(id => document.getElementById(id)).filter((element): element is HTMLElement => Boolean(element && frame.contains(element) && element.getClientRects().length)) : [];
   let top = 0, bottom = view.innerHeight, left = 0, right = view.innerWidth;
   for (let parent = frame.parentElement; parent; parent = parent.parentElement) {
     const style = view.getComputedStyle(parent), bounds = parent.getBoundingClientRect();
@@ -17,11 +19,11 @@ export function isFieldUnobscured(control: Element, includeFrame: boolean | void
       right = Math.min(right, bounds.left + parent.clientLeft + parent.clientWidth);
     }
   }
-  for (const element of new Set([...(includeFrame ? [frame] : []), control, ...(label ? [label] : [])])) {
+  for (const element of new Set([...(includeFrame ? [frame] : []), control, ...(label ? [label] : []), ...descriptions])) {
     const bounds = element.getBoundingClientRect();
     if (!bounds.width || !bounds.height || bounds.top < top - 1 || bounds.bottom > bottom + 1
       || bounds.left < left - 1 || bounds.right > right + 1) return false;
-    // Include the label and both edges of the control; a partly covered field is not success.
+    // Include supporting messages as well as the label and control; ARIA presence alone cannot detect an overlay.
     if (element === frame && element !== control && element !== label) continue;
     for (const x of [bounds.left + Math.min(2, bounds.width / 2), bounds.right - Math.min(2, bounds.width / 2)]) {
       for (const y of [bounds.top + Math.min(2, bounds.height / 2), bounds.bottom - Math.min(2, bounds.height / 2)]) {

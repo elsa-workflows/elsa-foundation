@@ -90,6 +90,7 @@ public sealed class Actor(int id, int node, int partition)
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
@@ -135,16 +136,27 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
         Send("load", $"load [{string.Join(", ", ids)}]", () => world.Store.LoadAsync(ids));
+    public bool HasActorAliases => ((IKernelStore)world.Store).HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
+        Send("load", $"load [{string.Join(", ", ids)}]", () => ((IKernelStore)world.Store).LoadActorsAsync(ids));
 
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) =>
         Send("events", $"events for [{string.Join(", ", keys)}]", () => world.Store.FindEventsAsync(keys));
 
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) =>
+        world.Store.PublishedMatchesAsync(published);
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) =>
+        Send("events", $"events for {waits.Count} waits", () => world.Store.KeptMatchesAsync(waits));
+
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => world.Store.AddAsync(message);
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => world.Store.AddEventAsync(delivery);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => world.Store.PublishAsync(@event);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => world.Store.FindSubscriptionsAsync(key);
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => world.Store.SubscribeAsync(subscription);
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) =>
         Send("journal", $"journal p{partition} after {after}", () => world.Store.ReadJournalAsync(partition, after, take));
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) =>
+        Send("journal", $"journal of {instance} after {after}", () => world.Store.ReadJournalOfAsync(partition, instance, after, cancellationToken));
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) =>
         Send("projected", $"projection p{partition}", () => world.Store.ProjectedAsync(partition));
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) =>
@@ -279,6 +291,8 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
+            OnKeptInMemory = (instance, revision) => Oracle.InMemory[instance] = revision,
+            OnLeftMemory = (instance, status) => { if (status is InstanceStatus.Running or null) Faults.Add($"I9 {instance} left memory without a row while it was {status?.ToString() ?? "missing"}"); },
             OnObservedDelivery = row => actor.ObservedHistory[row.Message.Id] = row.Seen > 0 || row.Trial > 0,
             OnTurn = (instance, inbox, _) =>
             {
@@ -660,7 +674,7 @@ public sealed class Generator(int seed, World world)
             if (owners.Count == 0) return new Act("tick", r.Next(50));
             var owner = owners[r.Next(owners.Count)];
             var mode = Http.Starts[r.Next(Http.Starts.Length)];
-            var spec = Http.Spec(mode, ephemeral: mode == Http.Respond && r.Next(2) == 0);
+            var spec = Http.Spec(mode, ephemeral: mode != Http.Early && r.Next(2) == 0);     // decision 4: a timer or a job may wait in memory
             return new Act("request", owner.Id, S: mode, M: new Message($"x{n}", InstanceRef.In(owner.Partition, "h" + n), Kinds.Start, Start: spec, ReplyTo: "|q" + n));
         }
         if (roll < 60)
@@ -710,10 +724,13 @@ public sealed class Generator(int seed, World world)
             return new Act("register", S: "d" + which, M: new Message("", default, "s" + which % 2));
         }
         if (roll == 8 && world.CatchingUp.Count > 0) return new Act("catch-up", S: world.CatchingUp[r.Next(world.CatchingUp.Count)].Wait);
-        var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+        // Decision 4: instances held in memory only, never written, get suspends and resumes too; they are written first.
+        var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id)
+            .Concat(world.Actors.Where(a => !a.Dead).SelectMany(a => a.Worker.Unwritten)).Distinct().Order(StringComparer.Ordinal).ToList();
         if (rows.Count == 0) return new Act("tick", r.Next(50));
         var target = rows[r.Next(rows.Count)];
-        var kind = world.Store.Instances[target].Suspended == (r.Next(4) == 0) ? Kinds.Suspend : Kinds.Resume;
+        if (!world.Store.Instances.ContainsKey(target)) World.Count("a suspend or resume for an instance held in memory");
+        var kind = (world.Store.Instances.GetValueOrDefault(target)?.Suspended ?? false) == (r.Next(4) == 0) ? Kinds.Suspend : Kinds.Resume;
         return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(target), kind, KeepUntil: world.Time + 3_600_000));
     }
 

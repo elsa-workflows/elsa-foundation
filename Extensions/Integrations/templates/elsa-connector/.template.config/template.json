@@ -12,5 +12,15 @@
   "tags": {
     "language": "C#",
     "type": "project"
-  }
+  },
+  "primaryOutputs": [
+    { "path": "src/Company.Connector/Company.Connector.csproj" },
+    { "path": "tests/Company.Connector.Tests/Company.Connector.Tests.csproj" }
+  ],
+  "sources": [
+    {
+      "source": "./",
+      "target": "./"
+    }
+  ]
 }

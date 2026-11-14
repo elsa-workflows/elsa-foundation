@@ -20,7 +20,7 @@ import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight
 import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
-import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
+import { formatNamedIdentityTitle, formatRunPageTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
 import type { ActivityCatalogItem, ActivityExecutionLayout, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
 import { resolveRuntimeActivityLabel as resolveActivityLabel } from "../runtimeActivityDisplay";
@@ -833,7 +833,7 @@ interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
 const maxIncidentActivityLookups = 50;
 const incidentActivityLookupBatchSize = 8;
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate, onRunTitleChange }: {
   context: StudioEndpointContext;
   ai: StudioWeaverRegistry;
   /** The Workflows module's Weaver state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
@@ -846,6 +846,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   initialInspectorTab?: InstanceInspectorTab;
   initialReturnTo?: string | null;
   navigate(path: string): void;
+  onRunTitleChange?(title: string): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
@@ -1006,6 +1007,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   );
   const selectedDefinitionId = data?.details.instance.definitionId;
   const selectedDefinitionCanBeReviewed = canReviewDefinition(definitionAccess, context, selectedDefinitionId);
+  const runDisplayName = data?.definitionName ?? data?.definitionVersion?.definition.name;
+  useEffect(() => {
+    onRunTitleChange?.(formatRunPageTitle(runDisplayName, data?.details.instance.definitionId));
+  }, [data?.details.instance.definitionId, onRunTitleChange, runDisplayName]);
 
   // The selected occurrence lives in the URL (spec 260 FR-423): an activity execution, or the one an incident names.
   const selectedUrlActivityId = state !== "ready" || !selectedEvidenceId

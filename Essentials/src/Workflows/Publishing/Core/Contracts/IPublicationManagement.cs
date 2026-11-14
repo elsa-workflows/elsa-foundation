@@ -15,6 +15,8 @@ public interface IPublicationRecordStore
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<PublicationOriginSnapshot?>(new Elsa.Workflows.Runtime.Core.Models.RuntimeSourceReadException("publication_source_profile_unsupported", true));
 
+    /// <summary>Creates a record or accepts an exactly equal retained snapshot.</summary>
+    /// <exception cref="PublicationRecordAlreadyExistsException">The identity already contains a different snapshot; no write took place.</exception>
     ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
     ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default);
 
@@ -110,6 +112,16 @@ public interface IPublicationActivator
     ValueTask<PublicationActivationResult> ActivateAsync(
         PublicationActivationRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Publishes exact stored native/model material through Runtime's shared activation lifecycle.
+    /// A custom activator must opt into this boundary; the default refuses before changing publication state.
+    /// </summary>
+    ValueTask<PublicationActivationResult> ActivateMaterialAsync(
+        PublicationMaterialActivationRequest request,
+        CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<PublicationActivationResult>(cancellationToken) :
+            ValueTask.FromException<PublicationActivationResult>(new NotSupportedException("This publication activator does not support material-neutral activation."));
 
     /// <summary>
     /// Makes sure the activation the slot names serves (<c>IWorkflowActivationCoordinator.EnsureServingAsync</c>), then

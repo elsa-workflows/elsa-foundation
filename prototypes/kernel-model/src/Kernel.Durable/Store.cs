@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -10,15 +11,30 @@ namespace Kernel.Durable;
 /// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, string? PendingStart = null);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null);
+
+/// <summary>A requested spelling, its stored actor identity (or first equivalent candidate if missing), and its snapshot.</summary>
+public sealed record ActorLookup(string Requested, string Canonical, InstanceRow? Row)
+{
+    public static IReadOnlyList<ActorLookup> Ordinal(IReadOnlyCollection<string> ids, IReadOnlyList<InstanceRow> rows)
+    {
+        var found = rows.ToDictionary(row => row.Id, StringComparer.Ordinal);
+        return ids.Select(id => new ActorLookup(id, id, found.GetValueOrDefault(id))).ToList();
+    }
+}
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
-public sealed record SubscriptionRow(string Key, string Instance, string Wait, StartSpec? Start = null, long Creation = 0);
+public sealed record SubscriptionRow(
+    [property: JsonConverter(typeof(DurableKeyJson))] string Key,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0);
 
-public sealed record EventRow(string Key, string Id, string? Payload, long KeepUntil);
+public sealed record EventRow(
+    [property: JsonConverter(typeof(DurableKeyJson))] string Key,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil);
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries);
 
@@ -30,6 +46,25 @@ public sealed record Projection(long Position, long Written);
 
 /// <summary>The viewer's row of an instance, as the projector has it: the last revision it saw and how many commits.</summary>
 public sealed record ViewRow(string Instance, long Revision, int Commits);
+
+/// <summary>The view change for one key in a projection page. Reset discards the view before the last delete.</summary>
+public sealed record ViewChange(string Instance, long Revision, int Commits, bool Reset)
+{
+    public static IReadOnlyCollection<ViewChange> From(IReadOnlyList<JournalRow> rows)
+    {
+        var changes = new Dictionary<string, ViewChange>(StringComparer.Ordinal);
+        foreach (var row in rows.OrderBy(r => r.Position))
+        {
+            if (row.Revision < 0) changes[row.Instance] = new(row.Instance, 0, 0, true);
+            else if (row.Revision > 0)
+            {
+                changes.TryGetValue(row.Instance, out var previous);
+                changes[row.Instance] = new(row.Instance, row.Revision, (previous?.Commits ?? 0) + 1, previous?.Reset ?? false);
+            }
+        }
+        return changes.Values;
+    }
+}
 
 public sealed record Lease(long Epoch, long Position, long Now);
 
@@ -46,26 +81,36 @@ public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 /// subscribes apply before its unsubscribes.
 /// </summary>
 public sealed record TurnCommit(
-    string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<string> Consumed, IReadOnlyList<string> Done, IReadOnlyList<Message> Sent,
-    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<string>? Held = null, bool Delete = false);
+    string Instance, InstanceRow? Row, long? Expected, IReadOnlyList<InboxKey> Consumed, IReadOnlyList<InboxKey> Done, IReadOnlyList<Message> Sent,
+    IReadOnlyList<SubscriptionRow> Subscribed, IReadOnlyList<SubscriptionRow> Unsubscribed, string? Journal, bool Unsubscribe = false, IReadOnlyList<InboxKey>? Held = null, bool Delete = false);
 
 /// <summary>What the owner of <c>Partition</c> at <c>Epoch</c>, believing the position is <c>Position</c>, writes in one transaction.</summary>
 public sealed record CommitBatch(
     int Partition, long Epoch, long Position, TimeSpan Lease, bool HandOver, IReadOnlyList<TurnCommit> Turns,
-    IReadOnlyList<string> Seen, IReadOnlyList<string> Trial)
+    IReadOnlyList<InboxKey> Seen, IReadOnlyList<InboxKey> Trial)
 {
     /// <summary>How far the position moves: one per journal row.</summary>
     public int Positions => Turns.Count(s => s.Journal is not null);
+
+    /// <summary>Optional closed-open authority interval required by this transaction's guarded turns.</summary>
+    public CommitWindow? Window { get; init; }
 }
 
 /// <summary><c>Landed</c> is false when the fence matched nothing. <c>Seqs</c> are those of the inserted messages, in order.</summary>
 public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs);
+
+public sealed record CommitWindow(long FromInclusive, long UntilExclusive)
+{
+    public CommitWindow Intersect(CommitWindow next) =>
+        new(Math.Max(FromInclusive, next.FromInclusive), Math.Min(UntilExclusive, next.UntilExclusive));
+}
 
 public enum Failure
 {
     Unknown,    // the outcome is not known: reset
     Transient,  // it did not happen and may be tried again as it is: a deadlock victim, SQLITE_BUSY
     Definite,   // it did not happen and never will: a value too long, a constraint
+    WindowExpired, // the entire transaction rolled back and its time-dependent decisions must be reconsidered
 }
 
 public sealed class StoreException(Failure failure, string message, Exception? inner = null) : Exception(message, inner)
@@ -79,8 +124,11 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 /// </summary>
 public interface IKernelStore : IMembership
 {
+    /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
+    bool SupportsCommitWindow => false;
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;
+    bool HasActorAliases => false;
 
     /// <summary>
     /// Qualified immutable clock facts in the same atomic commit; unavailable by default. A qualified store returns
@@ -108,7 +156,14 @@ public interface IKernelStore : IMembership
     /// <summary>Add a message. False when the id exists already.</summary>
     ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default);
 
+    /// <summary>Insert the delivery derived from an event and subscription. Repeating the match is idempotent.</summary>
+    ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default);
+
     ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>One load under the provider's actor-key equality. Ordinal providers use their existing indexed read.</summary>
+    async ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
+        ActorLookup.Ordinal(ids, await LoadAsync(ids, cancellationToken));
 
     ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default);
 
@@ -119,6 +174,10 @@ public interface IKernelStore : IMembership
 
     ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default);
 
+    /// <summary>Read canonical persisted rows using this store's correlation and identity equality.</summary>
+    ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default);
+
     ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default);
 
     /// <summary>The position of the partition's projector, its own row apart from the fence, and then the partition's position.</summary>
@@ -127,28 +186,65 @@ public interface IKernelStore : IMembership
     /// <summary>
     /// In one transaction: move the projector's position from <paramref name="from"/> to <paramref name="to"/>, if it is
     /// still at <paramref name="from"/>, and write the view rows of <paramref name="rows"/>; a row of a deleted instance
-    /// removes its view. False when another projector moved it first.
+    /// resets its view at that journal position. Positive revisions after that delete start a fresh count. False when another projector moved it first.
     /// </summary>
     ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default);
 
     /// <summary>The viewer's read: the view rows of these instances, as the projectors have written them. Missing ids are skipped.</summary>
     ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Decision 11, the viewer's tail: one instance's journal rows past position <paramref name="after"/>, in position order.
+    /// Return one committed snapshot, including any delete marker visible in that snapshot. Concurrent commits must
+    /// not extend the read indefinitely or combine rows from different snapshots. Wrappers forward this operation.
+    /// </summary>
+    ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default);
+
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>A read-only event delivery. Only the event router constructs this envelope.</summary>
+public sealed class EventDelivery
+{
+    internal EventDelivery(Message message, EventMatch match) => Message = message.WithInboxScope(-2, match.Encode());
+    public Message Message { get; }
+    public Message At(long serial) => Message.Start is null ? Message : Message with { Target = InstanceRef.ForEvent(Message.Target.Partition, serial) };
+}
+
+public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
+{
+    public EventDelivery Delivery(int partitions = 1, string? replyTo = null) =>
+        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
+}
+
+public sealed record EventAcceptance(bool Added, InstanceRef Target)
+{
+    public static implicit operator bool(EventAcceptance result) => result.Added;
+}
+
+public sealed record EventMatch(
+    [property: JsonConverter(typeof(DurableKeyJson))] string Key,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Event,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Wait,
+    long Creation = 0)
+{
+    public string Encode() => Json.Write(this);
+    public static EventMatch Decode(string text) => Json.Read<EventMatch>(text);
 }
 
 public static class Events
 {
     /// <summary>
-    /// The message that delivers an event to a wait, or that starts an instance for it. Both sides derive the same id, so
-    /// the double is refused; a start's target is derived from event and subscription too, so it is created once.
+    /// The logical wire envelope for a match. A start carries its placement partition until the store
+    /// allocates the physical target and returns it with the acceptance receipt.
     /// </summary>
-    public static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
+    internal static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
         ? new(s.Creation > 0 ? FormattableString.Invariant($"evq:{e.Id.Length}:{e.Id}:{CreationProtocol.Origin(s.Instance, s.Creation)}:{s.Wait}")
             : $"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
             TargetCreation: s.Creation > 0 ? s.Creation : null)
-        : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
+        : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), ""), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
 
     /// <summary>
     /// What a delivery is for: the event's id and the wait it was delivered to, read back from the derived id (merge,
@@ -167,32 +263,50 @@ public static class Events
             return (m.Id.Substring(start, length), m.Id[(start + length + qualifiedMarker.Length)..]);
         }
         if (m.Kind != Kinds.Event || !m.Id.StartsWith("ev:", StringComparison.Ordinal)) return null;
+        if (m.EventMatch is { } encoded)
+        {
+            var match = EventMatch.Decode(encoded);
+            return (match.Event, match.Wait);
+        }
         var marker = m.Start is null ? $":{m.Target.Id}:" : "::";
         var at = m.Id.LastIndexOf(marker, StringComparison.Ordinal);
         return at < 3 ? null : (m.Id[3..at], m.Id[(at + marker.Length)..]);
     }
 
+    /// <summary>Both sides of the match insert the same kernel-derived envelope. An HTTP waiter may attach its response handle.</summary>
+    public static EventDelivery Route(EventRow e, SubscriptionRow s, int partitions = 1, string? replyTo = null)
+    {
+        if (e.Key != s.Key) throw new ArgumentException("The event and subscription must name the same key.", nameof(s));
+        return new EventRoute(e, s).Delivery(partitions, replyTo);
+    }
+
     /// <summary>The publisher's side: insert the event, and only then read who waits for it.</summary>
-    public static async ValueTask PublishAsync(IKernelStore store, EventRow e, int partitions = 1, CancellationToken cancellationToken = default)
+    public static async ValueTask PublishAsync(IKernelStore store, EventRow e, int partitions = 1, CancellationToken cancellationToken = default, Action<EventRoute, EventAcceptance>? matched = null)
     {
         await store.PublishAsync(e, cancellationToken);
-        foreach (var subscription in await store.FindSubscriptionsAsync(e.Key, cancellationToken))
-            await store.AddAsync(Deliver(e, subscription, partitions), cancellationToken);
+        foreach (var match in await store.PublishedMatchesAsync(e, cancellationToken))
+        {
+            var accepted = await store.AddEventAsync(match.Delivery(partitions), cancellationToken);
+            matched?.Invoke(match, accepted);
+        }
     }
 
     /// <summary>
     /// The registrar's side of a start subscription: insert it, and only then read the events of its key that are still
     /// kept. Like a publisher, the registrar retries until both are done.
     /// </summary>
-    public static async ValueTask SubscribeAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default)
+    public static async ValueTask SubscribeAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default, Action<EventRoute, EventAcceptance>? matched = null)
     {
         await store.SubscribeAsync(start, cancellationToken);
-        await CatchUpAsync(store, start, partitions, cancellationToken);
+        await CatchUpAsync(store, start, partitions, cancellationToken, matched);
     }
 
-    public static async ValueTask CatchUpAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default)
+    public static async ValueTask CatchUpAsync(IKernelStore store, SubscriptionRow start, int partitions, CancellationToken cancellationToken = default, Action<EventRoute, EventAcceptance>? matched = null)
     {
-        foreach (var e in await store.FindEventsAsync([start.Key], cancellationToken))
-            await store.AddAsync(Deliver(e, start, partitions), cancellationToken);
+        foreach (var match in await store.KeptMatchesAsync([start], cancellationToken))
+        {
+            var accepted = await store.AddEventAsync(match.Delivery(partitions), cancellationToken);
+            matched?.Invoke(match, accepted);
+        }
     }
 }

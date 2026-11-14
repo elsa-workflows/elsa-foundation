@@ -163,7 +163,17 @@
 
 .wf-page--run-workbench > .studio-page-header {
   flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
   padding: 16px 20px 0;
+}
+
+.wf-page--run-workbench > .studio-page-header .studio-page-header-copy { flex: 1 1 0; }
+.wf-page--run-workbench > .studio-page-header :is(h1, h2) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wf-page--run-workbench > .wf-toolbar {

@@ -18,6 +18,7 @@ public sealed class Oracle
     public readonly HashSet<string> Trees = [];                                          // roots of trees started from outside
     public readonly Dictionary<string, List<string>> Events = new();                   // key -> events published
     public readonly List<SubscriptionRow> Starts = [];                                   // start subscriptions registered
+    public readonly Dictionary<string, long> InMemory = new(StringComparer.Ordinal);      // decision 4: instances kept in memory, unwritten, and their last revision there
     public readonly HashSet<string> Deleted = [];                                        // instances that were sent a delete
 
     public bool Accepts(Message m) => m.Kind != "cancel" || Parents.ContainsKey(m.Target.Id) || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
@@ -50,6 +51,7 @@ public sealed class Oracle
 public sealed partial class World
 {
     public readonly Oracle Oracle = new();
+    private readonly Dictionary<string, EventMatch> _startedBy = [];
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (long Generation, bool Retired)> _creations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _late = new(StringComparer.Ordinal);
@@ -126,12 +128,30 @@ public sealed partial class World
             else if (!projected.TryGetValue(id, out var expected) || expected != (view.Revision, view.Commits))
                 return $"I6 the view of {id} says revision {view.Revision} after {view.Commits} commits; the journal up to the projector says {expected.Revision} after {expected.Commits}";
         if (projected.Keys.FirstOrDefault(id => !Store.Views.ContainsKey(id)) is { } unseen) return $"I6 the projector passed the journal rows of {unseen} and has no view of it";
+        // I6 for the viewer (decision 11): the tail read (cursor, view, the instance's rows past the cursor, merged) says
+        // what the instance's whole journal says, whatever the projectors have done. One pass over the journal.
+        foreach (var group in Store.Journal.Values.GroupBy(j => j.Instance))
+        {
+            var rows = group.OrderBy(j => j.Position).ToList();
+            var cursor = Store.Projection[rows[0].Partition];
+            var read = Viewer.Merge(group.Key, Store.Views.GetValueOrDefault(group.Key), rows.Where(j => j.Position > cursor).ToList());
+            // Expected state is an independent fold, so a defect in the viewer cannot validate itself.
+            ViewRow? whole = null;
+            foreach (var row in rows)
+                if (row.Revision < 0) whole = null;
+                else if (row.Revision > 0)
+                    whole = new(whole?.Instance ?? row.Instance, Math.Max(whole?.Revision ?? 0, row.Revision), (whole?.Commits ?? 0) + 1);
+            if (whole != read) return $"I6 the tail read of {group.Key} says {read?.Revision}:{read?.Commits}; the journal says {whole?.Revision}:{whole?.Commits}";
+        }
         foreach (var (id, revisions) in commits)
         {
             revisions.Sort();
             if (Store.Instances.GetValueOrDefault(id) is not { } row) return $"I2 the journal has a commit of {id} and there is no row";
             if (row.History == History.Minimal) return $"I6 {id} keeps minimal history and has journal rows";
-            if (revisions.Count != row.Revision || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
+            // Decision 4: an Ephemeral instance that waited in memory is written at the last revision it had there (a write
+            // of the instance as it is) or the next (a turn or a park), so its journal starts there, with no gap after it.
+            var first = Oracle.InMemory.TryGetValue(id, out var kept) && (revisions[0] == kept || revisions[0] == kept + 1) ? revisions[0] : 1;
+            if (revisions.Count != row.Revision - first + 1 || revisions[0] != first || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
         }
         foreach (var row in Store.Instances.Values)
         {
@@ -193,15 +213,21 @@ public sealed partial class World
             if (worker.Idle > 2) return $"I21 actor {actor.Id} holds {worker.Idle} idle instances; the bound is 2";
             if (!worker.Flushing && worker.Position != partition.Position)
                 return $"I9 actor {actor.Id} believes partition {actor.Partition} is at {worker.Position}; it is at {partition.Position}";
+            var unwritten = worker.Unwritten.ToHashSet(StringComparer.Ordinal);
+            var busyNow = worker.Instances.Where(i => i.Busy).Select(i => i.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var id in unwritten)       // decision 4: in memory only, so never a row (unless the commit that writes it is in flight)
+                if (Store.Instances.ContainsKey(id) && !busyNow.Contains(id))
+                    return $"I9 actor {actor.Id} holds {id} in memory only, and it has a row";
             foreach (var (id, row, state, busy) in worker.Instances)
             {
+                if (unwritten.Contains(id)) continue;
                 if (row is { Model: "counter", StateVersion: 2 } && actor.Version == 1) Count("a version-1 owner holds a counter row at version 2");
                 if (busy) continue;
                 if (row != Store.Instances.GetValueOrDefault(id))
                     return $"I9 actor {actor.Id} holds {id} at revision {row?.Revision.ToString() ?? "none"}; its row is at {Store.Instances.GetValueOrDefault(id)?.Revision.ToString() ?? "none"}";
                 if (state is not null && state != row?.State) return $"I9 actor {actor.Id}: the live state of {id} is {state} and its row says {row?.State}";
             }
-            var held = new HashSet<string>(StringComparer.Ordinal);
+            var held = new HashSet<InboxKey>();
             foreach (var (id, durable, taken) in worker.Messages)
             {
                 held.Add(id);
@@ -209,7 +235,7 @@ public sealed partial class World
             }
             if (worker.Flushing) continue;
             foreach (var row in Store.Messages.Values)
-                if (row.Seen == partition.Epoch && !row.Done && row.Message.Target.Partition == actor.Partition && !held.Contains(row.Message.Id))
+                if (row.Seen == partition.Epoch && !row.Done && row.Message.Target.Partition == actor.Partition && !held.Contains(row.Message.InboxKey))
                     return $"I3 message {row.Message.Id} is marked seen at epoch {partition.Epoch} and its owner, actor {actor.Id}, does not hold it";
         }
         return null;
@@ -294,8 +320,13 @@ public sealed partial class World
         var rows = Store.Subscriptions.Where(s => s.Start is null).ToLookup(s => s.Instance, s => s.Key);
         // I20: an event starts at most one instance per start subscription, and that instance takes exactly that event.
         foreach (var row in Store.Instances.Values.Where(i => i.Model == "onevent"))
-            if (State<OnEventState>(row.Id) is { } got && (got.Got.Count > 1 || got.Got.Exists(id => !row.Id.EndsWith(id.Replace("ev:", "on:").Replace("::", ":")))))
+        {
+            if (State<OnEventState>(row.Id) is not { } got || got.Got.Count == 0) continue;
+            if (got.Got.Count != 1 || got.Match is not { } match || match.Instance != "" || got.Got[0] != $"ev:{match.Event}::{match.Wait}" ||
+                !row.Id.StartsWith("e", StringComparison.Ordinal) || row.Definition != match.Wait)
                 return $"I20 {row.Id} was started by [{string.Join(", ", got.Got)}]";
+            _startedBy[row.Id] = match;
+        }
         // Owner decision, 13 November: Park retains the checkpoint, but removes active routing in the same commit.
         if (rows.FirstOrDefault(g => Store.Instances.GetValueOrDefault(g.Key) is { Status: InstanceStatus.Faulted }) is { } faulted)
             return $"I8 faulted instance {faulted.Key} still has active subscriptions";
@@ -462,7 +493,13 @@ public sealed partial class World
                     return $"I15 actor {Of(node, partition).Id} still holds the reply address {late} past its deadline";
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Jobs.Count > 0))) continue;
             if (Unfair() is not null) continue;
-            if (published && (!Config.Native || NativeMeet() == 0)) return End();    // native waits that appeared since get their events too
+            if (published && (!Config.Native || NativeMeet() == 0))    // native waits that appeared since get their events too
+            {
+                // A dying owner may commit after its observer disappears. Normal settlement still runs first;
+                // only the final idle check waits for live callers to reach their existing deadlines.
+                if (Asked.Any(a => Running(a.Process) && !a.Request.Done && Time < a.Request.Deadline)) continue;
+                return End();
+            }
             if (Meet() is { } missed) return missed;
             published = true;
         }
@@ -519,13 +556,12 @@ public sealed partial class World
     {
         if (Store.Messages.Values.FirstOrDefault(m => !m.Done && m.Message.Kind != "expire") is { } message) return $"END message {message.Message.Id} was never consumed";
         // I20 at the end: every event and every start subscription of its key, both committed, made exactly one instance.
-        var started = Store.Instances.Values.Where(i => i.Model == "onevent").Select(i => i.Id).Concat(_gone.Where(id => id.Contains("/on:"))).Select(id => id[(id.IndexOf('/') + 1)..]).ToHashSet();
+        var started = _startedBy.Values.ToList();
         Count("instances deleted", _gone.Count);
         foreach (var start in Oracle.Starts)
             foreach (var e in Oracle.Events.GetValueOrDefault(start.Key) ?? [])
-                if (!started.Remove($"on:{e}:{start.Wait}")) return $"I20 event {e} for key {start.Key} and start subscription {start.Wait} are both committed and no instance was started";
-        if (started.Count > 0) return $"I20 instances [{string.Join(", ", started)}] were started by no event and subscription";
-        if (Store.Instances.Values.FirstOrDefault(i => i.Model == "onevent" && i.Status != InstanceStatus.Finished) is { } open) return $"I20 {open.Id} ended as {open.Status}";
+                if (!started.Remove(new(start.Key, e, "", start.Wait))) return $"I20 event {e} for key {start.Key} and subscription {start.Wait} did not start exactly once";
+        if (started.Count > 0) return $"I20 unexpected start for {started[0]}";
         if (Store.Subscriptions.FirstOrDefault(s => s.Start is null && !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
         foreach (var (id, (_, delay, spread)) in Oracle.Parents)
         {

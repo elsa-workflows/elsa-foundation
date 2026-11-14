@@ -40,7 +40,7 @@ internal static class ValueFaults
         worker.RunTurn(actor.Id);
         await worker.FlushAsync();
         await blocked.Written.Task.WaitAsync(TimeSpan.FromSeconds(15));
-        Require(File.Exists(blob) && State().Reference is null && store.Messages.ContainsKey(Worker.TicketId(actor.Id, "put")),
+        Require(File.Exists(blob) && State().Reference is null && store.Messages.ContainsKey(InboxKey.Ticket(actor.Id, "put")),
             "blob exists before acknowledgement with only the durable put intent committed");
         // Owner loses the answer after the put succeeded. Replacement executes the same durable ticket again.
         var previous = worker;

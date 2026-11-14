@@ -96,7 +96,8 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
         if (routes.TryStart(request.Method, request.Path, out var route))
         {
             var instance = InstanceRef.In(local.Partition, $"http-{node}-{_requests}");
-            var spec = NativeModel.Spec(route.Workflow, mode, null, route.Node);
+            // Decision 4: an Ephemeral run may wait in memory for its own short timers and jobs up to the route's timeout.
+            var spec = NativeModel.Spec(route.Workflow, mode, null, route.Node) with { ShortWait = TimeSpan.FromMilliseconds(open.Deadline - local.Now) };
             local.Post(new Message($"{instance}#start", instance, Kinds.Start, Start: spec, ReplyTo: replyTo), fresh: true, ambient: Values.From(request));
         }
         else
@@ -104,8 +105,8 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
             var key = HttpRoutes.Key(request.Method, request.Path);
             var waiting = await store.FindSubscriptionsAsync(key);
             if (waiting.Count == 0) return new HttpResponse(404, "text/plain", "no workflow waits on this route");
-            var delivery = Events.Deliver(new EventRow(key, $"{node}.{id}", Json.Write(request), local.Now + 60_000), waiting[0]);
-            await store.AddAsync(delivery with { ReplyTo = replyTo });
+            var delivery = new EventRoute(new EventRow(key, $"{node}.{id}", Json.Write(request), local.Now + 60_000), waiting[0]).Delivery(replyTo: replyTo);
+            await store.AddEventAsync(delivery);
         }
         await pump();
         requests.Expire(open.Deadline);     // the pump gave up: past this request's deadline
