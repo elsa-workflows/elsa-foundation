@@ -9,6 +9,7 @@ import unittest
 
 from export_evidence import export_evidence
 from export_failure_diagnostic import export_failure_diagnostic
+from evidence import witness_manifest
 
 
 class FailureDiagnosticExportTests(unittest.TestCase):
@@ -53,7 +54,7 @@ class FailureDiagnosticExportTests(unittest.TestCase):
         self.assertEqual("a" * 40, exported["source"])
         self.assertEqual("browser-sdk-incompatible", exported["stage"])
         self.assertEqual(32, exported["originalCaseCount"])
-        self.assertEqual(107, exported["expectedCaseCount"])
+        self.assertEqual(witness_manifest()["expectedCaseCount"], exported["expectedCaseCount"])
         frames = exported["browserFailureDiagnostic"]["frames"]
         self.assertLessEqual(len(frames), 8)
         self.assertEqual(len(frames), len({(f["line"], f["column"]) for f in frames}))

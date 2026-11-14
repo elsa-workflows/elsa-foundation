@@ -237,6 +237,10 @@ class CompleteWitnessTests(unittest.TestCase):
         self.base.setUp()
         self.addCleanup(self.base.tearDown)
         self.report = complete_witness_report(self.base)
+        # Python evaluates arguments before the isolated new-reader mocks. Keep
+        # explicit synthetic placeholders; production still requires native sections.
+        self.report["moduleEffectsQualification"] = {"syntheticReaderDispatch": True}
+        self.report["moduleEffectsRestartQualification"] = {"syntheticReaderDispatch": True}
 
     def rejected(self, change):
         report = copy.deepcopy(self.report)
