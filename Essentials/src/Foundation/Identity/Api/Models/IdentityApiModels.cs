@@ -45,4 +45,4 @@ public sealed record RefreshTokenRequest(string RefreshToken);
 /// The <c>GET /_elsa/identity/token</c> response. The Studio client reads <c>accessToken</c> (camelCase);
 /// <c>expiresAt</c> is additive.
 /// </summary>
-public sealed record AccessTokenResponse(string AccessToken, DateTimeOffset ExpiresAt);
+public sealed record AccessTokenResponse(string AccessToken, DateTimeOffset ExpiresAt, string? RefreshToken = null);
