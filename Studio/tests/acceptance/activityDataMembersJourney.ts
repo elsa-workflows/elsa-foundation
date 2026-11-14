@@ -57,6 +57,7 @@ export async function activityDataMembersJourney(page: Page, info: TestInfo, cap
         const writesBefore = s.writes();
         await s.replace().click(); await expect.poll(() => !!release).toBe(true);
         await expect(s.chooser().getByLabel("Loading outputs", { exact: true })).toBeVisible();
+        await expect(s.chooser()).toBeFocused();
         await capture(page, info, "customer-loading");
         await page.keyboard.press("Escape"); await expect(s.replace()).toBeFocused();
         release!(); await page.unrouteAll({ behavior: "wait" });
@@ -108,7 +109,7 @@ export async function activityDataMembersJourney(page: Page, info: TestInfo, cap
       s.observations.push("autosave-off producer deletion uses current snapshot, preserves saved document and reference, Undo repairs");
       const viewport = page.viewportSize()!;
       await page.setViewportSize({ width: 320, height: 900 }); await s.open(created); await s.replace().click();
-      await customer().press("Enter"); await expect(member()).toBeVisible(); await capture(page, info, "customer-320");
+      await customer().press("Enter"); await expect(member()).toBeVisible(); await expect(member()).toBeFocused(); await capture(page, info, "customer-320");
       await page.keyboard.press("Escape"); await expect(s.replace()).toBeFocused(); expect(await s.stored(created)).toEqual(expected);
       await page.setViewportSize(viewport);
     } else {

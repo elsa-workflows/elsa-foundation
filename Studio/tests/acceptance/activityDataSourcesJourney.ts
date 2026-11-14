@@ -71,7 +71,8 @@ export async function activityDataSourcesJourney(page: Page, info: TestInfo, cap
   await capture(page, info, "unsupported-request");
   const unchanged = s.writes(); await s.replace().press("Enter");
   await expect(s.chooser().getByRole("group", { name: "Workflow inputs", exact: true })).toBeVisible();
-  await page.keyboard.press("Escape"); await expect(s.replace()).toBeFocused(); expect(await s.stored(unsupported)).toEqual(legacy); expect(s.writes()).toBe(unchanged);
+  await expect(s.chooser().getByRole("option").first()).toBeFocused();
+  await page.keyboard.press("Escape"); await expect(s.chooser()).toHaveCount(0); await expect(s.replace()).toBeFocused(); expect(await s.stored(unsupported)).toEqual(legacy); expect(s.writes()).toBe(unchanged);
   await page.getByRole("button", { name: "Clear data for Text", exact: true }).click();
   await expect.poll(() => s.stored(unsupported)).toBeNull(); await s.history(unsupported, legacy, null);
   await page.getByRole("button", { name: "Undo", exact: true }).click(); await expect.poll(() => s.stored(unsupported)).toEqual(legacy); await s.select();
@@ -88,6 +89,7 @@ export async function activityDataSourcesJourney(page: Page, info: TestInfo, cap
   await expect(s.chooser().locator(".wf-data-members")).toContainText("No earlier data is available");
   await expect(s.chooser().getByRole("textbox", { name: "Request member", exact: true })).toHaveCount(0);
   await expect(s.chooser().getByRole("button", { name: "Open request member", exact: true })).toHaveCount(0);
+  await expect(s.chooser()).toBeFocused();
   await capture(page, info, "no-request-proposal"); await page.keyboard.press("Escape"); await expect(s.trigger()).toBeFocused(); expect(await s.stored(empty)).toBeNull();
   expect(s.contexts.flatMap(item => item.response.analysis?.sources ?? []).some(source => source.shape?.state === "unknown"), "Real deferred shape facts, not runtime-key inference").toBe(true);
 }

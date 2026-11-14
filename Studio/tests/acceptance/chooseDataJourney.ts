@@ -264,8 +264,9 @@ export async function activityDataCapabilityControl(page: Page, info: TestInfo, 
     await expect(support.chooser().getByRole("option", { name: /^customerId/ })).toHaveCount(0);
     await expect(support.chooser().getByRole("textbox", { name: "Member name", exact: true })).toHaveCount(0);
   }
+  await expect(support.chooser().getByRole("option").first()).toBeFocused();
   await capture(page, info, "capability-control");
-  await page.keyboard.press("Escape"); await expect(support.trigger()).toBeFocused();
+  await page.keyboard.press("Escape"); await expect(support.chooser()).toHaveCount(0); await expect(support.trigger()).toBeFocused();
   expect(await support.stored(capable)).toBeNull();
   await support.assertComposition();
   const retained = await support.saved(capable);
@@ -276,7 +277,8 @@ export async function activityDataCapabilityControl(page: Page, info: TestInfo, 
   await expect(support.reference()).toContainText("Get Customer");
   await capture(page, info, "capability-reference");
   await support.replace().click(); await expect(support.chooser()).toBeVisible();
-  await page.keyboard.press("Escape"); await expect(support.replace()).toBeFocused();
+  await expect(support.chooser().getByRole("option").first()).toBeFocused();
+  await page.keyboard.press("Escape"); await expect(support.chooser()).toHaveCount(0); await expect(support.replace()).toBeFocused();
   expect(await support.stored(capable)).toEqual(memberBinding);
   support.observations.push(enhanced ? "typed object member capability enabled" : "typed object with capability false: legacy whole browser, no members, existing member binding preserved on Replace/Escape");
 
