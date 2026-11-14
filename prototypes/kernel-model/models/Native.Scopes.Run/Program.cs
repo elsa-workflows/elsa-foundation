@@ -5,6 +5,8 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
+if (args is ["--read-list"]) { foreach (var name in ReadWitness.Names) Console.WriteLine(name); return; }
+if (args is ["--read"]) { ReadWitness.Run(); return; }
 var cases = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true } from reload in new[] { false, true }
     select (mode, nested, reload, agenda: false)).Concat(from nested in new[] { false, true } select (mode: Modes.Durable, nested, reload: true, agenda: true)).ToArray();
 string Name((string mode, bool nested, bool reload, bool agenda) c) => c.agenda ? $"lexical:agenda-reload,{c.mode},nested={c.nested}" : $"lexical:cross-phase,{c.mode},nested={c.nested},reload={c.reload}";

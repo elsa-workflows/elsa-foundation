@@ -50,6 +50,8 @@ internal static class RootWitness
             throw new InvalidOperationException("R0: root/iteration witness exceeded bounded drain");
         }
         NativeState State() => Json.Read<NativeState>(world.Store.Instances[target.Id].State);
+        void CheckContexts() => Check(RootLeaf.Calls.All(c => c.RecoverySource ==
+            State().Retries?.Values.SingleOrDefault(r => r.Successor == c.Frame)?.Source.Id), "R45: leaf context lost or invented its immediate recovery predecessor");
         void Reload() { Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1 - owner; Apply(new("take", Actor().Id)); }
         void Send(string id, NativeRetry request) => Apply(new("add", M: new(id, target, NativeRetry.Kind, Json.Write(request), ReplyTo: ReplyTo.Of("outside", id, world.Time + 120_000), TargetCreation: 1)));
         void Stage(NativeRetry request, int calls, bool uncertain = false)
@@ -98,11 +100,13 @@ internal static class RootWitness
             Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && RootLeaf.Calls.Count == permitted && Json.Write(State().Retries) == history &&
                 world.Deliveries.Select(d => d.Reply.Item).OfType<Admission>().LastOrDefault()?.Result == "UnknownInvocation",
                 "R31: cancelled root/iteration metadata hydrated authored material, changed history or resumed work");
+            CheckContexts();
         }
         Apply(new("take", Actor().Id)); Apply(new("add", M: new("start", target, Kinds.Start, Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "root-proof") }))); Drain();
         var state = State(); var source = state.Frames.Values.SingleOrDefault(f => f.Node == "leaf");
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Running && source?.Intervention is not null && RootLeaf.Calls.Count == 1,
             root ? "R22: opted-in root fault ended the run instead of retaining intervention" : "R23: direct ForEach fault lost its continuing iteration");
+        CheckContexts();
         if (cut == "cancel-fault") { Cancel(false); Console.WriteLine($"PASS recovery:root-iteration,{mode},root={root},external={external},cut={cut}"); return; }
         if (cut == "reload-fault") { workflow.InterventionRequested = false; Reload(); Drain(); }
         var first = new NativeRetry("root-retry-1", source!.Id, source.Intervention!.Id, "first repair");
@@ -113,6 +117,7 @@ internal static class RootWitness
         var again = State().Frames.Values.Single(f => f.Node == "leaf");
         Check(RootLeaf.Calls.Count == 2 && again.Intervention is not null && again.Id != source.Id && State().InterventionPolicy == 5,
             "R28: repeated root/iteration fault lost its fresh occurrence, intervention or frozen policy");
+        CheckContexts();
         foreach (var retry in new[] { first, first with { Reason = "conflict" }, first with { Id = "stale-source" } })
         { Send("replay-" + retry.Id + retry.Reason, retry); Drain(); }
         Check(world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().TakeLast(3).Select(r => r.Result).SequenceEqual(new[] { "Duplicate", "Conflict", "NotEligible" }) && RootLeaf.Calls.Count == 2,
@@ -121,6 +126,7 @@ internal static class RootWitness
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && RootLeaf.Calls.Count == (root ? 3 : 4) && RootLeaf.Calls.Take(3).Select(c => c.Frame).Distinct().Count() == 3 && RootLeaf.Calls.Take(3).Select(c => c.Operation).Distinct().Count() == 1 &&
             RootLeaf.Calls.Select(c => c.Value).SequenceEqual(root ? new[] { 7, 7, 7 } : new[] { 7, 7, 7, 9 }) && RootLeaf.Calls.Select(c => c.Index).SequenceEqual(root ? new[] { 0, 0, 0 } : new[] { 0, 0, 0, 1 }) &&
             RootLeaf.Calls.All(c => c.Attempt == (external && mode == Modes.Durable ? 1 : 0)) && (root || RootLeaf.Calls[3].Operation != RootLeaf.Calls[2].Operation), "R26: recovery repeated, skipped or misrouted a root/iteration obligation");
+        CheckContexts();
         Console.WriteLine($"PASS recovery:root-iteration,{mode},root={root},external={external},cut={cut}");
     }
 }
@@ -129,10 +135,10 @@ internal class RootLeaf : Kernel.Native.Activity<int>
     public RootLeaf() { }
     [Input] public int Value { get; set; }
     [Input] public int Index { get; set; }
-    internal static readonly List<(string Frame, string Operation, int Value, int Index, int Attempt)> Calls = [];
+    internal static readonly List<(string Frame, string Operation, int Value, int Index, int Attempt, string? RecoverySource)> Calls = [];
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
     {
-        Calls.Add((context.FrameId, context.OperationKey, Value, Index, context.Attempt));
+        Calls.Add((context.FrameId, context.OperationKey, Value, Index, context.Attempt, context.RecoverySource));
         return ValueTask.FromResult(Calls.Count <= 2 ? Fault("dependency", "repair required") : Complete(Value));
     }
 }
