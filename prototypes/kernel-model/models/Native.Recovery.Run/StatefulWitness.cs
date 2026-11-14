@@ -31,6 +31,18 @@ internal static class StatefulWitness
         void Apply(Act a)
         {
             world.Apply(a);
+            CheckWorld();
+        }
+        void Release(SubscriptionRow wait, string id, string payload)
+        {
+            var release = Events.Route(new("event:go", id, Values.From(payload).ToJsonString(), world.Time + 120_000), wait);
+            var accepted = world.Store.AddEventAsync(release).Result;
+            Check(accepted.Added && accepted.Target == target, "Stateful release missed the registered creation.");
+            world.Oracle.Note(release.Message);
+            CheckWorld();
+        }
+        void CheckWorld()
+        {
             if (world.Store.Instances.TryGetValue(target.Id, out var row) && row.Status == InstanceStatus.Faulted)
                 throw new InvalidOperationException("R32: stateful reported fault ended instead of retaining its invocation");
             if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
@@ -60,8 +72,8 @@ internal static class StatefulWitness
             oldWait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:go"); Reload();
             if (parent == "parallel") { Name("change", "change", "change"); Drain(); }
             // Two actual competing wait-addressed deliveries queue two resumes before either is processed.
-            Apply(new("add", M: Events.Deliver(new("event:go", "old-1", Values.From("old-payload").ToJsonString(), world.Time + 120_000), oldWait)));
-            Apply(new("add", M: Events.Deliver(new("event:go", "old-2", Values.From("duplicate-payload").ToJsonString(), world.Time + 120_000), oldWait))); Drain();
+            Release(oldWait, "old-1", "old-payload");
+            Release(oldWait, "old-2", "duplicate-payload"); Drain();
         }
         var source = State().Frames.Values.SingleOrDefault(f => f.Node == "leaf");
         Check(source?.Intervention is not null && StatefulProbe.Calls.Count == (startFault ? 1 : 2), "R32: stateful reported fault lost its continuing invocation or replayed a resume");
@@ -120,7 +132,7 @@ internal static class StatefulWitness
         if (oldWait is not null)
         {
             Check(oldWait.Wait != currentWait.Wait, "R37: successor reused an old wait identity"); var count = StatefulProbe.Calls.Count;
-            Apply(new("add", M: Events.Deliver(new("event:go", "late-old", Values.From("late-old").ToJsonString(), world.Time + 120_000), oldWait))); Drain();
+            Release(oldWait, "late-old", "late-old"); Drain();
             Check(StatefulProbe.Calls.Count == count && State().Frames.ContainsKey(fresh.Id), "R37: old occurrence-addressed delivery resumed the successor");
         }
         var beforeReplay = StatefulProbe.Calls.Count;
