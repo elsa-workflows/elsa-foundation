@@ -90,7 +90,7 @@ COPILOT_URL_ROWS = tuple(f'(component: "{component}", absolute: {absolute})'
     for component in ("userinfo", "query", "fragment", "path", "dot-path", "escaped-dot-path", "single-dot-path",
         "escaped-single-dot-path", "backslash-path", "empty-userinfo") for absolute in ("True", "False"))
 COPILOT_URL_FAILURES = tuple(f'(component: "{component}", absolute: True)'
-    for component in ("dot-path", "escaped-dot-path", "single-dot-path", "escaped-single-dot-path", "backslash-path", "empty-userinfo")) \
+    for component in ("dot-path", "escaped-dot-path", "single-dot-path", "escaped-single-dot-path", "empty-userinfo")) \
     + ('(component: "empty-userinfo", absolute: False)',)
 
 # These are exact source fragments, exact selected rows, and the intended assertion.

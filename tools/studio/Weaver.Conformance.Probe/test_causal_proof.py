@@ -131,17 +131,23 @@ class VerdictControls(unittest.TestCase):
                 change(rows[0])
                 with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 1, rows)
 
-    def test_url_validation_control_requires_exactly_the_seven_canonicalized_rows_at_availability(self):
+    def test_url_validation_control_requires_exactly_the_six_canonicalized_rows_at_availability(self):
         recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "copilot-runtime-url-validation")
         self.assertEqual(len(recipe.names()), 20)
-        self.assertEqual(len(recipe.failed_names()), 7)
+        self.assertEqual(len(recipe.failed_names()), 6)
+        backslash_name = recipe.test + '(component: "backslash-path", absolute: True)'
+        self.assertEqual("passed", next(row for row in records(recipe) if row["name"] == backslash_name)["status"])
         def swap_failure(rows):
             failed = next(row for row in rows if row["status"] == "failed")
             passed = next(row for row in rows if row["status"] == "passed")
             passed.update(status="failed", message=failed["message"], stack=failed["stack"])
             failed["status"] = "passed"
+        def unexpected_backslash_failure(rows):
+            failed = next(row for row in rows if row["status"] == "failed")
+            next(row for row in rows if row["name"] == backslash_name).update(status="failed", message=failed["message"], stack=failed["stack"])
         for change in (
                 swap_failure,
+                unexpected_backslash_failure,
                 lambda rows: next(row for row in rows if row["status"] == "failed").update(status="passed"),
                 lambda rows: next(row for row in rows if row["status"] == "failed").update(message="Assert.Equal() Failure\nExpected: 0\nActual: 1"),
                 lambda rows: next(row for row in rows if row["status"] == "failed").update(message="System.ArgumentException : invalid URI"),
