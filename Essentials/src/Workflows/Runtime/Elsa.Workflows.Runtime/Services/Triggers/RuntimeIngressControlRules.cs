@@ -113,6 +113,6 @@ internal static class RuntimeIngressControlRules
         DateTimeOffset? availableAt, long fence) => new(item.OutboxItemId, item.Intent, status, item.RecordedAt, availableAt,
         item.RetryPolicy, item.DeliveryAttemptCount, null, null, item.DeliveredAt, item.LastFailureMessage, item.Metadata,
         fence, null, item.StimulusDeliveryProtocolVersion, item.StimulusDeliverySourceScope, item.RecipientSnapshot,
-        item.StandaloneIngress, item.SubscriptionDeliveryProtocolVersion, item.SubscriptionDelivery);
+        item.StandaloneIngress, item.SubscriptionDeliveryProtocolVersion, item.SubscriptionDelivery, item.SavedStimulusStarts);
     private static TriggerOperationException Conflict() => new("conflict", "The delivery or reviewed recipient state changed; reload it.");
 }

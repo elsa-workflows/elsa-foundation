@@ -231,6 +231,10 @@ public sealed class RuntimeCheckpointCommandPayload
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeIngressCommandOrigin? IngressOrigin { get; init; }
 
+    /// <summary>Retained scope authority for an ordinary saved-cohort start from an ingress-owned publisher.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeStimulusDeliveryOrigin? StimulusDeliveryOrigin { get; init; }
+
     /// <summary>Durable cross-workflow dispatch depth. Missing legacy values default to zero.</summary>
     public int DispatchNestingDepth { get; }
 

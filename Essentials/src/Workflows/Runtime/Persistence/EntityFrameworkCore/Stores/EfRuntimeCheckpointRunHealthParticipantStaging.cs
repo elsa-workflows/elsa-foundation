@@ -95,11 +95,11 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
 
         if (healthRow is null)
         {
-            context.WorkflowRunHealthStates.Add(ToEntity(next, scope, healthId, 1));
+            context.WorkflowRunHealthStates.Add(ToEntity(context, next, scope, healthId, 1));
             return;
         }
 
-        CopyToEntity(healthRow, next, scope, healthId, checked(healthRow.Revision + 1));
+        CopyToEntity(context, healthRow, next, scope, healthId, checked(healthRow.Revision + 1));
     }
 
     internal static WorkflowRunHealthProjection ReadChecked(
@@ -231,22 +231,23 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
         if (!StringComparer.Ordinal.Equals(change.StateId, change.State.WorkflowExecutionId) ||
             !StringComparer.Ordinal.Equals(change.StateId, workflowExecutionId))
             throw new InvalidOperationException("Workflow execution state change identity does not belong to the checkpoint workflow.");
-        if (change.State.TenantId is not null && !StringComparer.Ordinal.Equals(change.State.TenantId, scope))
+        if (change.State.TenantId is not null && !StringComparer.Ordinal.Equals(change.State.TenantId, scope) &&
+            !EfWorkflowExecutionStateStore.HasBoundIngressScope(change.State, scope))
             throw new InvalidOperationException("The workflow execution tenant does not belong to the persistence scope.");
     }
 
-    private static WorkflowRunHealthStateEntity ToEntity(
+    private static WorkflowRunHealthStateEntity ToEntity(RuntimeDbContext context,
         WorkflowRunHealthProjection projection,
         string scope,
         string id,
         long revision)
     {
         var row = new WorkflowRunHealthStateEntity { Id = id };
-        CopyToEntity(row, projection, scope, id, revision);
+        CopyToEntity(context, row, projection, scope, id, revision);
         return row;
     }
 
-    private static void CopyToEntity(
+    private static void CopyToEntity(RuntimeDbContext context,
         WorkflowRunHealthStateEntity row,
         WorkflowRunHealthProjection projection,
         string scope,
@@ -269,7 +270,7 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
         row.IncidentCount = projection.IncidentCount;
         row.IncidentBearingCount = projection.IncidentBearingCount;
         row.ContentJson = RuntimeArtifactJson.Serialize(projection);
-        row.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion;
+        row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion);
         row.Revision = revision;
     }
 
