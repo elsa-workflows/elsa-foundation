@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using CShells;
+using CShells.Lifecycle;
 using CShells.Features;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Activities.Http.Activities;
