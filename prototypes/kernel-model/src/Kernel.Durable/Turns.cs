@@ -8,8 +8,15 @@ namespace Kernel.Durable;
 /// </summary>
 public interface IActorType
 {
+    /// <summary>A referenced address whose equality with this actor affects admission. Routers can identify
+    /// references from the wire kind before the stored model is loaded. This grants no sender authority.</summary>
+    string? SelfReference(Delivery delivery) => null;
+
     /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
     bool SingleMessage(Message message) => false;
+
+    /// <summary>A mixed host dispatches the classifier by the committed model. Single-model actors keep their existing boundary.</summary>
+    bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) => SingleMessage(delivery.Message);
 
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
@@ -66,12 +73,15 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
     internal long InboxOrder => CompletedOrder == 0 ? Seq : 0; // F7 priority among eligible inputs
     internal long ObservedOrder;     // in-memory order of first observation, for local/durable tie-breaking
     internal long ObservedAt;        // monotonic observation time, used when a command matures before trial selection
     internal long CompletedOrder;    // ordinal when the driver published its result in this owner
     internal long CompletedAt;       // a durable ticket alone cannot establish when its result became ready
+    public bool HasRequestAddress => RequestAddress is not null;
+    internal string? RequestAddress;   // a single live response to a retryable PostRequest; never persisted
     internal bool Durable;            // it is a row
     internal bool AwaitPoll;          // promoted while catching up: poll must observe its row before marking it
     internal bool Marked;             // its row says seen at this epoch
@@ -82,6 +92,11 @@ public sealed class Delivery(Message message, long seq)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal Message? Original;       // a job's ticket as it was before its result replaced it (decision 4: what is written)
     internal int Attempts;
+    internal bool SuppliedCompletion => Message.Kind == Kinds.JobFinished && !CompletedJob;
+    internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job;
+    internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
+    internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
+    internal bool CompletedJob;       // only the Worker can turn a ticket into a result
     internal bool Ticket;             // a kernel message, not (yet) for the model
     internal bool Taken;              // a turn or a commit in flight has it
     internal string? Key;             // of a job
@@ -154,7 +169,15 @@ public sealed class TurnOutcome(string instance)
     public InstanceStatus? Status = InstanceStatus.Running;     // after this turn; null when the instance does not exist
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
+    internal CommitWindow? Window;
     public List<RequestReply> Replied = [];
+
+    /// <summary>Reply on the consumed delivery's own route when this outcome lands.</summary>
+    public void ReplyTo(Delivery delivery, object? value)
+    {
+        if ((delivery.RequestAddress ?? delivery.Message.ReplyTo) is { } route)
+            Replied.Add(new(delivery.Message.InboxKey, route, Request.Response, value) { Rpc = delivery.RequestAddress is not null });
+    }
     public List<Delivery> Consumed = [], Held = [];
     public List<string> Cancelled = [];
     public List<Message> Sent = [];
@@ -172,7 +195,10 @@ public sealed class TurnOutcome(string instance)
 }
 
 /// <summary>A reply to one consumed request, after commit; it does not subscribe a workflow observer.</summary>
-public sealed record RequestReply(string Message, string To, string Channel, object? Item);
+public sealed record RequestReply(InboxKey Message, string To, string Channel, object? Item)
+{
+    internal bool Rpc { get; init; }
+}
 
 /// <summary>
 /// The durable half of one turn: what it sends, holds, recalls, subscribes, publishes and emits, and the background jobs
