@@ -1,12 +1,9 @@
 namespace Elsa.Weaver.Core.Services;
 
 /// <summary>
-/// Single source of truth for redacting provider secrets from text that reaches a log sink or a
-/// client-facing error (issue #414 item 3). The provider adapters (Anthropic, GitHub Copilot) each
-/// hold a different set of secrets — Anthropic redacts one resolved API key; GitHub Copilot redacts a
-/// configured token, a runtime-connection token, an environment-variable token, and a runtime URL — so
-/// this helper is parameterized by the secret set rather than hard-coding a fixed list. Redaction fidelity is a
-/// security property: a narrowed secret set is a leak, so each caller passes its full set explicitly.
+/// Redacts sensitive literals from text that reaches a log sink or a client-facing error (issue #414 item 3).
+/// Each caller supplies all sensitive literals for its boundary; the helper contains no boundary-specific inventory.
+/// Redaction fidelity is a security property: narrowing the supplied set can disclose sensitive text.
 /// </summary>
 public static class WeaverLogRedaction
 {
