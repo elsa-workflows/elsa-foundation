@@ -24,7 +24,27 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Func<Elsa3Activity, string, bool>? isScriptBody = null,
         IReadOnlySet<string>? containerVariableIds = null,
         IReadOnlyDictionary<string, string>? memoryAliases = null,
-        bool isReusable = false)
+        bool isReusable = false) =>
+        LowerCore(definition, inventory, diagnosticMetadata, jsonPaths, sourceNameOf, isScriptBody,
+            containerVariableIds, memoryAliases, isReusable, null);
+
+    internal IReadOnlyList<Elsa3MigrationDiagnostic> Lower(Elsa3ConversionPlan plan, Elsa3MemoryReferenceInventory inventory) =>
+        LowerCore(plan.Definition, inventory, plan.Request.DiagnosticMetadata, plan.JsonPaths, plan.SourceName,
+            (node, property) => plan.Find(node)?.ScriptProperty is { } script && StringComparer.Ordinal.Equals(script, property),
+            plan.Nodes.Values.SelectMany(node => node.Variables).Select(variable => variable.ReferenceKey).ToHashSet(StringComparer.Ordinal),
+            plan.MemoryAliases, plan.Request.IsReusable, plan);
+
+    private IReadOnlyList<Elsa3MigrationDiagnostic> LowerCore(
+        Elsa3WorkflowDefinition definition,
+        Elsa3MemoryReferenceInventory inventory,
+        IReadOnlyDictionary<string, string> diagnosticMetadata,
+        IReadOnlyDictionary<Elsa3Activity, string>? jsonPaths,
+        Func<Elsa3Activity, string, string>? sourceNameOf,
+        Func<Elsa3Activity, string, bool>? isScriptBody,
+        IReadOnlySet<string>? containerVariableIds,
+        IReadOnlyDictionary<string, string>? memoryAliases,
+        bool isReusable,
+        Elsa3ConversionPlan? plan)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -53,6 +73,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
         foreach (var property in properties)
         {
+            var isVariableExpression = TryReadVariableExpression(property.Value, out var variableDeclaration);
             var directions = property.Occurrences.Select(occurrence => occurrence.Direction).Distinct().ToArray();
             if (directions.Contains(Elsa3PropertyDirection.Unknown))
             {
@@ -81,7 +102,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 continue;
             }
 
-            if ((property.Expression is not null || property.MemoryReferenceId is not null) &&
+            if ((property.Expression is not null || property.MemoryReferenceId is not null || isVariableExpression) &&
                 property.InputContract is not null &&
                 !ValueFits(property, property.InputContract.Type))
             {
@@ -93,6 +114,12 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     "Change the Elsa 3 typed value to the target activity member type before import.",
                     $"{property.JsonPath}.typeName",
                     property.MemoryReferenceId));
+                continue;
+            }
+
+            if (isVariableExpression)
+            {
+                LowerVariableExpression(input, property, variableDeclaration, variablesById, containerVariables, outputs, plan, diagnostics);
                 continue;
             }
 
@@ -267,6 +294,92 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         return diagnostics;
     }
 
+    private static void LowerVariableExpression(
+        DiagnosticScope input,
+        ActivityProperty property,
+        JsonElement declaration,
+        IReadOnlyDictionary<string, Elsa3Variable[]> variablesById,
+        IReadOnlySet<string> containerVariableIds,
+        IReadOnlyList<Elsa3MemoryOccurrence> outputs,
+        Elsa3ConversionPlan? plan,
+        List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        var path = $"{property.JsonPath}.expression.value.id";
+        if (declaration.ValueKind != JsonValueKind.Object ||
+            !declaration.TryGetProperty("id", out var idElement) ||
+            idElement.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(idElement.GetString()))
+        {
+            Refuse(Elsa3ImportDiagnosticCodes.UnresolvableReferenceShape,
+                "Variable expression does not name a non-empty variable id.",
+                "Select a declared variable before importing the workflow.");
+            return;
+        }
+
+        var id = idElement.GetString()!;
+        for (var parent = plan?.Find(property.Activity)?.Parent; parent is not null; parent = plan!.Find(parent)?.Parent)
+        {
+            var ancestor = plan!.Find(parent)!;
+            var matches = ancestor.Variables.Where(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, id)).ToArray();
+            if (matches.Length > 1)
+            {
+                Refuse(Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"Variable expression '{id}' identifies multiple declarations in its enclosing container.",
+                    "Give each variable a unique id before importing.", id);
+                return;
+            }
+            if (matches.Length == 1)
+            {
+                Bind(Elsa3ConversionDiagnostics.NodeId(parent), id);
+                return;
+            }
+        }
+
+        var workflowMatches = variablesById.GetValueOrDefault(id) ?? [];
+        if (workflowMatches.Length > 1)
+        {
+            Refuse(Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                $"Variable expression '{id}' identifies multiple workflow declarations.",
+                "Give each variable a unique id before importing.", id);
+            return;
+        }
+        if (workflowMatches.Length == 1)
+        {
+            if (outputs.FirstOrDefault(output => IsLoopVariable(output) && StringComparer.Ordinal.Equals(output.MemoryReferenceId, id)) is { } loop)
+                LowerLoopVariableRead(input, property with { MemoryReferenceId = id }, loop, diagnostics, path);
+            else
+                Bind(VariableReference.WorkflowScopeId, id);
+            return;
+        }
+
+        Refuse(containerVariableIds.Contains(id) ? Elsa3ImportDiagnosticCodes.CrossFrameReference : Elsa3ImportDiagnosticCodes.DanglingReference,
+            $"Variable expression '{id}' names no variable declared by the workflow or an enclosing container.",
+            "Select a variable declared in this scope, or declare it on the workflow before importing.", id);
+        return;
+
+        void Bind(string scope, string key) =>
+            property.Activity.AdditionalProperties[property.PropertyName] = CreateArgument(property.Value, "Variable",
+                JsonSerializer.SerializeToElement(new { referenceKey = key, declaringScopeId = scope }));
+
+        void Refuse(string code, string message, string guidance, string? id = null) =>
+            diagnostics.Add(CreateDiagnostic(input, property, code, message, guidance, path, id));
+    }
+
+    private static bool TryReadVariableExpression(JsonElement value, out JsonElement declaration)
+    {
+        declaration = default;
+        if (value.ValueKind != JsonValueKind.Object ||
+            !value.TryGetProperty("expression", out var expression) ||
+            expression.ValueKind != JsonValueKind.Object ||
+            !expression.TryGetProperty("type", out var type) ||
+            type.ValueKind != JsonValueKind.String ||
+            !StringComparer.OrdinalIgnoreCase.Equals(type.GetString(), "Variable"))
+            return false;
+
+        expression.TryGetProperty("value", out declaration);
+        return true;
+    }
+
     private void LowerExpression(
         Elsa3WorkflowDefinition definition,
         DiagnosticScope input,
@@ -367,7 +480,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         DiagnosticScope input,
         ActivityProperty property,
         Elsa3MemoryOccurrence loop,
-        List<Elsa3MigrationDiagnostic> diagnostics)
+        List<Elsa3MigrationDiagnostic> diagnostics,
+        string? diagnosticPath = null)
     {
         if (IsCarriedValue(loop, property))
         {
@@ -388,7 +502,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             Elsa3ActivityDiagnosticCodes.OutputNotRepresentable,
             $"Variable '{property.MemoryReferenceId}' holds loop '{loop.ActivityNodeId}''s current value, which Elsa 4 keeps only inside the loop body.",
             "Read the value inside the loop, or copy it into another variable there.",
-            $"{property.JsonPath}.memoryReference",
+            diagnosticPath ?? $"{property.JsonPath}.memoryReference",
             property.MemoryReferenceId));
     }
 
