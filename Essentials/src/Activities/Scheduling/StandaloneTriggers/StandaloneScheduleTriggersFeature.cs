@@ -39,6 +39,17 @@ internal sealed class ScheduleResourcePlanner(IRecurringScheduleCalculator calcu
     public StandaloneSchedulePlan Plan(TriggerScope scope, TriggerAggregate? previous, TriggerStoreWrite write,
         RecurringTriggerSchedule? current, DateTimeOffset now)
     {
+        try { return PlanCore(scope, previous, write, current, now); }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException or JsonException or
+            FormatException or OverflowException or KeyNotFoundException or InvalidOperationException or ArgumentException)
+        {
+            throw new TriggerOperationException("validation", "The resource recurrence or timezone is invalid or unavailable on this host.",
+                new Dictionary<string, string> { ["scope"] = scope.Persistence.Value, ["triggerId"] = write.Trigger.Id }, exception);
+        }
+    }
+    private StandaloneSchedulePlan PlanCore(TriggerScope scope, TriggerAggregate? previous, TriggerStoreWrite write,
+        RecurringTriggerSchedule? current, DateTimeOffset now)
+    {
         var trigger = write.Trigger;
         if (!Supports(trigger.TypeKey) || trigger.TenantId != scope.TenantId || previous is not null && previous.Trigger.Id != trigger.Id)
             throw new TriggerOperationException("validation", "The schedule planner does not own this exact resource mutation.");
@@ -59,7 +70,7 @@ internal sealed class ScheduleResourcePlanner(IRecurringScheduleCalculator calcu
     }
 }
 
-internal sealed class ScheduleSourceContext(TimeProvider clock) : IStandaloneTriggerSourceContext<TimerScheduleSource>, IStandaloneTriggerSourceContext<CronScheduleSource>
+internal sealed class ScheduleSourceContext : IStandaloneTriggerSourceContext<TimerScheduleSource>, IStandaloneTriggerSourceContext<CronScheduleSource>
 {
     public bool SupportsResourceAuthorization => true;
     internal const string TimerFamily = "Elsa.StandaloneTimer";
@@ -69,14 +80,18 @@ internal sealed class ScheduleSourceContext(TimeProvider clock) : IStandaloneTri
     public ValueTask<StandaloneTriggerInvocationContext> GetAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(Current ?? throw new InvalidOperationException("Schedule source context requires the actual recurring pump occurrence."));
+        return ValueTask.FromResult(Current ?? throw new TriggerOperationException("unavailable", "Schedule source context requires the actual recurring pump occurrence.",
+            innerException: new InvalidOperationException("No recurring occurrence is bound to this source scope.")));
     }
     public ValueTask<bool> AuthorizeAsync(StandaloneTrigger trigger, StandaloneTriggerSignal signal, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var claim = Current?.ScheduleClaim;
         var owner = claim?.Schedule.Resource;
-        return ValueTask.FromResult(claim is not null && owner is not null && claim.VisibleAfter > clock.GetUtcNow() &&
+        return ValueTask.FromResult(claim is not null && owner is not null &&
+            // Renewal changes the physical deadline. The protected admission writer fences the actual current claim;
+            // the immutable snapshot supplied by the pump is not an independent expiry authority.
+
             Current!.Scope.Persistence == owner.Scope && Current.Scope.TenantId == owner.TenantId && trigger.TenantId == owner.TenantId &&
             trigger.Id == owner.TriggerId && signal.TriggerId == trigger.Id && trigger.TypeKey == owner.SourceTypeKey &&
             signal.SourceKey == claim.Schedule.BuildOccurrenceKey() &&
@@ -93,9 +108,9 @@ internal sealed class ScheduleResourceSource(ScheduleSourceContext context, ISta
         CancellationToken cancellationToken = default)
     {
         var schedule = claim.Schedule;
-        var owner = schedule.Resource ?? throw new InvalidOperationException("The schedule is not a resource-owned occurrence.");
+        var owner = schedule.Resource ?? throw Failure(scope, schedule.ScheduleId, new InvalidDataException("The schedule is not a resource-owned occurrence."));
         if (owner.Scope != scope || !schedule.IsActive || !Supports(owner.SourceTypeKey, owner.SourceFamily))
-            throw new InvalidDataException("The schedule differs from its installed producer and trusted persistence scope.");
+            throw Failure(scope, owner.TriggerId, new InvalidDataException("The schedule differs from its installed producer and trusted persistence scope."));
         access.Current.EnsureScope(scope);
         var previous = context.Current;
         context.Current = new(new(scope, owner.TenantId), new(scope.Value),
@@ -109,12 +124,16 @@ internal sealed class ScheduleResourceSource(ScheduleSourceContext context, ISta
             var result = owner.SourceTypeKey == "timer" ? await timers.AdmitAsync(signal, cancellationToken) : await cron.AdmitAsync(signal, cancellationToken);
             var sourceId = RuntimeStandaloneIngressSource.BuildOutboxItemId(scope, owner.TenantId, owner.TriggerId, owner.SourceFamily, signal.SourceKey);
             var item = await delivery.FindDeliveryAsync(new(scope, owner.TenantId), sourceId, cancellationToken) ??
-                throw new TriggerOperationException("unavailable", "The actual accepted schedule source is unavailable.");
+                throw Failure(scope, owner.TriggerId, new InvalidDataException("The actual accepted schedule source is unavailable."));
             if (item.StandaloneIngress?.AdmissionId != result.AdmissionId || item.StandaloneIngress.TriggerId != owner.TriggerId ||
                 item.StandaloneIngress.SourceFamily != owner.SourceFamily || item.StandaloneIngress.TenantId != owner.TenantId)
-                throw new InvalidDataException("The accepted schedule acknowledgement differs from its actual authorized occurrence source.");
+                throw Failure(scope, owner.TriggerId, new InvalidDataException("The accepted schedule acknowledgement differs from its actual authorized occurrence source."));
             return new(item, result.Replayed);
         }
         finally { context.Current = previous; }
     }
+    private static TriggerOperationException Failure(PersistenceScope scope, string resourceId, Exception cause) =>
+        new("unavailable", "The recurring source does not match its actual resource-owned occurrence.",
+            new Dictionary<string, string> { ["scope"] = scope.Value, ["triggerId"] = resourceId }, cause);
+
 }

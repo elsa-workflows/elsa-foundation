@@ -81,6 +81,21 @@ public sealed class StandaloneRecurringPumpTests
         Assert.Equal(replacement, await store.FindAsync(old.ScheduleId));
     }
 
+    [Fact]
+    public async Task A_backward_clock_after_acceptance_never_rewinds_the_resource_cursor()
+    {
+        var clock = new AdjustableClock(Now); var store = new InMemoryRecurringTriggerScheduleStore(clock);
+        var schedule = Resource(Now); await store.SaveAsync(schedule);
+        var source = new Source(claim => { var accepted = Accepted(claim); clock.Now = Now.AddHours(-1); return accepted; });
+        await Pump(store, source, clock).ExecuteAsync(default);
+        Assert.Equal(schedule.NextOccurrence.AddMinutes(5), (await store.FindAsync(schedule.ScheduleId))!.NextOccurrence);
+    }
+    private sealed class AdjustableClock(DateTimeOffset initial) : TimeProvider
+    {
+        internal DateTimeOffset Now = initial;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     private static RecurringTriggerPumpTask Pump(IRecurringTriggerScheduleStore store, IStandaloneScheduleSource source,
         TimeProvider clock, IRecurringScheduleCalculator? calculator = null) => new(store, new InMemoryWorkflowTriggerBindingStore(),
         new UnusedRouter(), calculator ?? new RecurringScheduleCalculator(), Options.Create(new RecurringTriggerPumpOptions

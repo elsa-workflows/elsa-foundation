@@ -75,7 +75,12 @@ internal sealed class CronTriggerConfigurationValidator : ITriggerConfigurationV
         { findings.Add(new("InvalidCron", "Enter a valid five-field or six-field Cron expression.", "expression")); }
         try
         {
-            var zone = configuration.TryGetProperty("timezone", out var timezone) && timezone.ValueKind == JsonValueKind.String ? timezone.GetString() : "UTC";
+            var zone = "UTC";
+            if (configuration.TryGetProperty("timezone", out var timezone))
+            {
+                if (timezone.ValueKind != JsonValueKind.String) throw new TimeZoneNotFoundException();
+                zone = timezone.GetString();
+            }
             if (string.IsNullOrWhiteSpace(zone)) throw new TimeZoneNotFoundException();
             _ = TimeZoneInfo.FindSystemTimeZoneById(zone);
         }

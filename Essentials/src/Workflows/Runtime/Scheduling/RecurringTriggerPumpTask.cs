@@ -347,7 +347,12 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
 
         if (schedule.Resource is { } owner)
         {
-            try { next = calculator.ComputeNext(schedule.Kind, schedule.Expression, _timeProvider.GetUtcNow(), owner.TimeZoneId)?.ToUniversalTime(); }
+            try
+            {
+                var currentTime = _timeProvider.GetUtcNow();
+                var afterAccepted = currentTime > schedule.NextOccurrence ? currentTime : schedule.NextOccurrence;
+                next = calculator.ComputeNext(schedule.Kind, schedule.Expression, afterAccepted, owner.TimeZoneId)?.ToUniversalTime();
+            }
             catch (Exception exception)
             {
                 Logger.LogError(exception, "Resource schedule '{ScheduleId}' accepted its frozen cohort but cannot advance; retry retains that same source key", schedule.ScheduleId);

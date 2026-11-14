@@ -97,6 +97,67 @@ public sealed class StandaloneScheduleSourcesTests
     }
 
     [Fact]
+    public async Task Typed_source_authority_leaves_snapshot_expiry_to_the_actual_current_physical_fence()
+    {
+        var factory = new ProbeFactory { CheckAuthority = true };
+        using var services = Services(factory); using var scope = services.CreateScope();
+        var planner = Assert.Single(scope.ServiceProvider.GetServices<IStandaloneSchedulePlanner>());
+        var schedule = planner.Plan(Scope, null, Write(Trigger()), null, Now).Replacement!;
+        // Providers can renew the physical claim while the pump retains this older snapshot. Native/EF provider
+        // tests separately prove acceptance uses the actual current deadline and still refuses expiry/replacement.
+        var snapshot = new RecurringTriggerOccurrenceClaim(schedule, "pump", 1, 1, Now.AddMinutes(-2), Now.AddSeconds(-1), 0);
+        await Assert.ThrowsAsync<ReachedPublicPort>(() => scope.ServiceProvider.GetRequiredService<IStandaloneScheduleSource>()
+            .AdmitAsync(Scope.Persistence, snapshot).AsTask());
+        Assert.Same(snapshot, factory.Context!.ScheduleClaim);
+    }
+
+    [Theory]
+    [InlineData("timer", 2, "{\"interval\":\"PT5M\"}", "UnsupportedSchema")]
+    [InlineData("timer", 1, "{\"interval\":\"PT0S\"}", "InvalidInterval")]
+    [InlineData("timer", 1, "{\"interval\":\"-PT5M\"}", "InvalidInterval")]
+    [InlineData("timer", 1, "{\"interval\":\"invalid\"}", "InvalidInterval")]
+    [InlineData("timer", 1, "{\"interval\":123}", "InvalidInterval")]
+    [InlineData("timer", 1, "{\"interval\":\"PT5M\",\"http\":null}", "UnexpectedHttpMode")]
+    [InlineData("cron", 2, "{\"expression\":\"0 9 * * *\"}", "UnsupportedSchema")]
+    [InlineData("cron", 1, "{\"expression\":\"bad cron\"}", "InvalidCron")]
+    [InlineData("cron", 1, "{\"expression\":\"0 9 * * *\",\"timezone\":\"Elsa/NotAZone\"}", "InvalidTimezone")]
+    [InlineData("cron", 1, "{\"expression\":\"0 9 * * *\",\"timezone\":123}", "InvalidTimezone")]
+    [InlineData("cron", 1, "{\"expression\":\"0 9 * * *\",\"timezone\":null}", "InvalidTimezone")]
+    [InlineData("cron", 1, "{\"expression\":\"0 9 * * *\",\"http\":{}}", "UnexpectedHttpMode")]
+    public async Task Registered_authoring_validators_refuse_unsupported_and_malformed_source_settings(string type, int version, string configuration, string code)
+    {
+        IServiceCollection services = new ServiceCollection(); new StandaloneScheduleTriggerAuthoringFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var validator = Assert.Single(scope.ServiceProvider.GetServices<ITriggerConfigurationValidator>(), item => item.TypeKey == type);
+        Assert.Contains(await validator.ValidateAsync(version, Json(configuration)), finding => finding.Code == code);
+        Assert.Empty(scope.ServiceProvider.GetServices<IStandaloneScheduleSource>());
+    }
+
+    [Theory]
+    [InlineData("timer", "{\"interval\":\"PT5M\"}")]
+    [InlineData("cron", "{\"expression\":\"0 9 * * *\",\"timezone\":\"UTC\"}")]
+    [InlineData("cron", "{\"expression\":\"0 9 * * *\"}")]
+    public async Task Registered_authoring_accepts_valid_recurrences_without_installing_intake(string type, string configuration)
+    {
+        IServiceCollection services = new ServiceCollection(); new StandaloneScheduleTriggerAuthoringFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        Assert.Empty(await Assert.Single(scope.ServiceProvider.GetServices<ITriggerConfigurationValidator>(), item => item.TypeKey == type)
+            .ValidateAsync(1, Json(configuration)));
+        Assert.Empty(scope.ServiceProvider.GetServices<IStandaloneScheduleSource>());
+    }
+
+    [Fact]
+    public void Missing_host_timezone_is_a_contextual_planning_failure_with_the_original_cause()
+    {
+        using var services = Services(new ProbeFactory()); using var scope = services.CreateScope();
+        var planner = Assert.Single(scope.ServiceProvider.GetServices<IStandaloneSchedulePlanner>());
+        var failure = Assert.Throws<TriggerOperationException>(() => planner.Plan(Scope, null,
+            Write(Trigger(type: "cron", settings: Json("{\"expression\":\"0 9 * * *\",\"timezone\":\"Elsa/NotAZone\"}"))), null, Now));
+        Assert.IsType<TimeZoneNotFoundException>(failure.InnerException); Assert.Equal("validation", failure.Code);
+        Assert.Equal(Scope.Persistence.Value, failure.Fields!["scope"]); Assert.Equal("resource", failure.Fields["triggerId"]);
+    }
+
+    [Fact]
     public void Resource_schedule_identity_distinguishes_scope_and_absent_tenant_without_changing_legacy_keys()
     {
         Assert.NotEqual(RecurringTriggerSchedule.BuildResourceId(new("one"), "resource", null),
@@ -115,13 +176,18 @@ public sealed class StandaloneScheduleSourcesTests
     private sealed class ProbeFactory : IStandaloneTriggerIngressFactory
     {
         internal IServiceProvider Services = null!;
+        internal bool CheckAuthority;
         public StandaloneTriggerSourceDescriptor? Descriptor; public StandaloneTriggerInvocationContext? Context; public StandaloneTriggerSignal? Signal;
         public IStandaloneTriggerIngress<TSource> Create<TSource>() where TSource : class => new Probe<TSource>(this,
             Services.GetRequiredKeyedService<StandaloneTriggerSourceDescriptor>(typeof(TSource)), Services.GetRequiredService<IStandaloneTriggerSourceContext<TSource>>());
         private sealed class Probe<T>(ProbeFactory owner, StandaloneTriggerSourceDescriptor descriptor, IStandaloneTriggerSourceContext<T> context) : IStandaloneTriggerIngress<T> where T : class
         {
             public async ValueTask<StandaloneTriggerIngressResult> AdmitAsync(StandaloneTriggerSignal signal, CancellationToken cancellationToken = default)
-            { owner.Descriptor = descriptor; owner.Context = await context.GetAsync(cancellationToken); owner.Signal = signal; throw new ReachedPublicPort(); }
+            {
+                owner.Descriptor = descriptor; owner.Context = await context.GetAsync(cancellationToken); owner.Signal = signal;
+                if (owner.CheckAuthority) Assert.True(await context.AuthorizeAsync(Trigger(type: descriptor.TypeKey), signal, cancellationToken));
+                throw new ReachedPublicPort();
+            }
         }
     }
 }
