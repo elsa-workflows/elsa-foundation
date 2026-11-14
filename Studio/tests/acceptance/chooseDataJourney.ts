@@ -14,7 +14,6 @@ const cleanupRequestTimeout = 15_000;
  * Every wait is on observable UI or server state. Seeded definitions are unique per run and deleted afterwards.
  */
 export async function chooseDataJourney(page: Page, info: TestInfo, capture: Capture, registerCleanup: (cleanup: () => Promise<void>) => void) {
-  const support = await activityDataSupport(page, info, registerCleanup);
   const enhanced = process.env.UX_ACTIVITY_DATA_COMPOSITION !== "default-off";
   const base = process.env.ELSA_WORKBENCH_URL!;
   expect(base, "Owned Workbench URL").toBeTruthy();
@@ -206,40 +205,13 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
   await page.keyboard.press("Escape");
   await expect(chooser()).toHaveCount(0);
   await page.setViewportSize(viewport);
+  await openConsumer(twice.definition.id);
   await page.getByRole("button", { name: "Clear data for Text", exact: true }).press("Enter");
   await expect(reference()).toHaveCount(0);
   await expect(trigger()).toBeFocused();
   await expect.poll(() => storedText(twice.draftId), { timeout: 30_000 }).toBeNull();
 
-  // The off control uses a genuinely member-capable typed object and an existing canonical member reference.
-  // Flipping only the host capability to true must fail this branch: a scalar Timer alone would be vacuous.
-  const customerVersion = await support.version("Elsa.Workbench.ActivityDataSelectionProof.GetCustomer");
-  const memberBinding = { expressionType: "ActivityResultMember", value: { producerNodeId: "producer", projectionKey: "Customer", isOptional: false, memberPath: ["customerId"] } };
-  const capable = await support.seed("capability control", support.root([
-    { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] },
-    support.line()
-  ]));
-  await support.open(capable);
-  await support.trigger().click();
-  if (enhanced) await expect(support.chooser().locator(".wf-data-members")).toBeVisible();
-  else {
-    await expect(support.chooser().locator(".wf-data-members")).toHaveCount(0);
-    await expect(support.chooser().getByRole("option", { name: /^Customer/ })).toBeVisible();
-    await expect(support.chooser().getByRole("option", { name: /^customerId/ })).toHaveCount(0);
-    await expect(support.chooser().getByRole("textbox", { name: "Member name", exact: true })).toHaveCount(0);
-  }
-  await capture(page, info, "capability-control");
-  await page.keyboard.press("Escape"); await expect(support.trigger()).toBeFocused();
-  expect(await support.stored(capable)).toBeNull();
-  await support.assertComposition();
-  const retained = await support.saved(capable);
-  retained.state.rootActivity.structure!.payload.activities[1].inputs = [{ referenceKey: "text", value: memberBinding }];
-  await support.api(`/design/workflows/drafts/${capable.draftId}`, "PUT", retained);
-  await support.open(capable); expect(await support.stored(capable)).toEqual(memberBinding);
-  await support.replace().click(); await expect(support.chooser()).toBeVisible();
-  await page.keyboard.press("Escape"); await expect(support.replace()).toBeFocused();
-  expect(await support.stored(capable)).toEqual(memberBinding);
-  support.observations.push(enhanced ? "typed object member capability enabled" : "typed object with capability false: legacy whole browser, no members, existing member binding preserved on Replace/Escape");
+  await activityDataCapabilityControl(page, info, capture, registerCleanup);
 
   async function publishAndRun(definitionId: string) {
     await page.getByRole("button", { name: "Review & publish", exact: true }).click();
@@ -269,4 +241,43 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     expect(payload.payload.preview).toBe("00:00:01");
     await info.attach(`whole-output-runtime-${definitionId}.json`, { body: JSON.stringify({ definitionId, workflowExecutionId: run.workflowExecutionId, expected: "00:00:01", committed: payload.payload.preview }), contentType: "application/json" });
   }
+}
+
+/** Also invoked alone by the owned enabled-host negative: the same typed control must refuse a false off claim. */
+export async function activityDataCapabilityControl(page: Page, info: TestInfo, capture: Capture, registerCleanup: (cleanup: () => Promise<void>) => void) {
+  const support = await activityDataSupport(page, info, registerCleanup);
+  const enhanced = process.env.UX_ACTIVITY_DATA_COMPOSITION !== "default-off";
+  // The off control uses a genuinely member-capable typed object and an existing canonical member reference.
+  // Flipping only the host capability to true must fail this branch: a scalar Timer alone would be vacuous.
+  const customerVersion = await support.version("Elsa.Workbench.ActivityDataSelectionProof.GetCustomer");
+  const memberBinding = { expressionType: "ActivityResultMember", value: { producerNodeId: "producer", projectionKey: "Customer", isOptional: false, memberPath: ["customerId"] } };
+  const capable = await support.seed("capability control", support.root([
+    { nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] },
+    support.line()
+  ]));
+  await support.open(capable);
+  await support.trigger().click();
+  if (enhanced) await expect(support.chooser().locator(".wf-data-members")).toBeVisible();
+  else {
+    await expect(support.chooser().locator(".wf-data-members")).toHaveCount(0);
+    await expect(support.chooser().getByRole("option", { name: /^Customer/ })).toBeVisible();
+    await expect(support.chooser().getByRole("option", { name: /^customerId/ })).toHaveCount(0);
+    await expect(support.chooser().getByRole("textbox", { name: "Member name", exact: true })).toHaveCount(0);
+  }
+  await capture(page, info, "capability-control");
+  await page.keyboard.press("Escape"); await expect(support.trigger()).toBeFocused();
+  expect(await support.stored(capable)).toBeNull();
+  await support.assertComposition();
+  const retained = await support.saved(capable);
+  retained.state.rootActivity.structure!.payload.activities[1].inputs = [{ referenceKey: "text", value: memberBinding }];
+  await support.api(`/design/workflows/drafts/${capable.draftId}`, "PUT", retained);
+  await support.open(capable); expect(await support.stored(capable)).toEqual(memberBinding);
+  await expect(support.reference()).toContainText("customerId");
+  await expect(support.reference()).toContainText("Get Customer");
+  await capture(page, info, "capability-reference");
+  await support.replace().click(); await expect(support.chooser()).toBeVisible();
+  await page.keyboard.press("Escape"); await expect(support.replace()).toBeFocused();
+  expect(await support.stored(capable)).toEqual(memberBinding);
+  support.observations.push(enhanced ? "typed object member capability enabled" : "typed object with capability false: legacy whole browser, no members, existing member binding preserved on Replace/Escape");
+
 }

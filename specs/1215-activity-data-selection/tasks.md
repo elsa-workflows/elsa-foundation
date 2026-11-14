@@ -269,7 +269,10 @@ This receipt does not mark full T024/T025, spec1215 or the program complete.
 cover inherited whole outputs, typed Customer Sequence/Flowchart members, declared input and nearest/outer
 same-name scoped variable literal paths. The existing owned runner adds explicit normal/minimal/default-off
 composition, repeated exact title selection, fixed capture/runtime/canonical-offer inventories, opt-in test
-fixture import and fixture-free cleanup. Product semantics and defaults remain unchanged. Current-head
+fixture import and fixture-free cleanup. Fresh pre-edit admission is distinguished from post-edit
+provenance, and minimal proof observes the live backend dependency closure/descriptors plus a populated
+Studio menu. Direct semantic controls import the actual admission/closure predicates. Product semantics
+and defaults remain unchanged. Current-head
 executed checks/composed artifacts and independent reviews are still required; this source receipt is not
 a pass claim. Full T024/T025 and expression, equivalent-editor, placed/external and persistent-recovery
 obligations remain open. Earlier S4 failed/superseded attempts keep their original identities/statuses.

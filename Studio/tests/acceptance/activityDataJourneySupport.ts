@@ -7,9 +7,50 @@ export type Node = { nodeId: string; activityVersionId: string; inputs: { refere
 export type State = { rootActivity: Node; variables: unknown[]; inputs: unknown[]; outputs: unknown[] };
 export type Created = { definition: { id: string }; draftId: string };
 type Draft = { state: State; layout: unknown; activityPresentation: unknown };
-type Context = { request: { definitionId: string; nodeId: string; inputKey: string; documentRevision: string; query?: { source?: Binding; memberPath?: string[] }; snapshot: State };
+export type Context = { request: { definitionId: string; nodeId: string; inputKey: string; documentRevision: string; query?: { source?: Binding; memberPath?: string[] }; snapshot: State };
   response: { state: string; documentRevision: string; analysis?: { memberReadsEnabled?: boolean; sources: { binding: Binding | null; shape?: { state: string; kind: string } }[] } } };
 type Execution = { activityExecutionId: string; authoredActivityId: string; status: string };
+
+export function wireIdentity(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
+}
+
+/** Match the fresh admission call, never the post-edit provenance read that it triggers. */
+export function findActivityDataAdmission(contexts: Context[], before: Context["request"], expected: Binding): Context | undefined {
+  const memberPath = (expected.value as { memberPath?: string[] }).memberPath;
+  return contexts.find(item => (item.response.state === "supported" || item.response.state === "empty") &&
+    item.request.definitionId === before.definitionId && item.request.nodeId === before.nodeId && item.request.inputKey === before.inputKey &&
+    item.request.documentRevision === before.documentRevision && item.response.documentRevision === before.documentRevision &&
+    wireIdentity(item.request.snapshot) === wireIdentity(before.snapshot) && !!item.request.query?.source &&
+    wireIdentity(item.request.query.memberPath) === wireIdentity(memberPath) &&
+    !!item.response.analysis?.sources.some(source => wireIdentity(source.binding) === wireIdentity(expected)));
+}
+
+export type FeatureFact = { id: string; enabled: boolean; runtimeAvailable: boolean; dependencies: { id: string; optional: boolean }[] };
+export const optionalBackendFeatures = ["HttpJavaScript", "JavaScriptActivities", "JavaScriptEndpoints", "JavaScriptExpressions",
+  "JavaScriptJintEngine", "JavaScriptWorkflowsDesign", "Liquid"];
+
+/** The live catalog's enabled bit is requested state. Dependencies come from resolved runtime descriptors. */
+export function resolvedFeatureClosure(features: FeatureFact[]): string[] {
+  const byId = new Map(features.map(feature => [feature.id, feature]));
+  if (!features.length || byId.size !== features.length) throw new Error("Missing or ambiguous live feature catalog");
+  for (const id of ["WorkflowsPublishingApi", "WorkflowDesignValidations"])
+    if (!byId.get(id)?.enabled || !byId.get(id)?.runtimeAvailable) throw new Error(`Required rooted feature unavailable: ${id}`);
+  const reached = new Set<string>();
+  function visit(id: string) {
+    if (reached.has(id)) return;
+    const feature = byId.get(id);
+    if (!feature?.runtimeAvailable || !Array.isArray(feature.dependencies)) throw new Error(`Required feature graph unresolved: ${id}`);
+    reached.add(id);
+    for (const dependency of feature.dependencies) {
+      if (typeof dependency.id !== "string" || typeof dependency.optional !== "boolean") throw new Error("Malformed feature dependency");
+      if (!dependency.optional) visit(dependency.id);
+    }
+  }
+  for (const feature of features) if (feature.enabled) visit(feature.id);
+  return [...reached].sort();
+}
 
 /** Real composed-host support. Setup uses REST; every authored selection is made through Studio, from an observed offer. */
 export async function activityDataSupport(page: Page, info: TestInfo, registerCleanup: (cleanup: () => Promise<void>) => void) {
@@ -17,9 +58,10 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   expect(base, "Owned Workbench URL").toBeTruthy();
   const composition = process.env.UX_ACTIVITY_DATA_COMPOSITION ?? "normal";
   const contexts: Context[] = [], pending: Promise<void>[] = [], scripts: string[] = [], definitions: string[] = [];
-  const selections: { definitionId: string; binding: Binding; offered: Binding; documentRevision: string }[] = [];
+  const selections: { definitionId: string; binding: Binding; offered: Binding; admission: Context; before: Context["request"] }[] = [];
   const runtime: { definitionId: string; workflowExecutionId: string; expected: string; committed: string; consumer: Execution; producers: Execution[] }[] = [];
   const observations: string[] = [];
+  let compositionObservation: { features: FeatureFact[]; mandatoryClosure: string[]; expressionTypes: string[]; syntaxChoices: string[] } | undefined;
   let writes = 0;
   page.on("response", response => {
     if (response.url().includes("/design/workflows/activity-data/context") && response.ok()) {
@@ -45,7 +87,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       catch (error) { failures.push(error); cleanup.push({ id, status: "failed" }); }
     }
     await info.attach("activity-data-proof.json", { body: JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA,
-      composition, contexts, selections, runtime, observations, scripts, cleanup }, null, 2), contentType: "application/json" });
+      composition, contexts, selections, runtime, observations, scripts, cleanup, compositionObservation }, null, 2), contentType: "application/json" });
     if (failures.length) throw new AggregateError(failures, "Owned activity-data cleanup or evidence collection failed");
   });
   await api("/_elsa/identity/login", "POST", { username: "admin", password: "Password123!" });
@@ -101,17 +143,17 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const path = () => chooser().getByRole("navigation", { name: "Member path", exact: true });
   async function commit(created: Created, expected: Binding, action: () => Promise<void>) {
     await Promise.all(pending);
-    const before = contexts.length;
+    const oldBinding = await stored(created);
+    const before = [...contexts].reverse().find(item => item.request.definitionId === created.definition.id && item.request.nodeId === "consumer" && item.request.inputKey === "text" &&
+      wireIdentity(item.request.snapshot.rootActivity.structure!.payload.activities.find(node => node.nodeId === "consumer")!.inputs.find(input => input.referenceKey === "text")?.value ?? null) === wireIdentity(oldBinding));
+    expect(before, "Current pre-edit snapshot before selection").toBeTruthy();
+    const boundary = contexts.length;
     await action(); await expect(chooser()).toHaveCount(0); await Promise.all(pending);
-    // Scalar clicks and "Use this value" request fresh admission. Capture that request's offer,
-    // rather than a later provenance refresh or a locally fabricated binding.
-    const answer = contexts.slice(before).find(item => item.request.definitionId === created.definition.id && item.request.nodeId === "consumer" && item.request.inputKey === "text" &&
-      item.response.analysis?.sources.some(source => source.binding?.expressionType === expected.expressionType && JSON.stringify(source.binding.value) === JSON.stringify(expected.value)));
-    const offer = answer?.response.analysis?.sources.find(source => source.binding?.expressionType === expected.expressionType && JSON.stringify(source.binding.value) === JSON.stringify(expected.value))?.binding;
-    expect(offer, "Exact real server offer belonging to the committing request").toEqual(expected);
-    expect(answer!.response.documentRevision).toBe(answer!.request.documentRevision);
+    const admission = findActivityDataAdmission(contexts.slice(boundary), before!.request, expected);
+    expect(admission, "Fresh supported pre-edit admission, not a post-edit provenance read").toBeTruthy();
+    const offer = admission!.response.analysis!.sources.find(source => wireIdentity(source.binding) === wireIdentity(expected))!.binding!;
     await expect.poll(() => stored(created)).toEqual(offer);
-    selections.push({ definitionId: created.definition.id, binding: (await stored(created))!, offered: offer!, documentRevision: answer!.request.documentRevision });
+    selections.push({ definitionId: created.definition.id, binding: (await stored(created))!, offered: offer, admission: admission!, before: before!.request });
   }
   async function history(created: Created, before: Binding | null, after: Binding | null) {
     await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -156,10 +198,20 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     await Promise.all(pending);
     expect(contexts.some(item => item.response.analysis?.memberReadsEnabled === (composition !== "default-off")), "Measured member capability").toBe(true);
     if (composition === "minimal") {
+      const catalog = await api<{ features: FeatureFact[] }>("/modularity/features");
+      const features = catalog.features.map(({ id, enabled, runtimeAvailable, dependencies }) => ({ id, enabled, runtimeAvailable, dependencies }));
+      const mandatoryClosure = resolvedFeatureClosure(features);
+      expect(mandatoryClosure.filter(id => optionalBackendFeatures.includes(id)), "Optional backend features absent from actual resolved dependency closure").toEqual([]);
+      const descriptors = await api<{ items: { typeName: string }[] }>("/expressions/descriptors");
+      const expressionTypes = descriptors.items.map(item => item.typeName);
+      expect(expressionTypes).toContain("Literal"); expect(expressionTypes.filter(name => /JavaScript|Liquid/i.test(name))).toEqual([]);
       await page.getByRole("button", { name: /^Text expression syntax/ }).click();
-      const choices = await page.getByRole("listbox").getByRole("option").allTextContents();
-      expect(choices.some(text => /JavaScript|Liquid/i.test(text))).toBe(false); await page.keyboard.press("Escape");
+      const options = page.getByRole("listbox").getByRole("option"); await expect(options.first()).toBeVisible();
+      const syntaxChoices = await options.allTextContents();
+      expect(syntaxChoices.length).toBeGreaterThan(0); expect(syntaxChoices.some(text => /Activity output/i.test(text))).toBe(true);
+      expect(syntaxChoices.some(text => /JavaScript|Liquid/i.test(text))).toBe(false); await page.keyboard.press("Escape");
       expect(scripts.filter(url => /expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression/i.test(url))).toEqual([]);
+      compositionObservation = { features, mandatoryClosure, expressionTypes, syntaxChoices };
       observations.push("minimal installed syntax menu and requested scripts exclude optional JavaScript/Liquid editors");
     }
   }

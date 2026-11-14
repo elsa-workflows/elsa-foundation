@@ -36,7 +36,7 @@ CAPTURES = {
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
-    'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control'],
+    'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control', 'capability-reference'],
     'choose nested activity data': ['reference', 'customer-sources', 'customer-members', 'customer-reference', 'customer-code-reopened', 'customer-flowchart', 'customer-held', 'customer-loading', 'customer-retry', 'customer-320'],
     'choose declared and scoped activity data': ['reference', 'source-groups', 'variable-literal', 'variable-empty', 'variable-reference', 'outer-variable-reference', 'declared-reference', 'unsupported-request', 'request-repaired', 'no-request-proposal', 'source-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
@@ -225,6 +225,53 @@ def verdict(report, artifacts, journeys=None, composition="normal"):
     return len(rows)
 
 
+def validate_activity_admission(selection):
+    before = selection.get('before', {})
+    admission = selection.get('admission', {})
+    request, response = admission.get('request', {}), admission.get('response', {})
+    same = ('definitionId', 'nodeId', 'inputKey', 'documentRevision', 'snapshot')
+    query = request.get('query', {})
+    if not before.get('documentRevision') or not before.get('snapshot') or any(request.get(key) != before.get(key) for key in same) or \
+            response.get('state') not in {'supported', 'empty'} or response.get('documentRevision') != before['documentRevision'] or \
+            not query.get('source') or query.get('memberPath') != selection['binding'].get('value', {}).get('memberPath') or \
+            not any(source.get('binding') == selection['offered'] for source in response.get('analysis', {}).get('sources', [])):
+        raise ValueError('Selection lacks its supported pre-edit admission; post-edit provenance is not admission')
+
+
+def validate_minimal_composition(observation):
+    features = observation.get('features', [])
+    by_id = {feature['id']: feature for feature in features}
+    if not features or len(by_id) != len(features):
+        raise ValueError('Missing or ambiguous live minimal feature catalog')
+    for required in ('WorkflowsPublishingApi', 'WorkflowDesignValidations'):
+        if not by_id.get(required, {}).get('enabled') or not by_id.get(required, {}).get('runtimeAvailable'):
+            raise ValueError('Missing rooted live minimal feature')
+    reached = set()
+    def visit(key):
+        if key in reached:
+            return
+        feature = by_id.get(key, {})
+        if not feature.get('runtimeAvailable') or not isinstance(feature.get('dependencies'), list):
+            raise ValueError('Unresolved required minimal feature graph')
+        reached.add(key)
+        for dependency in feature['dependencies']:
+            if not isinstance(dependency.get('id'), str) or type(dependency.get('optional')) is not bool:
+                raise ValueError('Malformed required minimal feature graph')
+            if not dependency['optional']:
+                visit(dependency['id'])
+    for feature in features:
+        if feature.get('enabled'):
+            visit(feature['id'])
+    optional = {'HttpJavaScript', 'JavaScriptActivities', 'JavaScriptEndpoints', 'JavaScriptExpressions',
+                'JavaScriptJintEngine', 'JavaScriptWorkflowsDesign', 'Liquid'}
+    if reached & optional or sorted(reached) != observation.get('mandatoryClosure'):
+        raise ValueError('Minimal resolved graph retains optional backend features or mismatches its closure')
+    syntaxes, choices = observation.get('expressionTypes', []), observation.get('syntaxChoices', [])
+    if 'Literal' not in syntaxes or not choices or not any(re.search('Activity output', choice, re.I) for choice in choices) or \
+            any(re.search('JavaScript|Liquid', name, re.I) for name in [*syntaxes, *choices]):
+        raise ValueError('Minimal backend descriptors or installed Studio menu are missing/optional')
+
+
 def activity_data_verdict(title, attachments, composition):
     files = {item.get('name'): item.get('path') for item in attachments}
     proof = json.loads(Path(files['activity-data-proof.json']).read_text())
@@ -237,9 +284,13 @@ def activity_data_verdict(title, attachments, composition):
     if composition == 'minimal' and any(re.search(r'expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression', url, re.I)
                                         for url in proof.get('scripts', [])):
         raise ValueError('Optional expression editor script requested in minimal composition')
+    if composition == 'minimal':
+        validate_minimal_composition(proof.get('compositionObservation') or {})
     selections = proof.get('selections', [])
     if any(item.get('binding') != item.get('offered') or not item.get('binding') for item in selections):
         raise ValueError('Selected binding differs from actual server offer')
+    for selection in selections:
+        validate_activity_admission(selection)
     runs = proof.get('runtime', [])
     if title == 'choose nested activity data':
         if len(selections) != 2 or any(item['binding'] != {'expressionType': 'ActivityResultMember', 'value': {

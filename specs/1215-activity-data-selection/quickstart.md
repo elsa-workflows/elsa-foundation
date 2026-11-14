@@ -56,11 +56,23 @@ fixture only into the test build, observe real canonical offers and committed ru
 fixture-free Workbench after owned hosts stop. `report.json` records composition, fixture/config/binary
 hashes, exact source identities and cleanup; JSON/PNG/ARIA/trace attachments retain every state.
 Minimal copies remove seven optional backend JS/Liquid features and both optional Studio expression
-editors; journeys inspect actual syntax menus and script requests. Default-off leaves the committed flag
+editors; journeys inspect the live backend descriptor dependency closure, actual expression descriptors,
+populated installed syntax menus and script requests. A selected member receipt retains its supported
+pre-edit admission request/response; a later provenance read cannot substitute for that offer. Default-off leaves the committed flag
 alone and uses a member-capable typed Customer source plus a stored member reference preservation control.
 Controlled request delay/abort cases exercise actual Studio loading/Retry/cancel without substituting
 server data; they are not evidence of a real backend/auth outage. These instructions do not themselves
 claim an executed or independently accepted matrix, nor close the remaining nine-family M5 inventory.
+
+Owning harness checks (the Node predicate checks use the same Node22 runtime as Studio CI and the locked
+Studio dependencies; Python guards remain independent of Node):
+
+```bash
+python3 -m unittest discover -s tools/ux-acceptance -p test_run.py
+node --experimental-strip-types --test tools/ux-acceptance/test_activity_data.mjs
+pnpm --dir Studio exec tsc --noEmit -p tests/acceptance/tsconfig.json
+```
+
 
 The existing four profiles are desktop-light/desktop-dark at 1440×1000 and narrow-light/narrow-dark at
 360×900. Run changed UI journeys in these profiles and capture a focused 320px picker/reference state

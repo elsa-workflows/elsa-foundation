@@ -48,6 +48,12 @@ class VerdictTests(unittest.TestCase):
             proof = {'composition': 'normal', 'contexts': [{'response': {'state': 'supported', 'analysis': {'memberReadsEnabled': True, 'sources': [{'binding': {'expressionType': 'ActivityResult', 'value': {'projectionKey': 'Customer'}}}]}}}],
                      'selections': [{'binding': binding, 'offered': binding} for binding in bindings],
                      'runtime': [{'committed': value, 'consumer': {'status': 'Completed'}, 'producers': [{'status': 'Completed'}]} for value in values], 'scripts': []}
+            for selection in proof['selections']:
+                before = {'definitionId': 'owned', 'nodeId': 'consumer', 'inputKey': 'text', 'documentRevision': 'before',
+                          'snapshot': {'consumer': {'inputs': []}}}
+                selection['before'] = before
+                selection['admission'] = {'request': {**copy.deepcopy(before), 'query': {'source': {'expressionType': 'Variable', 'value': 'setup'}, 'memberPath': selection['binding']['value']['memberPath']}},
+                                          'response': {'state': 'supported', 'documentRevision': 'before', 'analysis': {'sources': [{'binding': copy.deepcopy(selection['offered'])}]}}}
             file = self.root / (title.replace(' ', '-') + '.json')
             file.write_text(json.dumps(proof))
             for test in row['tests']:
@@ -141,6 +147,17 @@ class VerdictTests(unittest.TestCase):
                 try:
                     with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
                 finally: file.write_text(original)
+        self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+
+    def test_post_edit_provenance_cannot_replace_committing_admission(self):
+        file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)
+        admission = proof['selections'][0]['admission']
+        admission['request']['documentRevision'] = admission['response']['documentRevision'] = 'after'
+        admission['request']['snapshot']['consumer']['inputs'] = [proof['selections'][0]['binding']]
+        file.write_text(json.dumps(proof))
+        try:
+            with self.assertRaisesRegex(ValueError, 'pre-edit admission'): acceptance.verdict(self.report, self.root)
+        finally: file.write_text(original)
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
 
     def test_default_off_rejects_an_enabled_host_and_still_requires_typed_source_and_whole_runtime(self):
@@ -322,6 +339,29 @@ class CompositionTests(unittest.TestCase):
                 self.assertIs(True, b['WorkflowDesignValidations']['MemberReads'])
                 self.assertEqual(({'Keep', 'WorkflowDesignValidations'} if mode == 'minimal' else backend_keys | {'Keep', 'WorkflowDesignValidations'}), set(b))
                 self.assertEqual(({'Keep'} if mode == 'minimal' else studio_keys | {'Keep'}), set(f))
+
+
+    def test_live_minimal_graph_and_descriptors_are_non_vacuous(self):
+        observation = {'features': [
+            {'id': 'WorkflowsPublishingApi', 'enabled': True, 'runtimeAvailable': True, 'dependencies': [{'id': 'WorkflowsPublishing', 'optional': False}]},
+            {'id': 'WorkflowsPublishing', 'enabled': False, 'runtimeAvailable': True, 'dependencies': []},
+            {'id': 'WorkflowDesignValidations', 'enabled': True, 'runtimeAvailable': True, 'dependencies': []},
+            {'id': 'JavaScriptJintEngine', 'enabled': False, 'runtimeAvailable': True, 'dependencies': []}],
+            'mandatoryClosure': ['WorkflowDesignValidations', 'WorkflowsPublishing', 'WorkflowsPublishingApi'],
+            'expressionTypes': ['Literal', 'Object'], 'syntaxChoices': ['Literal', 'Activity output…']}
+        acceptance.validate_minimal_composition(observation)
+        for change in ('empty', 'dependency', 'unresolved', 'descriptors', 'empty-menu', 'optional-menu'):
+            with self.subTest(change=change):
+                broken = copy.deepcopy(observation)
+                if change == 'empty': broken['features'] = []
+                if change == 'dependency':
+                    broken['features'][1]['dependencies'] = [{'id': 'JavaScriptJintEngine', 'optional': False}]
+                    broken['mandatoryClosure'].append('JavaScriptJintEngine'); broken['mandatoryClosure'].sort()
+                if change == 'unresolved': broken['features'][1]['runtimeAvailable'] = False
+                if change == 'descriptors': broken['expressionTypes'].append('JavaScript')
+                if change == 'empty-menu': broken['syntaxChoices'] = []
+                if change == 'optional-menu': broken['syntaxChoices'].append('Liquid')
+                with self.assertRaises(ValueError): acceptance.validate_minimal_composition(broken)
 
 
 class SourcePairTests(unittest.TestCase):
