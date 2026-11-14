@@ -111,7 +111,8 @@ internal sealed class ScheduleResourceSource(ScheduleSourceContext context, ISta
         var owner = schedule.Resource ?? throw Failure(scope, schedule.ScheduleId, new InvalidDataException("The schedule is not a resource-owned occurrence."));
         if (owner.Scope != scope || !schedule.IsActive || !Supports(owner.SourceTypeKey, owner.SourceFamily))
             throw Failure(scope, owner.TriggerId, new InvalidDataException("The schedule differs from its installed producer and trusted persistence scope."));
-        access.Current.EnsureScope(scope);
+        try { access.Current.EnsureScope(scope); }
+        catch (InvalidOperationException exception) { throw Failure(scope, owner.TriggerId, exception); }
         var previous = context.Current;
         context.Current = new(new(scope, owner.TenantId), new(scope.Value),
             new("runtime.recurring-trigger", "standalone-trigger:" + owner.TriggerId, new Dictionary<string, string>
