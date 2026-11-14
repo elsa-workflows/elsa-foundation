@@ -87,7 +87,7 @@ public sealed class NativeCatalogAcquisitionTests
     private sealed class Joined(params IReleaseContentReader[] readers) : IReleaseContentReader
     {
         public IReadOnlyList<ReleaseContentMember> Members => readers.SelectMany(value => value.Members).ToArray();
-        public ReleaseContentMember GetMember(ReleaseMemberKey key) => readers.SelectMany(value => value.Members).Single(value => value.Key == key);
+        public ReleaseContentMember GetMember(ReleaseMemberKey key) => readers.SelectMany(value => value.Members).SingleOrDefault(value => value.Key == key) ?? throw new KeyNotFoundException();
         public ReadOnlyMemory<byte> GetPayload(ReleaseMemberKey key)
         { foreach (var reader in readers) if (reader.Members.Any(value => value.Key == key)) return reader.GetPayload(key); throw new KeyNotFoundException(); }
     }
