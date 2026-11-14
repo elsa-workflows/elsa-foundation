@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   readActivityInputOptionsProvider,
@@ -44,6 +45,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   },
   {
     id: "studio.property.dropdown",
+    presentsField: true,
     order: 100,
     supportsValidationReporting: true,
     supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "dropdown") || hasOptionSource(descriptor)),
@@ -58,6 +60,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   },
   {
     id: "studio.property.timespan",
+    presentsField: true,
     order: 128,
     supportsValidationReporting: true,
     // Element-scoped TimeSpan fields (scalar or collection element): typed input with a format hint and
@@ -67,6 +70,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   },
   {
     id: "studio.property.number",
+    presentsField: true,
     order: 130,
     supportsValidationReporting: true,
     // Element-scoped numeric fields (scalar or collection element, e.g. an Int32[] item): a number
@@ -76,6 +80,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   },
   {
     id: "studio.property.password",
+    presentsField: true,
     order: 135,
     supportsValidationReporting: true,
     // Ahead of multiline and singleline so a hint that would show the text in the clear never wins over
@@ -88,6 +93,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   },
   {
     id: "studio.property.multiline",
+    presentsField: true,
     order: 140,
     supportsValidationReporting: true,
     supports: (descriptor, context) => isElementScope(context) && hasUiHint(descriptor, "multiline"),
@@ -95,6 +101,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   },
   {
     id: "studio.property.singleline",
+    presentsField: true,
     order: 160,
     supportsValidationReporting: true,
     supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "singleline") || isTextDescriptor(descriptor)),
@@ -102,6 +109,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   },
   {
     id: "studio.property.text-fallback",
+    presentsField: true,
     order: 10_000,
     supportsValidationReporting: true,
     // Element-scoped only: in collection scope, declining here lets the panel fall back to its repeater.
@@ -183,7 +191,7 @@ function SinglelineEditor({ descriptor, value, disabled, onChange }: StudioActiv
     ? `Enter a valid ${formatSimpleTypeName(descriptor.typeName)} value (enum member name).`
     : undefined;
   return (
-    <input
+    <StudioField label={accessibleName(descriptor)}><input
       type="text"
       aria-label={accessibleName(descriptor)}
       title={enumHint}
@@ -191,7 +199,7 @@ function SinglelineEditor({ descriptor, value, disabled, onChange }: StudioActiv
       disabled={disabled}
       placeholder={stringValue(descriptor.defaultValue) || (enumHint ? formatSimpleTypeName(descriptor.typeName) : "")}
       onChange={event => onChange(event.target.value)}
-    />
+    /></StudioField>
   );
 }
 
@@ -240,7 +248,7 @@ function PasswordField({ descriptor, value, disabled, onChange }: StudioActivity
 
   if (!replacing && hasStoredValue) {
     return (
-      <div className="studio-property-secret-value">
+      <StudioField label={name}><div className="studio-property-secret-value">
         <span>Value set</span>
         <StudioButton
           ref={replaceRef}
@@ -254,12 +262,12 @@ function PasswordField({ descriptor, value, disabled, onChange }: StudioActivity
         >
           Replace
         </StudioButton>
-      </div>
+      </div></StudioField>
     );
   }
 
   return (
-    <input
+    <StudioField label={name}><input
       ref={inputRef}
       type="password"
       aria-label={name}
@@ -282,19 +290,19 @@ function PasswordField({ descriptor, value, disabled, onChange }: StudioActivity
         setDraft(event.target.value);
         onChange(event.target.value);
       }}
-    />
+    /></StudioField>
   );
 }
 
 function MultilineEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
   return (
-    <textarea
+    <StudioField label={accessibleName(descriptor)}><textarea
       aria-label={accessibleName(descriptor)}
       value={value == null ? "" : String(value)}
       disabled={disabled}
       rows={4}
       onChange={event => onChange(event.target.value)}
-    />
+    /></StudioField>
   );
 }
 
@@ -340,7 +348,7 @@ function NumericEditor({ descriptor, value, disabled, onChange, onValidationChan
 
   return (
     <>
-      <input
+      <StudioField label={accessibleName(descriptor)}><input
         type="text"
         inputMode={integer ? "numeric" : "decimal"}
         aria-label={accessibleName(descriptor)}
@@ -352,7 +360,7 @@ function NumericEditor({ descriptor, value, disabled, onChange, onValidationChan
         autoComplete="off"
         placeholder={stringValue(descriptor.defaultValue)}
         onChange={event => commit(event.target.value)}
-      />
+      /></StudioField>
       {error ? <p id={errorId} className="studio-property-error" role="alert">{error}</p> : null}
     </>
   );
@@ -387,7 +395,7 @@ function TimeSpanEditor({ descriptor, value, disabled, onChange, onValidationCha
 
   return (
     <>
-      <input
+      <StudioField label={accessibleName(descriptor)}><input
         type="text"
         aria-label={accessibleName(descriptor)}
         aria-invalid={error ? true : undefined}
@@ -398,7 +406,7 @@ function TimeSpanEditor({ descriptor, value, disabled, onChange, onValidationCha
         autoComplete="off"
         placeholder="hh:mm:ss"
         onChange={event => commit(event.target.value)}
-      />
+      /></StudioField>
       {error
         ? <p id={errorId} className="studio-property-error" role="alert">{error}</p>
         : <p id={hintId} className="studio-property-hint">Format: hh:mm:ss (e.g. 00:00:30), or d.hh:mm:ss for days.</p>}
@@ -431,7 +439,7 @@ function DropdownEditor({ descriptor, value, disabled, onChange }: StudioActivit
   const options = getOptions(descriptor);
   const renderedOptions = withUnavailableOptions(options, value == null || value === "" ? [] : [value]);
   return (
-    <select aria-label={accessibleName(descriptor)} value={value == null || value === "" ? "" : optionKey(value)} disabled={disabled} onChange={event => {
+    <StudioField label={accessibleName(descriptor)}><select aria-label={accessibleName(descriptor)} value={value == null || value === "" ? "" : optionKey(value)} disabled={disabled} onChange={event => {
       const option = renderedOptions.find(candidate => optionKey(candidate.value) === event.target.value);
       onChange(option ? option.value : event.target.value);
     }}>
@@ -441,7 +449,7 @@ function DropdownEditor({ descriptor, value, disabled, onChange }: StudioActivit
           {option.unavailable ? `${option.label} (unavailable)` : option.label}
         </option>
       ))}
-    </select>
+    </select></StudioField>
   );
 }
 

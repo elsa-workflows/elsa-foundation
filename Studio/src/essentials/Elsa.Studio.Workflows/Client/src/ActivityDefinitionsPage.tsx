@@ -12,7 +12,7 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField } from "@elsa-workflows/studio-ui";
 import {
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
@@ -116,7 +116,11 @@ export function ActivityDefinitionsPage({
     setAuthorizationRevision(activityAuthorityRevision);
     setAuthorizationInvalidating(true);
     pendingRedactionsRef.current += 1;
-    void redactActivityDefinitionManagementCache(queryClient).then(() => queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections })).finally(() => {
+    void redactActivityDefinitionManagementCache(queryClient).then(() => Promise.all([
+      queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections }),
+      // A mounted draft has a separate cache key: refresh its redacted definition identity too.
+      queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources })
+    ])).finally(() => {
       pendingRedactionsRef.current -= 1;
       if (pendingRedactionsRef.current === 0) setAuthorizationInvalidating(false);
     });
@@ -194,8 +198,8 @@ export function ActivityDefinitionsPage({
     );
   }
 
-  const collectionEntryId = readActivityHistoryMetadata()?.collection?.entryId ?? "new-entry";
-  return <ActivityDefinitionCollection key={`${collectionEntryId}:${historyRevision}`} context={context} baseUrl={context.baseUrl} authorityRevision={authorizationRevision} authorizationInvalidating={authorizationInvalidating} activityEditors={activityEditors()} onHistoryContextChange={updateRouteCollectionContext} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onPlanUpgrade={() => navigateToStudioPath("/workflows/activity-definitions/upgrades")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
+  // Popstate changes the revision; persisting this entry's metadata must not remount an open form.
+  return <ActivityDefinitionCollection key={historyRevision} context={context} baseUrl={context.baseUrl} authorityRevision={authorizationRevision} authorizationInvalidating={authorizationInvalidating} activityEditors={activityEditors()} onHistoryContextChange={updateRouteCollectionContext} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onPlanUpgrade={() => navigateToStudioPath("/workflows/activity-definitions/upgrades")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
 }
 
 function defaultStudioPathNavigation(path: string) {
@@ -371,7 +375,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           <summary>Advanced filters</summary>
           <div className="ad-disclosure-panel ad-advanced-filter-fields">
             <label><span>Provider key</span><input value={providerInput} onChange={event => setProviderInput(event.target.value)} placeholder="Exact provider key" /></label>
-            <label><span>Rows per page</span><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></label>
+            <StudioField label={<><span>Rows per page</span></>}><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></StudioField>
           </div>
         </details>
       </section>

@@ -35,6 +35,7 @@ public static class WorkflowExecutableSourceReferenceComparer
                StringComparer.Ordinal.Equals(left.ActivationId, right.ActivationId) &&
                StringComparer.Ordinal.Equals(left.SlotId, right.SlotId) &&
                StringComparer.Ordinal.Equals(left.TenantId, right.TenantId) &&
+               left.PublicationScope == right.PublicationScope &&
                SameLayout(left.Layout, right.Layout) &&
                SameSidecar(left.LayoutSidecar, right.LayoutSidecar) &&
                SameAuthoredInputs(left.AuthoredInputs, right.AuthoredInputs) &&
@@ -48,6 +49,23 @@ public static class WorkflowExecutableSourceReferenceComparer
         SameIdentity(left, right) &&
         left.DeletedAt == right.DeletedAt &&
         StringComparer.Ordinal.Equals(left.DeletedReason, right.DeletedReason);
+
+    /// <summary>Checks a live logical publication against its current physical scope and canonical slot/reference identities.</summary>
+    /// <remarks>This compares supplied evidence; it grants no permission and does not replace atomic admission fences.
+    /// A null expected owner accepts any positive slot owner, including source-managed publications.</remarks>
+    public static bool MatchesPublication(WorkflowExecutableSourceReference reference, WorkflowActivationSlot slot,
+        PersistenceScope scope, string? tenantId, DateTimeOffset now, WorkflowActivationSource? expectedOwner = null)
+    {
+        ArgumentNullException.ThrowIfNull(reference); ArgumentNullException.ThrowIfNull(slot); ArgumentNullException.ThrowIfNull(scope);
+        return reference.Scope == WorkflowExecutableReferenceScope.Published && reference.IsLive(now) &&
+            reference.PublicationScope == scope && reference.TenantId == tenantId &&
+            !string.IsNullOrWhiteSpace(reference.ActivationId) && !string.IsNullOrWhiteSpace(reference.DefinitionId) &&
+            !string.IsNullOrWhiteSpace(slot.SlotName) && slot.Revision > 0 && slot.Source is not null &&
+            (expectedOwner is null || slot.Source.IsSameOwnerAs(expectedOwner)) &&
+            slot.WorkflowDefinitionId == reference.DefinitionId && slot.ActiveActivationId == reference.ActivationId &&
+            slot.SlotId == reference.SlotId && slot.SlotId == WorkflowActivationSlotIdentity.Create(reference.DefinitionId, slot.SlotName) &&
+            reference.SourceReferenceId == WorkflowActivationReferenceIdentity.Create(reference.ActivationId);
+    }
 
     private static bool SameLayout(
         IReadOnlyList<WorkflowExecutableLayoutRecord> left,

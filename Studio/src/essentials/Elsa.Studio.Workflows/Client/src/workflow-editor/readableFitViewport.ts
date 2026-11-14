@@ -1,10 +1,5 @@
 import { getViewportForBounds, type FitViewOptions, type Node, type Rect, type Viewport } from "@xyflow/react";
-import {
-  READ_ONLY_MINIMAP_CLEARANCE,
-  READ_ONLY_MINIMAP_OUTER_HEIGHT,
-  READ_ONLY_MINIMAP_OUTER_WIDTH,
-  READ_ONLY_MINIMAP_PANEL_OFFSET
-} from "./readOnlyMinimap";
+import { READ_ONLY_CONTROLS_INSET, READ_ONLY_MINIMAP_INSET_BOTTOM, READ_ONLY_MINIMAP_INSET_RIGHT } from "./readOnlyMinimap";
 
 /**
  * Smallest zoom at which a run canvas's first view keeps outcome port labels readable.
@@ -17,18 +12,20 @@ export interface ReadableEdgeMargin { top: number; right: number; bottom: number
 
 /**
  * Screen margins that keep the graph's own edges in view when the first view is clamped to a
- * readable zoom. The right margin leaves room for outcome labels drawn beyond the node box.
+ * readable zoom. The right margin leaves room for outcome labels drawn beyond the node box, and the
+ * bottom margin keeps the graph above the bottom-left zoom controls row (#4196).
  */
-export const readableEdgeMargin: ReadableEdgeMargin = { top: 24, right: 112, bottom: 32, left: 32 };
+export const readableEdgeMargin: ReadableEdgeMargin = { top: 24, right: 112, bottom: READ_ONLY_CONTROLS_INSET, left: 32 };
 
 /**
  * Margins when the read-only MiniMap is shown: the right and bottom margins cover the MiniMap's
- * rendered box and its offset from the pane's bottom-right corner, plus a clearance gap.
+ * rendered box and its offset from the pane's bottom-right corner, plus a clearance gap. The bottom
+ * margin also clears the shorter controls row on the left.
  */
 export const readableMinimapEdgeMargin: ReadableEdgeMargin = {
   ...readableEdgeMargin,
-  right: READ_ONLY_MINIMAP_OUTER_WIDTH + READ_ONLY_MINIMAP_PANEL_OFFSET + READ_ONLY_MINIMAP_CLEARANCE,
-  bottom: READ_ONLY_MINIMAP_OUTER_HEIGHT + READ_ONLY_MINIMAP_PANEL_OFFSET + READ_ONLY_MINIMAP_CLEARANCE
+  right: READ_ONLY_MINIMAP_INSET_RIGHT,
+  bottom: READ_ONLY_MINIMAP_INSET_BOTTOM
 };
 const minimumFocusInset = 8;
 

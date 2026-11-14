@@ -340,7 +340,7 @@ describe("connection credential creation", () => {
       }
     });
     expect(JSON.stringify(createCall?.body)).not.toContain(rawSecretValue);
-    expect(onCreated).toHaveBeenCalledWith(createdConnection());
+    expect(onCreated).toHaveBeenCalledWith(createdConnection(), true);
     expect(calls.filter(call => call.url === "/secrets/picker").map(call => call.body)).toEqual([
       pickerRequest(""), pickerRequest("")
     ]);

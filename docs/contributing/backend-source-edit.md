@@ -14,7 +14,7 @@ Keep the following `writeLine.Text` assertion at `Hello World!`; this exercise c
 dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --filter FullyQualifiedName~WriteLineBoundInputExecutionTests -p:RestoreLockedMode=true
 ```
 
-It should fail because the activity still writes `Hello World!`. Now, in `Essentials/src/Activities/Primitives/Activities/WriteLine.cs`, change:
+It should fail because the activity still writes `Hello World!`. Now, in `Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs`, change:
 
 ```csharp
 Console.WriteLine(Text);

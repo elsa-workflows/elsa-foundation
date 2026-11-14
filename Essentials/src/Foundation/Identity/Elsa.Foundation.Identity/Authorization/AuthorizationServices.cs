@@ -554,7 +554,11 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
         string.Equals(claimType, IdentityClaimTypes.SubjectProvider, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(claimType, IdentityClaimTypes.Role, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(claimType, IdentityClaimTypes.Permission, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(claimType, IdentityClaimTypes.UserId, StringComparison.OrdinalIgnoreCase);
+        string.Equals(claimType, IdentityClaimTypes.UserId, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.SubjectIssuer, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.ExternalSubject, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.TokenSubjectKey, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(claimType, IdentityClaimTypes.SessionId, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>

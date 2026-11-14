@@ -1,4 +1,3 @@
-using System.Text;
 using Elsa.Http.Core.Exceptions;
 using Elsa.Http.Core.Models;
 
@@ -43,54 +42,7 @@ public static class HttpRouteManifestValidator
     /// Canonicalizes route templates for collision checks while preserving constraint/default bodies. Parameter
     /// names are not routing identities, but parameter shape, catch-all markers, constraints, and defaults are.
     /// </summary>
-    public static string Canonicalize(string route)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(route);
-        var trimmed = route.Trim().Trim('/');
-        var builder = new StringBuilder(trimmed.Length);
-        var insideParameter = false;
-        var parameterName = true;
-
-        foreach (var character in trimmed)
-        {
-            if (character == '{')
-            {
-                insideParameter = true;
-                parameterName = true;
-                builder.Append(character);
-                continue;
-            }
-
-            if (character == '}')
-            {
-                insideParameter = false;
-                builder.Append(character);
-                continue;
-            }
-
-            if (insideParameter && parameterName)
-            {
-                if (character == '*')
-                {
-                    builder.Append(character);
-                    continue;
-                }
-
-                if (character is ':' or '=' or '?')
-                {
-                    parameterName = false;
-                    builder.Append(character);
-                }
-                // Parameter names are intentionally erased. This makes {id} and {name} equivalent while keeping
-                // catch-all/optional/constraint/default syntax in the canonical route.
-                continue;
-            }
-
-            builder.Append(insideParameter ? character : char.ToLowerInvariant(character));
-        }
-
-        return "/" + builder;
-    }
+    public static string Canonicalize(string route) => Elsa.Http.Core.RouteTemplateIdentity.Canonicalize(route);
 
     private static IReadOnlyCollection<string> Methods(HttpRouteData route)
     {

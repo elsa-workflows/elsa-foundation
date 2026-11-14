@@ -163,7 +163,17 @@
 
 .wf-page--run-workbench > .studio-page-header {
   flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
   padding: 16px 20px 0;
+}
+
+.wf-page--run-workbench > .studio-page-header .studio-page-header-copy { flex: 1 1 0; }
+.wf-page--run-workbench > .studio-page-header :is(h1, h2) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wf-page--run-workbench > .wf-toolbar {
@@ -1586,6 +1596,7 @@
 }
 
 .wf-instance-section.wf-activity-overview {
+  container: workflow-activity-overview / inline-size;
   overflow: hidden;
   padding: 0;
 }
@@ -1672,6 +1683,26 @@
 
 .wf-activity-overview-status {
   justify-content: flex-end;
+}
+
+@container workflow-activity-overview (max-width: 30rem) {
+  .wf-activity-overview-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .wf-activity-overview-status {
+    grid-column: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .wf-instance-section .wf-activity-overview-title h4 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
 }
 
 .wf-activity-summary-grid,
@@ -3432,47 +3463,6 @@
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
-}
-
-.wf-form-field input,
-.wf-form-field select,
-.wf-form-field textarea {
-  min-height: 38px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  color: var(--wf-text);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  width: 100%;
-  min-width: 0;
-  padding: 0 10px;
-  text-transform: none;
-}
-
-.wf-form-field input,
-.wf-form-field textarea {
-  background: var(--wf-panel-muted);
-}
-
-.wf-form-field textarea {
-  min-height: 74px;
-  padding: 9px 10px;
-  resize: vertical;
-}
-
-.wf-form-field select {
-  /* Preserve the shared host chevron while applying the field surface. */
-  background-color: var(--wf-panel-muted-tone);
-  padding-right: 28px;
-}
-
-.wf-form-field input:focus,
-.wf-form-field select:focus,
-.wf-form-field textarea:focus {
-  border-color: var(--wf-accent);
-  outline: none;
-  box-shadow: var(--wf-focus-ring);
 }
 
 .wf-root-field {
@@ -5427,13 +5417,13 @@ button.wf-reference-select {
   gap: 10px;
 }
 
-.wf-property-row-header label {
+.wf-property-row-caption {
   color: var(--wf-text);
   font-size: 12px;
   font-weight: var(--wf-label-weight, 600);
 }
 
-.wf-property-row-header span {
+.wf-property-row-header-meta > span {
   border: 1px solid var(--wf-border);
   border-radius: 999px;
   color: var(--wf-muted-text);
@@ -5559,6 +5549,38 @@ button.wf-reference-select {
   min-height: 32px;
   border-color: var(--wf-border);
   border-left: 0;
+}
+
+/* Owned scalar fields lay actions out beside their native value, below the legend and above help. */
+.wf-expression-field--outlined .studio-form-adornment > .wf-syntax-picker.inline {
+  position: static;
+  inset: auto;
+  display: flex;
+  align-self: stretch;
+  flex: 0 0 38px;
+  width: 38px;
+}
+
+.wf-expression-field--outlined .studio-form-adornment .wf-syntax-picker-trigger.inline {
+  height: auto;
+  min-height: var(--studio-control-height);
+  flex: 1;
+  border: 0;
+  border-inline-start: 1px solid var(--wf-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.wf-expression-field--outlined .studio-field-group .studio-form-adornment > .wf-syntax-picker.inline {
+  align-self: center;
+}
+
+.wf-expression-field--outlined .studio-form-adornment > .wf-expression-expand-button {
+  position: static;
+  inset: auto;
+  align-self: stretch;
+  height: auto;
+  min-height: var(--studio-control-height);
 }
 
 .wf-expression-field:not(.wf-expression-field--control) .wf-expression-editor > input[type="text"] {

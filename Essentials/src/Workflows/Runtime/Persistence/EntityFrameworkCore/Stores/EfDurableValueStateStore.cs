@@ -37,12 +37,12 @@ public sealed class EfDurableValueStateStore(
             cancellationToken);
         if (row is null)
         {
-            context.DurableValueStates.Add(ToEntity(state, scope, id, 1));
+            context.DurableValueStates.Add(ToEntity(context, state, scope, id, 1));
         }
         else
         {
             var current = Read(row, scope, state.WorkflowExecutionId, state.DurableValueId);
-            Copy(row, state, scope, checked(row.Revision + 1));
+            Copy(context, row, state, scope, checked(row.Revision + 1));
         }
 
         try
@@ -128,18 +128,18 @@ public sealed class EfDurableValueStateStore(
     }
 
     // Internal checkpoint staging reuses the direct store's provider-neutral projection.
-    internal static DurableValueStateEntity ToEntity(DurableValueState state, string scope, string id, long revision) => new()
+    internal static DurableValueStateEntity ToEntity(RuntimeDbContext context, DurableValueState state, string scope, string id, long revision) => new()
     {
         Id = id, ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope), ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
         WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId), WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId), WorkflowExecutionIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId),
         DurableValueId = EfRuntimeOperationalStoreSupport.Encode(state.DurableValueId), DurableValueIdHash = EfRuntimeOperationalStoreSupport.Hash(state.DurableValueId), DurableValueIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.DurableValueId),
-        ContentJson = RuntimeArtifactJson.Serialize(state), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = revision
+        ContentJson = RuntimeArtifactJson.Serialize(state), SchemaVersion = RuntimeSchemaWriteVersion.Operational(context), Revision = revision
     };
 
-    internal static void Copy(DurableValueStateEntity row, DurableValueState state, string scope, long revision)
+    internal static void Copy(RuntimeDbContext context, DurableValueStateEntity row, DurableValueState state, string scope, long revision)
     {
-        var replacement = ToEntity(state, scope, row.Id, revision);
-        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.DurableValueId = replacement.DurableValueId; row.DurableValueIdHash = replacement.DurableValueIdHash; row.DurableValueIdOrderKey = replacement.DurableValueIdOrderKey; row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        var replacement = ToEntity(context, state, scope, row.Id, revision);
+        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.DurableValueId = replacement.DurableValueId; row.DurableValueIdHash = replacement.DurableValueIdHash; row.DurableValueIdOrderKey = replacement.DurableValueIdOrderKey; row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion); row.Revision = revision;
     }
 
     internal static DurableValueState Read(DurableValueStateEntity row, string scope, string? expectedWorkflow = null, string? expectedValue = null)
