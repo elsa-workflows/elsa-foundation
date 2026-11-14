@@ -12,6 +12,9 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 {
     private readonly Dictionary<string, IExecutionModel> _models = models.ToDictionary(m => m.Key, StringComparer.Ordinal);
     public bool SingleMessage(Message message) => message.Kind == WorkflowKinds.ChildFinished;
+    public bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) =>
+        row is { Status: not InstanceStatus.Running } && delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.Job ||
+        row is { Creation: > 0 } && SingleMessage(delivery.Message);
 
     /// <summary>
     /// A running instance is suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model
@@ -34,14 +37,14 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             }
             catch (System.Text.Json.JsonException) { return CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidChildCompletion"); }
         }
-        if (row is { } current && Kinds.IsControl(first.Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || first.Message.Kind == Kinds.Delete))
+        if (row is { } current && Kinds.IsControl(first.Message.Kind) && (current.Status == InstanceStatus.Running || current.Children is not null || first.Message.Kind == Kinds.Terminate && current.Jobs is not null || first.Message.Kind == Kinds.Delete))
             return Control(input, first);       // a terminate still goes on to the children of a finished instance
         if (row is { Status: not InstanceStatus.Running } && _models[row.Model] is IModelMetadata reader &&
             row.StateVersion > _models[row.Model].StateVersion && !input.Services.Has(Flaw.TurnNewerState) &&
             input.Taken.Any(d => reader.HandlesMetadata(d.Message)))
         {
             // Keep private future state opaque, answer the capability mismatch, and still drain ordinary late input.
-            var next = row with { Revision = row.Revision + 1 };
+            var next = row with { Revision = row.Revision + 1, Jobs = RemainingJobs(row, input.Taken) };
             var unavailable = new ModelMetadataUnavailable(input.Actor, row.Model, row.StateVersion, _models[row.Model].StateVersion);
             var result = new TurnOutcome(input.Actor) { Row = next, Expected = row.Revision, Revision = next.Revision,
                 Status = row.Status, Consumed = [.. input.Taken], Journal = Journal(row.History, [unavailable]) };
@@ -51,7 +54,18 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         }
         if (row is { Status: not InstanceStatus.Running } &&
             !(_models[row.Model] is IModelMetadata metadata && input.Taken.Any(d => metadata.HandlesMetadata(d.Message))))
-            return new TurnOutcome(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };    // a finished target: consumed and dropped
+        {
+            var unit = new TurnOutcome(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
+            var jobs = RemainingJobs(row, input.Taken);
+            if (jobs != row.Jobs)
+            {
+                unit.Row = row with { Jobs = jobs, Revision = row.Revision + 1 };
+                unit.Expected = row.Revision;
+                unit.Revision = unit.Row.Revision;
+                unit.Journal = Journal(row.History, ["job ticket consumed"]);
+            }
+            return unit;
+        }
         return null;
     }
 
@@ -75,14 +89,28 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error, object? pending)
     {
-        var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
+        var ended = row is { Status: not InstanceStatus.Running };
+        var next = row is { } r ? r with { Status = ended ? r.Status : InstanceStatus.Faulted, Revision = r.Revision + 1,
+                Fault = ended ? r.Fault : error, Jobs = RemainingJobs(r, taken) }
             : spec is null ? null
             : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History,
                 Creation: spec.Creation?.Generation ?? 0, ParentCreation: spec.ParentCreation); // owner binds its staged start envelope, even when the model held all input
         if (next is not null && row is not { Status: not InstanceStatus.Running }) next = WorkflowCommitClock.End(next);
-        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Spec = spec, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, [.. pending as List<object> ?? [], "parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
-        if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
+        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Spec = spec, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, [.. pending as List<object> ?? [], (ended ? "late input failed: " : "parked: ") + error]), Status = next?.Status, Unsubscribe = next is not null };
+        if (next?.Parent is not null && !ended) unit.Sent.Add(Finished(next, null));
         return unit;
+    }
+
+    // Match the typed ticket of this creation, never an ordinary equal-looking wire ID.
+    private static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
+    {
+        if (row.Jobs is null) return null;
+        var consumed = taken.Where(i => (i.IsDurableJobTicket || i.IsWorkerJobCompletion) && i.Message.Target.Id == row.Id)
+            .Select(i => i.Message.InboxKey).ToHashSet();
+        if (consumed.Count == 0) return row.Jobs;
+        var jobs = DurableKeyJson.ReadKeys(row.Jobs);
+        if (jobs.RemoveAll(key => consumed.Contains(InboxKey.Ticket(row.Id, key, row.Creation))) == 0) return row.Jobs;
+        return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
     }
 
     /// <summary>Decision 4: an instance kept in memory past its short wait is written as it is, at the revision it has.</summary>
