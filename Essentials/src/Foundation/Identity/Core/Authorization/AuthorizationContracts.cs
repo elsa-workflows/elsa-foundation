@@ -189,6 +189,10 @@ public static class IdentityClaimTypes
     public const string Role = "elsa.identity.role";
 
     public const string Permission = "elsa.identity.permission";
+    public const string SubjectIssuer = "elsa.identity.subject_issuer";
+    public const string ExternalSubject = "elsa.identity.external_subject";
+    public const string TokenSubjectKey = "elsa.identity.token_subject";
+    public const string SessionId = "elsa.identity.session_id";
 }
 
 public static class DefaultIdentityPermissionKeys
@@ -212,6 +216,10 @@ public static class DefaultIdentityPermissionKeys
     public const string IdentityProvidersManage = "identity/providers:manage";
 
     public const string IdentityCredentialsManage = "identity/credentials:manage";
+    public const string IdentitySessionsRead = "identity/sessions:read";
+    public const string IdentitySessionsManage = "identity/sessions:manage";
+    public const string IdentityLinksRead = "identity/links:read";
+    public const string IdentityLinksManage = "identity/links:manage";
 }
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;
