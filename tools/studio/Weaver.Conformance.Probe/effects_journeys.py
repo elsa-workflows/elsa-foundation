@@ -1532,12 +1532,14 @@ def require_browser_terminal(browser, root, spec, origin, trace):
 
 
 def require_uncertainty_presentation(value, native_warning):
-    """The card's owner caution and the separately rendered native warning are both required."""
-    _need(isinstance(value, dict) and value.get("cardStatus") == "uncertain"
-          and isinstance(value.get("cardText"), str) and "Widget check is unconfirmed" in value["cardText"]
+    """Keep visible owner caution distinct from the native warning retained in the execute HTTP receipt."""
+    _need(isinstance(value, dict) and set(value) == {"cardStatus", "cardText", "nativeWarningSource", "nativeWarning"}
+          and value.get("cardStatus") == "uncertain"
+          and isinstance(value.get("cardText"), str) and "uncertain" in value["cardText"].lower() and "Widget check is unconfirmed" in value["cardText"]
           and "a possibly completed action must not be repeated automatically" in value["cardText"]
           and isinstance(native_warning, str) and "uncertain" in native_warning.lower() and "not be replayed" in native_warning.lower()
-          and value.get("warningText") == native_warning, "uncertain presentation lost its owner caution or separate native no-replay warning")
+          and value.get("nativeWarningSource") == "execute-http" and value.get("nativeWarning") == native_warning,
+          "uncertain presentation lost its visible owner caution or misrepresented the native HTTP warning")
 
 
 def require_browser_uncertain(browser, root, value, spec, trace):

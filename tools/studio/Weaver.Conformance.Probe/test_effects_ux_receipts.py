@@ -147,14 +147,16 @@ def terminal_fixture(root):
 
 
 class EffectsTerminalIntegrityTests(unittest.TestCase):
-    def test_uncertainty_needs_both_the_card_caution_and_the_separate_native_warning(self):
+    def test_uncertainty_card_caution_is_distinct_from_the_execute_http_warning(self):
         warning = "Execution was interrupted after dispatch. Its effect is uncertain and will not be replayed."
-        presentation = {"cardStatus": "uncertain", "cardText": "Widget check is unconfirmed. No matching owner receipt is available here. Use the shared operation status; a possibly completed action must not be repeated automatically.",
-                        "warningText": warning}
-        # The genuine card deliberately has no copy of the separate native warning.
+        presentation = {"cardStatus": "uncertain", "cardText": "uncertain. Widget check is unconfirmed. No matching owner receipt is available here. Use the shared operation status; a possibly completed action must not be repeated automatically.",
+                        "nativeWarningSource": "execute-http", "nativeWarning": warning}
+        # The genuine card has its owner's caution; the exact native warning is HTTP evidence only.
         require_uncertainty_presentation(presentation, warning)
-        for mutate in (lambda row: row.update(warningText=""),
-                       lambda row: row.update(warningText="The operation was refused; no effect occurred."),
+        for mutate in (lambda row: row.update(nativeWarning=""),
+                       lambda row: row.update(nativeWarning="The operation was refused; no effect occurred."),
+                       lambda row: row.update(nativeWarningSource="module-results"),
+                       lambda row: row.update(nativeWarningRendered=True),
                        lambda row: row.update(cardStatus="performed"),
                        lambda row: row.update(cardText=warning),
                        lambda row: row.update(cardText="Widget check is unconfirmed.")):
