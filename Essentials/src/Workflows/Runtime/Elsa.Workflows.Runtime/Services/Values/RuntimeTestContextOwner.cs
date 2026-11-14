@@ -26,8 +26,9 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
             !WorkflowExecutionAuthoritySnapshot.Matches(entry.Authority, workflow.Authority.SystemIdentity,
                 workflow.Authority.RootInitiator, workflow.Authority.Metadata) ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(workflow.PinnedExecutable, entry.Executable) ||
-            context.OwnedNodeIds.Count != 1 || context.OwnedNodeIds[0] != entry.ExecutableNodeId)
-            throw new InvalidOperationException("The persisted lexical owner differs from its admitted terminal leaf.");
+            context.OwnedNodeIds.Count == 0 || context.OwnedNodeIds[0] != entry.ExecutableNodeId ||
+            context.OwnedNodeIds.Distinct(StringComparer.Ordinal).Count() != context.OwnedNodeIds.Count)
+            throw new InvalidOperationException("The persisted lexical owner differs from its admitted selected work.");
         var parent = workflow.RootVariableFrame?.FrameId
             ?? throw new InvalidOperationException("The selected lexical owner has no canonical root.");
         for (var index = 0; index < context.Frames.Count; index++)
@@ -44,16 +45,45 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
         return context;
     }
 
-    internal static void RequireConsumer(WorkflowExecutionState workflow, ActivityExecutionState activity)
+    internal static void RequireConsumer(WorkflowExecutionState workflow, ActivityExecutionState activity,
+        IReadOnlyCollection<ActivityExecutionState>? ancestors = null, bool requireActive = true)
     {
         if (RequireContext(workflow) is not { } context) return;
-        if (activity.Execution.WorkflowExecutionId != workflow.WorkflowExecutionId ||
-            activity.InvocationId != context.RootActivityExecutionId || activity.ParentActivityExecutionId is not null ||
-            activity.Execution.ExecutableNodeId != workflow.TestEntry!.ExecutableNodeId ||
-            workflow.Status != WorkflowExecutionStatus.Running || workflow.RootVariableFrame?.Status != VariableFrameStatus.Active ||
-            context.Frames.Any(x => x.Frame.Status != VariableFrameStatus.Active))
-            throw new InvalidOperationException("The consumer is outside the exact admitted selected invocation.");
+        if (requireActive && (workflow.Status != WorkflowExecutionStatus.Running || workflow.RootVariableFrame?.Status != VariableFrameStatus.Active ||
+            context.Frames.Any(x => x.Frame.Status != VariableFrameStatus.Active))) throw Outside();
+        var current = activity;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        while (true)
+        {
+            if (!visited.Add(current.InvocationId) || current.Execution.WorkflowExecutionId != workflow.WorkflowExecutionId ||
+                !context.OwnedNodeIds.Contains(current.Execution.ExecutableNodeId, StringComparer.Ordinal)) throw Outside();
+            if (current.InvocationId == context.RootActivityExecutionId)
+            {
+                if (current.Execution.ExecutableNodeId != workflow.TestEntry!.ExecutableNodeId || current.ParentActivityExecutionId is not null)
+                    throw Outside();
+                return;
+            }
+            current = ancestors?.SingleOrDefault(x => x.InvocationId == current.ParentActivityExecutionId) ?? throw Outside();
+        }
     }
+
+    internal static async ValueTask RequireConsumerAsync(WorkflowExecutionState workflow, ActivityExecutionState activity,
+        IActivityExecutionStateStore store, CancellationToken cancellationToken, bool requireActive = true)
+    {
+        var ancestors = new List<ActivityExecutionState>();
+        var visited = new HashSet<string>(StringComparer.Ordinal) { activity.InvocationId };
+        var parentId = activity.ParentActivityExecutionId;
+        while (parentId is not null)
+        {
+            if (!visited.Add(parentId)) throw Outside();
+            var parent = await store.FindAsync(workflow.WorkflowExecutionId, parentId, cancellationToken) ?? throw Outside();
+            ancestors.Add(parent);
+            parentId = parent.ParentActivityExecutionId;
+        }
+        RequireConsumer(workflow, activity, ancestors, requireActive);
+    }
+
+    private static InvalidOperationException Outside() => new("The consumer is outside the exact admitted selected invocation tree.");
 
     internal static IReadOnlyList<VariableFrameState> EnclosingFrames(WorkflowExecutionState workflow,
         VariableFrameState root, out RuntimeTestContextFrame? closed)
@@ -78,7 +108,7 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
         if (workflow is null || RequireContext(workflow) is not { } context) return null;
         var activity = await activities.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken)
             ?? throw new InvalidOperationException("The capture producer is unavailable.");
-        RequireConsumer(workflow, activity);
+        await RequireConsumerAsync(workflow, activity, activities, cancellationToken);
         var owner = context.Frames.LastOrDefault(x => x.IsClosedBoundary);
         if (owner is null || owner.Frame.ScopeId != scopeId) return null;
         if (!owner.Writable || owner.Frame.Status != VariableFrameStatus.Active)

@@ -23,13 +23,13 @@ internal static class RuntimeActivityResultReader
         var test = workflow is null ? null : RuntimeTestContextOwner.RequireContext(workflow);
         if (test is null) return Actual();
 
-        RuntimeTestContextOwner.RequireConsumer(workflow!, consumer);
+        RuntimeTestContextOwner.RequireConsumer(workflow!, consumer, context.RuntimeView);
         // This is a committed context snapshot, not an ambient overlay. No fixture becomes a producer
         // invocation or a causal edge, and no unowned consumer may inherit another leaf's fixtures.
         if (workflow!.WorkflowExecutionId != context.WorkflowExecutionId ||
             consumer.Execution.WorkflowExecutionId != context.WorkflowExecutionId || consumer.InvocationId != context.ActivityExecutionId ||
             !test.OwnedNodeIds.Contains(consumer.Execution.ExecutableNodeId, StringComparer.Ordinal) ||
-            consumer.ParentActivityExecutionId is not null || workflow.Status != WorkflowExecutionStatus.Running ||
+            workflow.Status != WorkflowExecutionStatus.Running ||
             workflow.RootVariableFrame?.Status != VariableFrameStatus.Active ||
             test.Frames.Any(x => x.Frame.Status != VariableFrameStatus.Active) || context.Executable is not { } executable ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(workflow.PinnedExecutable, executable.Identity))

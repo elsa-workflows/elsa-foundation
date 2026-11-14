@@ -43,7 +43,6 @@ public sealed class RuntimeContainerScopeService(
 
         var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' has no durable variable-frame owner state.");
-        RuntimeTestContextOwner.RequireConsumer(workflowState, activityState);
         var root = workflowState.RootVariableFrame
             ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' has no canonical root variable frame.");
         if (root.Status != VariableFrameStatus.Active ||
@@ -67,6 +66,8 @@ public sealed class RuntimeContainerScopeService(
             ancestors.Push(ancestor);
             ancestorId = ancestor.ParentActivityExecutionId;
         }
+
+        RuntimeTestContextOwner.RequireConsumer(workflowState, activityState, ancestors.ToArray());
 
         // Below a closed activity execution scope the boundary's variables are the root, and nothing above
         // the boundary (the caller's root, containers or iterations, or the boundary's own frames) is visible.
