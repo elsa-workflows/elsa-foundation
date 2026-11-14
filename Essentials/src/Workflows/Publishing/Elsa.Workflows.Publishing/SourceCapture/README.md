@@ -10,6 +10,8 @@ activation source reference must agree with an actually activated Active/Retired
 Draft/test references, candidates and timestamp-only legacy references do not qualify. Legacy adoption
 is an owner operation; a missing journal is never replaced by a label. An imported deployment source
 requires its later owning provenance adapter and is refused by this initial profile.
+Any timestamp-only legacy Published reference on the selected version refuses this profile, including
+a mixed history that also has a canonical reference. An owner-qualified adoption must resolve it first.
 
 The selected definition/version labels remain separate from the stored immutable executable's original
 full producer pin. Equal behavior published by different definitions never rewrites that pin. Runtime
