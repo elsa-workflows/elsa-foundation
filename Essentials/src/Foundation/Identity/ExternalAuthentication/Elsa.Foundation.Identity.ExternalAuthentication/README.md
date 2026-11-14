@@ -92,3 +92,11 @@ The optional API invokes canonical sign-in after admission; this flow service it
 Production requires a durable artifact authority; a non-durable replacement is accepted only in Development.
 The controlled OIDC fixture source exercises these boundaries after execution is authorized; it is not evidence
 of a real identity-provider deployment, current cookie/session enforcement or Studio acceptance.
+
+## Optional connection-management API
+
+The optional [protocol and connection API](../Api/README.md) exposes source-aware reads, bounded saved-role/user
+lookups, read-only assessment, protocol tests and guarded lifecycle commands. Its capability declaration is
+installed with those routes. Current permissions, antiforgery, source/catalog revisions, role delegation and
+coordinated final-path recovery remain server-owned checks. This does not install a Studio editor or qualify
+provider, browser, restart or multi-node behavior.

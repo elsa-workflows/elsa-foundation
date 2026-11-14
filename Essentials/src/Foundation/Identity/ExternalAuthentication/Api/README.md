@@ -1,4 +1,4 @@
-# External authentication protocol API
+# External authentication protocol and connection API
 
 This optional package connects the managed flow service to the backend-owned login chooser and canonical
 ASP.NET Core Identity cookie/session authority. Register `AddFoundationExternalAuthenticationApi` and map
@@ -52,10 +52,41 @@ The generic Foundation Identity token/refresh/logout endpoints preserve persiste
 eligibility checks. Logout revokes before invalidating the cookie authority; a revocation failure preserves a
 retryable session and returns a failure. A retired managed provider's own signed session can still sign out.
 
+## Connection administration
+
+Capability `elsa.api.identity.external-authentication` version1 advertises `external-connections` at
+`/_elsa/identity/external-connections`, below the backend base. Its declaration and routes are installed together.
+
+| Method and suffix | Required permission and result |
+|---|---|
+| `GET /` and `GET /{id}` | Provider read; source-aware list/detail with supported settings and secret references. |
+| `POST /assess` | Provider manage and antiforgery; evaluate a proposed command without saving. |
+| `POST /commands` | Provider manage and antiforgery; apply the guarded, revision-bound lifecycle command. |
+| `POST /test` | Provider manage and antiforgery; bounded saved-configuration protocol test without authenticating a user. |
+| `GET /lookups/users` | User read plus provider manage; bounded tenant user lookup. |
+| `GET /lookups/roles` | Role read plus provider manage; bounded saved-role lookup with current delegation eligibility. |
+
+Endpoint metadata supplies API denials rather than cookie redirects. Handlers independently re-read current
+canonical eligibility and saved permissions. Mutation requests carry the current catalog revision and respect
+source ownership, deployment policy and the existing role-permission delegation boundary. Enable/restore use
+the saved policy, so omitting its roles from the submitted body cannot bypass delegation checks.
+
+The catalog reports read-only status when the selected store cannot coordinate IAM revision guards. Assessment
+and save use the same guarded writer. Retiring an effective path rechecks protected administrative recovery or
+eligible local recovery, including current account, membership, role, exact link and issued-session authority;
+configuration validity and successful preview are insufficient. Stale or uncoordinated writes do not save a
+partial change. Ordinary same-key drafts do not shadow deployment; only an explicitly permitted full override
+does. Disabled overrides shadow, archive/remove reveal the baseline, and restore reinstates the saved document.
+
+Test results contain readiness/failure and stale-material status. They do not serialize private issuer/credential
+proof, resolve secret values into responses or establish recovery evidence. Unknown adapters/settings remain
+visible as source metadata without an arbitrary settings/secret dump. Deployment-only catalog reads continue
+to avoid the optional provider-configuration database.
+
 ## Source-preparation boundary
 
-This prefix contains protocol/chooser/preview routes and canonical session integration. Connection and user,
-link or session administration routes and their capability discovery follow in the owning later slices. It does
+This prefix contains protocol/chooser/preview, canonical session integration and connection administration.
+User, link and selected-session administration routes follow in their owning later slice. It does
 not enable Workbench or provide a Studio administration module.
 
 Controlled-provider HTTP regression source covers the composed contracts, including prior protected sessions
