@@ -355,7 +355,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         await terminalAffordance();
         await capture(page, info, `${host}-${kind}-terminal-readonly`);
       }
-      await row(blockId).click();
+      await collapseInspector(); await row(blockId).click(); await collapseInspector();
       await page.getByRole("button", { name: `Open ${name} (${profile === "expression-results" ? 3 : 2} steps)`, exact: true }).click();
       await expect(row("one")).toBeVisible(); await expect(page.locator(".wf-breadcrumb")).toContainText(name);
       if (terminal) await expect(row("complete")).toContainText("Ends reusable activity");

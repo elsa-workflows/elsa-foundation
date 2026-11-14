@@ -3,13 +3,15 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NativeBlockCommands, type NativeBlockValidation } from "../graph-authoring/NativeBlockCommands";
-import { planExtractNativeBlock, type NativeBlockContext } from "../graph-authoring/nativeBlocks";
+import { planExtractNativeBlock, type NativeBlockContext, type NativeBlockDocument } from "../graph-authoring/nativeBlocks";
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import type { ActivityNode } from "../workflowTypes";
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
 import { sequenceActivity, sequenceNode, writeLine, leafNode, setVariableActivity } from "./fixtures";
 
 let root: Root, container: HTMLDivElement;
 let context: NativeBlockContext;
-const validate = vi.fn<() => Promise<NativeBlockValidation>>();
+const validate = vi.fn<(document: NativeBlockDocument) => Promise<NativeBlockValidation>>();
 const apply = vi.fn();
 const open = vi.fn();
 beforeEach(() => {
@@ -108,4 +110,35 @@ it("refuses result-crossing preview when the composing host has no language pres
   expect(container.querySelector("[role=alert]")?.textContent).toContain("Adding a result variable cannot preserve");
   expect(button("Apply change").disabled).toBe(true);
   expect(validate).not.toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled(); expect(context.document).toEqual(before);
+});
+
+it("preserves explicit result bindings through the expanded editor input boundary", async () => {
+  const consumer = leafNode("after");
+  consumer.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: {
+    language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+    parameters: { prior: { kind: "ActivityResult", producerNodeId: "one", projectionKey: "$result" } }
+  } } }];
+  (context.document.rootActivity.structure!.payload.activities as ActivityNode[]).push(consumer);
+  context = { ...context, catalog: [...context.catalog, setVariableActivity],
+    document: { ...context.document, rootActivity: expandStateFromWire({ rootActivity: context.document.rootActivity }).rootActivity! },
+    expressionScopePreservation: { revision: "available", allowsVariableAddition: () => true } };
+  render();
+  const before = structuredClone(context.document);
+  click("Extract block…"); name("Grouped"); click("Preview change"); await settle();
+  expect(validate).toHaveBeenCalledTimes(1);
+  const candidate = validate.mock.calls[0][0];
+  const wire = canonicalizeStateForWire({ rootActivity: candidate.rootActivity }).rootActivity!;
+  const payload = wire.structure!.payload;
+  expect(payload.variables).toHaveLength(1);
+  const children = payload.activities as ActivityNode[];
+  expect(children[0].structure!.payload.activities).toHaveLength(3);
+  const binding = children[1].inputs[0] as { value: { value: { source: string; parameters: unknown } } };
+  expect(binding.value.value.source).toBe("args.prior + 1");
+  expect(binding.value.value.parameters).toEqual({ prior: { kind: "Variable", declaringScopeNodeId: "root", variableKey: expect.any(String) } });
+  // Validation and the resource commit both receive the editor form, including the rewritten binding.
+  expect((candidate.rootActivity.structure!.payload.activities as ActivityNode[])[1].inputs).toEqual([]);
+  click("Apply change"); await settle();
+  expect(apply).toHaveBeenCalledTimes(1);
+  expect(canonicalizeStateForWire({ rootActivity: apply.mock.calls[0][0].rootActivity }).rootActivity).toEqual(wire);
+  expect(context.document).toEqual(before);
 });
