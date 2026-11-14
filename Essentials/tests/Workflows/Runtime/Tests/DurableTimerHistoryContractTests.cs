@@ -152,7 +152,7 @@ public sealed class DurableTimerHistoryContractTests
         Assert.Same(state, RuntimeHistoryNoRecordCompletion.Validate(completion));
     }
 
-    private static WorkflowExecutionState CompletionState() => new("run", new("artifact", "1", "hash"),
+    private static WorkflowExecutionState CompletionState() => new("run", new("artifact", "definition", "version", "1", "hash"),
         WorkflowExecutionStatus.Completed, null, At, At, At, At, null, null, "tenant",
         new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = nameof(PersistenceMode.Ephemeral) }) { HistoryCapturePolicy = Policy };
     private static RuntimeCheckpointCommit Completion(WorkflowExecutionState state, string name) => new("commit",
