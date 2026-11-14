@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
+    <DefineConstants>$(DefineConstants);ELSA_DASHBOARD_QUALIFICATION</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

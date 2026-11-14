@@ -465,6 +465,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
             options.EnablePathRouting = true;
             // Host observation must not activate the default shell merely by reading its state.
             options.ExcludePaths = ["/health/live", "/health/ready", "/_admin/composition/default-shell"];
+#if ELSA_DASHBOARD_QUALIFICATION
+            DashboardQualificationBootstrap.ExcludeReadinessProbe(options);
+#endif
         })
         .ConfigureAllShells(shell => new WorkbenchEfToolingShellDefaults().Configure(shell, configuration));
 });
@@ -534,7 +537,7 @@ app.UseAuthorization();
 QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
 // Shell middleware replaces request services; the bootstrap is owned by the root host.
 var dashboardQualification = app.Services.GetRequiredService<DashboardQualificationBootstrap>();
-app.MapGet("/__qualification/ready", () => dashboardQualification.Ready
+app.MapGet(DashboardQualificationBootstrap.ReadinessPath, () => dashboardQualification.Ready
         ? Results.Ok(new { ready = true }) : Results.StatusCode(503))
     .WithHostOwner("Elsa.Workbench")
     .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)

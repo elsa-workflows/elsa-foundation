@@ -81,10 +81,15 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
             .WithWebRouting(options =>
             {
                 options.EnablePathRouting = true;
+#if !ELSA_DASHBOARD_QUALIFICATION
                 options.EnableHostRouting = false;
+#endif
                 options.ExcludePaths = [LivePath, ReadyPath, "/_admin/composition/default-shell"];
+#if ELSA_DASHBOARD_QUALIFICATION
+                DashboardQualificationBootstrap.ExcludeReadinessProbe(options);
+#endif
             })
-            .AddShell(DefaultShellName, shell => shell.WithFeature<ReadinessProbeFeature>(feature =>
+            .AddShell(DefaultShellName, shell => shell.WithPath("").WithFeature<ReadinessProbeFeature>(feature =>
             {
                 feature.ControlId = routeInitialization.Id;
                 feature.ShellName = DefaultShellName;
@@ -101,6 +106,10 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
         app.MapShellReadiness();
         app.MapShells();
         app.MapCompositionActivationObservation();
+#if ELSA_DASHBOARD_QUALIFICATION
+        app.MapGet(DashboardQualificationBootstrap.ReadinessPath, () => Results.StatusCode(StatusCodes.Status503ServiceUnavailable))
+            .WithHostOwner("Elsa.Workbench");
+#endif
         await app.StartAsync();
 
         var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };

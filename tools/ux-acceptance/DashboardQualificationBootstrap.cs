@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using CShells.Features;
+using CShells.AspNetCore.Resolution;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
@@ -7,6 +8,11 @@ using Microsoft.Extensions.Hosting;
 internal sealed class DashboardQualificationBootstrap(IShellRegistry registry, IConfiguration configuration,
     IHostApplicationLifetime lifetime, IRuntimeFeatureCatalog featureCatalog) : BackgroundService
 {
+    internal const string ReadinessPath = "/__qualification/ready";
+
+    internal static void ExcludeReadinessProbe(WebRoutingShellResolverOptions options) =>
+        options.ExcludePaths = [..(options.ExcludePaths ?? []), ReadinessPath];
+
     private volatile bool ready;
     internal bool Ready => ready;
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
