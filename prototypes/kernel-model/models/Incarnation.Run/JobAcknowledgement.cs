@@ -8,9 +8,10 @@ internal static class JobAcknowledgement
     internal static async Task Run(bool qualified, bool caughtUp = false)
     {
         var calls = 0;
+        var release = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var store = new InMemoryStore(1, () => 100);
         var wire = new DelayedCommit(store);
-        var http = new Http(0, (_, _) => { calls++; return new ValueTask<object?>("done"); });
+        var http = new Http(0, (_, _) => { calls++; return new ValueTask<object?>(release.Task); });
         await using var worker = new Worker("job-ack", 0, wire, new WorkflowInstance([http]), new WorkerOptions { Monotonic = () => 100 });
         await new DurableHost([worker]).ActivateAsync(0);
         if (caughtUp) await worker.PollAsync();
@@ -26,9 +27,15 @@ internal static class JobAcknowledgement
         Require(calls == 0 && (caughtUp || worker.Messages.Any(m => m.Id == Worker.TicketId(target.Id, "work", qualified ? 1 : 0))),
             "job did not wait behind the staged owner checkpoint");
         wire.Reply.TrySetResult(); await flush;
-        if (!caughtUp) await worker.PollAsync();
+        for (var i = 0; i < 100 && calls == 0; i++)
+        {
+            await worker.PollAsync(); if (worker.NeedsLoad) await worker.LoadAsync();
+            foreach (var ready in worker.Ready.ToArray()) worker.RunTurn(ready);
+            if (worker.NeedsFlush) await worker.FlushAsync();
+        }
         var completion = worker.JobCompletion(target.Id, "work", qualified ? 1 : 0);
         Require(completion is not null, "actual job driver was not available for observation");
+        release.TrySetResult("done");
         await completion!.WaitAsync(TimeSpan.FromSeconds(5));
         Require(worker.JobResultReady(target.Id, "work"), "completed job result was invisible to its observer");
         for (var i = 0; i < 100 && store.Instances[target.Id].Status == InstanceStatus.Running; i++)
