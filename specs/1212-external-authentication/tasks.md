@@ -4,7 +4,7 @@ Delivery record #3579; program #2771; identity-isolation prerequisite #2848 was 
 
 ## Status of this carried task record
 
-The completed marks below record implementation or source-specific qualification from the original branch before #3806 was closed. They do not mean that any new stack slice has merged or passed its gates. This first slice is source preparation only; all current-stack build/runtime/publication/merge/main acceptance remains unrun. At the final 6 November checkpoint the corrected managed UI journey was not runtime-qualified and PostgreSQL baseline was UNKNOWN. R1–R5 history remains visible and R6 was reserved; restacking does not reset it.
+The completed marks below record implementation or source-specific qualification from the original branch before #3806 was closed. They do not mean that any new stack slice has merged or passed its gates. This first slice carries specification/decision records only. At the historical 6 November checkpoint the managed UI journey was unqualified, PostgreSQL baseline was UNKNOWN and R6 was reserved. Subsequent source-bound local qualification closed those local gaps at its recorded heads. On14November the owner authorized latest-main reconciliation, sizing, publication, reviews, CI, merge and resulting-main verification, excluding cloud infrastructure. R1–R13 history remains visible; standing authority permits reasonable continuation without a review reset. Current-head gates and resulting-main proof remain distinct from preceding-source passes.
 
 ## Phase 1 — Setup and design
 
