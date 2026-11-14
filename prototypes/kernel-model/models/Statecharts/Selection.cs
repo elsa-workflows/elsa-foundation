@@ -151,6 +151,22 @@ internal sealed class SelectionChart
     }
 
     private sealed record Candidate(GraphRule Rule, string Visit, string[] Exiting, string[] Entering);
+    internal int[][] Prerequisites(IReadOnlyList<(string Phase, string State)> work)
+    {
+        if (work.Any(w => w.Phase is not ("exit" or "transition" or "entry") || !_nodes.TryGetValue(w.State, out var node) || !IsState(node)))
+            throw new ArgumentException("Invalid structural work.");
+        var exits = Enumerable.Range(0, work.Count).Where(i => work[i].Phase == "exit").ToArray();
+        var actions = Enumerable.Range(0, work.Count).Where(i => work[i].Phase == "transition").ToArray();
+        var entries = Enumerable.Range(0, work.Count).Where(i => work[i].Phase == "entry").ToArray();
+        string? Nearest(string state, int[] indices) => _paths[state].Skip(1).FirstOrDefault(parent => indices.Any(i => work[i].State == parent));
+        return work.Select(w => w.Phase switch
+        {
+            "exit" => exits.Where(i => work[i].State != w.State && Nearest(work[i].State, exits) == w.State).ToArray(),
+            "transition" => exits.ToArray(),
+            _ => Nearest(w.State, entries) is { } parent ? entries.Where(i => work[i].State == parent).ToArray() : actions.ToArray()
+        }).ToArray();
+    }
+
     internal GraphPlan Select(IEnumerable<StateVisit> visits, Func<GraphRule, StateVisit, bool> matches, Func<GraphRule, StateVisit, bool>? guard = null)
     {
         var active = Configuration(visits);
@@ -171,15 +187,12 @@ internal sealed class SelectionChart
                 selected.Add(c);
         var exits = selected.SelectMany(c => c.Exiting).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var entries = selected.SelectMany(c => c.Entering).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        var exitSteps = exits.Select(id => new GraphStep("exit:" + id, "exit", id, _nodes[id].Exit, active[id].Occurrence, null,
-            exits.Where(child => child != id && _paths[child].Skip(1).FirstOrDefault(exits.Contains) == id).Select(child => "exit:" + child).Order(StringComparer.Ordinal).ToArray())).ToArray();
-        var actions = selected.Select(c => new GraphStep("action:" + c.Rule.Id, "transition", c.Rule.Source, c.Rule.Action, c.Visit, c.Rule.Id, exitSteps.Select(s => s.Id).ToArray())).ToArray();
-        var entrySteps = entries.Select(id =>
-        {
-            var parent = _paths[id].Skip(1).FirstOrDefault(entries.Contains);
-            return new GraphStep("entry:" + id, "entry", id, _nodes[id].Entry, null, null, parent is null ? actions.Select(a => a.Id).ToArray() : ["entry:" + parent]);
-        });
+        var steps = exits.Select(id => new GraphStep("exit:" + id, "exit", id, _nodes[id].Exit, active[id].Occurrence, null, []))
+            .Concat(selected.Select(c => new GraphStep("action:" + c.Rule.Id, "transition", c.Rule.Source, c.Rule.Action, c.Visit, c.Rule.Id, [])))
+            .Concat(entries.Select(id => new GraphStep("entry:" + id, "entry", id, _nodes[id].Entry, null, null, []))).ToArray();
+        var requires = Prerequisites(steps.Select(s => (s.Phase, s.State)).ToArray());
+        var planned = steps.Select((s, i) => s with { After = requires[i].Select(j => steps[j].Id).ToArray() }).ToArray();
         return new(candidates.OrderBy(c => c.Rule.Order).Select(c => c.Rule.Id).ToArray(), selected.Select(c => c.Rule.Id).ToArray(),
-            active.Keys.Except(exits, StringComparer.Ordinal).Concat(entries).Order(StringComparer.Ordinal).ToArray(), [.. exitSteps, .. actions, .. entrySteps]);
+            active.Keys.Except(exits, StringComparer.Ordinal).Concat(entries).Order(StringComparer.Ordinal).ToArray(), planned);
     }
 }

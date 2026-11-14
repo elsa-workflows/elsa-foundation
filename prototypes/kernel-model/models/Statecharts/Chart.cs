@@ -78,14 +78,5 @@ public sealed class Chart
 
     public bool IsFinal(IEnumerable<string> active) => _selection.IsTopFinal(active);
 
-    // A phase barrier applies to the selected set; hierarchy only orders work along the relevant chain.
-    public int[][] Prerequisites(Reaction reaction) => reaction.Steps.Select((step, index) => reaction.Steps
-        .Select((prior, previous) => (prior, previous)).Where(p => p.previous != index &&
-            (Rank(p.prior.Phase) < Rank(step.Phase) || p.prior.Phase == step.Phase &&
-                (step.Phase == "exit" && p.prior.State != step.State && _selection.Within(p.prior.State, step.State) ||
-                 step.Phase == "entry" && p.prior.State != step.State && _selection.Within(step.State, p.prior.State))))
-        .Select(p => p.previous).ToArray()).ToArray();
-
-    private static int Rank(string phase) => phase switch
-    { "exit" => 0, "transition" => 1, "entry" => 2, _ => throw new ArgumentException("Unknown phase.") };
+    public int[][] Prerequisites(Reaction reaction) => _selection.Prerequisites(reaction.Steps.Select(s => (s.Phase, s.State)).ToArray());
 }
