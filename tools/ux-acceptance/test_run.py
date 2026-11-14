@@ -43,6 +43,21 @@ class VerdictTests(unittest.TestCase):
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
 
+    def test_weaver_inventory_is_opt_in_and_still_requires_its_named_evidence(self):
+        self.assertFalse(acceptance.JOURNEYS & acceptance.weaver_inventory.JOURNEYS)
+        journey = acceptance.weaver_inventory.BASELINE
+        report = {'suites': [{'specs': [{'title': journey, 'tests': [{
+            'projectName': 'desktop-light', 'expectedStatus': 'passed', 'status': 'expected',
+            'results': [{'status': 'passed', 'attachments': [
+                {'name': name, 'path': str(self.trace if name == 'trace' else self.artifact)}
+                for name in ['weaver-interaction.json', 'weaver-inventory.json'] + [f'{capture}.{suffix}'
+                    for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}]}]}]}
+        with self.assertRaisesRegex(ValueError, 'safe-export.json'):
+            acceptance.verdict(report, self.root, [journey], ['desktop-light'])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey])
+        report['suites'][0]['specs'][0]['tests'][0]['results'][0]['attachments'].pop()
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey], ['desktop-light'])
+
     def test_compact_inputs_preserve_inherited_named_journeys(self):
         required = {'collections and connection creation', 'agent authoring and navigation',
                     'executable designer parity',
