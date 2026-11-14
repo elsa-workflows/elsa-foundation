@@ -180,6 +180,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     await expect.poll(() => stored(created)).toEqual(before); await open(created);
   }
   async function publishRun(created: Created, expected: string, inputs: unknown = {}, producer = false) {
+    const authoredBinding = await stored(created);
     await page.getByRole("button", { name: "Review & publish", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Publish workflow", exact: true });
     await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled({ timeout: 60_000 });
@@ -202,6 +203,9 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     const payload = await api<{ payload: { preview: string } }>(`${instance}/activity-executions/${consumer.activityExecutionId}/value-evidence/${evidence!.evidenceId}/payload`);
     expect(payload.payload.preview).toBe(expected);
     runtime.push({ definitionId: created.definition.id, workflowExecutionId: run.workflowExecutionId, expected, committed: payload.payload.preview, consumer, producers });
+    // Publication returns the Inspector to the workflow root. Navigate back explicitly before the next input edit.
+    await select(); await expect(replace()).toBeVisible();
+    expect(await stored(created), "Publication/runtime did not change the authored input").toEqual(authoredBinding);
   }
   async function assertComposition() {
     await Promise.all(pending);
