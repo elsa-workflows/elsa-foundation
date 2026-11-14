@@ -6,3 +6,5 @@
 .wf-block-dialog input,.wf-block-dialog textarea,.wf-block-dialog select{width:100%;color:inherit;background:var(--wf-surface);border:1px solid var(--wf-border);border-radius:.4rem;padding:.5rem;font:inherit}
 .wf-block-dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
 .wf-block-preview pre{max-height:18rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.75rem}
+
+.wf-block-command-notice{margin:0;padding:0 1rem .5rem;font-size:var(--wf-text-sm)}

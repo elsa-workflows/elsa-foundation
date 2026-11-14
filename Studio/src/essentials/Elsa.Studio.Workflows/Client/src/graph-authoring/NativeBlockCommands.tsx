@@ -18,7 +18,7 @@ export function NativeBlockCommands(props: {
   context: NativeBlockContext;
   selectedNodeIds: string[];
   validate(document: NativeBlockDocument): Promise<NativeBlockValidation>;
-  apply(document: NativeBlockDocument, selection: string[]): void;
+  apply(document: NativeBlockDocument, selection: string[], isCurrent: () => boolean): void | Promise<void>;
   open(nodeId: string): void;
 }) {
   const current = useRef(props);
@@ -30,8 +30,10 @@ export function NativeBlockCommands(props: {
   const [plan, setPlan] = useState<ReadyPlan | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const committingRef = useRef(false);
   const request = useRef(0);
-  const close = () => { request.current++; setAction(null); setPlan(null); setMessages([]); setBusy(false); };
+  const close = () => { if (committingRef.current) return; request.current++; setAction(null); setPlan(null); setMessages([]); setBusy(false); };
   useEffect(() => () => { request.current++; }, []);
   const scope = resolveScope(props.context.document.rootActivity, props.context.scope, props.context.catalog);
   const selected = scope?.slot.activities.find(node => props.selectedNodeIds.length === 1 && node.nodeId === props.selectedNodeIds[0]);
@@ -39,6 +41,8 @@ export function NativeBlockCommands(props: {
   const isBlock = selectedKind === sequenceStructureKind || selectedKind === flowchartStructureKind;
   const supported = scope?.slot.cardinality === "many" && scope.slot.property === "activities" &&
     (scope.owner.structure?.kind === sequenceStructureKind || scope.owner.structure?.kind === flowchartStructureKind);
+  const unavailable = !props.context.canEdit ? "Block editing is unavailable in this view. Open an editable draft."
+    : !supported ? "Open a Sequence or Flowchart body to create or extract native blocks." : undefined;
   const kind: NativeBlockKind = action === "flowchart" ? "flowchart" : action === "extract" && scope?.owner.structure?.kind === flowchartStructureKind ? "flowchart" : "sequence";
   const choices = props.context.catalog.filter(item => item.available !== false && item.activityTypeKey ===
     `Elsa.Activities.${kind === "sequence" ? "Sequence" : "Flowchart"}.Activities.${kind === "sequence" ? "Sequence" : "Flowchart"}`);
@@ -79,10 +83,12 @@ export function NativeBlockCommands(props: {
       const final = applyNativeBlockPlan(current.current.context, checked);
       if (final.status !== "ready") { setPlan(null); refuseStale(); return; }
       if (result.state !== "validated") { setPlan(null); setMessages(result.messages.length ? result.messages : ["The resource or its authority changed. Preview again."]); return; }
-      current.current.apply(final.document, final.selection);
-      close();
+      committingRef.current = true; setCommitting(true);
+      await current.current.apply(final.document, final.selection, () => request.current === id);
+      committingRef.current = false; setCommitting(false);
+      if (id === request.current) close();
     } catch { if (id === request.current) setMessages(["The change was not applied. Refresh the resource and preview again."]); }
-    finally { if (id === request.current) setBusy(false); }
+    finally { committingRef.current = false; if (id === request.current) { setCommitting(false); setBusy(false); } }
   };
   const stale = plan && applyNativeBlockPlan(props.context, plan).status !== "ready";
   const changes = plan ? describeNativeBlockChange(props.context.document, plan.document, props.context.catalog) : null;
@@ -90,13 +96,14 @@ export function NativeBlockCommands(props: {
   const label = selected && props.context.document.activityPresentation.find(item => item.nodeId === selected.nodeId)?.displayName;
   const childCount = selected ? getChildSlots(selected, props.context.catalog).reduce((sum, slot) => sum + slot.activities.length, 0) : 0;
   return <>
-    <div className="wf-block-commands" role="group" aria-label="Named block commands">
+    <div className="wf-block-commands" role="group" aria-label="Named block commands" title={unavailable}>
       <button type="button" disabled={!props.context.canEdit || !supported} onClick={() => begin("sequence")}>Create Sequence block</button>
       <button type="button" disabled={!props.context.canEdit || !supported} onClick={() => begin("flowchart")}>Create Flowchart block</button>
       <button type="button" disabled={!props.context.canEdit || !supported || !props.selectedNodeIds.length} onClick={() => begin("extract")}>Extract block…</button>
       <button type="button" disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => begin("ungroup")}>Ungroup…</button>
       {isBlock && selected ? <button type="button" onClick={() => props.open(selected.nodeId)}>Open {label || "block"} ({childCount} steps)</button> : null}
     </div>
+    {unavailable ? <p className="wf-muted wf-block-command-notice">{unavailable}</p> : null}
     {action ? <NativeBlockDialog title={title} onClose={close}>
       <h2>{title}</h2>
       {action !== "ungroup" ? <>
@@ -104,11 +111,11 @@ export function NativeBlockCommands(props: {
         <StudioField label="Summary"><textarea value={description} maxLength={2000} disabled={busy} onChange={event => { setDescription(event.target.value); setPlan(null); }} /></StudioField>
         {choices.length !== 1 ? <StudioField label={`${kind === "sequence" ? "Sequence" : "Flowchart"} version`}><select value={version} disabled={busy} onChange={event => { setVersion(event.target.value); setPlan(null); }}><option value="">Choose an available version</option>{choices.map(item => <option key={item.activityVersionId} value={item.activityVersionId}>{item.version} · {item.activityVersionId}</option>)}</select></StudioField> : null}
       </> : <p>Remove this container and keep its steps in the current scope. Generated result-transfer steps and variables are retained when still needed.</p>}
-      <p>{action === "extract" ? `${props.selectedNodeIds.length} selected steps will move into a ${kind === "sequence" ? "Sequence" : "Flowchart"} body.` : action === "ungroup" ? `${childCount} direct steps in ${label || "this block"}.` : `The block uses a native ${kind === "sequence" ? "Sequence" : "Flowchart"} body.`}</p>
+      <p>{action === "extract" ? `${props.selectedNodeIds.length} selected ${props.selectedNodeIds.length === 1 ? "step" : "steps"} will move into a ${kind === "sequence" ? "Sequence" : "Flowchart"} body.` : action === "ungroup" ? `${childCount} direct steps in ${label || "this block"}.` : `The block uses a native ${kind === "sequence" ? "Sequence" : "Flowchart"} body.`}</p>
       <p>Complete ends the nearest reusable graph boundary and cancels its remaining work. It does not continue through an outgoing connection.</p>
       {messages.length ? <ul role="alert">{messages.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
       {stale ? <p role="alert">This preview is stale. Preview again before applying.</p> : null}
-      {plan ? <div className="wf-block-preview"><h3>Proposed change</h3><p>{plan.selection.length} resulting steps selected. The complete resource passed its normal validation.</p>
+      {plan ? <div className="wf-block-preview"><h3>Proposed change</h3><p>{plan.selection.length} resulting {plan.selection.length === 1 ? "step" : "steps"} selected. The complete resource passed its normal validation.</p>
         {changes ? <>
           <ul>{changes.containers.map((item, index) => <li key={index}>{item.change === "add" ? "Create" : "Remove"} <strong>{item.name}</strong> · {item.kind} · {item.children} direct steps</li>)}</ul>
           {changes.movedSteps.length ? <details open><summary>Move {changes.movedSteps.length} steps</summary><ul>{changes.movedSteps.map((label, index) => <li key={index}>{label}</li>)}</ul></details> : null}
@@ -116,7 +123,7 @@ export function NativeBlockCommands(props: {
           {changes.addedVariables.length ? <details open><summary>Add {changes.addedVariables.length} result variables</summary><ul>{changes.addedVariables.map((label, index) => <li key={index}>{label}</li>)}</ul></details> : null}
           {changes.removedConnections.length || changes.addedConnections.length ? <details open><summary>Rewire connections</summary><ul>{changes.removedConnections.map((label, index) => <li key={`old-${index}`}>Remove: {label}</li>)}{changes.addedConnections.map((label, index) => <li key={`new-${index}`}>Add: {label}</li>)}</ul></details> : null}
         </> : null}<details><summary>Current graph, layout and names</summary><pre>{JSON.stringify(props.context.document, null, 2)}</pre></details><details><summary>Complete proposed graph, connections, bindings, layout and names</summary><pre>{JSON.stringify(plan.document, null, 2)}</pre></details></div> : null}
-      <div className="wf-block-dialog-actions"><button type="button" onClick={close}>Cancel</button><button type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : "Preview change"}</button><button type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</button></div>
+      <div className="wf-block-dialog-actions"><button type="button" disabled={committing} onClick={close}>Cancel</button><button type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : "Preview change"}</button><button type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</button></div>
     </NativeBlockDialog> : null}
   </>;
 }

@@ -64,6 +64,7 @@ export interface WorkflowLineageHold {
 // capture records every committed mutation (palette add, drag, property edit, auto-layout, code apply)
 // without touching each handler. A Weaver batch is recorded explicitly as its own entry.
 export function useDraftHistory({ draft, restoreDraft, captureView }: DraftHistoryParams) {
+  const nextEditViewRef = useRef<GraphAuthoringView | undefined>(undefined);
   const captureViewRef = useRef(captureView);
   captureViewRef.current = captureView;
   const historyRef = useRef<HistoryState<HistoryEntry>>(createHistory());
@@ -93,6 +94,7 @@ export function useDraftHistory({ draft, restoreDraft, captureView }: DraftHisto
   // Re-seeds history when a new draft loads (or after a promote). Returns nothing; callers invoke it in
   // their load() flow so a fresh definition starts with an empty, consistent undo stack.
   const resetHistory = useCallback((nextDraft: WorkflowDraft | null) => {
+    nextEditViewRef.current = undefined;
     historyRef.current = createHistory();
     lastCapturedDraftRef.current = nextDraft ? cloneWorkflowDraftForUndo(nextDraft) : null;
     lastCapturedSignatureRef.current = nextDraft ? getDraftSignature(nextDraft) : "";
@@ -110,9 +112,10 @@ export function useDraftHistory({ draft, restoreDraft, captureView }: DraftHisto
   // position keeps the line it inherited and has no batch origin.
   const capture = useCallback((next: WorkflowDraft) => {
     const previous = lastCapturedDraftRef.current;
-    if (previous) historyRef.current = pushSnapshot(historyRef.current, { draft: previous, lineage: lineageRef.current, origin: originRef.current, view: captureViewRef.current?.() });
+    if (previous) historyRef.current = pushSnapshot(historyRef.current, { draft: previous, lineage: lineageRef.current, origin: originRef.current, view: nextEditViewRef.current ?? captureViewRef.current?.() });
     lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(next);
     lastCapturedSignatureRef.current = getDraftSignature(next);
+    nextEditViewRef.current = undefined;
     originRef.current = null;
     changed();
   }, [changed]);
@@ -163,16 +166,23 @@ export function useDraftHistory({ draft, restoreDraft, captureView }: DraftHisto
     capture(latest);
   }, [capture]);
 
-  /** An ordinary atomic edit, with no Weaver batch lineage or explicit-save hold. */
-  const recordEdit = useCallback((applied: WorkflowDraft, commit?: () => boolean) => {
+  /** Reserve the ordinary edit's base view before dispatch; no Weaver lineage or save hold. */
+  const prepareEdit = useCallback(() => {
     flushPendingHistory();
-    if (pendingCaptureRef.current !== null) window.clearTimeout(pendingCaptureRef.current);
-    pendingCaptureRef.current = null;
-    if (commit && !commit()) return false;
-    capture(applied);
-    latestDraftRef.current = applied;
-    return true;
-  }, [capture, flushPendingHistory]);
+    nextEditViewRef.current = captureViewRef.current?.();
+  }, [flushPendingHistory]);
+  const cancelPreparedEdit = useCallback(() => { nextEditViewRef.current = undefined; }, []);
+  /** Observe the reducer receipt before recording. A normal capture that already ran is not duplicated. */
+  const recordEdit = useCallback((applied: WorkflowDraft) => {
+    // Another ordinary edit can follow the transaction in the same React commit. Keep that live
+    // position (and its capture timer); the proposal remains its own preceding history entry.
+    if (latestDraftRef.current && getDraftSignature(latestDraftRef.current) === getDraftSignature(applied)) {
+      if (pendingCaptureRef.current !== null) window.clearTimeout(pendingCaptureRef.current);
+      pendingCaptureRef.current = null;
+    }
+    if (getDraftSignature(applied) !== lastCapturedSignatureRef.current) capture(applied);
+    nextEditViewRef.current = undefined;
+  }, [capture]);
 
   const restoreDraftSnapshot = useCallback((entry: HistoryEntry) => {
     restoringRef.current = true;
@@ -270,5 +280,5 @@ export function useDraftHistory({ draft, restoreDraft, captureView }: DraftHisto
     }
   }), [changed, isLineageHeld, lineageHeld]);
 
-  return { recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold };
+  return { prepareEdit, cancelPreparedEdit, recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold };
 }

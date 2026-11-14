@@ -1,4 +1,4 @@
-import { flushSync } from "react-dom";
+import { useWorkflowNativeBlockCommit } from "./useWorkflowNativeBlockCommit";
 import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "../graph-authoring/presentationScopeFrames";
 import { NativeBlockCommands } from "../graph-authoring/NativeBlockCommands";
@@ -279,7 +279,7 @@ export function WorkflowEditor({
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path, primary);
   }, [editableDoc]);
-  const { recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, captureView: () => structuredClone(historyView.current) });
+  const { prepareEdit, cancelPreparedEdit, recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, captureView: () => structuredClone(historyView.current) });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -304,6 +304,7 @@ export function WorkflowEditor({
   }, [reload, setError]);
   const editorDoc = usePinnedEditorDocument({ document: editableDoc, context, definitionId, catalog });
   const { draft, frames, selectedNodeId } = editorDoc.state;
+  const commitNativeBlock = useWorkflowNativeBlockCommit(editorDoc, { prepareEdit, recordEdit, cancelPreparedEdit });
   const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta, flushDefinitionMeta } = useDefinitionMetadata({ context, documentAdapter, details, setDetails, setStatus });
@@ -1670,19 +1671,10 @@ export function WorkflowEditor({
               if (documentAdapter) return documentAdapter.validateCandidate?.(context, candidate) ?? { state: "unavailable", messages: ["This resource does not provide candidate validation."] };
               return validateWorkflowCandidate(context, persistedDraft!, candidate);
             }}
-            apply={(document, selection) => {
+            apply={async (document, selection, isCurrent) => {
               const next = { ...draft, state: { ...draft.state, rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
               if (!editorDoc.canEdit()) throw new Error("The resource is no longer editable.");
-              const applied = recordEdit(next, () => {
-                let accepted = false;
-                flushSync(() => editDraft(current => {
-                  if (!editorDoc.canEdit() || !current.draft || getDraftSignature(current.draft) !== getDraftSignature(draft) ||
-                      current.selectedNodeId !== selectedNodeId || JSON.stringify(current.frames) !== JSON.stringify(frames)) return null;
-                  accepted = true;
-                  return next;
-                }));
-                return accepted;
-              });
+              const applied = await commitNativeBlock(draft, frames, selectedNodeId, next, selection, () => isCurrent() && editorDoc.canEdit());
               if (!applied) throw new Error("The source changed before the edit could be committed.");
               canvas.selectNodes(selection);
               if (selection[0]) queueCanvasNodeFocus(selection[0]);

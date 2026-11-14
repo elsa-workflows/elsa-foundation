@@ -25,9 +25,10 @@ export function createTemplateDocumentAdapter(): WorkflowEditorDocumentAdapter {
     validateCandidate: async (context, draft) => {
       if (!current || current.id !== draft.id) return { state: "unavailable", messages: [] };
       const revision = current.revision;
+      const templateId = current.id;
       const path = await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-template-candidate-validation", { templateId: current.id });
       const result = await context.http.postJson<{ state: string; errors: { message: string }[] }>(path, { expectedRevision: revision, candidate: templateContent(draft) });
-      if (current.revision !== revision) return { state: "stale", messages: [] };
+      if (current.id !== templateId || current.revision !== revision) return { state: "stale", messages: [] };
       if (!result || typeof result.state !== "string" || !Array.isArray(result.errors)) throw new Error("Invalid template candidate validation response.");
       return { state: result.state, messages: result.errors.map(item => item.message) };
     },
