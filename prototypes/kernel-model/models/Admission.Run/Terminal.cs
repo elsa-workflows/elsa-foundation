@@ -65,8 +65,8 @@ internal static class TerminalReceipts
         void Add(string kind, object? payload = null, StartSpec? start = null, bool reply = false)
         {
             var id = "terminal-message-" + ++serial;
-            Apply(new("add", M: new Message(id, target, kind, payload is null ? null : Json.Write(payload), Start: start,
-                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000, beforeCommit: true) : null)));
+            Apply(new("add", M: CreationFixture.Pin(new Message(id, target, kind, payload is null ? null : Json.Write(payload), Start: start,
+                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000, beforeCommit: true) : null))));
         }
         void Drain()
         {
@@ -152,17 +152,17 @@ internal static class TerminalReceipts
         Require(Request(InvocationInput.Kind, a with { Value = "different" }).Result == "Conflict", "T1", "closed conflict was lost");
         Require(Request(InvocationInput.Kind, a with { Id = "new" }).Result == "Ended", "T1", "ended invocation accepted new work");
         Add(Kinds.Delete); Drain();
-        Require(world.Store.Instances.ContainsKey(target.Id), "T2", "delete removed an unexpired promise");
+        Require(!world.Store.Instances[target.Id].Retired, "T2", "delete removed an unexpired promise");
         Apply(new("tick", checked((int)(until!.Value - world.Time))));
         Require(Request(ReceiptQuery.Kind, new ReceiptQuery(frame, "a")).Result == "MissingOrExpired", "T4", "exact expiry boundary not enforced");
         if (latestUntil > world.Time)
         {
             Add(Kinds.Delete); Drain();
-            Require(world.Store.Instances.ContainsKey(target.Id), "T2", "delete ignored a later receipt promise");
+            Require(!world.Store.Instances[target.Id].Retired, "T2", "delete ignored a later receipt promise");
             Apply(new("tick", checked((int)(latestUntil!.Value - world.Time))));
         }
         Add(Kinds.Delete); Drain();
-        Require(world.Store.Instances.ContainsKey(target.Id) == (nested && ending == "completed"), "T2", "normal delete ignored expiry/running owner");
+        Require(world.Store.Instances[target.Id].Retired != (nested && ending == "completed"), "T2", "normal delete ignored expiry/running owner");
         NativeWorkflows.Registry.Add(workflow);
         TerminalReceiver.Forbidden = false;
         Console.WriteLine($"PASS terminal:{mode},nested={nested},ending={ending}");

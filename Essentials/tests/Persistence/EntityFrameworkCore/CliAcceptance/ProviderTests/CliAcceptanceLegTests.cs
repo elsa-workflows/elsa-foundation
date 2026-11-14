@@ -18,7 +18,7 @@ public sealed class CliAcceptanceLegTests
     /// <summary>
     /// Every EF module Workbench's own committed <c>shells.json</c> enables by default -- the 13-name
     /// vocabulary minus <c>Elsa3.Activities.Design.Import</c>, which that composition does not turn on, plus the
-    /// <c>Agents</c> turn journal and the <c>Decisions</c> extension it does. This
+    /// <c>Agent</c> turn journal, <c>Decisions</c> extension and <c>Studio.Dashboard</c> resources it does. This
     /// is what lets the last step's host-wide <c>Migrate:Policy=Validate</c> mean something: every module the
     /// running host actually activates has to already be migrated, not just the modules this test happened
     /// to pick.
@@ -33,6 +33,7 @@ public sealed class CliAcceptanceLegTests
         "Identity.ProviderConfiguration",
         "Secrets",
         "Agent",
+        "Studio.Dashboard",
         "Studio.Preferences",
         "Workflows.Design",
         "Workflows.Publishing",
@@ -62,6 +63,7 @@ public sealed class CliAcceptanceLegTests
         "IdentityProviderConfigurationEntityFrameworkCore",
         "SecretsEntityFrameworkCore",
         "AgentEntityFrameworkCore",
+        "StudioDashboardEntityFrameworkCore",
         "StudioPreferencesEntityFrameworkCore",
         "WorkflowsDesignEntityFrameworkCore",
         "WorkflowsPublishingEntityFrameworkCore",

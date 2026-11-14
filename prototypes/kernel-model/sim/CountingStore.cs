@@ -3,6 +3,7 @@ namespace Kernel.Sim;
 /// <summary>Passes everything through and counts the commits.</summary>
 public sealed class CountingStore(IKernelStore inner, Action committed) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
