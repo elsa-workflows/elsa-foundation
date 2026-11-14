@@ -2,6 +2,7 @@ using System.Reflection;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
@@ -21,12 +22,14 @@ internal static class RuntimeHistoryEfModule
             var entity = context.Model.FindEntityType(shape.Entity);
             if (entity is null || entity.FindPrimaryKey() is not { } key ||
                 !key.Properties.Select(property => property.Name).SequenceEqual(shape.Key)) return false;
-            foreach (var member in shape.Properties)
+            foreach (var required in shape.Properties)
             {
+                var member = required.Member;
                 var property = entity.FindProperty(member.Name);
                 var binding = property?.PropertyInfo;
                 if (property is null || binding is null || property.ClrType != member.PropertyType || binding.DeclaringType != member.DeclaringType ||
-                    binding.Name != member.Name) return false;
+                    binding.Name != member.Name || property.GetBeforeSaveBehavior() != required.BeforeSave ||
+                    property.GetAfterSaveBehavior() != required.AfterSave || property.ValueGenerated != required.ValueGenerated) return false;
             }
             if (entity.FindProperty("Revision")?.IsConcurrencyToken != true) return false;
             var indexes = entity.GetIndexes().ToArray();
@@ -40,20 +43,30 @@ internal static class RuntimeHistoryEfModule
 
     private static RequiredShape[] RequiredShapes()
     {
-        // Derive mandatory key/index definitions from the same owned configurations as Runtime.
+        // Derive mandatory key/index/write definitions from the same owned configurations as Runtime.
         // No provider conventions or storage access are needed for these explicit definitions.
         var builder = new ModelBuilder();
+        var types = Chain.ContentColumns.Select(column => column.Entity).Distinct().ToArray();
+        foreach (var type in types)
+            foreach (var member in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+                builder.Entity(type).Property(member.PropertyType, member.Name);
         RuntimeHistoryEntityConfiguration.Configure(builder);
         RuntimeHistoryOccurrenceEntityConfiguration.Configure(builder);
-        return Chain.ContentColumns.Select(column => column.Entity).Distinct().Select(type =>
+        return types.Select(type =>
         {
             var entity = builder.Model.FindEntityType(type) ?? throw new InvalidOperationException("The declared history family has no owned entity configuration.");
-            return new RequiredShape(type, type.GetProperties(BindingFlags.Instance | BindingFlags.Public),
+            var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public).Select(member =>
+            {
+                var property = entity.FindProperty(member.Name)!;
+                return new RequiredProperty(member, property.GetBeforeSaveBehavior(), property.GetAfterSaveBehavior(), property.ValueGenerated);
+            }).ToArray();
+            return new RequiredShape(type, properties,
                 entity.FindPrimaryKey()!.Properties.Select(property => property.Name).ToArray(),
                 entity.GetIndexes().Select(index => new RequiredIndex(index.Properties.Select(property => property.Name).ToArray(), index.IsUnique)).ToArray());
         }).ToArray();
     }
 
-    private sealed record RequiredShape(Type Entity, PropertyInfo[] Properties, string[] Key, RequiredIndex[] Indexes);
+    private sealed record RequiredShape(Type Entity, RequiredProperty[] Properties, string[] Key, RequiredIndex[] Indexes);
+    private sealed record RequiredProperty(PropertyInfo Member, PropertySaveBehavior BeforeSave, PropertySaveBehavior AfterSave, ValueGenerated ValueGenerated);
     private sealed record RequiredIndex(string[] Properties, bool Unique);
 }
