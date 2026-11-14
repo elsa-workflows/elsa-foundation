@@ -30,6 +30,12 @@ export function formatNamedIdentityTitle(label: string, secondaryIds: readonly s
   return secondaryIds.length > 0 ? `${label} (${secondaryIds.join(" · ")})` : label;
 }
 
+export function formatRunPageTitle(workflowName: string | null | undefined, fallbackId?: string | null) {
+  const name = workflowName?.trim();
+  const id = fallbackId?.trim();
+  return name && name !== id ? `Run · ${name}` : "Run";
+}
+
 export async function loadDefinitionDisplayNames(
   context: StudioEndpointContext,
   ids: Iterable<string | null | undefined>,
