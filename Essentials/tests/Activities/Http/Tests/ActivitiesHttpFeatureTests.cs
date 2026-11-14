@@ -8,6 +8,7 @@ using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Options;
 using Elsa.Activities.Http.Options;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Tasks;
@@ -70,6 +71,7 @@ public sealed class ActivitiesHttpFeatureTests
         // guarantee: the endpoint template is seeded so a request under the base path resolves and reaches
         // dispatch, where the no-start router yields 404 (proving the mounted middleware, not the sentinel,
         // answered).
+        services.AddPersistenceCore(); // Normal Runtime dependency of the mounted source middleware.
         services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
         services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
         services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore>();

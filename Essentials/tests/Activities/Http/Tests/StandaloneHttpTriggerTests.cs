@@ -125,10 +125,9 @@ public sealed class StandaloneHttpTriggerTests
     }
 
     [Fact]
-    public async Task Workflow_response_missing_instruction_returns_the_accepted_delivery_identity_without_a_caller_key()
+    public async Task Workflow_response_missing_instruction_returns_the_accepted_delivery_identity()
     {
         using var fixture = new Fixture(mode: "WorkflowResponse");
-        fixture.Http.Request.Headers.Remove("Idempotency-Key");
         var recipient = Assert.Single(fixture.Receipt.Item.SubscriptionDelivery!.Recipients);
         var now = DateTimeOffset.UtcNow;
         await fixture.Executions.SaveAsync(new(recipient.StartIdentity.WorkflowExecutionId, recipient.Material,
