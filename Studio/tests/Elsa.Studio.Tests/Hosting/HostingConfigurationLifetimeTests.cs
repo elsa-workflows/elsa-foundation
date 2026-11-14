@@ -61,16 +61,24 @@ public sealed class HostingConfigurationLifetimeTests
         Assert.All(providers, provider => Assert.True(provider.Source.ReloadOnChange));
         Assert.Equal("initial", host.Configuration["LifetimeProbe"]);
 
+        var removed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var reloaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var reloadTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         using var subscription = ChangeToken.OnChange(() => ((IConfiguration)host.Configuration).GetReloadToken(), () =>
         {
-            if (host.Configuration["LifetimeProbe"] == "updated") reloaded.TrySetResult();
+            var value = host.Configuration["LifetimeProbe"];
+            if (value is null) removed.TrySetResult();
+            if (value == "updated") reloaded.TrySetResult();
         });
         File.Delete(host.ShellsFile);
+        // Observe deletion before recreation: native watchers can coalesce an immediate delete/write.
+        // Both notifications share the original 15-second budget; no delay or wider timeout hides a failure.
+        await removed.Task.WaitAsync(reloadTimeout.Token);
+        Assert.Null(host.Configuration["LifetimeProbe"]);
         var shellProvider = providers.Single(provider => Path.GetFileName(provider.Source.Path) == "shells.json");
         Assert.Throws<FileNotFoundException>(() => shellProvider.Load());
         await File.WriteAllTextAsync(host.ShellsFile, """{"LifetimeProbe":"updated","CShells":{"Shells":{"Default":{"Features":{"StudioApi":{}}}}}}""");
-        await reloaded.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await reloaded.Task.WaitAsync(reloadTimeout.Token);
         Assert.Equal("updated", host.Configuration["LifetimeProbe"]);
 
         var files = providers.Select(provider => Assert.IsType<PhysicalFileProvider>(provider.Source.FileProvider)).ToArray();

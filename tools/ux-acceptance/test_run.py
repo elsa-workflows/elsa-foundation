@@ -306,11 +306,15 @@ class VerdictTests(unittest.TestCase):
             request.assert_not_called()
 
     def test_inherited_credentials_and_store_overrides_are_not_forwarded(self):
-        with patch.dict(os.environ, {'ConnectionStrings__Elsa': 'private', 'OPENAI_API_KEY': 'private', 'PATH': '/bin'}, clear=True):
+        with patch.dict(os.environ, {'ConnectionStrings__Elsa': 'private', 'OPENAI_API_KEY': 'private', 'PATH': '/bin',
+                                     'DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE': 'false',
+                                     'DOTNET_USE_POLLING_FILE_WATCHER': '1'}, clear=True):
             env = acceptance.clean_environment()
         self.assertNotIn('OPENAI_API_KEY', env)
         self.assertNotIn('ConnectionStrings__Elsa', env)
         self.assertEqual('/bin', env['PATH'])
+        self.assertEqual('false', env['DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE'])
+        self.assertEqual('1', env['DOTNET_USE_POLLING_FILE_WATCHER'])
 
     def test_host_is_stopped_on_failed_readiness_and_body_exception(self):
         for fail_start in (True, False):
