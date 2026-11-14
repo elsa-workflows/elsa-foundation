@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -46,8 +47,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
             Assert.Equal("Http", accepted.StandaloneIngress!.SourceFamily);
             var recipient = Assert.Single(accepted.SubscriptionDelivery!.Recipients);
             Assert.Equal("actual-http-input", recipient.Inputs["message"].GetString());
-            Assert.Equal(RuntimeRecipientPhase.Pending, Assert.Single(accepted.SubscriptionDelivery.Progress).Phase);
-            Assert.Null(await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(recipient.StartIdentity.WorkflowExecutionId));
+            Assert.NotEqual(RuntimeRecipientPhase.CancelledBeforeDispatch, Assert.Single(accepted.SubscriptionDelivery.Progress).Phase);
             Assert.Equal([RuntimeIngressTransportState.AwaitingResponse, RuntimeIngressTransportState.WriteCompleted],
                 accepted.SubscriptionDelivery.ControlFacts!.Transport.Select(item => item.State));
             var current = (await services.GetRequiredService<IStandaloneTriggerStore>().FindAsync(fixture.Scope, fixture.Trigger.Id))!;
@@ -71,7 +71,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
 
         await using var resumedScope = shell.ServiceProvider.CreateAsyncScope();
         var runtime = resumedScope.ServiceProvider;
-        Assert.Equal(1, (await runtime.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100))).DeliveredCount);
+        await AwaitHttpTargetAcceptanceAsync(shell.ServiceProvider, id);
         var delivered = (await runtime.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(id))!;
         var selected = Assert.Single(delivered.SubscriptionDelivery!.Recipients);
         var progress = Assert.Single(delivered.SubscriptionDelivery.Progress);
@@ -118,7 +118,24 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         Assert.Single(accepted.SubscriptionDelivery!.Recipients);
         Assert.Single(accepted.SubscriptionDelivery.Refusals);
         Assert.Equal("target-unpublished", accepted.SubscriptionDelivery.Refusals[0].ReasonCode);
-        Assert.Equal(RuntimeRecipientPhase.Pending, Assert.Single(accepted.SubscriptionDelivery.Progress).Phase);
+        Assert.NotEqual(RuntimeRecipientPhase.CancelledBeforeDispatch, Assert.Single(accepted.SubscriptionDelivery.Progress).Phase);
+    }
+
+    private static async Task AwaitHttpTargetAcceptanceAsync(IServiceProvider shell, string sourceId)
+    {
+        // The normal host's recurring pump may win. Read actual monotonic evidence rather than assuming this test's
+        // manual sweep owns dispatch or that an accepted source remains Pending until the assertion runs.
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < TimeSpan.FromSeconds(60))
+        {
+            await using var operation = shell.CreateAsyncScope();
+            var services = operation.ServiceProvider;
+            await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100));
+            var source = (await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(sourceId))!;
+            if (Assert.Single(source.SubscriptionDelivery!.Progress).Phase == RuntimeRecipientPhase.TargetAccepted) return;
+            await Task.Delay(50);
+        }
+        Assert.Fail("The retained HTTP recipient did not obtain its actual target acceptance receipt.");
     }
 
     private sealed record StandaloneHttpFixture(TriggerScope Scope, StandaloneTrigger Trigger, WorkflowExecutableIdentity Material);
