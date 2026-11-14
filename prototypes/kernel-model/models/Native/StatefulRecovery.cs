@@ -20,7 +20,7 @@ internal static class NativeStatefulRecovery
                 throw new InvalidOperationException("Invalid native qualified resume ownership.");
     }
     internal static bool SuspendedRoot(NativeState s, Frame f) => NativeInterventions.Policy(s) >= 3 && f.RecoveryStateful && f.Intervention is null &&
-        NativeInterventions.RootDescriptor(f) && s.Frames.Count == 1 && s.Waits.Values.Any(w => w.Frame == f.Id) &&
+        NativeInterventions.RootDescriptor(f) && s.Frames.Count == 1 && s.Waits.Values.All(w => w.Frame == f.Id) &&
         s.Agenda.All(w => w.Resume && w.Frame == f.Id && w.Wait is not null && s.Waits.TryGetValue(w.Wait, out var wait) && wait.Frame == f.Id &&
             w.Node is null && w.Parent is null && w.Tag is null && w.Scope is null && w.LexicalScope is null && w.RetrySource is null &&
             w.RecoveryInputs is null && w.RecoveryMaterial is null && w.OperationKey is null && w.Attempt == 0);

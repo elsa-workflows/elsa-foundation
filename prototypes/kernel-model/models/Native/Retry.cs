@@ -59,7 +59,7 @@ internal static class NativeRetries
             var queued = s.Agenda.Where(w => w.Frame == r.Successor && !w.Resume).ToArray(); s.Frames.TryGetValue(r.Successor, out var current);
             if (queued.Length == 0 && current is null) continue; // completed/superseded forensic receipts need no live root
             var staged = queued.Length == 1 && current is null && s.Frames.Count == 0 && s.Agenda.Count == 1 && !queued[0].Resume && queued[0].RetrySource == r.Source.Id;
-            var retained = queued.Length == 0 && current is not null && s.Frames.Count == 1 && (s.Agenda.Count == 0 || NativeStatefulRecovery.SuspendedRoot(s, current)) && current.RetrySource == r.Source.Id;
+            var retained = queued.Length == 0 && current is not null && s.Frames.Count == 1 && (current.RecoveryStateful && current.Intervention is null ? NativeStatefulRecovery.SuspendedRoot(s, current) : s.Agenda.Count == 0 && (!current.RecoveryStateful || s.Waits.Count == 0)) && current.RetrySource == r.Source.Id;
             if (!staged && !retained) throw new InvalidOperationException("Invalid native staged root obligation.");
         }
         NativeRetryReceipt Lineage(string source, string successor) => (s.Retries?.Values.SingleOrDefault(r => r.Source.Id == source && r.Successor == successor))
