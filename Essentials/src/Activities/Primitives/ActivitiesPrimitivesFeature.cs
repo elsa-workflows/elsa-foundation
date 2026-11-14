@@ -9,6 +9,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -56,6 +57,20 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         services.AddRuntimePostCommitIntentHandler<PublishStimulusExecutor>(
             PublishStimulusConstants.PublishStimulusIntentKind,
             new RuntimePostCommitRetryPolicy(maxAttempts: 4, delay: TimeSpan.FromSeconds(1)),
-            requiresDurableSource: true, stimulusDeliveryProtocolVersion: StimulusDeliverySnapshot.CurrentVersion);
+            requiresDurableSource: true, stimulusDeliveryProtocolVersion: StimulusDeliverySnapshot.CurrentVersion,
+            subscriptionDeliveryProtocolVersion: RuntimeSubscriptionDelivery.CurrentVersion);
+        if (!services.Any(item => item.ServiceType == typeof(WorkflowEventSourceRegistration)))
+        {
+            if (services.Any(item => item.ServiceType == typeof(StandaloneTriggerSourceDescriptor) && item.IsKeyedService &&
+                item.KeyedImplementationInstance is StandaloneTriggerSourceDescriptor descriptor && descriptor.SourceFamily == PublishStimulusIntentAdapter.SourceDescriptor.SourceFamily))
+                throw new InvalidOperationException("The canonical workflow Event producer ID is already owned by another source.");
+            services.AddSingleton(new WorkflowEventSourceRegistration());
+            // Reserve the stable producer identity only. No external producer context or ingress port is installed.
+            services.AddKeyedSingleton<StandaloneTriggerSourceDescriptor>(typeof(WorkflowEventSourceRegistration), PublishStimulusIntentAdapter.SourceDescriptor);
+            services.AddScoped(_ => new StandaloneTriggerSourceCapability(PublishStimulusIntentAdapter.SourceDescriptor, true)
+                { WorkflowIntentKind = PublishStimulusConstants.PublishStimulusIntentKind });
+        }
     }
+
+    private sealed class WorkflowEventSourceRegistration;
 }

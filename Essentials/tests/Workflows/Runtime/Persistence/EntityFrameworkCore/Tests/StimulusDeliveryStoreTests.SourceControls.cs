@@ -12,6 +12,34 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class StimulusDeliveryStoreTests
 {
     [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Cancelling_independent_recipients_of_a_combined_Event_preserves_the_actual_workflow_source_and_ordinary_cohort(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        var fixture = await PrepareWorkflowEventAsync(harness);
+        var installed = await fixture.Port.InstallWorkflowCohortAsync(fixture.Source, fixture.Ordinary, fixture.Independent);
+        var item = installed.Claim.Item;
+        var request = new RuntimeIngressControlRequest(fixture.Independent.Scope, item.OutboxItemId, item.SourceFingerprint,
+            item.SubscriptionDelivery!.SelectionFingerprint, "ingress-trigger", "operator", "cancel-independent", "cancel-independent",
+            RuntimeIngressControlKind.CancelPendingRecipients, item.SubscriptionDelivery.Progress.Select(progress =>
+                new RuntimeIngressRecipientExpectation(progress.RecipientId, RuntimeIngressInspection.ProgressFingerprint(progress))).ToArray())
+        { ExpectedTriggerRevision = 2 };
+
+        var cancelled = await fixture.Port.ControlAsync(request);
+
+        Assert.Null(cancelled.Item.StandaloneIngress);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, cancelled.Item.Status);
+        Assert.Equal(item.DeliveryFencingToken, cancelled.Item.DeliveryFencingToken);
+        Assert.Equal(item.SourceFingerprint, cancelled.Item.SourceFingerprint);
+        Assert.True(item.RecipientSnapshot!.IsEquivalentTo(cancelled.Item.RecipientSnapshot));
+        Assert.Single(cancelled.Item.RecipientSnapshot!.Starts);
+        Assert.Equal(RuntimeRecipientPhase.CancelledBeforeDispatch, Assert.Single(cancelled.Item.SubscriptionDelivery!.Progress).Phase);
+        Assert.Equal("conflict", (await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Port.ControlAsync(request with
+            { TriggerId = "another-trigger", RequestId = "wrong-resource" }).AsTask())).Code);
+        Assert.Equal(2, (await fixture.Resources.FindAsync(fixture.Independent.Scope, "ingress-trigger"))!.Trigger.Revision);
+    }
+
+    [Theory]
     [InlineData(false, false)] [InlineData(true, false)]
     [InlineData(false, true)] [InlineData(true, true)]
     public async Task Physical_source_control_and_dispatch_seal_have_one_causal_winner(bool ef, bool sealFirst)
