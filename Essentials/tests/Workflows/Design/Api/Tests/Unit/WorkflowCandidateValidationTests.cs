@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -37,6 +38,48 @@ public sealed class WorkflowCandidateValidationTests
         Assert.Equal(1, host.Publisher.Calls);
     }
 
+    [Fact]
+    public async Task Acknowledged_state_can_use_the_editors_equivalent_object_json_text_without_a_false_stale_verdict()
+    {
+        var host = new Host();
+        host.Store.Draft.State = new([], new("node", "inline-version", [new("Expression", new ArgumentValue(42, "Object"), null, null, null, null, null)], []), [], [], null);
+        var saved = host.Store.Draft.State;
+        var request = host.Request();
+        var baseline = request.Baseline;
+        var editorState = baseline.State with
+        {
+            RootActivity = baseline.State.RootActivity! with { Inputs = [new("Expression", new ArgumentValue("42", "Object"), null, null, null, null, null)] }
+        };
+        request = request with { Baseline = baseline with { State = editorState }, Candidate = new(new(), [], []) };
+        Assert.Equal("validated", (await host.Endpoint.HandleAsync(request, default)).State);
+        Assert.Same(saved, host.Store.Draft.State);
+        Assert.Equal(1, host.Publisher.Calls);
+    }
+
+    [Theory]
+    [InlineData("state")]
+    [InlineData("layout")]
+    [InlineData("presentation")]
+    [InlineData("source-version")]
+    [InlineData("missing-revision")]
+    public async Task The_acknowledgement_still_fences_saved_state_identity_and_each_sidecar(string change)
+    {
+        var host = new Host();
+        var request = host.Request();
+        switch (change)
+        {
+            case "state": host.Store.Draft.State = new([], new("changed", "another-version", [], []), [], [], null); break;
+            case "layout": host.Store.Layout = [new("node", 5, 6)]; break;
+            case "presentation": host.Store.Presentation = [new("node", "Changed")]; break;
+            case "source-version": host.Store.Draft.SourceVersionId = "another-version"; break;
+            case "missing-revision": request = request with { Baseline = request.Baseline with { AuthoringRevision = "" } }; break;
+        }
+        var result = await host.Endpoint.HandleAsync(request, default);
+        Assert.Equal("stale", result.State);
+        Assert.Empty(result.Errors);
+        Assert.Equal(0, host.Publisher.Calls);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -62,6 +105,7 @@ public sealed class WorkflowCandidateValidationTests
     [InlineData("authority", "denied")]
     [InlineData("source", "denied")]
     [InlineData("catalog", "stale")]
+    [InlineData("state", "stale")]
     [InlineData("layout", "stale")]
     [InlineData("presentation", "stale")]
     public async Task Refuses_changes_during_validation_without_disclosing_the_stale_findings(string change, string state)
@@ -74,6 +118,7 @@ public sealed class WorkflowCandidateValidationTests
             {
                 case "authority": host.Authority.Allowed = false; break;
                 case "source": host.Definitions.Definition.IsSourceOwned = true; break;
+                case "state": host.Store.Draft.State = new([], new("changed", "another-version", [], []), [], [], null); break;
                 case "catalog": host.Catalog.Entries = [new("another", "another", "1", "Another", null, null, true, null, [])]; break;
                 case "layout": host.Store.Layout = [new("node", 5, 6)]; break;
                 case "presentation": host.Store.Presentation = [new("node", "Changed")]; break;

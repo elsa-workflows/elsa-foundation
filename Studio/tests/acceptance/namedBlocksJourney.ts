@@ -33,8 +33,8 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
   };
   const line = (nodeId: string): Node => ({ nodeId, activityVersionId: versions.line, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: nodeId } }], outputs: [] });
   const complete: Node = { nodeId: "complete", activityVersionId: versions.complete, inputs: [{ referenceKey: "outcome", value: { expressionType: "Literal", value: "done" } }], outputs: [] };
-  const body = (kind: "sequence" | "flowchart", terminal: boolean): Content => {
-    const activities = [line("one"), terminal ? complete : line("two"), line("after"), ...(kind === "flowchart" ? [{ ...complete, nodeId: "terminal-inspection" }] : [])];
+  const body = (kind: "sequence" | "flowchart", terminal: boolean, inspectTerminal = false): Content => {
+    const activities = [line("one"), terminal ? complete : line("two"), line("after"), ...(inspectTerminal ? [{ ...complete, nodeId: "terminal-inspection" }] : [])];
     return { state: { rootActivity: { nodeId: "root", activityVersionId: versions[kind], inputs: [], outputs: [], structure: {
       kind: `elsa.${kind}.structure`, schemaVersion: "1.0.0", payload: kind === "sequence" ? { activities, variables: [] } : {
         activities, variables: [], startNodeId: "one", nodeMetadata: {}, connectionMetadata: {}, connections: [
@@ -43,7 +43,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         ]
       }
     } }, variables: [], inputs: [], outputs: [] }, layout: [
-      { nodeId: "one", x: 80, y: 100 }, { nodeId: terminal ? "complete" : "two", x: 380, y: 100 }, { nodeId: "after", x: 680, y: 100 }, ...(kind === "flowchart" ? [{ nodeId: "terminal-inspection", x: 380, y: 340 }] : [])
+      { nodeId: "one", x: 80, y: 100 }, { nodeId: terminal ? "complete" : "two", x: 380, y: 100 }, { nodeId: "after", x: 680, y: 100 }, ...(inspectTerminal ? [{ nodeId: "terminal-inspection", x: 380, y: 340 }] : [])
     ], activityPresentation: [] };
   };
   async function createWorkflow(name: string, content: Content) {
@@ -136,10 +136,11 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
     await expect(terminal.locator(".react-flow__handle.source")).toHaveCount(0);
   }
   const failures: unknown[] = [];
+  let terminalRefusalProof: unknown;
   try {
     for (const host of (profile === "expression-results" ? ["workflow"] as const : ["workflow", "activity"] as const)) for (const kind of (profile === "expression-results" ? ["sequence"] as const : ["sequence", "flowchart"] as const)) {
       const terminal = host === "activity" && kind === "sequence";
-      const content = body(kind, terminal);
+      const content = body(kind, terminal, host === "activity" && kind === "flowchart");
       let name = `Pack order ${host} ${kind}`;
       if (profile === "expression-results") {
         const children = content.state.rootActivity.structure!.payload.activities as Node[];
@@ -178,7 +179,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       const route = host === "workflow" ? `/workflows/definitions?backend=legacy&definition=${definitionId}` : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`;
       await page.goto(route); await canvas();
       await expect(row("one")).toBeVisible();
-      if (kind === "flowchart") await terminalAffordance();
+      if (host === "activity" && kind === "flowchart") await terminalAffordance();
       await row("one").click();
       if (kind === "sequence") await row("one").press("Shift+ArrowDown");
       else await row("two").click({ modifiers: [multipleKey] });
@@ -309,7 +310,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
           expect(matched).toHaveLength(1); expect(matched[0].status).toBe("Completed");
         }
       }
-      if (kind === "flowchart") for (const run of [item.before, item.after]) {
+      if (host === "activity" && kind === "flowchart") for (const run of [item.before, item.after]) {
         expect((run as { activities: { fixtureNodeId: string }[] }).activities.filter(value => value.fixtureNodeId === "terminal-inspection")).toHaveLength(0);
       }
       // The two terminal runs must prove an actual nearest graph exit and absence of the otherwise
@@ -350,7 +351,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       } else await page.goto(`/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`);
       await canvas(); await expect(row(blockId)).toBeVisible();
       for (const action of ["Create Sequence block", "Create Flowchart block", "Extract block…", "Ungroup…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();
-      if (kind === "flowchart") {
+      if (host === "activity" && kind === "flowchart") {
         await terminalAffordance();
         await capture(page, info, `${host}-${kind}-terminal-readonly`);
       }
@@ -361,13 +362,27 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       await capture(page, info, `${host}-${kind}-readonly`);
       if (currentDraftName) expect((await saved()).activityPresentation.find(value => value.nodeId === blockId)?.displayName).toBe(currentDraftName);
     }
+    if (profile === "commands") {
+      // Complete is legal only in reusable bodies. The Workflow editor still renders an invalid
+      // authored placement unambiguously, and its normal promotion gate must retain that refusal.
+      const invalid = await createWorkflow(`Owned Workflow Complete refusal ${info.project.name}`, body("flowchart", false, true));
+      await page.goto(`/workflows/definitions?backend=legacy&definition=${invalid.definitionId}`); await canvas();
+      await terminalAffordance();
+      const refused = await page.request.post(`${backend}/design/workflows/drafts/${invalid.draftId}/promote`, { data: { operationKey: crypto.randomUUID() } });
+      expect(refused.status()).toBe(409);
+      const problem = await refused.json() as { errors: Record<string, string[]> };
+      expect(problem.errors["terminal-inspection"]).toHaveLength(1);
+      expect(problem.errors["terminal-inspection"][0]).toContain("only be placed inside a reusable activity");
+      terminalRefusalProof = { definitionId: invalid.definitionId, draftId: invalid.draftId, status: refused.status(), problem };
+      await capture(page, info, "workflow-terminal-refusal");
+    }
   } catch (error) { failures.push(error); } finally {
     const cleanup: { kind: string; id: string; status: string }[] = [];
     for (const [kind, ids, prefix] of [["run", runIds, "/runtime/workflows/instances"], ["workflow", workflowIds, "/design/workflows/definitions"]] as const) for (const id of ids) {
       try { await api(`${prefix}/${id}`, "DELETE"); cleanup.push({ kind, id, status: "deleted" }); }
       catch (error) { failures.push(error); cleanup.push({ kind, id, status: "failed" }); }
     }
-    await info.attach("named-blocks-proof.json", { body: JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, proof, cleanup, disposableActivityDefinitionIds: activityIds }, null, 2), contentType: "application/json" });
+    await info.attach("named-blocks-proof.json", { body: JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, proof, terminalRefusalProof, cleanup, disposableActivityDefinitionIds: activityIds }, null, 2), contentType: "application/json" });
   }
   if (failures.length === 1) throw failures[0];
   if (failures.length) throw new AggregateError(failures, "Named-block journey or owned fixture cleanup failed");

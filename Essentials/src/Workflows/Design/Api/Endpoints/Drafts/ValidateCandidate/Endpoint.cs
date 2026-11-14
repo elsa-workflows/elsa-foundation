@@ -52,7 +52,14 @@ public sealed class Endpoint(
             return Refuse("denied");
         var baselineTenant = current.Draft.TenantId;
         var baseline = WorkflowDraftView.From(current.Draft, current.Layout, current.ActivityPresentation);
-        if (Hash(baseline) != Hash(request.Baseline)) return Refuse("stale");
+        // The opaque acknowledgement binds the actual stored state. Studio expands that state for
+        // editing and may encode Object JSON as text on the wire; that representation is not a new
+        // acknowledged resource. Compare the remaining identity and sidecars exactly, then retain
+        // the full server snapshot for the post-validation fence below.
+        if (string.IsNullOrWhiteSpace(request.Baseline.AuthoringRevision) ||
+            request.Baseline.AuthoringRevision != baseline.AuthoringRevision ||
+            Hash(baseline) != Hash(request.Baseline with { State = baseline.State }))
+            return Refuse("stale");
         var proposal = request.Candidate.ToContent();
         var visible = await catalog.ListAsync(ct);
         if (!visible.Allowed || !ActivityDataContextService.CatalogAllows(proposal.State.RootActivity, structures, visible, ct))
