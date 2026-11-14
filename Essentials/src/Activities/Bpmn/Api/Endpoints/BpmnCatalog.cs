@@ -72,7 +72,10 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
         cancellationToken.ThrowIfCancellationRequested();
         var identity = caller.Current();
         var scope = access.Current.RequireScope();
-        access.Current.EnsureTenantScope(identity.TenantId);
+        // Admitted ingress executions can retain a tenant inside the selected shared physical scope. Their
+        // catalog rows still require exact caller tenant and authorized state reads above; raw publications keep
+        // their existing tenant-to-scope restriction.
+        if (purpose != ExecutionsPurpose) access.Current.EnsureTenantScope(identity.TenantId);
         RuntimeStorePageRequest.ValidateLimit(request.Limit, nameof(request.Limit));
         RuntimeStorePageRequest.ValidateContinuationToken(request.ContinuationToken, nameof(request.ContinuationToken));
         if (request.ArtifactId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(request.ArtifactId);

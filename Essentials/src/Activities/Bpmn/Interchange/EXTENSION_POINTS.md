@@ -93,3 +93,7 @@ TimeSpan literal for Delay; the authored event descriptor retains the XML text f
 - `Elsa.Workflows.Design.Core` `ActivityNode` / `ActivityNodeStructure` as the import/export unit.
 - `Elsa.Activities.Design.Core` `IActivityDefinitionLookup` (optional, for both export and import) and `InputDefinition`
   declarations, which decide whether a task binding may travel and whether a confirmed one runs here.
+
+## Material-neutral authored publication
+
+`BpmnAuthoredDirectPublisher` remains an internal scoped service registered by `ActivitiesBpmnDirectPublishingFeature`. It now calls Bpmn.Core's opt-in `IBpmnModelRuntime.PreparePublicationAsync` member and Publishing.Core's `IPublicationActivator.ActivateMaterialAsync`. These are independent replacement members: unsupported hosts refuse instead of fabricating a native executable or a live raw source. The publisher owns authenticated authored projection and expected logical slot/publication intent; Runtime owns stored material, leases and atomic serving authority; Publishing owns the ordinary journal/completion/compensation. Same-artifact results retain the actual serving logical source. See [the target contract](../../../../../specs/1217-standalone-triggers/contracts/targets.md#material-neutral-publication-slot-bridge).

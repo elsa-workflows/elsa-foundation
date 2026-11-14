@@ -32,3 +32,7 @@ both authoring and execution. The concrete runtime forwards the moved neutral CL
 `BpmnAuthoredStructure` belongs to [Design](../Design/README.md), because it owns authored `ActivityNode` children.
 Private embedding wire plumbing is shared only with the BPMN runtime/Design siblings through same-domain
 friend grants; it is not a new third-party extension surface.
+
+## Authored inputs and logical publication
+
+The optional `foundation-inputs-v1` profile uses `BpmnInputModelDefinition` with a retained base format 1, 3 or 6 and explicit literal/declared-input worker mappings. `IBpmnModelRuntime.PreparePublicationAsync` returns stored material without publication authority; its default refuses unsupported hosts. `BpmnPublishedModel.Publication` is present for shared logical publications and omitted for raw legacy publication. The exact profile, frame-16 provenance and compatibility rules are owned by [spec 1217's target contract](../../../../../specs/1217-standalone-triggers/contracts/targets.md#genuine-bpmn-bounded-authored-input-profile).

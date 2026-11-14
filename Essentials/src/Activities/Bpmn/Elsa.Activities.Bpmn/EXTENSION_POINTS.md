@@ -37,3 +37,13 @@ The separate [Design feature](../Design/EXTENSION_POINTS.md) registers `BpmnEmbe
 | XML/catalog bindings | Registered import/export and host-readiness binders live in the separate interchange module. |
 
 Native parent joins, durable source/claim/cohort storage, incidents and scheduler recovery remain with their existing Foundation authorities. This module defines neither a second BPMN interpreter nor a general replacement runtime. See the [adapter README](README.md) and [specification](../../../../../specs/1006-bpmn-library-adoption/spec.md) for the contract and qualification links.
+
+## Standalone target contributions and authored preparation
+
+| Port | Kind / registration / default | Owning implementation and callers |
+|---|---|---|
+| `ITriggerTargetModelSource.GetModels()` (Runtime Core) | Singleton contribution, key `bpmn`; none when Hosting is absent. Collected by the single `TriggerTargetModelsDiscovering` aggregator. | `BpmnTriggerModelSource` supplies detached protocol/profile metadata and admission state. Discovery does not resolve its runtime delivery adapter or interpreter. |
+| `IStandaloneTriggerRuntimeTarget` (Runtime Core) | Scoped contribution, key `bpmn`; independent of the metadata fan-in; unknown models refuse. | `BpmnTriggerTarget` owns `Supports`, `PrepareDispatchAsync`, `ReconcileAsync` and `DispatchAsync` for Runtime's common standalone delivery executor. It validates physical captures/seals and actual queue/input receipts, retaining the normal actor/model queue. |
+| `IBpmnModelRuntime.PreparePublicationAsync(BpmnModelDefinition, WorkflowExecutableInputContract, IReadOnlyList<BpmnWorkerInputMapping>, BpmnModelCaller, CancellationToken)` | Additive member of the existing scoped replacement in Bpmn.Core; default refuses (or preserves caller cancellation). | `BpmnModelRuntime` validates worker pins/contracts/mappings and stores material without a live publication reference. Interchange passes this material to the shared Publishing lifecycle. Custom replacements opt in explicitly. |
+
+Registered model input kinds additionally include `start-authored-v1` and `start-trigger-v1`. Input profile and retained frame rules are in [the canonical target contract](../../../../../specs/1217-standalone-triggers/contracts/targets.md#genuine-bpmn-bounded-authored-input-profile). Fresh admission gating is separate from processing an already accepted source/queue responsibility.
