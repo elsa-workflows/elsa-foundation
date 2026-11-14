@@ -41,21 +41,23 @@ internal static partial class RuntimeIngressReservationRules
     {
         if (existing.Scope.Persistence != candidate.Scope.Persistence || existing.StimulusType != candidate.StimulusType ||
             !policies.TryGetValue(candidate.StimulusType, out var policy)) return;
-        if (!policy.Conflicts(Descriptor(existing), Descriptor(candidate))) return;
         var sameOwner = existing.OwnerKind == candidate.OwnerKind && existing.OwnerId == candidate.OwnerId &&
             (existing.Scope.TenantId == candidate.Scope.TenantId || existing.OwnerKind == RuntimeIngressReservation.PublicationSlotOwner);
-        if (!sameOwner) throw new TriggerOperationException("route-conflict", "Another source owns an equivalent endpoint reservation.");
+        if (sameOwner || !policy.Conflicts(Descriptor(existing), Descriptor(candidate))) return;
+        throw new TriggerOperationException("route-conflict", "Another source owns an equivalent endpoint reservation.");
     }
 
     internal static async ValueTask<IReadOnlyList<WorkflowTriggerBinding>> ConflictingBindingsAsync(
         IWorkflowTriggerBindingStore bindings, RuntimeIngressReservation claim,
-        IReadOnlyDictionary<string, IIngressReservationPolicy> policies, CancellationToken cancellationToken = default)
+        IReadOnlyDictionary<string, IIngressReservationPolicy> policies, CancellationToken cancellationToken = default,
+        Func<WorkflowTriggerBinding, bool>? exclude = null)
     {
         if (!policies.TryGetValue(claim.StimulusType, out var policy))
-            return await bindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash, cancellationToken);
+            return (await bindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash, cancellationToken))
+                .Where(binding => exclude?.Invoke(binding) != true).ToArray();
         // Keep the ORIGINAL binding for physical-scope and same-slot checks; legacy rows need no new metadata stamp.
         var current = await bindings.ListAllByStimulusTypeAsync(claim.StimulusType, cancellationToken);
-        return current.Where(binding => policy.Conflicts(Descriptor(claim),
+        return current.Where(binding => exclude?.Invoke(binding) != true && policy.Conflicts(Descriptor(claim),
             new(binding.StimulusType, binding.StimulusHash, binding.Metadata))).ToArray();
     }
 

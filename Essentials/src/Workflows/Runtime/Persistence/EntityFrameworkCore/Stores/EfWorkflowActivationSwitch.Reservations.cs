@@ -31,7 +31,7 @@ public sealed partial class EfWorkflowActivationSwitch
                     new RuntimeIngressReservationDescriptor(group.Key.StimulusType, group.Key.StimulusHash, group.First().Metadata)).ToArray();
             claims = RuntimeIngressReservationRules.Prepare(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, slot.Revision, slot.Revision, descriptors);
             foreach (var claim in claims)
-                if ((await RuntimeIngressReservationRules.ConflictingBindingsAsync(_bindings, claim, _reservationPolicies, ct)).Any(binding => binding.SlotId != slot.SlotId))
+                if ((await RuntimeIngressReservationRules.ConflictingBindingsAsync(_bindings, claim, _reservationPolicies, ct, binding => binding.SlotId == slot.SlotId)).Any(binding => binding.SlotId != slot.SlotId))
                     throw new TriggerOperationException("route-conflict", "Another published workflow owns this exclusive endpoint.");
         }
         else

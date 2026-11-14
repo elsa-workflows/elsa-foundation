@@ -1,5 +1,4 @@
 using Elsa.Http.Core;
-using Elsa.Http.Services;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.AspNetCore.Routing.Patterns;
 
@@ -34,6 +33,6 @@ internal sealed class HttpIngressReservationPolicy : IIngressReservationPolicy
                 throw Unavailable("An HTTP reservation has invalid method metadata.");
             method = value.ToUpperInvariant();
         }
-        return (HttpRouteManifestValidator.Canonicalize(route), method);
+        return (RouteTemplateIdentity.Canonicalize(route), method);
     }
 }

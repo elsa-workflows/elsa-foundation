@@ -41,7 +41,8 @@ public sealed partial class InMemoryWorkflowActivationSwitch
             foreach (var prior in _reservationState.IngressReservations.Values)
                 RuntimeIngressReservationRules.CheckSemanticOwner(prior, claim, _reservationPolicies);
             if (_reservationState.IngressReservations.TryGetValue(claim.ReservationId, out var existing)) RuntimeIngressReservationRules.CheckOwner(existing, claim);
-            var active = RuntimeIngressReservationRules.ConflictingBindingsAsync(_reservationBindings, claim, _reservationPolicies).AsTask().GetAwaiter().GetResult();
+            var active = RuntimeIngressReservationRules.ConflictingBindingsAsync(_reservationBindings, claim, _reservationPolicies,
+                exclude: binding => binding.SlotId == slot.SlotId || KnownOtherScope(binding, persistence)).AsTask().GetAwaiter().GetResult();
             if (active.Any(binding => binding.SlotId != slot.SlotId && !KnownOtherScope(binding, persistence)))
                 throw new TriggerOperationException("route-conflict", "Another published workflow owns this exclusive endpoint.");
         }

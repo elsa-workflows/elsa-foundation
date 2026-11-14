@@ -57,7 +57,7 @@ internal sealed class InMemoryTriggerSourceResourceCommitStore(IStandaloneTrigge
                         foreach (var prior in state.IngressReservations.Values)
                             RuntimeIngressReservationRules.CheckSemanticOwner(prior, claim, policies);
                         if (state.IngressReservations.TryGetValue(claim.ReservationId, out var existing)) RuntimeIngressReservationRules.CheckOwner(existing, claim);
-                        if (bindings is InMemoryWorkflowTriggerBindingStore sourceBindings && RuntimeIngressReservationRules.ConflictingBindingsAsync(sourceBindings, claim, policies)
+                        if (bindings is InMemoryWorkflowTriggerBindingStore sourceBindings && RuntimeIngressReservationRules.ConflictingBindingsAsync(sourceBindings, claim, policies, exclude: KnownOtherScope)
                             .AsTask().GetAwaiter().GetResult().Any(binding => !KnownOtherScope(binding)))
                             throw new TriggerOperationException("route-conflict", "A published workflow already owns this endpoint.");
                     }
