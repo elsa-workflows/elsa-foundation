@@ -330,14 +330,15 @@ def execute(root: Path, recipe: Recipe, phase: str, output: Path, deadline: floa
         environment = os.environ.copy()
         environment.update(DOTNET_CLI_USE_MSBUILD_SERVER="0", MSBUILDDISABLENODEREUSE="1")
         with (output / "command.log").open("wb") as log:
-            process = subprocess.Popen(argv, cwd=root / cwd, env=environment, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-            data["pid"] = process.pid
-            write_json(metadata, data)
             try:
+                process = subprocess.Popen(argv, cwd=root / cwd, env=environment, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                data["pid"] = process.pid
+                write_json(metadata, data)
                 data["exitCode"] = process.wait(timeout=remaining)
             finally:
-                data["cleanup"] = {"ownedProcessGroup": process.pid, "status": "unproven"}
-                data["cleanup"] = terminate_group(process)
+                if process is not None:
+                    data["cleanup"] = {"ownedProcessGroup": process.pid, "status": "unproven"}
+                    data["cleanup"] = terminate_group(process)
         if data["cleanup"]["groupStillObserved"]:
             raise ProofFailure("The owned process group is still observed after cleanup.")
         data["rawReport"] = retained(report)

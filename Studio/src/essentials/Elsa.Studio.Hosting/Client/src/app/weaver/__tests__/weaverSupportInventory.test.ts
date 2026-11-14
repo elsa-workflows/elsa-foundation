@@ -43,7 +43,7 @@ describe("prompt-time Studio support discovery", () => {
 
   it.each(["absent", "disabled", "failed", "incompatible"])("withdraws a %s origin before nested callbacks and preserves a healthy resource owner", async status => {
     const api = registry({ complete: true, modules: [row("Healthy"), ...(status === "absent" ? [] : [row("Satellite", status)])] });
-    const removed = vi.fn(async () => [attachment]); const healthy = vi.fn(async () => [attachment]);
+    const removed = vi.fn(async () => [{ ...attachment, id: "satellite.sample" }]); const healthy = vi.fn(async () => [{ ...attachment, id: "healthy.sample" }]);
     const satellite = beginWeaverModuleRegistration(api, "Satellite");
     satellite.api.weaver.contextProviders.add({ id: "satellite", moduleId: "Resource", displayName: "Satellite", surfaces: ["*"], sensitivity: "internal", collect: removed }); satellite.complete();
     const owner = beginWeaverModuleRegistration(api, "Healthy");

@@ -1,10 +1,12 @@
 """Synthetic negative controls for the bounded driver; these are not product bites."""
 from dataclasses import replace
+import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import xml.etree.ElementTree as ET
 
 import causal_proof as proof
@@ -64,14 +66,6 @@ class VerdictControls(unittest.TestCase):
                 ("baseline", 1, records(recipe, "baseline")), ("restored", 1, records(recipe))):
             with self.subTest(phase=phase, code=code), self.assertRaises(proof.ProofFailure):
                 proof.assess(recipe, phase, code, rows)
-
-    def test_recipe_anchors_match_reviewed_source_without_importing_or_executing_it(self):
-        root = Path(__file__).resolve().parents[3]
-        for recipe in proof.RECIPES:
-            with self.subTest(recipe=recipe.id):
-                self.assertEqual((root / recipe.source).read_bytes().count(recipe.before.encode()), 1)
-                line = (root / recipe.assertion_file).read_text().splitlines()[recipe.assertion_line - 1].strip()
-                self.assertEqual(line, recipe.assertion_text)
 
     def test_expected_head_rejects_invalid_and_different_input_without_echoing_it(self):
         proof.require_expected_head("a" * 40, "a" * 40)
@@ -211,6 +205,20 @@ class RestorationControls(unittest.TestCase):
         if arguments == ("diff", "--name-only"): return "source.cs"
         return ""
 
+    def test_preflight_refuses_changed_or_ambiguous_synthetic_source_before_commands(self):
+        cases = ((b"original guard guard bytes\n", b"original guard guard bytes\n", "assertion\n"),
+            (self.original, b"different committed guard\n", "assertion\n"),
+            (self.original, self.original, "changed assertion\n"))
+        for index, (actual, committed, assertion) in enumerate(cases):
+            with self.subTest(index=index):
+                (self.root / "source.cs").write_bytes(actual)
+                (self.root / "test.cs").write_text(assertion)
+                with patch.object(proof, "git", self.fake_git), patch.object(proof.subprocess, "check_output", return_value=committed), patch.object(proof, "execute") as execute:
+                    with self.assertRaises(proof.ProofFailure):
+                        proof.run_recipe(self.root, "a" * 40, self.recipe, self.root / str(index), float("inf"))
+                execute.assert_not_called()
+                self.assertEqual((self.root / "source.cs").read_bytes(), actual)
+
     def test_mutant_setup_failure_still_runs_restored_control_but_never_passes_recipe(self):
         phases = []
         def execute(_root, _recipe, phase, _output, _deadline):
@@ -249,6 +257,61 @@ class RestorationControls(unittest.TestCase):
         receipt = json.loads((output / "recipe.json").read_text())
         self.assertEqual(receipt["status"], "failed")
         self.assertTrue(receipt["sourceBytesRestored"])
+
+    def test_post_popen_metadata_failure_cleans_up_before_restoration_and_lock_release(self):
+        for failure in (OSError("Synthetic metadata failure"), KeyboardInterrupt()):
+            with self.subTest(failure=type(failure).__name__), tempfile.TemporaryDirectory() as output_parent:
+                root = self.root.resolve()
+                lock = root / "causal.lock"
+                events = []
+                process = Mock(pid=12345, returncode=None)
+                original_json, original_bytes = proof.write_json, Path.write_bytes
+                real_execute = proof.execute
+                failed = False
+
+                def git(_root, *arguments):
+                    if arguments == ("rev-parse", "--git-path", "weaver-causal-proof.lock"): return str(lock)
+                    return self.fake_git(_root, *arguments)
+
+                def metadata(path, value):
+                    nonlocal failed
+                    if path.name == "command.json" and "pid" in value and not failed:
+                        failed = True
+                        events.append("post-popen-metadata")
+                        raise failure
+                    original_json(path, value)
+
+                def cleanup(owned):
+                    self.assertIs(owned, process)
+                    self.assertTrue(lock.exists())
+                    self.assertEqual((root / "source.cs").read_bytes(), b"original disabled bytes\n")
+                    events.append("owned-process-cleanup")
+                    process.returncode = -15
+                    return {"groupStillObserved": False}
+
+                def source_write(path, value):
+                    if path == root / "source.cs" and value == self.original:
+                        self.assertTrue(lock.exists())
+                        self.assertIn("owned-process-cleanup", events)
+                        events.append("source-restored")
+                    return original_bytes(path, value)
+
+                def execute(checkout, recipe, phase, output, deadline):
+                    if phase == "mutated": return real_execute(checkout, recipe, phase, output, deadline)
+                    return {"phase": phase, "status": "passed"}
+
+                argv = ["causal_proof.py", "--scope", "dotnet", "--output", str(Path(output_parent).resolve() / "evidence")]
+                with patch.object(proof, "__file__", str(root / "tools/studio/Probe/causal_proof.py")), patch.object(proof, "RECIPES", (self.recipe,)), \
+                        patch.object(proof, "git", git), patch.object(proof.subprocess, "check_output", return_value=self.original), \
+                        patch.object(proof.subprocess, "Popen", return_value=process), patch.object(proof, "terminate_group", cleanup), \
+                        patch.object(proof, "write_json", metadata), patch.object(Path, "write_bytes", source_write), \
+                        patch.object(proof, "execute", execute), patch.dict(os.environ, {"WEAVER_CAUSAL_EXPECTED_HEAD": "a" * 40}), \
+                        patch("sys.argv", argv), patch("sys.stdout", new_callable=io.StringIO):
+                    self.assertEqual(proof.main(), 1)
+                self.assertEqual(events, ["post-popen-metadata", "owned-process-cleanup", "source-restored"])
+                process.wait.assert_not_called()
+                self.assertFalse(lock.exists())
+                self.assertEqual((root / "source.cs").read_bytes(), self.original)
 
 
 if __name__ == "__main__":
