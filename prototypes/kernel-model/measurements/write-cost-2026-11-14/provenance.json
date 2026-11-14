@@ -1,0 +1,198 @@
+{
+  "date": "2026-11-14",
+  "status": "authored finite measurements; no independent acceptance or architecture/product/provider/default qualification",
+  "source": {
+    "commit": "1b101defd87ae0275f0e2c2762ee317315a881e3",
+    "tree": "088cb73ed8b1279db0a1279d3902fbe882a08b94",
+    "prototypeTree": "3070133d004df19cdc4a0fa2ddeb3d9085395a8a",
+    "candidateWithIdenticalTree": "88cd3decf99eaceafd64f3cd6de6408991bd1c1f",
+    "earlierProvisionalSource": "f8ed018fef31aa6a0fd2db7410da9e5d744dde9d",
+    "reconciliation": "EF provider/schema/cost and shared conformance byte-identical to earlier source; only shared Worker changed; old values are not relabeled final",
+    "fullSourcePin": "The commit pins the complete tree; the 273-entry source and 117-entry binary hash lists remain in retained raw manifest.json.",
+    "relevantSourceSHA256": {
+      "prototypes/kernel-model/ef/Kernel.Ef.Run/EngineRun.cs": "947bd488e83f480e5af3da476a44eaa15d2365ae74b7af43b78243940c9b51d0",
+      "prototypes/kernel-model/ef/Kernel.Ef.Run/Kernel.Ef.Run.csproj": "d5221346c03fe2bb21acf6db22db446390cb7eb5bce85b89d42dea9df1a93e27",
+      "prototypes/kernel-model/ef/Kernel.Ef.Run/StateSizeBenchmark.cs": "b670eacafa6b146db96d3aa7a14a17191ea16a0380d36957f42d8b7c3ef80b92",
+      "prototypes/kernel-model/ef/Kernel.Ef.Run/Writes.cs": "af69ff325fc4f6c16d477257ad1d86bcd578cd7639358aa4a2bbd76c3f5480e4",
+      "prototypes/kernel-model/ef/Kernel.EntityFramework/EfStore.cs": "6c7bf06c37d1a255b8eecc635ebf4af79902ddcddff721691e8cb90ca212786b",
+      "prototypes/kernel-model/src/Kernel.Durable/Worker.cs": "e15c4867f963d05e64b9939cc8a62cf77bb6612ee3d525dd78b582a5a7d9e6b3"
+    }
+  },
+  "relevantBinarySHA256": {
+    "Kernel.Durable.dll": "774efbce46b681c2145dc3751096d8a6efa478195973adfd65be62e7a395bb9d",
+    "Kernel.Ef.Run.dll": "636d6d94bb2c94298692cc4e10686ed81b79a301454470397a1ddf2d8e4b4fe1",
+    "Kernel.EntityFramework.dll": "2c6754ff97c789f9dd76fb440786191bc53342a8da873b87d9ad1b5e096c7287",
+    "Kernel.Runtime.dll": "f2dbfb2899a57f938d00d43f10e5590e5416390dfb5a84d6e10713f921ee04b9",
+    "Kernel.Workflows.dll": "e259390e09b4ad2a550a05272be288ff18dfa3ce6d7a248cbf9bae263e724b38",
+    "Microsoft.EntityFrameworkCore.dll": "43d486891d48045957bcd538bc6ed9519510ba3ada75df8ad618c003ac2f15b3",
+    "Npgsql.EntityFrameworkCore.PostgreSQL.dll": "94fcf66e8e953fdb02c40c72ca89821dd5eed5324d4c0f12a7219ea8cd3d5a5e",
+    "Npgsql.dll": "e2bcafe1660fe4543fe9dfcabed972ec8d32259e5ea8009462ce1de23c7034c2",
+    "WritesAdapter.dll": "2b961da5893c4d37f8622a0af8a20ff97c688b0095f6154ede6ba8ab7508fc45"
+  },
+  "adapter": {
+    "measuredProgramSHA256": "800858cbd8ad4c53ab141e22075b5ca7b9ce9950bdf54b72bda030f6288c813a",
+    "measuredPrivatePathProjectSHA256": "75d0eec0796575aa268b1eae77552a1e2edb9df822d3e8e8983cbb1939ebbf9d",
+    "archivalProjectChange": "Reference path only replaced by KernelRunOutput property; archived as text, not a repository build project."
+  },
+  "database": {
+    "version": "PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "image": "postgres:17",
+    "imageId": "sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f",
+    "isolation": "read committed",
+    "fence": "batch",
+    "host": "random loopback port, newly owned isolated container",
+    "settings": {
+      "fsync": "on",
+      "full_page_writes": "on",
+      "synchronous_commit": "on",
+      "autovacuum": "on",
+      "autovacuum_naptime": "60s",
+      "checkpoint_timeout": "300s",
+      "wal_keep_size": "256MB",
+      "max_wal_size": "1024MB",
+      "tableSettings": "defaults; no manual indexes/fillfactor/autovacuum tuning"
+    }
+  },
+  "costArguments": [
+    "cost",
+    "postgres",
+    "[private fresh target connection]",
+    "writes=1",
+    "sizes=1",
+    "many=100,1000",
+    "fence=batch"
+  ],
+  "variants": {
+    "full": [
+      "history=full"
+    ],
+    "state": [
+      "history=state"
+    ],
+    "minimal": [
+      "history=minimal"
+    ],
+    "pad4k": [
+      "history=full",
+      "pad=4096"
+    ]
+  },
+  "coverage": {
+    "costCasesPerVariant": 16,
+    "costRecords": 64,
+    "stateTrialsPerVariant": 3,
+    "stateSizeKB": 1,
+    "verifiedRevisionsPerStateTrial": 10,
+    "included": "owner/outside ephemeral, balanced and durable no-ops; parent/children; terminate/delete; event-start subscription; projector; heartbeat; 100/1000 owner and polled starts",
+    "excluded": "explicit commit-window and clock/creation-fact qualification; private Job stress/recovery; chaos; sustained turnover; checkpoint/vacuum capacity; other providers; physical wire; speed"
+  },
+  "completionChecks": [
+    {
+      "mode": "full",
+      "instances": 2215,
+      "unfinished": 0,
+      "unconsumed": 0,
+      "partitionPosition": 2272,
+      "costExit": 0
+    },
+    {
+      "mode": "state",
+      "instances": 2215,
+      "unfinished": 0,
+      "unconsumed": 0,
+      "partitionPosition": 2272,
+      "costExit": 0
+    },
+    {
+      "mode": "minimal",
+      "instances": 2215,
+      "unfinished": 0,
+      "unconsumed": 0,
+      "partitionPosition": 1,
+      "costExit": 0
+    },
+    {
+      "mode": "pad4k",
+      "instances": 2215,
+      "unfinished": 0,
+      "unconsumed": 0,
+      "partitionPosition": 2272,
+      "costExit": 0
+    }
+  ],
+  "snapshotDelaySeconds": {
+    "full": 70.01764,
+    "state": 70.008003,
+    "minimal": 70.010502,
+    "pad4k": 70.008937
+  },
+  "safety": {
+    "independentAbsentTargets": 4,
+    "adapterGuards": "loopback, kwr22_ prefix, exact owned port and database absence",
+    "existingPopulatedTargetRefused": true,
+    "instancesBeforeAndAfterRefusal": 2215,
+    "dropDatabaseStatements": 0,
+    "forcedCheckpoint": false,
+    "forcedVacuum": false,
+    "chaos": false,
+    "containerStoppedExactIdAndOwnershipLabelsChecked": true,
+    "fourDatabasesRetained": true,
+    "credential": "private; excluded from public data and every digest"
+  },
+  "semantics": {
+    "wal": "exact generic CostLineAsync insert-LSN delta; individual boundary LSN strings are not printed; relation split retained; setup separate",
+    "driver": "actual command and transaction begin/end interception counts; sent derived; wire null/unmeasured",
+    "timing": "omitted from public cost records; no performance claim",
+    "limits": "one finite window/variant; catalog/background/other retained-database WAL may enter totals; no causal ratio or universal tuning conclusion"
+  },
+  "publicArtifactSHA256": {
+    "README.md": "43eb458a2f73e1ef5d04ce3fc4dc72d040e40815010aba8b945b37bfe6cbdd24",
+    "adapter.cs.txt": "800858cbd8ad4c53ab141e22075b5ca7b9ce9950bdf54b72bda030f6288c813a",
+    "adapter.csproj.txt": "801095d6469b6f2e72f8bba2d134da6ebe45df090687a86f91706f7b25d5f958",
+    "cost-cases.jsonl": "bcc5402bf414334d3398ffdf9ab4270fe1fe7dfaa6859c9b58023fac68e2e9aa",
+    "tuples.jsonl": "d17278ce3f2dac9afe760e957b6487e19f93e1972ac6c725a63f7867ad4b9e35"
+  },
+  "retainedLocalRawEvidence": {
+    "publication": "Hash references only; original bytes retained locally, not bundled here. No private credential is referenced.",
+    "SHA256": {
+      "RECEIPT.md": "6039dcfcd1dc6e41657c0ea1476a25c32d7e9534bf62b0148acbe691f3559a24",
+      "actual-cost-cases.json": "c61df8df22e6ef2f86cbc495f732bbe96af8a687e0b52b47a56a12967e986c49",
+      "adapter-build.log": "9542efe44b10e79aa064f089c533ae127516f53425ebc53a75e49792bdc85e26",
+      "adapter-safety.md": "2bf381606ab0898c225be655a134666671f44612eeefb97d6f8811ebb07df764",
+      "checks.json": "42bdc86126779fa1a07b0c13c944aa2afb74c9866e8e9a7ca731d5757be45174",
+      "container.json": "44d9a331e115bb81221cddb6978cbb8d7f56aa3df94f3932765e7a4a60d65359",
+      "cost-summary.json": "fb517182173abfda4f06df795ac399550a9ee5af71eb97aa1abf8cbaa6899a35",
+      "drained-poll-plan.sql": "f437741206bed678d4359400ddb1791ac7bc33e8a0c8fdabb2b88c168c2f67de",
+      "drained-poll-plan.txt": "9af3a54856a0fc7b96781386014c9cf8dd45f29f17c6ee522862046b9db05889",
+      "driver-count-semantics.md": "07009ce99d96cb6f22e9fbf97cbd940e0b19bfab33eabfe8caabc2cd575e1d12",
+      "existing-target-refusal.log": "187d8fed0139e859cc2b1fe3448575a11d4703198dd7c70190904e0b919bd3ac",
+      "full-absence.txt": "662a6d6fe3efe38bfbdf9d25d6dcb63f95e341727c57e2575b0f37ccf8b01695",
+      "full-schema.txt": "105d539f8fc4e05a1beb17ebf4678e99fc611ff8dd2e9674451fe886ad6ea6ca",
+      "full-tuples.json": "fca8f272277fada890197b6901f3bc56aa26a41926cf9e3b219053f5caf7edf5",
+      "full.log": "3014326329ff0a3067d7a849bbfb3c38bf6ba3dc05d2e455cd9099b49460bd28",
+      "manifest.json": "a68f3dbee9fdb142cc27df08889020af43d9026c567a57ba38e0e780f2559ed0",
+      "minimal-absence.txt": "4568c82752daa3cd690c8d3d111a675d73dbe0bd768b7b9954c7472a38d56b9d",
+      "minimal-schema.txt": "6c97ce98db51466e32432f3d9122ee0a1f6186bd85aff98fc7be88bf20115ac5",
+      "minimal-tuples.json": "2be0b9f661a3d1dd7fd4bf63f83a5438e1b116d7b40827a9c326fe96bf84575e",
+      "minimal.log": "1681410eb8b6969d10d6e05964123fa9c1511d98e7fd29b349f5d85511eb5773",
+      "old-final-tuples.json": "233dcbd3e1a6cfc64af273a88b3bde190a0a0ed4db42d6560f95562412ddd15d",
+      "pad4k-absence.txt": "39835b7288aabde72114460b72bd6cd25667b842aed262710fe57ace7f1a62c5",
+      "pad4k-schema.txt": "2138ef2d86e42d3a0ac8b4f433b9e573ab50b1e900b490aabc674133fd0bb4c9",
+      "pad4k-tuples.json": "1f5a913301c9f3c611b0004c1176e79fc328b8fd7435a69f60cb21ab361ed802",
+      "pad4k.log": "65ea9c685473721aacb73658da581b0f8923ea479ae8e1011cfad0f881fcfb8b",
+      "postgres-ddl.log": "ee3b72a6fd2c266d52bdfe64835950780967fa10123f406f3a8e4c3d21e2aed7",
+      "run.py": "3d569e7c53b4988879a2015cd31bb01ef18a1f68120422e5284030d4c242313d",
+      "source-build.log": "1d74804c0c43e6f184c8148995bc29dc57bbb1fd4a8d2aa97c5452ed224930d5",
+      "source-reconciliation.json": "c29d82d5b9e5e684d90cb8c7549426abf8738c6f3ec7b783edfe53ebdd9a3d53",
+      "state-absence.txt": "1723245349f486c306a3f5d8e95d36ae251b50942b75f0e9918932c15fb6b3c3",
+      "state-schema.txt": "be5b439d73af7cebd8fa8e11a01aee054d7bf787d0298ced6119b70d438b3404",
+      "state-tuples.json": "2f5dac44bb84ef8fda28b7d6d1b27bd25dfb4faa4bdc27bf4688ee84df7f7a35",
+      "state.log": "1ec081366f691e1105e6caa6344ce618b071cb03516435fc0ccae9930ec83da7",
+      "stop-proof.json": "d262d06c1705183d0e3d4ec8247d5c9bd964a261e332d14cec6be68b56f451a2",
+      "summarize.py": "51e856169f7f1f156393e4331803835681fca0e18e44645beab83cedf510e2c3",
+      "summary-output.json.txt": "dc5ca39db1f18a887b0abdbf4365bb04f0660adc62406cc4a49f0c85f70551bb",
+      "tuple-summary.json": "fa67b362fa981b72b27b4e6df3b36eb1c506ba424c472645e4b0d225703aa8d7",
+      "worktree-clean.txt": "666650aa4f79e459d48764d8c2d3542cca640e3790bdf1b9c101816fcd0a5f48"
+    }
+  }
+}
