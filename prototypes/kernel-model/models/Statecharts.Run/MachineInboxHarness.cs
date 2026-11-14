@@ -47,7 +47,7 @@ internal sealed class MachineInboxHarness
         Apply(new("crash", _owner)); Apply(new("tick", 20000)); _owner = 1 - _owner;
         Apply(new("take", Actor.Id)); Drain();
     }
-    internal void Cut(string request, bool landed)
+    internal void Cut(InboxKey request, bool landed)
     {
         var prepared = false;
         for (var i = 0; i < 100 && !prepared; i++)

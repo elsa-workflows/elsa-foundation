@@ -43,7 +43,7 @@ internal static class MachineInboxWitness
         {
             h.Drain(go);
             Check(h.State.Inboxes![frame].Receipts["go"].Status == "Queued", "Q16: selection cut was not after pure admission");
-            var wake = h.World.Store.Messages.Values.Single(r => !r.Done && r.Message.Target == h.Target && r.Message.Kind == NativeKinds.Continue).Message.Id;
+            var wake = h.World.Store.Messages.Values.Single(r => !r.Done && r.Message.Target == h.Target && r.Message.Kind == NativeKinds.Continue).Message.InboxKey;
             h.Cut(wake, cut == "selection-lost-answer");
         }
         else h.Drain();
