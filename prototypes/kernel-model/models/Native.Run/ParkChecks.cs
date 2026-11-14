@@ -202,6 +202,7 @@ public static class ParkChecks
             await Case("physical entry boundary " + mode, () => ParkAdmissionChecks.RunAsync(mode));
         foreach (var (label, run) in ParkR9Checks.Cases()) await Case(label, run);
         foreach (var (label, run) in ParkR10Checks.Cases()) await Case(label, run);
+        foreach (var (label, run) in ParkR11Checks.Cases()) await Case(label, run);
         Console.WriteLine($"park: {cases - failures} passed, {failures} failed");
         return failures == 0 ? 0 : 1;
     }
