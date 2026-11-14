@@ -32,7 +32,7 @@ public static class NativeStimulusDeliveryTestServices
     private sealed class FinalizedNativeSchema : IObservedSchemaFinalization
     {
         private static readonly SchemaFamilyObservation Observation = new("RuntimePostCommitOutbox", "native-component-test",
-            ["1.0.0", "2.0.0"], "2.0.0", "2.0.0", false, null, [], null, WorkflowExecutionHarness.Timestamp);
+            ["1.0.0", "2.0.0", "3.0.0"], "3.0.0", "3.0.0", false, null, [], null, WorkflowExecutionHarness.Timestamp);
         public SchemaFamilyObservation? Find(string family) => family == Observation.Family ? Observation : null;
         public IReadOnlyList<SchemaFamilyObservation> Observe() => [Observation];
         public ValueTask RefreshAsync(string family, TimeSpan maxAge, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;

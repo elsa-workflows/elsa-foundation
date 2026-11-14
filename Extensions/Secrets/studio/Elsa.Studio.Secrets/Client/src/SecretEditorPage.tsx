@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceTitle, useStudioWorkspaceWhenActive, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
@@ -27,7 +27,7 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
   const whenActive = useStudioWorkspaceWhenActive();
   const data = loaded?.scope === scope ? loaded : undefined;
   useStudioWorkspaceTitle(name ? data?.secret?.displayName || data?.secret?.name || "Edit secret" : "Create secret");
-  useEffect(() => { const generation = lifetime; mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
+  useLayoutEffect(() => { const generation = lifetime; mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
   useEffect(() => {
     if (identity.current.scope !== scope || identity.current.name !== name) {
       identity.current = { scope, name }; phase.current = { dirty: false, busy: false, accepted: false }; setFormState({ dirty: false, busy: false });
@@ -63,7 +63,7 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
     }
     phase.current.dirty = false;
     notifyStudioNavigationGuardReleased();
-    route(secretPath(browse, undefined, phase.current.accepted ? name ? "updated" : "created" : undefined, data?.secret?.name ?? name, location.href, !name));
+    route(secretPath(browse, undefined, undefined, data?.secret?.name ?? name, location.href, !name));
   };
   useEffect(() => {
     const guard = (event: Event) => {
@@ -74,14 +74,14 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
     return () => { window.removeEventListener(studioNavigationRequestedEvent, guard); window.removeEventListener("beforeunload", guard); };
   }, []);
   useEffect(() => { if (!formState.dirty && !formState.busy) notifyStudioNavigationGuardReleased(); }, [formState]);
-  const accepted = () => { phase.current.accepted = true; phase.current.dirty = false; notifyStudioNavigationGuardReleased(); };
+  const accepted = (title: string, origin: number) => { if (origin === lifetime.current && mounted.current && workspace?.isActive() !== false) api.notifications?.notify({ level: "success", title }); phase.current.accepted = true; phase.current.dirty = false; notifyStudioNavigationGuardReleased(); };
   return <StudioPage role="region" className="secrets-shell secrets-editor-page" aria-label={name ? "Edit secret" : "Create secret"}>
     <StudioPageHeader title={name ? "Edit secret" : "Create secret"} actions={<StudioButton variant="ghost" disabled={formState.busy} onClick={() => void leave()}><ArrowLeft size={16} aria-hidden />Back to secrets</StudioButton>} />
     {error ? <StudioAlert tone="danger">{error}<StudioButton disabled={loading} onClick={() => setRevision(value => value + 1)}>Retry secret options</StudioButton></StudioAlert> : null}
     {!data ? loading ? <p role="status">Loading secret editor…</p> : <StudioResultState title="Secret editor unavailable" description={error} />
-      : name && data.secret ? <SecretDetail key={data.secret.id} secret={data.secret} descriptors={data.descriptors} presentation="page" onStateChange={onStateChange}
-        onSave={async (key, request) => { phase.current.busy = true; try { await updateSecret(api.backend, key, request); if (current()) accepted(); } finally { if (currentScope.current === scope) phase.current.busy = false; } }} onClose={() => { if (current()) void leave(); }} />
+      : name && data.secret ? <SecretDetail notifications={api.notifications} copyScope={scope} key={data.secret.id} secret={data.secret} descriptors={data.descriptors} presentation="page" onStateChange={onStateChange}
+        onSave={async (key, request) => { const origin = lifetime.current; phase.current.busy = true; try { await updateSecret(api.backend, key, request); if (current()) accepted("Secret metadata updated.", origin); } finally { if (currentScope.current === scope) phase.current.busy = false; } }} onClose={() => { if (current()) void leave(); }} />
       : <CreateSecretForm descriptors={data.descriptors} scopeCatalogLoading={loading} scopeCatalogError={Boolean(error)} onRetryScopeCatalog={() => setRevision(value => value + 1)} onStateChange={onStateChange}
-        onSave={async request => { phase.current.busy = true; try { const created = await createSecret(api.backend, request); if (current()) { accepted(); route(secretPath(browse, undefined, "created", created.name, location.href)); } } finally { if (currentScope.current === scope) phase.current.busy = false; } }} onCancel={() => { if (current() && !phase.current.accepted) void leave(); }} />}
+        onSave={async request => { const origin = lifetime.current; phase.current.busy = true; try { const created = await createSecret(api.backend, request); if (current()) { accepted("Secret created.", origin); route(secretPath(browse, undefined, undefined, created.name, location.href)); } } finally { if (currentScope.current === scope) phase.current.busy = false; } }} onCancel={() => { if (current() && !phase.current.accepted) void leave(); }} />}
   </StudioPage>;
 }

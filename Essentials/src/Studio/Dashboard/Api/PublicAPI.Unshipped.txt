@@ -1,0 +1,13 @@
+#nullable enable
+Elsa.Studio.Dashboard.Api.DashboardResourcePermissionContributor
+Elsa.Studio.Dashboard.Api.DashboardResourcePermissionContributor.Contribute() -> System.Collections.Generic.IEnumerable<Elsa.Foundation.Identity.Core.Authorization.Permission!>!
+Elsa.Studio.Dashboard.Api.DashboardResourcePermissionContributor.DashboardResourcePermissionContributor() -> void
+Elsa.Studio.Dashboard.Api.DashboardResourcePermissionContributor.OwnerId.get -> string!
+Elsa.Studio.Dashboard.Api.DashboardResourcePermissions
+Elsa.Studio.Dashboard.Api.DashboardResourcesApi
+Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature
+Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature.DashboardResourcesApiFeature() -> void
+override Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+static Elsa.Studio.Dashboard.Api.DashboardResourcePermissions.All.get -> System.Collections.Generic.IReadOnlyList<string!>!
+static Elsa.Studio.Dashboard.Api.DashboardResourcesApi.MapDashboardResourcesApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+virtual Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void

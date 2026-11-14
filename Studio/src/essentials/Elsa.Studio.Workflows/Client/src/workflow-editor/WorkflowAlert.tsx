@@ -5,8 +5,9 @@ import { CopyValueButton } from "./executableShared";
 // The editor's surface-scoped error banner. Beyond the headline message it surfaces the ProblemDetails
 // `detail` (when it adds information beyond the message), a structured error `code`, the HTTP `status`,
 // and a copyable `traceId` so a failure can be correlated with server logs — and it can be dismissed.
-export function WorkflowAlert({ error, onDismiss, onCopied, onCopyFailed }: {
+export function WorkflowAlert({ error, onDismiss, onCopied, onCopyFailed, scope }: {
   error: WorkflowEditorError;
+  scope?: object | string;
   onDismiss(): void;
   onCopied(label: string): void;
   onCopyFailed(label: string): void;
@@ -29,6 +30,7 @@ export function WorkflowAlert({ error, onDismiss, onCopied, onCopyFailed }: {
                 <span className="wf-alert-trace-label">Trace</span>
                 <code>{error.traceId}</code>
                 <CopyValueButton
+                  scope={scope}
                   value={error.traceId}
                   ariaLabel="Copy trace id"
                   copiedLabel="Trace id"

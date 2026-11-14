@@ -11,6 +11,8 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
     private readonly IServiceProvider _serviceProvider;
     private readonly IReadOnlyDictionary<string, Type> _handlerTypes;
     private readonly HashSet<string> _requiredSourceKinds;
+    private readonly IReadOnlyDictionary<string, RuntimeDeliverySourceKind> _sourceKinds;
+    private readonly IReadOnlyDictionary<string, int?> _subscriptionProtocols;
 
     public RuntimePostCommitIntentDispatcher(
         IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions,
@@ -23,6 +25,9 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         var materialized = contributions.ToArray();
         _handlerTypes = BuildHandlerMap(materialized);
         _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(materialized);
+        _sourceKinds = materialized.GroupBy(item => item.IntentKind, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First().SourceKind, StringComparer.Ordinal);
+        _subscriptionProtocols = materialized.GroupBy(item => item.IntentKind, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().SubscriptionDeliveryProtocolVersion, StringComparer.Ordinal);
     }
 
     public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
@@ -50,15 +55,49 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         return _requiredSourceKinds.Contains(intentKind);
     }
 
+    public bool SupportsSourceKind(RuntimeDeliverySourceKind sourceKind) => sourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint ||
+        sourceKind == RuntimeDeliverySourceKind.StandaloneIngress && _sourceKinds.Values.Contains(sourceKind);
+
+    public bool SupportsSubscriptionDelivery(RuntimeDeliverySourceKind sourceKind, string deliveryKind, int protocolVersion) =>
+        protocolVersion == RuntimeSubscriptionDelivery.CurrentVersion && SupportsSourceKind(sourceKind) &&
+        _sourceKinds.TryGetValue(deliveryKind, out var actualKind) && actualKind == sourceKind &&
+        _subscriptionProtocols.TryGetValue(deliveryKind, out var actualProtocol) && actualProtocol == protocolVersion &&
+        _requiredSourceKinds.Contains(deliveryKind);
+
+    public ValueTask DispatchAsync(RuntimeDeliverySourceContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source); cancellationToken.ThrowIfCancellationRequested();
+        EnsureSubscriptionProtocol(source.Claim.Item);
+        if (!_handlerTypes.TryGetValue(source.DeliveryKind, out var handlerType) ||
+            !_sourceKinds.TryGetValue(source.DeliveryKind, out var expectedKind) || expectedKind != source.SourceKind)
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.DeliveryKind,
+                new NotSupportedException("No matching contributed handler owns this actual source family."), false);
+        if (source.SourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint)
+            return DispatchAsync(new PostCommitDeliveryContext(source.Claim, source.Scope), cancellationToken);
+        return ((IRuntimeDeliverySourceExecutor)_serviceProvider.GetRequiredService(handlerType)).HandleAsync(source, cancellationToken);
+    }
+
     public ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
+        EnsureSubscriptionProtocol(source.Claim.Item);
+        if (_sourceKinds.TryGetValue(source.Intent.Kind, out var expectedKind) && expectedKind != RuntimeDeliverySourceKind.WorkflowCheckpoint)
+            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                new InvalidDataException("A workflow source cannot impersonate a standalone ingress source."), false);
         if (!RequiresDurableSource(source.Intent.Kind))
             return DispatchAsync(source.Intent, cancellationToken);
         var handler = (IRuntimePostCommitDurableSourceIntentHandler)_serviceProvider
             .GetRequiredService(_handlerTypes[source.Intent.Kind]);
         return handler.HandleAsync(source, cancellationToken);
+    }
+
+    private void EnsureSubscriptionProtocol(RuntimePostCommitOutboxItem item)
+    {
+        if (item.SubscriptionDeliveryProtocolVersion is { } protocol &&
+            !SupportsSubscriptionDelivery(item.SourceKind, item.DeliveryKind, protocol))
+            throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.DeliveryKind,
+                new NotSupportedException("The selected contribution cannot preserve this source's subscription protocol."), false);
     }
 
     private static IReadOnlyDictionary<string, Type> BuildHandlerMap(
@@ -70,7 +109,7 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
                      .GroupBy(contribution => contribution.IntentKind, StringComparer.Ordinal)
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            if (group.Select(item => (item.RequiresDurableSource, item.StimulusDeliveryProtocolVersion)).Distinct().Count() != 1)
+            if (group.Select(item => (item.RequiresDurableSource, item.StimulusDeliveryProtocolVersion, item.SourceKind, item.SubscriptionDeliveryProtocolVersion)).Distinct().Count() != 1)
                 throw new InvalidOperationException("One intent kind cannot have competing durable-source requirements.");
             var distinctTypes = group
                 .Select(contribution => contribution.HandlerType)

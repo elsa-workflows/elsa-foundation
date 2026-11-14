@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
@@ -25,6 +26,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
         Validate(reference);
+        if (reference.PublicationScope is not null) throw new NotSupportedException("Generic source saves cannot assert protected logical publication scope.");
         var scope = ScopeForWrite(reference);
         var id = CreateId(scope, reference.SourceReferenceId);
         context.ChangeTracker.Clear();
@@ -96,9 +98,11 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     /// and expiry, except retry CreatedAt/PublishedAt timestamps. Anything else under that id is a conflict.
     /// </summary>
     internal async Task<(bool Created, WorkflowExecutableSourceReference Reference)> StageCreateOrAdoptAsync(
-        WorkflowExecutableSourceReference reference, CancellationToken cancellationToken, TimeProvider? liveClock = null)
+        WorkflowExecutableSourceReference reference, CancellationToken cancellationToken, TimeProvider? liveClock = null, bool scopedPublication = false)
     {
         Validate(reference);
+        if (reference.PublicationScope is not null && !scopedPublication)
+            throw new NotSupportedException("Logical publication scope requires the selected fenced source writer.");
         var scope = ScopeForWrite(reference);
         var id = CreateId(scope, reference.SourceReferenceId);
         var existing = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
@@ -128,6 +132,8 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         // Adoption is a root write too. Fence a concurrent retirement/replacement of this exact row
         // in the same commit as the native material revision, without rewriting its source payload.
         context.Attach(existing);
+        context.Entry(existing).Property(row => row.SchemaVersion).CurrentValue =
+            SourcePublicationWriteVersion.For(context, current, existing.SchemaVersion);
         existing.Revision = checked(existing.Revision + 1);
         context.Entry(existing).Property(row => row.Revision).IsModified = true;
         return (false, current);
@@ -144,6 +150,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         StringComparer.Ordinal.Equals(current.DefinitionId, candidate.DefinitionId) &&
         StringComparer.Ordinal.Equals(current.DefinitionVersionId, candidate.DefinitionVersionId) &&
         StringComparer.Ordinal.Equals(current.TenantId, candidate.TenantId) &&
+        current.PublicationScope == candidate.PublicationScope &&
         current.Scope == candidate.Scope;
 
     public async ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
@@ -542,17 +549,21 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     private string ScopeForWrite(WorkflowExecutableSourceReference reference)
     {
         var scope = RequireScope();
-        if (reference.TenantId is not null)
+        if (reference.PublicationScope is { } physical)
+        {
+            if (physical.Value != scope) throw new InvalidDataException("The logical publication differs from its actual source scope.");
+        }
+        else if (reference.TenantId is not null)
             access.Current.EnsureTenantScope(reference.TenantId);
         return scope;
     }
-    private static WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id)
+    private WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id)
     {
         var row = new WorkflowExecutableSourceReferenceEntity { Id = id, IncarnationId = NewIncarnationId() };
         Copy(row, value, scope);
         return row;
     }
-    private static void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
+    private void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
     {
         row.SourceReferenceId = Encode(value.SourceReferenceId);
         row.SourceReferenceIdHash = Hash(value.SourceReferenceId);
@@ -570,13 +581,13 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         row.IsRetired = value.DeletedAt is not null;
         row.ExpiresAtUtcTicks = value.ExpiresAt?.UtcTicks;
         row.ContentJson = SerializeEnvelope(value);
-        row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+        row.SchemaVersion = SourcePublicationWriteVersion.For(context, value, row.SchemaVersion);
         if (row.Revision <= 0)
             row.Revision = 1;
         else
             row.Revision++;
     }
-    private static WorkflowExecutableSourceReference Read(WorkflowExecutableSourceReferenceEntity row, string expectedScope, string expectedId)
+    private static WorkflowExecutableSourceReference Read(WorkflowExecutableSourceReferenceEntity row, string expectedScope, string expectedId, RuntimeSourceReadLimits? sourceLimits = null)
     {
         try
         {
@@ -593,15 +604,30 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
                 row.DefinitionVersionIdHash != Hash(Decode(row.DefinitionVersionId)) ||
                 row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
                 throw new InvalidDataException("The persisted workflow executable source reference row is corrupt.");
-            var envelope = JsonNode.Parse(RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!)?.AsObject()
-                           ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
-            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
-                !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) ||
-                envelope["reference"] is null)
-                throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
-            var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
+            var content = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(row.SchemaVersion,
+                (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
+            WorkflowExecutableSourceReference value;
+            if (sourceLimits is null)
+            {
+                var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
+                if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
+                    !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) || envelope["reference"] is null)
+                    throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
+                value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
+            }
+            else
+            {
+                using var document = JsonDocument.Parse(content, new JsonDocumentOptions { MaxDepth = sourceLimits.MaxJsonDepth }); var envelope = document.RootElement;
+                if (envelope.EnumerateObject().Any(property => property.Name is not ("collection" or "artifactId" or "reference")))
+                    throw new RuntimeSourceReadException("runtime_source_reference_envelope_unsupported", true);
+                if (!envelope.TryGetProperty("collection", out _) || !envelope.TryGetProperty("artifactId", out _) || !envelope.TryGetProperty("reference", out _))
+                    throw new RuntimeSourceReadException("runtime_source_stored_content_invalid");
+                if (envelope.GetProperty("collection").GetString() != "workflowExecutableSourceReference" || Decode(envelope.GetProperty("artifactId").GetString()!) != Decode(row.ArtifactId))
+                    throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
+                value = RuntimeArtifactJson.DeserializeBounded<WorkflowExecutableSourceReference>(envelope.GetProperty("reference").GetRawText(), sourceLimits.MaxJsonDepth);
+            }
             Validate(value);
-            if ((value.TenantId is not null && value.TenantId != expectedScope) ||
+            if ((value.PublicationScope is { } physical ? physical.Value != expectedScope : value.TenantId is not null && value.TenantId != expectedScope) ||
                 EfRelationalIdentity.Decode(row.ScopeKey) != expectedScope ||
                 value.SourceReferenceId != expectedId ||
                 value.ArtifactId != Decode(row.ArtifactId) ||
@@ -636,6 +662,10 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
             ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceVersion);
         if (!Enum.IsDefined(value.Scope))
             throw new ArgumentOutOfRangeException(nameof(value.Scope));
+        if (value.PublicationScope is not null && (value.Scope != WorkflowExecutableReferenceScope.Published || value.PublishedAt is null || value.ActivationId is null ||
+            value.SlotId is null || value.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(value.ActivationId) ||
+            !value.SlotId.StartsWith($"activation-slot:{value.DefinitionId.Length.ToString(CultureInfo.InvariantCulture)}:{value.DefinitionId}:", StringComparison.Ordinal)))
+            throw new ArgumentException("Scoped publication requires its exact logical activation source provenance.", nameof(value));
     }
 
     private static void ValidateBound(string value, string parameterName)

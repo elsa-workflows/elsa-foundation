@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { appendUnique } from "./paging";
 import React, { useEffect, useId, useRef, useState } from "react";
 import {
@@ -242,8 +243,8 @@ export function EtlPublishedSelectionEditor({
 
   return (
     <section className="etl-selection-editor" aria-label="Published ETL selection">
-      <div className="etl-editor-field">
-        <label htmlFor={`${editorId}-catalog`}>Pipeline catalog</label>
+      <div className="etl-editor-field"><StudioField controlId={`${editorId}-catalog`} label="Pipeline catalog">
+
         <select
           id={`${editorId}-catalog`}
           value={catalog}
@@ -259,10 +260,10 @@ export function EtlPublishedSelectionEditor({
           <option value="file">File pipelines</option>
           <option value="connector">Connector pipelines</option>
         </select>
-      </div>
+      </StudioField></div>
 
-      <div className="etl-editor-field">
-        <label htmlFor={`${editorId}-definition`}>Published ETL definition</label>
+      <div className="etl-editor-field"><StudioField controlId={`${editorId}-definition`} label="Published ETL definition">
+
         <select
           id={`${editorId}-definition`}
           value={definitionId}
@@ -293,10 +294,10 @@ export function EtlPublishedSelectionEditor({
             {definitionsMoreLoading ? "Loading more definitions…" : "Load more definitions"}
           </button>
         ) : null}
-      </div>
+      </StudioField></div>
 
-      <div className="etl-editor-field">
-        <label htmlFor={`${editorId}-version`}>Published ETL version</label>
+      <div className="etl-editor-field"><StudioField controlId={`${editorId}-version`} label="Published ETL version">
+
         <select
           id={`${editorId}-version`}
           value={savedSelectionValue || (savedVersionIsListed ? currentToken! : "")}
@@ -328,7 +329,7 @@ export function EtlPublishedSelectionEditor({
             {versionsMoreLoading ? "Loading more versions…" : "Load more versions"}
           </button>
         ) : null}
-      </div>
+      </StudioField></div>
 
       {currentToken && !current ? (
         <p role="status" aria-live="polite">The saved ETL selection is preserved. Choose a published version to replace it.</p>

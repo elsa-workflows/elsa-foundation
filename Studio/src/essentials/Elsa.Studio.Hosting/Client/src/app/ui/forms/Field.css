@@ -1,0 +1,127 @@
+/* Native legend gaps avoid guessing the background behind the label. */
+.studio-field.studio-form-field,
+.studio-field.studio-field-group,
+.studio-field.studio-choice-field {
+  display: grid;
+  align-content: start;
+  gap: var(--studio-outlined-field-gap, 5px);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--studio-body-size);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.studio-field > .studio-form-control {
+  box-sizing: border-box;
+  display: block;
+  min-inline-size: 0;
+  inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  border: var(--studio-outlined-field-width, 1px) solid var(--studio-edge-control);
+  border-radius: var(--studio-radius);
+  background: var(--studio-field-surface, var(--studio-surface));
+  color: var(--studio-text);
+}
+
+.studio-field > .studio-form-control > .studio-form-legend {
+  float: none;
+  display: block;
+  inline-size: auto;
+  max-inline-size: calc(100% - 16px);
+  margin-inline: 8px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-small-size, 12px);
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.studio-form-legend > .studio-field-label {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: text;
+}
+
+.studio-form-legend .studio-field-label strong { font: inherit; }
+.studio-field-meta { display: inline-block; margin-inline: 6px; unicode-bidi: isolate; }
+.studio-form-body { display: flex; align-items: stretch; min-inline-size: 0; }
+.studio-form-value { flex: 1 1 0; min-inline-size: 0; }
+
+.studio-field.studio-form-field > .studio-form-control [data-studio-field-control] {
+  box-sizing: border-box;
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: var(--studio-control-height);
+  margin: 0;
+  padding: 6px 12px 8px;
+  border: 0;
+  border-radius: var(--studio-radius);
+  background-color: transparent;
+  color: var(--studio-text);
+  font: inherit;
+  line-height: 1.4;
+}
+
+/* Native editor owners retain their read-only/record resize policy. */
+:where(.studio-field.studio-form-field > .studio-form-control) textarea:where([data-studio-field-control]) { resize: vertical; }
+.studio-field.studio-form-field > .studio-form-control select[data-studio-field-control]:not([multiple]):not([size]) { padding-inline-end: 30px; }
+.studio-field.studio-form-field > .studio-form-control [data-studio-field-control]:focus { outline: none; box-shadow: none; }
+.studio-field > .studio-form-control:focus-within { outline: 2px solid var(--studio-focus-ring-solid, var(--studio-accent)); outline-offset: 2px; }
+
+.studio-field[data-invalid="true"] > .studio-form-control,
+.studio-field > .studio-form-control:has([data-studio-field-control][aria-invalid="true"]) { border-color: var(--studio-danger); }
+
+.studio-field[data-invalid="true"] .studio-form-legend,
+.studio-field > .studio-form-control:has([data-studio-field-control][aria-invalid="true"]) > .studio-form-legend,
+.studio-field > .studio-field-error { color: var(--studio-danger-fg); }
+
+.studio-field > .studio-form-control:has([data-studio-field-control]:disabled) { opacity: .65; }
+.studio-field > .studio-form-control:has([data-studio-field-control][readonly]:not(:disabled)) { border-style: dashed; }
+.studio-field > :is(.studio-field-hint, .studio-field-error) { margin: 0; padding-inline: 12px; overflow-wrap: anywhere; }
+.studio-form-adornment { display: flex; align-items: center; flex: 0 0 auto; padding-inline: 4px; }
+.studio-form-group-content { min-inline-size: 0; padding: 8px 12px; }
+
+@media (forced-colors: active) {
+  .studio-field > .studio-form-control { border-color: CanvasText; }
+  .studio-field > .studio-form-control:focus-within { outline-color: Highlight; }
+  .studio-field > .studio-form-control:has([data-studio-field-control]:disabled) { opacity: 1; border-color: GrayText; }
+  .studio-field.studio-form-field > .studio-form-control select[data-studio-field-control] { appearance: auto; background-image: none; }
+}
+
+.studio-form-adornment > button:not(.studio-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--studio-control-height);
+  min-block-size: var(--studio-control-height);
+  border: 0;
+  border-radius: var(--studio-radius);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+}
+.studio-form-adornment > button:not(.studio-button):hover { background: var(--studio-surface-hover); }
+.studio-form-adornment > button:focus-visible { outline: 2px solid var(--studio-focus-ring-solid, var(--studio-accent)); outline-offset: -3px; }
+
+.studio-field:not([data-invalid="true"]) > .studio-form-control:hover:not(:has([data-studio-field-control]:disabled, [data-studio-field-control][aria-invalid="true"])) { border-color: var(--studio-text-muted); }
+
+.studio-choice-control { display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
+.studio-choice-control > input:is([type="checkbox"], [type="radio"]) { inline-size: 16px; min-block-size: 0; block-size: 16px; flex: 0 0 auto; }
+.studio-choice-control > label { margin: 0; font: inherit; }
+
+/* Apply disabled attenuation once at the field, including when legacy module CSS also dims inputs. */
+.studio-field.studio-form-field > .studio-form-control [data-studio-field-control]:disabled { opacity: 1; }

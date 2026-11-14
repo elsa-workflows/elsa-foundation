@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><RootNamespace>Kernel.Agent.Run</RootNamespace></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Agent/Kernel.Agent.csproj" /></ItemGroup>
+</Project>

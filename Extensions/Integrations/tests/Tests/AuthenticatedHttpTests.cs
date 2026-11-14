@@ -4,7 +4,7 @@ using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Integrations.Sdk;
-using Elsa.Integrations.Sdk.Harness;
+using Elsa.Integrations.Sdk.Testing;
 using Elsa.Integrations.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -22,6 +22,19 @@ public sealed class AuthenticatedHttpTests
         Assert.Null(typeof(ConnectorActivity).GetMethod(
             "PushHttpAuth",
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance | BindingFlags.FlattenHierarchy));
+    }
+
+    [Fact]
+    public void Sdk_does_not_export_test_fakes()
+    {
+        var names = typeof(ConnectorActivity).Assembly.GetTypes().Select(type => type.Name).ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain("ConnectorHarness", names);
+        Assert.DoesNotContain("InMemorySecretValueResolver", names);
+        Assert.DoesNotContain("InMemoryHttpConnectionApplicator", names);
+        Assert.DoesNotContain("RecordingHttpMessageHandler", names);
+        Assert.DoesNotContain("CannedHttpResponse", names);
+        Assert.DoesNotContain("CapturingLoggerProvider", names);
+        Assert.Equal("Elsa.Integrations.Sdk.Testing", typeof(ConnectorHarness).Namespace);
     }
 
     [Fact]
