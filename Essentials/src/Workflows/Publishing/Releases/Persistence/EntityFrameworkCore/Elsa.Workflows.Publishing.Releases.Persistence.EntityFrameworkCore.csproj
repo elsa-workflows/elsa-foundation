@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+    <Description>Consumer-context SQLite frozen release archives with scoped immutable binary storage and owned transactions.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <ProjectReference Include="../Core/Elsa.Workflows.Publishing.Releases.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../../Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="../../../../Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests" />
+  </ItemGroup>
+</Project>

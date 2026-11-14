@@ -75,7 +75,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
         await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Values.FindAsync("workflow-a", "value").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.Chain.CurrentVersion);
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
         await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Scheduler.FindAsync("workflow-a").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.Chain.CurrentVersion);
     }
 
     [Fact]
@@ -304,7 +304,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
         await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Liveness.FindAsync("workflow-a", "state-a").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.Chain.CurrentVersion);
     }
 
     [Fact]
@@ -437,7 +437,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
         await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(fixture.Context, v => row.SchemaVersion = v, v => row.ContentJson = v);
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => fixture.Holds.FindAsync("workflow-state").AsTask());
-        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.SchemaVersion);
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "RuntimeOperationalState", RuntimeOperationalStateEfModule.Chain.CurrentVersion);
     }
 
     [Fact]

@@ -7,6 +7,7 @@ public static class RuntimeTriggerBindingEfModule
     public const string TableName = "elsa_runtime_workflow_trigger_binding";
     public const string ProjectionStateTableName = "elsa_runtime_trigger_binding_projection_state";
     public const string SchemaVersion = "1.0.0";
+    public const string SemanticReservationsSchemaVersion = "1.1.0";
     public const string SchemaFamily = "RuntimeTriggerBinding";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
     /// upcasts through.</summary>

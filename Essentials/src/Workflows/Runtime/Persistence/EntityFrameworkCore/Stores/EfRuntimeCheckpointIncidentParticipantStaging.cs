@@ -81,7 +81,7 @@ internal static class EfRuntimeCheckpointIncidentParticipantStaging
         if (row is null)
         {
             if (change.Operation is RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert)
-                context.IncidentStates.Add(EfIncidentStateStore.ToEntity(state, scope, id, 1));
+                context.IncidentStates.Add(EfIncidentStateStore.ToEntity(context, state, scope, id, 1));
 
             // Conditional delete of an absent incident is intentionally idempotent.
             return;
@@ -98,6 +98,6 @@ internal static class EfRuntimeCheckpointIncidentParticipantStaging
             IncidentStateTransitionValidator.EnsureAppendTargetIsAbsent(existing, state);
 
         IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, state);
-        EfIncidentStateStore.Copy(row, state, scope, checked(row.Revision + 1));
+        EfIncidentStateStore.Copy(context, row, state, scope, checked(row.Revision + 1));
     }
 }

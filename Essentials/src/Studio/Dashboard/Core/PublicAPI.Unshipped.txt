@@ -1,0 +1,1266 @@
+#nullable enable
+const Elsa.Studio.Dashboard.Core.Resources.DashboardResourceKinds.Dashboard = "dashboard" -> string!
+const Elsa.Studio.Dashboard.Core.Resources.DashboardResourceKinds.Question = "question" -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.DashboardAuthoringChoice(string! Id, string! Label, string! Description) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Deconstruct(out string! Id, out string! Label, out string! Description) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Description.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Description.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Id.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Label.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Label.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Choices.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!>!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Choices.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.DashboardAuthoringClarification(string! Question, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!>! Choices) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Deconstruct(out string! Question, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice!>! Choices) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Question.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Question.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.ClientId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.ClientId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.DashboardAuthoringClient(string! ClientId, string! GenerationId) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.Deconstruct(out string! ClientId, out string! GenerationId) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.GenerationId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.GenerationId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanEdit.get -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanEdit.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanSave.get -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.CanSave.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.DashboardAuthoringContext(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>! Datasets, bool CanEdit, bool CanSave, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>! Problems) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Datasets.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Datasets.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Deconstruct(out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>! Datasets, out bool CanEdit, out bool CanSave, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>! Problems) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Draft.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Draft.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Problems.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Problems.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Client.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Client.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.ConfirmedInterpretation.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.ConfirmedInterpretation.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.DashboardAuthoringDraft(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, string! WorkingRevision, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, string? Name = null, bool Dirty = true, string? ConfirmedInterpretation = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Deconstruct(out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, out string! WorkingRevision, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, out string? Name, out bool Dirty, out string? ConfirmedInterpretation) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Definition.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Definition.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Dirty.get -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Dirty.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Name.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Name.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Target.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Target.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.WorkingRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.WorkingRevision.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Clarification.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Clarification.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Code.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Code.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.ConversationId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.ConversationId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.DashboardAuthoringEvent(string! Kind, string! ConversationId, string? Message = null, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? Proposal = null, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? Clarification = null, string? Code = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Deconstruct(out string! Kind, out string! ConversationId, out string? Message, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? Proposal, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? Clarification, out string? Code) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Kind.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Kind.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Message.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Message.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Proposal.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Proposal.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Client.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Client.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.DashboardAuthoringProposal(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, string! WorkingRevision, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Definition, string! DefinitionFingerprint, Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? Preview, string! Interpretation) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Deconstruct(out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget! Target, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient! Client, out string! WorkingRevision, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Definition, out string! DefinitionFingerprint, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? Preview, out string! Interpretation) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Definition.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Definition.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.DefinitionFingerprint.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.DefinitionFingerprint.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Interpretation.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Interpretation.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Preview.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Preview.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Target.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Target.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.WorkingRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.WorkingRevision.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.ConversationId.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.ConversationId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.DashboardAuthoringRequest(string! Message, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, string? ConversationId = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Deconstruct(out string! Message, out Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! Draft, out string? ConversationId) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Draft.get -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Draft.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Message.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Message.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.<Clone>$() -> Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.DashboardAuthoringTarget(string! ModuleId, string! ResourceType, string! ResourceId, string! Revision, string? DisplayName = null) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Deconstruct(out string! ModuleId, out string! ResourceType, out string! ResourceId, out string! Revision, out string? DisplayName) -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.DisplayName.get -> string?
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.DisplayName.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Equals(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? other) -> bool
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ModuleId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ModuleId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceId.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceId.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceType.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ResourceType.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Authoring.IDashboardAuthoringService
+Elsa.Studio.Dashboard.Core.Authoring.IDashboardAuthoringService.AuthorAsync(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent!>!
+Elsa.Studio.Dashboard.Core.Authoring.IDashboardAuthoringService.PrepareAsync(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft! draft, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext!>
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardDatasetExtension
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardDatasetExtension.CollectAsync(Elsa.Studio.Dashboard.Core.Events.DashboardDatasetsCollecting! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardDatasetExtension.Ownership.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner!>!
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryDrillExtension
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryDrillExtension.DrillAsync(Elsa.Studio.Dashboard.Core.Events.DashboardQueryDrilling! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryDrillExtension.Ownership.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner!>!
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryExecutionExtension
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryExecutionExtension.ExecuteAsync(Elsa.Studio.Dashboard.Core.Events.DashboardQueryExecuting! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryExecutionExtension.Ownership.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner!>!
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryService
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryService.DiscoverAsync(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope! scope, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>!>
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryService.DrillAsync(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope! scope, Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult!>
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryService.ExecuteAsync(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope! scope, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult!>
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryService.ValidateAsync(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope! scope, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation!>
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryValidationExtension
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryValidationExtension.Ownership.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner!>!
+Elsa.Studio.Dashboard.Core.Contracts.IDashboardQueryValidationExtension.ValidateAsync(Elsa.Studio.Dashboard.Core.Events.DashboardQueryValidating! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Studio.Dashboard.Core.Events.DashboardDatasetsCollecting
+Elsa.Studio.Dashboard.Core.Events.DashboardDatasetsCollecting.DashboardDatasetsCollecting(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope! scope) -> void
+Elsa.Studio.Dashboard.Core.Events.DashboardDatasetsCollecting.Datasets.get -> System.Collections.Generic.ICollection<Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!>!
+Elsa.Studio.Dashboard.Core.Events.DashboardDatasetsCollecting.Scope.get -> Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryDrilling
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryDrilling.DashboardQueryDrilling(Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext! query, Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest! request, Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits! limits) -> void
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryDrilling.Limits.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryDrilling.Query.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryDrilling.Request.get -> Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryDrilling.Results.get -> System.Collections.Generic.ICollection<Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult!>!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryExecuting
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryExecuting.DashboardQueryExecuting(Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext! query, Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits! limits) -> void
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryExecuting.Limits.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryExecuting.Query.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryExecuting.Results.get -> System.Collections.Generic.ICollection<Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult!>!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryValidating
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryValidating.DashboardQueryValidating(Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext! query) -> void
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryValidating.Query.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext!
+Elsa.Studio.Dashboard.Core.Events.DashboardQueryValidating.Results.get -> System.Collections.Generic.ICollection<Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation!>!
+Elsa.Studio.Dashboard.Core.Exceptions.DashboardQueryException
+Elsa.Studio.Dashboard.Core.Exceptions.DashboardQueryException.Code.get -> string!
+Elsa.Studio.Dashboard.Core.Exceptions.DashboardQueryException.DashboardQueryException(string! code, string! message, System.Exception? innerException = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardComparison!
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.DashboardComparison(string! Mode, System.DateTimeOffset? From = null, System.DateTimeOffset? To = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.Deconstruct(out string! Mode, out System.DateTimeOffset? From, out System.DateTimeOffset? To) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardComparison? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.From.get -> System.DateTimeOffset?
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.From.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.Mode.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.Mode.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.To.get -> System.DateTimeOffset?
+Elsa.Studio.Dashboard.Core.Models.DashboardComparison.To.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardCoverage!
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.DashboardCoverage(string! Status, string! Description, System.DateTimeOffset? From = null, System.DateTimeOffset? To = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.Deconstruct(out string! Status, out string! Description, out System.DateTimeOffset? From, out System.DateTimeOffset? To) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.Description.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.Description.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardCoverage? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.From.get -> System.DateTimeOffset?
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.From.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.Status.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.Status.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.To.get -> System.DateTimeOffset?
+Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.To.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Availability.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Availability.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.CoverageDescription.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.CoverageDescription.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.DashboardDatasetDeclaration() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Description.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Description.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Fields.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Fields.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Forms.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Forms.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Id.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Metrics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Metrics.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.OwnerModuleId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.OwnerModuleId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Relationships.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Relationships.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.SchemaRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.SchemaRevision.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.SupportsDrill.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.SupportsDrill.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.SupportsExport.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.SupportsExport.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Time.get -> Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport?
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Time.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Title.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Title.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.UnavailableReason.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.UnavailableReason.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.DashboardDatasetOwner(string! DatasetId, string! OwnerModuleId) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.DatasetId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.DatasetId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.Deconstruct(out string! DatasetId, out string! OwnerModuleId) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.OwnerModuleId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.OwnerModuleId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.DashboardDatasetReference(string! Id, string! SchemaRevision) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.Deconstruct(out string! Id, out string! SchemaRevision) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.Id.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.SchemaRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.SchemaRevision.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Buckets.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Buckets.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.ComparisonModes.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.ComparisonModes.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.DashboardDatasetTimeSupport(System.Collections.Generic.IReadOnlyList<string!>! Fields, System.Collections.Generic.IReadOnlyList<string!>! Windows, System.Collections.Generic.IReadOnlyList<string!>! Buckets, System.Collections.Generic.IReadOnlyList<string!>! ComparisonModes) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Deconstruct(out System.Collections.Generic.IReadOnlyList<string!>! Fields, out System.Collections.Generic.IReadOnlyList<string!>! Windows, out System.Collections.Generic.IReadOnlyList<string!>! Buckets, out System.Collections.Generic.IReadOnlyList<string!>! ComparisonModes) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Fields.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Fields.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Windows.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Windows.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.DashboardDrillDescriptor(string! DatasetId, string! SchemaRevision, string! QueryFingerprint, string! Period, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>! GroupValues, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!>? Periods = null, System.DateTimeOffset? ObservedAt = null, string? Token = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.DatasetId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.DatasetId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Deconstruct(out string! DatasetId, out string! SchemaRevision, out string! QueryFingerprint, out string! Period, out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>! GroupValues, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!>? Periods, out System.DateTimeOffset? ObservedAt, out string? Token) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.GroupValues.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.GroupValues.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.ObservedAt.get -> System.DateTimeOffset?
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.ObservedAt.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Period.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Period.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Periods.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!>?
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Periods.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.QueryFingerprint.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.QueryFingerprint.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.SchemaRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.SchemaRevision.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Token.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Token.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Cursor.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Cursor.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.DashboardDrillRequest(Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Question, Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor! Descriptor, int PageSize = 25, string? Cursor = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Deconstruct(out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Question, out Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor! Descriptor, out int PageSize, out string? Cursor) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Descriptor.get -> Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Descriptor.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.PageSize.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.PageSize.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Question.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest!
+Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Question.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.DashboardEffectivePeriod(string! Role, System.DateTimeOffset From, System.DateTimeOffset To, string! TimeZone) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.Deconstruct(out string! Role, out System.DateTimeOffset From, out System.DateTimeOffset To, out string! TimeZone) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.From.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.From.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.Role.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.Role.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.TimeZone.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.TimeZone.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.To.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.To.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition!
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Aggregates.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Aggregates.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.BusinessDimension.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.BusinessDimension.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.DashboardFieldDefinition(string! Id, string! Label, string! Type, System.Collections.Generic.IReadOnlyList<string!>! FilterOperators, bool Nullable = false, bool Groupable = false, bool Sortable = false, bool Projectable = true, string? Unit = null, string? Description = null, System.Collections.Generic.IReadOnlyList<string!>? Aggregates = null, bool BusinessDimension = false) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Deconstruct(out string! Id, out string! Label, out string! Type, out System.Collections.Generic.IReadOnlyList<string!>! FilterOperators, out bool Nullable, out bool Groupable, out bool Sortable, out bool Projectable, out string? Unit, out string? Description, out System.Collections.Generic.IReadOnlyList<string!>? Aggregates, out bool BusinessDimension) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Description.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Description.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.FilterOperators.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.FilterOperators.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Groupable.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Groupable.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Id.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Label.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Label.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Nullable.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Nullable.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Projectable.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Projectable.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Sortable.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Sortable.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Type.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Type.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Unit.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Unit.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Comparable.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Comparable.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.DashboardMetricDefinition(string! Id, string! Revision, string! Label, string! Unit, string! Description, bool Comparable = false, System.Collections.Generic.IReadOnlyList<string!>? RequiredFields = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Deconstruct(out string! Id, out string! Revision, out string! Label, out string! Unit, out string! Description, out bool Comparable, out System.Collections.Generic.IReadOnlyList<string!>? RequiredFields) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Description.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Description.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Id.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Label.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Label.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.RequiredFields.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.RequiredFields.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Unit.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Unit.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Aggregate.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Aggregate.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Alias.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Alias.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.DashboardMetricSelection(string! Alias, string? Metric = null, string? Revision = null, string? Aggregate = null, string? Field = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Deconstruct(out string! Alias, out string? Metric, out string? Revision, out string? Aggregate, out string? Field) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Field.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Field.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Metric.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Metric.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Revision.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition!
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.DashboardParameterDefinition(string! Name, string! Type, bool Required = false, bool Nullable = false, Elsa.Studio.Dashboard.Core.Models.DashboardValue? Default = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Deconstruct(out string! Name, out string! Type, out bool Required, out bool Nullable, out Elsa.Studio.Dashboard.Core.Models.DashboardValue? Default) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Default.get -> Elsa.Studio.Dashboard.Core.Models.DashboardValue?
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Default.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Name.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Nullable.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Nullable.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Required.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Required.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Type.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Type.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardPredicate!
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.All.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardPredicate!>?
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.All.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Any.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardPredicate!>?
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Any.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.DashboardPredicate() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardPredicate? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Field.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Field.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Metric.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Metric.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Operator.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Operator.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Value.get -> Elsa.Studio.Dashboard.Core.Models.DashboardValue?
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Value.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Values.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardValue!>?
+Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Values.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.DashboardQueryContext(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope! Scope, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Request, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration! Dataset, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>! Parameters, string! QueryFingerprint, System.DateTimeOffset EvaluatedAt, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!>! Periods) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Dataset.get -> Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Dataset.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Deconstruct(out Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope! Scope, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! Request, out Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration! Dataset, out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>! Parameters, out string! QueryFingerprint, out System.DateTimeOffset EvaluatedAt, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!>! Periods) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.EvaluatedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.EvaluatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Parameters.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Periods.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Periods.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.QueryFingerprint.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.QueryFingerprint.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Request.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Request.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Scope.get -> Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Scope.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Comparison.get -> Elsa.Studio.Dashboard.Core.Models.DashboardComparison?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Comparison.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.DashboardQueryDefinition() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Dataset.get -> Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Dataset.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Fields.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Fields.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Filters.get -> Elsa.Studio.Dashboard.Core.Models.DashboardPredicate?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Filters.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Form.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Form.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.GroupBy.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.GroupBy.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Having.get -> Elsa.Studio.Dashboard.Core.Models.DashboardPredicate?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Having.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Limit.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Limit.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Metrics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Metrics.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Parameters.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Parameters.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.SchemaVersion.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.SchemaVersion.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Sort.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardSort!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Sort.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Time.get -> Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Time.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.DashboardQueryLimits() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.ExecutionTimeout.get -> System.TimeSpan
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.ExecutionTimeout.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumConcurrentReads.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumConcurrentReads.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumDefinitionBytes.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumDefinitionBytes.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumGroups.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumGroups.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumResultRows.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumResultRows.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumSourceRows.get -> int
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryLimits.MaximumSourceRows.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Code.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Code.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.DashboardQueryProblem(string! Code, string! Path, string! Message) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Deconstruct(out string! Code, out string! Path, out string! Message) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Message.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Message.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Path.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Path.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.DashboardQueryRequest() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.ParameterValues.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.ParameterValues.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.Query.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.Query.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.Visualization.get -> Elsa.Studio.Dashboard.Core.Models.DashboardVisualization!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.Visualization.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Columns.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Columns.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Coverage.get -> Elsa.Studio.Dashboard.Core.Models.DashboardCoverage!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Coverage.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.DashboardQueryResult() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.DatasetId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.DatasetId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.ErrorCode.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.ErrorCode.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.GeneratedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.GeneratedAt.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Interpretation.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Interpretation.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Message.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Message.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.NextCursor.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.NextCursor.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Outcome.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Outcome.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Periods.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Periods.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.QueryFingerprint.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.QueryFingerprint.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Rows.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardResultRow!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Rows.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.SchemaRevision.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.SchemaRevision.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.DashboardQueryValidation(bool IsValid, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>! Problems, string? Interpretation = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.Deconstruct(out bool IsValid, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>! Problems, out string? Interpretation) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.Interpretation.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.Interpretation.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.IsValid.get -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.IsValid.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.Problems.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.Problems.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition!
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Cardinality.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Cardinality.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.DashboardRelationshipDefinition(string! Id, string! Description, string! Cardinality) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Deconstruct(out string! Id, out string! Description, out string! Cardinality) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Description.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Description.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Id.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope!
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.DashboardRequestScope(string! TenantId, string! SubjectId, string! HostId) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.Deconstruct(out string! TenantId, out string! SubjectId, out string! HostId) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.HostId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.HostId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.SubjectId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.SubjectId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.TenantId.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.TenantId.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardResultCell!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.DashboardResultCell(string! Type, string? Value, string? NullReason = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.Deconstruct(out string! Type, out string? Value, out string? NullReason) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardResultCell? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.NullReason.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.NullReason.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.Type.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.Type.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.Value.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.Value.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.DashboardResultColumn(string! Id, string! Label, string! Type, string? Unit = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Deconstruct(out string! Id, out string! Label, out string! Type, out string? Unit) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Id.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Label.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Label.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Type.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Type.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Unit.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Unit.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardResultRow!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.DashboardResultRow(string! Key, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardResultCell!>! Values, Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor? Drill = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Deconstruct(out string! Key, out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardResultCell!>! Values, out Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor? Drill) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Drill.get -> Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor?
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Drill.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardResultRow? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Key.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Key.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Values.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardResultCell!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Values.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardSort
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardSort!
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.DashboardSort(string! Reference, string! Direction = "ascending", string! Nulls = "last") -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Deconstruct(out string! Reference, out string! Direction, out string! Nulls) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Direction.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Direction.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardSort? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Nulls.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Nulls.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Reference.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardSort.Reference.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange!
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Bucket.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Bucket.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.DashboardTimeRange() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Field.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Field.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.From.get -> System.DateTimeOffset?
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.From.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.TimeZone.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.TimeZone.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.To.get -> System.DateTimeOffset?
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.To.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.WeekStart.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.WeekStart.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Window.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Window.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardValue
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardValue!
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.DashboardValue(string! Type, string? Literal = null, string? Parameter = null) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Deconstruct(out string! Type, out string? Literal, out string? Parameter) -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardValue? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Literal.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Literal.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Parameter.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Parameter.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Type.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardValue.Type.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.<Clone>$() -> Elsa.Studio.Dashboard.Core.Models.DashboardVisualization!
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.DashboardVisualization() -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Equals(Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? other) -> bool
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Kind.get -> string!
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Kind.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Label.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Label.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.X.get -> string?
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.X.init -> void
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Y.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Y.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardActor!
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.AuthenticationSubjectId.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.AuthenticationSubjectId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.DashboardActor(string! TenantId, string! UserId, System.Collections.Generic.IReadOnlySet<string!>! RoleIds, System.Collections.Generic.IReadOnlySet<string!>! Permissions) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.Deconstruct(out string! TenantId, out string! UserId, out System.Collections.Generic.IReadOnlySet<string!>! RoleIds, out System.Collections.Generic.IReadOnlySet<string!>! Permissions) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardActor? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.Permissions.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.Permissions.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.RoleIds.get -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.RoleIds.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.TenantId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.TenantId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.UserId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardActor.UserId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.DashboardAudienceCandidate(string! Kind, string! Id, string! Name) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Deconstruct(out string! Kind, out string! Id, out string! Name) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Kind.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Kind.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.ContinuationToken.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.ContinuationToken.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.DashboardAudienceCandidatePage(System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate!>! Items, string? ContinuationToken = null) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate!>! Items, out string? ContinuationToken) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.Items.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Access.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Access.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.DashboardAudienceGrant(string! Kind, string! Id, string! Access) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Deconstruct(out string! Kind, out string! Id, out string! Access) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Kind.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Kind.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.DashboardAudiencePage(System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!>! Items) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!>! Items) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.Items.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput!
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.DashboardCopyInput(string! OperationKey, string! Name, string? Description = null) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.Deconstruct(out string! OperationKey, out string! Name, out string? Description) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.Description.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.Description.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.OperationKey.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.OperationKey.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem!
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.ActorId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.ActorId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.DashboardHistoryItem(string! Revision, string! Name, string? Description, string! ActorId, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Deconstruct(out string! Revision, out string! Name, out string? Description, out string! ActorId, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Description.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Description.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.UpdatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage!
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.DashboardHistoryPage(System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem!>! Items) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem!>! Items) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Items.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse!
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.DashboardQuestionUse(string! Id, string! Name, int TileCount) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Deconstruct(out string! Id, out string! Name, out int TileCount) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.TileCount.get -> int
+Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.TileCount.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanCopy.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanCopy.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanDelete.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanDelete.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanEdit.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanEdit.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanRead.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanRead.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanShare.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.CanShare.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.DashboardResourceCapabilities(bool CanRead, bool CanEdit, bool CanShare, bool CanDelete, bool CanCopy) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.Deconstruct(out bool CanRead, out bool CanEdit, out bool CanShare, out bool CanDelete, out bool CanCopy) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.DashboardResourceContent(string! Name, string? Description, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardTile!>! Tiles) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Deconstruct(out string! Name, out string? Description, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardTile!>! Tiles) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Definition.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Definition.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Description.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Description.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Tiles.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardTile!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Tiles.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Audience.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Audience.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Content.get -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Content.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.CreatedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.CreatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.DashboardResourceDocument(string! Id, string! Kind, string! TenantId, string! OwnerId, string! Revision, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent! Content, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!>! Audience, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision!>! History, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Deconstruct(out string! Id, out string! Kind, out string! TenantId, out string! OwnerId, out string! Revision, out Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent! Content, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!>! Audience, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision!>! History, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.History.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.History.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Kind.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Kind.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.OwnerId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.OwnerId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.TenantId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.TenantId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedBy.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.UpdatedBy.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceException
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceException.Code.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceException.DashboardResourceException(string! code, string! message, System.Exception? inner = null) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.DashboardResourceInput() -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Definition.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Definition.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Description.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Description.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.OperationKey.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.OperationKey.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.PreserveDefinition.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.PreserveDefinition.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Tiles.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Tiles.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceKinds
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.ContinuationToken.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.ContinuationToken.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.DashboardResourcePage(System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>! Items, string? ContinuationToken = null) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.Deconstruct(out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>! Items, out string? ContinuationToken) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.Items.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.Items.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.ActorId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.ActorId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.Content.get -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.Content.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.DashboardResourceRevision(string! Revision, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent! Content, string! ActorId, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.Deconstruct(out string! Revision, out Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent! Content, out string! ActorId, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.UpdatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Capabilities.get -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Capabilities.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.CreatedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.CreatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.DashboardResourceView(string! Id, string! Kind, string! OwnerId, string! Revision, string! Name, string? Description, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities! Capabilities, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, string! DefinitionState, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardTileView!>! Tiles, System.DateTimeOffset CreatedAt, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Deconstruct(out string! Id, out string! Kind, out string! OwnerId, out string! Revision, out string! Name, out string? Description, out Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities! Capabilities, out Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? Definition, out string! DefinitionState, out System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardTileView!>! Tiles, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Definition.get -> Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Definition.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.DefinitionState.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.DefinitionState.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Description.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Description.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Kind.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Kind.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Name.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Name.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.OwnerId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.OwnerId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Tiles.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardTileView!>!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Tiles.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.UpdatedAt.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Uses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse!>?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Uses.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.DashboardResourceWrite(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument! Document, string? ExpectedRevision, string? OperationKey = null, string? OperationFingerprint = null, bool Delete = false) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.Deconstruct(out Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument! Document, out string? ExpectedRevision, out string? OperationKey, out string? OperationFingerprint, out bool Delete) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.Delete.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.Delete.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.Document.get -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.Document.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.ExpectedRevision.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.ExpectedRevision.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.OperationFingerprint.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.OperationFingerprint.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.OperationKey.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.OperationKey.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.DashboardResourceWriteResult(string! Status, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument? Document = null) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.Deconstruct(out string! Status, out Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument? Document) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.Document.get -> Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument?
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.Document.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.Status.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.Status.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput
+Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput!
+Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.DashboardRestoreInput(string! Revision) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.Deconstruct(out string! Revision) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.Revision.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.Revision.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardTile!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.DashboardTile(string! Id, string! QuestionId, string! Size, Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? Presentation = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>? Parameters = null) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Deconstruct(out string! Id, out string! QuestionId, out string! Size, out Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? Presentation, out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>? Parameters) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardTile? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Parameters.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Presentation.get -> Elsa.Studio.Dashboard.Core.Models.DashboardVisualization?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Presentation.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.QuestionId.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.QuestionId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Size.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Size.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.DashboardTileInput() -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Parameters.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Presentation.get -> Elsa.Studio.Dashboard.Core.Models.DashboardVisualization?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Presentation.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.PreserveReference.get -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.PreserveReference.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.QuestionId.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.QuestionId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Size.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Size.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.<Clone>$() -> Elsa.Studio.Dashboard.Core.Resources.DashboardTileView!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.DashboardTileView(string! Id, string? QuestionId, string! Size, string! ReferenceState, Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? Presentation = null, System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>? Parameters = null) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Deconstruct(out string! Id, out string? QuestionId, out string! Size, out string! ReferenceState, out Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? Presentation, out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>? Parameters) -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Equals(Elsa.Studio.Dashboard.Core.Resources.DashboardTileView? other) -> bool
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Id.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Id.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Parameters.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Studio.Dashboard.Core.Models.DashboardValue!>?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Parameters.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Presentation.get -> Elsa.Studio.Dashboard.Core.Models.DashboardVisualization?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Presentation.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.QuestionId.get -> string?
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.QuestionId.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.ReferenceState.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.ReferenceState.init -> void
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Size.get -> string!
+Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Size.init -> void
+Elsa.Studio.Dashboard.Core.Resources.IDashboardActorContext
+Elsa.Studio.Dashboard.Core.Resources.IDashboardActorContext.GetAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardActor!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardAudienceDirectory
+Elsa.Studio.Dashboard.Core.Resources.IDashboardAudienceDirectory.IsValidAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant! grant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardAudienceDirectory.SearchAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string? search, string? continuationToken = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardDefinitionValidator
+Elsa.Studio.Dashboard.Core.Resources.IDashboardDefinitionValidator.CanDiscloseAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! definition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardDefinitionValidator.ValidateAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest! definition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.CopyAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, string! expectedRevision, Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.CreateAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.DeleteAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, string! expectedRevision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.GetAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.GetAudienceAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.GetAuthorizedQuestionAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.GetRevisionAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, string! revision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.HistoryAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.ListAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string? ownership = null, string? search = null, string? continuationToken = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.RestoreAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, string! expectedRevision, string! revision, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.SetAudienceAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, string! expectedRevision, System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant!>! audience, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceService.UpdateAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardActor! actor, string! kind, string! id, string! expectedRevision, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput! input, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.FindAsync(string! tenantId, string! kind, string! id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument?>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.FindCreatedAsync(string! tenantId, string! actorId, string! kind, string! operationKey, string! fingerprint, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument?>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.ReadPageAsync(string! tenantId, string! kind, string? afterId = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument!>!>
+Elsa.Studio.Dashboard.Core.Resources.IDashboardResourceStore.WriteAsync(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite! write, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult!>
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardComparison.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardComparison.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardComparison.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardSort.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardSort.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardSort.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardValue.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardValue.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardValue.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardActor.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardActor.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardActor.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTile.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTile.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTile.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.ToString() -> string!
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.Equals(object? obj) -> bool
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.GetHashCode() -> int
+override Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.ToString() -> string!
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringChoice? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClarification? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringClient? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringContext? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringDraft? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringEvent? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringProposal? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.operator !=(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? right) -> bool
+static Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget.operator ==(Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? left, Elsa.Studio.Dashboard.Core.Authoring.DashboardAuthoringTarget? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardComparison.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardComparison? left, Elsa.Studio.Dashboard.Core.Models.DashboardComparison? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardComparison.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardComparison? left, Elsa.Studio.Dashboard.Core.Models.DashboardComparison? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardCoverage? left, Elsa.Studio.Dashboard.Core.Models.DashboardCoverage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardCoverage.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardCoverage? left, Elsa.Studio.Dashboard.Core.Models.DashboardCoverage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetDeclaration? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetOwner? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetReference? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport? left, Elsa.Studio.Dashboard.Core.Models.DashboardDatasetTimeSupport? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor? left, Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor? left, Elsa.Studio.Dashboard.Core.Models.DashboardDrillDescriptor? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest? left, Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest? left, Elsa.Studio.Dashboard.Core.Models.DashboardDrillRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod? left, Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod? left, Elsa.Studio.Dashboard.Core.Models.DashboardEffectivePeriod? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardFieldDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardMetricDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection? left, Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection? left, Elsa.Studio.Dashboard.Core.Models.DashboardMetricSelection? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardParameterDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardPredicate? left, Elsa.Studio.Dashboard.Core.Models.DashboardPredicate? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardPredicate.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardPredicate? left, Elsa.Studio.Dashboard.Core.Models.DashboardPredicate? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryContext? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryProblem? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryRequest? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryResult? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation? left, Elsa.Studio.Dashboard.Core.Models.DashboardQueryValidation? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition? left, Elsa.Studio.Dashboard.Core.Models.DashboardRelationshipDefinition? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope? left, Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope? left, Elsa.Studio.Dashboard.Core.Models.DashboardRequestScope? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardResultCell? left, Elsa.Studio.Dashboard.Core.Models.DashboardResultCell? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardResultCell.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardResultCell? left, Elsa.Studio.Dashboard.Core.Models.DashboardResultCell? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn? left, Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn? left, Elsa.Studio.Dashboard.Core.Models.DashboardResultColumn? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardResultRow? left, Elsa.Studio.Dashboard.Core.Models.DashboardResultRow? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardResultRow.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardResultRow? left, Elsa.Studio.Dashboard.Core.Models.DashboardResultRow? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardSort.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardSort? left, Elsa.Studio.Dashboard.Core.Models.DashboardSort? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardSort.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardSort? left, Elsa.Studio.Dashboard.Core.Models.DashboardSort? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange? left, Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange? left, Elsa.Studio.Dashboard.Core.Models.DashboardTimeRange? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardValue.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardValue? left, Elsa.Studio.Dashboard.Core.Models.DashboardValue? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardValue.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardValue? left, Elsa.Studio.Dashboard.Core.Models.DashboardValue? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.operator !=(Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? left, Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? right) -> bool
+static Elsa.Studio.Dashboard.Core.Models.DashboardVisualization.operator ==(Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? left, Elsa.Studio.Dashboard.Core.Models.DashboardVisualization? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardActor.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardActor? left, Elsa.Studio.Dashboard.Core.Resources.DashboardActor? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardActor.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardActor? left, Elsa.Studio.Dashboard.Core.Resources.DashboardActor? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidate? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceCandidatePage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudienceGrant? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardAudiencePage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardCopyInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem? left, Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem? left, Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryItem? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardHistoryPage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? left, Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? left, Elsa.Studio.Dashboard.Core.Resources.DashboardQuestionUse? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceCapabilities? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceContent? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceDocument? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourcePage? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceRevision? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceView? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWrite? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult? left, Elsa.Studio.Dashboard.Core.Resources.DashboardResourceWriteResult? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardRestoreInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardTile.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardTile? left, Elsa.Studio.Dashboard.Core.Resources.DashboardTile? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardTile.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardTile? left, Elsa.Studio.Dashboard.Core.Resources.DashboardTile? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput? left, Elsa.Studio.Dashboard.Core.Resources.DashboardTileInput? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.operator !=(Elsa.Studio.Dashboard.Core.Resources.DashboardTileView? left, Elsa.Studio.Dashboard.Core.Resources.DashboardTileView? right) -> bool
+static Elsa.Studio.Dashboard.Core.Resources.DashboardTileView.operator ==(Elsa.Studio.Dashboard.Core.Resources.DashboardTileView? left, Elsa.Studio.Dashboard.Core.Resources.DashboardTileView? right) -> bool

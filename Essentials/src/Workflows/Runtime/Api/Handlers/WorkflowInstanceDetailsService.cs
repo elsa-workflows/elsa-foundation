@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Inspection.Core;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;

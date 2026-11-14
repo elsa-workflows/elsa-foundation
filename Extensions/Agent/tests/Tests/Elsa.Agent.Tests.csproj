@@ -6,7 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Agent.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj" />
     <ProjectReference Include="../../src/Anthropic/Elsa.Agent.Anthropic.csproj" />

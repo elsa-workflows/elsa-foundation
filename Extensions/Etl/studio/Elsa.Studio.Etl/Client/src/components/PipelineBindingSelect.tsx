@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import type { EtlBindingSummary, EtlConnectorBindingSummary } from "../etlTypes";
 
@@ -43,8 +44,8 @@ export function PipelineBindingSelect({
   const subject = subjectLabel ?? (kind === undefined ? roleLabels[role] : connectorRoleLabels[role][kind]);
 
   return (
-    <div className="etl-editor-field">
-      <label htmlFor={id}>{label}</label>
+    <div className="etl-editor-field"><StudioField controlId={id} label={<>{label}</>}>
+
       <select id={id} value={value} disabled={disabled} onChange={event => onChange(event.currentTarget.value)}>
         <option value="" disabled={kind !== undefined || bindingsLoading || bindingsUnavailable}>
           {bindingsLoading ? "Loading approved bindings…" : bindingsUnavailable && candidates.length === 0 ? "Approved bindings unavailable" : "Choose an approved binding"}
@@ -57,7 +58,7 @@ export function PipelineBindingSelect({
         : candidates.length === 0
         ? `No ${inSentence(subject)} aliases are in the loaded bindings yet. Load more to check other pages.`
         : `Choose a host-approved ${inSentence(subject)} binding.`}</small>
-    </div>
+    </StudioField></div>
   );
 }
 

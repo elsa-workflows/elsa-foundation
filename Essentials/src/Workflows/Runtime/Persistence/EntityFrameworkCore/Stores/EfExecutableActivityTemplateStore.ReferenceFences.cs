@@ -112,6 +112,9 @@ public sealed partial class EfExecutableActivityTemplateStore
                 tracked.Entity.Revision = checked(row.Revision + 1);
                 tracked.Property(entity => entity.Revision).IsModified = true;
             }
+            // Choose the stamp after the revision decision: changing it also marks the entry Modified.
+            tracked.Property(entity => entity.SchemaVersion).CurrentValue =
+                RuntimeSchemaWriteVersion.Artifact(owner, tracked.Entity.SchemaVersion);
         }
     }
 

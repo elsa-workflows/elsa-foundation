@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useId } from "react";
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import { readPortableExpressionDefinition, withLiteralValue, type PortableExpressionDefinitionValue, type WrappedActivityInputValue } from "./activityProperties";
@@ -179,8 +180,8 @@ export function WorkflowInputArgumentBindings({
   const bindingsByArgumentName = new Map(arguments_.map(binding => [binding.argumentName, binding]));
 
   return (
-    <div className="wf-js-input-bindings">
-      <label className="wf-section-label" htmlFor={selectId}>Workflow input bindings</label>
+    <div className="wf-js-input-bindings"><StudioField className="wf-section-label" controlId={selectId} label="Workflow input bindings">
+
       <select
         id={selectId}
         value=""
@@ -224,7 +225,7 @@ export function WorkflowInputArgumentBindings({
           })}
         </ul>
       ) : null}
-    </div>
+    </StudioField></div>
   );
 }
 

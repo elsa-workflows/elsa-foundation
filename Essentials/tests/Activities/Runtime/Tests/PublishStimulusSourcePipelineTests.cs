@@ -19,6 +19,7 @@ using Elsa.Cluster.InProcess;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -30,6 +31,27 @@ public sealed class PublishStimulusSourcePipelineTests
     private static readonly DateTimeOffset Now = new(2026, 10, 27, 6, 0, 0, TimeSpan.Zero);
     private static readonly PersistenceScope Scope = new("tenant");
     private static readonly WorkflowExecutableIdentity Pin = new("artifact", "definition", "version", "1.0.0", "hash");
+
+    [Theory]
+    [InlineData("processor")]
+    [InlineData("dispatcher")]
+    public async Task Fresh_combined_Event_source_with_a_legacy_selected_pipeline_refuses_before_cohort_selection_or_wait_effects(string pipeline)
+    {
+        await using var harness = new Harness(pipeline: pipeline);
+        await harness.SeedMaterial(); await harness.Bind("binding"); await harness.Wait("existing", "wait");
+        var pending = await harness.Commit();
+        var claim = Assert.Single(await harness.Store.ClaimAsync(new("readiness-test", Now, TimeSpan.FromMinutes(1), 10)));
+
+        var failure = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() =>
+            harness.Router.RouteSourceAsync(new(claim, Scope)).AsTask());
+
+        Assert.IsType<NotSupportedException>(failure.InnerException);
+        var actual = (await harness.Find(pending.OutboxItemId))!;
+        Assert.Null(actual.RecipientSnapshot); Assert.Null(actual.SubscriptionDelivery);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, actual.Status);
+        Assert.NotNull(await harness.Bookmarks.FindAsync("existing", "wait"));
+        Assert.Equal(0, harness.Lookup.Reads); Assert.Empty(harness.Actors.Attempts);
+    }
 
     [Theory]
     [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)] [InlineData(true, true)]
@@ -80,6 +102,7 @@ public sealed class PublishStimulusSourcePipelineTests
     [InlineData("seed", false)] [InlineData("seed", true)]
     [InlineData("held", false)] [InlineData("held", true)]
     [InlineData("not-adopted", false)] [InlineData("not-adopted", true)]
+    [InlineData("outbox-two", false)] [InlineData("outbox-two", true)]
     public async Task Actual_publish_checkpoint_refuses_shared_schema_dormancy_before_any_durable_write(string schema, bool materialized)
     {
         await using var harness = new Harness(schema: schema); await harness.SeedMaterial();
@@ -160,9 +183,9 @@ public sealed class PublishStimulusSourcePipelineTests
     internal sealed class Observed(string state) : IObservedSchemaFinalization
     {
         public SchemaFamilyObservation? Find(string family) => family != "RuntimePostCommitOutbox" ? null :
-            new(family, "runtime", ["1.0.0", "2.0.0"], state is "held" or "seed" ? "1.0.0" : "2.0.0",
-                state is "held" or "seed" or "not-adopted" ? "1.0.0" : "2.0.0", false, null,
-                state == "held" ? [new("2.0.0", true, [new("2.0.0", "Constructed operator hold.", "component-owner", Now)], null)] : [], null, Now);
+            new(family, "runtime", ["1.0.0", "2.0.0", "3.0.0"], state is "held" or "seed" ? "1.0.0" : state == "outbox-two" ? "2.0.0" : "3.0.0",
+                state is "held" or "seed" or "not-adopted" ? "1.0.0" : state == "outbox-two" ? "2.0.0" : "3.0.0", false, null,
+                state == "held" ? [new("3.0.0", true, [new("3.0.0", "Constructed operator hold.", "component-owner", Now)], null)] : [], null, Now);
         public IReadOnlyList<SchemaFamilyObservation> Observe() => [Find("RuntimePostCommitOutbox")!];
         public ValueTask RefreshAsync(string family, TimeSpan maxAge, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask<IReadOnlyList<SchemaFamilyObservation>> ReadStatusAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(Observe());
@@ -222,7 +245,7 @@ public sealed class PublishStimulusSourcePipelineTests
         public IWorkflowExecutableSourceReferenceStore References => Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
         public InMemoryExecutionLivenessStateStore Ownership => (InMemoryExecutionLivenessStateStore)Services.GetRequiredService<IExecutionLivenessStateStore>();
         public CountingLookup Lookup => Services.GetRequiredService<CountingLookup>();
-        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false)
+        public Harness(bool coalescing = false, string schema = "finalized", bool laterEnricher = false, bool skip = false, string pipeline = "modern")
         {
             var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(Clock); services.AddSingleton<IPersistenceAccessContextAccessor, Access>();
             services.AddSingleton<IWorkflowExecutionActorProvider>(Actors);
@@ -231,6 +254,8 @@ public sealed class PublishStimulusSourcePipelineTests
             if (skip) services.AddSingleton<IRuntimeCheckpointPersistencePolicy, SkipPolicy>();
             if (laterEnricher) services.AddSingleton<IRuntimeCheckpointCommitEnricher>(new LateEnricher(() => lateEnvelope));
             services.AddSingleton(new PersistenceModeOptions()); services.AddWorkflowRuntime(); if (coalescing) services.AddPersistenceModes();
+            if (pipeline == "processor") { services.RemoveAll<IRuntimePostCommitOutboxProcessor>(); services.AddScoped<IRuntimePostCommitOutboxProcessor, LegacyProcessor>(); }
+            if (pipeline == "dispatcher") { services.RemoveAll<IRuntimePostCommitIntentDispatcher>(); services.AddScoped<IRuntimePostCommitIntentDispatcher, LegacyDispatcher>(); }
             services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
             services.AddScoped<CountingLookup>(sp => new(new GlobalBookmarkStimulusLookup((IBookmarkStimulusIndex)sp.GetRequiredService<IBookmarkStateStore>(), sp.GetRequiredService<IWorkflowExecutionStateStore>())));
             services.AddScoped<IGlobalBookmarkStimulusLookup>(sp => sp.GetRequiredService<CountingLookup>()); services.AddWorkflowStimulusRouter();
@@ -287,5 +312,16 @@ public sealed class PublishStimulusSourcePipelineTests
         private static WorkflowExecutionState Execution(string id) => new(id, Pin, WorkflowExecutionStatus.Suspended, null, Now, Now, Now,
             null, null, null, "tenant", new Dictionary<string, string>()) { RunKind = WorkflowRunKind.PublishedRun, Partition = new("partition") };
         public async ValueTask DisposeAsync() { scope.Dispose(); await provider.DisposeAsync(); }
+    }
+
+    private sealed class LegacyProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default) => throw new InvalidOperationException("The source readiness boundary must refuse before processing.");
+    }
+    private sealed class LegacyDispatcher : IRuntimePostCommitIntentDispatcher
+    {
+        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The source readiness boundary must refuse before dispatch.");
     }
 }
