@@ -190,6 +190,22 @@ class VerdictTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'cancellation evidence'): acceptance.verdict(self.report, self.root)
         finally: file.write_text(original)
 
+    def test_cancelled_response_is_separate_from_the_required_held_request_control(self):
+        file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)
+        observed = {'kind': 'cancelled-context-response', 'request': {'nodeId': 'consumer', 'inputKey': 'text'}, 'failure': 'net::ERR_ABORTED'}
+        proof['transportControls'].append(observed)
+        try:
+            file.write_text(json.dumps(proof))
+            self.assertEqual(sum(len(projects) for projects in acceptance.JOURNEY_PROJECTS.values()), acceptance.verdict(self.report, self.root))
+            proof['transportControls'] = [observed]
+            file.write_text(json.dumps(proof))
+            with self.assertRaisesRegex(ValueError, 'cancellation evidence'): acceptance.verdict(self.report, self.root)
+            observed['kind'] = 'cancelled'
+            proof['transportControls'] = [observed, copy.deepcopy(observed)]
+            file.write_text(json.dumps(proof))
+            with self.assertRaisesRegex(ValueError, 'cancellation evidence'): acceptance.verdict(self.report, self.root)
+        finally: file.write_text(original)
+
     def test_post_edit_provenance_cannot_replace_committing_admission(self):
         file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)
         admission = proof['selections'][0]['admission']
