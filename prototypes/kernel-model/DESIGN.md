@@ -360,9 +360,13 @@ public interface ITurn
 - **Models compose through messages only.** A parent starts a child of any model and gets `child-finished`.
 - **How the known models sit on it:** native (built: activity frames, agenda, waits and variables as state; slow
   activities are background jobs; a Flowchart's paths, arrivals and dead paths are the graph engine's, in its frame's
-  state, and add no database call; NATIVE.md); BPMN (tokens; tasks are jobs; kept waits for early messages; start subscriptions for
-  message start events; `Recall` for boundary timers that do not fire); ETL (cursors; children spread over partitions);
-  agents (a checkpoint; tool calls are jobs; streamed output is emitted); durable entities (operations with a reply-to).
+  state, and add no database call; NATIVE.md). BPMN stores tokens, runs tasks as jobs, keeps early messages and uses
+  `Recall` to cancel unused boundary timers. Register message start events with `BpmnModel.MessageStart` through
+  `Events.SubscribeAsync`. Use `BpmnModel.Spec` for direct starts. The registration identifies the process,
+  local start element and event key. The start commit records the triggering event so a later catch waits for a new
+  publication. Replace old prototype registrations that contain only a local element and direct start spec.
+  ETL stores cursors and spreads children over partitions. Agents checkpoint, run tool calls as jobs and stream
+  output. Durable entities use operations with a reply-to.
 
 ## Synchronous HTTP requests
 
