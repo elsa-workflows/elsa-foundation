@@ -72,6 +72,7 @@
       "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
       "Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj",
       "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj",
+      "Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj",
       "Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj",
       "Essentials/src/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
       "Essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",

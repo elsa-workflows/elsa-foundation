@@ -58,3 +58,11 @@ Configuration readiness is separate from successful normal administrator sign-in
 is bounded and tied to current connection material, exact qualified link, credentials, callback and canonical
 session/account binding. Preview does not establish recovery evidence. Later callback/session/protocol services
 must be installed before the default runtime can establish readiness or recovery; no success placeholder is used.
+
+## Optional managed OIDC adapter
+
+The [managed OIDC package](../Oidc/README.md) contributes the `oidc` protocol through
+`AddFoundationExternalOidc` or the `FoundationIdentityExternalOidc` feature. It supplies discovery and
+code/PKCE/nonce/issuer validation with secret references resolved when used. Installing the adapter does not
+install callback/chooser/API routes, enable a connection or establish recovery evidence. The existing direct
+bearer OIDC feature remains a separate composition.
