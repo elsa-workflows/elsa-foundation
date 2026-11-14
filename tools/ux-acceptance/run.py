@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 from contextlib import contextmanager
 import json
 import os
@@ -14,13 +15,34 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
 import urllib.error
 import zipfile
 
-import weaver_inventory
+def _load_sibling(name):
+    """Absolute-spec consumers need the same fixed sibling as direct CLI imports."""
+    spec = importlib.util.spec_from_file_location('_elsa_ux_' + __name__ + '_' + name,
+                                               Path(__file__).resolve().with_name(name + '.py'))
+    if spec is None or spec.loader is None:
+        raise ImportError('The acceptance sibling could not be loaded')
+    module = importlib.util.module_from_spec(spec)
+    previous = sys.modules.get(spec.name)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        if previous is None:
+            sys.modules.pop(spec.name, None)
+        else:
+            sys.modules[spec.name] = previous
+        raise
+    return module
+
+
+weaver_inventory = _load_sibling('weaver_inventory')
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}

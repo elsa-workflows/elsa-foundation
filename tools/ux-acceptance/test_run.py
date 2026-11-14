@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -14,6 +15,42 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).with_name('run.py'))
 acceptance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(acceptance)
+
+
+class SiblingImportTests(unittest.TestCase):
+    def test_absolute_spec_import_finds_the_bound_sibling_without_changing_sys_path(self):
+        source = Path(__file__).with_name('run.py').resolve()
+        script = '''
+import importlib.util
+import json
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).resolve()
+original_path = list(sys.path)
+spec = importlib.util.spec_from_file_location('isolated_owned_ux_helpers', source)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+assert sys.path == original_path
+assert Path(module.weaver_inventory.__file__).resolve() == source.with_name('weaver_inventory.py')
+assert sys.modules[module.weaver_inventory.__name__] is module.weaver_inventory
+assert module.weaver_inventory.BASELINE in module.CAPTURES
+assert module.weaver_inventory.BASELINE not in module.selected_journeys()
+print(json.dumps({'boundSibling': True, 'unchangedPath': True}))
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            foreign = Path(directory)
+            (foreign / 'weaver_inventory.py').write_text('raise RuntimeError("Foreign module must not be imported")\n')
+            result = subprocess.run([sys.executable, '-I', '-c', script, str(source)], cwd=foreign,
+                                    capture_output=True, text=True, timeout=30, check=True)
+        self.assertEqual({'boundSibling': True, 'unchangedPath': True}, json.loads(result.stdout))
+
+    def test_isolated_cli_help_preserves_profile_and_composition_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, '-I', str(Path(__file__).with_name('run.py').resolve()), '--help'],
+                                    cwd=directory, capture_output=True, text=True, timeout=30, check=True)
+        self.assertIn('--profile', result.stdout)
+        self.assertIn('--composition', result.stdout)
+        self.assertIn('--journey', result.stdout)
 
 
 class ProvenanceInputPrivacyTests(unittest.TestCase):
