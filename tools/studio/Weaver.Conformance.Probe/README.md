@@ -369,15 +369,42 @@ through `runtime.RestartableServer`, one owned origin with a separate receipt, l
 generation. It first restarts the host on the in-memory default and requires the pending review to be lost
 (`restart-without-durable-store`). Then, while no generation runs, `consumers.enable_durable_weaver_store` selects
 `WeaverEntityFrameworkCore` on SQLite over a new database under the run's output root. `restart_journeys.py` then runs
-three restarts per actual adapter: graceful, abrupt (the owned process group is killed while a write is held at the module's
+three restart kinds per actual adapter: graceful (a separate restart for each case), abrupt (the owned process group is killed while a write is held at the module's
 native rendezvous and a provider turn is held at the pre-call gate), and after-deadline (stopped before and started after the
 prepared deadline on the real clock, about five minutes). Ten cases per adapter assert the recovered outcome, the execution
 count at the independent native owner and the audit `settledBy` values. A failed case keeps its precise cause and the rest
 still run. The Studio host keeps running throughout; consumer no-source/no-frontend and cleanup rules are unchanged.
-`witness_manifest()` is now 38 + 4 + 26 + 20 restart cases + 1 restart control = 89. `validate_complete_witness` refuses a
-report without the passed restart section, and only a run that passes everything sets `independentPackageWitness`.
+The historical #3441 increment brought its inventory to89; the current `evidence.witness_manifest()` also includes the
+later workflow and module-effects matrices. `validate_complete_witness` refuses any missing section or failed deep
+reader, and only a run that passes everything sets `independentPackageWitness`.
 
 ```sh
 python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
   --output /absolute/new-owned-weaver3441-proof --version 4.0.0-weaver3441.local1
 ```
+
+### Module effects upgrade and recovery (spec1203 T038)
+
+The source driver appends fourteen classed/removed-owner cases to the running durable backend. After the ordinary
+backend/Studio pair closes, `upgrade_journeys.py` prepares isolated old/current backend distributions and runs sixteen
+upgrade cases. Each actual adapter gets a fresh content root, database, authenticated principals and process namespace.
+The old product is pinned to post-rename Weaver1.0 commit `dff7c490d0e5501b22d4ba89beb389c956d4f423`; the current product
+reuses the witness's retained archives. The external legacy resource and bounded hold/status/release operator are
+independently restored and packed against each generation. Immutable publishes and actual native package membership,
+protocol bytes, owner reads and process closeouts remain separate evidence.
+
+These cases cover original pending/approved operations, Admin off/on, original deadlines, waiting client resolution,
+every legacy row kind, protected identity bytes/defaults and permanent counter readability. The held/released cases join
+the shared catalog, Attention and capabilities observations to real module preparation refusal/availability and an
+SDK-driven performed result. The module's preparation-only endpoint uses the existing public invoker; it supplies no
+approval or execution shortcut. Malformed operator controls run while the owning host is stopped and compare its
+main/WAL/SHM bytes and owned-content inventory. They do not claim a global system-call trace.
+
+`effects_journeys.require_effect_restarts` requires all thirty cases in the current manifest and invokes both native
+readers. Partial or failed child records cannot promote a witness. `export_evidence.py` retains verified protocol source
+prefixes, immutable windows and raw receipts, checking custody and private-data exclusions before writing. Exported
+references preserve original paths and native identities; the index maps copied bytes without claiming that a download
+has the original file identity.
+
+This is the source-authored qualification path. Its new controls and native journeys remain **UNRUN** until the real
+qualifier executes the committed candidate; source review alone does not complete T038 or establish package/UX acceptance.
