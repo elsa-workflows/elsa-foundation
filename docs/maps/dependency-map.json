@@ -425,6 +425,26 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Api",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Oidc",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Oidc",
           "path": "Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj"
         },
