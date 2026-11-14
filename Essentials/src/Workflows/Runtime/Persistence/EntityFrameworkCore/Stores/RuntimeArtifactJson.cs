@@ -12,7 +12,7 @@ internal static class RuntimeArtifactJson
     private static readonly JsonSerializerOptions Options = CreateOptions();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, JsonSerializerOptions> BoundedOptions = new();
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
-    public static T Deserialize<T>(string value) => Deserialize<T>(value, Options);
+    public static T Deserialize<T>(string value) => DeserializeWithOptions<T>(value, Options);
     public static T DeserializeBounded<T>(string value, int maximumDepth)
     {
         var options = BoundedOptions.GetOrAdd(maximumDepth, depth =>
@@ -21,7 +21,7 @@ internal static class RuntimeArtifactJson
             bounded.PropertyNameCaseInsensitive = false; // Current owner producer spelling; case aliases cannot overwrite a known field.
             return bounded;
         });
-        var result = Deserialize<T>(value, options);
+        var result = DeserializeWithOptions<T>(value, options);
         // Current source profile must preserve every stored field. Constructor defaults, computed aliases and
         // normalized collections cannot silently replace a persisted source body with a different export.
         using var output = new BoundedSnapshotStream(Encoding.UTF8.GetByteCount(value));
@@ -34,7 +34,7 @@ internal static class RuntimeArtifactJson
         return result;
     }
 
-    private static T Deserialize<T>(string value, JsonSerializerOptions options)
+    private static T DeserializeWithOptions<T>(string value, JsonSerializerOptions options)
     {
         // Direct state reads only; a future containing payload also needs presence-aware decoding.
         if (typeof(T) != typeof(DurableValueState))
