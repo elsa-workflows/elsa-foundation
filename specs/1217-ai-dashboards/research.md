@@ -44,7 +44,7 @@ Power BI's report authoring uses a conversational pane for generating and editin
 | Copy dashboard privately while retaining identified question references | Predictable shallow copy without silently duplicating others' question ownership | Deep-copy all questions; copy audiences/results/conversation. Question copy remains separate |
 | Weaver read-only preview then explicit native Save | Uses current generic extension path without waiting for unmerged M4 effect categories | Dashboard-specific conversation engine; generated prose that reports persistence |
 
-These are reviewable recommendations within the selected feature. Only choices already recorded in #3604 and its owner-authorization comment are confirmed. Provider/access remains unresolved; no credentials are assumed usable or authorized.
+These are reviewable recommendations within the selected feature. Only choices already recorded in #3604 and its owner-authorization comment are confirmed. The owner selected the existing Copilot SDK through backend configuration. Explicit configured live access passed on owned qualification hosts; exact source/model/limits are recorded in the [evidence ledger](evidence/2026-11-13/README.md).
 
 ## Agreement and ownership boundaries
 

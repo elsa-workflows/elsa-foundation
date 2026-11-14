@@ -1,0 +1,9 @@
+#nullable enable
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.AuditSubject.get -> string!
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.CanInspectSensitiveValuesAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! workflowExecution, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.CanInspectStructureAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! workflowExecution, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.CanResolveSensitiveValuePayloadsAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! workflowExecution, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.GetAuthorizationProfileAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<string!>
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.RequestCorrelationId.get -> string!
+Elsa.Workflows.Runtime.Inspection.Core.IActivityInspectionContextAsync.TenantScope.get -> string!

@@ -56,6 +56,7 @@ public sealed class NativeOptions
     /// </summary>
     public Action<InstanceRef, string, string, int, bool>? OnExternal { get; init; }
     public int MaxActivitiesPerTurn { get; init; } = 1000;
+    public AdmissionFlaw AdmissionFlaws { get; init; }
     public TimeSpan EventWindow { get; init; } = TimeSpan.FromHours(1);
 }
 
@@ -73,6 +74,8 @@ public sealed class NativeState
     public Dictionary<string, JsonNode?> Results { get; set; } = new(StringComparer.Ordinal);
     public string? TriggerNode { get; set; }
     public JsonNode? Trigger { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
 
 /// <summary>A live activity: a composite with children, or an activity that waits.</summary>
@@ -104,19 +107,20 @@ public sealed class Work
     [JsonIgnore] internal bool Gone;       // only under NativeFlaw.InFlightInMemory
 }
 
-public sealed record WaitEntry(string Frame, string Kind, string Key);
+public sealed record WaitEntry(string Frame, string Kind, string Key, long Creation = 0);
 
 // ---- the model -----------------------------------------------------------------------------------------------------
 
-public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? options = null) : IExecutionModel
+public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? options = null) : IExecutionModel, IModelMetadata
 {
     public const string ModelKey = "native";
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Round 3's state versions: native's state has one shape so far.</summary>
-    public int StateVersion => 1;
-    public object UpgradeState(string state, int fromVersion) => throw new NotSupportedException($"native state has no version {fromVersion}");
+    /// <summary>Version 3 captures optional terminal receipt policy; legacy identities remain protected without invented expiry.</summary>
+    public int StateVersion => 3;
+    public object UpgradeState(string state, int fromVersion) => fromVersion is 1 or 2 ? Json.Read<NativeState>(state)
+        : throw new NotSupportedException($"native state has no version {fromVersion}");
 
     internal WorkflowRegistry Registry => registry;
     internal NativeOptions Options { get; } = options ?? new NativeOptions();
@@ -128,6 +132,19 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
 
     public ValueTask TurnAsync(ITurn turn, CancellationToken cancellationToken) => new Burst(this, turn, cancellationToken).RunAsync();
 
+    public bool HandlesMetadata(Message message) => message.Kind is InvocationInput.Kind or ReceiptQuery.Kind;
+    public ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken) => turn.State is NativeState
+        ? new Burst(this, turn, cancellationToken, status).MetadataAsync() : InvocationLifetime.Missing(turn);
+    public void TerminateMetadata(object state)
+    {
+        if (state is NativeState native) InvocationLifetime.Terminate(native, WorkflowCommitClock.Terminal, "cancelled", (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0,
+            (Options.AdmissionFlaws & AdmissionFlaw.RestampCompleted) != 0);
+    }
+    public bool ProtectsDeletion(object state, long now, ICommitClock clock) => (Options.AdmissionFlaws & AdmissionFlaw.IgnoreRetention) == 0 &&
+        ((Options.AdmissionFlaws & AdmissionFlaw.UnsafeNull) != 0
+            ? InvocationLifetime.Protected((NativeState)state, now, clock)
+            : state is NativeState native && InvocationLifetime.Protected(native, now, clock));
+
     /// <summary>A Background leaf, run as a background job: its inputs were materialized in the turn that started it.</summary>
     public async ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken)
     {
@@ -135,16 +152,17 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         var args = Json.Read<BackgroundArgs>(job.Arguments!);
         var node = registry.Get(args.Workflow).Nodes[args.Node];
         var activity = (ILeaf)Hydrator.Create(node, args.Inputs);
-        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken));
+        var t = await activity.ExecuteAsync(new ActivityContext(job.Instance, args.Frame, node.Id, 0, cancellationToken, job.Creation));
         return new BackgroundResult(t.Kind, t.Result, t.Outcome, t.Fault);
     }
 }
 
 /// <summary>One turn: take the inbox, then run the scheduled work until everything waits, ends or meets a boundary.</summary>
-internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken)
+internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationToken cancellationToken, InstanceStatus? ended = null)
 {
+    internal long Creation => turn.Instance.Creation;
     private readonly NativeState _s = (NativeState)turn.State;
-    private readonly Workflow _wf = model.Registry.Get(turn.Instance.Definition);
+    private Workflow _wf => model.Registry.Get(turn.Instance.Definition); // metadata-only turns never resolve authored definitions
     private InstanceStatus _status = InstanceStatus.Running;
     private int _executed;
 
@@ -155,8 +173,13 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
 
     public async ValueTask RunAsync()
     {
-        foreach (var message in turn.Inbox) Accept(message);
+        if (AdmitPrefix()) return;
+        foreach (var message in turn.Inbox)
+            if (model.HandlesMetadata(message)) turn.Hold(message);
+            else Accept(message);
         await DrainAsync();
+        FinishSignals();
+        if (turn.Inbox.Any(model.HandlesMetadata)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
 
     // ---- messages in -------------------------------------------------------------------------------------------------
@@ -175,6 +198,9 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
                 _s.Agenda.Add(new Work { Frame = NewId("f"), Node = _wf.Root.Id });
                 break;
             }
+            case CompositeSignal.Kind:
+                AcceptSignal(m);
+                break;
             case NativeKinds.Timer:
             {
                 // The timer's message is consumed by this turn. Its resume may wait in the agenda past a Durable boundary,
@@ -287,8 +313,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
             case ILeaf leaf:
                 if (node.External)
                 {
-                    // Friction F-N6, fixed in the merge: the kernel says when the turn may have run before, so the
-                    // journal can say "this side effect may have happened already" instead of nobody knowing.
+                    // The observed delivery history can flag a possible earlier turn; a false hint does not rule out a race.
                     var again = turn.Inbox.Any(turn.Redelivered);
                     if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
                     model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
@@ -321,7 +346,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
         Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
     }
 
-    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken);
+    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -361,7 +386,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
                 break;
             case ChildTrigger c:
                 var child = turn.Start(NativeModel.Spec(c.Workflow, c.Mode, c.Input as JsonObject));
-                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id);
+                _s.Waits[id] = new WaitEntry(frame.Id, "child", child.Id, turn.ChildAddress(child).Creation);
                 turn.Record($"s:{frame.Id}:{child.Id}");
                 break;
         }
@@ -373,7 +398,9 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
         {
             case "event": turn.Unsubscribe(wait.Key, id); break;
             case "job" when cancel: turn.CancelJob(wait.Key); break;
-            case "child" when cancel: turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel); break;
+            case "child" when cancel:
+                turn.Send(new InstanceRef(wait.Key), NativeKinds.Cancel, options: new SendOptions(TargetCreation: wait.Creation > 0 ? wait.Creation : null));
+                break;
             case "timer" when cancel && wait.Key.Length > 0: turn.Recall(wait.Key); break;      // its row goes with this commit
         }
     }
@@ -402,6 +429,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
 
     internal void Complete(Frame frame, string outcome, JsonNode? result)
     {
+        CloseInbox(frame.Id, "completed");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
         if (result is not null) _s.Results[frame.Node] = result;
@@ -442,6 +470,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
 
     internal void Fail(Frame frame, ActivityFault fault)
     {
+        CloseInbox(frame.Id, "faulted");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
         turn.Record($"f:{frame.Id}:{frame.Node}");
@@ -481,6 +510,7 @@ internal sealed class Burst(NativeModel model, ITurn turn, CancellationToken can
     {
         if (_s.Frames.Remove(frame, out var f))
         {
+            CloseInbox(frame, "cancelled");
             foreach (var (id, wait) in _s.Waits.Where(w => w.Value.Frame == frame).ToList())
             {
                 _s.Waits.Remove(id);
@@ -558,7 +588,7 @@ internal sealed class FrameScope(Burst burst, Frame frame) : IScope
 }
 
 /// <summary>What a composite sees: its children, its private state, and the structural requests it may make.</summary>
-public sealed class CompositeContext
+public sealed partial class CompositeContext
 {
     private readonly Burst _burst;
     private readonly Frame _frame;
@@ -567,6 +597,7 @@ public sealed class CompositeContext
 
     public Node Node { get; }
     public string FrameId => _frame.Id;
+    public long Creation => _burst.Creation;
     public IReadOnlyList<Node> Children => Node.Children;
     public IReadOnlyList<string> Running => _burst.Running(_frame.Id);
     internal bool Flawed(NativeFlaw flaw) => _burst.Flawed(flaw);
@@ -584,7 +615,7 @@ public sealed class CompositeContext
     public void Complete(string outcome = "Done", JsonNode? result = null) => _burst.Complete(_frame, outcome, result);
     public void Join() => _burst.Join(_frame);
     public void RecordJoin(string node) => _burst.RecordJoin(_frame, node);
-    internal void Record(string entry) => _burst.Record(entry);
+    public void Record(string entry) => _burst.Record(entry);
     public void Fault(ActivityFault fault) => _burst.Fail(_frame, fault);
     public void Cancel(string childFrame) => _burst.Cancel(childFrame);
 }

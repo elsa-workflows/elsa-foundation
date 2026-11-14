@@ -1586,6 +1586,7 @@
 }
 
 .wf-instance-section.wf-activity-overview {
+  container: workflow-activity-overview / inline-size;
   overflow: hidden;
   padding: 0;
 }
@@ -1672,6 +1673,26 @@
 
 .wf-activity-overview-status {
   justify-content: flex-end;
+}
+
+@container workflow-activity-overview (max-width: 30rem) {
+  .wf-activity-overview-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .wf-activity-overview-status {
+    grid-column: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .wf-instance-section .wf-activity-overview-title h4 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
 }
 
 .wf-activity-summary-grid,
@@ -5518,6 +5539,38 @@ button.wf-reference-select {
   min-height: 32px;
   border-color: var(--wf-border);
   border-left: 0;
+}
+
+/* Owned scalar fields lay actions out beside their native value, below the legend and above help. */
+.wf-expression-field--outlined .studio-form-adornment > .wf-syntax-picker.inline {
+  position: static;
+  inset: auto;
+  display: flex;
+  align-self: stretch;
+  flex: 0 0 38px;
+  width: 38px;
+}
+
+.wf-expression-field--outlined .studio-form-adornment .wf-syntax-picker-trigger.inline {
+  height: auto;
+  min-height: var(--studio-control-height);
+  flex: 1;
+  border: 0;
+  border-inline-start: 1px solid var(--wf-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.wf-expression-field--outlined .studio-field-group .studio-form-adornment > .wf-syntax-picker.inline {
+  align-self: center;
+}
+
+.wf-expression-field--outlined .studio-form-adornment > .wf-expression-expand-button {
+  position: static;
+  inset: auto;
+  align-self: stretch;
+  height: auto;
+  min-height: var(--studio-control-height);
 }
 
 .wf-expression-field:not(.wf-expression-field--control) .wf-expression-editor > input[type="text"] {

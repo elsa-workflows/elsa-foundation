@@ -1,3 +1,7 @@
+# Dashboard evidence index
+
+Current delivered source, original downloadable screenshots/ARIA, privacy-reviewed trace archives, exact model identities and allowlisted acceptance reports are in the [13 November delivery ledger](2026-11-13/README.md). The [resulting-main receipt](2026-11-13/resulting-main-receipt.json) qualifies clean main3a90b64b96 with actual provider/native keyboard journeys and real host restart. The history below retains its original failed, unavailable, preliminary and source-specific meanings.
+
 # Dashboard delivery evidence
 
 **12 November — historical receipts below:** #3913 closed without merging. The owner resumed delivery and extended the review limit within reason. [Delivery slices](../delivery-slices.md) owns current integration status. The local passes below belong to the preserved November 6 source; former `/tmp` artifacts are unavailable. They are not current-head, independent, downloadable or resulting-main qualification. References below to the exhausted review cap describe the old checkpoint, not a pending permission request.
@@ -44,3 +48,26 @@ At frozen48b7e029c, native006 machine assertions passed4/4 projects with all req
 R6 reviewed frozen6828fced3. Native007 machine assertions passed4/4 with the table-word and scrolled-value checks; independent inspection opened39 current images and accepted the observed native states. Correctness found one additional legal-name case: the question picker Add button overflowed after dialog-wide wrapping was removed. An author-prepared correction scopes wrapping and width limits to native dialog buttons, leaving table text unchanged. Three real QuestionPickerDialog cases first failed, then the complete rendered suite passed16/16; Dashboard182/182 and typechecks/lint/stylelint/build pass. The composed journey now also uses a legal unbroken question name in the picker. This correction has not received a fresh independent review: the organization six-round limit has been reached. Owner authorization is required to extend review before delivery can finish; live-provider, required CI/downloadable evidence, merge and resulting-main gates also remain open.
 
 Author verification at a442d36ff passed Native0084/4 including the long-question picker. The first committed Home matrix passed1/4 and failed3/4: after an explicit administrator default, the first personal PUT reused its ETag and received412. This is a pre-existing Home preservation bug (homeLayout.ts was unchanged from main before this fix), matching the existing documented requirement for If-None-Match on the first personal write. The prepared store now remembers authoritative remote user-target state separately from inherited document metadata. Four genuine412 regressions failed before the correction; whole Dashboard187/187, TypeScript/lint/build pass afterward, preserving queued user revisions, reset, cold supplied-user revision and anonymous/device behavior. A fresh composed Home run is required. This author-prepared correction, like the picker button fix, awaits authorization for independent review beyond round6; no merge or delivery acceptance is claimed.
+
+## Current native composed qualification
+
+The owned UX runner supports the complete `native dashboard questions and sharing` and `existing home widgets and layout defaults` journeys across all four viewport/color projects. It builds real Workbench/Studio, seeds normal native Identity principals only in its explicitly selected private QA host, and disables Copilot inference for this native proof. Use new output directories:
+
+```sh
+python3 tools/ux-acceptance/run.py --output /tmp/dashboard-native-unique --journey 'native dashboard questions and sharing'
+python3 tools/ux-acceptance/run.py --output /tmp/dashboard-home-unique --journey 'existing home widgets and layout defaults'
+```
+
+An optional `--studio-root /absolute/reviewed/studio-checkout` builds that exact clean frontend against the runner checkout's backend. Reports record `sourceSha` (backend) and `studioSourceSha` (frontend), both dirty flags, and refuse changes to either source during qualification. This lets each stacked UI PR be inspected at its actual reviewed frontend commit while using the independently versioned current backend. Set `UX_PR_HEAD_SHA` to the reviewed PR head when they differ; it must be an observed source SHA or the verified second parent of a two-parent tested CI merge; never describe the pair as one source revision. Default runs still build both from the same checkout and require every journey unless a complete single journey is explicitly selected.
+
+The isolated pointer/long-name/drill fixtures use `Studio/tests/browser/playwright.dashboard-native.config.ts`, which owns its Vite server and never reuses another checkout. They are supporting browser regressions, not composed product acceptance. Current machine reports/screenshots still require independent inspection and downloadable CI evidence before UI acceptance. Native browser message-submit counters do not measure physical SDK/HTTP calls.
+
+The opt-in actual provider runner is `tools/studio/Dashboard.Conformance.Probe/live_qualify.py`.
+Preparation/build do not inspect credentials or call a model. Live mode requires a pinned model,
+explicit restored-access acknowledgement and the approved credential environment-variable name.
+Its dedicated host declares the current normal Workbench dependencies plus Acme unconditionally;
+it forwards the real SDK factory and observes turns/tools without recording source results.
+Browser traces are owned by Playwright, including the independent reader context.
+A successful SDK discovery alone does not qualify authoring. Both actual lifecycle journeys,
+native zero-send phases, current IAM denials, numerical oracles and independent screen inspection
+remain required. Reports/traces are private; publish only an inspected allowlisted receipt.

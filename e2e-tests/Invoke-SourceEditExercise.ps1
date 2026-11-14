@@ -13,7 +13,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $testRelative = 'Essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs'
-$sourceRelative = 'Essentials/src/Activities/Primitives/Activities/WriteLine.cs'
+$sourceRelative = 'Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs'
 $testPath = Join-Path $repoRoot ($testRelative -replace '/', [IO.Path]::DirectorySeparatorChar)
 $sourcePath = Join-Path $repoRoot ($sourceRelative -replace '/', [IO.Path]::DirectorySeparatorChar)
 $testProject = 'Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj'

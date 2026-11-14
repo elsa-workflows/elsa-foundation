@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Update;
 using Npgsql;
 
 namespace Kernel.EntityFramework;
@@ -54,6 +55,8 @@ public sealed class ViewEntity
 
 public sealed class MessageEntity
 {
+    // Only used while preparing this commit. EF maps public properties by convention.
+    internal int SendOrdinal { get; set; }
     public string Id { get; set; } = "";
     public long Seq { get; set; }
     public int Partition { get; set; }
@@ -108,6 +111,12 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     public DbSet<JournalEntity> Journal => Set<JournalEntity>();
     public DbSet<ProjectionEntity> Projections => Set<ProjectionEntity>();
     public DbSet<ViewEntity> Views => Set<ViewEntity>();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
+        MySqlCommandBatchPreparer.Configure(optionsBuilder);
+    }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -275,6 +284,8 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(batch);
+        CommitClockFacts.RejectUnsupported(batch);
         // FINDINGS 25.2 (M6): subscriptions are idempotent. The change tracker writes them as rows, so subscribing what is
         // there is a key violation and unsubscribing what is not is a count that does not match. A commit whose first
         // count that does not match is on a wait, or that subscribes anything and fails with a definite error while the
@@ -396,8 +407,10 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                 db.Attach(new MessageEntity { Id = id, Trial = 0 }).Property(m => m.Trial).IsModified = true;
             foreach (var message in turn.Sent)
             {
-                sent.Add(ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq));
-                db.Add(sent[^1]);
+                var entity = ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq);
+                entity.SendOrdinal = sent.Count;
+                sent.Add(entity);
+                db.Add(entity);
             }
             if (turn.Journal is not null)
                 db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : turn.Row?.Revision ?? 0, Entries = turn.Journal });
@@ -466,6 +479,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(message);
         await using var db = create();
         var m = ToEntity(message, 0, 0);
         if (Engine is not null) return await Engine.AddAsync(db, m, cancellationToken);
@@ -504,6 +518,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(subscription);
         await using var db = create();
         if (Engine is not null) { await Engine.SubscribeAsync(db, subscription, cancellationToken); return; }
         await db.Database.ExecuteSqlRawAsync(
@@ -525,6 +540,17 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
     }
 
+    public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();      // the index on Journal(Partition, Instance)
+        // With RCSI disabled a SQL Server scan needs range locks to hold its committed image for this statement.
+        var journal = Engine is SqlServerEngine { ReadCommittedSnapshot: false }
+            ? db.Journal.FromSqlRaw("SELECT * FROM [Journal] WITH (HOLDLOCK)")
+            : db.Journal.AsQueryable();
+        var rows = await journal.AsNoTracking().Where(j => j.Partition == partition && j.Instance == instance && j.Position > after).OrderBy(j => j.Position).ToListAsync(cancellationToken);
+        return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
+    }
+
     private sealed class ProjectionRow
     {
         public long Position { get; set; }
@@ -542,19 +568,46 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default)
     {
+        var changes = ViewChange.From(rows);
+        var deleted = changes.Where(v => v.Commits == 0).Select(v => v.Instance).ToArray();
+        var views = changes.Where(v => v.Commits > 0).ToList();
         await using var db = create();
-        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        var moved = await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}"""), [to, partition, from], cancellationToken);
-        if (moved != 1) return false;
-        foreach (var view in rows.Where(r => r.Revision > 0).GroupBy(r => r.Instance))
+        if (postgres && Engine is null)
         {
-            if (Engine is not null) { await Engine.ViewAsync(db, view.Key, partition, view.Max(r => r.Revision), view.Count(), cancellationToken); continue; }
-            await db.Database.ExecuteSqlRawAsync(
-                """INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = "Views"."Commits" + excluded."Commits" """,
-                [view.Key, partition, view.Max(r => r.Revision), view.Count()], cancellationToken);
+            // PostgreSQL: one statement, so one round trip and its own transaction. The view rows are written only if the
+            // projector's row moved from where the round read it.
+            var moved = await db.Database.SqlQueryRaw<int>(
+                """
+                WITH moved AS (UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2} RETURNING 1),
+                up AS (INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits")
+                       SELECT v.i, {1}, v.r, v.c FROM unnest({3}::text[], {4}::bigint[], {5}::integer[]) AS v(i, r, c) WHERE EXISTS (SELECT 1 FROM moved)
+                       ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = CASE WHEN excluded."Instance" = ANY({7}::text[]) THEN excluded."Commits" ELSE "Views"."Commits" + excluded."Commits" END),
+                gone AS (DELETE FROM "Views" WHERE "Instance" = ANY({6}::text[]) AND EXISTS (SELECT 1 FROM moved))
+                SELECT COUNT(*)::int AS "Value" FROM moved
+                """,
+                to, partition, from, views.Select(v => v.Instance).ToArray(), views.Select(v => v.Revision).ToArray(), views.Select(v => v.Commits).ToArray(), deleted, views.Where(v => v.Reset).Select(v => v.Instance).ToArray())
+                .ToListAsync(cancellationToken);
+            return moved[0] == 1;
         }
-        foreach (var deleted in rows.Where(r => r.Revision < 0))
-            await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Views" WHERE "Instance" = {0}"""), [deleted.Instance], cancellationToken);
+        await using var transaction = await (Engine?.BeginAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
+        var movedRows = await db.Database.ExecuteSqlRawAsync(Q("""UPDATE "Projections" SET "Position" = {0} WHERE "Partition" = {1} AND "Position" = {2}"""), [to, partition, from], cancellationToken);
+        if (movedRows != 1) return false;
+        if (Engine is not null)
+        {
+            await Engine.ProjectViewsAsync(db, partition, rows, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        foreach (var group in views.GroupBy(v => v.Reset))
+        {
+            string commits = group.Key ? "excluded.\"Commits\"" : "\"Views\".\"Commits\" + excluded.\"Commits\"";
+            foreach (var chunk in group.Chunk(200))     // SQLite: 4 parameters per row
+                await db.Database.ExecuteSqlRawAsync(
+                    $$"""INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES {{string.Join(", ", chunk.Select((_, i) => $"({{{4 * i}}}, {{{4 * i + 1}}}, {{{4 * i + 2}}}, {{{4 * i + 3}}})"))}} ON CONFLICT ("Instance") DO UPDATE SET "Revision" = excluded."Revision", "Commits" = {{commits}} """,
+                    chunk.SelectMany(v => new object[] { v.Instance, partition, v.Revision, v.Commits }), cancellationToken);
+        }
+        foreach (var chunk in deleted.Chunk(500))
+            await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Views" WHERE "Instance" IN ({string.Join(", ", chunk.Select((_, i) => $"{{{i}}}"))})"""), chunk, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
     }

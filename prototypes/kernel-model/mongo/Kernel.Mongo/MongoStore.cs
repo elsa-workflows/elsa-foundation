@@ -147,6 +147,8 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(batch);
+        CommitClockFacts.RejectUnsupported(batch);
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {
@@ -377,6 +379,7 @@ public sealed class MongoStore : IKernelStore
 
     public async ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
+        CreationProtocol.RejectUnsupported(message);
         // Nothing fences an outside add, so its key comes from the target partition's inbox clock: one document per
         // partition, apart from the partition document so that adds never conflict with the owner's commits.
         BsonDocument[] tick = [new("$set", new BsonDocument("clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$clock", 0L }), NowUs }), 1L })))];
@@ -437,6 +440,14 @@ public sealed class MongoStore : IKernelStore
         return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
     }
 
+    public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        // A find may span multiple cursor batches. Keep them on the same committed snapshot.
+        var docs = await _journal.WithReadConcern(ReadConcern.Snapshot).Find(new BsonDocument { { "partition", partition }, { "instance", instance }, { "position", new BsonDocument("$gt", after) } })
+            .Sort(new BsonDocument("position", 1)).ToListAsync(cancellationToken);
+        return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
+    }
+
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         var expired = new BsonDocument("$expr", new BsonDocument("$lt", new BsonArray { "$keepUntil", NowMs }));
@@ -461,8 +472,11 @@ public sealed class MongoStore : IKernelStore
     }
 
     /// <summary>A subscription of kind start, upserted by its id, so registering it twice keeps one.</summary>
-    public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) =>
+    public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
+    {
+        CreationProtocol.RejectUnsupported(subscription);
         await _subscriptions.ReplaceOneAsync(new BsonDocument("_id", SubscriptionId(subscription)), ToDocument(subscription, 0), new ReplaceOptions { IsUpsert = true }, cancellationToken);
+    }
 
     public async ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default)
     {
@@ -487,11 +501,20 @@ public sealed class MongoStore : IKernelStore
                 return false;
             }
             var models = new List<BulkWriteModel>();
-            foreach (var view in rows.Where(r => r.Revision > 0).GroupBy(r => r.Instance))
-                models.Add(new BulkWriteUpdateOneModel<BsonDocument>(_views.CollectionNamespace, new BsonDocument("_id", view.Key),
-                    new BsonDocument { { "$set", new BsonDocument("partition", partition) }, { "$max", new BsonDocument("revision", view.Max(r => r.Revision)) }, { "$inc", new BsonDocument("commits", view.Count()) } }, isUpsert: true));
-            foreach (var deleted in rows.Where(r => r.Revision < 0))
-                models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_views.CollectionNamespace, new BsonDocument("_id", deleted.Instance)));
+            foreach (var change in ViewChange.From(rows))
+            {
+                var key = new BsonDocument("_id", change.Instance);
+                if (change.Commits == 0)
+                    models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_views.CollectionNamespace, key));
+                else
+                {
+                    var fields = new BsonDocument { { "partition", partition }, { "revision", change.Revision } };
+                    var update = new BsonDocument("$set", fields);
+                    if (change.Reset) fields["commits"] = change.Commits;
+                    else update["$inc"] = new BsonDocument("commits", change.Commits);
+                    models.Add(new BulkWriteUpdateOneModel<BsonDocument>(_views.CollectionNamespace, key, update, isUpsert: true));
+                }
+            }
             if (models.Count > 0) await _client.BulkWriteAsync(session, models, new ClientBulkWriteOptions { IsOrdered = true }, cancellationToken);
             await session.CommitTransactionAsync(cancellationToken);
             return true;

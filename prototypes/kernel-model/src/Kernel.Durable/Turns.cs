@@ -8,6 +8,9 @@ namespace Kernel.Durable;
 /// </summary>
 public interface IActorType
 {
+    /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
+    bool SingleMessage(Message message) => false;
+
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
 
@@ -32,6 +35,8 @@ public interface ITurnServices
 {
     /// <summary>Database time as far as this owner knows.</summary>
     long Now { get; }
+    bool CommitClockAvailable { get; }
+    bool CreationIdentityAvailable { get; }
 
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }
@@ -51,13 +56,14 @@ public sealed class Delivery(Message message, long seq)
     internal bool Marked;             // its row says seen at this epoch
     internal bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
-    internal bool Again;              // its row was seen at an earlier epoch: a turn may have run with it (DurableTurn.Redelivered)
+    internal bool Again;              // its polled row already had a seen or trial marker (DurableTurn.Redelivered)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal int Attempts;
     internal bool Ticket;             // a kernel message, not (yet) for the model
     internal bool Taken;              // a turn or a commit in flight has it
     internal string? Key;             // of a job
     internal CancellationTokenSource? Cancel;
+    internal Task? JobDriver;
 }
 
 /// <summary>What a turn is given: the actor, its committed row and live state, and the messages that are due, in order.</summary>
@@ -77,7 +83,9 @@ public sealed class TurnInput
 
     internal Slot Slot { get; }
     public string Actor { get; }
-    public InstanceRow? Row => Slot.Row;
+    public InstanceRow? Row => Slot.CurrentRow;
+    public InstanceRow? Previous => Slot.Row;
+    public long Creation => Row?.Creation ?? Spec?.Creation?.Generation ?? 0;
 
     /// <summary>The live state between turns, equal to the row's; null when it is not in memory.</summary>
     public object? State => Slot.State;
@@ -114,6 +122,7 @@ public sealed class TurnOutcome(string instance)
     public InstanceStatus? Status = InstanceStatus.Running;     // after this turn; null when the instance does not exist
     public long Revision;
     public List<(string Channel, object? Item)> Emitted = [];
+    public List<RequestReply> Replied = [];
     public List<Delivery> Consumed = [], Held = [];
     public List<string> Cancelled = [];
     public List<Message> Sent = [];
@@ -123,6 +132,9 @@ public sealed class TurnOutcome(string instance)
 
     internal bool Durable => Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id));
 }
+
+/// <summary>A reply to one consumed request, after commit; it does not subscribe a workflow observer.</summary>
+public sealed record RequestReply(string Message, string To, string Channel, object? Item);
 
 /// <summary>
 /// The durable half of one turn: what it sends, holds, recalls, subscribes, publishes and emits, and the background jobs
@@ -135,6 +147,7 @@ public sealed class DurableTurn
     private readonly HashSet<string> _fresh = [], _volatile = [], _started = [], _held = [];
     private readonly List<SubscriptionRow> _subscribed = [], _unsubscribed = [];
     private readonly List<(string, object?)> _emitted = [];
+    private readonly List<RequestReply> _replied = [];
     private readonly HashSet<SubscriptionRow> _kept = [];
     private readonly List<string> _jobs, _cancelled = [];
     private int _ordinal;
@@ -148,9 +161,11 @@ public sealed class DurableTurn
         foreach (var message in Inbox)
             if (message.Kind == Kinds.JobFinished) _jobs.Remove(message.Read<JobFinished>().Key);    // its result is being handled: no longer in flight
         Revision = (input.Row?.Revision ?? 0) + 1;
+        Clock = new TurnClock(input.Row, Revision, input.Services);
     }
 
     public InstanceRef Actor { get; }
+    public ICommitClock Clock { get; }
     public IReadOnlyList<Message> Inbox { get; }
 
     /// <summary>The revision this turn's commit writes.</summary>
@@ -163,21 +178,30 @@ public sealed class DurableTurn
     public int SentCount => _sent.Count;
     public int SubscribedCount => _subscribed.Count;
     private string Id => Actor.Id;
+    private string Origin => CreationProtocol.Origin(Id, _input.Creation);
     private ITurnServices Services => _input.Services;
 
     public void Emit(string channel, object? item) => _emitted.Add((channel, item));
 
-    public bool Redelivered(Message message) => _input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false;
+    public void Reply(Message request, string channel, object? item)
+    {
+        if (!Inbox.Contains(request) || _held.Contains(request.Id) || _replied.Any(r => r.Message == request.Id))
+            throw new InvalidOperationException("Reply must name one consumed request of this turn, once.");
+        if (request.ReplyTo is { } to) _replied.Add(new(request.Id, to, channel, item));
+    }
+
+    public bool Redelivered(Message message) => !Services.Has(Flaw.HideDeliveryHistory) && (_input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false);
 
     // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
     // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.
     public string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null) =>
-        Send($"{Id}#{Revision}.{_ordinal++:D4}", target, kind, payload, options);
+        Send($"{Origin}#{Revision}.{_ordinal++:D4}", target, kind, payload, options);
 
     private string Send(string id, InstanceRef target, string kind, object? payload, SendOptions? options = null)
     {
         _sent.Add(new Message(id, target, kind, payload is null ? null : Json.Write(payload), Id, options?.Start,
-            options?.Delay is { } delay ? Services.Now + (long)delay.TotalMilliseconds : null));
+            options?.Delay is { } delay ? Services.Now + (long)delay.TotalMilliseconds : null,
+            TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null)));
         return id;
     }
 
@@ -189,7 +213,7 @@ public sealed class DurableTurn
 
     public void Recall(string message)
     {
-        if (!message.StartsWith(Id + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by {Id}.");
+        if (!message.StartsWith(Origin + "#", StringComparison.Ordinal)) throw new InvalidOperationException($"Message '{message}' was not sent by the current creation of {Id}.");
         if (Inbox.Any(m => m.Id == message) || _cancelled.Contains(message)) return;     // given to this turn: consumed with it
         if (_sent.RemoveAll(m => m.Id == message) > 0) return;      // sent by this turn: never written
         _cancelled.Add(message);        // its row goes with this commit, as a cancelled job's ticket does
@@ -203,14 +227,14 @@ public sealed class DurableTurn
         _started.Add(key);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
-        Send(Worker.TicketId(Id, key), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments is null ? null : Json.Write(arguments)));
+        Send(Worker.TicketId(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments is null ? null : Json.Write(arguments)));
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].Id);
     }
 
     public void CancelJob(string key)
     {
         if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
-        var ticket = Worker.TicketId(Id, key);
+        var ticket = Worker.TicketId(Id, key, _input.Creation);
         if (_started.Remove(key)) _sent.RemoveAll(m => m.Id == ticket);
         else _cancelled.Add(ticket);
         Services.Cancelling(ticket);     // from here on its result is nobody's
@@ -219,20 +243,21 @@ public sealed class DurableTurn
     public void Hold(Message message)
     {
         if (!Inbox.Contains(message)) throw new InvalidOperationException($"Message '{message.Id}' is not in this turn's inbox.");
+        if (_replied.Any(r => r.Message == message.Id)) throw new InvalidOperationException("A replied request cannot be held.");
         _held.Add(message.Id);
     }
 
     public void Subscribe(string key, string wait, bool keep = false)
     {
-        _subscribed.Add(new SubscriptionRow(key, Id, wait));
+        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
         if (keep) _kept.Add(_subscribed[^1]);
     }
-    public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait));
+    public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
 
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
     public string Publish(string key, string? payload, TimeSpan keep)
     {
-        var id = $"{Id}#{Revision}.{_ordinal:D4}";
+        var id = $"{Origin}#{Revision}.{_ordinal:D4}";
         Send(Actor, Kinds.Publish, new EventRow(key, id, payload, Services.Now + (long)keep.TotalMilliseconds));
         return id;
     }
@@ -255,7 +280,7 @@ public sealed class DurableTurn
     {
         Consumed = _input.Taken.Where(i => !_held.Contains(i.Message.Id)).ToList(),
         Held = _input.Taken.Where(i => _held.Contains(i.Message.Id)).ToList(),
-        Cancelled = _cancelled, Spec = _input.Spec, Status = status, Revision = Revision, Emitted = _emitted,
+        Cancelled = _cancelled, Spec = _input.Spec, Status = status, Revision = Revision, Emitted = _emitted, Replied = _replied,
     };
 
     /// <summary>The turn's end is its commit, and the only one: the row, the journal, and everything it sent.</summary>
@@ -268,8 +293,8 @@ public sealed class DurableTurn
             Send(Actor, Kinds.Meet, _subscribed.Where(_kept.Contains).ToArray());
             if (Services.Has(Flaw.MeetWithoutTicket)) _volatile.Add(_sent[^1].Id);
         }
-        unit.Row = row;
-        unit.Expected = _input.Row is null ? null : Revision - 1;
+        unit.Row = row with { CommitTimes = ((TurnClock)Clock).Snapshot() };
+        unit.Expected = _input.Previous?.Revision;
         unit.State = state;
         unit.Journal = journal;
         unit.Sent = _sent;

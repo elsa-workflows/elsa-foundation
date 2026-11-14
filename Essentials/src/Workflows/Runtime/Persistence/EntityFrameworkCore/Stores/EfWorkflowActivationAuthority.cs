@@ -208,6 +208,7 @@ public sealed class EfWorkflowActivationAuthority(
 
     /// <summary>The context every staged transition writes through; a switch commits only stores that share it.</summary>
     internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => accessContextAccessor.Current;
 
     /// <summary>Saves one staged slot transition on its own, retrying a lost race.</summary>
     private ValueTask<WorkflowActivationTransition> CommitAsync(
@@ -335,7 +336,7 @@ public sealed class EfWorkflowActivationAuthority(
     // rather than duplicating its text.
     private const string IdentityMismatchMessage = "The persisted EF activation-slot row does not match its identity envelope or authoritative content.";
 
-    private static WorkflowActivationSlot Read(WorkflowActivationSlotEntity row, string scope, string? expectedDefinitionId = null, string? expectedSlotName = null)
+    internal static WorkflowActivationSlot Read(WorkflowActivationSlotEntity row, string scope, string? expectedDefinitionId = null, string? expectedSlotName = null)
     {
         if (EfSchemaVersion.NotReadable(RuntimeActivationSlotEfModule.Chain, row.SchemaVersion))
             throw new InvalidDataException(IdentityMismatchMessage);

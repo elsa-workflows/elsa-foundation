@@ -7,14 +7,16 @@ namespace Kernel.Durable;
 /// <c>Jobs</c>, the keys of the background jobs in flight. The workflow instance's part (layer 3): <c>Model</c>,
 /// <c>Definition</c>, <c>Status</c>, <c>Parent</c>, <c>Fault</c>, <c>Suspended</c> and <c>Children</c>, the instances it started
 /// that have not finished. One row, so one write per commit: a seam leak (FINDINGS section 24). JSON arrays or null.
+/// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
-public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1);
+public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, string? PendingStart = null);
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
-public sealed record SubscriptionRow(string Key, string Instance, string Wait, StartSpec? Start = null);
+public sealed record SubscriptionRow(string Key, string Instance, string Wait, StartSpec? Start = null, long Creation = 0);
 
 public sealed record EventRow(string Key, string Id, string? Payload, long KeepUntil);
 
@@ -28,6 +30,25 @@ public sealed record Projection(long Position, long Written);
 
 /// <summary>The viewer's row of an instance, as the projector has it: the last revision it saw and how many commits.</summary>
 public sealed record ViewRow(string Instance, long Revision, int Commits);
+
+/// <summary>The view change for one key in a projection page. Reset discards the view before the last delete.</summary>
+public sealed record ViewChange(string Instance, long Revision, int Commits, bool Reset)
+{
+    public static IReadOnlyCollection<ViewChange> From(IReadOnlyList<JournalRow> rows)
+    {
+        var changes = new Dictionary<string, ViewChange>(StringComparer.Ordinal);
+        foreach (var row in rows.OrderBy(r => r.Position))
+        {
+            if (row.Revision < 0) changes[row.Instance] = new(row.Instance, 0, 0, true);
+            else if (row.Revision > 0)
+            {
+                changes.TryGetValue(row.Instance, out var previous);
+                changes[row.Instance] = new(row.Instance, row.Revision, (previous?.Commits ?? 0) + 1, previous?.Reset ?? false);
+            }
+        }
+        return changes.Values;
+    }
+}
 
 public sealed record Lease(long Epoch, long Position, long Now);
 
@@ -77,6 +98,15 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 /// </summary>
 public interface IKernelStore : IMembership
 {
+    /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
+    bool CreationIdentityAvailable => false;
+
+    /// <summary>
+    /// Qualified immutable clock facts in the same atomic commit; unavailable by default. A qualified store returns
+    /// the exact authoritative stamp time in Committed.Now; the generic permission to omit that time does not apply.
+    /// </summary>
+    bool CommitClockAvailable => false;
+
     /// <summary>
     /// Take the partition if it is free, expired or already mine. Every take bumps the epoch. A take from another
     /// owner can only succeed because that owner's lease expired: that is a death, and in the same transaction every
@@ -116,12 +146,19 @@ public interface IKernelStore : IMembership
     /// <summary>
     /// In one transaction: move the projector's position from <paramref name="from"/> to <paramref name="to"/>, if it is
     /// still at <paramref name="from"/>, and write the view rows of <paramref name="rows"/>; a row of a deleted instance
-    /// removes its view. False when another projector moved it first.
+    /// resets its view at that journal position. Positive revisions after that delete start a fresh count. False when another projector moved it first.
     /// </summary>
     ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default);
 
     /// <summary>The viewer's read: the view rows of these instances, as the projectors have written them. Missing ids are skipped.</summary>
     ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Decision 11, the viewer's tail: one instance's journal rows past position <paramref name="after"/>, in position order.
+    /// Return one committed snapshot, including any delete marker visible in that snapshot. Concurrent commits must
+    /// not extend the read indefinitely or combine rows from different snapshots. Wrappers forward this operation.
+    /// </summary>
+    ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default);
 
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
@@ -134,7 +171,9 @@ public static class Events
     /// the double is refused; a start's target is derived from event and subscription too, so it is created once.
     /// </summary>
     public static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
-        ? new($"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil)
+        ? new(s.Creation > 0 ? FormattableString.Invariant($"evq:{e.Id.Length}:{e.Id}:{CreationProtocol.Origin(s.Instance, s.Creation)}:{s.Wait}")
+            : $"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
+            TargetCreation: s.Creation > 0 ? s.Creation : null)
         : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
 
     /// <summary>
@@ -143,6 +182,16 @@ public static class Events
     /// </summary>
     public static (string Event, string Wait)? Delivered(Message m)
     {
+        if (m.Kind == Kinds.Event && m.Start is null && m.TargetCreation is > 0 && m.Id.StartsWith("evq:", StringComparison.Ordinal))
+        {
+            var split = m.Id.IndexOf(':', 4);
+            if (split < 0 || !int.TryParse(m.Id.AsSpan(4, split - 4), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var length) || length > m.Id.Length - split - 1) return null;
+            var start = split + 1;
+            var qualifiedMarker = $":{CreationProtocol.Origin(m.Target.Id, m.TargetCreation.Value)}:";
+            if (!m.Id.AsSpan(start + length).StartsWith(qualifiedMarker, StringComparison.Ordinal)) return null;
+            return (m.Id.Substring(start, length), m.Id[(start + length + qualifiedMarker.Length)..]);
+        }
         if (m.Kind != Kinds.Event || !m.Id.StartsWith("ev:", StringComparison.Ordinal)) return null;
         var marker = m.Start is null ? $":{m.Target.Id}:" : "::";
         var at = m.Id.LastIndexOf(marker, StringComparison.Ordinal);

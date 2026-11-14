@@ -1,3 +1,4 @@
+import { useCompactNavigation } from "../navigation/useCompactNavigation";
 import { StudioPageHeader, StudioButton, StudioField } from "../ui";
 import React, { useEffect, useMemo, useRef, useState, useId } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
@@ -69,14 +70,18 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const { previewTheme, refreshThemes } = useTheme();
   const [store, setStore] = useState<ThemeStoreResponse | null>(null);
   const [selectedThemeId, setSelectedThemeId] = useState("");
+  const { compact, navigationRef, selectRef, contentRef } = useCompactNavigation();
   const [draft, setDraft] = useState<StudioThemeDefinition | null>(null);
   const [tab, setTab] = useState<BuilderTab>("overview");
   const [mode, setMode] = useState<ThemeMode>("light");
-  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingWrites, setPendingWrites] = useState(0);
   const assetInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const currentHost = useRef(api.host);
+  currentHost.current = api.host;
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current++; }, [api.host]);
 
   // Load until a store has arrived. A background workspace tab mounts its effects again when it returns:
   // a loaded store is kept, a load still in flight is not repeated, and a load that failed is retried.
@@ -224,7 +229,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   async function applyPreview() {
     if (!draft || !validation.valid) return;
     previewTheme(draft);
-    setStatus("Preview applied.");
+    api.notifications?.notify({ level: "success", title: "Preview applied." });
   }
 
   async function uploadAsset(file: File) {
@@ -265,12 +270,12 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }
 
   async function run(operation: () => Promise<void>, success: string, kind: "load" | "write" = "write") {
+    const operationGeneration = generation.current;
     setError(null);
-    setStatus(null);
     if (kind === "write") setPendingWrites(count => count + 1);
     try {
       await operation();
-      setStatus(success);
+      if (success && kind === "write" && currentHost.current === api.host && generation.current === operationGeneration) api.notifications?.notify({ level: "success", title: success });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -330,10 +335,14 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         </StudioToolbar></>} />
 
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
-      {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
-      <div className="theme-builder-workbench">
-        <aside className="theme-builder-list" aria-label="Themes">
+      <div className={`theme-builder-workbench${compact ? " is-compact" : ""}`}>
+        {compact ? <label className="theme-builder-select">
+          <span>Current theme</span>
+          <select ref={selectRef} value={selectedThemeId} onChange={event => setSelectedThemeId(event.target.value)}>
+            {store.themes.map(theme => <option key={theme.id} value={theme.id}>{theme.name} · {theme.source}</option>)}
+          </select>
+        </label> : <aside ref={navigationRef} className="theme-builder-list" aria-label="Themes">
           {store.themes.map(theme => (
             <button
               key={theme.id}
@@ -352,9 +361,9 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
               </span>
             </button>
           ))}
-        </aside>
+        </aside>}
 
-        <div className="theme-builder-detail">
+        <div ref={contentRef} className="theme-builder-detail">
           <div className="theme-builder-actions">
             <div>
               <h3>{draft.name}</h3>

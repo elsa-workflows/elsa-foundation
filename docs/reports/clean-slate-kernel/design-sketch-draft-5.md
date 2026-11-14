@@ -44,7 +44,8 @@ Owner decisions on this proposal. They become binding when the design is approve
 10. **State size:** large values are stored by reference, and a size benchmark goes into the cost runs; segments only if measurements show the need.
 11. **Viewer read path:** the API shows a run from its projected rows plus the journal tail past the projector's cursor, expanded in memory, so the view is always current. Studio may ask for a projector catch-up for the partition; rounds are coalesced. Studio never forces an owner commit or shows uncommitted state. Live watching is a push stream of committed journal entries.
 
-**Built in the prototype so far:** decision 2 (both fence modes, and since round 4 each engine's default: the checked fence on SQL Server, the fence in the batch elsewhere), 5 (the tables) and part of 9 (job tickets are counted like messages; parking the job and faulting the instance is not built). Decision 3 in part: round 4 added the wake-signal interface with an in-process implementation. The rest is not built.
+The prototype's implementation coverage and limits are recorded in its [README](../../../prototypes/kernel-model/README.md), [DESIGN](../../../prototypes/kernel-model/DESIGN.md) and [FINDINGS](../../../prototypes/kernel-model/FINDINGS.md). Those records own the as-built evidence; this sketch records the proposed design and owner decisions. A demonstrated spike is not product qualification.
+
 
 ## Three layers
 
@@ -177,7 +178,7 @@ The owner of partition `p` at epoch `e`, which believes the position is `n`, com
 
 Statement 1 is the fence. With the fence as its own statement, the row lock on the partition row orders the commit against a takeover; with the fence in the batch EF chooses the order, see E9 below. The check in step 2 is why a commit is **two round trips, not one**: a commit sent in the same packet as a fence that matched nothing would still land. There are two ways to do it, both measured: `epoch` and `position` as EF concurrency tokens in the one `SaveChanges`, which checks before it sends the commit (2 round trips on PostgreSQL, lease time from the node's clock); or the fence as its own statement first (3 round trips, lease time from the database). The fence also renews the lease, so a busy partition needs no heartbeat. An idle owner sends an empty fenced commit as its heartbeat, which is also how a stale one finds out. **Default (12 November): the fence in the batch; the fence as its own statement stays an option.**
 
-On SQL Server the fence in the batch has a known problem (finding E9 of the prototype): a stale owner's commit holds a message lock and waits for the partition row, because EF sends the fence last, while a take holds the partition row and waits for that message. In one stress run that made 127 deadlocks, every victim a take. Nothing wrong landed; it costs availability during takeovers. The fence as its own statement had no take deadlocks there, so it is SQL Server's default (decided 13 November); the prototype's EF store applies it since round 4, and a stress run with the default had no take deadlocks.
+On SQL Server the fence in the batch has a known problem (finding E9 of the prototype): a stale owner's commit holds a message lock and waits for the partition row, because EF can write messages before checking the partition fence, while a take holds the partition row and waits for that message. In one stress run that made 127 deadlocks, every victim a take. Nothing wrong landed; it costs availability during takeovers. The fence as its own statement had no take deadlocks there, so it is SQL Server's default (decided 13 November); the prototype's EF store applies it since round 4, and a stress run with the default had no take deadlocks.
 
 The ordinal in a derived message id has a fixed width. EF sends the inserts of one commit in key order, so without it the eleventh message of a turn overtook the third (found on PostgreSQL).
 
@@ -258,7 +259,7 @@ public interface ITurn
     void Subscribe(string key, string wait, bool keep = false); // keep: also get events published earlier
     void Unsubscribe(string key, string wait);
     string Publish(string key, string? payload, TimeSpan keep);  // the one way a turn publishes an event
-    bool Redelivered(Message message);                        // the message may have been handled before a crash
+    bool Redelivered(Message message);                        // observed delivery history; false does not prove no earlier execution
     void Record(JournalEntry entry);                          // common envelope plus the model's payload
     void Emit(string channel, object item);                   // live, not durable
     void Rebind(string definition);                           // migrate to another definition version
@@ -374,7 +375,7 @@ Large request and response bodies stay out of the instance's state; the workflow
 
 The journal row is the durable hand-off the owner decided on 11 November: one compact row per commit, in the commit. Each entry has a common envelope (node, parent node, kind, time) and the model's own payload, so one viewer works across models. A projector expands journal rows into the viewer's tables afterwards, in position order per partition. Positions are assigned by the one writer under the lock it holds to commit, so a cursor cannot skip a row. The history level (Full, State only, Minimal) decides what is recorded; at Minimal no journal row is written.
 
-The projector runs as a background worker, off the hot path, in its own transaction, nudged after commits and on a timer. The target is a few set-based statements per round (decision 8); the prototype still issues one statement per instance in its page (about 17 round trips for a dozen instances in the prototype's cost run). Its cursor is its own row, guarded by a conditional update, so any node may project any partition.
+The projector runs as a background worker, off the hot path, in its own transaction, nudged after commits and on a timer. Each round is set-based (decision 8): in the prototype a round costs 3 round trips on PostgreSQL (the two reads and one statement that moves the cursor and writes every view row of the page), where one statement per instance cost 17 for about a dozen instances; SQLite is set-based too. SQL Server and MySQL apply one statement per nonzero journal event in position order, batched up to 200 statements / 1,000 parameters per command, preserving the existing provider collation through deletion and recreation. FINDINGS 25.8 records that command tradeoff and the historical one-statement-per-view path. The cursor is its own row, guarded by a conditional update, so any node may project any partition.
 
 **The viewer's read path** (owner decision, 12 November):
 
@@ -408,11 +409,9 @@ On PostgreSQL the native model on the kernel needs no database call for a reques
 
 ## What the tests show
 
-A deterministic simulation drives several nodes against one store with crashes, paused owners, lost answers, retried commands and skewed clocks, and checks every invariant after every action; it passes at 200,000 runs of 300 actions and 20,000 runs of 1,000, also with native instances in the mix. Mutation checks break the kernel one rule at a time, and each is caught, except two rules that another rule covers (the position in the fence, the count on deletes), which are caught when that rule is broken too. The store conformance suite (58 cases since round 4) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; where engines differ, the contract is silent and has to be defined (round 4 defined subscriptions as idempotent; the order of seqs within one commit is still open). A stress test with killed connections and stalls holds on all five engines, and fails on every one with the fence broken on purpose. The figures, the seeds, and what each round found are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, E9 among them, are in ENGINES.md.
+The standalone prototype exercises the design with deterministic simulation, deliberate mutations, store and runtime conformance suites, and concurrent stress with connection failures and takeovers. The native model and execution-model spikes test composition on the same durable layer. These are design experiments, not product acceptance.
 
-- **Not built yet:** the runtime conformance suite and the Orleans adapter; the graph engine and the BPMN, StateMachine, agent, standalone-jobs and ETL fan-out spikes; short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set; the projector's set-based rounds; reply-address deadlines and the owner's signal to the receiving node; the recreate rule per kind of id; values by reference; the viewer's tail read and catch-up; `Describe`, the journal envelope, tenant checks and trace headers; streaming responses and a route mapping a client's disconnect to a cancel.
-- **Done in round 4 stage A:** the three layers as separate projects and the turn/job/pass renames.
-- **Next, before the design proposal (program #4229, step 2):** the rest of the card decisions (SQL Server's checked fence is built); the Orleans adapter with a runtime conformance suite; the graph engine; spikes for BPMN, StateMachine, agents, standalone jobs with the worker protocol, and ETL's fan-out pattern; and the write-volume measurement.
+The current commands, results, measured costs and coverage limits belong to the prototype's [README](../../../prototypes/kernel-model/README.md), [FINDINGS](../../../prototypes/kernel-model/FINDINGS.md), [ENGINES](../../../prototypes/kernel-model/ENGINES.md) and per-area reports. Program #4229 tracks the remaining work and approval gates. This record does not duplicate that changing implementation inventory.
 
 ## Trade-offs
 
@@ -426,7 +425,7 @@ What the design gains, what it pays for it, and the lever that moves the balance
 | 4 | Batching: many commits in one transaction under load | A commit waits for the one before it, so latency rises a little under load while throughput rises a lot | Rows per flush |
 | 5 | Balanced mode: one commit per wait | After a crash, the activities since the last commit run again. Activity code runs at least once; its effect on workflow state happens exactly once. Side effects outside Elsa may repeat | Persistence mode per workflow; Durable narrows the window; idempotency keys for what must not repeat |
 | 6 | Background jobs do not block the instance | A background job can run more than once after a crash; external calls need idempotency keys | None: inherent, as in Temporal |
-| 7 | The run viewer costs nothing on the hot path | The run view stays current by reading the journal tail (decision 11, not built); lists and other views over projected rows lag the projector; the projector's own writes still cost database calls, most at Full history | History level per workflow |
+| 7 | The run viewer costs nothing on the hot path | The run view stays current by reading the journal tail (decision 11, built in the prototype in round 4); lists and other views over projected rows lag the projector; the projector's own writes still cost database calls, most at Full history | History level per workflow |
 | 8 | Instances only talk through messages: no races, no cross-run locks | No code can read another instance's state: a question to another instance is a message or a read of a projection that may lag. Some features become a little harder to write | None: it is the design |
 | 9 | State is a snapshot, not a replayed history: authors have no determinism rules, and loading is fast | History is a record, not the source: no rebuilding a run from history alone, and an old state needs upgrade code when a model changes | State versions and `UpgradeState` |
 | 10 | State is opaque to the kernel: any model fits | The kernel cannot search inside state. Finding instances by a variable needs the model to publish a summary or an index, which costs writes | `Describe`; indexed fields chosen per workflow |
@@ -472,7 +471,7 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 ### Decided 13 November
 
 - **Where the architecture section lives:** `docs/architecture/` now, a published section in `website/docs/` at the switch (see "Architecture documentation").
-- **SQL Server's default fence (E9):** the fence as its own statement. With the fence in the batch EF sends the fence last, so on SQL Server a take can deadlock with a stale commit (127 deadlocks on takes in one stress run, safety held); the fence as its own statement had none. Other engines keep the fence in the batch.
+- **SQL Server's default fence (E9):** the fence as its own statement. With the fence in the batch, a stale commit can lock a message before the partition row, so on SQL Server it can deadlock with a take (127 deadlocks on takes in one stress run, safety held); the fence as its own statement had none. Other engines keep the fence in the batch.
 
 ### Earlier open questions
 

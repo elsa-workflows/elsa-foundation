@@ -5,10 +5,10 @@ namespace Kernel.Workflows;
 
 public enum Placement { WithParent, Spread }
 
-public sealed record InstanceInfo(InstanceRef Ref, string Model, string Definition, string? Parent);
+public sealed record InstanceInfo(InstanceRef Ref, string Model, string Definition, string? Parent, long Creation = 0, long ParentCreation = 0);
 
 /// <summary>What a parent is told when a child ends.</summary>
-public sealed record ChildFinished(string Child, InstanceStatus Status, string? Output);
+public sealed record ChildFinished(string Child, InstanceStatus Status, string? Output, long Creation = 0);
 
 /// <summary>The message kinds of the workflow instance; the durable layer's own are in <see cref="Kinds"/>.</summary>
 public static class WorkflowKinds
@@ -36,9 +36,22 @@ public interface IExecutionModel
     ValueTask<object?> ExecuteJobAsync(IJob job, CancellationToken cancellationToken);
 }
 
+public sealed record ModelMetadataUnavailable(string Actor, string Model, int StoredVersion, int AvailableVersion);
+
+/// <summary>Optional model-owned metadata; the workflow actor keeps command and commit authority.</summary>
+public interface IModelMetadata
+{
+    bool HandlesMetadata(Message message);
+    ValueTask MetadataAsync(ITurn turn, InstanceStatus status, CancellationToken cancellationToken);
+    void TerminateMetadata(object state);
+    bool ProtectsDeletion(object state, long now, ICommitClock clock);
+}
+
 public interface ITurn
 {
     InstanceInfo Instance { get; }
+    long Now { get; } // the existing database-anchored owner clock
+    ICommitClock Clock { get; }
     IReadOnlyList<Message> Inbox { get; }
     object State { get; set; }
     object? Ambient { get; }                    // what the starter on this node gave: this activation only, never stored
@@ -49,6 +62,8 @@ public interface ITurn
     /// turn ends instead, so it may see output of a turn whose commit is then lost.
     /// </summary>
     void Emit(string channel, object? item);
+    /// <summary>Reply only to this turn's consumed request, after commit, without observing future workflow output.</summary>
+    void Reply(Message request, string channel, object? item);
 
     /// <summary>Returns the message's id, derived from this instance and its revision: what <see cref="Recall"/> takes.</summary>
     string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null);
@@ -65,6 +80,8 @@ public interface ITurn
     /// that has no parent (merge, friction F-N5): it reports to nobody, and since its id is minted here it needs no read.
     /// </summary>
     InstanceRef Start(StartSpec spec, Placement placement = Placement.WithParent, bool detached = false);
+    /// <summary>The exact address retained by this parent's child registry; never resolves a replacement's current row.</summary>
+    CreationAddress ChildAddress(InstanceRef child);
     void StartJob(string key, object? arguments = null);
     void CancelJob(string key);
     void Hold(Message message);                 // not consumed: handed to the next turn again, in its place in the order
@@ -78,9 +95,8 @@ public interface ITurn
     void Unsubscribe(string key, string wait);
 
     /// <summary>
-    /// True when this message was held by an owner before this one, so a turn that took it may have run already and
-    /// its result been lost (merge, friction F-N6). A first delivery is false. It may say true for a message whose
-    /// earlier owner never ran it: "may have run", never "did run".
+    /// True when a polled row was already marked seen or on trial when observed. This is a delivery-history hint,
+    /// not proof that a turn executed. False does not prove no other owner ran it, including during takeover races.
     /// </summary>
     bool Redelivered(Message message);
 

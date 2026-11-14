@@ -259,6 +259,48 @@ public static class Semantics
             Context.Equal(new JournalRow(0, 1, "0/i", 1, "[\"j\"]"), journal, "the journal row");
             await c.Lands(() => c.Commit(0, lease.Epoch, 1, [Make.New("0/next")]), "a commit at the moved position");
         }),
+        new("commit: journaled creations survive large batches and roll back together on refusal", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var outside = c.Provided.NewClient();
+            var from = 0;
+            // Oracle 10.0.12 acknowledged the 125 creations without their journal, and threw at 420 (#4358).
+            foreach (var count in new[] { 125, 420 })
+            {
+                var ids = Enumerable.Range(from, count).Select(i => $"0/v{i:D3}").ToArray();
+                var turns = ids.Select(id => Make.New(id)).ToArray();
+                await c.Lands(() => c.Commit(0, lease.Epoch, from, turns));
+                Context.Equal((long)(from + count), (await outside.ProjectedAsync(0)).Written, "partition position");
+                var rows = await outside.LoadAsync(ids);
+                Context.That(rows.OrderBy(r => r.Id, StringComparer.Ordinal).SequenceEqual(ids.Select(id => Make.Row(id, 1))), "durable instances");
+                var journal = await outside.ReadJournalAsync(0, from, count + 1);
+                var expected = ids.Select((id, i) => new JournalRow(0, from + i + 1, id, 1, "[]"));
+                Context.That(journal.SequenceEqual(expected), $"durable journal rows after {count} creations (read {journal.Count})");
+                from += count;
+            }
+
+            // With a missing message, EF's late delete count rolls back the earlier instance and journal inserts.
+            var idsToCreate = Enumerable.Range(0, 125).Select(i => $"0/mixed{i:D3}").ToArray();
+            var mixed = idsToCreate.Select(id => Make.New(id)).ToArray();
+            mixed[^1] = mixed[^1] with { Consumed = ["input"] };
+            var outcome = await c.Refused(() => c.Commit(0, lease.Epoch, from, mixed));
+            if (c.Provided.MissingConsumeOutcome is { } expectedOutcome)
+                Context.Equal(expectedOutcome, outcome, "missing consume outcome");
+            c.Notes.Add(outcome);
+            Context.Equal((long)from, (await outside.ProjectedAsync(0)).Written, "position after refusal");
+            Context.Equal(0, (await outside.LoadAsync(idsToCreate)).Count, "instances after refusal");
+            Context.Equal(0, (await outside.ReadJournalAsync(0, from, mixed.Length + 1)).Count, "journal rows after refusal");
+
+            // Supply only the missing input, then repeat the identical mixed commit with the original fence.
+            Context.That(await outside.AddAsync(Make.M("input", 0)), "the control input already exists");
+            await c.Lands(() => c.Commit(0, lease.Epoch, from, mixed));
+            Context.Equal((long)(from + mixed.Length), (await outside.ProjectedAsync(0)).Written, "position after retry");
+            var created = await outside.LoadAsync(idsToCreate);
+            Context.That(created.OrderBy(r => r.Id, StringComparer.Ordinal).SequenceEqual(idsToCreate.Select(id => Make.Row(id, 1))), "instances after retry");
+            var durable = await outside.ReadJournalAsync(0, from, mixed.Length + 1);
+            Context.That(durable.SequenceEqual(idsToCreate.Select((id, i) => new JournalRow(0, from + i + 1, id, 1, "[]"))), "journal rows after retry");
+            Context.That(await outside.AddAsync(Make.M("input", 0)), "the successful mixed commit did not remove its input");
+        }),
         new("commit: refused for an old epoch, and writes nothing", Level.Required, async c =>
         {
             await c.S.AddAsync(Make.M("in", 0));
@@ -368,6 +410,16 @@ public static class Semantics
             var lease = await c.Take(0);
             var sent = Enumerable.Range(0, 12).Select(i => Make.M($"0/a#1.{i:D4}", 1, target: "b")).ToList();
             var result = await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a", sent)]));
+            await SentInOrder(c, sent, result);
+        }),
+        new("commit: promotion sends an older timer before a newer one across revision 9 to 10", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var target = InstanceRef.In(1, "b");
+            var due = lease.Now;
+            Message[] sent = [new("0/a#9.0001", target, "A", Sender: "0/a", Due: due), new("0/a#10.0000", target, "B", Sender: "0/a", Due: due)];
+            var promotion = Make.Turn("0/a", Make.Row("0/a", 10), sent: sent);
+            var result = await c.Lands(() => c.Commit(lease, 0, [promotion]));
             await SentInOrder(c, sent, result);
         }),
         new("commit: seqs of one commit follow the order sent, whatever the ids", Level.Reference, async c =>
@@ -756,7 +808,100 @@ public static class Semantics
             Context.That(await c.S.ProjectAsync(0, 3, 5, next), "the second round did not move");
             views = (await c.S.ReadViewsAsync(["0/a", "0/b"])).ToList();
             Context.Equal("0/a:3:3", string.Join(",", views.Select(v => $"{v.Instance}:{v.Revision}:{v.Commits}")), "view rows after a delete");
+            // Recreate at the same store key. The earlier projected revision/count must be replaced.
+            await c.Lands(() => c.Commit(0, lease.Epoch, 5, [Make.Delete("0/a", 3)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 6, [Make.New("0/a")]));
+            var fresh = new ViewRow("0/a", 1, 1);
+            Context.Equal(fresh, await Viewer.ReadAsync(c.S, 0, "0/a"), "new generation in the unprojected tail");
+            await new Projector(c.S, 0).CatchUpAsync();
+            Context.Equal(fresh, await Viewer.ReadAsync(c.S, 0, "0/a"), "delete and recreate in one projection page");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 7, [Make.Delete("0/a", 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 8, [Make.New("0/a")]));
+            var pages = new Projector(c.S, 0, take: 1);
+            await pages.RoundAsync();
+            Context.Equal(0, (await c.S.ReadViewsAsync(["0/a"])).Count, "delete at page boundary");
+            Context.Equal(fresh, await Viewer.ReadAsync(c.S, 0, "0/a"), "new generation after a projected delete");
+            await pages.CatchUpAsync();
+            Context.Equal(fresh, (await c.S.ReadViewsAsync(["0/a"])).Single(), "recreation on the next page");
+            await ProjectionIdentityChecks.RunAsync(c, lease);
         }),
+        new("projection: rounds larger than a statement's chunk: 850 views in one, then 600 deletes alone", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            var ids = Enumerable.Range(0, 850).Select(i => $"0/v{i:D3}").ToList();
+            // Several creation and deletion commits feed a single large projection page.
+            for (var at = 0; at < 850; at += 170)
+            {
+                var (from, chunk) = (at, ids.Skip(at).Take(170).Select(id => Make.New(id)).ToList());
+                await c.Lands(() => c.Commit(0, lease.Epoch, from, chunk));
+            }
+            Context.That(await c.S.ProjectAsync(0, 0, 850, await c.S.ReadJournalAsync(0, 0, 1000)), "the first round did not move");
+            Context.Equal(850, (await c.S.ReadViewsAsync(ids)).Count(v => v is { Revision: 1, Commits: 1 }), "views after a round of 850 new instances");
+            for (var at = 0; at < 600; at += 200)
+            {
+                var (from, chunk) = (850 + at, ids.Skip(at).Take(200).Select(id => Make.Delete(id, 1)).ToList());
+                await c.Lands(() => c.Commit(0, lease.Epoch, from, chunk));
+            }
+            Context.That(await c.S.ProjectAsync(0, 850, 1450, await c.S.ReadJournalAsync(0, 850, 1000)), "the round of deletes did not move");
+            var left = await c.S.ReadViewsAsync(ids);
+            Context.Equal("250 from 0/v600", $"{left.Count} from {left.Select(v => v.Instance).Order(StringComparer.Ordinal).FirstOrDefault()}", "views after a round of 600 deletes");
+
+            // Delete and recreate all surviving keys within one projection page, across SQLite's upsert chunk.
+            var survivors = ids.Skip(600).ToList();
+            for (var at = 0; at < survivors.Count; at += 125)
+            {
+                var chunk = survivors.Skip(at).Take(125).Select(id => Make.Delete(id, 1)).ToList();
+                await c.Lands(() => c.Commit(0, lease.Epoch, 1450 + at, chunk));
+            }
+            // Single-turn recreation commands isolate the projection page from the MySQL batch-write defect recorded in FINDINGS 25.7.
+            for (var at = 0; at < survivors.Count; at++)
+                await c.Lands(() => c.Commit(0, lease.Epoch, 1700 + at, [Make.New(survivors[at])]));
+            var mixed = await c.S.ReadJournalAsync(0, 1450, 1000);
+            Context.Equal(250, mixed.Count(r => r.Revision < 0), "durable delete markers in mixed page");
+            Context.Equal(250, mixed.Count(r => r.Revision == 1), "durable creations in mixed page");
+            Context.That(await c.S.ProjectAsync(0, 1450, 1950, mixed), "mixed delete and recreate round did not move");
+            left = await c.S.ReadViewsAsync(ids);
+            Context.Equal(250, left.Count, "view count after mixed page");
+            Context.Equal(250, left.Count(v => v is { Revision: 1, Commits: 1 }), "fresh view counts across projection chunks");
+            Context.That(survivors.SequenceEqual(left.Select(v => v.Instance).Order(StringComparer.Ordinal)), "incorrect keys after mixed page");
+        }),
+        new("journal: one instance's rows past a position, in order", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b")]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 3, [Make.Turn("0/a", Make.Row("0/a", 3), expected: 2), Make.Turn("0/b", Make.Row("0/b", 2), expected: 1)]));
+            var rows = await c.S.ReadJournalOfAsync(0, "0/a", 1);
+            Context.Equal("3:2,4:3", string.Join(",", rows.Select(r => $"{r.Position}:{r.Revision}")), "0/a's rows past position 1");
+            Context.Equal(0, (await c.S.ReadJournalOfAsync(0, "0/none", 0)).Count, "rows of an instance that has none");
+        }),
+        new("viewer: the tail read is current when a round commits between its reads (decision 11)", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, [Make.New("0/a"), Make.New("0/b")]));
+            Context.That(await c.S.ProjectAsync(0, 0, 2, await c.S.ReadJournalAsync(0, 0, 10)), "the first round did not move");
+            await c.Lands(() => c.Commit(0, lease.Epoch, 2, [Make.Turn("0/a", Make.Row("0/a", 2), expected: 1), Make.Delete("0/b", 1)]));
+            await c.Lands(() => c.Commit(0, lease.Epoch, 4, [Make.Turn("0/a", Make.Row("0/a", 3), expected: 2)]));
+            var cursor = (await c.S.ProjectedAsync(0)).Position;       // the viewer reads the cursor first
+            Context.That(await c.S.ProjectAsync(0, 2, 4, (await c.S.ReadJournalAsync(0, 2, 10)).Where(r => r.Position <= 4).ToList()), "the round between the reads did not move");
+            string Show(ViewRow? v) => v is null ? "none" : $"{v.Revision}:{v.Commits}";
+            foreach (var (id, expected) in new[] { ("0/a", "3:3"), ("0/b", "none") })
+            {
+                var view = Viewer.Merge(id, (await c.S.ReadViewsAsync([id])).SingleOrDefault(), await c.S.ReadJournalOfAsync(0, id, cursor));
+                Context.Equal(expected, Show(view), $"the tail read of {id}");
+            }
+            Context.Equal("3:3", Show(await Viewer.ReadAsync(c.S, 0, "0/a")), "a tail read with nothing between its reads");
+            await ViewerChecks.DeleteDuringReadAsync(c, lease);
+            await ViewerChecks.PartitionAsync(c);
+        }),
+        new("projector: catch-up requests are coalesced and leave the projection current, past one page (decision 11)", Level.Required, async c =>
+        {
+            var lease = await c.Take(0);
+            await c.Lands(() => c.Commit(lease, 0, Enumerable.Range(0, 250).Select(i => Make.New($"0/p{i:D3}")).ToList()));     // two pages past the round under way
+            await ViewerChecks.CatchUpAsync(c);
+        }),
+        new("projector: a delete between bound and page reads cannot acknowledge a stale view", Level.Required,
+            ViewerChecks.DeleteDuringCatchUpAsync),
         new("projection: of many concurrent writes from one position, exactly one moves it", Level.Required, async c =>
         {
             var lease = await c.Take(0);

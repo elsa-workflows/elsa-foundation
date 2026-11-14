@@ -9,6 +9,7 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\runtime-e2e-build-receipt.json"
           CopyToOutputDirectory="PreserveNewest" />
+      <ProjectReference Include="../../../src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -124,6 +125,12 @@
     <ProjectReference Include="..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Capture/Core/Elsa.Workflows.Publishing.Releases.Capture.Core.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Capture/Elsa.Workflows.Publishing.Releases.Capture/Elsa.Workflows.Publishing.Releases.Capture.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/Elsa.Workflows.Publishing.Releases.Runtime.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Runtime/Source/Elsa.Workflows.Publishing.Releases.Runtime.Source.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
@@ -136,6 +143,11 @@
     <ProjectReference Include="..\..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
     <ProjectReference Include="../../../src/Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Dashboard/Queries/Elsa.Workflows.Dashboard.Queries.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Api/Elsa.Studio.Dashboard.Api.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../src/Studio/Dashboard/Management/Elsa.Studio.Dashboard.Management.csproj" />
     <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
@@ -164,8 +176,9 @@
     <ProjectReference Include="..\..\..\src\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
+    <ProjectReference Include="../../../src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
@@ -233,4 +246,10 @@
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Weaver/src/Dashboard/Elsa.Weaver.Dashboard.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj" />
+  </ItemGroup>
 </Project>

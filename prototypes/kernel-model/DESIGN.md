@@ -162,7 +162,7 @@ run background jobs, read kept events, publish) is a message in that commit. A n
 ## Persistence
 
 The kernel depends on one storage contract, `IKernelStore` (`src/Kernel.Durable/Store.cs`), stated by what each operation
-guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 58 semantic cases (57 before round 4),
+guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 65 semantic cases (57 before round 4),
 a concurrent stress test with injected connection failures and the provider's own connection killer, and the cost runs.
 
 | Operation | Guarantee |
@@ -257,12 +257,17 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
 - **Timers** are messages with a future `due`. The poll returns database time; the owner anchors it and schedules on a
   monotonic clock. **A turn takes a timer back with `Recall`**: the row is deleted with the turn's commit, like a
   cancelled job's ticket (merge, F-N4).
-- **Redelivery:** `ITurn.Redelivered(message)` is true when the row was seen at an earlier epoch, so a turn that took
-  it may have run and its result been lost (merge, F-N6). "May have run", never "did run".
+- **Local lease deadline:** the worker stands down before starting new work once its conservative monotonic lease window expires. Existing work may still have external effects; the fence remains authoritative. The trace, scheduler tests and clock limitations are in [LEASE.md](LEASE.md).
+- **Redelivery:** `ITurn.Redelivered(message)` is true when its polled row already carried a seen or trial marker.
+  This is an observed-history hint: false does not prove that another owner did not execute it (F-N6, #4362).
 - **Poison:** suspects (rows another owner had) are tried apart, alone in the process (F2, F11), one at a time or in
-  halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the message is
-  parked with its instance. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
+  halving groups; a take that finds a death adds one attempt to what was on trial; at the threshold the instance is
+  parked and the deliveries consumed. A trial starts only when its turn can run at once (F13); a suspect of a withheld instance
   is shelved (F12). A turn that throws parks its instance at once.
+- **Park (owner decision, 13 November):** its fenced commit faults the instance, consumes its deliveries and removes
+  every active subscription, while retaining the last committed state, fault details and configured history. The
+  parent still receives the faulted-child notice. Later arrivals are dropped. Suspension preserves subscriptions;
+  a future explicit recovery operation must restore waits, with kept-event semantics needed for events in the gap.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
 - **Edge cases:** a message to a missing target without a start spec is dropped and journalled; to an ended instance,
   consumed and dropped.
@@ -339,7 +344,7 @@ public interface ITurn
     void Hold(Message message);
     void Subscribe(string key, string wait, bool keep = false);
     void Unsubscribe(string key, string wait);
-    bool Redelivered(Message message);                        // may a turn with it have run before?
+    bool Redelivered(Message message);                        // observed delivery history, not proof of execution
     string Publish(string key, string? payload, TimeSpan keep);
     void Record(object entry);
     void Rebind(string definition);
@@ -355,9 +360,13 @@ public interface ITurn
 - **Models compose through messages only.** A parent starts a child of any model and gets `child-finished`.
 - **How the known models sit on it:** native (built: activity frames, agenda, waits and variables as state; slow
   activities are background jobs; a Flowchart's paths, arrivals and dead paths are the graph engine's, in its frame's
-  state, and add no database call; NATIVE.md); BPMN (tokens; tasks are jobs; kept waits for early messages; start subscriptions for
-  message start events; `Recall` for boundary timers that do not fire); ETL (cursors; children spread over partitions);
-  agents (a checkpoint; tool calls are jobs; streamed output is emitted); durable entities (operations with a reply-to).
+  state, and add no database call; NATIVE.md). BPMN stores tokens, runs tasks as jobs, keeps early messages and uses
+  `Recall` to cancel unused boundary timers. Register message start events with `BpmnModel.MessageStart` through
+  `Events.SubscribeAsync`. Use `BpmnModel.Spec` for direct starts. The registration identifies the process,
+  local start element and event key. The start commit records the triggering event so a later catch waits for a new
+  publication. Replace old prototype registrations that contain only a local element and direct start spec.
+  ETL stores cursors and spreads children over partitions. Agents checkpoint, run tool calls as jobs and stream
+  output. Durable entities use operations with a reply-to.
 
 ## Synchronous HTTP requests
 
@@ -374,6 +383,11 @@ the native model (merge):
   memory, up to the request's deadline.
 - **A request that resumes a waiting workflow** adds a delivery carrying its reply address; the owner, on any node,
   sends what the turn emits, and the end, over the runtime's transport (`IReplyTransport`), which is not durable.
+- **The reply address carries the caller's deadline** (decision 6, FINDINGS 25.3): `ReplyTo.Of(node, request,
+  deadline)`, absolute, in database milliseconds, computed as request start plus the route's timeout. Past it the owner drops the address: it
+  sends that caller nothing more, and the caller no longer keeps the instance in memory (a caller pins an instance
+  against eviction while it waits). The simulation checks after every settling pass that no owner holds a caller past
+  its deadline (`Flaw.KeepExpiredCallers` breaks it).
 - **The caller** (`Requests`) takes the first response or end and ignores the rest. A reset tells every caller it knows
   "lost" (503). An owner lost on another node is noticed only by the deadline (504).
 - Disconnect and timeout end the wait and leave the instance alone.
@@ -383,6 +397,16 @@ the native model (merge):
 One journal row per commit, in the commit, at the history level (Full, State, Minimal: no row). Projectors on any
 node expand the journal into view rows in position order, moving their own row only from where they read it, and pass
 a position that is missing below the partition's position: it was deleted, not written late (F15).
+
+**The viewer's read path** (decision 11, FINDINGS 25.8). `Viewer.ReadAsync` shows one run from its view plus its
+journal tail. It reads the projector's cursor first, then the view, then the instance's journal rows past the cursor
+(`IKernelStore.ReadJournalOfAsync`, on the index on (partition, instance)), and merges them in memory. A round that
+commits between the reads can be present in both. Within a run the merge counts only revisions above the view's.
+A delete clears the view, and later rows at the same key count from the new run's first revision. The viewer makes three logical store reads and no call to an owner. The tail read takes one committed
+snapshot for the instance, including visible delete markers. Store wrappers forward that query. `Projector.CatchUpAsync`
+covers the committed positions observed after the request. If a page skips one of those positions, or another
+projector advances through part of that range, catch-up reads one later bound to cover the responsible deletes.
+Requests waiting for the next catch-up round share its work. Live watching (a push stream) is not built.
 
 ## Invariants (what the simulation checks)
 
@@ -394,7 +418,7 @@ published after the wait committed is delivered once); 14 one bad instance; 15 c
 mix: N1 an activity completes once, N2 a join fires once (a Flowchart join once per scheduling id; G2 holds it to once per round where no merge lies
 upstream), N3 a child starts once and resumes once, N4 a Durable
 External effect runs only under a committed attempt, N5 final variables equal a run without faults, and N6 (merge) an
-External effect that runs again is told that its turn may have run before. The graph invariants of the sketch (round 4):
+External effect sees the delivery-history hint implied by the metadata observed before marking; false does not prove no other owner executed. The graph invariants of the sketch (round 4):
 G1 path conservation, G2 a join fires at most once per round, G3 an All join fires once every inbound of its round has
 arrived, live or dead (G2 and G3 skip a merge and every node forward of it; the mix has no merge), G4 a graph completes exactly when no path is live, G5 no path outlives its cancelled scope.
 
@@ -421,8 +445,11 @@ Native workflows on PostgreSQL (NATIVE.md's runs, merged kernel): Balanced write
 Ephemeral 0, Balanced 3 / 2; fork-join with a direct resume 11 / 8 (15 / 11 on the native branch: no meet ticket);
 resume at an HttpEndpoint, both requests, 12 / 9 (16 / 12).
 
-- The model's activities do nothing and its history is one journal row per commit. A projector round costs one
-  statement per instance in its page (17 round trips for about a dozen instances); not optimized.
+- The model's activities do nothing and its history is one journal row per commit. A projector round is set-based
+  (decision 8, FINDINGS 25.7): 3 round trips on PostgreSQL (17 before, one statement per instance), 7 engine calls on
+  SQLite (18). SQL Server and MySQL apply one statement per nonzero journal event in position order, batching at
+  most 200 statements / 1,000 parameters per command to preserve provider collation across delete/recreate.
+  Their earlier one-statement-per-view path and measured command tradeoff are recorded in FINDINGS 25.8.
 - MySQL's driver sends four more round trips per transaction than PostgreSQL's (E10).
 
 ## Trade-offs
@@ -436,7 +463,7 @@ marked.
 | 2 | One writer per partition: no locks, many instances per commit | Failover takes about one lease; a hot partition has one writer; the partition count is fixed at creation | Partitions (64 on servers, 1 on SQLite: decided); lease (10 s: decided) |
 | 3 | An idle owner needs little traffic | A heartbeat per owned partition about three times per lease, plus one node beat | Lease |
 | 4 | Batching under load | A commit waits for the one before it | Rows per flush |
-| 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` says when they may have | Persistence mode per workflow |
+| 5 | Balanced mode: one commit per wait | Activities since the last commit run again after a crash; `Redelivered` reports observed delivery history, not every possible rerun | Persistence mode per workflow |
 | 6 | A background job does not block the instance | It can execute more than once | None: inherent |
 | 7 | The viewer costs nothing on the hot path | The viewer lags the run; projector writes cost calls | History level |
 | 8 | Instances talk only through messages | No reading another instance's state | None: the design |
@@ -485,10 +512,11 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
   graph check (FINDINGS section 26). G4 has no mutation of its own: that it bites is not shown.
 - **Graph engine:** main's Flowchart conformance corpus and join tests pass against the extracted engine (41), with
   main's two determinism byte-locks byte-identical.
-- **Store conformance suite:** 58 cases since round 4, 56 of them required (57 and 53 before); the required cases pass
-  on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB, with either fence, a case skipped where a store
-  cannot refuse a row; the reference cases differ where the contract is silent (F8). Round 4 made the two
-  subscription cases of M6 required (idempotent), and every store passes them (FINDINGS 25.2).
+- **Store conformance suite:** 65 cases, 63 required and two reference. It covers semantic send order across revisions (#4459),
+  journaled creations and rollback across MySQL batch boundaries ([ENGINES E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358)),
+  and committed viewer reads. The earlier 59-case suite passed the applicable required cases in memory, SQLite,
+  PostgreSQL, SQL Server, MySQL and MongoDB. FINDINGS 25.2 records the required idempotent subscription cases;
+  FINDINGS 25.7 and 25.8 qualify the original per-engine projector and viewer results separately from integration.
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and
   SQLite. With the fence broken on purpose every engine fails (26 to 611 violations).
@@ -508,8 +536,10 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
 - **Poison counting** (FINDINGS sections 7, 21): innocent parking is rare but not zero; recovery of a backlog is serial.
 - **Kept events for plain waits:** the publisher still inserts every event with its window, because a kept wait may
   subscribe later; a deployment where no wait keeps could skip the insert. Not built.
-- **Reply addresses** should carry the caller's deadline; an owner on another node cannot tell a waiting node it was
-  lost.
+- **Reply addresses** carry the caller's deadline (round 4); an owner on another node still cannot tell a waiting node
+  it was lost.
 - **Delete and keys:** a start after a delete creates a new instance with the same id.
-- **State size**, **the notifier between nodes**, **one database**: as in draft 5.
+- **State size** (decision 10): the cost run measures it (FINDINGS 25.10, including historical tables and current
+  per-trial acceptance checks); values by reference are not part of that benchmark.
+- **The notifier between nodes**, **one database**: as in draft 5.
 - **MySQL's driver** costs four round trips per commit more than PostgreSQL's (E10).

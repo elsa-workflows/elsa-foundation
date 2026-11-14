@@ -6,8 +6,10 @@ import { derivePackageId, ExtensionBuilderPage } from "../extension-builder";
 import type { ExtensionRepositorySummary, ExtensionRuntimeStatus } from "../extensionBuilderApi";
 import { StudioHttpError, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
+const notifications = { notify: vi.fn((_input: { level: string; title: string; message?: string }) => ({ id: "test", update() {}, dismiss() {} })), track: <T,>(work: Promise<T>) => work };
 describe("extension builder page", () => {
   afterEach(() => {
+    notifications.notify.mockClear();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -145,7 +147,8 @@ describe("extension builder page", () => {
 
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Repository name']"), "Managed Repository");
     await clickButton(container, "Create managed repo");
-    await waitForText(container, "Created managed repository Managed Repository.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Created managed repository Managed Repository." })));
+    expect(container.querySelector('.studio-alert[data-tone="success"]')).toBeNull();
 
     expect(hostHttpMock(api).postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces`, { displayName: "Managed Repository" });
     expect(backendCalls).toEqual([]);
@@ -465,7 +468,8 @@ describe("extension builder page", () => {
 
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Extension name']"), "Acme Orders");
     await clickButton(container, "New extension");
-    await waitForText(container, "Created extension Acme Orders.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Created extension Acme Orders." })));
+    expect(container.querySelector('.studio-alert[data-tone="success"]')).toBeNull();
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces", { displayName: "Acme Orders" });
     expect(postJson).toHaveBeenCalledWith(
@@ -608,7 +612,7 @@ describe("extension builder page", () => {
     }, { timeoutMs: 40_000 });
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain("Server Extensions");
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain(`release · ${remoteState}`);
-    expect(container.textContent).toContain("Attached server-local repository Server Extensions.");
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Attached server-local repository Server Extensions." });
 
     await unmount();
   });
@@ -648,6 +652,7 @@ describe("extension builder page", () => {
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Clone repository name']"), "Cloned Extensions");
     await clickButton(container, "Clone from Git");
     await waitForText(container, "Cloned Extensions");
+    expect(container.querySelector('.studio-alert[data-tone="success"]')).toBeNull();
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/repositories/clone", {
       repositoryUrl,
@@ -655,7 +660,7 @@ describe("extension builder page", () => {
     }, { timeoutMs: 130_000 });
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain("Cloned Extensions");
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain(`main · ${repositoryUrl}`);
-    expect(container.textContent).toContain("Cloned repository Cloned Extensions.");
+    expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Cloned repository Cloned Extensions." });
 
     await unmount();
   });
@@ -682,7 +687,8 @@ describe("extension builder page", () => {
     const repositoryName = await waitForElement<HTMLInputElement>(container, "[aria-label='Repository name']");
     await fill(repositoryName, "Managed Repository");
     await clickButton(container, "Create managed repo");
-    await waitForText(container, "Created managed repository Managed Repository.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Created managed repository Managed Repository." })));
+    expect(container.querySelector('.studio-alert[data-tone="success"]')).toBeNull();
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces", { displayName: "Managed Repository" });
     const activeRepository = container.querySelector(".extension-builder-solution-card.active");
@@ -720,7 +726,7 @@ describe("extension builder page", () => {
     const branchInput = await waitForElement<HTMLInputElement>(container, "[aria-label='Working branch']");
     await fill(branchInput, "feature/session-work");
     await clickButton(container, "Open working branch");
-    await waitForText(container, "Opened working branch feature/session-work.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Opened working branch feature/session-work." }));
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/working-copies/select", expect.objectContaining({
       branchName: "feature/session-work",
@@ -778,7 +784,8 @@ describe("extension builder page", () => {
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Template parameter Class name']"), "GeneratedActivity");
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Template parameter Namespace']"), "Company.Extensions.Generated");
     await clickExactButton(container, "Apply");
-    await waitForText(container, "Applied C# class.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Applied C# class." })));
+    expect(container.querySelector('.studio-alert[data-tone="success"]')).toBeNull();
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }), { timeoutMs: 70_000 });
     // The generated file opens in the editor (full path shown in the editor status bar).
@@ -791,6 +798,7 @@ describe("extension builder page", () => {
   });
 
   it("stages, unstages, stages all, inspects diffs, and commits from the source inspector", async () => {
+    let remoteBlocked = false;
     let gitStatus = sourceControlStatus({ unstaged: ["src/Status.cs"] });
     const postJson = vi.fn(async (url: string, body: unknown) => {
       if (url.endsWith("/source-control/stage")) {
@@ -813,6 +821,7 @@ describe("extension builder page", () => {
         return { commitId: "abc123", message: "Add source control file", status: gitStatus };
       }
       if (url.endsWith("/source-control/push")) {
+        if (remoteBlocked) return { operation: "Push", state: "Blocked", message: "Remote push requires attention.", status: gitStatus };
         return { operation: "Push", state: "Completed", message: "Pushed feature/source-control to origin.", remote: "origin", branch: "feature/source-control", ahead: 0, behind: 0, status: gitStatus };
       }
       if (url.endsWith("/source-control/pull")) {
@@ -842,11 +851,13 @@ describe("extension builder page", () => {
     await waitForText(container, "+namespace Status;");
     await fill(await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Commit message']"), "Add source control file");
     await clickButton(container, "Commit staged");
-    await waitForText(container, "Committed staged changes.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Committed staged changes." })));
+    expect(container.querySelector('.studio-alert[data-tone="success"]')).toBeNull();
     await clickExactButton(container, "Push");
-    await waitForText(container, "Pushed committed changes.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Pushed committed changes." })));
+    expect(container.querySelector('.studio-alert[data-tone="success"]')).toBeNull();
     await clickExactButton(container, "Pull");
-    await waitForText(container, "Pulled remote changes.");
+    await vi.waitFor(() => expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Pulled remote changes." }));
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/stage", { path: "src/Status.cs" });
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/unstage", { path: "src/Status.cs" });
@@ -856,7 +867,41 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/pull", {}, { timeoutMs: 130_000 });
     expect(getJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/diff/src/Status.cs?staged=true");
 
+    const successfulNotifications = notifications.notify.mock.calls.length;
+    remoteBlocked = true;
+    await clickExactButton(container, "Push");
+    await waitForText(container, "Remote push requires attention.");
+    expect(notifications.notify).toHaveBeenCalledTimes(successfulNotifications);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Remote push requires attention.");
+
     await unmount();
+  });
+
+  it.each(["another workspace", "the same workspace"])("suppresses a retired Git confirmation after opening %s", async destination => {
+    const pending = deferred<unknown>();
+    const postJson = vi.fn(async (url: string) => url.endsWith("/source-control/push") ? pending.promise : defaultPostJson(url));
+    const getJson = async (url: string) => {
+      if (url.endsWith("/repositories")) return [repositorySummary(), repositorySummary({ id: "ws-2", name: "Other Extensions" })];
+      if (url.endsWith("/workspaces")) return [workspaceWithProject(), { ...workspaceWithProject(), id: "ws-2", displayName: "Other Extensions" }];
+      return defaultGetJson(url);
+    };
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    try {
+      await openSolution(container, "Team Extensions");
+      await clickTab(container, "Source control");
+      await clickExactButton(container, "Push");
+      expect(postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces/ws-1/source-control/push`, {}, { timeoutMs: 130_000 });
+      await clickExactButton(container, "Solutions");
+      const destinationName = destination === "another workspace" ? "Other Extensions" : "Team Extensions";
+      await openSolution(container, destinationName);
+      expect(container.querySelector(".extension-builder-crumb strong")?.textContent).toBe(destinationName);
+      pending.resolve({ operation: "Push", state: "Completed", message: "Pushed.", status: sourceControlStatus() });
+      await flushPromises();
+      expect(notifications.notify).not.toHaveBeenCalled();
+    } finally {
+      pending.resolve(null);
+      await unmount();
+    }
   });
 
   it("blocks navigation and keeps the edit when an auto-save flush fails", async () => {
@@ -1033,7 +1078,7 @@ describe("extension builder page", () => {
     await flushPromises();
     await flushPromises();
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/builds", { projectId: "proj-1", command: "Build", targetPath: null });
-    expect(container.textContent).toContain("Build submitted");
+    expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: expect.stringContaining("Build submitted") }));
     expect(container.textContent).toContain("Succeeded");
 
     await clickTab(container, "Promote");
@@ -1172,6 +1217,7 @@ describe("extension builder page", () => {
     await clickTab(container, "Promote");
     await clickButton(container, "Promote build");
     await waitForText(container, expected);
+    expect(notifications.notify).not.toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("Promotion response received") }));
 
     expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
     await unmount();
@@ -1351,6 +1397,41 @@ describe("extension builder page", () => {
     expect(packButton).not.toBeNull();
     expect(packButton?.querySelector(".is-spinning")).not.toBeNull();
     await simple.unmount();
+  });
+
+  it.each(["hidden", "visible"] as const)("tracks an accepted build that completes while its retained tab is %s", async completionMode => {
+    const submitted = deferred<ReturnType<typeof runningBuild>>();
+    const running = runningBuild();
+    const postJson = vi.fn(async (url: string) => url.endsWith("/builds") ? submitted.promise : defaultPostJson(url));
+    const getJson = vi.fn(async (url: string) => url.endsWith("/builds/build-running") ? running : defaultGetJson(url));
+    const fetchLog = mockFetch();
+    const page = await renderExtensionBuilderPage(stubApi({ getJson, postJson }), { retained: true });
+    try {
+      await openSolution(page.container);
+      await waitForText(page.container, "Activities/HelloActivity.cs");
+      await clickButton(page.container, "Build");
+      expect(postJson.mock.calls.filter(([url]) => url.endsWith("/builds"))).toHaveLength(1);
+      expect(getJson.mock.calls.some(([url]) => url.endsWith("/builds/build-running"))).toBe(false);
+      notifications.notify.mockClear();
+
+      page.setVisible(false);
+      await flushPromises();
+      if (completionMode === "visible") {
+        page.setVisible(true);
+        await flushPromises();
+      }
+      submitted.resolve(running);
+      await flushPromises();
+      page.setVisible(true);
+      await waitForText(page.container, "Building…");
+
+      expect(buttonContaining(page.container, "Building…")?.disabled).toBe(true);
+      await vi.waitFor(() => expect(getJson.mock.calls.filter(([url]) => url.endsWith("/builds/build-running")).length).toBeGreaterThanOrEqual(2), { timeout: 3000 });
+      expect(fetchLog.mock.calls.some(([url]) => String(url).includes("build-running/log"))).toBe(true);
+      expect(notifications.notify).not.toHaveBeenCalled();
+    } finally {
+      await page.unmount();
+    }
   });
 
   it("scopes busy state per operation so an in-flight source action does not disable the build action", async () => {
@@ -1546,7 +1627,7 @@ const ADVANCED_PREFERENCE_KEY = "elsa.extensionBuilder.advanced";
 
 // Most of this suite exercises the full (advanced) workbench. Default render to advanced mode so
 // those surfaces are present; simple-mode tests opt out with { advanced: false }.
-async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { advanced?: boolean }) {
+async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { advanced?: boolean; retained?: boolean }) {
   if (options?.advanced === false) {
     window.localStorage?.removeItem(ADVANCED_PREFERENCE_KEY);
   } else {
@@ -1557,12 +1638,16 @@ async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { 
   document.body.appendChild(container);
   const root = createRoot(container);
 
-  flushSync(() => {
-    root.render(<ExtensionBuilderPage api={api} />);
+  const moduleApi = { ...api, notifications };
+  const render = (visible: boolean) => flushSync(() => {
+    const page = <ExtensionBuilderPage api={moduleApi} />;
+    root.render(options?.retained ? <React.Activity mode={visible ? "visible" : "hidden"}>{page}</React.Activity> : page);
   });
+  render(true);
 
   return {
     container,
+    setVisible: render,
     unmount: async () => {
       flushSync(() => root.unmount());
       container.remove();

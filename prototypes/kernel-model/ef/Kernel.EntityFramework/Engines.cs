@@ -75,7 +75,40 @@ public abstract class Engine
     public abstract ValueTask SubscribeAsync(KernelDb db, SubscriptionRow subscription, CancellationToken cancellationToken);
 
     /// <summary>Inside the projector's transaction: the view row of an instance, created or moved on by <paramref name="commits"/>.</summary>
-    public abstract ValueTask ViewAsync(KernelDb db, string instance, int partition, long revision, int commits, CancellationToken cancellationToken);
+    public virtual async ValueTask ViewAsync(KernelDb db, string instance, int partition, long revision, int commits, bool reset, CancellationToken cancellationToken) =>
+        await db.Database.ExecuteSqlRawAsync(Sql(ViewStatement), [instance, partition, revision, commits, reset ? 1 : 0], cancellationToken);
+
+    protected abstract string ViewStatement { get; }
+
+    /// <summary>
+    /// Apply journal events in position order, using the Views column's actual equality for every delete/upsert.
+    /// Grouping strings in .NET can split one database key (case, accents or trailing spaces) and reorder its reset.
+    /// At most 200 statements / 1,000 parameters per command, inside the caller's guarded projection transaction.
+    /// </summary>
+    public async ValueTask ProjectViewsAsync(KernelDb db, int partition, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken)
+    {
+        foreach (var chunk in rows.Where(r => r.Revision != 0).OrderBy(r => r.Position).Chunk(200))
+        {
+            var sql = new System.Text.StringBuilder();
+            var arguments = new List<object>();
+            foreach (var row in chunk)
+            {
+                if (row.Revision < 0)
+                {
+                    sql.AppendLine(Sql($"DELETE FROM \"Views\" WHERE \"Instance\" = {{{arguments.Count}}};"));
+                    arguments.Add(row.Instance);
+                }
+                else
+                {
+                    var slots = Enumerable.Range(arguments.Count, 5).Select(i => (object)$"{{{i}}}").ToArray();
+                    sql.AppendLine(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        Sql(ViewStatement).TrimEnd().TrimEnd(';') + ";", slots));
+                    arguments.AddRange([row.Instance, partition, row.Revision, 1, 0]);
+                }
+            }
+            await db.Database.ExecuteSqlRawAsync(sql.ToString(), arguments, cancellationToken);
+        }
+    }
 
     /// <summary>What one of this engine's own exceptions means; null when the exception is not this engine's.</summary>
     public abstract Failure? Classify(Exception exception);
@@ -117,7 +150,7 @@ public abstract class Engine
 public sealed class SqlServerEngine : Engine
 {
     /// <summary>
-    /// ENGINES.md E9, decided 13 November: the checked fence. With the fence in the batch EF sends it last, so a stale
+    /// ENGINES.md E9, decided 13 November: the checked fence. When EF writes messages before the batched fence, a stale
     /// commit holds a message lock and waits for the partition row while a take holds the row and waits for the message.
     /// </summary>
     public override bool FenceInBatchByDefault => false;
@@ -227,13 +260,12 @@ public sealed class SqlServerEngine : Engine
         catch (SqlException x) when (x.Number is 2627 or 2601) { }
     }
 
-    public override async ValueTask ViewAsync(KernelDb db, string instance, int partition, long revision, int commits, CancellationToken cancellationToken) =>
-        await db.Database.ExecuteSqlRawAsync(
+    protected override string ViewStatement =>
             """
             MERGE "Views" WITH (HOLDLOCK) AS t USING (SELECT {0} AS "Instance", {1} AS "Partition", {2} AS "Revision", {3} AS "Commits") AS s ON t."Instance" = s."Instance"
-            WHEN MATCHED THEN UPDATE SET "Revision" = s."Revision", "Commits" = t."Commits" + s."Commits"
+            WHEN MATCHED THEN UPDATE SET "Revision" = s."Revision", "Commits" = CASE WHEN {4} = 1 THEN s."Commits" ELSE t."Commits" + s."Commits" END
             WHEN NOT MATCHED THEN INSERT ("Instance", "Partition", "Revision", "Commits") VALUES (s."Instance", s."Partition", s."Revision", s."Commits");
-            """, [instance, partition, revision, commits], cancellationToken);
+            """;
 
     private static SqlParameter Text(string name, string? value) => new(name, System.Data.SqlDbType.NVarChar, -1) { Value = Value(value) };
 
@@ -341,10 +373,8 @@ public sealed class MySqlEngine : Engine
         await db.Database.ExecuteSqlRawAsync(Sql("""INSERT IGNORE INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition", "Start") VALUES (@key, @instance, @wait, 0, @start)"""),
             [new MySqlParameter("@key", s.Key), new MySqlParameter("@instance", s.Instance), new MySqlParameter("@wait", s.Wait), new MySqlParameter("@start", Value(Json.Write(s.Start)))], cancellationToken);
 
-    public override async ValueTask ViewAsync(KernelDb db, string instance, int partition, long revision, int commits, CancellationToken cancellationToken) =>
-        await db.Database.ExecuteSqlRawAsync(Sql(
-            """INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES ({0}, {1}, {2}, {3}) AS v ON DUPLICATE KEY UPDATE "Revision" = v."Revision", "Commits" = "Views"."Commits" + v."Commits" """),
-            [instance, partition, revision, commits], cancellationToken);
+    protected override string ViewStatement =>
+        """INSERT INTO "Views" ("Instance", "Partition", "Revision", "Commits") VALUES ({0}, {1}, {2}, {3}) AS v ON DUPLICATE KEY UPDATE "Revision" = v."Revision", "Commits" = CASE WHEN {4} = 1 THEN v."Commits" ELSE "Views"."Commits" + v."Commits" END """;
 
     public override Failure? Classify(Exception exception) => exception is not MySqlException e ? null : e.Number switch
     {

@@ -106,6 +106,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     private sealed class Provided(EfProvider provider, EfStore store, EfStore outside, string admin, string? file, Counting? counter) : ProvidedStore
     {
         public override IKernelStore Store => store;
+        public override string MissingConsumeOutcome => "not landed";
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
 

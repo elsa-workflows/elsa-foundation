@@ -518,7 +518,7 @@ runtime cannot be retrofitted; it refuses by failing to read.
 | Kind | Differs from the result case | Shape facts |
 |---|---|---|
 | `VariableMember` | Requires an explicit `declaringScopeId`; legacy `Variable` defaults to the workflow scope (`RuntimeInputBindingCompiler.cs:619-632`, `ParseVariableReference`). Current items are the owning structure's scoped variables. Placement remaps the scope as for `VariableRead` (`PlacedReferenceRemapper.cs:83-99`, `RemapScope`). Delivered in slice D1. | Always `DeferredFit`: a declared type yields `serialization-profile-unbound` (`ClrActivitySerializedShapeSource.cs:151-165`); variables can hold JSON from other writers. |
-| `WorkflowRequestMember` | Payload `memberKey` only; legacy dotted `Path` must be null. An open request (no declared inputs) is always deferred (`ActivityDataSelectionAnalyzer.cs:237-240`). | Always `DeferredFit`. A CLR value supplied at start is serialized with default JSON options (PascalCase) by `WorkflowExecutionStartCommandPayload.ToJsonValues` (`Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs:710-713`). That one function seeds both request inputs (`WR/Services/Executions/WorkflowStartDispatcher.cs:467`) and start-time variables (`:503`), so a CLR-seeded request **or variable** may carry `CustomerId` where an author types `customerId`: exact segments then read `Absent`. Rule chosen (slice D): exact stored names; normalising CLR seeding is a separate follow-up. |
+| `WorkflowRequestMember` | Payload `memberKey` only; legacy dotted `Path` must be null. Owner14Nov correction: the request root must name a declared workflow input; an empty declaration list is a closed v1 contract, so undeclared roots are refused before publication. | Always `DeferredFit`. A CLR value supplied at start is serialized with default JSON options (PascalCase) by `WorkflowExecutionStartCommandPayload.ToJsonValues` (`Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs:710-713`). That one function seeds both request inputs (`WR/Services/Executions/WorkflowStartDispatcher.cs:467`) and start-time variables (`:503`), so a CLR-seeded request **or variable** may carry `CustomerId` where an author types `customerId`: exact segments then read `Absent`. Rule chosen (slice D): exact stored names; normalising CLR seeding is a separate follow-up. |
 | `InputMember` | Authored only. Placement must lower it to `WorkflowRequestMember` with all segments; `Input` reads are lowered by `InputReadLowering` (`WP/InputReadLowering.cs`), keyed by reference key in a placed body (`ActivityTemplatePlacer.ToGraphInputRead`) and by the declared input's name at workflow level (`ExecutableNodeCompiler`, #4087, §11 item 4); slice D2 extends it so `InputMember` lowers to `WorkflowRequestMember` with `memberPath` unchanged, in both places. Delivered in slice D2. | Always `DeferredFit`. |
 
 None of the three can be `Known` today, so all depend on the runtime fit helper, and the issue's acceptance names
@@ -672,9 +672,7 @@ whose requirement is unmet (§8). Studio shows that refusal as an ordinary publi
   budget across the page (`ActivityDataSelectionAnalyzer.cs:170-176`).
 - **Known versus deferred:** only result members can be Known. A declared type, which covers variables, inputs and
   request members, gives `activity.shape.serialization-profile-unbound`
-  (`Essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrActivitySerializedShapeSource.cs:151-165`, §9). An
-  open request is `OpenWorkflowRequest` with no shape (`ActivityDataSelectionAnalyzer.cs:250-252`). For those families
-  the picker can offer only literal segments.
+  (`Essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrActivitySerializedShapeSource.cs:151-165`, §9). Owner14Nov correction: undeclared workflow request roots are refused (`ActivityData/UnknownInput`); declared request/input and variable members remain deferred and offer literal segments.
 - **A focused member query** (`source` plus `memberPath`) returns one source whose `binding` is the member read and
   whose `shape` is the member's (`:103-126,174`).
 - **Type fit is not reported at design time.** Neither discovery nor focused analysis compares a source or member type
@@ -734,7 +732,7 @@ server's order:
 
 - **Workflow inputs.** At workflow level the server offers them as `WorkflowRequest` reads keyed by name; in a body
   they are `Input` reads (`ActivityDataSelectionAnalyzer.cs:261-268`).
-- **Request members** of an open request.
+- **Request members** of declared workflow inputs, keyed by their names; no undeclared-name proposal.
 - **Variables**, nearest scope first. All visible scopes are listed, so a shadowed outer variable is present with its
   own `scopeId` and id `variable:{scope}:{key}` (`Essentials/src/Workflows/Design/Core/Services/ScopedVariableResolver.cs:86-108,157-161`;
   `ActivityDataSelectionAnalyzer.cs:289`). A name that appears in more than one scope shows the scope as
@@ -868,3 +866,19 @@ its actual governance before adoption.
 [Plan](plan.md) fixes package/port ownership, [binding contract](contracts/binding-contract.md) fixes
 behavior, and [quickstart](quickstart.md) fixes evidence. Independent M2 artifact review is complete;
 normal exact-head checks/review, merge and resulting-main qualification remain delivery gates.
+
+
+### Owner correction14Nov: explicit workflow request inputs
+
+The owner selected explicit inputs and removal of the undeclared-request option on
+[#4309](https://github.com/elsa-workflows/elsa-foundation/issues/4309#issuecomment-6871062664).
+S4 exploratory proof found the previous assumption wrong: newly compiled workflows always carry an
+explicit v1 input contract, including an empty list, and runtime rejects undeclared start-input names.
+Discovery, stored whole/member/legacy-path request admission, and publication must match those declarations.
+A workflow request uses the declared input's name; reusable bodies keep their existing declared boundary
+reference keys. Declared Object/JSON input members still accept exact dotted/empty literal segments and
+remain DeferredFit. No public input is inferred from bindings and runtime validation is not relaxed.
+Studio removes the undeclared-name form and host flag. Existing unsupported references retain their exact
+payload and report an actionable declare-input problem with explicit Replace/Clear. This changes new
+source admission, not stored legacy compiled artifacts. Earlier open-request proof is historical evidence,
+not acceptance of runtime support; fresh committed-head proof and independent UX review remain required.

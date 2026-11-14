@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../../Studio/Dashboard/Core/Elsa.Studio.Dashboard.Core.csproj" />
+    <ProjectReference Include="../../Runtime/Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
+    <ProjectReference Include="../../Design/Core/Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="../../Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
