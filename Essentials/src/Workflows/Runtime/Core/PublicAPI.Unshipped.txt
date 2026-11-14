@@ -12090,3 +12090,99 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.SavedStimulusStar
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.WithSavedStimulusStart(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandEnvelope! envelope) -> Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem!
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem.RuntimePostCommitOutboxItem(string! outboxItemId, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntent? intent, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxStatus status, System.DateTimeOffset recordedAt, System.DateTimeOffset? availableAt, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy? retryPolicy, int deliveryAttemptCount, string? deliveringOwnerId, System.DateTimeOffset? deliveryStartedAt, System.DateTimeOffset? deliveredAt, string? lastFailureMessage, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? metadata, long deliveryFencingToken, System.DateTimeOffset? deliveryVisibleAfter, int? stimulusDeliveryProtocolVersion, Elsa.Workflows.Runtime.Core.Models.PersistenceScope? stimulusDeliverySourceScope, Elsa.Workflows.Runtime.Core.Models.StimulusDeliverySnapshot? recipientSnapshot, Elsa.Workflows.Runtime.Core.Models.RuntimeStandaloneIngressSource? standaloneIngress, int? subscriptionDeliveryProtocolVersion, Elsa.Workflows.Runtime.Core.Models.RuntimeSubscriptionDelivery? subscriptionDelivery, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>? savedStimulusStarts) -> void
 Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.SealSavedStartAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority! authority, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandEnvelope! candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandEnvelope!>
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.RuntimeDeploymentScope(string! authority, string! partition, string? tenantId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.Authority.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.Partition.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.TenantId.get -> string?
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope? left, Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope? left, Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.RuntimeDeploymentMember(string! kind, string! identity, Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope! sourceScope) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.Kind.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.Identity.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.SourceScope.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember? left, Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember? left, Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentCaptureException
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentCaptureException.RuntimeDeploymentCaptureException(string! code, bool isUnsupported = false) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentCaptureException.Code.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentCaptureException.IsUnsupported.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeploymentScopeAccessor
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeDeploymentScopeAccessor.RequireScope() -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus.Ready = 0 -> Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus.Committed = 1 -> Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus.Revoked = 2 -> Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.RuntimeMaterialStageMember(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember! sourceMember, System.ReadOnlyMemory<byte> originalPayload, string? originalSourceReferenceId, string? originalIncarnationId, string? expectedIncarnationId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable? workflow = null, Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial? model = null, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate? template = null) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.SourceMember.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.OriginalSourceReferenceId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.OriginalIncarnationId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.ExpectedIncarnationId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.Workflow.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.Model.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.Template.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.OriginalPayloadBytes.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember.GetOriginalPayloadBytes() -> byte[]!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.RuntimeMaterialStageCommand(string! commandId, string! attemptId, string! actorId, Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope! targetScope, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember!>! members) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.CommandId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.AttemptId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.ActorId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.TargetScope.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.Members.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageMember!>!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.MaximumMembers = 128 -> int
+const Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.MaximumMemberBytes = 4194304 -> int
+const Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand.MaximumBatchBytes = 33554432 -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.RuntimeMaterialStageResult(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember! sourceMember, string! originalPayloadDigest, string! ownerBodyDigest, string! incarnationId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity? originalPin, string? templateHash, string? originalSourceReferenceId, string? originalIncarnationId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.SourceMember.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentMember!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.OriginalPayloadDigest.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.OwnerBodyDigest.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.IncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.OriginalPin.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.TemplateHash.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.OriginalSourceReferenceId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult.OriginalIncarnationId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt.RuntimeMaterialStageReceipt(string! commandId, string! fingerprint, long fence, Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus status, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult!>! materials) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt.CommandId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt.Fingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt.Fence.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt.Status.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageStatus
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt.Materials.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageResult!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStagingException
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStagingException.RuntimeMaterialStagingException(string! code, bool isUnsupported = false) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStagingException.Code.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStagingException.IsUnsupported.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommitUnknownException
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommitUnknownException.RuntimeMaterialStageCommitUnknownException(string! commandId, string! fingerprint, System.Exception! innerException) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommitUnknownException.CommandId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommitUnknownException.Fingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageRetentionRoot
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageRetentionRoot.RuntimeMaterialStageRetentionRoot(string! kind, string! materialId, string! incarnationId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageRetentionRoot.Kind.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageRetentionRoot.MaterialId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageRetentionRoot.IncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingStore
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingStore.RegisterAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingStore.StageAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand! command, long fence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingStore.FindReceiptAsync(string! commandId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt?>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingStore.AdvanceFenceAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand! command, long expectedFence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingStore.RevokeAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand! command, long expectedFence, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageReceipt!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingAuthorization
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingAuthorization.AuthorizeAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageCommand! command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingAuthorization.AuthorizeReadAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope! targetScope, string! commandId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStageRetentionReader
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStageRetentionReader.ReadStageRetentionRootsAsync(int maximumRoots, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageRetentionRoot!>!>
