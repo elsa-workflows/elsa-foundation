@@ -126,6 +126,6 @@ function WorkflowOutputPicker({ input, outputs, value, disabled, onSelect }: {
       {missing && <option value={selected} disabled>{selected} (renamed or removed)</option>}
       {names.map(name => <option key={name} value={name}>{name}</option>)}
     </select>
-    <p id={`${id}-help`} role={missing ? "alert" : undefined}>{missing ? "This output is no longer defined. " : ""}{!names.length ? "Add a workflow output in the editor's Outputs tab, then select it here." : missing ? "Select its current name." : "Assign a value to an output declared in this draft."}</p>
+    <p id={`${id}-help`} className={missing ? "wf-property-row-error" : undefined} role={missing ? "alert" : undefined}>{missing ? "This output is no longer defined. " : ""}{!names.length ? "Add a workflow output in the editor's Outputs tab, then select it here." : missing ? "Select its current name." : "Assign a value to an output declared in this draft."}</p>
   </StudioField>;
 }
