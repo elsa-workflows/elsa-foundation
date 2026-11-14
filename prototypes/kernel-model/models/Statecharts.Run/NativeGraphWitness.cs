@@ -193,7 +193,10 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
             if (_before is not null) Reload();
             var key = (reverse ? waits.OrderDescending(StringComparer.Ordinal) : waits.Order(StringComparer.Ordinal)).First();
             var wait = _world.Store.Subscriptions.Single(s => s.Instance == _target.Id && s.Key == key);
-            Add(Events.Deliver(new(key, "release-" + ++_serial, null, _world.Time + 120_000), wait)); Drain();
+            var release = Events.Route(new(key, "release-" + ++_serial, null, _world.Time + 120_000), wait);
+            var accepted = _world.Store.AddEventAsync(release).Result;
+            Check(accepted.Added && accepted.Target == _target, "N5: native release missed its registered creation");
+            Drain();
         }
         throw new InvalidOperationException("N0: native graph phase exceeded its bounded work");
     }

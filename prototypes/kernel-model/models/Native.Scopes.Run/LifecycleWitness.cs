@@ -87,7 +87,9 @@ internal sealed class LifecycleWitness(string mode, bool nested, bool reverse, b
             if (waits.Length == 0) return;
             if (reload) Reload();
             var wait = (reverse ? waits.OrderByDescending(s => s.Key, StringComparer.Ordinal) : waits.OrderBy(s => s.Key, StringComparer.Ordinal)).First();
-            Add(Events.Deliver(new(wait.Key, "release-" + ++_serial, null, _world.Time + 120_000), wait)); Drain();
+            var accepted = _world.Store.AddEventAsync(Events.Route(new(wait.Key, "release-" + ++_serial, null, _world.Time + 120_000), wait)).Result;
+            Check(accepted.Added && accepted.Target == _target, "Scope release missed its registered creation.");
+            Drain();
         }
         throw new InvalidOperationException("L0: lexical phase exceeded its bound");
     }

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.util
 from contextlib import contextmanager
 import json
 import os
@@ -13,13 +15,34 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
 import urllib.error
 import zipfile
 
-import weaver_inventory
+def _load_sibling(name):
+    """Absolute-spec consumers need the same fixed sibling as direct CLI imports."""
+    spec = importlib.util.spec_from_file_location('_elsa_ux_' + __name__ + '_' + name,
+                                               Path(__file__).resolve().with_name(name + '.py'))
+    if spec is None or spec.loader is None:
+        raise ImportError('The acceptance sibling could not be loaded')
+    module = importlib.util.module_from_spec(spec)
+    previous = sys.modules.get(spec.name)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        if previous is None:
+            sys.modules.pop(spec.name, None)
+        else:
+            sys.modules[spec.name] = previous
+        raise
+    return module
+
+
+weaver_inventory = _load_sibling('weaver_inventory')
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
@@ -40,7 +63,9 @@ CAPTURES = {
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
-    'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320'],
+    'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control', 'capability-reference'],
+    'choose nested activity data': ['reference', 'customer-sources', 'customer-members', 'customer-reference', 'customer-code-reopened', 'customer-flowchart', 'customer-held', 'customer-loading', 'customer-retry', 'customer-320'],
+    'choose declared and scoped activity data': ['reference', 'source-groups', 'variable-literal', 'variable-empty', 'variable-reference', 'outer-variable-reference', 'declared-reference', 'unsupported-request', 'request-repaired', 'no-request-proposal', 'source-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
     'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes-initial', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
     'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
@@ -64,7 +89,43 @@ CAPTURES['native dashboard questions and sharing'] += (
 JOURNEYS = set(CAPTURES)
 # The Weaver inventory is opt-in. The inherited dashboard/native baseline and its no-inference profile stay unchanged.
 CAPTURES.update(weaver_inventory.CAPTURES)
+MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped activity data'}
+DATA_JOURNEYS = MEMBER_JOURNEYS | {'choose data for activity outputs'}
+COMPOSITIONS = {'normal', 'minimal', 'default-off'}
+
+
+def selected_journeys(journeys=None, composition='normal'):
+    if composition != 'normal' and journeys is None:
+        raise ValueError('Nonnormal composition requires explicit journeys')
+    if journeys is not None and not isinstance(journeys, str) and len(journeys) != len(set(journeys)):
+        raise ValueError('Duplicate journey selections')
+    selected = JOURNEYS if journeys is None else {journeys} if isinstance(journeys, str) else set(journeys)
+    if not selected or not selected <= JOURNEYS or composition not in COMPOSITIONS:
+        raise ValueError('Unknown or empty journey/composition inventory')
+    if composition != 'normal' and not selected <= DATA_JOURNEYS:
+        raise ValueError('Minimal/default-off composition requires explicit activity-data journeys')
+    if composition == 'default-off' and selected != {'choose data for activity outputs'}:
+        raise ValueError('Default-off requires the whole-output control; member journeys cannot be skipped')
+    return selected
+
+
+def configure_activity_data(backend_shells, studio_shells, composition, journeys):
+    """Configure private copies only; default-off observes the committed default without forcing a false flag."""
+    if not journeys & DATA_JOURNEYS:
+        return
+    backend = backend_shells['CShells']['Shells']['default']['Features']
+    studio = studio_shells['CShells']['Shells']['Default']['Features']
+    if composition != 'default-off':
+        backend.setdefault('WorkflowDesignValidations', {})['MemberReads'] = True
+    if composition == 'minimal':
+        for key in ('HttpJavaScript', 'JavaScriptActivities', 'JavaScriptEndpoints', 'JavaScriptExpressions',
+                    'JavaScriptJintEngine', 'JavaScriptWorkflowsDesign', 'Liquid'):
+            backend.pop(key, None)
+        for key in ('JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'):
+            studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
+    **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
+    'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
     'existing home widgets and layout defaults': {'native-weaver-boundary.json', 'home-populated-appearance-matrix.json', 'home-default-baseline.json', 'home-module-widgets.json', 'home-preferences-restored.json'},
@@ -150,7 +211,7 @@ def recorded_browser_contexts(path):
     return contexts
 
 
-def verdict(report, artifacts, journeys=None, projects=None):
+def verdict(report, artifacts, journeys=None, *, projects=None, composition="normal"):
     """An exit code alone cannot certify that every intended journey actually ran."""
     journeys = JOURNEYS if journeys is None else set(journeys)
     if not journeys or not journeys <= JOURNEYS | weaver_inventory.JOURNEYS:
@@ -191,6 +252,8 @@ def verdict(report, artifacts, journeys=None, projects=None):
             file = Path(item.get('path', '')).resolve()
             if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
                 raise ValueError(f'{project} / {title}: missing or unsafe artifact {item.get("name")}')
+        if title in DATA_JOURNEYS:
+            activity_data_verdict(title, attachments, composition)
         if title == 'native dashboard questions and sharing':
             trace = next(item['path'] for item in attachments if item.get('name') == 'trace')
             if len(recorded_browser_contexts(trace)) < 2:
@@ -199,6 +262,107 @@ def verdict(report, artifacts, journeys=None, projects=None):
             manifest = next(item['path'] for item in attachments if item.get('name') == 'safe-export.json')
             weaver_inventory.export_manifest_verdict(manifest, artifacts, project=project)
     return len(rows)
+
+
+def validate_activity_admission(selection):
+    before = selection.get('before', {})
+    admission = selection.get('admission', {})
+    request, response = admission.get('request', {}), admission.get('response', {})
+    same = ('definitionId', 'nodeId', 'inputKey', 'documentRevision', 'snapshot')
+    query = request.get('query', {})
+    if not before.get('documentRevision') or not before.get('snapshot') or any(request.get(key) != before.get(key) for key in same) or \
+            response.get('state') not in {'supported', 'empty'} or response.get('documentRevision') != before['documentRevision'] or \
+            not query.get('source') or query.get('memberPath') != selection['binding'].get('value', {}).get('memberPath') or \
+            not any(source.get('binding') == selection['offered'] for source in response.get('analysis', {}).get('sources', [])):
+        raise ValueError('Selection lacks its supported pre-edit admission; post-edit provenance is not admission')
+
+
+def validate_minimal_composition(observation, title):
+    features = observation.get('features', [])
+    by_id = {feature['id']: feature for feature in features}
+    if not features or len(by_id) != len(features):
+        raise ValueError('Missing or ambiguous live minimal feature catalog')
+    for required in ('WorkflowsPublishingApi', 'WorkflowDesignValidations'):
+        if not by_id.get(required, {}).get('enabled') or not by_id.get(required, {}).get('runtimeAvailable'):
+            raise ValueError('Missing rooted live minimal feature')
+    reached = set()
+    def visit(key):
+        if key in reached:
+            return
+        feature = by_id.get(key, {})
+        if not feature.get('runtimeAvailable') or not isinstance(feature.get('dependencies'), list):
+            raise ValueError('Unresolved required minimal feature graph')
+        reached.add(key)
+        for dependency in feature['dependencies']:
+            if not isinstance(dependency.get('id'), str) or type(dependency.get('optional')) is not bool:
+                raise ValueError('Malformed required minimal feature graph')
+            if not dependency['optional']:
+                visit(dependency['id'])
+    for feature in features:
+        if feature.get('enabled'):
+            visit(feature['id'])
+    optional = {'HttpJavaScript', 'JavaScriptActivities', 'JavaScriptEndpoints', 'JavaScriptExpressions',
+                'JavaScriptJintEngine', 'JavaScriptWorkflowsDesign', 'Liquid'}
+    if reached & optional or sorted(reached) != observation.get('mandatoryClosure'):
+        raise ValueError('Minimal resolved graph retains optional backend features or mismatches its closure')
+    syntaxes, choices = observation.get('expressionTypes', []), observation.get('syntaxChoices', [])
+    native_syntax = {'choose nested activity data': 'Activity output member',
+                     'choose declared and scoped activity data': 'Variable member',
+                     'choose data for activity outputs': 'Activity output…'}.get(title)
+    if native_syntax is None or 'Literal' not in syntaxes or 'Literal' not in choices or native_syntax not in choices or \
+            any(re.search('JavaScript|Liquid', name, re.I) for name in [*syntaxes, *choices]):
+        raise ValueError('Minimal backend descriptors or installed Studio menu are missing/optional')
+
+
+def activity_data_verdict(title, attachments, composition):
+    files = {item.get('name'): item.get('path') for item in attachments}
+    proof = json.loads(Path(files['activity-data-proof.json']).read_text())
+    if proof.get('composition') != composition:
+        raise ValueError('Activity data proof composition mismatch')
+    analyses = [item.get('response', {}).get('analysis', {}) for item in proof.get('contexts', [])
+                if item.get('response', {}).get('state') in {'supported', 'empty'}]
+    if not any(item.get('memberReadsEnabled') is (composition != 'default-off') for item in analyses):
+        raise ValueError('Activity data capability was not observed')
+    if composition == 'minimal' and any(re.search(r'expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression', url, re.I)
+                                        for url in proof.get('scripts', [])):
+        raise ValueError('Optional expression editor script requested in minimal composition')
+    if composition == 'minimal':
+        validate_minimal_composition(proof.get('compositionObservation') or {}, title)
+    selections = proof.get('selections', [])
+    if any(item.get('binding') != item.get('offered') or not item.get('binding') for item in selections):
+        raise ValueError('Selected binding differs from actual server offer')
+    for selection in selections:
+        validate_activity_admission(selection)
+    runs = proof.get('runtime', [])
+    if title == 'choose nested activity data':
+        cancelled = [item for item in proof.get('transportControls', []) if item.get('kind') == 'cancelled']
+        if len(cancelled) != 1 or not re.search('ERR_ABORTED|cancelled|canceled|aborted', cancelled[0].get('failure', ''), re.I) or \
+                cancelled[0].get('request', {}).get('nodeId') != 'consumer' or cancelled[0].get('request', {}).get('inputKey') != 'text':
+            raise ValueError('Actual browser cancellation evidence is missing')
+        if len(selections) != 2 or any(item['binding'] != {'expressionType': 'ActivityResultMember', 'value': {
+                'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False, 'memberPath': ['customerId']}} for item in selections):
+            raise ValueError('Customer canonical binding inventory incomplete')
+        if len(runs) != 2 or any(item.get('committed') != 'cust-1042' or len(item.get('producers', [])) != 1 or
+                                item['producers'][0].get('status') != 'Completed' for item in runs):
+            raise ValueError('Customer committed runtime/producer evidence incomplete')
+    elif title == 'choose declared and scoped activity data':
+        expected = [{'expressionType': 'VariableMember', 'value': {'referenceKey': key, 'declaringScopeId': scope, 'memberPath': ['a.b', '']}}
+                    for key, scope in [('inner-payload', 'root'), ('outer-payload', 'workflow')]]
+        expected += [{'expressionType': 'WorkflowRequestMember', 'value': {'memberKey': 'payload', 'memberPath': ['a.b', '']}}] * 2
+        if [item['binding'] for item in selections] != expected:
+            raise ValueError('Scoped/declared canonical binding inventory incomplete')
+        if len(runs) != 3 or {item.get('committed') for item in runs} != {'inner-id', 'outer-id', 'declared-ui-id'}:
+            raise ValueError('Distinct scoped/declared committed runtime evidence incomplete')
+    else:
+        whole_runs = [json.loads(Path(path).read_text()) for name, path in files.items() if name and name.startswith('whole-output-runtime-')]
+        if len(whole_runs) != 2 or any(item.get('committed') != '00:00:01' for item in whole_runs):
+            raise ValueError('Whole-output committed runtime inventory incomplete')
+        if not any(source.get('binding', {}).get('expressionType') == 'ActivityResult' and
+                   source.get('binding', {}).get('value', {}).get('projectionKey') == 'Customer'
+                   for analysis in analyses for source in analysis.get('sources', []) if source.get('binding')):
+            raise ValueError('Member-capable typed source control was not observed')
+    if any(item.get('consumer', {}).get('status') != 'Completed' for item in runs):
+        raise ValueError('Consumer did not complete')
 
 
 def field_gallery_verdict(report, artifacts, requested_port=None):
@@ -396,7 +560,7 @@ def run_weaver_inventory(output, data, backend_project, studio_project, env, sha
                                 forbidden_values=[management_key, str(owned)])
                     if public_report is None:
                         raise ValueError('The private browser run produced no report; no evidence was exported')
-                    count = verdict(public_report, phase_output, [title], [project])
+                    count = verdict(public_report, phase_output, journeys=[title], projects=[project])
                 if backend_process.returncode != 0:
                     raise ValueError('Owned backend did not stop cleanly; a forced stop cannot qualify restart')
                 completed.append({'project': project, 'phase': phase, 'executed': count,
@@ -408,7 +572,13 @@ def run_weaver_inventory(output, data, backend_project, studio_project, env, sha
         raise ValueError('Incomplete normal-host inventory appearance/phase matrix')
 
 
-def run(output, journey=None, studio_root=None, profile='default'):
+def fingerprints(root):
+    return {str(file.relative_to(root)): hashlib.sha256(file.read_bytes()).hexdigest()
+            for file in sorted(root.rglob('*')) if file.is_file() and
+            (file.suffix in {'.dll', '.js', '.css', '.html'} or file.name in {'appsettings.json', 'shells.json'})}
+
+
+def run(output, journey=None, studio_root=None, *, profile='default', composition='normal'):
     output.mkdir(parents=True, exist_ok=False)
     if profile == 'weaver-inventory':
         output.chmod(0o700) # Actual provider traces are private evidence; never publish raw traces.
@@ -418,10 +588,13 @@ def run(output, journey=None, studio_root=None, profile='default'):
     supplied_head = os.environ.get('UX_PR_HEAD_SHA', sha)
     # Untrusted provenance input must never reach the failure report or finally's printed JSON.
     head = supplied_head.lower() if re.fullmatch(r'[0-9a-fA-F]{40}', supplied_head) else None
+    fixture_built = False
+    backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
     report = {'sourceSha': sha, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
-              'profile': profile, 'journeys': sorted(weaver_inventory.JOURNEYS) if profile == 'weaver-inventory' else [journey] if journey else sorted(JOURNEYS)}
+              'profile': profile, 'composition': composition,
+              'journeys': sorted(weaver_inventory.JOURNEYS) if profile == 'weaver-inventory' else []}
     if head is not None:
         report['headSha'] = head
     try:
@@ -432,9 +605,8 @@ def run(output, journey=None, studio_root=None, profile='default'):
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
-        if profile == 'weaver-inventory' and (journey or studio_root != ROOT.resolve()):
-            raise ValueError('Weaver inventory owns both actual host sources and its complete appearance/phase matrix')
-        backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+        if profile == 'weaver-inventory' and (journey is not None or composition != 'normal' or studio_root != ROOT.resolve()):
+            raise ValueError('Weaver inventory owns its normal composition, both actual host sources and its complete appearance/phase matrix')
         studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
         if profile == 'weaver-inventory':
             # Build logs, native host data, screenshots and traces originate outside the publishable output root.
@@ -459,7 +631,16 @@ def run(output, journey=None, studio_root=None, profile='default'):
             report.update(status='passed', stage='complete-native-observations',
                           providerAnswers='unavailable; no semantic answers verified', t045Acceptance='incomplete', storyAcceptance='incomplete')
             return
-        command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'backend-build.log')
+        selected = selected_journeys(journey, composition)
+        report['journeys'] = sorted(selected)
+        backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:2', '-nr:false', '-v:q', '-nologo']
+        if selected & DATA_JOURNEYS:
+            fixture = ROOT / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
+            backend_command.append(f'-p:CustomAfterMicrosoftCommonTargets={fixture}')
+            report['fixture'] = {str(file.relative_to(ROOT)): hashlib.sha256(file.read_bytes()).hexdigest()
+                                 for file in (fixture, fixture.with_name('CustomerFixture.cs'))}
+            fixture_built = True
+        command(backend_command, output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
         report['stage'] = 'isolated-field-gallery'
         gallery = output / 'outlined-gallery'
@@ -491,26 +672,39 @@ def run(output, journey=None, studio_root=None, profile='default'):
             identity = shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']
             identity['AllowedReturnUrlOrigins'] = [studio_url]
             configure_dashboard_qualification(settings, shells)
+            studio_shells = json.loads((studio / 'shells.json').read_text(encoding='utf-8-sig'))
+            configure_activity_data(shells, studio_shells, composition, selected)
+            (studio / 'shells.json').write_text(json.dumps(studio_shells))
+            report['composedFeatures'] = {'backend': sorted(shells['CShells']['Shells']['default']['Features']),
+                                          'studio': sorted(studio_shells['CShells']['Shells']['Default']['Features'])}
             (backend / 'appsettings.json').write_text(json.dumps(settings))
             (backend / 'shells.json').write_text(json.dumps(shells))
-            env = dict(clean_environment(), HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"),
+            report['binaryAndConfigHashes'] = {'backend': fingerprints(backend), 'studio': fingerprints(studio)}
+            report['ownedRoot'] = str(data)
+            env = dict(clean_environment(), DOTNET_PROCESSOR_COUNT='2', HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"),
                        **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
             (data / "home").mkdir()
             report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url,
                           hostProfile='ElsaDashboardQualification=true; private native principals; Copilot disabled',
                           modelEvidence='Native browser Weaver message submissions only; physical SDK calls not measured')
-            with host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env):
+            with host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env) as backend_process:
                 with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
-                          dict(env, Studio__BackendBaseUrl=backend_url)):
+                          dict(env, Studio__BackendBaseUrl=backend_url)) as studio_process:
+                    report['ownedPids'] = {'backend': backend_process.pid, 'studio': studio_process.pid}
                     report['stage'] = 'journeys'
                     browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', UX_ACCEPTANCE_PROFILE='default', ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
-                                       UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha)
+                                       UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha,
+                                       UX_ACTIVITY_DATA_COMPOSITION=composition)
                     browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
-                    if journey:
-                        browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
+                    if journey is not None:
+                        # Playwright greps project/file/title together; anchor the exact final title.
+                        browser_command.extend(['--grep', r'(?:^|\s)(?:' + '|'.join(re.escape(name) for name in sorted(selected)) + ')$'])
                     command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
-                    report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, [journey] if journey else None)
+                    report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output,
+                                                 journeys=selected, composition=composition)
+        report['hostExitCodes'] = {'backend': backend_process.returncode, 'studio': studio_process.returncode}
+        report['ownedRootRemoved'] = not data.exists()
         if (sha, dirty) != source_state(ROOT) or (studio_sha, studio_dirty) != source_state(studio_root):
             raise ValueError('Source changed during acceptance; rerun the exact committed revision')
         if dirty or studio_dirty:
@@ -529,6 +723,23 @@ def run(output, journey=None, studio_root=None, profile='default'):
             raise RuntimeError(report['error']) from None
         raise
     finally:
+        # TemporaryDirectory and nested host contexts have ended before removing the opt-in fixture build.
+        if fixture_built:
+            try:
+                command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'fixture-cleanup-build.log')
+                dll = backend_project.parent / 'bin/Debug/net10.0/Elsa.Workbench.dll'
+                if b'ActivityDataSelectionProof' in dll.read_bytes():
+                    raise ValueError('Default Workbench still contains the opt-in customer fixture')
+                report['fixtureCleanup'] = {'status': 'passed', 'workbenchSha256': hashlib.sha256(dll.read_bytes()).hexdigest(), 'markerAbsent': True}
+                if (sha, dirty) != source_state(ROOT) or (studio_sha, studio_dirty) != source_state(studio_root):
+                    raise ValueError('Source changed during fixture cleanup')
+            except Exception as error:
+                report.update(status='failed', cleanupError=str(error))
+                raise
+            finally:
+                report['ownedRootRemoved'] = not Path(report.get('ownedRoot', '/__never_owned__')).exists()
+                report['finalSource'] = {'backend': source_state(ROOT), 'studio': source_state(studio_root)}
+                (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
         report['finishedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
         print(json.dumps(report, indent=2), flush=True)
@@ -538,10 +749,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--studio-root', type=Path, help='Optional clean committed Studio checkout; both frontend/backend revisions are recorded and fenced')
-    parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one complete journey across all four projects; the default still requires every journey')
     parser.add_argument('--profile', choices=['default', 'weaver-inventory'], default='default', help='Explicitly opt in to the normal-host Weaver inventory; inherited UX baseline is unchanged')
+    parser.add_argument('--journey', action='append', choices=sorted(JOURNEYS), help='Repeat for exact complete journeys across four projects; default requires every normal journey')
+    parser.add_argument('--composition', choices=sorted(COMPOSITIONS), default='normal', help='Owned activity-data host composition; nonnormal modes require explicit journeys')
     args = parser.parse_args()
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned hosts will be stopped')
     signal.signal(signal.SIGTERM, terminate)
-    run(args.output.resolve(), args.journey, args.studio_root, args.profile)
+    run(args.output.resolve(), journey=args.journey, studio_root=args.studio_root,
+        profile=args.profile, composition=args.composition)

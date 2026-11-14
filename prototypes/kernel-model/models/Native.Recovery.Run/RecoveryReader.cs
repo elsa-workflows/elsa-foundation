@@ -81,7 +81,7 @@ internal static class RecoveryReader
             throw new InvalidOperationException("R10: future incident version was accepted");
         });
     }
-    private static NativeState Staged()
+    internal static NativeState Staged()
     {
         var state = Valid(); var source = state.Frames["f"]; source.RecoveryMaterial = new(); state.Frames.Remove("f");
         source.Scope = new() { ["CurrentItem"] = Values.From(7) }; source.LexicalScope = "borrowed";
