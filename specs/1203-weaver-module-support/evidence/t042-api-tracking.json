@@ -417,8 +417,9 @@
       "total": 622,
       "artifact": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43597281594/artifacts/14116917745",
       "artifactBytes": 513,
-      "artifactSha256": "8c1d6ceae3a0ebb8ef091581341221f6051b111e16b6dfb402f69d0e9255ece5",
-      "artifactContents": "test-outcomes.json; this older workflow did not upload raw TRX or discovery output",
+      "artifactReportedSha256": "8c1d6ceae3a0ebb8ef091581341221f6051b111e16b6dfb402f69d0e9255ece5",
+      "artifactInspected": false,
+      "artifactSelection": "The workflow selects test-outcomes.json, without raw TRX or discovery output. The artifact ZIP has not been opened; its digest and size are GitHub-reported metadata.",
       "scope": "Unfiltered architecture project passed on the actual CI merge of D3 and the recorded main parent, including the source roster of five PublicApiFilesGuardTests. This is not a separate discovery/count comparison or individual raw-TRX inspection, does not rewrite the failed worker receipt, and does not qualify newer private source, remaining T042 requirements or the Program."
     }
   ],
