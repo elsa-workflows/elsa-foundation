@@ -126,8 +126,10 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   async function stored(created: Created) { return binding(await saved(created)); }
   async function canvas() {
     if (page.viewportSize()!.width <= 600) {
-      const collapse = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
-      if (await collapse.isVisible()) await collapse.click();
+      for (const name of ["Collapse inspector panel", "Collapse activities panel"]) {
+        const collapse = page.getByRole("button", { name, exact: true });
+        if (await collapse.isVisible()) await collapse.click();
+      }
     }
   }
   async function select(nodeId = "consumer") {

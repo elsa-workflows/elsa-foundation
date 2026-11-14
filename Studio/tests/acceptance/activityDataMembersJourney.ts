@@ -98,7 +98,7 @@ export async function activityDataMembersJourney(page: Page, info: TestInfo, cap
       // Current unsaved snapshot must refuse the deleted producer without discarding the existing authored value.
       await page.getByRole("button", { name: "More workflow actions", exact: true }).click();
       await page.getByRole("menuitemcheckbox", { name: /^Autosave/ }).click(); await page.keyboard.press("Escape");
-      const before = await s.saved(created); await s.select("producer");
+      const before = await s.saved(created); await s.select("producer"); await s.canvas();
       await page.getByRole("button", { name: "Delete Get Customer", exact: true }).click(); await s.select();
       await expect(page.locator(".wf-data-reference-problem")).toContainText("Replace it or clear it");
       expect(await s.saved(created)).toEqual(before);
