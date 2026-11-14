@@ -51,7 +51,7 @@ internal static class ScopedReaders
         var defaults = new Dictionary<string, System.Text.Json.Nodes.JsonNode?> { ["payload"] = Wf.Object(("value", 7)) };
         var nodes = new GraphNode[] { new("r", NodeKind.Root, Initial: "A"), new("A", NodeKind.Atomic, "r", Defaults: defaults) };
         var graph = new SelectionChart(nodes, [], defaults);
-        try { StateMachine.Restore(old, graph, "literal-reader"); }
+        try { StateMachine.Restore(new MachineState(["A"], null, Version: 3, Visits: [new("A", "literal-reader/state/1")], VisitSerial: 1), graph, "literal-reader"); }
         catch (InvalidOperationException e) when (e.Message == "Legacy statechart checkpoint cannot acquire new declarations.") { Pass(13); goto definitions; }
         throw new InvalidOperationException("V11: legacy checkpoint silently acquired declarations");
         definitions:
