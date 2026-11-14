@@ -200,7 +200,8 @@ button {
   font-size: 0.75rem;
 }
 
-input[aria-invalid="true"] {
+/* A native select or textarea marked invalid shows the same error border as an input. */
+:is(input, select, textarea)[aria-invalid="true"] {
   border-color: color-mix(in srgb, var(--studio-danger) 60%, transparent);
 }
 

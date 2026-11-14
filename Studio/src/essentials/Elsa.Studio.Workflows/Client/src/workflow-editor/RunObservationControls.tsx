@@ -20,7 +20,7 @@ export function RunObservationControls({ following, onFollowingChange, onRefresh
       title={finished ? "The run has finished. Refresh to read its latest evidence." : "Pause or resume recorded updates without changing the inspected occurrence. Pausing updates does not stop the workflow."}
       onClick={() => onFollowingChange(!following)}>
       {finished ? <Check size={14} aria-hidden="true" /> : following ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
-      <span>{finished ? "Updates complete" : following ? "Live updates" : "Updates paused"}</span>
+      <span className="wf-run-tool-label">{finished ? "Updates complete" : following ? "Live updates" : "Updates paused"}</span>
     </button> : null}
   </div>;
 }

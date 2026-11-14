@@ -236,7 +236,7 @@ public sealed class WorkflowExecutableCompiler(
                 }
             }
 
-            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
+            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs, state.Outputs);
             var sourceRevision = ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(new
             {
                 source.SourceKind, source.SourceId, source.SourceVersion, source.DefinitionId,

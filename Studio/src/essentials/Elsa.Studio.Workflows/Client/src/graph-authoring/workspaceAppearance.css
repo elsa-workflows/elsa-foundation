@@ -128,6 +128,13 @@ html[data-workspace-style="minimal"] .wf-node:where(:not(.wf-node-runtime)) .wf-
 html[data-workspace-style="minimal"] .wf-panel-tab-list button.active { color: var(--studio-text); box-shadow: inset 0 -2px var(--studio-selection-mark); }
 html[data-workspace-style="minimal"] :is(.wf-property-section, .wf-property-group) { border-bottom-style: var(--studio-section-boundary-style); }
 html[data-workspace-style="minimal"] .wf-property-row :is(input, textarea, select) { background: var(--studio-surface); }
+/* An invalid inspector field is visibly an error, not only aria-invalid: a border in the danger fill, and its message in danger text. */
+.wf-property-row :is(input, select, textarea)[aria-invalid="true"],
+html[data-workspace-style] .wf-property-row :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--studio-danger, var(--wf-danger));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--studio-danger, var(--wf-danger)) 45%, transparent);
+}
+.wf-property-row p.wf-property-row-error { color: var(--studio-danger-fg, var(--wf-danger)); }
 @media (max-width: 600px) {
   html[data-workspace-style="minimal"] .wf-editor { padding: 0 6px 6px; }
 }

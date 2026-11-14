@@ -49,9 +49,27 @@
 .wf-attached-test-run .wf-run-observation-notice { flex-basis: 100%; }
 
 @media (max-width: 600px) {
-  .wf-run-actions { width: 100%; margin-left: 0; }
+  .wf-run-toolbar.wf-toolbar { gap: 4px 8px; padding: 6px 16px 8px; }
+  .wf-run-actions { width: 100%; margin-left: 0; gap: 4px; }
   .wf-run-actions > .wf-run-observation-controls { padding-left: 0; border-left: 0; }
-  .wf-run-identity > strong { max-width: 100%; }
+  /* One identity row: the run name gives way (full name in its tooltip) before the status wraps. */
+  .wf-run-identity { flex: 1 1 100%; flex-wrap: nowrap; }
+  .wf-run-identity > strong { flex: 0 1 auto; max-width: none; overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; white-space: nowrap; }
+  .wf-run-identity > :is(button, .wf-status-badge) { flex-shrink: 0; }
+  /* A phone keeps the run header to a few rows: secondary tools keep their icon and accessible name, not their visible text. */
+  /* Only the run toolbar hides the live tool's label; the attached Test Run keeps its fixed width so polling never moves it. */
+  .wf-run-toolbar .wf-run-live-tool { width: auto; }
+  .wf-run-toolbar .wf-run-tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* :where keeps this below the coarse-pointer 44px touch target. */
+  .wf-run-toolbar :where(.wf-run-tool:has(.wf-run-tool-label)) { min-width: 32px; }
 }
 
 @media (pointer: coarse) {
@@ -64,3 +82,32 @@
 .wf-run-toolbar .wf-run-incident-action[data-health="none"] { border-color: transparent; background: transparent; color: var(--studio-text-muted); font-weight: 400; }
 
 .wf-runtime-heading > .wf-status-badge { min-width: 6rem; justify-content: center; }
+
+/* On a phone the run title and its instance id share one line, so the run's canvas and evidence keep the viewport.
+   Only the run page carries that id; the executable inspector shares the page class and keeps its wrapping title. */
+@media (max-width: 600px) {
+  .studio-page.wf-page--run-workbench > .studio-page-header:has(.wf-page-context) {
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 12px;
+    padding: 16px 16px 0;
+  }
+
+  .studio-page.wf-page--run-workbench > .studio-page-header:has(.wf-page-context) > .studio-page-header-copy { flex: 0 0 auto; }
+  .studio-page.wf-page--run-workbench > .studio-page-header:has(.wf-page-context) > .studio-page-actions { flex: 1 1 auto; min-width: 0; }
+  .wf-page--run-workbench .wf-page-context { display: flex; align-items: baseline; justify-content: flex-end; gap: 6px; }
+  .wf-page--run-workbench .wf-page-context code { min-width: 0; max-width: none; }
+}
+
+/* The run panel's four tabs keep their full labels beside its panel buttons. Below the width that
+   fits them with icons, the labels stay and the icons go, rather than a label scrolling under the
+   chevron ("Detai"). */
+.wf-instance-inspector > .wf-instance-panel-title {
+  container: wf-run-panel-title / inline-size;
+}
+
+@container wf-run-panel-title (max-width: 460px) {
+  .wf-instance-panel-title .wf-panel-tab-list { gap: 2px; }
+  .wf-instance-panel-title .wf-panel-tab-list button { gap: 0; padding-inline: 6px; }
+  .wf-instance-panel-title .wf-panel-tab-icon { display: none; }
+}
