@@ -17,7 +17,7 @@ public sealed partial class WorkflowActivationCoordinator
     /// </summary>
     /// <param name="slotBeforeTransition">The slot as the call read it before a switch that threw, which may have committed.</param>
     private async ValueTask<WorkflowActivationResult> AbandonAsync(
-        WorkflowActivationCommand command,
+        ActivationCandidate command,
         WorkflowExecutableSourceReference reference,
         CancellationToken cancellationToken,
         Exception exception,
@@ -46,14 +46,14 @@ public sealed partial class WorkflowActivationCoordinator
     /// <param name="reason">Why the call stopped, as it reads in the log after the activation and its slot.</param>
     /// <param name="failure">The failure that stopped the call, logged as a warning; without one the log is informational.</param>
     private async ValueTask<WorkflowActivationResult> AbandonAsync(
-        WorkflowActivationCommand command,
+        ActivationCandidate command,
         WorkflowExecutableSourceReference reference,
         Func<WorkflowActivationSlot, WorkflowActivationResult> failed,
         string reason,
         WorkflowActivationSlot? slotBeforeTransition = null,
         Exception? failure = null)
     {
-        var definitionId = command.Executable.Identity.DefinitionId;
+        var definitionId = command.WorkflowDefinitionId;
         bool discarded;
         try
         {
@@ -101,12 +101,12 @@ public sealed partial class WorkflowActivationCoordinator
     /// as Publishing does, retires the record; and it notifies the trigger observers, logging rather than failing on them.
     /// </summary>
     private async ValueTask<WorkflowActivationResult> ActivatedByASwitchWhoseAnswerWasLostAsync(
-        WorkflowActivationCommand command,
+        ActivationCandidate command,
         WorkflowExecutableSourceReference reference,
         WorkflowActivationSlot slot,
         WorkflowActivationSlot slotBeforeTransition)
     {
-        await NotifyServingAsync(slot, command.ActivationId, command.Executable.Identity.ArtifactId);
+        await NotifyServingAsync(slot, command.ActivationId, command.Identity.ArtifactId);
         var replaced = slotBeforeTransition.ActiveActivationId is { } previous && !StringComparer.Ordinal.Equals(previous, command.ActivationId) ? previous : null;
         return new(true, WorkflowActivationOutcome.Activated, slot, await FindLiveReferenceAsync(slot, CancellationToken.None) ?? reference, replaced);
     }

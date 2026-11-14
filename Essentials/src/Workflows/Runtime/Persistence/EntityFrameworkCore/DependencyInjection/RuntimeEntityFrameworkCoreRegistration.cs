@@ -173,6 +173,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             // withdraws the publication projection-state unit they replace.
             services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
             services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
+            RuntimeStandaloneTriggerRegistration.UseEntityFramework(services);
             services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
             UseEntityFrameworkActivationSwitch(services);
 

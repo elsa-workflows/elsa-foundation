@@ -8,6 +8,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ---
 
+Standalone trigger reservations also participate in route projection and its fingerprint. The resolver reads all reservation pages in the trusted physical scope, filters resource owners, and incorporates owner/configuration generations and metadata, so a resource mode/security change invalidates the route manifest even when its template stays equal. These reservation reads materialize rows; the index-only cost statement above applies to the existing embedded binding/bookmark projections. Actual request admission rechecks the protected reservation. See the [HTTP source integration](../../../Activities/Http/StandaloneTriggers/README.md); composed multi-node acceptance remains open.
+
 ## Overridable contracts
 
 ### `IHttpEndpointRoutesResolver` *(Feature contract — `Elsa.Workflows.Runtime.Http`)*

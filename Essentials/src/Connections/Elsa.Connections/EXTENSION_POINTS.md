@@ -13,8 +13,8 @@ Use `services.AddConnections()` to register defaults, then replace these service
   which are created in the store named by `Elsa:Secrets:DefaultWritableStoreName` (default `encrypted`).
   `GetCapabilitiesAsync` identifies the actual configured metadata profile; unspecified contributions
   do not claim durability. A replacement must keep
-  the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` equals
-  the document's and then increments it; otherwise, including after a delete, it throws
+  the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` and ordinal creation identity equal
+  the document's and then increments the revision; otherwise, including after a delete/recreate at the same revision, it throws
   `ConnectionConflictException` and writes nothing. Its expected-version `DeleteAsync` deletes only while
   the stored version equals the expected one, atomically. Derive the replacement's tests from
   `ConnectionRepositoryContractTests` in `Essentials/tests/Connections/Tests/`.
@@ -43,7 +43,11 @@ Use `services.AddConnections()` to register defaults, then replace these service
   - A credential version that expires between the update's read and its rotation is reported as a 409 although no
     other request changed it; retrying the update succeeds (#3153).
   - `Revoke`, `Delete`, `Test`, `Find` and `List` do not wrap store failures (#3139).
-- `IConnectionResolver` for point-of-use resolution.
+- `IConnectionResolver` for point-of-use resolution. A supplied `ExpectedIncarnationId` must match the exact document
+  used for settings/credentials, refusing unknown identities and delete/recreate under the same name. An optional
+  positive `ExpectedVersion` guards a current preview observation from that same read. Omit that revision guard for
+  normal settings/credential rotation while retaining a mapping's resource identity. Metadata exposes both observations;
+  legacy null incarnation/zero revision remains unknown, never a confirmed match.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).
 - `IAccessTokenSource` implementations, keyed by `Kind`, for named credentials

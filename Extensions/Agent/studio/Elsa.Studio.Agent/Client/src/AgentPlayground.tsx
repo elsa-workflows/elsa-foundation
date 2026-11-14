@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FlaskConical, Play, RefreshCw, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { activityDefinitionPath } from "./AgentsPage";
 import { InvocationEvidenceDetails } from "./InvocationEvidence";
 import { invocationPath } from "./AgentInvocationPage";
@@ -221,13 +221,13 @@ function InputField({ input, value, error, disabled, onChange }: { input: Playgr
   const id = useId();
   const text = isText(input);
   return (
-    <div className="agent-playground__input">
-      <label htmlFor={id}>{input.displayName?.trim() || input.name}{input.isRequired ? " (required)" : ""}</label>
+    <div className="agent-playground__input"><StudioField controlId={id} label={<>{input.displayName?.trim() || input.name}{input.isRequired ? " (required)" : ""}</>}>
+
       {input.description ? <p className="agent-playground__hint">{input.description}</p> : null}
       <textarea id={id} value={value} disabled={disabled} aria-invalid={error ? true : undefined}
         placeholder={text ? "Text" : "JSON value"} onChange={event => onChange(event.target.value)} />
       {error ? <p className="agent-playground__error" role="alert">{error}</p> : null}
-    </div>
+    </StudioField></div>
   );
 }
 

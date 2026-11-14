@@ -17,6 +17,7 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
     private const string Family = RuntimeArtifactEfModule.SchemaFamily;
     private const string CurrentVersion = RuntimeArtifactEfModule.SchemaVersion;
     private const string NewerVersion = "2.0.0";
+    private static readonly string[] ReadableVersions = [CurrentVersion, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion];
 
     private readonly ServiceProvider _host;
     private readonly IClusterMembership _membership;
@@ -37,7 +38,7 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
         var self = Assert.Single((await _membership.ReadFleetAsync(FleetReadMode.Fresh)).Members);
 
         Assert.Equal(ClusterProviderKind.InProcess, _membership.ProviderKind);
-        Assert.Equal(new ReadabilityEntry(Family, "Workflows.Runtime", [CurrentVersion], moduleActive: false), Entry(self));
+        Assert.Equal(new ReadabilityEntry(Family, "Workflows.Runtime", ReadableVersions, moduleActive: false), Entry(self));
     }
 
     [Fact]
@@ -61,7 +62,7 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
         Assert.False(answer.EveryConsideredMemberMatches);
         var blocker = Assert.Single(answer.Failures);
         Assert.Equal(new ReadsSchemaVersion(Family, NewerVersion), blocker.Requirement);
-        Assert.Equal([CurrentVersion], Entry(blocker.Member).ReadableVersions);
+        Assert.Equal(ReadableVersions, Entry(blocker.Member).ReadableVersions);
     }
 
     [Fact]

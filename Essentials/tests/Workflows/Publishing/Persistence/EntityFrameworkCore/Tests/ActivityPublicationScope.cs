@@ -28,7 +28,7 @@ internal sealed class ActivityPublicationScope : IAsyncDisposable
         PublishingSnapshotReviewDbContext publishing,
         ActivitiesDesignDbContext design,
         RuntimeDbContext runtime,
-        TestAccess access)
+        IPersistenceAccessContextAccessor access)
     {
         Publishing = publishing;
         Design = design;

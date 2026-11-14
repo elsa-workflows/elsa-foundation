@@ -1,6 +1,6 @@
 using System.Net;
 using Elsa.Integrations.Connectors.Slack.Activities;
-using Elsa.Integrations.Sdk.Harness;
+using Elsa.Integrations.Sdk.Testing;
 
 namespace Elsa.Integrations.Connectors.Slack.Tests;
 

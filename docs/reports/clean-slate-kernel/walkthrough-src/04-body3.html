@@ -1,0 +1,193 @@
+
+<!-- 12 ─────────────────────────────────────────── -->
+<section class="ch" id="profiles">
+  <div class="num">12</div>
+  <h2>Deployment profiles</h2>
+  <p>Three things vary independently, each behind its own seam. There is no fourth "runtime" plug-in: a deployment profile is a named preset of the last two. A workflow behaves the same under every profile, and synchronous HTTP works on all of them. Pick a profile.</p>
+  <div class="seg" role="group" aria-label="Deployment profile" id="profile-seg">
+    <button type="button" data-profile="embedded" aria-pressed="false">Embedded</button>
+    <button type="button" data-profile="cluster" aria-pressed="true">Cluster</button>
+    <button type="button" data-profile="orleans" aria-pressed="false">Orleans</button>
+    <button type="button" data-profile="log" aria-pressed="false">Log (later)</button>
+  </div>
+  <div class="axes">
+    <div class="axis-col"><h4>Persistence mode</h4><p class="who">Chosen per workflow by its author. Gives the workflow its guarantees.</p>
+      <span class="opt on">Ephemeral</span><span class="opt on">Balanced</span><span class="opt on">Durable</span></div>
+    <div class="axis-col"><h4>Actor runtime</h4><p class="who">Layer 1. Where actors run.</p>
+      <span class="opt" data-in="embedded">Built-in, one node, no transport</span>
+      <span class="opt" data-in="cluster">Built-in, partitions shared over nodes</span>
+      <span class="opt" data-in="orleans">Orleans adapter</span>
+      <span class="opt" data-in="log">Built-in, partitions as replicated-log groups</span></div>
+    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What stores the rows.</p>
+      <span class="opt" data-in="embedded orleans">SQLite (1 partition)</span>
+      <span class="opt" data-in="embedded cluster orleans">PostgreSQL</span>
+      <span class="opt" data-in="embedded cluster orleans">SQL Server (RCSI on)</span>
+      <span class="opt" data-in="embedded cluster orleans">MySQL</span>
+      <span class="opt" data-in="embedded cluster orleans">MongoDB 8 (replica set)</span>
+      <span class="opt" data-in="log">A Zeebe-like log provider</span></div>
+  </div>
+  <p id="profile-note"></p>
+  <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
+</section>
+
+<!-- 13 ─────────────────────────────────────────── -->
+<section class="ch" id="costs">
+  <div class="num">13</div>
+  <h2>What it costs</h2>
+  <p>PostgreSQL round trips per workflow run: today's core, counted on 11 November, against the native model on the new kernel. Hover a row for both figures.</p>
+  <div class="legend"><span><i style="background:var(--hot)"></i>Today's core</span><span><i style="background:var(--accent)"></i>New kernel, native model</span></div>
+  <figure>
+    <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 424" role="img" aria-label="Round trips per run: today's core needs 48 to 680; the new kernel needs 0 to 123 for the same workflows."></svg></div>
+    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 8, 82). The fork-join figures are from the merged kernel. The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
+  </figure>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Engine</th><th class="n">Balanced run on the owner</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>PostgreSQL</td><td class="n">3 (2)</td><td>Round trips; in brackets the fence in the batch.</td></tr>
+      <tr><td>SQL Server</td><td class="n">4 (3)</td><td>Needs read-committed snapshot isolation.</td></tr>
+      <tr><td>MySQL</td><td class="n">7 (6)</td><td>Oracle's EF provider; upserts and <code>INSERT IGNORE</code>.</td></tr>
+      <tr><td>MongoDB 8</td><td class="n">3 (2)</td><td>Needs a replica set for transactions; the store assigns the order key.</td></tr>
+      <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Measured by the prototype's own cost runs, as reported in its findings; not re-measured for this record.</p>
+</section>
+
+<!-- 14 ─────────────────────────────────────────── -->
+<section class="ch" id="proof">
+  <div class="num">14</div>
+  <h2>How it is tested</h2>
+  <p>The model is attacked by a deterministic simulation: several nodes against one store, one random action at a time (takes, polls, turns, commits, crashes, a paused owner that wakes with stale memory, commits whose answer is lost, retried commands, clocks that disagree). After every action it checks these invariants. A failing seed replays exactly.</p>
+  <div class="grid">
+    <div class="card"><h4>1 · One writer</h4><p>No two commits land at the same position; nothing prepared under an old epoch lands.</p></div>
+    <div class="card"><h4>2 · Atomic turn</h4><p>State, consumed and sent messages, subscriptions and journal row: all or none.</p></div>
+    <div class="card"><h4>3 · No lost message</h4><p>A committed message reaches a turn that consumes it while any node owns the partition.</p></div>
+    <div class="card"><h4>4 · Once in state</h4><p>A message changes state at most once, including a retried outside command.</p></div>
+    <div class="card"><h4>5 · Timers</h4><p>Never delivered early, never lost.</p></div>
+    <div class="card"><h4>6 · Journal order</h4><p>Rows present plus rows removed by deletes equal the position; the projector never passes an unwritten position.</p></div>
+    <div class="card"><h4>7 · Takeover</h4><p>After a take at e + 1 nothing from e commits, and the new owner sees all that did.</p></div>
+    <div class="card"><h4>8 · Index matches state</h4><p>An instance's subscriptions are exactly the waits in its committed state.</p></div>
+    <div class="card"><h4>9 · Memory matches rows</h4><p>What an owner holds equals the committed row plus its own uncommitted turn.</p></div>
+    <div class="card"><h4>10 · Create once</h4><p>Two messages that would create one instance create one, in any order, across takeovers.</p></div>
+    <div class="card"><h4>11 · Order</h4><p>One sender's messages to one target are handled in the order sent.</p></div>
+    <div class="card"><h4>12 · Jobs</h4><p>A job's result is applied once; a cancelled job's result never.</p></div>
+    <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
+    <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
+  </div>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB (run commands are in the <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">prototype README</a>); a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
+</section>
+
+<!-- 15 ─────────────────────────────────────────── -->
+<section class="ch" id="tradeoffs">
+  <div class="num">15</div>
+  <h2>Trade-offs and the chosen defaults</h2>
+  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
+  <div class="chips">
+    <span class="chip">Side effects at least once in Balanced</span>
+    <span class="chip">History: Full</span>
+    <span class="chip">Lease: 10 s</span>
+    <span class="chip">64 partitions, 1 on SQLite</span>
+    <span class="chip">HTTP response after commit</span>
+    <span class="chip">No reads across instances</span>
+    <span class="chip">Events not kept unless asked</span>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Gain</th><th>Price</th><th>Lever</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td>No reads while a workflow runs: state is in memory</td><td>Memory per active instance; the whole state is rewritten at each commit</td><td>Bound on instances held; large values by reference</td></tr>
+      <tr><td class="n">2</td><td>One writer per partition: no locks, many instances per commit</td><td>Failover takes about one lease; a hot partition has one writer; partition count fixed at creation</td><td>Partition count; lease length</td></tr>
+      <tr><td class="n">3</td><td>An idle owner needs no traffic…</td><td>…except an empty fenced commit about three times per lease, per partition</td><td>Lease length</td></tr>
+      <tr><td class="n">4</td><td>Batching under load</td><td>A commit waits for the one before it: latency rises a little, throughput a lot</td><td>Rows per flush</td></tr>
+      <tr><td class="n">5</td><td>Balanced: one commit per wait</td><td>After a crash, activities since the last commit run again; outside side effects may repeat</td><td>Persistence mode; Durable for what must not repeat</td></tr>
+      <tr><td class="n">6</td><td>Background jobs do not block the instance</td><td>It can run more than once; external calls need idempotency keys</td><td>None: inherent, as in Temporal</td></tr>
+      <tr><td class="n">7</td><td>The run viewer costs nothing on the hot path</td><td>The run view stays current by reading the journal tail (decided, not built); lists over projected rows lag the projector; its writes still cost calls</td><td>History level per workflow</td></tr>
+      <tr><td class="n">8</td><td>Instances only talk through messages: no races</td><td>No code reads another instance's state; a question is a message or a lagging projection</td><td>None: it is the design</td></tr>
+      <tr><td class="n">9</td><td>State is a snapshot: no determinism rules for authors</td><td>History is a record, not the source; old state needs upgrade code</td><td>State versions, <code>UpgradeState</code></td></tr>
+      <tr><td class="n">10</td><td>State is opaque: any model fits</td><td>The kernel cannot search inside state; indexes cost writes</td><td><code>Describe</code>; indexed fields per workflow</td></tr>
+      <tr><td class="n">11</td><td>A message from outside costs little</td><td>One extra small commit (mark before running) and a poll; another node's resume pays a hop</td><td>Poll interval; notifier</td></tr>
+      <tr><td class="n">12</td><td>One shared database: simple, transactional across everything</td><td>The cluster's ceiling is that database's write throughput; a turn is never free of calls, unlike Zeebe</td><td>Later, if needed</td></tr>
+      <tr><td class="n">13</td><td>Persistence is abstracted: any store</td><td>No provider shortcuts in the kernel; each provider needs tuning; MongoDB needs a replica set</td><td>Store conformance suite</td></tr>
+      <tr><td class="n">14</td><td>The actor runtime can be swapped</td><td>Runtimes host partitions only; one grain per instance is deferred</td><td>Ship one runtime; adapters on demand</td></tr>
+      <tr><td class="n">15</td><td>A poison message cannot walk the cluster</td><td>Suspects are retried one at a time after a takeover; an innocent one is rarely parked</td><td>Threshold; trial group size</td></tr>
+      <tr><td class="n">16</td><td>No HTTP response for lost work</td><td>The response waits 2–3 round trips on PostgreSQL for its commit; a resume on another node pays a hop</td><td>Release before commit, per route</td></tr>
+      <tr><td class="n">17</td><td>A clean break: the smallest, fastest design</td><td>No migration of existing runs; the native interpreter is rewritten as a model; two cores until the switch</td><td>None: accepted 11 and 12 November</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 16 ─────────────────────────────────────────── -->
+<section class="ch" id="open">
+  <div class="num">16</div>
+  <h2>Open and not built</h2>
+  <div class="two">
+    <div class="card"><h4>Not built yet</h4>
+      <ul>
+        <li>The Orleans reference adapter and the runtime conformance suite</li>
+        <li>Deployment profiles as code; inline execution on every profile</li>
+        <li>The graph engine extracted from the Flowchart; spikes for BPMN on Bpmn.Semantics, StateMachine, agents, standalone jobs (Elsa.Jobs as a job actor type, with the worker protocol) and ETL's fan-out pattern</li>
+        <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
+        <li>Streaming HTTP responses; a route mapping a client's disconnect to a cancel; the owner's signal to the receiving node</li>
+        <li>SQL Server's checked fence as its default</li>
+      </ul></div>
+    <div class="card"><h4>Decided 12 November</h4>
+      <p class="note">The prototype's <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">README</a> and <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/FINDINGS.md">findings</a> track current implementation coverage and its limits. The decisions below record the proposed design.</p>
+      <ul>
+        <li>Commit fence in the batch by default (2 round trips on PostgreSQL); fence first stays an option</li>
+        <li>A pluggable wake signal between nodes; polling remains the guarantee</li>
+        <li>Short timers and jobs of an Ephemeral instance stay in memory, up to the route timeout or a few seconds</li>
+        <li>Events: subscription and event tables are the one kernel mechanism</li>
+        <li>Reply addresses expire at the route's timeout, then the instance is unpinned</li>
+        <li>Recreate after delete: generated ids never return; caller keys may after <code>keep_until</code></li>
+        <li>The projector batches each round into set-based writes, off the hot path</li>
+        <li>Jobs are counted for poison like messages</li>
+        <li>Large values stored by reference; segments only if measurements need them</li>
+        <li>The viewer reads projected rows plus the journal tail, so it is always current</li>
+        <li>Orleans hosts partitions as grains; no grain per instance, no sweep</li>
+              <li>13 November: SQL Server defaults to the fence as its own statement (E9); the architecture section goes in <code>docs/architecture/</code>, published at the switch</li>
+      </ul></div>
+    <div class="card"><h4>To answer in the design proposal</h4>
+      <ul>
+        <li>Migrating running instances: a hook per container engine, and versioned activity state</li>
+        <li>Data lifecycle: retention, the right to erasure in an append-only journal, encryption at rest</li>
+        <li>Fairness, per-tenant quotas, admission control and bounded inboxes</li>
+        <li>Fan-out and fan-in over 100,000 children without flooding the parent</li>
+        <li>Job workers outside the process, in any language, with leases and heartbeats, built from Elsa.Jobs's worker protocol</li>
+        <li>Observability: trace context, stable metrics, operator actions on parked work</li>
+        <li>Write volume and bloat: bytes per commit and PostgreSQL dead rows, measured</li>
+      </ul></div>
+    <div class="card"><h4>Still open</h4>
+      <ul>
+        <li>What the store contract says about subscribing twice and removing what is absent</li>
+        <li>Tenant and trace headers; <code>Describe</code> for lists</li>
+        <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
+        <li>The default join for a Flowchart node with several inbound connections</li>
+        <li>BPMN's scope for its first release</li>
+      </ul></div>
+  </div>
+  <h3>Release 1 scope (decided 12 November)</h3>
+  <div class="two">
+    <div class="card"><h4>In release 1</h4>
+      <ul>
+        <li>The kernel, the built-in runtime, the Embedded and Cluster profiles</li>
+        <li>The native model: structured containers and the Flowchart on the graph engine</li>
+        <li>Synchronous HTTP</li>
+        <li>PostgreSQL, SQL Server and SQLite, tuned; MySQL supported, not tuned</li>
+        <li>Studio on the new core</li>
+        <li>Basic trace context and metrics, retention and delete, admission control, simple instance migration</li>
+        <li>StateMachine, unless its design milestone is late; then 1.1</li>
+        <li>Agents as native activities, agent calls as background jobs</li>
+      </ul></div>
+    <div class="card"><h4>After release 1</h4>
+      <ul>
+        <li>BPMN, the Orleans adapter and ETL, each proven by a spike now</li>
+        <li>MongoDB in 1.1; proven in CI against a replica set from release 1</li>
+        <li>The aggregating fan-out pattern, with ETL; release 1 caps a parallel ForEach</li>
+        <li>The out-of-process job worker protocol (1.x); its contract designed now</li>
+        <li>A dedicated agent execution model</li>
+      </ul></div>
+  </div>
+  <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
+  <p>Program <a href="https://github.com/elsa-workflows/elsa-foundation/issues/4229">#4229</a> tracks the remaining prototype work and its evidence. The design proposal includes a new ADR, a program plan, the architecture references and a list of ADRs to retire, followed by the Fable review and owner approval. No product code until the design is approved.</p>
+</section>
+</main>
+</div>
