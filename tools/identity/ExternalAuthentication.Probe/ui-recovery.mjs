@@ -136,6 +136,7 @@ export async function exerciseConnectionConflict({ page, admin, backend, compone
     await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
     await expect(page.getByLabel("Display order", { exact: true })).toBeEnabled();
     await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("8");
+    await expect(page.locator(".external-auth-notice")).toHaveCount(0);
 
     const commandRoute = url => url.pathname.endsWith("/_elsa/identity/external-connections/commands");
     const loseAcknowledgement = async route => {
