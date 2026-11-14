@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -28,6 +29,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
     private readonly InMemoryActivityExecutionStateStore _activityStore = new();
     private readonly PayloadStore _payloadStore = new();
     private readonly InMemoryDurableValueStateStore _durableStore = new();
+    private readonly OutputExpressionEvaluator _outputExpressionEvaluator = new();
     private readonly WorkflowIntrinsicExecutor _executor;
 
     public WorkflowIntrinsicAssignmentConversionTests() =>
@@ -35,7 +37,73 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
             _durableStore,
             new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()), new FakeTimeProvider(Now),
             externalPayloadStore: _payloadStore, valueConversionExecutor: new RuntimeValueConversionExecutor(new IntRegistry()),
-            inputValidator: new WorkflowExecutableInputValidator(new IntRegistry()));
+            inputValidator: new WorkflowExecutableInputValidator(new IntRegistry()),
+            portableExpressionEvaluator: _outputExpressionEvaluator);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetOutput_evaluates_the_expression_under_its_source_contract_and_converts_before_storage(bool formatted)
+    {
+        _outputExpressionEvaluator.ExpectedAlias = formatted ? "String" : "Elsa.Any";
+        _outputExpressionEvaluator.Result = JsonSerializer.SerializeToElement(formatted ? (object)"7" : 7);
+
+        var commit = await ExecuteAsync(OutputExpressionNode(formatted), 7, false);
+
+        var output = Assert.Single(commit.StateChanges.DurableValues,
+            change => change.State.Metadata.GetValueOrDefault(RuntimeMetadataKeys.OutputName) == "Count").State;
+        Assert.Equal("Int32", output.Type.Id);
+        Assert.Equal(JsonValueKind.Number, output.InlineValue!.Value.ValueKind);
+        Assert.Equal(7, output.InlineValue.Value.GetInt32());
+    }
+
+    [Theory]
+    [InlineData("\"7\"")]
+    [InlineData("true")]
+    [InlineData("2147483648")]
+    [InlineData("{\"unexpected\":true}")]
+    public async Task SetOutput_refuses_an_expression_result_that_cannot_satisfy_its_pinned_destination(string json)
+    {
+        _outputExpressionEvaluator.Result = JsonSerializer.Deserialize<JsonElement>(json);
+
+        await Assert.ThrowsAsync<RuntimeValueConversionException>(() => ExecuteAsync(OutputExpressionNode(false), 7, false).AsTask());
+
+        Assert.DoesNotContain(await _durableStore.ListAllDurableValueStatesAsync(WorkflowExecutionId),
+            state => state.Metadata.ContainsKey(RuntimeMetadataKeys.OutputName));
+        Assert.Equal(ActivityExecutionStatus.Scheduled, (await _activityStore.FindAsync(WorkflowExecutionId, IntrinsicExecutionId))!.Status);
+    }
+
+    private static ExecutableNode OutputExpressionNode(bool formatted)
+    {
+        var sourceType = new ValueTypeDescriptor(formatted ? "String" : "Elsa.Any");
+        var plan = new ValueConversionPlan(ValueConversionPlan.CurrentSchemaVersion,
+            formatted ? ValueRepresentation.FormattedContent : ValueRepresentation.StructuredValue,
+            sourceType, IntType, formatted ? ValueConversionMode.Json : ValueConversionMode.Auto,
+            ValueConversionOperation.Profile, new ValueConversionProfileReference("elsa.json", "1"), limits: null, options: null);
+        var bindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            ["name"] = new("name", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline,
+                RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(new ValueTypeDescriptor("String"),
+                    JsonSerializer.SerializeToElement("Count"), ValueProtectionPolicy.InstanceInline)),
+            ["value"] = new("value", IntType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
+                expression: new RuntimeExpressionBinding("JavaScript", "7", new RuntimeValueTypeDescriptor("alias", sourceType.Alias, null)),
+                conversionPlan: plan)
+        };
+        return new ExecutableNode("set-output", "set-output", "elsa.intrinsic.setoutput", "1.0.0", "intrinsic",
+            JsonSerializer.SerializeToElement(new { }), bindings, new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.SetOutput);
+    }
+
+    private sealed class OutputExpressionEvaluator : IPortableExpressionEvaluator
+    {
+        public string ExpectedAlias { get; set; } = "Elsa.Any";
+        public JsonElement Result { get; set; } = JsonSerializer.SerializeToElement(7);
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
+        {
+            Assert.Equal(ExpectedAlias, request.Definition.ResultType.Alias);
+            return ValueTask.FromResult(Result);
+        }
+    }
 
     [Theory]
     [InlineData("variable", false)]

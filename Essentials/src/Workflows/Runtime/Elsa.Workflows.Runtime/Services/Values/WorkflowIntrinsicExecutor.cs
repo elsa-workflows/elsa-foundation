@@ -632,17 +632,20 @@ public sealed class WorkflowIntrinsicExecutor(
             if (binding.EffectivePolicy.Lifecycle == DurableValueLifecycle.None)
                 throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist transient expression input '{binding.InputName}'.");
 
+            var expressionType = binding.ConversionPlan?.SourceType ?? binding.TargetType;
             var evaluated = await _portableExpressionEvaluator.EvaluateAsync(
                 expression,
-                binding.TargetType,
+                expressionType,
                 binding.EffectivePolicy,
                 intrinsicState.Execution.ExecutableNodeId,
                 binding.InputName,
                 context,
                 cancellationToken);
             var envelope = evaluated.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
-                ? ValueEnvelope.Null(binding.TargetType, evaluated.EffectivePolicy)
-                : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
+                ? ValueEnvelope.Null(expressionType, evaluated.EffectivePolicy)
+                : ValueEnvelope.Inline(expressionType, evaluated.Value, evaluated.EffectivePolicy);
+            if (binding.ConversionPlan is { } plan)
+                envelope = _valueConversionExecutor.Convert(envelope, plan);
             if (validateAssignmentPayload)
                 ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
             return await ApplyStorageAsync(
