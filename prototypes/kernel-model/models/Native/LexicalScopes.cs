@@ -106,7 +106,9 @@ internal sealed partial class Burst
             if (frame.Scope is { } local) yield return local;
             for (var id = frame.LexicalScope; id is not null && seen.Add(id);)
             {
-                var scope = LexicalScopes.Accessible(_s, frame.Id, id);
+                // An executing intrinsic/leaf is not stored as a live frame; its scheduled parent owns access.
+                var access = _s.Frames.ContainsKey(frame.Id) ? frame.Id : frame.Parent ?? frame.Id;
+                var scope = LexicalScopes.Accessible(_s, access, id);
                 yield return scope.Values;
                 id = scope.Parent;
             }

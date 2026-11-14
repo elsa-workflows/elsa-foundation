@@ -38,13 +38,13 @@ Console.WriteLine("PASS lexical:cross-phase-value");
 internal sealed class ScopeSession : CompositeActivity
 {
     public ScopeSession() { }
-    protected override void Execute(CompositeContext context)
+    protected internal override void Execute(CompositeContext context)
     {
         var scope = context.CreateLexicalScope(new Dictionary<string, JsonNode?> { ["counter"] = Values.From(0) });
         context.SetState(scope);
         Schedule(context, "entry");
     }
-    protected override void OnChildCompleted(CompositeContext context, ChildCompleted child)
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child)
     {
         if (child.Node == "entry") Schedule(context, "action");
         else context.Complete();
