@@ -6,6 +6,7 @@ using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,11 +43,13 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
             services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnEmbeddingDelivery),
                 RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BpmnNativeWorkCheckpointEnricher>());
-        foreach (var kind in new[] { BpmnNativeWorkBoundary.StartKind, BpmnNativeWorkBoundary.ResultKind, BpmnNativeWorkBoundary.CancelKind })
+        foreach (var kind in new[] { BpmnNativeWorkBoundary.StartKind, BpmnNativeWorkBoundary.InputStartKind, BpmnNativeWorkBoundary.IngressStartKind, BpmnNativeWorkBoundary.ResultKind, BpmnNativeWorkBoundary.CancelKind })
             services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnNativeWorkDelivery),
                 RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true));
         services.TryAddSingleton(new BpmnModelHostingOptions(AdmitNewExecutions));
         services.TryAddScoped<IBpmnModelRuntime, BpmnModelRuntime>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ITriggerTargetModelSource, BpmnTriggerModelSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStandaloneTriggerRuntimeTarget, BpmnTriggerTarget>());
         services.AddSingleton<IShellInitializer>(new BpmnModelHostingRegistrationInitializer(services));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeExecutionProtocolSource, BpmnProtocolSource>());
     }
@@ -56,7 +59,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         public BpmnProtocolSource() { }
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver))
-                { InputKinds = ["start", "complete-human", "claim-human", "complete-claimed-human", "cancel", "retry-service", "native-result", "native-start-retired", "timer-elapsed", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
+                { InputKinds = ["start", "start-authored-v1", "start-trigger-v1", "complete-human", "claim-human", "complete-claimed-human", "cancel", "retry-service", "native-result", "native-start-retired", "timer-elapsed", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
     }
 }
 
