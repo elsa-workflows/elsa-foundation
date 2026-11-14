@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Services.Triggers;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -47,7 +50,13 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
         IPersistenceAccessContextAccessor accessContextAccessor,
         TimeProvider timeProvider,
         IRecurringTriggerScheduleStore? recurringScheduleStore = null)
+        : this(authority, triggerBindingStore, sourceReferenceStore, accessContextAccessor, timeProvider, [], recurringScheduleStore) { }
+
+    public EfWorkflowActivationSwitch(IWorkflowActivationAuthority authority, IWorkflowTriggerBindingStore triggerBindingStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider timeProvider, IEnumerable<IIngressReservationPolicy> reservationPolicies, IRecurringTriggerScheduleStore? recurringScheduleStore = null)
     {
+        _reservationPolicies = RuntimeIngressReservationRules.Policies(reservationPolicies);
         _authority = authority as EfWorkflowActivationAuthority ?? throw Unsupported(authority);
         _context = _authority.Context;
         _bindings = Shared(triggerBindingStore as EfWorkflowTriggerBindingStore, triggerBindingStore, store => store.Context);
@@ -222,7 +231,7 @@ public sealed partial class EfWorkflowActivationSwitch : IWorkflowActivationSwit
                 cancellationToken.ThrowIfCancellationRequested();
                 var scope = EfRuntimeOperationalStoreSupport.RequireScope(_accessContextAccessor);
                 _context.ChangeTracker.Clear();
-                await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
                 Step<T> step;
                 try
                 {

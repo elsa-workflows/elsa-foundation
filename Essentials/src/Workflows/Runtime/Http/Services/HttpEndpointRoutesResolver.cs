@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Exceptions;
 using Elsa.Workflows.Runtime.Http.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
@@ -66,8 +67,11 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 public sealed class HttpEndpointRoutesResolver(
     IWorkflowTriggerBindingStore bindingStore,
     IGlobalBookmarkStimulusLookup bookmarkStimulusLookup,
-    ILogger<HttpEndpointRoutesResolver> logger) : IHttpEndpointRoutesResolver
+    ILogger<HttpEndpointRoutesResolver> logger, IRuntimeIngressReservationReader? reservations = null,
+    IPersistenceAccessContextAccessor? access = null) : IHttpEndpointRoutesResolver
 {
+    public HttpEndpointRoutesResolver(IWorkflowTriggerBindingStore bindingStore, IGlobalBookmarkStimulusLookup bookmarkStimulusLookup,
+        ILogger<HttpEndpointRoutesResolver> logger) : this(bindingStore, bookmarkStimulusLookup, logger, null, null) { }
     public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default) =>
         (await ResolveRouteSetAsync(cancellationToken)).Routes;
 
@@ -111,9 +115,13 @@ public sealed class HttpEndpointRoutesResolver(
         foreach (var bookmark in waiting.Matches)
             AddTemplate(bookmark.Metadata, candidates);
 
+        var standalone = await StandaloneReservationsAsync(cancellationToken);
+        foreach (var reservation in standalone) AddTemplate(reservation.Metadata, candidates);
+
         return new HttpEndpointRouteSet(
             candidates.Values.Select(candidate => candidate.ToRouteData()).ToArray(),
-            Fingerprint(bindings.Select(binding => binding.StimulusHash).Concat(waiting.Matches.Select(bookmark => bookmark.StimulusHash))));
+            Fingerprint(bindings.Select(binding => binding.StimulusHash).Concat(waiting.Matches.Select(bookmark => bookmark.StimulusHash))
+                .Concat(standalone.Select(ReservationIdentity))));
     }
 
     public async ValueTask<string> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
@@ -122,7 +130,31 @@ public sealed class HttpEndpointRoutesResolver(
         var bookmarkHashes = await bookmarkStimulusLookup.FindWaitingStimulusHashesByTypeAsync(
             new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
             cancellationToken);
-        return Fingerprint(bindingHashes.Concat(bookmarkHashes));
+        return Fingerprint(bindingHashes.Concat(bookmarkHashes).Concat((await StandaloneReservationsAsync(cancellationToken)).Select(ReservationIdentity)));
+    }
+
+    private async ValueTask<IReadOnlyList<RuntimeIngressReservation>> StandaloneReservationsAsync(CancellationToken cancellationToken)
+    {
+        if (reservations?.SupportsReservations != true) return [];
+        if (access?.Current.Scope is not { } scope || access.Current.AcrossScopes)
+            throw new InvalidOperationException("Standalone HTTP route projection requires one trusted shell persistence scope.");
+        var result = new List<RuntimeIngressReservation>(); string? after = null;
+        do
+        {
+            var page = await reservations.ListInScopeAsync(scope, new(HttpEndpointRouting.StimulusType, 100, after), cancellationToken);
+            result.AddRange(page.Items.Where(item => item.OwnerKind == RuntimeIngressReservation.StandaloneTriggerOwner));
+            if (page.Next is not null && page.Next == after) throw new InvalidOperationException("Ingress reservation paging did not advance.");
+            after = page.Next;
+        } while (after is not null);
+        return result;
+    }
+    private static string ReservationIdentity(RuntimeIngressReservation reservation)
+    {
+        // Resource revisions, mode and source-access changes participate even when the route template stays equal.
+        var content = System.Text.Json.JsonSerializer.Serialize(new { reservation.ReservationId, reservation.OwnerId,
+            reservation.OwnerRevision, reservation.ConfigurationRevision, reservation.Scope, reservation.StimulusHash,
+            Metadata = reservation.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray() });
+        return "standalone-http:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }
 
     // Order-insensitive and length-framed, so neither the order the stores return identities in nor an identity that

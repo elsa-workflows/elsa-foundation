@@ -226,7 +226,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
             () => store.ListByStimulusTypeAsync(new WorkflowTriggerBindingTypePageQuery("Event")).AsTask());
         Assert.Equal("RuntimeTriggerBinding", skew.Family);
         Assert.Equal("2", skew.Found);
-        Assert.Equal(RuntimeTriggerBindingEfModule.SchemaVersion, skew.Expected);
+        Assert.Equal(RuntimeTriggerBindingEfModule.SemanticReservationsSchemaVersion, skew.Expected);
     }
 
     [Fact]
