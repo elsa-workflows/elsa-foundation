@@ -2227,27 +2227,139 @@ async function moduleEffects() {
   const spec = config.effectsScenario;
   const tools = ["acme_home_admin_visibility", "acme_home_irrecoverable_visibility", "acme_home_omitted_admin_visibility",
     "acme_home_raised_risk_visibility", "acme_home_activation_visibility", "acme_home_check_widget"];
-  need(spec && tools.includes(spec.tool) && ["browser", "browser-failed", "browser-typed", "nested-removal"].includes(spec.condition), "Exact effects fixture scenario required.");
+  need(spec && tools.includes(spec.tool) && ["browser", "browser-failed", "browser-typed", "nested-removal", "browser-policy", "browser-uncertain"].includes(spec.condition), "Exact effects fixture scenario required.");
   const typed = spec.condition === "browser-typed";
   if (typed) need(typeof config.effectsCanary === "string" && config.effectsCanary.length === 48
     && ["authorization", "preparation", "execution", "receipt", "context"].includes(spec.channel), "Private typed-channel input required.");
   result.effectsScenario = spec;
+  need(/^[a-f0-9]{40}$/.test(config.effectsTestedSource), "Effects captures need their exact tested source.");
   result.effectsRefs = {};
+  result.effectsStateCaptures = {};
+  const modes = [["desktop", 1920, 1080], ["narrow", 390, 844]];
+  const captureState = async (name, expectedStatuses, { loading = false, empty = false, matrix = true } = {}) => {
+    let first;
+    for (const [layout, width, height] of matrix ? modes : modes.slice(0, 1)) {
+      await page.setViewportSize({ width, height });
+      for (const theme of matrix ? ["light", "dark"] : ["light"]) {
+        // The shared theme control belongs to desktop chrome; narrow evidence
+        // retains its actual selected mode without inventing a narrow settings UI.
+        await page.setViewportSize({ width: 1920, height: 1080 });
+        await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: theme === "light" ? "Light" : "Dark", exact: true }).click();
+        await page.setViewportSize({ width, height });
+        await expect(page.locator("html")).toHaveAttribute("data-theme-mode", theme);
+        await expect(dock()).toBeVisible();
+        const proposals = dock().locator(".weaver-proposal");
+        if (empty) await expect(proposals).toHaveCount(0);
+        if (loading) await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeDisabled();
+        if (expectedStatuses !== null) await expect.poll(() => proposals.evaluateAll(rows => rows.map(row => row.dataset.status))).toEqual(expectedStatuses);
+        const key = name + "/" + layout + "/" + theme;
+        need(!result.effectsStateCaptures[key], "Duplicate named effects state.");
+        await screenshot("effects-state-" + key.replaceAll("/", "-"));
+        const image = result.evidence.at(-1);
+        first ??= image;
+        const receipt = retain("effects-state-" + key.replaceAll("/", "-"), {
+          state: name, testedSource: config.effectsTestedSource, scenario: spec, layout, viewport: page.viewportSize(), theme: await page.locator("html").getAttribute("data-theme-mode"),
+          route: new URL(page.url()).pathname, image, snapshot: await dock().ariaSnapshot(),
+          statuses: await proposals.evaluateAll(rows => rows.map(row => row.dataset.status)),
+          busy: await dock().getAttribute("aria-busy"),
+          composerEnabled: await dock().getByLabel("Ask Weaver", { exact: true }).isEnabled(),
+          messageCount: await dock().locator(".weaver-message").count(),
+          policy: await dock().locator("details.weaver-privilege-policy dd").allTextContents(),
+          enabledApply: await proposals.getByRole("button", { name: "Apply", exact: true }).evaluateAll(rows => rows.filter(row => !row.disabled).length),
+          focus: await page.locator(":focus").evaluateAll(rows => rows.map(row => ({ tag: row.tagName, label: row.getAttribute("aria-label"), text: row.textContent })))
+        });
+        result.evidence.push(receipt); result.effectsStateCaptures[key] = receipt;
+      }
+    }
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "Light", exact: true }).click();
+    return first;
+  };
   const capture = async name => {
-    await screenshot("effects-" + name);
-    return result.evidence.at(-1);
+    if (!await dock().isVisible()) {
+      await page.getByRole("button", { name: /^Weaver/ }).click();
+      await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+    }
+    return captureState(name, await dock().locator(".weaver-proposal").evaluateAll(rows => rows.map(row => row.dataset.status)));
   };
   const read = async (name, endpoint, headers = {}) => {
     const value = await owner("effects-" + name, endpoint, headers);
     result.effectsRefs[name] = value.receipt;
     return value.value;
   };
+  const unavailableChecks = async name => {
+    const response = await page.request.get(backend + witness.ownerEndpoint + "/checks");
+    const raw = await response.body();
+    need([500, 503].includes(response.status()), "A tainted observation journal was reported as known available.");
+    // Preserve failure identity without exporting a development error body, stack,
+    // native identity or private fixture input. The poisoned marker is retained separately.
+    const receipt = retain("effects-" + name, { url: response.url(), status: response.status(), bodySha256: digest(raw),
+      observation: "unknown", cause: "owner-observation-journal-invalid" });
+    result.evidence.push(receipt); result.effectsRefs[name] = receipt;
+    return null;
+  };
+  const reopenTerminal = async (sessionPath, statuses, name = "terminal") => {
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    const composer = dock().getByLabel("Ask Weaver", { exact: true });
+    await expect(composer).toBeEnabled();
+    await composer.focus(); await expect(composer).toBeFocused();
+    const typedText = "Inspect the owning page before making a new request.";
+    const messagesBefore = requests.filter(row => new URL(row.url).pathname.endsWith("/messages")).length;
+    await composer.pressSequentially(typedText);
+    await expect(dock().getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
+    const interaction = retain("effects-terminal-composer-interaction", { method: "keyboard", control: "Ask Weaver", completed: true,
+      focused: await composer.evaluate(node => node === document.activeElement), typedCharacters: (await composer.inputValue()).length,
+      sendEnabled: await dock().getByRole("button", { name: "Send message", exact: true }).isEnabled(),
+      messagesBefore, messagesAfter: requests.filter(row => new URL(row.url).pathname.endsWith("/messages")).length });
+    result.evidence.push(interaction);
+    await composer.fill(""); // Prove usability without issuing another SDK command.
+    await captureState(name, statuses);
+    await nativeEnter("effects-new-conversation", dock().getByRole("button", { name: "New conversation", exact: true }), "New conversation");
+    const recent = dock().getByRole("list", { name: "Recent conversations", exact: true });
+    const entry = recent.locator('button[data-session-id="' + sessionPath.split("/").at(-1) + '"]');
+    await expect(entry).toBeVisible();
+    await captureState("recent", []);
+    await nativeEnter("effects-reopen-conversation", entry, "Reopen the exact recent conversation");
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    await expect(composer).toBeEnabled();
+    await captureState("reopened", statuses);
+    await read("reopenedSession", sessionPath);
+    result.effectsTerminal = { sessionPath, statuses, composerTypedWithoutSending: true, exactRecentSession: true };
+  };
   const layoutHeaders = { "X-Elsa-Studio-Host-Id": witness.hostId };
+  // Hold the real bootstrap request to inspect the shipped loading state. No response is fabricated.
+  let releaseBootstrap;
+  let bootstrapRequestHeld = false;
+  const bootstrapHeld = new Promise(resolve => { releaseBootstrap = resolve; });
+  await page.route(backend + "/_elsa/weaver/bootstrap", async route => { bootstrapRequestHeld = true; await bootstrapHeld; await route.continue(); }, { times: 1 });
   await page.goto(studio + "/qualification/acme-home-effects");
   await expect(page.getByTestId("acme-effects-revision")).toBeVisible();
+  if (!await dock().isVisible()) await page.getByRole("button", { name: /^Weaver/ }).click();
+  try {
+    await expect.poll(() => bootstrapRequestHeld).toBe(true);
+    await captureState("loading", [], { loading: true, empty: true, matrix: false });
+    result.effectsLoading = { actualBootstrapHeld: true, fabricatedResponse: false };
+  }
+  finally { releaseBootstrap(); }
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+  await captureState("empty", [], { empty: true, matrix: false });
+  const policy = dock().locator("details.weaver-privilege-policy");
+  const summary = policy.locator("summary");
+  await summary.focus(); await expect(summary).toBeFocused();
+  await nativeEnter("effects-policy-open", summary, "Host privilege policy");
+  await expect(policy).toHaveAttribute("open", ""); await expect(summary).toBeFocused();
+  await expect(policy.locator("input, select, button")).toHaveCount(0);
+  const expectedPolicy = spec.condition === "browser-policy" && spec.boundary === "unconfigured" ? ["Disabled", "Disabled", "Disabled"]
+    : spec.condition === "browser-policy" && spec.boundary === "administrative-only" || spec.policy === "administrative-only" ? ["Enabled", "Disabled", "Disabled"] : ["Enabled", "Enabled", "Enabled"];
+  await expect(policy.locator("dd")).toHaveText(expectedPolicy);
+  await captureState("policy", []);
+  await nativeEnter("effects-policy-close", summary, "Host privilege policy");
+  await expect(policy).not.toHaveAttribute("open", ""); await expect(summary).toBeFocused();
+  result.effectsPolicyKeyboard = { openedWithEnter: true, closedWithEnter: true, retainedSummaryFocus: true };
   const before = await read("before", witness.ownerEndpoint);
   const layoutBefore = await read("layoutBefore", "/_elsa/studio/preferences/home-layout", layoutHeaders);
   const checksBefore = await read("checksBefore", witness.ownerEndpoint + "/checks");
+  if (spec.condition === "browser-uncertain") await read("entriesBefore", witness.ownerEndpoint + "/execution-entries");
   const searchTyped = async sessionPath => {
     if (!typed) return;
     const sessionId = sessionPath.split("/").at(-1);
@@ -2369,6 +2481,71 @@ async function moduleEffects() {
   await page.getByRole("button", { name: isCheck ? "Review widget check" : "Review classed visibility change", exact: true }).click();
   const sent = await accepted(message, "effects-message");
   const sessionPath = new URL(sent.response.url()).pathname.replace(/\/messages$/, "");
+  await captureState("populated", null, { matrix: false });
+  const policyCase = spec.condition === "browser-policy";
+  const setOperatorPolicy = async enabled => {
+    // The existing owned host options are the only policy authority. This is a
+    // private fixture operator action; no editing control or API is added to Studio.
+    const file = config.effectsOperatorConfiguration, root = config.effectsOwnedBackendRoot;
+    need(path.isAbsolute(file) && path.isAbsolute(root) && fs.realpathSync(file) === file
+      && fs.realpathSync(root) === root && path.relative(root, file) === "appsettings.json", "Policy control escaped the owned backend root.");
+    const settings = JSON.parse(fs.readFileSync(file, "utf8"));
+    settings.Elsa.Weaver.Privileges = Object.fromEntries(["Administrative", "Irrecoverable", "Activation"].map(key => [key, enabled]));
+    writeControl(file, settings);
+    let observed;
+    await expect.poll(async () => {
+      const name = "policyBootstrap-" + enabled + "-" + crypto.randomUUID();
+      observed = await read(name, "/_elsa/weaver/bootstrap");
+      result.effectsRefs["policyBootstrap-" + enabled] = result.effectsRefs[name];
+      return observed.data?.privileges;
+    }).toEqual({ administrative: enabled, irrecoverable: enabled, activation: enabled });
+    return observed;
+  };
+  const finishPolicyRefusal = async review => {
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    const statuses = await cards.evaluateAll(rows => rows.map(row => row.dataset.status));
+    need(statuses.every(value => value === "failed"), "Policy refusal left an actionable card.");
+    const refusedSession = await read("refusalSession", sessionPath);
+    const after = await read("after", witness.ownerEndpoint);
+    const layoutAfter = await read("layoutAfter", "/_elsa/studio/preferences/home-layout", layoutHeaders);
+    const checksAfter = await read("checksAfter", witness.ownerEndpoint + "/checks");
+    expect(after).toEqual(before); expect(layoutAfter).toEqual(layoutBefore); expect(checksAfter).toEqual(checksBefore);
+    result.effects = { commandId: selected.commandId, toolName: spec.tool, arguments: args, sessionPath,
+      before, after, layoutBefore, layoutAfter, checksBefore, checksAfter, refusedSession };
+    result.effectsCaptures = { review, result: await capture("policy-refused"),
+      accessibility: retain("effects-accessibility", { route: new URL(page.url()).pathname, snapshot: await dock().ariaSnapshot() }) };
+    await setOperatorPolicy(true);
+    await reopenTerminal(sessionPath, statuses, "recovery");
+    // A fresh command must make a different preparation; the terminal refusal
+    // remains readable and cannot be resurrected by re-enabling host policy.
+    const fresh = command(spec.tool, args);
+    const freshMessage = responseFor("/messages");
+    await page.getByRole("button", { name: "Review classed visibility change", exact: true }).click();
+    const freshSent = await accepted(freshMessage, "effects-fresh-message");
+    await expect(cards).toHaveCount(statuses.length + 1);
+    const freshCard = cards.last();
+    await expect(freshCard).toHaveAttribute("data-status", "awaiting-approval");
+    await capture("fresh-review");
+    const denied = responseFor("/deny");
+    await nativeEnter("effects-fresh-deny", freshCard.getByRole("button", { name: "Deny", exact: true }), "Deny the fresh policy control");
+    const denial = await accepted(denied, "effects-fresh-deny");
+    await expect(freshCard).toHaveAttribute("data-status", "denied");
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    await capture("fresh-terminal");
+    result.effects.policyRecovery = { commandId: fresh.commandId, message: freshSent.value, denial: denial.value };
+    await read("freshSession", sessionPath);
+    expect(await read("recoveryOwner", witness.ownerEndpoint)).toEqual(after);
+    expect(await read("recoveryChecks", witness.ownerEndpoint + "/checks")).toEqual(checksAfter);
+  };
+  if (policyCase) {
+    await read("policyBootstrapInitial", "/_elsa/weaver/bootstrap");
+    if (["unconfigured", "administrative-only"].includes(spec.boundary)) {
+      await expect.poll(async () => JSON.stringify(await streamCapture()).includes("weaver.proposal.privilege_disabled")).toBe(true);
+      await expect(cards).toHaveCount(count);
+      await finishPolicyRefusal(await capture("policy-before-review"));
+      return;
+    }
+  }
   if (authorizationGate) {
     need(path.isAbsolute(config.traceFile) && Number.isSafeInteger(config.effectsTraceOffset) && config.effectsTraceOffset >= 0, "Exact actual gate trace offset required.");
     await expect.poll(() => {
@@ -2397,30 +2574,63 @@ async function moduleEffects() {
     result.effects = { toolName: spec.tool, commandId: selected.commandId, before, after, layoutBefore, layoutAfter, checksBefore, checksAfter };
     result.effectsCaptures = { review, result: await capture("typed-" + spec.channel + "-terminal"),
       accessibility: retain("effects-accessibility", { route: new URL(page.url()).pathname, snapshot: await dock().ariaSnapshot() }) };
+    // Removal of the operator fault only allows a fresh request. Reopening reads the
+    // retained refusal and cannot replay the failed call, including unavailable owners.
+    fs.unlinkSync(config.effectsFaultFile);
+    await reopenTerminal(sessionPath, [], "recovery");
+    expect(await read("recoveryOwner", witness.ownerEndpoint)).toEqual(after);
+    expect(await read("recoveryChecks", witness.ownerEndpoint + "/checks")).toEqual(checksAfter);
     return;
   }
   await expect(cards).toHaveCount(count + 1);
   // Capture position before status transitions; never retain a locator filtered by awaiting-approval.
   const card = cards.nth(count);
   await expect(card).toHaveAttribute("data-status", "awaiting-approval");
-  const policy = dock().locator("details.weaver-privilege-policy");
   if ((await policy.getAttribute("open")) === null) await policy.locator("summary").click();
-  await expect(policy.locator("dd")).toHaveText(["Enabled", "Enabled", "Enabled"]);
+  await expect(policy.locator("dd")).toHaveText(expectedPolicy);
   await expect(policy.locator("input, select, button")).toHaveCount(0);
   await card.locator('[aria-label="Required host privileges"]').isVisible().then(value => need(value, "No effective class review."));
   const expectedLabels = spec.tool.includes("irrecoverable") || spec.tool.includes("omitted_admin") ? ["Administrative", "Irrecoverable"]
     : spec.tool.includes("activation") ? ["Activation"] : ["Administrative"];
   for (const label of expectedLabels) await expect(card.locator('[aria-label="Required host privileges"]')).toContainText(label);
   const review = await capture("review-" + spec.tool);
+  if (policyCase && spec.boundary === "approval-disabled") await setOperatorPolicy(false);
   const decisionResponse = responseFor("/approve");
   await nativeEnter("effects-approve", card.getByRole("button", { name: "Approve", exact: true }), "Approve");
+  if (policyCase && spec.boundary === "approval-disabled") {
+    const response = await decisionResponse, value = await response.json();
+    need(response.status() === 403 && value.error?.code === "weaver.proposal.privilege_disabled", "Approval refusal had a different cause.");
+    result.effectsRefs.refusal = retain("effects-policy-refusal", { url: response.url(), status: response.status(), request: response.request().postDataJSON(), response: value });
+    result.evidence.push(result.effectsRefs.refusal);
+    await finishPolicyRefusal(review); return;
+  }
   const decision = await accepted(decisionResponse, "effects-approve");
   result.effectsRefs.approve = result.evidence.at(-1);
   await expect(card).toHaveAttribute("data-status", "approved");
   const prepared = decision.value.data.preparedInvocation;
   need(prepared?.toolName === spec.tool && prepared.moduleId === witness.moduleId, "The approved card names another tool/owner.");
+  if (policyCase) await setOperatorPolicy(false);
+  let checksJournalBefore;
+  let dispatchEntriesAfter;
+  if (spec.condition === "browser-uncertain") {
+    const file = config.effectsChecksJournal, root = config.effectsOwnedRunRoot;
+    need(path.isAbsolute(file) && path.isAbsolute(root) && fs.realpathSync(file) === file
+      && !path.relative(root, file).startsWith(".." + path.sep), "Uncertainty control escaped the owned journal.");
+    checksJournalBefore = fs.readFileSync(file);
+    need(digest(checksJournalBefore) === config.effectsChecksJournalSha256, "Owner journal changed before the uncertainty control.");
+    const invalid = Buffer.concat([checksJournalBefore, Buffer.from('\n{"invalid":"t045-owned-observation"}\n')]);
+    fs.writeFileSync(file, invalid, { mode: 0o600 });
+    result.effectsUncertainty = { cause: "owner-observation-journal-invalid", beforeSha256: digest(checksJournalBefore), invalidSha256: digest(invalid) };
+  }
   const executionResponse = responseFor("/execute");
   await nativeEnter("effects-execute", card.getByRole("button", { name: "Apply", exact: true }), "Apply");
+  if (policyCase) {
+    const response = await executionResponse, value = await response.json();
+    need(response.status() === 403 && value.error?.code === "weaver.proposal.privilege_disabled", "Execution refusal had a different cause.");
+    result.effectsRefs.refusal = retain("effects-policy-refusal", { url: response.url(), status: response.status(), request: response.request().postDataJSON(), response: value });
+    result.evidence.push(result.effectsRefs.refusal);
+    await finishPolicyRefusal(review); return;
+  }
   let delivery;
   if (typed && spec.channel === "execution") {
     const response = await executionResponse, rawBody = await response.text();
@@ -2431,8 +2641,26 @@ async function moduleEffects() {
     delivery = { response, value };
   } else delivery = await accepted(executionResponse, "effects-execute");
   result.effectsRefs.execute = result.evidence.at(-1);
-  await expect(card).toHaveAttribute("data-status", typed && spec.channel === "execution" ? "failed" : isCheck ? "performed" : "executed");
-  if (isCheck && !(typed && spec.channel === "execution")) {
+  if (checksJournalBefore) {
+    need(digest(fs.readFileSync(config.effectsChecksJournal)) === result.effectsUncertainty.invalidSha256, "Uncertainty control found an unexpected owner journal write.");
+    result.effectsUncertainty.retiredSha256 = digest(fs.readFileSync(config.effectsChecksJournal));
+    need(delivery.value.data?.status === "uncertain" && delivery.value.data?.executed === false, "A dispatched observation failure was not uncertain.");
+    dispatchEntriesAfter = await read("entriesAfter", witness.ownerEndpoint + "/execution-entries");
+  }
+  await expect(card).toHaveAttribute("data-status", spec.condition === "browser-uncertain" ? "uncertain" : typed && spec.channel === "execution" ? "failed" : isCheck ? "performed" : "executed");
+  if (spec.condition === "browser-uncertain") {
+    await expect(card).toContainText(/uncertain/i);
+    await expect(card).toContainText("Widget check is unconfirmed");
+    await expect(card).toContainText("a possibly completed action must not be repeated automatically");
+    // The accepted server outcome updates the card's status/result. Retain its
+    // native HTTP warning separately from the owner's actually rendered caution.
+    const nativeWarning = delivery.value.data.toolResult.content;
+    need(typeof nativeWarning === "string" && /uncertain/i.test(nativeWarning) && /not be replayed/i.test(nativeWarning), "The native uncertainty warning lost its no-replay instruction.");
+    result.effectsUncertaintyPresentation = { cardStatus: await card.getAttribute("data-status"), cardText: await card.innerText(),
+      nativeWarningSource: "execute-http", nativeWarning };
+    await expect(card.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+    await expect(card.getByRole("group", { name: "Resolve uncertain change", exact: true })).toHaveCount(0);
+  } else if (isCheck && !(typed && spec.channel === "execution")) {
     await expect(card.getByTestId("acme-check-confirmation")).toContainText("independently confirmed");
     await expect(card.getByTestId("acme-check-invocation")).toHaveText(prepared.invocationId);
     await expect(card).toContainText(spec.condition === "browser-failed" ? "Business condition failed." : "Business condition passed.");
@@ -2440,7 +2668,7 @@ async function moduleEffects() {
   } else if (!isCheck) await expect(card.getByTestId("acme-home-result")).toContainText("independently confirmed the saved visibility");
   const after = await read("after", witness.ownerEndpoint);
   const layoutAfter = await read("layoutAfter", "/_elsa/studio/preferences/home-layout", layoutHeaders);
-  const checksAfter = await read("checksAfter", witness.ownerEndpoint + "/checks");
+  const checksAfter = spec.condition === "browser-uncertain" ? await unavailableChecks("checksUnavailable") : await read("checksAfter", witness.ownerEndpoint + "/checks");
   if (isCheck) { expect(after).toEqual(before); expect(layoutAfter).toEqual(layoutBefore); }
   else { expect(after.visible).toBe(args.visible); expect(unrelated(layoutAfter)).toEqual(unrelated(layoutBefore)); }
   result.effects = { toolName: spec.tool, commandId: selected.commandId, prepared, execution: delivery.value.data,
@@ -2448,14 +2676,26 @@ async function moduleEffects() {
   await searchTyped(sessionPath);
   result.effectsCaptures = { review, result: await capture("result-" + spec.tool),
     accessibility: retain("effects-accessibility", { route: new URL(page.url()).pathname, snapshot: await card.ariaSnapshot() }) };
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(card).toBeVisible();
-  await capture("result-narrow-" + spec.tool);
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "Dark", exact: true }).click();
-  await capture("result-dark-" + spec.tool);
-  await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "Light", exact: true }).click();
-  await capture("result-light-" + spec.tool);
+  const terminalStatus = spec.condition === "browser-uncertain" ? "uncertain" : typed && spec.channel === "execution" ? "failed" : isCheck ? "performed" : "executed";
+  if (typed) fs.unlinkSync(config.effectsFaultFile);
+  if (terminalStatus === "performed") await setOperatorPolicy(false);
+  await reopenTerminal(sessionPath, [terminalStatus], typed || spec.condition === "browser-uncertain" ? "recovery" : "terminal");
+  if (isCheck && terminalStatus === "performed") {
+    const repeated = await page.request.post(delivery.response.url(), { data: delivery.response.request().postDataJSON() });
+    need(repeated.status() === 200, "Duplicate performed delivery lost its retained result.");
+    const repeatedBody = await repeated.json();
+    expect(repeatedBody.data.toolResult).toEqual(delivery.value.data.toolResult);
+    const duplicate = retain("effects-duplicate", { url: repeated.url(), request: delivery.response.request().postDataJSON(), status: repeated.status(), response: repeatedBody });
+    result.evidence.push(duplicate); result.effectsRefs.duplicate = duplicate;
+    await expect(dock().locator(".weaver-proposal")).toHaveAttribute("data-status", "performed");
+    await expect(dock().locator(".weaver-proposal").getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+  }
+  expect(await read("recoveryOwner", witness.ownerEndpoint)).toEqual(after);
+  expect(await read("recoveryLayout", "/_elsa/studio/preferences/home-layout", layoutHeaders)).toEqual(layoutAfter);
+  if (spec.condition === "browser-uncertain") {
+    await unavailableChecks("recoveryChecksUnavailable");
+    expect(await read("recoveryEntries", witness.ownerEndpoint + "/execution-entries")).toEqual(dispatchEntriesAfter);
+  } else expect(await read("recoveryChecks", witness.ownerEndpoint + "/checks")).toEqual(checksAfter);
 }
 try {
   if (config.journey === "sdk-incompatible") await incompatibleModule();

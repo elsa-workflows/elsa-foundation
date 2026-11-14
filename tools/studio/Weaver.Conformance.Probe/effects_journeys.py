@@ -54,11 +54,13 @@ SOURCE_PATHS = (
     "tools/studio/Weaver.Conformance.Probe/effects_journeys.py",
     "tools/studio/Weaver.Conformance.Probe/case_records.py",
     "tools/studio/Weaver.Conformance.Probe/browser.mjs",
+    "tools/studio/Weaver.Conformance.Probe/restart_journeys.py",
     "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/Client/src/effects.tsx",
     "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/WidgetEffectsTools.cs.in",
     "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/WidgetEffectsOwner.cs.in",
     "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/WidgetEffectsContext.cs.in",
     "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/WidgetEffectObservations.cs.in",
+    "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/WidgetExecutionJournal.cs.in",
 )
 
 
@@ -82,6 +84,11 @@ def scenarios():
         rows["browser:" + tool] = {"tool": tool, "condition": "browser"}
     rows["browser:business-failed"] = {"tool": CHECK_TOOL, "condition": "browser-failed"}
     rows["browser:nested-removal"] = {"tool": CHECK_TOOL, "condition": "nested-removal"}
+    # Additive T045 cases; the original 188 ordinary effects records keep their order.
+    for boundary in ("unconfigured", "administrative-only", "approval-disabled", "execution-disabled"):
+        rows["browser-policy:" + boundary] = {"tool": "acme_home_irrecoverable_visibility", "condition": "browser-policy", "boundary": boundary}
+    rows["browser:uncertain"] = {"tool": CHECK_TOOL, "condition": "browser-uncertain"}
+    rows["browser:administrative-only-allowed"] = {"tool": "acme_home_admin_visibility", "condition": "browser", "policy": "administrative-only"}
     return rows
 
 
@@ -254,7 +261,7 @@ def require_normal_terminal(frames):
 
 
 def require_called_refusal(trace, provider, command_id, tool, arguments, session_id, initial, terminal,
-                           code, recorded_session, *, owner_unavailable=False, proposal_id=None, human_denial=None):
+                           code, recorded_session, *, owner_unavailable=False, proposal_id=None, human_denial=None, uncertain_invocation=None):
     """Bind native failed results to the actual current SDK call/completion, not a code elsewhere."""
     require_normal_terminal(terminal)
     starts = [row.get("payload") for row in initial if row.get("kind") == "toolCallStarted"]
@@ -277,7 +284,14 @@ def require_called_refusal(trace, provider, command_id, tool, arguments, session
     _need(result.get("toolName") == tool and result.get("toolCallId") == call_id and result.get("succeeded") is False
           and result.get("receipt") is None, "foreign or contradictory native refusal result")
     error = result.get("error")
-    if human_denial is None:
+    if uncertain_invocation is not None:
+        # A dispatched, interrupted server effect is a lifecycle result without a
+        # module Error or receipt. Keep every existing native/SDK correlation gate.
+        _need(code == "uncertain" and proposal_id and human_denial is None and not owner_unavailable
+              and isinstance(uncertain_invocation, str) and uncertain_invocation and error is None
+              and result.get("payload") == {"typeId": "weaver.operation-outcome", "schemaVersion": "1", "data": {
+                  "status": "uncertain", "InvocationId": uncertain_invocation}}, "uncertain lifecycle result changed cause/invocation")
+    elif human_denial is None:
         _need(isinstance(error, dict) and error.get("code") == code and isinstance(error.get("message"), str)
               and error["message"] and type(error.get("statusCode")) is int and 400 <= error["statusCode"] <= 599,
               "native failure lost its typed error")
@@ -306,6 +320,8 @@ def require_called_refusal(trace, provider, command_id, tool, arguments, session
               and proposals[0]["preparedInvocation"].get("turnId") == initial_starts[0]["turnId"]
               and [row.get("kind") for row in initial if row.get("kind") in ("completed", "error", "turnCancelled", "toolApprovalRequested")] == ["toolApprovalRequested"],
               "refusal continuation lost its original reviewed native turn/call")
+        if uncertain_invocation is not None:
+            _need(proposals[0]["preparedInvocation"].get("invocationId") == uncertain_invocation, "uncertainty belongs to another prepared invocation")
     rows = [row for row in trace if row.get("data", {}).get("commandId") == command_id]
     lifecycle = [row for row in rows if row.get("kind") in (provider + ".request", provider + ".call", provider + ".return", provider + ".continuation")]
     kinds = [row.get("kind") for row in lifecycle]
@@ -401,7 +417,7 @@ def require_case(value, root, source, bindings):
     expected = SCENARIOS[name]
     _need(value.get("scenario") == expected and value.get("provider") == provider and value.get("liveProvider") is False
           and value.get("evidenceCategory") == EVIDENCE_CATEGORY, "wrong case meaning or evidence category")
-    if expected["condition"] in ("browser", "browser-failed", "browser-typed", "nested-removal"):
+    if expected["condition"] in ("browser", "browser-failed", "browser-typed", "nested-removal", "browser-policy", "browser-uncertain"):
         return require_browser_case(value, root, expected)
     refs, origin = value["refs"], value["backendOrigin"]
     before = {key: _native(root, refs[key + "Before"], origin, path) for key, path in
@@ -1304,6 +1320,307 @@ def require_nested_observations(observations, trace, provider):
     return True
 
 
+def browser_capture_states(spec):
+    """Required named states, with their observable proposal statuses, not optional extra images."""
+    states = {"loading": [], "empty": [], "policy": []}
+    condition = spec["condition"]
+    if condition == "nested-removal":
+        return dict(states, **{"nested-before": [], "nested-removed": []})
+    states["populated"] = None  # Native traffic can progress while this actual populated frame is captured.
+    if condition == "browser-policy":
+        reviewed = spec["boundary"] in ("approval-disabled", "execution-disabled")
+        terminal = ["failed"] if reviewed else []
+        states["review-" + spec["tool"] if reviewed else "policy-before-review"] = ["awaiting-approval"] if reviewed else []
+        states.update({"policy-refused": terminal, "recovery": terminal, "recent": [], "reopened": terminal,
+                       "fresh-review": terminal + ["awaiting-approval"], "fresh-terminal": terminal + ["denied"]})
+    elif condition == "browser-typed" and spec["channel"] in ("authorization", "preparation", "context"):
+        states.update({"typed-" + spec["channel"] + "-refusal": [], "typed-" + spec["channel"] + "-terminal": [],
+                       "recovery": [], "recent": [], "reopened": []})
+    else:
+        terminal = ["uncertain" if condition == "browser-uncertain" else "failed" if condition == "browser-typed" and spec["channel"] == "execution"
+                    else "performed" if spec["tool"] == CHECK_TOOL else "executed"]
+        states.update({"review-" + spec["tool"]: ["awaiting-approval"], "result-" + spec["tool"]: terminal,
+                       "recovery" if condition in ("browser-typed", "browser-uncertain") else "terminal": terminal, "recent": [], "reopened": terminal})
+    return states
+
+
+def require_browser_captures(browser, root, spec, source):
+    states = browser_capture_states(spec)
+    single = {"loading", "empty", "populated"}
+    required = {state + "/" + layout + "/" + theme: (state, layout, theme, statuses)
+                for state, statuses in states.items()
+                for layout in (("desktop",) if state in single else ("desktop", "narrow"))
+                for theme in (("light",) if state in single else ("light", "dark"))}
+    captures = browser.get("effectsStateCaptures")
+    _need(isinstance(captures, dict) and set(captures) == set(required), "missing/extra named state, viewport or theme capture")
+    seen = set()
+    for key, (state, layout, theme, statuses) in required.items():
+        value = _owned(root, captures[key])
+        viewport = {"width": 1920, "height": 1080} if layout == "desktop" else {"width": 390, "height": 844}
+        _need(value.get("state") == state and value.get("scenario") == spec and value.get("testedSource") == source
+              and value.get("layout") == layout and value.get("viewport") == viewport and value.get("theme") == theme,
+              "capture state/source/viewport/theme binding differs")
+        expected_route = "/dashboard" if state.startswith("nested-") else ROUTE
+        _need(value.get("route") == expected_route and isinstance(value.get("snapshot"), str) and value["snapshot"].strip()
+              and isinstance(value.get("statuses"), list) and (statuses is None or value["statuses"] == statuses),
+              "capture has the wrong route, accessibility snapshot or proposal state")
+        _need(type(value.get("messageCount")) is int and (value["messageCount"] > 0 if state == "populated" else value["messageCount"] >= 0)
+              and type(value.get("composerEnabled")) is bool and type(value.get("enabledApply")) is int
+              and value["enabledApply"] == 0, "capture omitted actual populated/composer/action observations")
+        if state == "loading": _need(value["composerEnabled"] is False and value["messageCount"] == 0, "loading capture was ready or populated")
+        if state in ("empty", "policy", "terminal", "recovery", "recent", "reopened"):
+            _need(value["composerEnabled"] is True and value.get("busy") == "false", "terminal/empty state did not release its composer/busy state")
+        if state in ("empty", "policy"): _need(value["messageCount"] == 0, "empty capture contains a previous conversation")
+        if state == "policy":
+            boundary = spec.get("boundary", spec.get("policy"))
+            policy = ["Disabled"] * 3 if boundary == "unconfigured" else ["Enabled", "Disabled", "Disabled"] if boundary == "administrative-only" else ["Enabled"] * 3
+            _need(value.get("policy") == policy and "Host privilege policy" in value["snapshot"], "wrong read-only policy disclosure")
+        image = _owned_file(root, value["image"])
+        raw = image.read_bytes()
+        _need(image.suffix == ".png" and len(raw) > 44 and raw[:8] == b"\x89PNG\r\n\x1a\n" and raw[8:16] == b"\0\0\0\rIHDR"
+              and b"IDAT" in raw and raw.endswith(b"\0\0\0\0IEND\xaeB`\x82")
+              and int.from_bytes(raw[16:20], "big") == viewport["width"]
+              and int.from_bytes(raw[20:24], "big") >= viewport["height"], "missing/wrong-sized actual PNG capture")
+        _need(str(image) not in seen, "one screenshot reused for multiple required states")
+        seen.add(str(image))
+    _need(browser.get("effectsPolicyKeyboard") == {"openedWithEnter": True, "closedWithEnter": True, "retainedSummaryFocus": True},
+          "policy keyboard discovery/focus observations missing")
+    _need(browser.get("effectsLoading") == {"actualBootstrapHeld": True, "fabricatedResponse": False}, "loading was not an actual held bootstrap")
+    names = {Path(ref["path"]).name: ref for ref in browser["evidence"]}
+    interactions = {"effects-policy-open": "Host privilege policy", "effects-policy-close": "Host privilege policy"}
+    if spec["condition"] != "nested-removal":
+        interactions.update({"effects-new-conversation": "New conversation", "effects-reopen-conversation": "Reopen the exact recent conversation"})
+        _need("effects-terminal-composer-interaction.json" in names, "missing required terminal composer interaction")
+        composer = _owned(root, names["effects-terminal-composer-interaction.json"])
+        _need(composer.get("method") == "keyboard" and composer.get("control") == "Ask Weaver" and composer.get("completed") is True
+              and composer.get("focused") is True and composer.get("sendEnabled") is True
+              and type(composer.get("typedCharacters")) is int and composer["typedCharacters"] > 0
+              and type(composer.get("messagesBefore")) is int and composer["messagesBefore"] > 0
+              and composer.get("messagesAfter") == composer["messagesBefore"], "terminal composer was unusable or sent a new model command")
+    for name, control in interactions.items():
+        _need(name + "-interaction.json" in names, "missing required keyboard interaction")
+        _need(_owned(root, names[name + "-interaction.json"]) == {"method": "keyboard", "key": "Enter", "control": control, "completed": True},
+              "keyboard interaction did not complete")
+
+
+def _browser_read(browser, root, name, origin, endpoint):
+    value = _owned(root, browser["effectsRefs"][name])
+    _need(value.get("url") == origin + endpoint and value.get("status") == 200, "wrong owning browser GET: " + name)
+    return value.get("value")
+
+
+def _browser_streams(browser, root, origin, session_path):
+    refs = [ref for ref in browser["evidence"] if Path(ref["path"]).name == "weaver-streams.json"]
+    _need(len(refs) == 1, "missing/duplicate actual browser stream export")
+    streams = _owned(root, refs[0])
+    _need(isinstance(streams, list) and streams, "no native browser streams")
+    frames = []
+    for stream in streams:
+        _need(stream.get("url") == origin + session_path + "/stream" and stream.get("status") == 200
+              and stream.get("termination") == "loadingFinished" and stream.get("captureError") is None
+              and stream.get("captureValidationError") is None and not stream.get("sizeExceeded")
+              and stream.get("contentType", "").split(";", 1)[0].strip() == "text/event-stream"
+              and stream.get("captureMethod") in ("streamResourceContent", "getResponseBody")
+              and stream.get("trailingIncompleteUtf8Bytes") == 0 and stream.get("textTruncation") == "none",
+              "foreign, partial or unfinished actual browser stream")
+        frames.append(frames_from_raw(stream.get("rawBody")))
+    return frames
+
+
+def require_browser_policy_case(browser, root, spec, origin, trace):
+    data, boundary = browser["effects"], spec["boundary"]
+    session_path = data.get("sessionPath", "")
+    _need(re.fullmatch(r"/_elsa/weaver/sessions/[^/]+", session_path), "policy refusal omitted its native session")
+    session_id = session_path.split("/")[-1]
+    before_policy = dict(zip(CLASSES, [False] * 3 if boundary == "unconfigured" else [True, False, False] if boundary == "administrative-only" else [True] * 3))
+    _need(_browser_read(browser, root, "policyBootstrapInitial", origin, "/_elsa/weaver/bootstrap").get("data", {}).get("privileges") == before_policy,
+          "policy UI case did not observe the configured host options")
+    reviewed = boundary in ("approval-disabled", "execution-disabled")
+    if reviewed:
+        _need(_browser_read(browser, root, "policyBootstrap-false", origin, "/_elsa/weaver/bootstrap").get("data", {}).get("privileges") == dict.fromkeys(CLASSES, False),
+              "policy was not actually disabled between lifecycle boundaries")
+        response = _owned(root, browser["effectsRefs"]["refusal"])
+        endpoint = "/approve" if boundary == "approval-disabled" else "/execute"
+        _need(response.get("status") == 403 and response.get("url", "").startswith(origin + "/_elsa/weaver/proposals/")
+              and response["url"].endswith(endpoint), "policy refusal came from the wrong HTTP boundary")
+        require_refusal(response.get("response"), POLICY_CODE, owner_unavailable=False)
+    _need(_browser_read(browser, root, "policyBootstrap-true", origin, "/_elsa/weaver/bootstrap").get("data", {}).get("privileges") == dict.fromkeys(CLASSES, True),
+          "policy recovery was not actually enabled by the operator")
+    streams = _browser_streams(browser, root, origin, session_path)
+    _need(len(streams) == (4 if reviewed else 3), "policy refusal/fresh-request continuation count differs")
+    session = _browser_read(browser, root, "refusalSession", origin, session_path).get("data")
+    proposal = next((row["payload"] for row in streams[0] if row.get("kind") == "proposalCreated"), None)
+    if reviewed:
+        _need(isinstance(proposal, dict) and response["url"] == origin + "/_elsa/weaver/proposals/" + proposal["id"] + endpoint,
+              "policy refusal belongs to another reviewed proposal")
+    require_called_refusal(trace, browser["provider"], data["commandId"], spec["tool"], data["arguments"], session_id,
+                           streams[0], streams[1] if reviewed else streams[0], POLICY_CODE, session,
+                           proposal_id=proposal["id"] if reviewed else None)
+    recovery = data.get("policyRecovery") or {}
+    _need(recovery.get("commandId") and recovery["commandId"] != data["commandId"], "re-enable reused the terminal command")
+    fresh_initial, fresh_terminal = streams[-2:]
+    proposals = [row["payload"] for row in fresh_initial if row.get("kind") == "proposalCreated"]
+    _need(len(proposals) == 1 and (proposal is None or proposals[0]["id"] != proposal["id"]
+          and proposals[0].get("preparedInvocation", {}).get("invocationId") != proposal.get("preparedInvocation", {}).get("invocationId")),
+          "re-enable resurrected the old proposal/invocation")
+    fresh = proposals[0]
+    denial = recovery.get("denial", {}).get("data", {})
+    _need(denial.get("approvalStatus") == "denied" and denial.get("proposalId") == fresh["id"], "fresh policy control did not deny its own proposal")
+    refs = {Path(ref["path"]).name: ref for ref in browser["evidence"]}
+    for name, session_message in (("effects-message", None), ("effects-fresh-message", recovery.get("message"))):
+        sent = _owned(root, refs[name + ".json"])
+        _need(sent.get("url") == origin + session_path + "/messages" and sent.get("status") == 200
+              and sent.get("response", {}).get("data", {}).get("message", {}).get("sessionId") == session_id
+              and (session_message is None or same(sent.get("response"), session_message)), "policy turn belongs to a different native message/session")
+    denied = _owned(root, refs["effects-fresh-deny.json"])
+    _need(denied.get("url") == origin + "/_elsa/weaver/proposals/" + fresh["id"] + "/deny" and denied.get("status") == 200
+          and same(denied.get("response"), recovery["denial"]), "fresh denial projection differs from its actual owning response")
+    final_session = _browser_read(browser, root, "freshSession", origin, session_path).get("data")
+    require_called_refusal(trace, browser["provider"], recovery["commandId"], spec["tool"], data["arguments"], session_id,
+                           fresh_initial, fresh_terminal, "weaver.proposal.closed", final_session, proposal_id=fresh["id"],
+                           human_denial=dict(fresh, status="denied"))
+    calls = [row for row in trace if row.get("kind") == browser["provider"] + ".call"]
+    _need(len(calls) == 2 and {row["data"].get("commandId") for row in calls} == {data["commandId"], recovery["commandId"]},
+          "policy recovery issued an unaccounted SDK command")
+    for before, after in (("before", "after"), ("layoutBefore", "layoutAfter"), ("checksBefore", "checksAfter")):
+        _need(data[before] == data[after], "policy refusal changed the native owner")
+    for name, endpoint in (("before", OWNER), ("after", OWNER), ("layoutBefore", HOME_PREFERENCES_PATH), ("layoutAfter", HOME_PREFERENCES_PATH),
+                           ("checksBefore", OWNER + "/checks"), ("checksAfter", OWNER + "/checks")):
+        _need(_browser_read(browser, root, name, origin, endpoint) == data[name], "policy refusal owner projection differs")
+
+
+def require_browser_terminal(browser, root, spec, origin, trace):
+    data = browser["effects"]
+    terminal = browser.get("effectsTerminal") or {}
+    path = terminal.get("sessionPath", "")
+    statuses = browser_capture_states(spec)["reopened"]
+    _need(re.fullmatch(r"/_elsa/weaver/sessions/[^/]+", path) and terminal.get("statuses") == statuses
+          and terminal.get("composerTypedWithoutSending") is True and terminal.get("exactRecentSession") is True,
+          "terminal composer/reopen interaction is missing or belongs to another state")
+    reopened = _browser_read(browser, root, "reopenedSession", origin, path)
+    _need(reopened.get("error") is None and reopened.get("data", {}).get("sessionId") == path.split("/")[-1], "reopened a different native session")
+    if spec["condition"] == "browser-policy" or spec["condition"] == "browser-typed" and spec["channel"] != "receipt":
+        original = _browser_read(browser, root, "refusalSession", origin, path)
+        _need(same(reopened.get("data"), original.get("data")), "reopening changed a retained refusal")
+    else:
+        result = data["execution"]["toolResult"]
+        results = [strict_json(row["content"]) for row in reopened["data"].get("messages", []) if row.get("role") == "tool"]
+        matches = [row for row in results if row.get("toolCallId") == data["prepared"]["toolCallId"]]
+        _need(len(matches) == 1 and same(matches[0], result), "reopen lost/changed/duplicated the original owner-backed result")
+    reads = [("recoveryOwner", "after", OWNER)]
+    if spec["condition"] != "browser-uncertain": reads.append(("recoveryChecks", "checksAfter", OWNER + "/checks"))
+    for name, after, endpoint in reads:
+        _need(_browser_read(browser, root, name, origin, endpoint) == data[after], "recovery/reopen/duplicate changed the native owner or journal")
+    if spec["condition"] not in ("browser-policy",):
+        expected_calls = 0 if spec["condition"] == "browser-typed" and spec["channel"] == "context" else 1
+        calls = [row for row in trace if row.get("kind") == browser["provider"] + ".call"]
+        _need(len(calls) == expected_calls and all(row.get("data", {}).get("commandId") == data["commandId"] for row in calls),
+              "reopen/duplicate issued an additional actual SDK command")
+    performed = statuses == ["performed"]
+    if performed:
+        _need(_browser_read(browser, root, "policyBootstrap-false", origin, "/_elsa/weaver/bootstrap").get("data", {}).get("privileges") == dict.fromkeys(CLASSES, False),
+              "retained performed receipt was not reopened after an actual host policy change")
+        original = _owned(root, browser["effectsRefs"]["execute"])
+        duplicate = _owned(root, browser["effectsRefs"]["duplicate"])
+        _need(duplicate.get("url") == original.get("url") and duplicate.get("request") == original.get("request")
+              and duplicate.get("status") == 200 and duplicate.get("response", {}).get("data", {}).get("status") == "performed"
+              and duplicate["response"]["data"].get("executed") is True
+              and same(duplicate["response"]["data"].get("toolResult"), data["execution"]["toolResult"]),
+              "duplicate delivery lost its exact retained performed receipt")
+        _need(_browser_read(browser, root, "recoveryLayout", origin, HOME_PREFERENCES_PATH) == data["layoutAfter"],
+              "duplicate performed delivery changed the native layout")
+
+
+def require_uncertainty_presentation(value, native_warning):
+    """Keep visible owner caution distinct from the native warning retained in the execute HTTP receipt."""
+    _need(isinstance(value, dict) and set(value) == {"cardStatus", "cardText", "nativeWarningSource", "nativeWarning"}
+          and value.get("cardStatus") == "uncertain"
+          and isinstance(value.get("cardText"), str) and "uncertain" in value["cardText"].lower() and "Widget check is unconfirmed" in value["cardText"]
+          and "a possibly completed action must not be repeated automatically" in value["cardText"]
+          and isinstance(native_warning, str) and "uncertain" in native_warning.lower() and "not be replayed" in native_warning.lower()
+          and value.get("nativeWarningSource") == "execute-http" and value.get("nativeWarning") == native_warning,
+          "uncertain presentation lost its visible owner caution or misrepresented the native HTTP warning")
+
+
+def require_browser_uncertain(browser, root, value, spec, trace):
+    data, origin = browser["effects"], value["backendOrigin"]
+    _called_once(trace, value["provider"], data["commandId"], CHECK_TOOL)
+    control = value.get("uncertaintyControl") or {}
+    poisoned = b'\n{"invalid":"t045-owned-observation"}\n'
+    _need(control == browser.get("effectsUncertainty") and control.get("cause") == "owner-observation-journal-invalid"
+          and control.get("beforeSha256") == hashlib.sha256(b"").hexdigest()
+          and control.get("invalidSha256") == control.get("retiredSha256") == hashlib.sha256(poisoned).hexdigest()
+          and _owned_file(root, value["uncertaintyRetiredJournal"]).read_bytes() == poisoned,
+          "uncertainty lacks its preserved tainted observation namespace")
+    for name, endpoint in (("before", OWNER), ("after", OWNER), ("layoutBefore", HOME_PREFERENCES_PATH), ("layoutAfter", HOME_PREFERENCES_PATH),
+                           ("checksBefore", OWNER + "/checks")):
+        _need(_browser_read(browser, root, name, origin, endpoint) == data[name], "uncertain owner projection differs from its native GET")
+    _need(data["before"] == data["after"] and data["layoutBefore"] == data["layoutAfter"]
+          and data["checksBefore"].get("ranCount") == 0 and data["checksBefore"].get("runs") == [] and data.get("checksAfter") is None,
+          "uncertainty changed the owner or converted unknown observation to clean zero")
+    for name in ("checksUnavailable", "recoveryChecksUnavailable"):
+        failed = _owned(root, browser["effectsRefs"][name])
+        _need(failed.get("url") == origin + OWNER + "/checks" and failed.get("status") in (500, 503)
+              and failed.get("observation") == "unknown" and failed.get("cause") == "owner-observation-journal-invalid"
+              and isinstance(failed.get("bodySha256"), str) and re.fullmatch(r"[a-f0-9]{64}", failed["bodySha256"]),
+              "tainted owner journal became available or failure evidence changed cause")
+    prepared, execution = data.get("prepared") or {}, data.get("execution") or {}
+    delivered = _owned(root, browser["effectsRefs"]["execute"])
+    decision = _owned(root, browser["effectsRefs"]["approve"])
+    _need(delivered.get("status") == decision.get("status") == 200 and same(delivered.get("response", {}).get("data"), execution)
+          and same(decision.get("response", {}).get("data", {}).get("preparedInvocation"), prepared)
+          and execution.get("status") == "uncertain" and execution.get("executed") is False
+          and prepared.get("toolName") == CHECK_TOOL and prepared.get("moduleId") == MODULE and _target(prepared.get("target"), data["before"]["revision"]),
+          "uncertainty is not the approved actual owner dispatch")
+    result = execution.get("toolResult") or {}
+    require_uncertainty_presentation(browser.get("effectsUncertaintyPresentation"), result.get("content"))
+    _need(result.get("toolCallId") == prepared.get("toolCallId") and result.get("toolName") == CHECK_TOOL and result.get("succeeded") is False
+          and result.get("receipt") is None and result.get("payload", {}).get("typeId") == "weaver.operation-outcome"
+          and result["payload"].get("data", {}).get("status") == "uncertain", "uncertainty invented a performed/persisted receipt")
+    require_adapter_result(trace, value["provider"], data["commandId"], result)
+    entries_before = _browser_read(browser, root, "entriesBefore", origin, EXECUTION_ENDPOINT)
+    entries_after = _browser_read(browser, root, "entriesAfter", origin, EXECUTION_ENDPOINT)
+    _need(entries_before.get("entryCount") == 0 and entries_before.get("entries") == []
+          and entries_after.get("entryCount") == 1 and len(entries_after.get("entries", [])) == 1,
+          "uncertainty lacks a unique actual module ExecuteAsync entry")
+    entry = entries_after["entries"][0]
+    _need(all(entry.get(key) == expected for key, expected in {
+        "toolName": CHECK_TOOL, "requestedToolName": CHECK_TOOL, "invocationId": prepared.get("invocationId"), "toolCallId": prepared.get("toolCallId"),
+        "sessionId": prepared.get("sessionId"), "turnId": prepared.get("turnId"), "host": HOST,
+        "actor": prepared.get("actorId"), "requestedActor": prepared.get("actorId"),
+        "tenant": prepared.get("tenantId"), "requestedTenant": prepared.get("tenantId"), "entryNumber": 1}.items()),
+        "uncertain module entry belongs to another dispatch/actor/tenant")
+    owner = {"subject": prepared.get("actorId"), "tenantId": prepared.get("tenantId")}
+    before_journals = value.get("uncertaintyJournalsBefore") or {}
+    _need(set(before_journals) == {"execution", "checks"}, "uncertainty omitted its fresh known-zero observation namespace")
+    observed_before = {kind: _owned(root, ref) for kind, ref in before_journals.items()}
+    for kind, record in observed_before.items():
+        _need(require_execution_observation(record, path=record["sourcePath"], owner=owner, execution=kind == "execution") == [],
+              "uncertainty started with a previously used observation journal")
+    observed_after = _owned(root, value["uncertaintyExecutionAfter"])
+    raw_entries = require_execution_observation(observed_after, path=observed_before["execution"]["sourcePath"], owner=owner)
+    _need([{key[0].lower() + key[1:]: item for key, item in row.items()} for row in raw_entries] == entries_after["entries"],
+          "uncertain dispatch projection differs from the actual protected module journal")
+    unknown = value.get("uncertaintyObservationFailure") or {}
+    _need(set(unknown) == {"journal", "failure"}, "tainted observation failure receipt is missing")
+    failed = _owned(root, unknown["failure"])
+    tainted = _owned(root, unknown["journal"])
+    _need(failed.get("requiresFreshObservationPath") is True and failed.get("observation") == tainted
+          and tainted.get("sourcePath") == observed_before["checks"]["sourcePath"]
+          and tainted.get("rawBody") == poisoned.decode() and tainted.get("bytesSha256") == control["retiredSha256"],
+          "tainted observer was repaired, changed namespace or lost its unknown failure evidence")
+    _need(_browser_read(browser, root, "recoveryEntries", origin, EXECUTION_ENDPOINT) == entries_after,
+          "uncertain server effect was dispatched again during recovery")
+    session_path = browser.get("effectsTerminal", {}).get("sessionPath", "")
+    streams = _browser_streams(browser, root, origin, session_path)
+    _need(len(streams) == 2, "uncertain effect omitted its actual proposal/continuation streams")
+    proposals = [row["payload"] for row in streams[0] if row.get("kind") == "proposalCreated"]
+    _need(len(proposals) == 1 and same(proposals[0].get("preparedInvocation"), prepared), "uncertain dispatch differs from its frozen native proposal")
+    require_called_refusal(trace, value["provider"], data["commandId"], CHECK_TOOL, prepared.get("arguments"), prepared.get("sessionId"),
+                           streams[0], streams[-1], "uncertain", _browser_read(browser, root, "reopenedSession", origin, session_path).get("data"),
+                           proposal_id=proposals[0]["id"], uncertain_invocation=prepared.get("invocationId"))
+
+
 def require_browser_case(value, root, spec):
     shutdown = _owned(root, value["browserShutdown"])
     _need(shutdown.get("provenAbsent") is True and shutdown.get("remaining") == []
@@ -1325,6 +1642,7 @@ def require_browser_case(value, root, spec):
     captures = browser.get("effectsCaptures")
     _need(isinstance(captures, dict) and set(captures) == {"review", "result", "accessibility"}, "missing feature-specific visual/a11y captures")
     for ref in [*captures.values(), *browser["evidence"]]: _owned_file(root, ref)
+    require_browser_captures(browser, root, spec, value["source"])
     trace = _owned(root, value["trace"])
     _need(trace.get("incompleteTailBytes") == 0, "browser adapter trace is incomplete")
     if spec["condition"] == "browser-typed":
@@ -1352,7 +1670,11 @@ def require_browser_case(value, root, spec):
                 raw = path.read_text(); require_canary_absent(raw, digest)
                 require_canary_absent(strict_json(raw), digest)
         require_canary_absent(trace, digest)
-    if spec["condition"] == "nested-removal":
+    if spec["condition"] == "browser-policy":
+        require_browser_policy_case(browser, root, spec, value["backendOrigin"], trace["records"])
+    elif spec["condition"] == "browser-uncertain":
+        require_browser_uncertain(browser, root, value, spec, trace["records"])
+    elif spec["condition"] == "nested-removal":
         _need(browser["effects"].get("removedNestedWidget") is True, "nested module removal not witnessed")
         native = browser["effects"]
         _need(native["before"]["visible"] is True and native["after"] == native["before"], "nested removal changed the owner instead of unloading its presentation")
@@ -1462,6 +1784,8 @@ def require_browser_case(value, root, spec):
             _need(browser.get("typedCanarySearch", {}).get("found") == 0 and browser["typedCanarySearch"].get("rawWeaverTraffic") is True
                   and browser["typedCanarySearch"].get("audit") is True and browser["typedCanarySearch"].get("reviewCard") is True,
                   "receipt replacement omitted a browser canary channel")
+    if spec["condition"] != "nested-removal":
+        require_browser_terminal(browser, root, spec, value["backendOrigin"], trace["records"])
     return value
 
 
@@ -1645,8 +1969,34 @@ def _browser_case(runtime, name, spec, fault_file):
     output = runtime.output("effects-browser")
     target = output / "observation"
     config = {"journey": "module-effects", "provider": runtime.provider, "studioOrigin": runtime.studio_origin, "backendOrigin": runtime.backend_origin,
-              "storageState": runtime.active_identity["storageState"], "commandFile": str(runtime.command_file), "output": str(target), "effectsScenario": spec}
+              "storageState": runtime.active_identity["storageState"], "commandFile": str(runtime.command_file), "output": str(target), "effectsScenario": spec,
+              "effectsTestedSource": runtime.run.source}
+    if spec["condition"] == "browser-policy" or spec["tool"] == CHECK_TOOL and (spec["condition"] in ("browser", "browser-failed")
+            or spec["condition"] == "browser-typed" and spec.get("channel") == "receipt"):
+        owned = owned_content_root(runtime.run, runtime.run.profiles["backend"])
+        configuration = owned / "appsettings.json"
+        _need(owned.resolve().is_relative_to(runtime.run.root.resolve()) and configuration.is_file()
+              and not configuration.is_symlink(), "operator configuration escaped the owned runtime")
+        config.update(effectsOwnedBackendRoot=str(owned.resolve()), effectsOperatorConfiguration=str(configuration.resolve()))
     canary = secrets.token_hex(24)
+    uncertainty_owner = uncertainty_journal = original_journal = original_journal_sha = None
+    if spec["condition"] == "browser-uncertain":
+        from restart_journeys import _effect_journal_snapshot, RestartCaseFailure
+        catalog, _ = runtime.native.json(runtime.backend, "effects-uncertain-original-catalog", "/modularity/features")
+        uncertainty_owner = next(row for row in catalog["features"] if row["id"] == runtime.witness["backendFeature"])
+        original_journal = Path(uncertainty_owner["configuration"]["CheckObservationFile"])
+        _need(original_journal.is_absolute() and original_journal.resolve().is_relative_to(runtime.run.root.resolve())
+              and original_journal.is_file() and not original_journal.is_symlink(), "original journal escaped the owned fixture")
+        original_journal_sha = sha(original_journal)
+        # A new observation namespace starts known empty. The global cumulative
+        # observer is never copied, poisoned, repaired or used to infer clean zero.
+        uncertainty_journal = output / "checks-uncertain-private.jsonl"
+        uncertainty_journal.write_bytes(b""); uncertainty_journal.chmod(0o600)
+        entries = output / "execution-entries-private.jsonl"
+        entries.write_text(EXECUTION_HEADER + "\n"); entries.chmod(0o600)
+        uncertainty_before = _effect_journal_snapshot(runtime, {"execution": entries, "checks": uncertainty_journal}, "effects-uncertainty-before")
+        config.update(effectsChecksJournal=str(uncertainty_journal), effectsOwnedRunRoot=str(runtime.run.root.resolve()),
+                      effectsChecksJournalSha256=hashlib.sha256(b"").hexdigest())
     if spec["condition"] == "browser-typed":
         if spec["channel"] != "authorization":
             atomic_json(fault_file, {"channel": spec["channel"], "code": "outside.declared." + canary, "message": "Unsupported module diagnostic " + canary, "ownerUnavailable": spec["ownerUnavailable"]})
@@ -1662,10 +2012,19 @@ def _browser_case(runtime, name, spec, fault_file):
     node = shutil.which("node")
     _need(node, "actual browser driver needs Node")
     try:
+        if uncertainty_owner is not None:
+            runtime.apply_features("effects-observe-uncertain-dispatch", {uncertainty_owner["id"]:
+                                   (True, dict(uncertainty_owner["configuration"], CheckObservationFile=str(uncertainty_journal), ExecutionObservationFile=str(entries)))})
         stage_name = "effects-" + name.replace("/", "-").replace(":", "-")
         shutdown = _run_effects_browser(runtime, stage_name, [node, str(TOOL / "browser.mjs"), str(output / "config-private.json")], config, output)
     finally:
         require_browser_stopped(runtime)
+        if uncertainty_journal is not None:
+            # Retire the tainted namespace intact after exact process absence.
+            # Restore only the original untouched global observer configuration.
+            _need(sha(original_journal) == original_journal_sha, "global owner journal changed during isolated uncertainty")
+            runtime.apply_features("effects-restore-uncertainty-observation", {uncertainty_owner["id"]:
+                                   (uncertainty_owner["enabled"], uncertainty_owner["configuration"])})
         if studio_original is not None:
             attempted = target / "effects-module-selection-attempt-false.json"
             acknowledgement = target / "effects-module-selection-false.json"
@@ -1684,6 +2043,18 @@ def _browser_case(runtime, name, spec, fault_file):
     result = {"id": name, "source": runtime.run.source, "provider": runtime.provider, "scenario": spec, "status": "passed", "bindings": source_bindings(),
               "backendOrigin": runtime.backend_origin, "canarySha256": hashlib.sha256(canary.encode()).hexdigest(),
               "evidenceCategory": EVIDENCE_CATEGORY, "liveProvider": False, "browser": observed, "browserShutdown": shutdown, "trace": trace["receipt"]}
+    if uncertainty_journal is not None:
+        result["uncertaintyControl"] = {"cause": "owner-observation-journal-invalid", "beforeSha256": hashlib.sha256(b"").hexdigest(),
+            "invalidSha256": hashlib.sha256(b'\n{"invalid":"t045-owned-observation"}\n').hexdigest(), "retiredSha256": sha(uncertainty_journal)}
+        result["uncertaintyRetiredJournal"] = retained(uncertainty_journal)
+        result["uncertaintyJournalsBefore"] = uncertainty_before
+        result["uncertaintyExecutionAfter"] = _effect_journal_snapshot(runtime, {"execution": entries}, "effects-uncertainty-after")["execution"]
+        try:
+            _effect_journal_snapshot(runtime, {"checks": uncertainty_journal}, "effects-uncertainty-retired")
+        except RestartCaseFailure as error:
+            _need(error.cause == "effects.restart.journal_unknown" and error.observation, "uncertainty observation failed for a different cause")
+            result["uncertaintyObservationFailure"] = error.observation
+        else: _need(False, "tainted uncertainty observer unexpectedly established a clean count")
     if spec["condition"] in ("browser", "browser-failed") or spec["condition"] == "browser-typed" and spec["channel"] == "receipt":
         correlation = correlate_browser_protocol(transport, target, runtime.provider, offset=offset)
         result["protocolCorrelation"] = correlation["receipt"]
@@ -1717,8 +2088,10 @@ def qualify_effects(runtime):
                 name = provider + "/" + key
                 section["activeCase"] = name
                 with _bounded(runtime, name):
-                    if spec["condition"] in ("browser", "browser-failed", "browser-typed", "nested-removal"):
-                        _policy(runtime, [True] * 3)
+                    if spec["condition"] in ("browser", "browser-failed", "browser-typed", "nested-removal", "browser-policy", "browser-uncertain"):
+                        boundary = spec.get("boundary", spec.get("policy"))
+                        enabled = [False] * 3 if boundary == "unconfigured" else [True, False, False] if boundary == "administrative-only" else [True] * 3
+                        _policy(runtime, enabled, unconfigured=boundary == "unconfigured")
                         value = _browser_case(runtime, name, spec, fault)
                     else: value = _native_case(runtime, name, spec, fault)
                     require_case(value, run.root, run.source, section["bindings"])
