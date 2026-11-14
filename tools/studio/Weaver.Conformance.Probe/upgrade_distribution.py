@@ -14,7 +14,7 @@ import subprocess
 
 from artifacts import (BACKEND_PACKAGES, FIXTURES, REPO, ConformanceRun, check,
                        pack_product_projects, package_identity, sha, write_json)
-from authors import _closure, _environment, _pack, _ref, _restore
+from authors import _closure, _environment, _pack, _project, _ref, _restore
 from consumers import (COMMON_EFFECTS_FEATURE, DURABLE_EFFECTS_FEATURE, DURABLE_STORE_FEATURE,
                        consumer_binary_provenance, enable_durable_weaver_store, prepare_consumers,
                        select_native_archives, stage_native_archives)
@@ -30,6 +30,7 @@ RESOURCE_OWNER = "/_qualification/acme/upgrade-widget"
 RESOURCE_TOOLS = {"read": "acme_upgrade_read_widget", "write": "acme_upgrade_set_visibility",
                   "admin": "acme_upgrade_admin_visibility"}
 JOURNAL_HEADER = '{"Format":"acme.home.execution-entries","Version":2}'
+OPERATOR_ASSEMBLY = "Acme.Weaver.UpgradeOperator.dll"
 
 
 def _product_snapshot(run):
@@ -115,6 +116,68 @@ def _new_distribution(run, name, version):
     return distribution
 
 
+def _prepare_operator(distribution):
+    """Publish a package-only operator, without launching it or opening a database."""
+    source = distribution.materialize("upgrade-operator", "Upgrade.Operator", {
+        "__EF_SQLITE_VERSION__": distribution.pin("Microsoft.EntityFrameworkCore.Sqlite", scope="backend")})
+    for ancestor in source.parents:
+        check(not any((ancestor / name).exists() for name in ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props")),
+              "External operator would inherit ambient build configuration")
+    env, audit = distribution.consumer_environment("upgrade-operator")
+    audit.touch(exist_ok=False)
+    closure = _restore(distribution, "upgrade-operator", source, env)
+    project = _project(source)
+    published = distribution.root / "upgrade-operator-published"
+    distribution.run("upgrade-operator-build", [distribution.dotnet, "build", str(project), "-c", "Release", "--no-restore", "--nologo"], source, env)
+    distribution.run("upgrade-operator-publish", [distribution.dotnet, "publish", str(project), "-c", "Release", "--no-restore", "--no-build",
+                     "-o", str(published)], source, env)
+    profile = {"published": published, "assembly": project.stem + ".dll"}
+    check(profile["assembly"] == OPERATOR_ASSEMBLY, "Unexpected upgrade operator entry point")
+    binaries = consumer_binary_provenance(profile, closure)
+    from runtime import RUNTIME_ENVIRONMENT, published_files, published_files_digest
+    files = published_files(published)
+    manifest = distribution.root / "operator-published-files.json"
+    write_json(manifest, files)
+    check(not audit.read_text().strip(), "Package-only operator preparation invoked frontend tools")
+    record = {"status": "prepared", "source": distribution.source, "productSource": distribution.report["productSource"],
+              "executed": False, "databaseOpened": False, "qualified": False, "independentPackageWitness": False,
+              "allowedOperations": ["hold", "release", "status"], "family": "Weaver", "provider": "Sqlite",
+              "published": str(published), "assembly": profile["assembly"], "commandPrefix": [distribution.dotnet, str(published / profile["assembly"])],
+              "runtimeEnv": {key: value for key, value in env.items() if key in RUNTIME_ENVIRONMENT},
+              "sourceFiles": {str(path.relative_to(source)): _ref(path) for path in source.rglob("*")
+                              if path.is_file() and not {"obj", "bin"}.intersection(path.relative_to(source).parts)},
+              "closure": closure, "binaryProvenance": binaries, "publishedFiles": files,
+              "publishedFilesManifest": _ref(manifest), "publishedFilesSha256": published_files_digest(files), "frontendAudit": _ref(audit),
+              "guardControls": _ref(source / "guard-controls.json"),
+              "tests": {"status": "not-run"}}
+    distribution.report["upgradeOperator"] = record
+    distribution.save()
+    return record
+
+
+def upgrade_operator_command(run, prepared, name, database):
+    """Return a validated launch command; caller owns stdin, execution and outcome proof."""
+    check(name in prepared and "operator" in prepared[name], "Select a prepared upgrade operator generation")
+    item = prepared[name]
+    operator = item["operator"]
+    from runtime import owned_content_root, published_files
+    root = owned_content_root(run, item["profile"])
+    database = Path(database)
+    check(database.is_absolute() and database.is_file() and not database.is_symlink()
+          and database == database.resolve() and database.is_relative_to(root)
+          and str(database) == str(database).rstrip()
+          and not any(character in str(database) for character in (';', '"', '\r', '\n')),
+          "Operator requires an existing canonical owned runtime database path")
+    published = Path(operator["published"])
+    check(published.is_absolute() and published.resolve().is_relative_to(run.root.resolve())
+          and operator["assembly"] == OPERATOR_ASSEMBLY
+          and operator["commandPrefix"] == [run.dotnet, str(published / OPERATOR_ASSEMBLY)],
+          "Operator command must name the exact owned prepared entry point")
+    check(not root.is_relative_to(published) and not published.is_relative_to(root), "Operator publish and runtime content must not overlap")
+    check(published_files(published) == operator["publishedFiles"], "Operator published inputs changed")
+    return [*operator["commandPrefix"], "--owned-root", str(root), "--database", str(database)]
+
+
 def prepare_upgrade_distributions(run):
     """Return old/current independently restored backend profiles, without launching them.
 
@@ -160,6 +223,7 @@ def prepare_upgrade_distributions(run):
             profile = distribution.profiles["backend"]
             consumer_closure = _closure(distribution, profile["source"], profile["env"])
             binaries = consumer_binary_provenance(profile, consumer_closure)
+            operator = _prepare_operator(distribution)
             stage_native_archives(distribution, "backend", select_native_archives(
                 distribution, "backend", [resource["packed"]["package"]], resource))
             # Root's runtime verifier supplies the canonical all-file manifest.
@@ -174,13 +238,14 @@ def prepare_upgrade_distributions(run):
                       "report": _ref(distribution.root / "report.json"),
                       "consumer": distribution.report["consumers"]["backend"],
                       "consumerClosure": consumer_closure, "consumerBinaryProvenance": binaries,
+                      "operator": operator,
                       "publishedFiles": _ref(manifest), "publishedFilesSha256": published_files_digest(profile["publishedFiles"]),
                       "protocolAuthor": protocol, "resourceAuthor": resource}
             distribution.report["status"] = "prepared"
             distribution.save()
             record["report"] = _ref(distribution.root / "report.json")
             section["generations"][name] = record
-            result[name] = {"profile": profile, "distribution": distribution, "record": record}
+            result[name] = {"profile": profile, "distribution": distribution, "record": record, "operator": operator}
             check(_product_snapshot(run) == current_products, "Old writer contaminated current candidate product metadata")
             run.save()
         section["status"] = "prepared"
