@@ -6,7 +6,7 @@ using Kernel.Sim.Native;
 
 internal static class RetryWitness
 {
-    private static string[] Cuts => ["steady", "reload-before", "reload-staged", "lost-before-apply", "lost-answer"];
+    private static string[] Cuts => ["steady", "reload-before", "reload-staged", "lost-before-apply", "lost-answer", "sibling-before"];
     private static string[] Refusals => ["legacy-v5", "replace-leaf", "replace-binding", "replace-capture", "replace-parent"];
     internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Cuts select $"recovery:successor,{m},parallel-parent={d},cut={c}";
     internal static IEnumerable<string> RefusalNames => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Refusals select $"recovery:{(c == "legacy-v5" ? "seeded-context" : "material-refusal")},{m},parallel-parent={d},case={c}";
@@ -21,11 +21,11 @@ internal static class RetryWitness
         var target = InstanceRef.In(0, "successor"); var owner = 0; Actor Actor() => world.Of(owner, 0);
         Workflow Build(bool replacement = false)
         {
-        var leaf = new Node("leaf", replacement ? typeof(ReplacementRetryLeaf) : typeof(RetryLeaf));
-        leaf.Inputs.Add("Value", Binding.Var("sourceValue")); leaf.Inputs.Add("Iteration", Binding.Var("CurrentItem")); leaf.Inputs.Add("Local", Binding.Var("local"));
-        return Wf.Workflow("successor", Wf.Node<RetryScope>("outer").With(Wf.ForEach("iterations", Binding.Literal(new[] { 7 }), Wf.Parallel("parallel", null,
-            direct ? leaf : Wf.Sequence("sequence", Wf.Set("before", "before", 1), leaf, Wf.Set("after", "after", 1)),
-            Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish"))))), ("sourceValue", 17));
+            var leaf = new Node("leaf", replacement ? typeof(ReplacementRetryLeaf) : typeof(RetryLeaf));
+            leaf.Inputs.Add("Value", Binding.Var("sourceValue")); leaf.Inputs.Add("Iteration", Binding.Var("CurrentItem")); leaf.Inputs.Add("Local", Binding.Var("local"));
+            return Wf.Workflow("successor", Wf.Node<RetryScope>("outer").With(Wf.ForEach("iterations", Binding.Literal(new[] { 7 }), Wf.Parallel("parallel", null,
+                direct ? leaf : Wf.Sequence("sequence", Wf.Set("before", "before", 1), leaf, Wf.Set("after", "after", 1)),
+                Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish")), Wf.Event("tail", "tail")))), ("sourceValue", 17));
         }
         var workflow = Build();
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
@@ -53,6 +53,7 @@ internal static class RetryWitness
         Apply(new("take", Actor().Id)); Apply(new("add", M: new("start", target, Kinds.Start,
             Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "successor-proof") }))); Drain();
         var source = State().Frames.Values.Single(f => f.Node == "leaf");
+        var originalParent = State().Frames[source.Parent!];
         var scopes = Json.Write(State().LexicalScopes);
         Check(source.Intervention is not null && RetryLeaf.Invocations.Count == 1, "R12: retry witness did not begin with an ordinary intervention");
         var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:change");
@@ -76,6 +77,11 @@ internal static class RetryWitness
             if (cut == "replace-capture") replacement.Nodes["leaf"].Captures.Add("new-capture", "");
             if (cut == "replace-parent") replacement.Nodes[direct ? "parallel" : "sequence"].Children.Reverse();
             NativeWorkflows.Registry.Add(replacement); Reload(); Drain();
+        }
+        if (cut == "sibling-before")
+        {
+            var sibling = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:finish");
+            Apply(new("add", M: Events.Deliver(new("event:finish", "finish-early", null, world.Time + 120_000), sibling)));
         }
         Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(request), ReplyTo: ReplyTo.Of("outside", "retry", world.Time + 120_000), TargetCreation: 1)));
         if (Refusals.Contains(cut))
@@ -112,10 +118,26 @@ internal static class RetryWitness
             world.Auto = true; Reload(); Drain();
         }
         else { Drain(cut: true); checkpoint = State(); }
+        if (checkpoint.Retries?.ContainsKey(request.Id) == true && direct)
+        {
+            var successor = checkpoint.Agenda.Single(w => w.Node == "leaf");
+            var prior = Values.To<ParallelState>(originalParent.State)!; var rebound = Values.To<ParallelState>(checkpoint.Frames[source.Parent!].State)!;
+            Check(rebound.Pending.SequenceEqual(prior.Pending.Select(id => id == source.Id ? successor.Frame : id)) && rebound.Done == prior.Done && rebound.Faulted == prior.Faulted && rebound.Joined == prior.Joined,
+                "R20: committed retry did not replace the exact outstanding parallel child obligation");
+        }
         Check(cut.StartsWith("lost-", StringComparison.Ordinal) || checkpoint.Agenda.Any(w => w.Node == "leaf" && w.Frame != source.Id && w.Parent == source.Parent) && !checkpoint.Frames.ContainsKey(source.Id) && RetryLeaf.Invocations.Count == 1,
             "R13: retry did not durably stage a fresh successor before executing it; " + world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().LastOrDefault()?.Result);
-        if (cut == "reload-staged") Reload();
+        if (cut is "reload-staged" or "sibling-before") Reload();
         Drain(); var next = State();
+        var completions = world.Store.Journal.Values.Where(j => j.Instance == target.Id).SelectMany(j => Json.Read<string[]>(j.Entries)).Where(e => e.StartsWith("c:", StringComparison.Ordinal)).ToArray();
+        Check(completions.Count(e => e.EndsWith(":before", StringComparison.Ordinal)) == (direct ? 0 : 1) && completions.Count(e => e.EndsWith(":after", StringComparison.Ordinal)) == (direct ? 0 : 1),
+            "R21: recovery replayed previously completed ordinary work");
+        if (cut == "sibling-before")
+        {
+            var siblingAt = Array.FindIndex(completions, e => e.EndsWith(":sibling", StringComparison.Ordinal));
+            Check(siblingAt >= 0 && siblingAt < Array.FindIndex(completions, e => e.EndsWith(":leaf", StringComparison.Ordinal)),
+                "R20: sibling callback did not cross the staged retry and reload boundary");
+        }
         Check(RetryLeaf.Invocations.Count == 2 && RetryLeaf.Invocations[1].Frame != source.Id && RetryLeaf.Invocations[1].Operation == source.OperationKey && RetryLeaf.Invocations[1].Value == 17 &&
             RetryLeaf.Invocations[1].Iteration == 7 && RetryLeaf.Invocations[1].Local == 23 && Json.Write(next.LexicalScopes) == scopes &&
             (direct || next.Variables["before"]!.ToString() == "1" && next.Variables["after"]!.ToString() == "1") && world.Store.Instances[target.Id].Status == InstanceStatus.Running,
@@ -126,8 +148,10 @@ internal static class RetryWitness
         Check(RetryLeaf.Invocations.Count == count && State().Retries!.Count == 1 && State().Retries![request.Id].Successor == accepted.Successor &&
             world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().TakeLast(3).Select(r => r.Result).SequenceEqual(new[] { "Duplicate", "Conflict", "NotEligible" }),
             "R17: replay, conflict or stale source created another successor or changed its receipt");
-        var finish = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:finish");
-        Apply(new("add", M: Events.Deliver(new("event:finish", "finish", null, world.Time + 120_000), finish))); Drain();
+        if (world.Store.Subscriptions.SingleOrDefault(s => s.Instance == target.Id && s.Key == "event:finish") is { } finish)
+        { Apply(new("add", M: Events.Deliver(new("event:finish", "finish", null, world.Time + 120_000), finish))); Drain(); }
+        var tail = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:tail");
+        Apply(new("add", M: Events.Deliver(new("event:tail", "tail", null, world.Time + 120_000), tail))); Drain();
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && State().LexicalScopes is null && State().Frames.Count == 0 && RetryLeaf.Invocations.Count == 2,
             "R19: successful recovery repeated its iteration or leaked completed ancestor resources");
         Console.WriteLine($"PASS recovery:successor,{mode},parallel-parent={direct},cut={cut}");

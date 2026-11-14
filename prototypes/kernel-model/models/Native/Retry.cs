@@ -40,8 +40,10 @@ internal static class NativeRetries
 {
     internal static bool Present(NativeState s) => s.Retries is not null || s.Frames.Values.Any(f => f.RecoveryMaterial is not null || f.RetrySource is not null) ||
         s.Agenda.Any(w => w.RecoveryInputs is not null || w.RecoveryMaterial is not null || w.OperationKey is not null || w.RetrySource is not null);
-    internal static void Validate(NativeState s)
+    internal static void Validate(NativeState s, bool cancelled = false)
     {
+        // Forced cancellation retires all live handles while retaining forensic source history. Active validation stays exact.
+        bool Borrowed(string? current, string? original) => current == original || cancelled && s.LexicalScopes is null && current is null;
         var successors = new HashSet<string>(StringComparer.Ordinal); var sources = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (id, r) in s.Retries ?? [])
             if (r is null || r.Request is null || string.IsNullOrEmpty(id) || id != r.Request.Id || r.Source is null || r.Source.Id != r.Request.Source ||
@@ -56,7 +58,8 @@ internal static class NativeRetries
             if (f.RetrySource is { } source)
             {
                 var old = Lineage(source, f.Id).Source;
-                if (f.Node != old.Node || f.Parent != old.Parent || f.Tag != old.Tag || f.OperationKey != old.OperationKey ||
+                if (f.Node != old.Node || f.Parent != old.Parent || f.Tag != old.Tag || f.OperationKey != old.OperationKey || !Borrowed(f.LexicalScope, old.LexicalScope) ||
+                    !JsonNode.DeepEquals(Values.From(f.Scope), Values.From(old.Scope)) ||
                     !JsonNode.DeepEquals(f.RecoveryInputs, old.RecoveryInputs) || !JsonNode.DeepEquals(f.RecoveryMaterial, old.RecoveryMaterial))
                     throw new InvalidOperationException("Invalid native successor frame provenance.");
             }
@@ -69,7 +72,8 @@ internal static class NativeRetries
                 continue;
             }
             var old = Lineage(w.RetrySource, w.Frame).Source;
-            if (w.Resume || w.Node != old.Node || w.Parent != old.Parent || w.Tag != old.Tag || w.OperationKey != old.OperationKey || w.Attempt is < 0 or > 1 ||
+            if (w.Resume || w.Node != old.Node || w.Parent != old.Parent || w.Tag != old.Tag || w.OperationKey != old.OperationKey || w.Attempt is < 0 or > 1 || !Borrowed(w.LexicalScope, old.LexicalScope) ||
+                !JsonNode.DeepEquals(Values.From(w.Scope), Values.From(old.Scope)) ||
                 !JsonNode.DeepEquals(w.RecoveryInputs, old.RecoveryInputs) || !JsonNode.DeepEquals(w.RecoveryMaterial, old.RecoveryMaterial))
                 throw new InvalidOperationException("Invalid native successor work provenance.");
         }

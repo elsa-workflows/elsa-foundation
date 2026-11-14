@@ -60,7 +60,7 @@ internal sealed partial class Burst
     internal ValueTask MetadataAsync()
     {
         LexicalScopes.Validate(_s);
-        NativeInterventions.Validate(_s);
+        NativeInterventions.Validate(_s, cancelled: ended == InstanceStatus.Cancelled);
         if (AdmissionHas(AdmissionFlaw.DropMetadata)) return ValueTask.CompletedTask;
         if (ended is { } status && turn.Clock.Resolve(WorkflowCommitClock.Terminal) is not null)
             InvocationLifetime.Terminate(_s, WorkflowCommitClock.Terminal, status switch

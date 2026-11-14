@@ -44,6 +44,22 @@ internal static class RecoveryReader
                 LexicalScopes.Validate(state);
                 Refuse(() => NativeInterventions.Validate(state), "Invalid native successor frame provenance.");
             });
+        foreach (var live in new[] { false, true }) foreach (var cancelled in new[] { false, true })
+            yield return ($"retired-forensic,frame={live},cancelled={cancelled}", () =>
+            {
+                var state = live ? Materialized() : Staged(); var original = Json.Write(state.Retries);
+                LexicalScopes.Terminate(state); LexicalScopes.Validate(state);
+                if (cancelled) NativeInterventions.Validate(state, cancelled: true);
+                else Refuse(() => NativeInterventions.Validate(state), live ? "Invalid native successor frame provenance." : "Invalid native successor work provenance.");
+                Check(Json.Write(state.Retries) == original, "forced retirement rewrote forensic source provenance");
+            });
+        foreach (var retired in new[] { false, true }) yield return ("cancelled-drift,retired=" + retired, () =>
+        {
+            var state = Staged();
+            if (retired) { LexicalScopes.Terminate(state); state.Agenda[0].Scope!["CurrentItem"] = 99; }
+            else state.Agenda[0].LexicalScope = null;
+            Refuse(() => NativeInterventions.Validate(state, cancelled: true), "Invalid native successor work provenance.");
+        });
         foreach (var change in new (string Name, Action<NativeState> Apply, string Error)[]
         {
             ("no-profile", s => s.InterventionEnabled = false, "Native recovery data requires its opted-in profile."),

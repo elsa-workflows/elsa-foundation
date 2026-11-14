@@ -30,7 +30,7 @@ internal static class NativeInterventions
     internal static bool Present(NativeState state) => state.InterventionEnabled || NativeRetries.Present(state) || state.Frames.Values.Any(f =>
         f.Intervention is not null || f.RecoveryInputs is not null || f.OperationKey is not null);
 
-    internal static void Validate(NativeState state)
+    internal static void Validate(NativeState state, bool cancelled = false)
     {
         if (!state.InterventionEnabled)
         {
@@ -52,7 +52,7 @@ internal static class NativeInterventions
                 state.Waits.Values.Any(w => w.Frame == f.Id) || state.Frames.Values.Any(child => child.Parent == f.Id))
                 throw new InvalidOperationException("Invalid native intervention ownership.");
         }
-        NativeRetries.Validate(state);
+        NativeRetries.Validate(state, cancelled);
     }
 }
 
