@@ -34,5 +34,8 @@ public static class PublishingLedgerEfModule
     public const int TestRunIdOrderKeyMaximumLength = (PublishingPolicyProjectionEfModule.IdentityMaximumLength + 1) * sizeof(char);
 
     /// <summary>The schema version stamped on every publication-record, activity-publication receipt and test-run row.</summary>
-    public const string ContentSchemaVersion = "1";
+    public const string ContentSchemaVersion = "2";
+
+    /// <summary>Original ledger rows have no exact publication request fingerprint.</summary>
+    public const string LegacyContentSchemaVersion = "1";
 }

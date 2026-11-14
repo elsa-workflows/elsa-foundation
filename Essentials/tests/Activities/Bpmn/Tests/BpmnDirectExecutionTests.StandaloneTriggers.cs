@@ -227,6 +227,46 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal(RuntimeRecipientPhase.DispatchCommitted, Assert.Single(source.SubscriptionDelivery!.Progress).Phase);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Malformed_retained_model_commands_preserve_cause_and_delivery_context(bool queued, bool invalidObject)
+    {
+        await using var host = await OpenAsync(); await using var scope = await ScopeAsync(host);
+        var services = scope.ServiceProvider;
+        var fixture = await PrepareModelIngressAsync(services);
+        var target = services.GetServices<IStandaloneTriggerRuntimeTarget>().Single(item => item.ModelKey == "bpmn");
+        var seal = await target.PrepareDispatchAsync(fixture.Source, fixture.Recipient);
+        var malformed = invalidObject ? JsonSerializer.SerializeToElement(new { }) :
+            JsonSerializer.SerializeToElement(new { executable = "malformed-pin" });
+        if (!queued)
+            seal = new(seal.Version, seal.SourceOutboxItemId, seal.SourceFingerprint, seal.SelectionFingerprint,
+                seal.RecipientId, seal.StartIdentity, seal.CommittedAt, seal.CommandProtocol, seal.CommandProtocolVersion, malformed);
+        var claim = Assert.Single(await services.GetRequiredService<IRuntimePostCommitOutboxClaimStore>()
+            .ClaimAsync(new("malformed-model-delivery", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1), 10)));
+        var source = await fixture.Port.CommitDispatchAsync(new(claim, fixture.Scope.Persistence), seal);
+        if (queued)
+        {
+            var identity = fixture.Recipient.StartIdentity;
+            await services.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(new(
+                RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(identity.InputId), identity.WorkflowExecutionId,
+                identity.InputId, WorkflowExecutionCommandKind.ExecuteModel, identity.EnvelopeId, identity.IdempotencyKey,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, payload: malformed));
+        }
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() =>
+            target.ReconcileAsync(source, fixture.Recipient, seal).AsTask());
+        if (invalidObject) Assert.IsAssignableFrom<ArgumentException>(error.InnerException);
+        else Assert.IsAssignableFrom<JsonException>(error.InnerException);
+        Assert.Contains(source.OutboxItemId, error.Message);
+        Assert.Contains(fixture.Recipient.RecipientId, error.Message);
+        Assert.Contains(fixture.Scope.Persistence.Value, error.Message);
+        Assert.Contains(queued ? "queued" : "sealed", error.Message);
+        Assert.Null(await services.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync(fixture.Recipient.StartIdentity.WorkflowExecutionId));
+        await AssertNativeEmptyAsync(services);
+    }
+
     private sealed record ModelIngressFixture(IRuntimeIngressDeliveryStore Port, TriggerScope Scope, RuntimePostCommitOutboxItem Source,
         RuntimeSubscriptionRecipient Recipient, RuntimeExecutionMaterial Material, TriggerSubscription Subscription, DateTimeOffset CreatedAt)
     {

@@ -23,6 +23,7 @@ public sealed class EfPublicationRecordStoreTests : IAsyncLifetime
         var record = Record("publication-1", "slot-1") with
         {
             Failure = new PublicationFailure("code", ""),
+            RequestFingerprint = new string('a', 64),
             Status = PublicationStatus.Failed
         };
         await using (var context = Open())
@@ -68,13 +69,17 @@ public sealed class EfPublicationRecordStoreTests : IAsyncLifetime
     [Fact]
     public async Task A_transition_is_a_compare_and_swap_on_the_observed_status_and_never_changes_identity()
     {
-        var candidate = Record("publication-cas", "slot-1");
+        var candidate = Record("publication-cas", "slot-1") with { RequestFingerprint = new string('b', 64) };
         await using var context = Open();
         var store = Store(context, "tenant-a");
         await store.SaveAsync(candidate);
 
         var active = candidate with { Status = PublicationStatus.Active, ActivatedAt = Created.AddMinutes(1), SourceReferenceId = "reference-2" };
         Assert.False(await store.TryTransitionAsync(active, PublicationStatus.Active));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.TryTransitionAsync(
+            active with { RequestFingerprint = null }, PublicationStatus.Candidate).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.TryTransitionAsync(
+            active with { RequestFingerprint = new string('c', 64) }, PublicationStatus.Candidate).AsTask());
         Assert.True(await store.TryTransitionAsync(active, PublicationStatus.Candidate));
         Assert.False(await store.TryTransitionAsync(active with { Status = PublicationStatus.Retired }, PublicationStatus.Candidate));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>

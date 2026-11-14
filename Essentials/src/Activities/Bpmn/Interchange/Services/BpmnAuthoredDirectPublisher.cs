@@ -84,11 +84,20 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
         var sourceId = WorkflowActivationReferenceIdentity.Create(publicationId);
         var now = clock.GetUtcNow();
         var prior = await publications.FindAsync(publicationId, cancellationToken);
+        // Bind supplied intent, including omission, rather than today's resolved policy/slot authority.
+        var requestFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            formatVersion = 1, definitionId = definition.Id, versionId = version.Id, caller.ActorId, caller.TenantId, requestId,
+            intentProvided = intent is not null, action = intent is null ? (int?)null : (int)intent.Action,
+            slotName = intent?.SlotName, expectedSlotRevision, expectedPublicationId
+        }))).ToLowerInvariant();
+        if (prior is not null && prior.RequestFingerprint != requestFingerprint)
+            throw new RuntimeCheckpointReplayConflictException("publish:" + requestId);
         var hostPolicy = await policies.FindAsync(null, cancellationToken)
             ?? new PublicationPolicy(null, PublicationPolicyDefaultAction.ReplaceDefaultSlot, "default", 0, now);
         // An already accepted operation retains its resolved slot when the default policy later changes.
-        var resolved = prior is not null && intent is null
-            ? new ResolvedPublicationAction(definition.Id, version.Id, PublicationAction.Replace, prior.SlotName, PublicationPolicySource.Request, null)
+        var resolved = prior is not null
+            ? new ResolvedPublicationAction(definition.Id, version.Id, intent?.Action ?? PublicationAction.Replace, prior.SlotName, PublicationPolicySource.Request, null)
             : policyResolver.Resolve(definition.Id, version.Id, intent, await policies.FindAsync(definition.Id, cancellationToken), hostPolicy);
         var slot = await slots.FindAsync(definition.Id, resolved.SlotName, cancellationToken);
         var slotId = WorkflowActivationSlotIdentity.Create(definition.Id, resolved.SlotName);
@@ -108,7 +117,8 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
         if (expectedPublicationId is not null && slot?.ActiveActivationId != expectedPublicationId)
             throw new PublicationPolicyResolutionException(PublicationFailureCodes.ExpectedPublicationMismatch, "The serving publication changed.");
         var candidate = prior ?? new PublicationRecord(publicationId, slotId, definition.Id, version.Id, material.Identity.ArtifactId,
-            sourceId, expectedSlotRevision ?? slot?.Revision ?? 0, PublicationStatus.Candidate, now, null, null, null, resolved.SlotName);
+            sourceId, expectedSlotRevision ?? slot?.Revision ?? 0, PublicationStatus.Candidate, now, null, null, null, resolved.SlotName)
+        { RequestFingerprint = requestFingerprint };
         var reference = new WorkflowExecutableSourceReference(sourceId, material.Identity.ArtifactId, "BpmnModel", version.Id, version.Version,
             definition.Id, version.Id, version.Version, candidate.CreatedAt, candidate.CreatedAt, WorkflowExecutableReferenceScope.Published,
             Layout: projected.Source.Layout, TenantId: caller.TenantId, ActivityPresentation: projected.Source.ActivityPresentation,

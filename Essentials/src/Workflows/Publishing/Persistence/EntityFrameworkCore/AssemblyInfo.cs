@@ -23,7 +23,7 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 // readability report is derived from these alone; every family the stores check must be declared
 // here, at the version they read; that holds by review until #2606 restores a compiled check. Each names the tables
 // whose rows it stamps, so the finalization gate holds every write to its own family's write version.
-[assembly: EfSchemaFamily(PublishingLedgerEfModule.SchemaFamily, "Workflows.Publishing", PublishingLedgerEfModule.ContentSchemaVersion, Entities = [typeof(PublicationRecordEntity), typeof(ActivityPublicationReceiptEntity), typeof(ActivityDraftTestRunEntity)])]
+[assembly: EfSchemaFamily(PublishingLedgerEfModule.SchemaFamily, "Workflows.Publishing", PublishingLedgerEfModule.ContentSchemaVersion, Upcasters = [typeof(PublishingLedgerV1Upcaster)], Entities = [typeof(PublicationRecordEntity), typeof(ActivityPublicationReceiptEntity), typeof(ActivityDraftTestRunEntity)])]
 [assembly: EfSchemaFamily(PublishingPolicyProjectionEfModule.SchemaFamily, "Workflows.Publishing", PublishingPolicyProjectionEfModule.SchemaVersion, Entities = [typeof(PublicationPolicyEntity), typeof(PublicationProjectionIntentEntity)])]
 [assembly: EfSchemaFamily(PublishingSnapshotReviewEfModule.SchemaFamily, "Workflows.Publishing", PublishingSnapshotReviewEfModule.SchemaVersion, Entities = [typeof(PublicationSnapshotReviewEntity)])]
 

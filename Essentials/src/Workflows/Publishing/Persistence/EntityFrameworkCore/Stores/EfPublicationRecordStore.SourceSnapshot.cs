@@ -85,7 +85,9 @@ public sealed partial class EfPublicationRecordStore
                     if (EfPublishingStoreSupport.Encode(decoded) != encoded) throw SourceRefused("publication_source_stored_content_invalid");
                     return decoded;
                 }
-                if (Raw("SchemaVersion") != PublishingLedgerEfModule.ContentSchemaVersion) throw SourceRefused("publication_source_schema_unsupported", true);
+                if (EfSchemaVersion.NotReadable(PublishingLedgerEfModule.Chain, Raw("SchemaVersion"))) throw SourceRefused("publication_source_schema_unsupported", true);
+                if (Raw("SchemaVersion") == PublishingLedgerEfModule.LegacyContentSchemaVersion && text["RequestFingerprint"] is not null)
+                    throw SourceRefused("publication_source_stored_content_invalid");
                 var id = Decoded("PublicationId")!; var tenant = Decoded("TenantId"); var slot = Decoded("SlotId")!;
                 if (id != publicationId || tenant != expectedScope.Value || Raw("Id") != EfPublishingStoreSupport.PhysicalId(tenant, id) ||
                     Raw("TenantIdHash") != EfPublishingStoreSupport.TenantHash(tenant) || Raw("PublicationIdHash") != EfPublishingStoreSupport.Hash(id) ||
@@ -128,7 +130,7 @@ public sealed partial class EfPublicationRecordStore
     private sealed class SourceSnapshotShape
     {
         public SourceSnapshotField[] Fields { get; } = [new("Id"), new("PublicationId"), new("PublicationIdHash"), new("SlotId"), new("SlotIdHash"),
-            new("WorkflowDefinitionId"), new("WorkflowDefinitionVersionId"), new("ArtifactId"), new("SourceReferenceId", Nullable: true), new("Status"),
+            new("WorkflowDefinitionId"), new("WorkflowDefinitionVersionId"), new("ArtifactId"), new("RequestFingerprint", Nullable: true), new("SourceReferenceId", Nullable: true), new("Status"),
             new("TenantId", Nullable: true), new("TenantIdHash"), new("SchemaVersion"), new("Revision", Integer: true),
             new("ActivatedAtUtcTicks", Nullable: true, Integer: true), new("ActivatedAtOffsetMinutes", Nullable: true, Integer: true)];
         public string Preflight { get; }

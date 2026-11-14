@@ -96,7 +96,7 @@ public sealed class EfActivityPublicationReceiptStore(
             ? $"global\n{idempotencyKey}"
             : $"tenant\n{tenantId.Length.ToString(CultureInfo.InvariantCulture)}\n{tenantId}\n{idempotencyKey}";
 
-    private static ActivityPublicationReceiptEntity ToEntity(ActivityPublicationReceipt receipt, string? scope)
+    private ActivityPublicationReceiptEntity ToEntity(ActivityPublicationReceipt receipt, string? scope)
     {
         var receiptKey = ReceiptKey(receipt.TenantId, receipt.IdempotencyKey);
         return new ActivityPublicationReceiptEntity
@@ -106,7 +106,7 @@ public sealed class EfActivityPublicationReceiptStore(
             IdempotencyKey = EfPublishingStoreSupport.Encode(receipt.IdempotencyKey),
             ReceiptTenantId = EfPublishingStoreSupport.EncodeNullable(receipt.TenantId),
             Status = receipt.Status.ToString(),
-            SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion,
+            SchemaVersion = PublishingLedgerWriteVersion.For(context),
             Content = PublishingEfJson.Serialize(receipt),
             TenantId = EfPublishingStoreSupport.EncodeNullable(scope),
             TenantIdHash = EfPublishingStoreSupport.TenantHash(scope)

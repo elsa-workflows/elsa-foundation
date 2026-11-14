@@ -15,6 +15,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -336,6 +337,61 @@ public sealed class BpmnAuthoredDirectPublisherTests
         Assert.Equal(0, fixture.Publications);
     }
 
+    [Theory]
+    [InlineData("publication")]
+    [InlineData("revision")]
+    [InlineData("omitted-revision")]
+    [InlineData("intent")]
+    [InlineData("action")]
+    [InlineData("slot")]
+    public async Task A_reused_operation_id_binds_the_exact_supplied_publication_intent(string change)
+    {
+        var fixture = new Fixture();
+        var originalIntent = change is "action" or "slot" ? new PublicationRequestIntent(PublicationAction.Replace) : null;
+        long? originalRevision = change == "omitted-revision" ? 0 : null;
+        await fixture.Publish(originalIntent, originalRevision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => fixture.Publish(
+            change switch
+            {
+                "intent" => new(PublicationAction.Replace),
+                "action" => new(PublicationAction.PublishSideBySide),
+                "slot" => new(PublicationAction.Replace, "default"),
+                _ => originalIntent
+            }, change == "revision" ? 0 : change == "omitted-revision" ? null : originalRevision,
+            change == "publication" ? "different-serving-publication" : null));
+        Assert.Equal(1, fixture.Publications);
+    }
+
+    [Fact]
+    public async Task Exact_replay_keeps_its_accepted_slot_after_policy_and_authority_advance()
+    {
+        var fixture = new Fixture();
+        var original = await fixture.Publish(expectedSlotRevision: 0);
+        fixture.ResolvedSlotName = "new-default";
+        fixture.Slot = fixture.Slot! with { Revision = 9, ActiveActivationId = "later-publication" };
+        var replay = await fixture.Publish(expectedSlotRevision: 0);
+        Assert.Equal(original.Publication!.PublicationId, replay.Publication!.PublicationId);
+        Assert.Equal("default", replay.Publication.SlotName);
+        Assert.Equal(1, fixture.Publications);
+        Assert.Equal(1, fixture.PolicyResolutions);
+    }
+
+    [Theory]
+    [InlineData(PublicationStatus.Candidate)]
+    [InlineData(PublicationStatus.Failed)]
+    [InlineData(PublicationStatus.Active)]
+    [InlineData(PublicationStatus.Retired)]
+    public async Task Every_retained_status_refuses_changed_or_unverifiable_intent(PublicationStatus status)
+    {
+        var fixture = new Fixture();
+        await fixture.Publish();
+        fixture.RetainedPublication = fixture.RetainedPublication! with { Status = status };
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => fixture.Publish(expectedSlotRevision: 0));
+        fixture.RetainedPublication = fixture.RetainedPublication with { RequestFingerprint = null };
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => fixture.Publish());
+        Assert.Equal(1, fixture.Publications);
+    }
+
     private sealed class Fixture : IWorkflowDefinitionVersionStore, IWorkflowDefinitionStore,
         IWorkflowDefinitionVersionLayoutStore, IActivityDefinitionLookup, IPermissionAuthorizationService, IBpmnModelRuntime,
         IWorkflowExecutableSourceReferenceReader
@@ -357,6 +413,10 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public bool MissingActivity { get; set; }
         public bool Visible { get; set; } = true;
         public int Publications { get; private set; }
+        public PublicationRecord? RetainedPublication { get; set; }
+        public WorkflowActivationSlot? Slot { get; set; }
+        public string ResolvedSlotName { get; set; } = "default";
+        public int PolicyResolutions { get; private set; }
         public BpmnModelDefinition? Model { get; private set; }
         public BpmnModelPublicationProvenance? Source { get; private set; }
         public BpmnModelCaller? Caller { get; private set; }
@@ -378,7 +438,8 @@ public sealed class BpmnAuthoredDirectPublisherTests
                 new(Process.StructureKind, Process.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web))), [], [], null) };
         }
 
-        public Task<BpmnPublishedModel> Publish()
+        public Task<BpmnPublishedModel> Publish(PublicationRequestIntent? intent = null, long? expectedSlotRevision = null,
+            string? expectedPublicationId = null)
         {
             var validator = new NormalizedPrincipalValidator(Options.Create(new FoundationIdentityOptions
                 { NormalizedAuthenticationTypes = new HashSet<string>(["test"]) }));
@@ -391,17 +452,22 @@ public sealed class BpmnAuthoredDirectPublisherTests
                 var candidate = Activation.Candidate;
                 Source = new(Activation.Reference.SourceId, Activation.Reference.SourceVersion!, Activation.Reference.Layout,
                     Activation.Reference.ActivityPresentation);
-                return ValueTask.FromResult(new PublicationActivationResult(true, candidate with { Status = PublicationStatus.Active },
-                    new(candidate.SlotId, candidate.WorkflowDefinitionId, candidate.SlotName, candidate.PublicationId,
-                        WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)));
+                RetainedPublication = candidate with { Status = PublicationStatus.Active };
+                Slot = new(candidate.SlotId, candidate.WorkflowDefinitionId, candidate.SlotName, candidate.PublicationId,
+                    WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow);
+                return ValueTask.FromResult(new PublicationActivationResult(true, RetainedPublication, Slot));
             });
             return new BpmnAuthoredDirectPublisher(this, this, this, this, validator, this, this, this, TimeProvider.System,
-                activator, Stub<IPublicationRecordStore>((_, _) => ValueTask.FromResult<PublicationRecord?>(null)),
-                Stub<IWorkflowActivationAuthority>((_, _) => ValueTask.FromResult<WorkflowActivationSlot?>(null)),
+                activator, Stub<IPublicationRecordStore>((_, _) => ValueTask.FromResult(RetainedPublication)),
+                Stub<IWorkflowActivationAuthority>((_, _) => ValueTask.FromResult(Slot)),
                 Stub<IPublicationPolicyStore>((_, _) => ValueTask.FromResult<PublicationPolicy?>(null)),
-                Stub<IPublicationPolicyResolver>((_, args) => new ResolvedPublicationAction((string)args![0]!, (string)args[1]!,
-                    PublicationAction.Replace, "default", PublicationPolicySource.Host, 0)))
-                .PublishAsync("version-1", "operation", principal, default);
+                Stub<IPublicationPolicyResolver>((_, args) =>
+                {
+                    PolicyResolutions++;
+                    return new ResolvedPublicationAction((string)args![0]!, (string)args[1]!,
+                        PublicationAction.Replace, ResolvedSlotName, PublicationPolicySource.Host, 0);
+                }))
+                .PublishAsync("version-1", "operation", principal, default, intent, expectedSlotRevision, expectedPublicationId);
         }
 
         public void UseService(string metadata)

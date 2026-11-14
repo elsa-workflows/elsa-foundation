@@ -65,7 +65,7 @@ internal sealed class BpmnTriggerTarget(IWorkflowExecutableStore materials,
             var page = await Queue.ListAsync(query, cancellationToken);
             foreach (var work in page.Items.Where(item => item.WorkItemId == RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(command.InputId)))
             {
-                var queued = work.Payload?.Deserialize<RuntimeModelExecutionCommand>(Web);
+                var queued = work.Payload is { } payload ? ReadCommand(payload, source, recipient, "queued") : null;
                 if (work.CommandKind != WorkflowExecutionCommandKind.ExecuteModel || queued is null || work.CommandId != command.InputId ||
                     RuntimeCheckpointCommitFingerprint.ComputeModelInput(queued) != RuntimeCheckpointCommitFingerprint.ComputeModelInput(command))
                     throw new RuntimeCheckpointReplayConflictException(command.InputId);
@@ -129,12 +129,23 @@ internal sealed class BpmnTriggerTarget(IWorkflowExecutableStore materials,
         var committed = await ingress.ReadCommittedRecipientAsync(new RuntimeCommittedRecipientAuthority(source.OutboxItemId,
             source.SourceFingerprint, selection.SelectionFingerprint, recipient.StartIdentity.Scope, recipient.RecipientId, seal.Fingerprint), cancellationToken);
         var expected = Command(source, selection, recipient);
-        var command = seal.Command.Deserialize<RuntimeModelExecutionCommand>(Web) ?? throw new BpmnModelValidationException("The sealed model command is missing.");
+        var command = ReadCommand(seal.Command, source, recipient, "sealed") ?? throw new BpmnModelValidationException("The sealed model command is missing.");
         if (!committed.Recipient.IsEquivalentTo(recipient) || !committed.Seal.IsEquivalentTo(seal) ||
             seal.CommandProtocol != BpmnModelProtocol.Key || seal.CommandProtocolVersion != BpmnModelProtocol.Version ||
             RuntimeCheckpointCommitFingerprint.ComputeModelInput(command) != RuntimeCheckpointCommitFingerprint.ComputeModelInput(expected))
             throw new BpmnModelValidationException("The model dispatch differs from its actual immutable committed seal.");
         return command;
+    }
+
+    private static RuntimeModelExecutionCommand? ReadCommand(JsonElement value, RuntimePostCommitOutboxItem source,
+        RuntimeSubscriptionRecipient recipient, string kind)
+    {
+        try { return value.Deserialize<RuntimeModelExecutionCommand>(Web); }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            throw new BpmnModelValidationException($"The {kind} BPMN command is malformed for source '{source.OutboxItemId}', " +
+                $"recipient '{recipient.RecipientId}', scope '{recipient.StartIdentity.Scope.Value}'.", exception);
+        }
     }
 
     private static RuntimeModelExecutionCommand Command(RuntimePostCommitOutboxItem source, RuntimeSubscriptionDelivery selection,
