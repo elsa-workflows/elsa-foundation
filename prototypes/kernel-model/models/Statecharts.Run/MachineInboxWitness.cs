@@ -22,7 +22,7 @@ internal static class MachineInboxWitness
             new("B", NodeKind.Atomic, "root", Entry: "next", Defaults: new Dictionary<string, JsonNode?> { ["local"] = Values.From(99) }),
             new("C", NodeKind.Final, "root")],
             [new("go", 0, "A", "B", VisitMode.Reenter, "go", phase == "action" ? "dependency" : "action"),
-             new("stop", 0, "B", "C", VisitMode.Reenter, "stop")]);
+             new("stop", 1, "B", "C", VisitMode.Reenter, "stop")]);
         Node Mark(string id) => Wf.Node<ChartMark>(id, ("Name", Binding.Literal(id)), ("Local", Binding.Var("local")));
         var children = new List<Node> { Wf.Node<ChartDependency>("dependency", ("Local", Binding.Var("local"))), Mark("next") };
         children.AddRange(new[] { "entry", "exit", "action" }.Where(n => n != phase).Select(Mark));
