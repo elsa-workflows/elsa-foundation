@@ -285,7 +285,7 @@ public sealed class PublicationMaterialActivationTests
         Assert.NotNull(originalReference.PublicationScope);
         var legacy = new LegacyNativeReader(host.Materials);
         var unpublish = new UnpublishPublicationSlotRequestHandler(host.Authority, host.Coordinator(), host.Publications, legacy, host.References, TimeProvider.System);
-        await Assert.ThrowsAsync<NotSupportedException>(() => unpublish.Handle(new(definition, "default"), default).AsTask());
+        await Assert.ThrowsAsync<NotSupportedException>(() => unpublish.Handle(new(definition, "default"), default));
         Assert.Equal(original.Slot, await host.Authority.FindAsync(definition, "default"));
         Assert.Equal(PublicationStatus.Active, (await host.Publications.FindAsync("opaque-publication"))!.Status);
         Assert.True(WorkflowExecutableSourceReferenceComparer.SameSnapshot(originalReference, (await host.References.FindAsync(originalReference.SourceReferenceId))!));
@@ -293,7 +293,7 @@ public sealed class PublicationMaterialActivationTests
         var inactive = await host.Unpublisher().Handle(new(definition, "default"), default);
         var prior = Assert.Single(await host.Publications.ListBySlotAsync(inactive.SlotId));
         var restore = new RestorePublicationSlotRequestHandler(host.Authority, host.Publications, host.Activator(), legacy, host.References, TimeProvider.System);
-        await Assert.ThrowsAsync<NotSupportedException>(() => restore.Handle(new(definition, "default"), default).AsTask());
+        await Assert.ThrowsAsync<NotSupportedException>(() => restore.Handle(new(definition, "default"), default));
         Assert.Equal(inactive, await host.Authority.FindAsync(definition, "default"));
         Assert.Equal(prior, Assert.Single(await host.Publications.ListBySlotAsync(inactive.SlotId)));
     }
