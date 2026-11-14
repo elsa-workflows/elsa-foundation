@@ -194,8 +194,6 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             cancellationToken);
         return ValueEnvelope.External(type, reference, effectivePolicy);
     }
-
-
 }
 
 public sealed record ActivityCompletionProjection(

@@ -1455,7 +1455,9 @@ This slice activates no Testing library, public runner, Studio or headless surfa
 
 `RuntimeResultProjectionSelector.Select(ActivityResultContract, JsonElement)` is a pure cross-assembly
 helper used by normal `ActivityCompletionProjector` and native fixture preparation. It is an integration
-utility, not a replacement contract. It preserves completion selection: `$` selects the whole value;
+utility, not a replacement contract. It remains public because `Activities` and `Workflows/Runtime` are
+distinct domains: [framework §2.23.3](../../../../../../.specify/memory/constitution-framework.md)
+forbids a production `InternalsVisibleTo` grant across that boundary. It preserves completion selection: `$` selects the whole value;
 an exact top-level name wins over interpreting dots as nested navigation; nested segments are trimmed
 and case-sensitive. It checks every declared persistable projection and every required missing/null
 value before any completion storage write or selected-start admission.
@@ -1466,7 +1468,11 @@ custom converters, CLR object construction, schemas and transient source represe
 Optional absent projections may remain unreferenced; reading one refuses before execution, even for an
 optional producer reference. Explicit null remains a distinct value subject to the consumer contract.
 Unknown projection keys refuse. Protection for the atomic whole fixture includes all projections, so an
-unread sensitive projection still protects the whole fixture and its other views.
+unread sensitive projection still protects the whole fixture and its other views. Fixture-supplied
+protection may exceed the captured minimum and is retained on every view. Consuming an absent optional
+fixture projection refuses during preparation; normal completion can still return an absent optional
+view in its projection document. Normal completion also folds all declared projection minima into the
+atomic result; this is not permission to weaken a fixture's whole-result protection.
 
 The shared result reader returns an already selected fixture envelope to direct bindings and portable
 expression policy/value reads. Both skip their ordinary projection step for that envelope; there is no
