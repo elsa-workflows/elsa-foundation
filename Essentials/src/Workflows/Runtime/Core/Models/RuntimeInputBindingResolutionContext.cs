@@ -29,6 +29,12 @@ public sealed class RuntimeInputBindingResolutionContext
         CorrelationId = correlationId;
     }
 
+    /// <summary>
+    /// The committed workflow snapshot captured by Runtime alongside lexical inputs. Used to validate
+    /// admitted test fixtures; supplying this snapshot does not grant selected-start authority.
+    /// </summary>
+    public WorkflowExecutionState? WorkflowState { get; init; }
+
     public string WorkflowExecutionId { get; }
     public string ActivityExecutionId { get; }
 

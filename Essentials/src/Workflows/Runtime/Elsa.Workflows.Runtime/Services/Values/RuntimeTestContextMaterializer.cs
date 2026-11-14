@@ -474,7 +474,7 @@ internal static class RuntimeTestContextMaterializer
             throw Refused("Test context requires explicit durable values; missing or transient fixtures are unavailable.");
     }
 
-    private static bool SameType(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
+    internal static bool SameType(Elsa.Primitives.Models.ValueTypeDescriptor left, Elsa.Primitives.Models.ValueTypeDescriptor right) =>
         left.Alias == right.Alias && left.CollectionKind == right.CollectionKind && left.SchemaVersion == right.SchemaVersion &&
         left.Schema?.GetRawText() == right.Schema?.GetRawText();
 

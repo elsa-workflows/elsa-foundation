@@ -90,7 +90,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
     /// <summary>
     /// Guards the backstop's hand-maintained scan: every member of a workflow or activity execution state that can carry
     /// a <see cref="ValueEnvelope"/>, found by walking the two state types and the types they compose, must be the member
-    /// of a <see cref="Locations"/> row or an explicitly unavailable result-fixture shape. The refusal theories prove every classification. A new
+    /// of a <see cref="Locations"/> row of a scanned location. The refusal theories prove every classification. A new
     /// envelope-bearing member turns this red until a row, and the scan it proves, are added.
     /// </summary>
     [Fact]
@@ -102,19 +102,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
             .ToArray();
 
         Assert.NotEmpty(discovered);
-        Assert.Equal(discovered, Locations.Values.Select(location => location.Member)
-            .Concat(["WorkflowExecutionState.TestContext.Results[].Result"]).Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
-    public void Outside_result_fixture_location_is_unavailable_before_any_private_checkpoint()
-    {
-        foreach (var value in Payloads.Values.Concat(AcceptedValues.Values))
-        {
-            var exception = Assert.Throws<RuntimeCheckpointCommitValidationException>(() =>
-                RuntimeCheckpointCommitValidator.Validate(Commit(TestContextChanges(value(), "fixture"))));
-            Assert.DoesNotContain(Sentinel, exception.Message, StringComparison.Ordinal);
-        }
+        Assert.Equal(discovered, Locations.Values.Select(location => location.Member).Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -210,6 +198,8 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         {
             IterationFrameRequest = new LoopIterationScopeRequest("loop", "iteration-1", new Dictionary<string, ValueEnvelope> { ["token"] = value })
         })),
+        ["supplied fixture"] = new("WorkflowExecutionState.TestContext.Results[].Result",
+            $"Workflow execution '{WorkflowExecutionId}' test fixture 'outside'", value => TestContextChanges(value, "fixture")),
         ["supplied variable"] = new("WorkflowExecutionState.TestContext.Frames[].Frame.Values[]",
             $"Workflow execution '{WorkflowExecutionId}' test frame 'test-context:7:context:0:scope-1' 'token'", value => TestContextChanges(value, "frame")),
         ["supplied input"] = new("WorkflowExecutionState.TestContext.Frames[].Inputs[]",
