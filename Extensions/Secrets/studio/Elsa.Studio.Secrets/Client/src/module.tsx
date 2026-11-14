@@ -34,19 +34,20 @@ export function register(api: ElsaStudioModuleApi) {
         id: "secrets", requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
         path: "/security/secrets",
         label: "Secrets",
-        component: ({ navigate }) => <SecretsPage context={api.backend} dialogs={api.dialogs} navigate={navigate} />
+        component: ({ navigate }) => <SecretsPage context={api.backend} dialogs={api.dialogs} navigate={navigate} notifications={api.notifications} />
       },
       {
         id: "secrets-legacy",
         path: "/secrets",
         label: "Secrets",
-        component: ({ navigate }) => <SecretsPage context={api.backend} dialogs={api.dialogs} navigate={navigate} />
+        component: ({ navigate }) => <SecretsPage context={api.backend} dialogs={api.dialogs} navigate={navigate} notifications={api.notifications} />
       }
     ]
   });
 
   api.expressionEditors.add({
     id: "elsa.secret-reference-editor", requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
+    presentsField: true,
     order: 100,
     supports: context => context.syntax === "Secret",
     surfaces: {

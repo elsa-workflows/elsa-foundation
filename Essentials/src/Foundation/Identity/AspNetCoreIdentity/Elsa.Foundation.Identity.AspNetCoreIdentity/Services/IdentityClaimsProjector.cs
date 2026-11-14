@@ -31,8 +31,10 @@ internal static class IdentityClaimsProjector
         Replace(identity, "sub", user.Id);
         Replace(identity, IdentityClaimTypes.TenantId, user.TenantId);
         // An Elsa user is keyed by its id, never by a provider's subject, so no subject provider may ride along.
-        foreach (var subjectProvider in identity.FindAll(IdentityClaimTypes.SubjectProvider).ToArray())
-            identity.RemoveClaim(subjectProvider);
+        foreach (var type in new[] { IdentityClaimTypes.SubjectProvider, IdentityClaimTypes.SubjectIssuer,
+                     IdentityClaimTypes.ExternalSubject, IdentityClaimTypes.TokenSubjectKey, IdentityClaimTypes.SessionId })
+            foreach (var claim in identity.Claims.Where(claim => string.Equals(claim.Type, type, StringComparison.OrdinalIgnoreCase)).ToArray())
+                identity.RemoveClaim(claim);
 
         if (!string.IsNullOrWhiteSpace(user.DisplayName))
             AddIfMissing(identity, ClaimTypes.Name, user.DisplayName);

@@ -30,12 +30,14 @@
     <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\Releases\Capture\Core\Elsa.Workflows.Publishing.Releases.Capture.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api" />
     <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Api.Tests" />
     <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workflows.Publishing.Releases.NativeCapture.Tests" />
   </ItemGroup>
 
 </Project>

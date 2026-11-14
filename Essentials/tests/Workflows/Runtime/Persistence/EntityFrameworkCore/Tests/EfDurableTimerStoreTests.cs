@@ -234,7 +234,7 @@ public sealed class EfDurableTimerStoreTests
             () => fixture.Store.FindAsync("wf-skew", "timer-1").AsTask());
         Assert.Equal("RuntimeOperationalState", skew.Family);
         Assert.Equal("2", skew.Found);
-        Assert.Equal(RuntimeOperationalStateEfModule.SchemaVersion, skew.Expected);
+        Assert.Equal(RuntimeOperationalStateEfModule.Chain.CurrentVersion, skew.Expected);
     }
 
     [Fact]

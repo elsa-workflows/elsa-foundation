@@ -201,6 +201,8 @@ internal sealed class NormalizedExternalAuthenticationHandler(
             new Claim("sub", parts[1]),
             new Claim(IdentityClaimTypes.TenantId, AspNetCoreIdentityDefaults.DefaultTenantId),
             new Claim(IdentityClaimTypes.Provider, parts[0]),
+            new Claim(IdentityClaimTypes.SubjectProvider, parts[0]),
+            new Claim(IdentityClaimTypes.SubjectIssuer, "https://validated.example/"),
             new Claim(IdentityClaimTypes.Normalized, "v1")
         ], AuthenticationSchemeName);
         return Task.FromResult(AuthenticateResult.Success(

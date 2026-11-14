@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 const repo=process.cwd();
 const { chromium, expect }=await import(pathToFileURL(path.join(repo,'Studio/node_modules/@playwright/test/index.mjs')).href);
+const { signInThroughStudio }=await import(pathToFileURL(path.join(repo,'tools/bpmn/studio_ready.mjs')).href);
 if(!process.argv[2])throw new Error('Usage: node tools/bpmn/drive_direct_etl_studio.mjs OUTPUT');
 const resuming=process.argv.includes('--resume-after-restored');
 const driverSource=execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim();
@@ -26,10 +27,7 @@ function observe(page){page.setDefaultTimeout(30000);currentPage=page;page.on('p
  events.push({method:request.method(),path:url.pathname,status:response.status(),request:request.postDataJSON(),response:body});})();pending.add(read);read.finally(()=>pending.delete(read));
 });}
 async function shot(page,name){if(resuming)name='resumed-'+name;await Promise.all([...pending]);await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:path.join(output,name+'.png'),fullPage:true});write(name+'.json',{url:page.url(),text:await page.locator('body').innerText(),viewport:page.viewportSize()});write('browser-events.json',{actions,events,errors});}
-async function login(page,url){await page.goto(url);const username=page.getByLabel('Username',{exact:true});
- const visible=await username.waitFor({state:'visible',timeout:5000}).then(()=>true,()=>false);
- if(visible){await username.fill('admin');await page.getByLabel('Password',{exact:true}).fill('Password123!');await page.getByRole('button',{name:'Sign in',exact:true}).click();}
- await page.waitForURL(value=>value.origin===ready.studioUrl,{timeout:30000});await expect(page.getByRole('main').first()).toBeVisible({timeout:30000});}
+async function login(page,url){await page.goto(url);await signInThroughStudio(page,expect,{studioOrigin:ready.studioUrl});}
 async function command(action,label){const receipt=path.join(output,(action==='finish'?'process':label)+'.json');
  if(fs.existsSync(receipt))throw new Error('Refusing to overwrite a checkpoint.');fs.writeFileSync(path.join(output,'command.json'),JSON.stringify({action,label}));await expect.poll(()=>fs.existsSync(receipt),{timeout:90000,intervals:[200,500]}).toBe(true);return JSON.parse(fs.readFileSync(receipt,'utf8'));}
 async function binding(page,label,value){const select=page.getByLabel(label,{exact:true});await expect(select).toBeEnabled();await select.selectOption(value);await expect(select).toHaveValue(value);}

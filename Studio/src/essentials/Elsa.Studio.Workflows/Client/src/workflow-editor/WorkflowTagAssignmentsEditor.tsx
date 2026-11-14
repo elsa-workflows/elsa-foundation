@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   createWorkflowTag, getWorkflowTag, listWorkflowTags, workflowTagAssignmentKey,
@@ -111,8 +111,8 @@ export function WorkflowTagAssignmentsEditor({ context, assignments, disabled, a
     } catch (caught) { if (generation === generationRef.current) setError(message(caught)); }
     finally { if (generation === generationRef.current) setLoading(false); }
   };
-  return <div className="wf-tag-editor">
-    <label id={`${id}-label`} htmlFor={`${id}-input`}>Tags</label>
+  return <div className="wf-tag-editor"><StudioField labelId={`${id}-label`} controlId={`${id}-input`} label="Tags">
+
     <div className="wf-tag-input" data-disabled={locked || undefined}>
       {assignments.map(assignment => <span className="wf-tag-chip" key={workflowTagAssignmentKey(assignment)}>
         <span>{labelFor(assignment)}</span>
@@ -151,7 +151,7 @@ export function WorkflowTagAssignmentsEditor({ context, assignments, disabled, a
     {creating ? <p role="status">Creating tag…</p> : null}
     {status ? <p className="wf-library-help" role="status">{status}</p> : null}
     {error ? <p role="alert">{error} <StudioButton size="sm" disabled={locked} onClick={() => { setRefresh(value => value + 1); setOpen(true); }}>Retry tag search</StudioButton></p> : null}
-  </div>;
+  </StudioField></div>;
 }
 
 function message(caught: unknown) { return caught instanceof Error ? caught.message : "The server could not complete this request."; }

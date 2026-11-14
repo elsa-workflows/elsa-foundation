@@ -53,6 +53,8 @@ public sealed class ConnectionsApiTests
         Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
         var metadata = await corrected.Content.ReadFromJsonAsync<ConnectionMetadata>(Json);
         Assert.Equal("backend.api-1_test", metadata!.Name);
+        Assert.False(string.IsNullOrWhiteSpace(metadata.IncarnationId));
+        Assert.True(metadata.Version > 0);
     }
 
     [Fact]

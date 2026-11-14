@@ -6,7 +6,7 @@
     <ProjectReference Include="../../../Essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
-    <ProjectReference Include="../../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />

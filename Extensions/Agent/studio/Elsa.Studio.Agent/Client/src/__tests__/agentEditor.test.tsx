@@ -80,7 +80,7 @@ function type(element: HTMLInputElement | HTMLTextAreaElement, text: string) {
 
 const connectionSelect = (container: HTMLElement) => field(container, "Model connection") as unknown as HTMLSelectElement;
 const field = (container: HTMLElement, label: string) =>
-  [...container.querySelectorAll("label.studio-field")].find(x => x.querySelector(".studio-field-label")?.textContent === label)!.querySelector("input, textarea, select") as HTMLInputElement;
+  [...container.querySelectorAll<HTMLLabelElement>("label.studio-field-label")].find(x => x.textContent === label)!.control as HTMLInputElement;
 const hasField = (container: HTMLElement, label: string) => [...container.querySelectorAll(".studio-field-label")].some(x => x.textContent === label);
 const button = (container: HTMLElement, text: string) => [...container.querySelectorAll("button")].find(x => x.textContent?.includes(text));
 
@@ -292,7 +292,7 @@ describe("agent editor", () => {
     await settle();
     expect(calls.value).toBe("2.5");
     expect(calls.getAttribute("aria-invalid")).toBe("true");
-    const message = document.getElementById(calls.getAttribute("aria-describedby")!)!;
+    const message = document.getElementById(calls.getAttribute("aria-describedby")!.split(/\s+/)[0])!;
     expect(message.textContent).toBe("Not saved: enter a whole number. The saved value 8 is kept.");
     expect(latest().limits.maximumModelCalls).toBe(8);
 
@@ -323,7 +323,7 @@ describe("agent editor", () => {
     expect(container.textContent).toContain("There are no model connections you can use yet.");
     const select = connectionSelect(container);
     expect(select.getAttribute("aria-invalid")).toBe("true");
-    expect(document.getElementById(select.getAttribute("aria-describedby")!)?.textContent).toBe("Choose a model connection.");
+    expect(document.getElementById(select.getAttribute("aria-describedby")!.split(/\s+/)[0])?.textContent).toBe("Choose a model connection.");
     expect(connectionSelect(container).querySelectorAll("optgroup")).toHaveLength(0);
   });
 

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Offline observer regression tests. Fakes stay here and are refused by the live feature. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <OutputType>Library</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <ProjectReference Include="__SOURCE_ROOT__/Extensions/Weaver/src/GitHubCopilot/Elsa.Weaver.GitHubCopilot.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj" />
+    <Compile Include="__SOURCE_ROOT__/tools/studio/Dashboard.Conformance.Probe/live/DashboardLiveQualification.cs" />
+    <Compile Include="__SOURCE_ROOT__/tools/studio/Dashboard.Conformance.Probe/live/ObserverTests.cs.in" />
+  </ItemGroup>
+</Project>

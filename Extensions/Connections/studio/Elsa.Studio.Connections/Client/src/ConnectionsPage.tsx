@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Plus, RefreshCw, X } from "lucide-react";
-import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Plus, RefreshCw, X } from "lucide-react";
+import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioSearchInput , StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar} from "@elsa-workflows/studio-ui";
 import { deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
@@ -10,9 +10,10 @@ import { ConnectionList } from "./ConnectionList";
 
 type Notice = { message: string; error?: boolean };
 
-export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
+export function ConnectionsPage({ context, dialogs, notifications }: { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi }) {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const appliedSearchRef = useRef(appliedSearch); appliedSearchRef.current = appliedSearch;
   const [items, setItems] = useState<ConnectionMetadata[]>([]);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [descriptors, setDescriptors] = useState<ConnectionDescriptorsResponse | null>(null);
@@ -27,6 +28,8 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   const operationRef = useRef<object | null>(null);
   const searchFormRef = useRef<HTMLFormElement>(null);
   const focusAfterCreate = useRef(false);
+  const owner = useMemo(() => ({ context }), [context]);
+  const currentOwner = useRef(owner); currentOwner.current = owner;
   currentContextRef.current = context;
   const contextIsLoaded = loadedContext === context;
   const visibleItems = contextIsLoaded ? items : [];
@@ -104,14 +107,15 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
       if (action === "Test") {
         const result = await testConnection(requestContext, connection.name);
         if (isCurrent()) {
-          setNotice({ message: result.message || (result.succeeded ? "Test succeeded." : "Test failed."), error: !result.succeeded });
+          if (result.succeeded) notifications?.notify({ level: "success", title: "Connection test succeeded.", message: result.message || undefined });
+          else setNotice({ message: result.message || "Test failed.", error: true });
           await load(appliedSearch);
         }
       } else {
         if (action === "Revoke") await revokeConnection(requestContext, connection.name);
         else await deleteConnection(requestContext, connection.name);
         if (!isCurrent()) return;
-        setNotice({ message: `Connection '${connection.name}' ${action === "Revoke" ? "revoked" : "deleted"}.` });
+        notifications?.notify({ level: "success", title: `Connection '${connection.name}' ${action === "Revoke" ? "revoked" : "deleted"}.` });
         await load(appliedSearch);
       }
     } catch (cause) {
@@ -122,7 +126,7 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   }
 
   const notification = contextIsLoaded && notice ? <div className={`connections-notice${notice.error ? " connections-notice--error" : ""}`} role={notice.error ? "alert" : "status"}>
-    {notice.error ? <AlertCircle size={16} aria-hidden="true" /> : <CheckCircle2 size={16} aria-hidden="true" />}<span>{notice.message}</span>
+    <AlertCircle size={16} aria-hidden="true" /><span>{notice.message}</span>
     <button type="button" className="connections-icon-button" aria-label="Dismiss notification" onClick={() => setNotice(null)}><X size={14} aria-hidden="true" /></button>
   </div> : null;
 
@@ -143,6 +147,14 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} shown</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}
-    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={created => { focusAfterCreate.current = true; setNotice({ message: `Connection '${created.name}' created.` }); setCreating(false); setSelectedName(null); setSearch(appliedSearch); void load(appliedSearch); }} /> : null}
+    {creating && visibleDescriptors ? <ConnectionCreateDialog context={context} descriptors={visibleDescriptors} onCancel={() => setCreating(false)} onCreated={(created, canNotify) => {
+      if (currentOwner.current !== owner) return;
+      if (canNotify) {
+        focusAfterCreate.current = true;
+        notifications?.notify({ level: "success", title: `Connection '${created.name}' created.` });
+        setCreating(false); setSelectedName(null); setSearch(appliedSearch);
+      }
+      void load(appliedSearchRef.current);
+    }} /> : null}
   </StudioPage>;
 }

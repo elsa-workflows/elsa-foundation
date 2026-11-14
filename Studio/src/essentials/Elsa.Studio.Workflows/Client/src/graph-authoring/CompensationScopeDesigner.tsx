@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
 import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CircleSlash, CornerUpLeft, Hand, Hourglass, Loader, Minus, OctagonX, Plus, RotateCw, Timer, Trash2, Undo2, UserCheck, X } from "lucide-react";
@@ -206,8 +207,8 @@ export function CompensationScopeDesigner({
           </button>
         ) : null}
         {runtime?.occurrences && onSelectExecution ? (
-          <div className="wf-compensation-occurrence">
-            <label htmlFor={`${headingId}-occurrence`}>Occurrence</label>
+          <div className="wf-compensation-occurrence"><StudioField controlId={`${headingId}-occurrence`} label="Occurrence">
+
             <select
               id={`${headingId}-occurrence`}
               value={runtime.scopeActivityExecutionId ?? ""}
@@ -223,7 +224,7 @@ export function CompensationScopeDesigner({
             <span id={`${headingId}-occurrences`} className="wf-visually-hidden">
               This scope ran {runtime.occurrences.length} times. Choose the occurrence to show.
             </span>
-          </div>
+          </StudioField></div>
         ) : null}
       </header>
 
@@ -304,7 +305,7 @@ export function CompensationScopeDesigner({
                   {readOnly ? (
                     <span className="wf-compensation-name">{name}</span>
                   ) : (
-                    <input
+                    <StudioField label={`Name of step ${index + 1}`}><input
                       className="wf-compensation-name-input"
                       aria-label={`Name of step ${index + 1}`}
                       aria-describedby={problemId}
@@ -314,7 +315,7 @@ export function CompensationScopeDesigner({
                         const name = event.target.value;
                         change(current => updateCompensationStep(current, index, { name }), `Renamed step ${index + 1}`);
                       }}
-                    />
+                    /></StudioField>
                   )}
                   {!readOnly ? (
                     <div className="wf-compensation-actions" aria-label={`${name} actions`}>

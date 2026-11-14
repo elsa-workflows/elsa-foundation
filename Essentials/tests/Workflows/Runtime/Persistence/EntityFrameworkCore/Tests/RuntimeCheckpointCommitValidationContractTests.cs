@@ -161,10 +161,10 @@ public sealed class RuntimeCheckpointCommitValidationContractTests
             Mutated(parts => parts.Inspections[0] = parts.Inspections[0] with { Operation = RuntimeStateChangeOperation.Delete }),
             OperationMessage("activity execution inspection", "'Upsert'", RuntimeStateChangeOperation.Delete)),
         ["inspection-other-workflow"] = Invalid(
-            Mutated(parts => parts.Inspections[0] = Change("activity-a", Inspection("activity-a", OtherWorkflowId))),
+            Mutated(parts => parts.Inspections[0] = Change("activity-a", RuntimeCheckpointCommitContract.Inspection("activity-a", OtherWorkflowId))),
             WorkflowMessage("Activity execution inspection state change")),
         ["inspection-scope-provenance"] = Invalid(
-            Mutated(parts => parts.Inspections[0] = Change("activity-a", Inspection("activity-a") with { ExecutionScopeId = "scope-own" })),
+            Mutated(parts => parts.Inspections[0] = Change("activity-a", RuntimeCheckpointCommitContract.Inspection("activity-a") with { ExecutionScopeId = "scope-own" })),
             "Activity execution inspection ExecutionScopeId must match its scheduling provenance when both are present."),
 
         ["incident-delete"] = Invalid(

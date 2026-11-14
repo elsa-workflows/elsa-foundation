@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// begins or a lease is taken. Unsupported participants are rejected explicitly until their EF adapters can stage
 /// changes through this same context.
 /// </remarks>
-public sealed class EfRuntimeCheckpointCommitStore(
+public sealed partial class EfRuntimeCheckpointCommitStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     TimeProvider? timeProvider = null,
@@ -78,8 +78,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
     private async ValueTask StageExactBookmarkResumeAsync(RuntimeCheckpointCommit commit, string scope,
         Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes, CancellationToken cancellationToken)
     {
-        if (commit.ExpectedBookmarkResume is not { } expected) return;
         commit.EnsureExactBookmarkResumeShape();
+        if (commit.ExpectedBookmarkResume is not { } expected) return;
         if (accessContextAccessor.Current.RequireScope().Value != scope)
             throw new InvalidOperationException("The exact bookmark checkpoint changed physical scope.");
         var id = EfBookmarkStateStore.CreateId(scope, expected.WorkflowExecutionId, expected.BookmarkId);
@@ -94,7 +94,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
             throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
         var workflow = EfWorkflowExecutionStateStore.ReadChecked(workflowRow, scope, expected.WorkflowExecutionId);
         var activity = EfActivityExecutionStateStore.ReadChecked(activityRow, scope, expected.WorkflowExecutionId, expected.ActivityExecutionId);
-        accessContextAccessor.Current.EnsureTenantScope(workflow.TenantId);
+        if (commit.IngressWaitOrigin is null) accessContextAccessor.Current.EnsureTenantScope(workflow.TenantId);
+        else await ValidateIngressWaitCheckpointAsync(commit, new(scope), cancellationToken);
         var observed = new BookmarkStateObservation(bookmark, row.Revision, new PersistenceScope(scope));
         if (!expected.MatchesAdmission(observed, workflow, activity, new(scope), _timeProvider.GetUtcNow()))
             throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
@@ -204,7 +205,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
         if (commit.ExpectedModelExecution is { } expectedModel)
         {
             accessContextAccessor.Current.EnsureScope(expectedModel.Scope);
-            accessContextAccessor.Current.EnsureTenantScope(expectedModel.TenantId);
+            if (expectedModel.IngressOrigin is null) accessContextAccessor.Current.EnsureTenantScope(expectedModel.TenantId);
+            else if (expectedModel.IngressOrigin.Scope != expectedModel.Scope)
+                throw new InvalidDataException("The authorizing ingress model changed physical scope.");
             EfRuntimeOperationalStoreSupport.ValidateIdentity(expectedModel.ExecutionId, nameof(expectedModel.ExecutionId));
             if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
                 throw new NotSupportedException("Model-owned native worker admission requires an immediate physical checkpoint.");
@@ -212,7 +215,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
         if (commit.ModelState is { } model)
         {
             accessContextAccessor.Current.EnsureScope(model.State.Scope);
-            accessContextAccessor.Current.EnsureTenantScope(model.State.TenantId);
+            if (model.State.IngressOrigin is null) accessContextAccessor.Current.EnsureTenantScope(model.State.TenantId);
+            else if (model.State.IngressOrigin.Scope != model.State.Scope)
+                throw new InvalidDataException("The ingress model decision changed physical scope.");
             EfRuntimeOperationalStoreSupport.ValidateIdentity(model.State.ExecutionId, nameof(model.State.ExecutionId));
             EfRuntimeOperationalStoreSupport.ValidateIdentity(model.Input.InputId, nameof(model.Input.InputId));
             if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
@@ -231,7 +236,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
         ValidateThinSlice(commit);
         if (commit.StateChanges.WorkflowExecution is { } workflowExecution)
         {
-            accessContextAccessor.Current.EnsureTenantScope(workflowExecution.State.TenantId);
+            if (workflowExecution.State.StimulusDeliveryOrigin is null && workflowExecution.State.IngressOrigin is null && workflowExecution.State.ModelWorkOrigin?.IngressOrigin is null)
+                accessContextAccessor.Current.EnsureTenantScope(workflowExecution.State.TenantId);
             if (workflowExecution.State.TestScope is { } testScope)
                 accessContextAccessor.Current.EnsureTenantScope(testScope.TenantId);
         }
@@ -477,6 +483,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     }
                 }
 
+                await StageIngressExecutionAuthorityAsync(commit, scope, writeCancellationToken);
+                await StageIngressModelAuthorityAsync(commit, scope, writeCancellationToken);
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
                 await StageModelParentWaitAsync(commit, scope, touchedTestScopes, writeCancellationToken);
 
@@ -750,7 +758,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             throw new NotSupportedException("The R19 EF checkpoint slice supports scheduler upserts only.");
     }
 
-    private static RuntimeCheckpointCommitEntity ToEntity(
+    private RuntimeCheckpointCommitEntity ToEntity(
         RuntimeCheckpointCommit commit,
         string scope,
         string id,
@@ -777,7 +785,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             JsonOptions),
         PendingPostCommitWorkIdsJson = JsonSerializer.Serialize(PendingOutboxIds(commit), JsonOptions),
         ConsumedSchedulerWorkItemIdsJson = JsonSerializer.Serialize(ConsumedSchedulerWorkIds(commit), JsonOptions),
-        SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+        SchemaVersion = RuntimeSchemaWriteVersion.Operational(context),
         Revision = 1
     };
 

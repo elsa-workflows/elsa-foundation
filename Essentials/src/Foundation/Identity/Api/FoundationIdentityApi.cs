@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -155,7 +154,7 @@ public static class FoundationIdentityApi
             return;
         }
 
-        if (!TryGetTokenSubject(normalizedPrincipal, out var tokenSubject, out var subject))
+        if (!context.RequestServices.GetRequiredService<ITokenSubjectResolver>().TryResolve(normalizedPrincipal, out var tokenSubject))
         {
             await Results.Unauthorized().ExecuteAsync(context);
             return;
@@ -166,10 +165,11 @@ public static class FoundationIdentityApi
             .ToArray();
         var result = await context.RequestServices.GetRequiredService<ITokenService>()
             .IssueAsync(
-                new TokenIssueRequest(subject, tokenSubject.TenantId, permissions) { CanonicalUserId = tokenSubject.UserId, Provider = tokenSubject.Provider },
+                new TokenIssueRequest(tokenSubject.UserId ?? tokenSubject.ProviderSubject!, tokenSubject.TenantId, permissions)
+                { CanonicalUserId = tokenSubject.UserId, Provider = tokenSubject.Provider, SubjectIssuer = tokenSubject.Issuer },
                 context.RequestAborted);
 
-        await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
+        await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt, result.RefreshToken), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
     }
 
     private static async Task<bool> IsFirstPartyBearerAsync(HttpContext context)
@@ -260,7 +260,7 @@ public static class FoundationIdentityApi
         var tokens = context.RequestServices.GetService<ITokenService>();
         if (tokens is null ||
             !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(session, out var principal) ||
-            !TryGetTokenSubject(principal, out var subject, out _))
+            !context.RequestServices.GetRequiredService<ITokenSubjectResolver>().TryResolve(principal, out var subject))
             return true;
 
         try
@@ -355,47 +355,6 @@ public static class FoundationIdentityApi
 
         return null;
     }
-
-    /// <summary>
-    /// The identity a normalized principal's tokens are stored under, and the subject its JWT names. An Elsa user (one
-    /// <c>elsa.identity.user_id</c> claim) is keyed by tenant and user, whichever provider signed it in; any other
-    /// principal by tenant, its one provider and its subject, so a provider's <c>sub</c> never shares tokens with
-    /// another provider's, with the same <c>sub</c> in another tenant, or with an Elsa user id (#2848). On a first-party
-    /// bearer the provider claim names the issuing module, so the subject's own provider is read from the
-    /// <c>elsa.identity.subject_provider</c> claim the exchange stamped. A principal with several user ids or providers,
-    /// or with neither, has no token subject: it gets no token and revokes none.
-    /// </summary>
-    private static bool TryGetTokenSubject(ClaimsPrincipal principal, [NotNullWhen(true)] out TokenSubject? tokenSubject, [NotNullWhen(true)] out string? subject)
-    {
-        tokenSubject = null;
-        subject = Subject(principal);
-        var tenantId = principal.FindFirstValue(IdentityClaimTypes.TenantId) ?? "default";
-        var users = principal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
-        var providers = principal.FindAll(IdentityClaimTypes.SubjectProvider).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
-        if (providers.Length == 0)
-            providers = principal.FindAll(IdentityClaimTypes.Provider).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
-        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(tenantId) || users.Length > 1 || providers.Length > 1)
-            return false;
-
-        if (users.Length == 1)
-        {
-            if (string.IsNullOrWhiteSpace(users[0]))
-                return false;
-            tokenSubject = TokenSubject.ForUser(tenantId, users[0]);
-            return true;
-        }
-
-        if (providers.Length == 1 && !string.IsNullOrWhiteSpace(providers[0]))
-        {
-            tokenSubject = TokenSubject.ForProviderSubject(tenantId, providers[0], subject);
-            return true;
-        }
-
-        return false;
-    }
-
-    private static string? Subject(ClaimsPrincipal principal) =>
-        principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
 
     private static string RouteValue(HttpContext context, string name) =>
         context.Request.RouteValues.TryGetValue(name, out var value) ? Convert.ToString(value) ?? string.Empty : string.Empty;

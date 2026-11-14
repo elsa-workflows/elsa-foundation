@@ -12,7 +12,7 @@ import type {
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { useStudioThemeLayout } from "@elsa-workflows/studio-sdk";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState, WorkflowDraft, WorkflowInput } from "./workflowTypes";
 import {
   buildCanvas,
@@ -250,8 +250,8 @@ export function ActivityGraphPublicInterfaceEditor({
         </li>)}</ul> : <p>No completion paths connected yet.</p>}
         {unresolvedOutcomes.length > 0 ? <p role="alert">Outcomes still needing a connection: {unresolvedOutcomes.map(item => item.name).join(", ")}.</p> : null}
         {outcomeMappingOptions.sourceOutcomes.length === 0 ? <p role="status">This designer does not expose any connectable completion paths.</p> : outcomeMappingOptions.boundaryOutcomes.length === 0 ? <p role="status">Add an enabled outcome above before connecting a completion path.</p> : <div className="ad-graph-outcome-mapping-add">
-          <label><span>When the designer finishes with</span><select aria-label="Designer outcome" value={sourceOutcomeReferenceKey} onChange={event => setSourceOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an outcome</option>{outcomeMappingOptions.sourceOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey} disabled={payload.outcomeMappings.some(mapping => mapping.sourceOutcomeReferenceKey === outcome.referenceKey)}>{outcome.name}</option>)}</select></label>
-          <label><span>Return this activity outcome</span><select aria-label="Activity outcome" value={boundaryOutcomeReferenceKey} onChange={event => setBoundaryOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an emitted outcome</option>{outcomeMappingOptions.boundaryOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey}>{outcome.name}</option>)}</select></label>
+          <StudioField label={<><span>When the designer finishes with</span></>}><select aria-label="Designer outcome" value={sourceOutcomeReferenceKey} onChange={event => setSourceOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an outcome</option>{outcomeMappingOptions.sourceOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey} disabled={payload.outcomeMappings.some(mapping => mapping.sourceOutcomeReferenceKey === outcome.referenceKey)}>{outcome.name}</option>)}</select></StudioField>
+          <StudioField label={<><span>Return this activity outcome</span></>}><select aria-label="Activity outcome" value={boundaryOutcomeReferenceKey} onChange={event => setBoundaryOutcomeReferenceKey(event.target.value)} disabled={readOnly}><option value="">Select an emitted outcome</option>{outcomeMappingOptions.boundaryOutcomes.map(outcome => <option key={outcome.referenceKey} value={outcome.referenceKey}>{outcome.name}</option>)}</select></StudioField>
           <StudioButton size="sm" onClick={addOutcomeMapping} disabled={readOnly || !sourceOutcomeReferenceKey || !boundaryOutcomeReferenceKey}>Connect</StudioButton>
         </div>}
       </section> : <section className="ad-inline-status" role="status">
@@ -1140,7 +1140,7 @@ function ActivityGraphOutputMappingEditor({
         {output.isRequired ? <span role="alert">Choose a value for this required output.</span> : <span className="wf-muted">No value is configured.</span>}
         <StudioButton size="sm" onClick={add} disabled={readOnly || available.length === 0}>Set value</StudioButton>
       </> : <>
-        <label><span>Value source</span><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={readOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></label>
+        <StudioField label={<><span>Value source</span></>}><select value={currentSyntax} onChange={event => changeSyntax(event.target.value)} disabled={readOnly}><option value="">Select an expression type</option>{available.map(item => <option key={item.descriptor.type} value={item.descriptor.type}>{item.descriptor.displayName || item.descriptor.type}</option>)}</select></StudioField>
         {Editor ? <Editor
           descriptor={descriptor}
           syntax={currentSyntax}
