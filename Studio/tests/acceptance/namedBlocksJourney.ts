@@ -178,6 +178,12 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       const item = { host, kind, before, baselineVersion } as typeof proof[number]; proof.push(item);
       const route = host === "workflow" ? `/workflows/definitions?backend=legacy&definition=${definitionId}` : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`;
       await page.goto(route); await canvas();
+      if (host === "workflow") {
+        // Loading expands wire inputs. A normal save acknowledges their canonical form before the
+        // preview freezes the source, including Object literals imported as raw JSON numbers.
+        await page.getByRole("button", { name: "Save", exact: true }).click();
+        await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+      }
       await expect(row("one")).toBeVisible();
       if (host === "activity" && kind === "flowchart") await terminalAffordance();
       await row("one").click();
