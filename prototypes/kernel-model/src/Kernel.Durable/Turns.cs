@@ -80,6 +80,7 @@ public sealed class Delivery(Message message, long seq)
     internal long ObservedAt;        // monotonic observation time, used when a command matures before trial selection
     internal long CompletedOrder;    // ordinal when the driver published its result in this owner
     internal long CompletedAt;       // a durable ticket alone cannot establish when its result became ready
+    internal volatile bool AwaitingJobMark; // a queued volatile job promoted behind the poll horizon
     public bool HasRequestAddress => RequestAddress is not null;
     internal string? RequestAddress;   // a single live response to a retryable PostRequest; never persisted
     internal bool Durable;            // it is a row
@@ -164,6 +165,7 @@ public sealed class TurnInput
 public sealed class TurnOutcome(string instance)
 {
     internal Slot? Slot;
+    internal bool RestrictsJobEntry;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
