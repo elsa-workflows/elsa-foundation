@@ -1,3 +1,4 @@
+import type { GraphAuthoringView } from "./GraphAuthoringView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyEdgeChanges,
@@ -34,7 +35,9 @@ export function useGraphAuthoringCanvas<TDocument>({
   applyModel,
   reconcileDocument,
   documentSignature = stableSignature,
-  onChange
+  onChange,
+  captureView,
+  restoreView
 }: {
   document: TDocument;
   adapter: GraphDocumentAdapter<TDocument>;
@@ -56,7 +59,13 @@ export function useGraphAuthoringCanvas<TDocument>({
   /** Compare server acknowledgements using the host's persisted representation. */
   documentSignature?(document: TDocument): string;
   onChange(document: TDocument): void;
+  captureView?(): GraphAuthoringView;
+  restoreView?(view: GraphAuthoringView, document: TDocument): void;
 }) {
+  const viewHandlersRef = useRef({ captureView, restoreView });
+  viewHandlersRef.current = { captureView, restoreView };
+  type Position = { document: TDocument; view?: GraphAuthoringView };
+  const position = useCallback((source: TDocument): Position => ({ document: source, view: viewHandlersRef.current.captureView?.() }), []);
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const derive = useCallback(
@@ -74,7 +83,7 @@ export function useGraphAuthoringCanvas<TDocument>({
   const [edges, setEdges] = useState(initial.edges);
   const documentRef = useRef(document);
   const emittedSignatureRef = useRef<string | null>(null);
-  const historyRef = useRef(createActivityGraphHistory<TDocument>(resetKey));
+  const historyRef = useRef(createActivityGraphHistory<Position>(resetKey));
   const [, setHistoryVersion] = useState(0);
   const signature = documentSignature(document);
 
@@ -92,14 +101,14 @@ export function useGraphAuthoringCanvas<TDocument>({
       emittedSignatureRef.current = null;
       return;
     }
-    historyRef.current = createActivityGraphHistory<TDocument>(resetKey);
+    historyRef.current = createActivityGraphHistory<Position>(resetKey);
     setHistoryVersion(version => version + 1);
   }, [resetKey, signature]);
 
   const emit = useCallback((candidate: TDocument, record = true) => {
     const next = reconcileDocument?.(documentRef.current, candidate) ?? candidate;
     if (record) {
-      historyRef.current = recordActivityGraphEdit(historyRef.current, documentRef.current);
+      historyRef.current = recordActivityGraphEdit(historyRef.current, position(documentRef.current));
     }
     documentRef.current = next;
     emittedSignatureRef.current = documentSignature(next);
@@ -108,7 +117,7 @@ export function useGraphAuthoringCanvas<TDocument>({
     setEdges(model.edges);
     setHistoryVersion(version => version + 1);
     onChange(next);
-  }, [derive, documentSignature, onChange, reconcileDocument]);
+  }, [derive, documentSignature, onChange, position, reconcileDocument]);
 
   const commitCanvas = useCallback((
     nextNodes: Node<WorkflowNodeData>[],
@@ -119,18 +128,20 @@ export function useGraphAuthoringCanvas<TDocument>({
   }, [applyModel, edges, emit]);
 
   const undo = useCallback(() => {
-    const step = undoActivityGraph(historyRef.current, documentRef.current);
+    const step = undoActivityGraph(historyRef.current, position(documentRef.current));
     if (!step) return;
     historyRef.current = step.state;
-    emit(step.document, false);
-  }, [emit]);
+    emit(step.document.document, false);
+    if (step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+  }, [emit, position]);
 
   const redo = useCallback(() => {
-    const step = redoActivityGraph(historyRef.current, documentRef.current);
+    const step = redoActivityGraph(historyRef.current, position(documentRef.current));
     if (!step) return;
     historyRef.current = step.state;
-    emit(step.document, false);
-  }, [emit]);
+    emit(step.document.document, false);
+    if (step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+  }, [emit, position]);
 
   return {
     nodes,
