@@ -1,0 +1,31 @@
+{
+  "id": "workflow-variable-expression-v1",
+  "definitionId": "workflow-variable-expression",
+  "name": "workflow-variable-expression",
+  "description": "Test-owned #3201 workflow: read a Variable expression and store the value in a different workflow variable.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    { "id": "source", "name": "source", "typeName": "String", "value": "read through Variable" },
+    { "id": "destination", "name": "destination", "typeName": "String" }
+  ],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isLatest": true,
+  "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "copy", "nodeId": "copy", "name": "copy", "type": "Elsa.SetVariable", "version": 1,
+    "variable": { "id": "destination", "name": "destination", "typeName": "String" },
+    "value": {
+      "typeName": "String",
+      "expression": {
+        "type": "Variable",
+        "value": { "id": "source", "name": "old-source-name", "typeName": "String" }
+      }
+    }
+  }
+}
