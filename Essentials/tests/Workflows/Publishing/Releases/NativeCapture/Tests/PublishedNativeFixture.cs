@@ -30,6 +30,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executables;
+using PublishingWorkflowExecutableHasher = Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.EntityFrameworkCore;
@@ -88,7 +90,7 @@ internal sealed class PublishedNativeFixture : IAsyncDisposable
         var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
         var compiler = new WorkflowExecutableCompiler(sp.GetRequiredService<IActivityDataSelectionAnalyzer>(), versions, activityVersions, activityPublications,
             templates, f.References, new ActivityTemplatePlacer(activityPublications, templates, f.References, new Sha256ActivityPlacementHasher(), structures, inputs, outputs),
-            inputs, outputs, new WorkflowExecutableHasher(), new ActivityTreeProjector(structures), new ExecutableNodeCompiler(structures, types, inputs, outputs));
+            inputs, outputs, new PublishingWorkflowExecutableHasher(), new ActivityTreeProjector(structures), new ExecutableNodeCompiler(structures, types, inputs, outputs));
         var authority = new EfWorkflowActivationAuthority(f.Runtime, access); var bindings = new EfWorkflowTriggerBindingStore(f.Runtime, access);
         var extractor = new WorkflowTriggerBindingExtractor([]); var indexer = new WorkflowTriggerIndexer(extractor, bindings);
         var coordinator = new WorkflowActivationCoordinator(authority, new EfWorkflowActivationSwitch(authority, bindings, f.References, access, TimeProvider.System),
