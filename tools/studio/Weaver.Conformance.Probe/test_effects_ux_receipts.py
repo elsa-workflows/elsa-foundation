@@ -7,7 +7,7 @@ import tempfile
 import unittest
 import zlib
 
-from case_records import retained, retained_json
+from case_records import retained
 from effects_journeys import (CHECK_TOOL, EXPECTED_CASES, OWNER, HOME_PREFERENCES_PATH, ROUTE,
                              require_browser_captures, require_browser_terminal, require_called_refusal)
 from test_effects_journeys import check_fixture, refusal_fixture
@@ -15,6 +15,11 @@ from test_effects_journeys import check_fixture, refusal_fixture
 
 SOURCE = "a" * 40
 SPEC = {"tool": CHECK_TOOL, "condition": "browser"}
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value) + "\n")
+    return retained(path)
 
 
 def png(width, height):
@@ -45,13 +50,13 @@ def capture_fixture(root):
                      "image": retained(image), "statuses": statuses, "busy": "false", "messageCount": 0 if state in ("loading", "empty", "policy", "recent") else 2,
                      "composerEnabled": state not in ("loading", "populated", "review-" + CHECK_TOOL),
                      "enabledApply": 0, "policy": ["Enabled"] * 3, "focus": []}
-            receipt = retained_json(root / (key.replace("/", "-") + ".json"), value)
+            receipt = write_json(root / (key.replace("/", "-") + ".json"), value)
             browser["effectsStateCaptures"][key] = receipt
             browser["evidence"].extend((retained(image), receipt))
     for name, control in (("effects-policy-open", "Host privilege policy"), ("effects-policy-close", "Host privilege policy"),
                           ("effects-new-conversation", "New conversation"), ("effects-reopen-conversation", "Reopen the exact recent conversation")):
-        browser["evidence"].append(retained_json(root / (name + "-interaction.json"), {"method": "keyboard", "key": "Enter", "control": control, "completed": True}))
-    browser["evidence"].append(retained_json(root / "effects-terminal-composer-interaction.json", {"method": "keyboard", "control": "Ask Weaver", "completed": True,
+        browser["evidence"].append(write_json(root / (name + "-interaction.json"), {"method": "keyboard", "key": "Enter", "control": control, "completed": True}))
+    browser["evidence"].append(write_json(root / "effects-terminal-composer-interaction.json", {"method": "keyboard", "control": "Ask Weaver", "completed": True,
         "focused": True, "typedCharacters": 12, "sendEnabled": True, "messagesBefore": 1, "messagesAfter": 1}))
     return browser
 
@@ -60,7 +65,7 @@ def replace_capture(browser, root, key, mutate):
     ref = browser["effectsStateCaptures"][key]
     value = json.loads(Path(ref["path"]).read_text())
     mutate(value)
-    updated = retained_json(Path(ref["path"]), value)
+    updated = write_json(Path(ref["path"]), value)
     browser["effectsStateCaptures"][key] = updated
     browser["evidence"] = [updated if row["path"] == ref["path"] else row for row in browser["evidence"]]
 
@@ -104,7 +109,7 @@ class EffectsCaptureIntegrityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             browser = capture_fixture(root)
-            wrong = retained_json(root / "not-an-image.json", {"status": "passed"})
+            wrong = write_json(root / "not-an-image.json", {"status": "passed"})
             replace_capture(browser, root, "terminal/desktop/light", lambda row: row.update(image=wrong))
             with self.assertRaisesRegex(RuntimeError, "PNG"): require_browser_captures(browser, root, SPEC, SOURCE)
         with tempfile.TemporaryDirectory() as directory:
@@ -129,7 +134,7 @@ def terminal_fixture(root):
                "composerTypedWithoutSending": True, "exactRecentSession": True},
                "effects": {"commandId": "command-one", "prepared": prepared, "execution": execution, "before": before, "after": after,
                            "layoutBefore": layout_before, "layoutAfter": layout_after, "checksBefore": checks_before, "checksAfter": checks_after}}
-    def save(name, value): browser["effectsRefs"][name] = retained_json(root / (name + ".json"), value)
+    def save(name, value): browser["effectsRefs"][name] = write_json(root / (name + ".json"), value)
     session = {"data": {"sessionId": "session-one", "messages": [{"role": "tool", "status": "completed", "content": json.dumps(execution["toolResult"])}]}}
     for name, endpoint, value in (("reopenedSession", session_path, session), ("recoveryOwner", OWNER, after),
                                   ("recoveryLayout", HOME_PREFERENCES_PATH, layout_after), ("recoveryChecks", OWNER + "/checks", checks_after),
@@ -154,9 +159,9 @@ class EffectsTerminalIntegrityTests(unittest.TestCase):
                                  ("recoveryOwner", lambda row: row["value"].update(revision="changed"))):
                 original = json.loads(Path(browser["effectsRefs"][name]["path"]).read_text())
                 changed = copy.deepcopy(original); mutate(changed)
-                browser["effectsRefs"][name] = retained_json(root / (name + ".json"), changed)
+                browser["effectsRefs"][name] = write_json(root / (name + ".json"), changed)
                 with self.subTest(name=name), self.assertRaises(RuntimeError): require_browser_terminal(browser, root, SPEC, origin, trace)
-                browser["effectsRefs"][name] = retained_json(root / (name + ".json"), original)
+                browser["effectsRefs"][name] = write_json(root / (name + ".json"), original)
             with self.assertRaisesRegex(RuntimeError, "additional"):
                 require_browser_terminal(browser, root, SPEC, origin, trace + trace)
 
