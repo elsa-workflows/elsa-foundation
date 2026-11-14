@@ -21,17 +21,20 @@ internal sealed class StandaloneTriggerTargetDiscovery(TriggerTargetResolver res
         RuntimeStorePageRequest.ValidateLimit(query.Limit, nameof(query));
         var result = new List<TriggerTargetDescription>();
         var cursor = query.After;
+        var now = clock.GetUtcNow();
         // One source per page permits returning the provider's exact continuation without losing an overfetched slot.
         // Limit each HTTP query's scan; a continuation may accompany an empty filtered result.
         for (var scanned = 0; scanned < RuntimeStorePageRequest.MaximumLimit; scanned++)
         {
-            var page = await references.ListPageAsync(new(WorkflowExecutableReferenceScope.Published, true,
-                clock.GetUtcNow(), 1, cursor), cancellationToken);
+            // Provider cursors bind the complete query, including its as-of timestamp. Keep paging
+            // timestamp-independent across HTTP requests; evaluate liveness before resolving each slot.
+            var page = await references.ListPageAsync(new(WorkflowExecutableReferenceScope.Published, false,
+                null, 1, cursor), cancellationToken);
             cursor = page.NextContinuationToken;
             if (page.Items.Count == 1)
             {
                 var source = page.Items[0];
-                if (source.TenantId == scope.TenantId && source.SlotId is not null && source.ActivationId is not null &&
+                if (source.TenantId == scope.TenantId && source.IsLive(now) && source.SlotId is not null && source.ActivationId is not null &&
                     (string.IsNullOrWhiteSpace(query.Search) || source.DefinitionId.Contains(query.Search, StringComparison.OrdinalIgnoreCase)))
                 {
                     var target = await resolver.ResolveAsync(scope, source.DefinitionId, SlotName(source), cancellationToken);
