@@ -40,7 +40,12 @@ export async function activityDataSourcesJourney(page: Page, info: TestInfo, cap
   await s.chooser().getByRole("button", { name: "Back", exact: true }).click();
   await expect(s.path()).not.toContainText('""');
   await s.path().getByRole("button", { name: "Whole value", exact: true }).click();
-  await expect(s.memberName()).toBeEnabled(); await s.memberName().press("Escape");
+  // The old path can still expose an enabled input for one render before its replacement request starts.
+  // Wait for the requested root breadcrumb/packet, then send Escape from the actual focused enabled input.
+  await expect(s.path().getByRole("button")).toHaveCount(1);
+  await expect(s.chooser().locator(".wf-data-members")).not.toHaveAttribute("aria-busy", "true");
+  await expect(s.memberName()).toBeEnabled(); await s.memberName().focus(); await expect(s.memberName()).toBeFocused();
+  await page.keyboard.press("Escape"); await expect(s.chooser()).toHaveCount(0);
   await expect(s.trigger()).toBeFocused(); expect(await s.saved(created)).toEqual(before); expect(s.writes()).toBe(writesBefore);
   s.observations.push("literal dot/empty keys; Back/breadcrumb/Escape focus; no hidden mutation or save on navigation/cancel");
 

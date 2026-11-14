@@ -78,6 +78,8 @@ export async function activityDataMembersJourney(page: Page, info: TestInfo, cap
         await page.unrouteAll({ behavior: "wait" }); await s.chooser().getByRole("option", { name: /^customer\b/ }).press("Enter");
         await expect(s.path()).toContainText("customer");
         await s.path().getByRole("button", { name: "Whole value", exact: true }).click();
+        await expect(s.path().getByRole("button")).toHaveCount(1);
+        await expect(s.chooser().locator(".wf-data-members")).not.toHaveAttribute("aria-busy", "true");
         await expect(s.chooser().getByRole("option", { name: /^customer\b/ })).toBeFocused();
         await s.chooser().getByRole("button", { name: "Back", exact: true }).click(); await expect(whole()).toBeFocused();
         await page.keyboard.press("Escape"); await expect(s.replace()).toBeFocused();
