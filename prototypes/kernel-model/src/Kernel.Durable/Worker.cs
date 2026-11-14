@@ -216,7 +216,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal ITurnServices ServicesFor(Slot slot)
     {
         var services = new TurnServices(this, slot, _generation, slot.TurnFence);
-        slot.UndoTurn = services.Invalidate;
+        slot.UndoTurn = () => services.Invalidate(restartJobs: true);
+        slot.RollbackTurn = () => services.Invalidate(restartJobs: false);
         return services;
     }
 
@@ -238,15 +239,24 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     worker.Cancelling(ticket);
                 }
         }
-        public void Invalidate()
+        public void Invalidate(bool restartJobs)
         {
             foreach (var id in _reservations)
             {
                 worker._cancelling.Remove(id);
                 if (!worker._items.TryGetValue(id, out var item)) continue;
-                // A refused or throwing turn never commits its cancellations. Keep the original driver
-                // and any result published while reserved; the post-commit pass rechecks job admission.
-                item.Taken = false;
+                if (restartJobs && item.Key is not null && item.Message.Kind == Kinds.Job)
+                {
+                    // Deadline/stand-down invalidation retains the foundation's fresh-driver retry contract.
+                    item.Taken = true;
+                    item.Cancel?.Cancel();
+                    var replacement = new Delivery(item.Message, item.Seq) { Key = item.Key, Ticket = true,
+                        Durable = item.Durable, Marked = item.Marked, ObservedOrder = item.ObservedOrder, ObservedAt = item.ObservedAt };
+                    worker._items[id] = replacement;
+                    slot.Inbox.Remove(item);
+                    Insert(slot, replacement);
+                }
+                else item.Taken = false; // failed-turn rollback keeps the original driver or its retained result
             }
             _reservations.Clear();
         }
@@ -936,7 +946,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             {
                 if (generation != _generation || fence != input.Slot.TurnFence) return;
                 input.Slot.Driving = false;
-                input.Slot.UndoTurn?.Invoke();
+                input.Slot.RollbackTurn?.Invoke();
                 unit = _type.Park(input.Row, input.Actor, input.Taken, input.Spec, e.Message, input.Unwritten ? input.Pending : null);
                 if (input.Unwritten) RetireVolatileJobs(unit);
                 Enqueue(Bound(unit, input.Slot), cancellationToken);
@@ -1229,7 +1239,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (outcome == Outcome.Refused && unit.Slot is { } slot)
                 {
                     // An instance kept in memory has no accepted row: it is parked without the state the store refused.
-                    slot.UndoTurn?.Invoke();
+                    slot.RollbackTurn?.Invoke();
                     var park = Bound(slot.Unwritten ? _type.Park(slot.Row! with { State = "null" }, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
                         : _type.Park(slot.CurrentRow, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal), slot);
                     if (slot.Unwritten) RetireVolatileJobs(park);
@@ -1644,6 +1654,7 @@ internal sealed class Slot
     public bool Loaded, Busy;
     public bool Driving;            // a model turn, as distinct from a queued commit, is in flight
     public long TurnFence;          // invalidates an uncommitted turn during graceful stand-down
+    public Action? RollbackTurn;    // abandon a failed unit without restarting unrelated physical work
     public Action? UndoTurn;        // unwind only the invalidated turn's provisional cancellations
     public long Used;               // when a turn last started or it was loaded: the least recent idle one goes first
     public readonly List<Delivery> Inbox = [];
