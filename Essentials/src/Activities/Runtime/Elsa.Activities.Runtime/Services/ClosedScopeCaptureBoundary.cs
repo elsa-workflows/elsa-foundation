@@ -13,10 +13,10 @@ internal static class ClosedScopeCaptureBoundary
 {
     public static async ValueTask<IReadOnlyDictionary<string, RuntimeTestCaptureTarget>> FindTestTargetsAsync(
         IServiceProvider services, string workflowExecutionId, string activityExecutionId,
-        ExecutableNode node, CancellationToken cancellationToken)
+        ExecutableNode node, ActivityExecutionState? closedScopeBoundary, CancellationToken cancellationToken)
     {
         var targets = new Dictionary<string, RuntimeTestCaptureTarget>(StringComparer.Ordinal);
-        if (await FindAsync(services, workflowExecutionId, activityExecutionId, node, cancellationToken) is not null)
+        if (closedScopeBoundary is not null)
             return targets;
         var access = services.GetService<IRuntimeTestContextFrameAccess>();
         if (access is null) return targets;

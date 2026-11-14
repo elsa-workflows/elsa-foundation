@@ -41,6 +41,8 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
             throw Refused("The trusted selected setup is unavailable.");
         if (prepared.Context!.Results.Count != 0)
             throw Refused("Outside result fixtures require the qualified result-reference interpreter profile.");
+        // Match RuntimeContainerScopeService.BuildVisibleFramesCoreAsync: a scope's iteration is outer
+        // to its own container. Supplied frames must preserve the same lexical shadowing order.
         if (prepared.Context.Frames.GroupBy(x => x.Frame.ScopeId, StringComparer.Ordinal).Any(group =>
             group.Count() > 1 && !group.Select(x => x.Frame.Kind).SequenceEqual([VariableFrameKind.Iteration, VariableFrameKind.Container])))
             throw Refused("Supplied frames must retain the native iteration-before-container order for each scope.");

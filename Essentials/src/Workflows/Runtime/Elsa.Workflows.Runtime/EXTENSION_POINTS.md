@@ -1401,7 +1401,8 @@ and cancellation close the context through the normal terminal boundary. Outside
 composite/async responsibility profiles remain unavailable.
 
 `IRuntimeTestContextFrameAccess` is the scoped single-owner capture participant in Runtime Core. Runtime
-registers its internal canonical owner and aliases the port; no public authoring request supplies it.
+registers its internal canonical owner and aliases the contract. It is public for cross-assembly Activities
+Runtime completion integration, not a qualified replacement seam; no public authoring request supplies it.
 `FindCaptureTargetAsync(workflowExecutionId, activityExecutionId, scopeId, token)` reads the actual admitted
 leaf and returns its exact workflow/context/fingerprint/frame/scope/revision identity.
 `ApplyWrites(workflow, writes)` checks that identity and writable ownership, prepares an immutable header
