@@ -60,7 +60,7 @@ public sealed partial class StimulusDeliveryStoreTests
         if (ef)
         {
             var row = await harness.Context!.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
-            Assert.Equal("2.0.0", row.SchemaVersion);
+            Assert.Equal(RuntimePostCommitOutboxEfModule.SchemaVersion, row.SchemaVersion);
             Assert.Equal(3, row.Revision); // create, claim, one install; a losing proposal never rewrites.
         }
     }
@@ -515,6 +515,7 @@ public sealed partial class StimulusDeliveryStoreTests
         Assert.Equal(original, cast["ContentJson"]);
         Assert.True(RuntimePostCommitOutboxEfModule.Chain.IsReadable("1.0.0"));
         Assert.True(RuntimePostCommitOutboxEfModule.Chain.IsReadable("2.0.0"));
+        Assert.True(RuntimePostCommitOutboxEfModule.Chain.IsReadable(RuntimePostCommitOutboxEfModule.SchemaVersion));
         Assert.False(RuntimePostCommitOutboxEfModule.Chain.IsReadable("future"));
     }
 
@@ -599,7 +600,7 @@ public sealed partial class StimulusDeliveryStoreTests
     {
         await using var harness = await Harness.Create(true);
         var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
-        Assert.Equal("2.0.0", (await harness.Context!.RuntimePostCommitOutbox.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimePostCommitOutboxEfModule.SchemaVersion, (await harness.Context!.RuntimePostCommitOutbox.AsNoTracking().SingleAsync()).SchemaVersion);
         Assert.Null((await harness.Lookup.FindAsync(source.SourceOutboxItemId))!.RecipientSnapshot);
         await harness.Export("before-selection");
         await harness.Delivery.InstallAsync(source, Snapshot(source));
@@ -737,7 +738,7 @@ public sealed partial class StimulusDeliveryStoreTests
         Assert.Equal(acknowledgementLost ? 2 : 1, lost.FlushIds.Count);
         Assert.Single(lost.FlushIds.Distinct(StringComparer.Ordinal));
         var row = await harness.Context!.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
-        Assert.Equal("2.0.0", row.SchemaVersion);
+        Assert.Equal(RuntimePostCommitOutboxEfModule.SchemaVersion, row.SchemaVersion);
         var canonical = EfRelationalIdentity.Decode(row.OutboxItemId);
         Assert.NotEqual(original.OutboxItemId, canonical);
         Assert.Equal(acknowledgementLost ? 0 : 1, (await processor.ProcessAsync(new(10, "publisher", "publish"))).DeliveredCount);
@@ -1005,8 +1006,8 @@ public sealed partial class StimulusDeliveryStoreTests
     private static WorkflowExecutableSourceProvenance SelectedSource() => new("selected-reference", "definition", "selected-definition", "2",
         "selected-definition", "selected-publication-version", "selected-label", "activation", "slot");
 
-    private static StimulusStartRecipient Start(string id) => new(new(id, "artifact", "definition", "1.0.0", "hash",
-        "start", "event", "named", null, new Dictionary<string, string> { ["key\ud800"] = "value\udc00" }, Now,
+    private static StimulusStartRecipient Start(string id, string stimulusType = "event", string stimulusHash = "named") => new(new(id, "artifact", "definition", "1.0.0", "hash",
+        "start", stimulusType, stimulusHash, null, new Dictionary<string, string> { ["key\ud800"] = "value\udc00" }, Now,
         "activation", "slot"), Pin, SelectedSource());
 
     private static RuntimePostCommitOutboxItem Pending(string commit, bool protocol, string payload = "original", string kind = "publish") => new(
@@ -1063,7 +1064,7 @@ public sealed partial class StimulusDeliveryStoreTests
         }
     }
 
-    private sealed class Harness : IAsyncDisposable
+    private sealed partial class Harness : IAsyncDisposable
     {
         private readonly SqliteConnection? connection;
         private readonly InMemoryRuntimeCheckpointStoreState memory = new();
@@ -1104,7 +1105,8 @@ public sealed partial class StimulusDeliveryStoreTests
         public IWorkflowExecutableStore Artifacts => Context is null ? memoryArtifacts : new EfWorkflowExecutableStore(Context, new Accessor());
         public IWorkflowExecutableSourceReferenceStore References => Context is null ? memoryReferences : new EfWorkflowExecutableSourceReferenceStore(Context, new Accessor(), new Codec(), Clock);
         private InMemoryRuntimeCheckpointCommitStore MemoryStore(PersistenceScope? scope = null) =>
-            new(memoryArtifacts, memoryReferences, publishers, operationalStateStore: liveness, state: memory,
+            new(memoryArtifacts, memoryReferences, publishers, activityExecutionStateStore: ingressActivities,
+                bookmarkStateStore: ingressBookmarks, operationalStateStore: liveness, state: memory,
                 persistenceAccessContextAccessor: new Accessor(scope), timeProvider: Clock,
                 rootWriteLeaseManager: Observe(new WorkflowExecutableRootWriteLeaseManager(memoryArtifacts,
                     Options.Create(new WorkflowExecutableGarbageCollectionOptions()), Clock)));
@@ -1180,6 +1182,7 @@ public sealed partial class StimulusDeliveryStoreTests
         }
         public async ValueTask DisposeAsync()
         {
+            targetMetadata?.Dispose();
             foreach (var context in contexts) await context.DisposeAsync();
             if (connection is not null) await connection.DisposeAsync();
         }

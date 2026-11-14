@@ -121,6 +121,8 @@ public sealed class ReleaseSemanticVerificationOptions
     public ReleaseBundleLimits? TransportLimits { get; init; }
     public int MaxSites { get; init; } = 100_000;
     public int MaxDiagnostics { get; init; } = 1000;
+    /// <summary>Aggregate owner payload bytes inspected per member, including members sharing the same blob.</summary>
+    public long MaxInspectionBytes { get; init; } = 256L * 1024 * 1024;
 }
 
 public sealed class ReleaseSemanticAdapterCapability(ReleaseSemanticAdapterIdentity identity, IReadOnlyList<ReleaseCodecKey> codecs, IReadOnlyList<ReleaseSiteKey> sites)

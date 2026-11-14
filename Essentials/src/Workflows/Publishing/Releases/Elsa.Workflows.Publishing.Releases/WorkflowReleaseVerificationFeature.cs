@@ -17,10 +17,13 @@ public class WorkflowReleaseVerificationFeature : IShellFeature, IPostConfigureS
     {
         services.TryAddScoped<ReleaseSemanticRegistry>();
         services.TryAddScoped<IReleaseSemanticVerifier, ReleaseSemanticVerifier>();
+        services.TryAddScoped<IReleaseBundleBuilder, ReleaseBundleBuilder>();
     }
 
     public virtual void PostConfigureServices(IServiceCollection services)
     {
+        if (services.Count(item => !item.IsKeyedService && item.ServiceType == typeof(IReleaseBundleBuilder)) != 1)
+            throw new InvalidOperationException("Exactly one canonical IReleaseBundleBuilder registration must be selected.");
         if (services.Count(item => !item.IsKeyedService && item.ServiceType == typeof(IReleaseSemanticVerifier)) != 1)
             throw new InvalidOperationException("Exactly one canonical IReleaseSemanticVerifier registration must be selected.");
         if (services.Count(item => !item.IsKeyedService && item.ServiceType == typeof(IReleaseBundleCodec)) != 1)

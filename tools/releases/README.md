@@ -18,6 +18,8 @@ The complete native/BPMN/ETL two-target and process/Studio qualification remains
 
 The installed package witness also resolves the semantic framework and proves an unregistered owner codec remains
 Unsupported. This is a fail-closed framework/package boundary control; it does not qualify any native, BPMN or ETL owner adapter.
+The packed builder also refuses to manufacture a bundle for that unknown owner; it discovers declarations from actual
+owner facts and does not fill gaps from a source or target store.
 
 The Runtime bridge has a separate installed-package witness:
 
