@@ -351,6 +351,8 @@ internal static partial class ShortWaitRaces
         await Cuts(Check);
         await Maturity(Check);
         await TakeoverCuts(Check);
+        await JobCuts(Check);
+        await UnknownJobCuts(Check);
         Console.WriteLine($"short-wait races: {failed} failures"); return failed == 0 ? 0 : 1;
     }
 }
