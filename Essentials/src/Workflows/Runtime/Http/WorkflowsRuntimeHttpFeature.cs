@@ -46,6 +46,10 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // AuthenticationBasedHttpEndpointAuthorizationHandler needs IAuthorizationService. Hosts that enable
+        // this feature without FoundationIdentityAbstractions still have to resolve that handler when the
+        // standalone HTTP trigger middleware is constructed.
+        services.AddAuthorization();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IIngressReservationPolicy, HttpIngressReservationPolicy>());
         RegisterFaultHandler(services);
         RegisterAuthorizationHandler(services);

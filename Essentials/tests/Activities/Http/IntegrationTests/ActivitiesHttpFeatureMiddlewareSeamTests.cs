@@ -2,6 +2,7 @@ using CShells.AspNetCore.Features;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Http.StandaloneTriggers;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -44,6 +45,12 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         var router = new RecordingStimulusRouter();
         var services = new ServiceCollection();
         services.AddSingleton<IMiddlewareFactory, MiddlewareFactory>();
+        services.AddLogging();
+        services.AddHttpContextAccessor();
+        services.AddAuthorization();
+        services.AddSingleton<IPersistenceAccessContextAccessor, StubPersistenceAccess>();
+        services.AddScoped<HttpTriggerSourceContext>();
+        services.AddScoped<StandaloneHttpTriggerMiddleware>();
         services.AddScoped<HttpEndpointMiddleware>();
         services.AddScoped<HttpTestRunIngressMiddleware>();
         services.AddSingleton<IStimulusRouter>(router);
@@ -71,8 +78,9 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         var app = new StubApplicationBuilder(provider);
         ((IMiddlewareShellFeature)new ActivitiesHttpFeature()).UseMiddleware(app, environment: null);
 
-        // Both isolated TestRun ingress and production endpoint middleware are mounted, in that order. Drive a
-        // request under the production endpoint base path and verify the TestRun ingress passes it through.
+        // TestRun ingress, standalone HTTP trigger, and production endpoint middleware are mounted, in that
+        // order. Drive a request under the production endpoint base path and verify the TestRun ingress passes
+        // it through.
         var pipeline = app.Build();
         var context = NewContext("/workflows/http/seam-probe", "GET");
         await pipeline(context);
@@ -112,7 +120,7 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
 
         public RequestDelegate Build()
         {
-            Assert.Equal(2, _components.Count);
+            Assert.Equal(3, _components.Count);
             RequestDelegate app = context =>
             {
                 // Ensure an IMiddleware can resolve itself from the request scope during the run.
@@ -147,5 +155,10 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
     private sealed class StubPartitionAccessor : IWorkflowExecutionPartitionAccessor
     {
         public WorkflowExecutionPartition Current { get; } = new("test-partition");
+    }
+
+    private sealed class StubPersistenceAccess : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Global;
     }
 }
