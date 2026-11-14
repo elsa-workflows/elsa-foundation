@@ -7,8 +7,9 @@ or enable `FoundationIdentityExternalAuthenticationEntityFrameworkCore` in the c
 package or solution entry does not enable the feature.
 
 The module is `Identity.ExternalAuthentication`; its frozen history module is `ElsaIdentityExternalAuthentication`.
-At schema **1.1.0**, all four providers retain the Initial artifact history and add the DurableSessions migration.
-The content-preserving V1 upcaster leaves earlier protected artifact payloads unchanged. Session rows bind
+At schema **1.2.0**, all four providers retain the Initial artifact and DurableSessions history, followed by a
+QualifiedLinkSessionBinding marker with no physical layout change. The content-preserving V1/V2 upcasters
+leave earlier protected payloads unchanged and never synthesize a missing link revision. Session rows bind
 protected provenance to their tenant, owner, identifier and timestamps; indexed identifiers are opaque hashes.
 
 ## Authority and acknowledgement
@@ -35,5 +36,5 @@ selects its existing provider backend. See the [core contracts](../../Core/EXTEN
 
 This prefix registers the optional stores without activating a callback/chooser/API route or switching local
 password sign-in, cookie validation or token issuance to the canonical session pipeline. The qualified-link
-content version and complete flow/session enforcement follow in their owning source slices. Source presence
+content version is recorded here; complete flow/session enforcement follows in its owning source slices. Source presence
 alone is no proof of provider sign-in, database/model compatibility, restart or multi-node correctness.
