@@ -199,8 +199,8 @@ internal static class InternalProgressWitness
         var good = new InternalProgress(4, 1, 2, [new("A", "a"), new("B", "b")], [new("A", "a", 1), new("B", "b", 2)]);
         foreach (var (name, bad) in new (string, InternalProgress)[] {
             ("limit", good with { Limit = 0 }), ("steps", good with { Steps = 5 }), ("serial", good with { Serial = 0 }),
-            ("duplicate-offer", good with { Offered = [new("A", "a"), new("B", "a")] }),
-            ("duplicate-offer-state", good with { Offered = [new("A", "a"), new("A", "b")] }),
+            ("duplicate-offer", good with { Offered = [new("A", "a"), new("B", "a")], Ready = [] }),
+            ("duplicate-offer-state", good with { Offered = [new("A", "a"), new("A", "b")], Ready = [new("A", "a", 1), new("A", "b", 2)] }),
             ("offered-without-serial", good with { Ready = [], Serial = 0 }),
             ("phase-without-count", new(4, PhasePending: true)),
             ("unoffered-ready", good with { Offered = [] }), ("ready-order", good with { Ready = [good.Ready![1], good.Ready![0]] }),
