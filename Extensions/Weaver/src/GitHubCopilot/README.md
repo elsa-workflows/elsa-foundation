@@ -42,7 +42,9 @@ Supported settings:
 - `UseLoggedInUser`: use the backend machine's stored Copilot login. Useful for
   local development only.
 - `RuntimeUrl` and `RuntimeConnectionToken`: connect to an already running
-  Copilot runtime instead of spawning the bundled runtime.
+  Copilot runtime instead of spawning the bundled runtime. The external runtime owns provider
+  authentication; Elsa forwards only `RuntimeConnectionToken` for connection authentication
+  and omits `GitHubToken` and `UseLoggedInUser`.
 - `BaseDirectory`: root for SDK-owned state when Elsa spawns the runtime; a hash of the trusted
   server tenant partitions session directories beneath it. The default is a host temporary
   Elsa directory. Provider diagnostics use a separately tagged directory. The SDK ignores
