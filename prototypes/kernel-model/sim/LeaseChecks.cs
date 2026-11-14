@@ -234,6 +234,8 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool DelayNext, DelayTake;
+    public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
+    public int PollCalls, LoadCalls;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource TakeReply = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource Landed = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -252,12 +254,23 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     }
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken ct = default) => inner.HeartbeatAsync(node, window, ct);
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken ct = default) => inner.ReleaseAsync(partition, epoch, ct);
-    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken ct = default) => inner.PollAsync(partition, epoch, horizon, limit, ct);
+    public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken ct = default)
+    {
+        PollCalls++;
+        if (BeforePoll is not null) await BeforePoll(ct);
+        return await inner.PollAsync(partition, epoch, horizon, limit, ct);
+    }
     public ValueTask<bool> AddAsync(Message message, CancellationToken ct = default) => inner.AddAsync(message, ct);
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken ct = default) => inner.AddEventAsync(delivery, ct);
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken ct = default) => inner.LoadAsync(ids, ct);
     public bool HasActorAliases => inner.HasActorAliases;
-    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken ct = default) => inner.LoadActorsAsync(ids, ct);
+    public async ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken ct = default)
+    {
+        LoadCalls++;
+        var rows = await inner.LoadActorsAsync(ids, ct);
+        if (AfterLoad is not null) await AfterLoad(ct);
+        return rows;
+    }
     public ValueTask PublishAsync(EventRow row, CancellationToken ct = default) => inner.PublishAsync(row, ct);
     public ValueTask SubscribeAsync(SubscriptionRow row, CancellationToken ct = default) => inner.SubscribeAsync(row, ct);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken ct = default) => inner.FindSubscriptionsAsync(key, ct);
