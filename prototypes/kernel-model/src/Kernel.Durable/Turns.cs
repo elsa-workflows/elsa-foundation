@@ -93,10 +93,12 @@ public sealed class Delivery(Message message, long seq)
 public sealed class TurnInput
 {
     private readonly Worker _worker;
+    private readonly ITurnServices _services;
 
     internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec)
     {
         _worker = worker;
+        _services = worker.ServicesFor(slot);
         Slot = slot;
         Actor = actor;
         Taken = taken;
@@ -133,7 +135,7 @@ public sealed class TurnInput
     public object? Pending => Slot.Pending;
 
     public string Model => Row?.Model ?? Spec!.Model;
-    public ITurnServices Services => _worker;
+    public ITurnServices Services => _services;
 
     /// <summary>Say that the actor's code is about to run, with what it is given (for tests).</summary>
     public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox);
