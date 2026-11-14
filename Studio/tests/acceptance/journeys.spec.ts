@@ -17,6 +17,8 @@ import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
 import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacementHolds } from "./toastPlacementControl";
 import { structuredLogsJourney } from "./structuredLogsJourney";
+import { activityDataMembersJourney } from "./activityDataMembersJourney";
+import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
 import { phoneContentJourney } from "./phoneContentJourney";
@@ -649,6 +651,13 @@ test("workflow template metadata defaults", async ({ page }, info) => {
 
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture);
+});
+
+test("choose nested activity data", async ({ page }, info) => {
+  await activityDataMembersJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+test("choose declared and scoped activity data", async ({ page }, info) => {
+  await activityDataSourcesJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
 test("choose data for activity outputs", async ({ page }, info) => {

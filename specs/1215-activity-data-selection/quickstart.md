@@ -15,7 +15,9 @@ Read [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) and
 [backend e2e lifecycle instructions](../../e2e-tests/README.md). Preserve the machine's build-slot wrapper;
 target affected projects and inspect `uptime` before attributing timing failures to product behavior.
 
-The composed runner supports `--output` and optional `--journey` (plus help). The default retains the
+The composed runner supports `--output`, repeatable exact `--journey` selections, and
+`--composition normal|minimal|default-off` (plus help). Nonnormal modes require explicit selections;
+repeated titles and member journeys in default-off are refused before any build. The default retains the
 complete capture/journey inventory, including Decisions. From the repository root:
 
 ```bash
@@ -34,9 +36,31 @@ Add the production feature journey to `Studio/tests/acceptance/journeys.spec.ts`
 names to `tools/ux-acceptance/run.py`'s `CAPTURES` inventory. Keep exact expected project/journey matching,
 one successful execution, zero retries and required artifact checks. Passing the existing unrelated
 journeys does not qualify data selection. A scoped `--journey` run supports iteration but does not replace
-the complete M5 inventory. Do not invent `--minimal` or `--restart` flags for this runner:
-normal/minimal/restart variants need reviewed owned-host integration in the affected proof
-infrastructure, with their actual entrypoints recorded in the final receipt.
+the complete M5 inventory. The ordinary-input S5 matrix uses the permanent runner integration below;
+there is no `--minimal` or `--restart` flag. Restart evidence remains in the separate backend lifecycle lane.
+
+```bash
+python3 tools/ux-acceptance/run.py --output /tmp/activity-data-normal-<unique> \
+  --journey 'choose data for activity outputs' --journey 'choose nested activity data' \
+  --journey 'choose declared and scoped activity data'
+python3 tools/ux-acceptance/run.py --output /tmp/activity-data-minimal-<unique> --composition minimal \
+  --journey 'choose data for activity outputs' --journey 'choose nested activity data' \
+  --journey 'choose declared and scoped activity data'
+python3 tools/ux-acceptance/run.py --output /tmp/activity-data-off-<unique> --composition default-off \
+  --journey 'choose data for activity outputs'
+```
+
+These commands require 12 + 12 + 4 executions, with the stock four projects, 120-second journey budget,
+zero retries/skips and an embedded 320px state in each title. They import the committed typed Customer
+fixture only into the test build, observe real canonical offers and committed runtime inputs, and rebuild
+fixture-free Workbench after owned hosts stop. `report.json` records composition, fixture/config/binary
+hashes, exact source identities and cleanup; JSON/PNG/ARIA/trace attachments retain every state.
+Minimal copies remove seven optional backend JS/Liquid features and both optional Studio expression
+editors; journeys inspect actual syntax menus and script requests. Default-off leaves the committed flag
+alone and uses a member-capable typed Customer source plus a stored member reference preservation control.
+Controlled request delay/abort cases exercise actual Studio loading/Retry/cancel without substituting
+server data; they are not evidence of a real backend/auth outage. These instructions do not themselves
+claim an executed or independently accepted matrix, nor close the remaining nine-family M5 inventory.
 
 The existing four profiles are desktop-light/desktop-dark at 1440×1000 and narrow-light/narrow-dark at
 360×900. Run changed UI journeys in these profiles and capture a focused 320px picker/reference state
