@@ -261,3 +261,16 @@ contributors remain supported. The agent registrations are documented in their
 ### Structure-owned occurrence inputs
 
 `ActivityTemplateOccurrenceCompilation.StructureInputs` optionally carries the owning Design handler's input projection from a graph provider to the publishing coordinator. Providers emit effective ordinary/projected argument states and validate their references against that same view. `ActivityTemplateCompiler` lowers declarations/policies against the exact source template into optional `ExecutableActivityTemplateOccurrenceOverlay.InputContracts`; no Design types enter Runtime artifacts. Placement compiles and stamps these same contracts, then applies the existing closed-scope variable/result remapping. Null is omitted for ordinary occurrences, preserving their serialized shape and template hashes. Switch condition overlays also retain their authored case outcomes on the placed contract.
+
+## Bounded source publication evidence
+
+| Contract | Kind, layer and default | Signature | Replacement guidance and callers |
+|---|---|---|---|
+| `IPublicationRecordStore.FindOriginBoundedAsync` | Replacement member in Publishing.Core; unsupported by default; selected EF journal implements it | `ValueTask<PublicationOriginSnapshot?> FindOriginBoundedAsync(string publicationId, PersistenceScope expectedScope, RuntimeSourceReadLimits limits, CancellationToken cancellationToken = default)` | Copy exact activation/publication/source association scalars after physical scope, type/byte and current-schema checks in one read snapshot. Never fall back to ordinary unbounded `FindAsync`. Future native source selectors use this as evidence; it does not grant selection or export authority. |
+
+The explicit first profile is UTF-8 SQLite and refuses caller-owned transactions or pending changes. Arbitrary
+failure text is outside this bounded projection. Copied journal evidence can describe current or retired records;
+the source adapter must independently require a real activated published association. No activation is performed.
+
+Provider reads and connection cleanup wrap infrastructure failures in `PublicationSourceSnapshotPersistenceException`,
+with the original cause, publication identity and physical scope. Cancellation and coded source refusals propagate.

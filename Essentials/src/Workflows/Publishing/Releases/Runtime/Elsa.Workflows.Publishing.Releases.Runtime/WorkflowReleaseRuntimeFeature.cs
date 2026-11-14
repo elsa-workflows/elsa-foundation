@@ -22,6 +22,7 @@ public class WorkflowReleaseRuntimeFeature : IShellFeature, IPostConfigureShellS
         services.TryAddScoped<IReleaseRuntimeSiteReader, ReleaseRuntimeSiteReader>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IReleaseArtifactSemanticVerifier, ReleaseRuntimeArtifactVerifier>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IReleaseOccurrenceInspector, RuntimeIntrinsicReleaseInspector>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IReleaseOccurrenceInspector, RuntimeCatalogReleaseInspector>());
     }
     public virtual void PostConfigureServices(IServiceCollection services)
     {
