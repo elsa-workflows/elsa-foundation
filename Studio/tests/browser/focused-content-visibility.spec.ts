@@ -157,6 +157,23 @@ for (const appearance of ["light", "dark"]) {
       }
     };
     await assertStable(150);
+    // A bare link is its own frame: prove the shared predicate detects a real external overlay.
+    await link.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const overlay = element.ownerDocument.createElement("div");
+      overlay.setAttribute("data-focus-occlusion-control", "");
+      overlay.setAttribute("aria-hidden", "true");
+      Object.assign(overlay.style, { position: "fixed", zIndex: "2147483647", background: "Canvas",
+        left: `${bounds.left}px`, top: `${bounds.top}px`, width: `${bounds.width}px`, height: `${bounds.height}px` });
+      element.ownerDocument.body.append(overlay);
+    });
+    try {
+      await expect.poll(() => link.evaluate(isFieldUnobscured)).toBe(false);
+      await expect(link).toBeFocused();
+    } finally {
+      await page.locator("[data-focus-occlusion-control]").evaluate(element => element.remove());
+    }
+    await expect.poll(() => link.evaluate(isFieldUnobscured)).toBe(true);
     // Dragging the real dock does not steal focus from the inline control.
     await setNaturalHeight(120);
     await assertStable(120);

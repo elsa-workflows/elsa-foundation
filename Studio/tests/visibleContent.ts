@@ -17,12 +17,12 @@ export function isFieldUnobscured(control: Element, includeFrame: boolean | void
       right = Math.min(right, bounds.left + parent.clientLeft + parent.clientWidth);
     }
   }
-  for (const element of [...(includeFrame ? [frame] : []), control, ...(label ? [label] : [])]) {
+  for (const element of new Set([...(includeFrame ? [frame] : []), control, ...(label ? [label] : [])])) {
     const bounds = element.getBoundingClientRect();
     if (!bounds.width || !bounds.height || bounds.top < top - 1 || bounds.bottom > bottom + 1
       || bounds.left < left - 1 || bounds.right > right + 1) return false;
     // Include the label and both edges of the control; a partly covered field is not success.
-    if (element === frame) continue;
+    if (element === frame && element !== control && element !== label) continue;
     for (const x of [bounds.left + Math.min(2, bounds.width / 2), bounds.right - Math.min(2, bounds.width / 2)]) {
       for (const y of [bounds.top + Math.min(2, bounds.height / 2), bounds.bottom - Math.min(2, bounds.height / 2)]) {
         const hit = document.elementFromPoint(x, y);
