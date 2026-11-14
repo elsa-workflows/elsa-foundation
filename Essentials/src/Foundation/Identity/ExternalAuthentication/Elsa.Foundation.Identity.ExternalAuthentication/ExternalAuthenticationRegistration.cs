@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.ExternalAuthentication.Connections;
 using Elsa.Foundation.Identity.ExternalAuthentication.Core;
 using Elsa.Foundation.Identity.ExternalAuthentication.Admission;
+using Elsa.Foundation.Identity.ExternalAuthentication.Flows;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -32,6 +33,7 @@ public static class ExternalAuthenticationRegistration
         services.EnsureReplacementContract<IConnectionRecovery, ConnectionRuntimeServices>();
         services.EnsureReplacementContract<IConnectionSignInEvidence, ConnectionRuntimeServices>();
         services.EnsureReplacementContract<IExternalAdmissionService, ExternalAdmissionService>();
+        services.EnsureReplacementContract<IExternalAuthenticationFlowService, ExternalAuthenticationFlowService>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExternalProvisioningPolicy, JitProvisioningPolicy>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExternalProvisioningPolicy, MatchProvisioningPolicy>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer, ExternalAuthenticationActivation>());
