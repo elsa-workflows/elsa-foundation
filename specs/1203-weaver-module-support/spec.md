@@ -571,7 +571,7 @@ Negative cases:
 #### Evidence
 
 - **FR-022**: Each story MUST have end-to-end evidence.
-  - **Hosts**: a scenario that needs test code runs in the probe host, which carries the leaf's fixtures. The normal host and the durable host run only shipped code. Each story's Independent Test assigns its scenarios.
+  - **Hosts**: a scenario that needs in-host test fixtures, a substituted provider implementation or a qualification bootstrap runs in the probe host, which carries the leaf's fixtures. The normal host and the durable host run only shipped code. Each story's Independent Test assigns its scenarios. The [14 November owner clarification](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6883469572) permits an external scripted Copilot protocol service for normal Studio/backend tests through the real SDK, without adding test code to those product hosts. The external service derives replies from the actual admitted context it receives; expected-phase canned answers cannot establish that chain. This changes test placement only, retains every acceptance gate, and authorizes no credentials, purchases or additional compute.
   - **Restart cases**: these run in their leaf's durable host, except story 1's, which run in the probe host's restart configuration.
   - **Adapter coverage**: every tool and effect MUST have a conformance-probe case on both provider adapters: Copilot's delegated loop and Anthropic's host-driven loop.
   - **Negative cases**: these run at the cheapest level that proves them.
@@ -582,6 +582,8 @@ Negative cases:
   - opt-in live-provider evidence (none claimed).
 
   Probe evidence is frozen at the exact reviewed head. Failures, skips and quarantines are recorded as they occurred.
+
+  The approved external-service normal-host observations belong to deterministic provider-protocol evidence. They do not claim live-model reasoning or replace the separately required packaged-consumer and both-adapter journeys.
 
 #### Later leaves
 
