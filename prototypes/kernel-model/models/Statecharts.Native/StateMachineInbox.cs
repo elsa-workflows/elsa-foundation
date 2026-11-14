@@ -32,7 +32,7 @@ internal sealed partial class StateMachine : IInvocationInputReceiver
     {
         if (state.Version < 5 && (state.Inbox is not null || state.SelectedInput is not null) ||
             state.Version == 5 && (state.Inbox is not { Capacity: > 0, RetentionMilliseconds: > 0 } s || s.ReceiptCapacity < s.Capacity) ||
-            state.SelectedInput is { } id && (string.IsNullOrEmpty(id) || state.Inbox is null || state.Pending?.EventId != id) ||
+            state.SelectedInput is { } id && (string.IsNullOrEmpty(id) || id.Length > 128 || state.Inbox is null || state.Pending?.EventId != id) ||
             state.Inbox is not null && state.Pending?.EventId is not null && state.SelectedInput is null)
             throw new InvalidOperationException("Invalid statechart admitted-input checkpoint.");
     }

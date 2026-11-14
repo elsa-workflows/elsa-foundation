@@ -12,6 +12,7 @@ internal static class MachineInboxWitness
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var nested in new[] { false, true })
         foreach (var phase in new[] { "entry", "exit", "action" }) foreach (var cut in new[] { "steady", "lost-before", "lost-answer", "cancel" })
             Run(mode, nested, phase, cut);
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) Legacy(mode);
     }
     private static void Run(string mode, bool nested, string phase, string cut)
     {
@@ -39,6 +40,14 @@ internal static class MachineInboxWitness
         var pending = Json.Write(h.State.Frames[frame].State); var resources = Json.Write(h.State.LexicalScopes);
         Check(ChartDependency.Calls.Count == 1 && h.State.Frames.Values.Any(f => f.Intervention is not null), "Q2: queue fixture did not reach an actual phase fault");
         Check(Inbox().Receipts["go"].Status == (phase == "entry" ? "Queued" : "Selected"), "Q2: selected receipt did not follow the pending reaction");
+        if (phase == "action" && !nested && cut == "steady") Readers(h, frame);
+        foreach (var creation in new long?[] { null, 2 })
+        {
+            var id = "wrong-creation-" + creation;
+            h.Apply(new("add", M: new(id, h.Target, InvocationInput.Kind, Json.Write(Input(id, "go")), ReplyTo: ReplyTo.Of("outside", id, h.World.Time + 120000), TargetCreation: creation))); h.Drain();
+            Check(h.World.Deliveries.Select(d => d.Reply.Item).OfType<CreationResult>().LastOrDefault()?.Result == (creation is null ? "IdentityRequired" : "WrongCreation") && Inbox().Next == 1,
+                "Q13: missing/stale creation was interpreted as the current machine");
+        }
         // Remove authored material only across a metadata commit, stopping before its ordinary Continue wake.
         Kernel.Sim.Native.NativeWorkflows.Registry.Remove(wf.Id);
         var unknown = h.Send(InvocationInput.Kind, Input("unknown", "unknown")); h.Drain(unknown);
@@ -86,4 +95,44 @@ internal static class MachineInboxWitness
         Check(h.Replies[^1] is { Result: "Found", ValidUntil: not null, FinalizedAt: not null }, "Q12: terminal query required authored material or lost retention");
         Console.WriteLine($"PASS machine-inbox:{mode},nested={nested},phase={phase},cut={cut}");
     }
+    private static void Readers(MachineInboxHarness h, string frame)
+    {
+        var state = h.State; var original = Json.Read<MachineState>(Json.Write(state.Frames[frame].State));
+        var source = state.Frames.Values.Single(f => f.Node == "dependency");
+        var definition = Kernel.Sim.Native.NativeWorkflows.Registry.Get("machine-inbox").Nodes["machine"];
+        var inbox = state.Inboxes![frame]; var parent = (IInterventionParent)new StateMachine();
+        foreach (var kind in new[] { "wrong-id", "mixed-v4", "missing-config", "receipt-state", "foreign-payload", "settings", "lost-receipt" })
+        {
+            var altered = original; var copy = Json.Read<InvocationInbox>(Json.Write(inbox));
+            if (kind == "wrong-id") altered = original with { SelectedInput = "other" };
+            if (kind == "mixed-v4") altered = original with { Version = 4 };
+            if (kind == "missing-config") altered = original with { Inbox = null };
+            if (kind == "receipt-state") copy.Receipts["go"] = copy.Receipts["go"] with { Status = "Queued" };
+            if (kind == "foreign-payload") copy.Pending[0] = copy.Pending[0] with { Frame = "other" };
+            if (kind == "settings") copy.Capacity++;
+            if (kind == "lost-receipt") copy.Receipts.Remove("go");
+            var value = Values.From(altered); var before = Json.Write(value); var beforeInbox = Json.Write(copy); var refused = false;
+            try { parent.PrepareRetry(definition, value, new(source.Id, "fresh", source.Node, source.Tag, source.Scope, frame, source.LexicalScope, copy)); }
+            catch (InvalidOperationException) { refused = true; }
+            Check(refused && Json.Write(value) == before && Json.Write(copy) == beforeInbox, "Q14: malformed selected-input retry reader mutated or accepted " + kind);
+            Console.WriteLine("PASS machine-inbox-seeded-reader:" + state.Mode + "," + kind);
+        }
+    }
+    private static void Legacy(string mode)
+    {
+        var h = new MachineInboxHarness();
+        var def = new StructuralDefinition([new("root", NodeKind.Root, Initial: "A"), new("A", NodeKind.Atomic, "root"), new("B", NodeKind.Final, "root")],
+            [new("go", 0, "A", "B", VisitMode.Reenter, "go")]);
+        var machine = Wf.Node<StateMachine>("machine", ("StructuralDefinition", Binding.Literal(def)));
+        Kernel.Sim.Native.NativeWorkflows.Registry.Add(Wf.Workflow("machine-inbox", machine)); h.Start(mode);
+        var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
+        machine.Inputs["InputInbox"] = Binding.Literal(new { Capacity = 4, ReceiptCapacity = 12, RetentionMilliseconds = 120000L });
+        h.Reload(); h.Send(InvocationInput.Kind, new InvocationInput(frame, "new", "go")); h.Drain();
+        Check(h.Replies[^1].Result == "UnknownInvocation" && h.State.Inboxes is null && Json.Read<MachineState>(Json.Write(h.State.Frames[frame].State)).Version == 4,
+            "Q15: old v4 invocation adopted latest inbox configuration");
+        h.Send(CompositeSignal.Kind, new CompositeSignal(frame, "go"), false); h.Drain();
+        Check(h.World.Store.Instances[h.Target.Id].Status == InstanceStatus.Finished && h.State.Inboxes is null, "Q15: legacy signal profile stopped working");
+        Console.WriteLine("PASS machine-inbox-legacy-v4:" + mode);
+    }
+
 }

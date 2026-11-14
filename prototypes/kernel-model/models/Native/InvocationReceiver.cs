@@ -28,12 +28,18 @@ internal sealed partial class Burst
     }
 
     internal void ValidateInputInbox(Frame frame, int capacity, int receiptCapacity, long retention, string? selected)
+        => InvocationInputs.Validate(_s.Inboxes?.GetValueOrDefault(frame.Id), frame.Id, capacity, receiptCapacity, retention, selected);
+}
+
+internal static class InvocationInputs
+{
+    internal static void Validate(InvocationInbox? inbox, string frame, int capacity, int receiptCapacity, long retention, string? selected)
     {
-        if (_s.Inboxes?.GetValueOrDefault(frame.Id) is not { Closed: null } inbox ||
+        if (inbox is not { Closed: null } ||
             inbox.Capacity != capacity || inbox.ReceiptCapacity != receiptCapacity || inbox.Retention != retention ||
             !inbox.Receipts.Where(r => r.Value.Status == "Selected").Select(r => r.Key).Order(StringComparer.Ordinal)
                 .SequenceEqual(selected is null ? [] : new[] { selected }) ||
-            selected is not null && inbox.Pending.Count(i => i.Frame == frame.Id && i.Id == selected) != 1)
+            selected is not null && inbox.Pending.Count(i => i.Frame == frame && i.Id == selected) != 1)
             throw new InvalidOperationException("Statechart input inbox does not match its frozen selection.");
     }
 }
