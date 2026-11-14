@@ -19,7 +19,7 @@ function phaseExecutable(phase, tools) {
   throw new Error("Unknown owned qualification phase.");
 }
 function commandTimeoutCap(phase, index) {
-  return (phase === "controls" ? 2 : phase === "probe" ? index === 0 ? 10 : 12 : 30) * 60_000;
+  return (phase === "controls" ? 2 : phase === "probe" ? index === 0 ? 10 : 12 : 45) * 60_000;
 }
 function commandRecipe(phase, tools, standardOutput) {
   const executable = phaseExecutable(phase, tools);
@@ -114,7 +114,7 @@ export async function verifyServedModule(studioUrl, proof) {
 
 async function recordBuild(phase, root, standardOutput, toolchainPath) {
   // Queue time is part of the deadline. This is an operational ceiling, not a timing test or retry policy.
-  const deadline = Date.now() + (phase === "controls" ? 2 : phase === "probe" ? 20 : 30) * 60_000;
+  const deadline = Date.now() + (phase === "controls" ? 2 : phase === "probe" ? 20 : 45) * 60_000;
   if (!["studio", "probe", "controls"].includes(phase) || !root || !isAbsolute(root) || !relative(repo, root).startsWith(".."))
     throw new Error("Select studio, probe or controls and an absolute owned root outside the checkout.");
   if (phase === "studio" && standardOutput && (!isAbsolute(standardOutput) || !relative(repo, standardOutput).startsWith("..") || existsSync(standardOutput)))
