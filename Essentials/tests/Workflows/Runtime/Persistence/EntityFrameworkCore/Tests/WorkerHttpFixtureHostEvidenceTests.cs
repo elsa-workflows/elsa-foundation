@@ -248,7 +248,8 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
         builder.Services.AddSingleton<IConfiguration>(configuration);
         builder.Services.AddEfPersistenceResources(configuration, typeof(WorkerHttpFixtureHostEvidenceTests).Assembly);
         builder.Services.AddCShellsAspNetCore(shells => shells
-            .WithAssemblies(
+            .WithAssemblies(new[]
+            {
                 typeof(PrimitivesFeature).Assembly,
                 typeof(SerializationFeature).Assembly,
                 typeof(MediatorFeature).Assembly,
@@ -268,8 +269,8 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
                 typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
                 typeof(Elsa.Http.HttpFeature).Assembly,
-                typeof(TasksFeature).Assembly,
-                typeof(HttpPromptSuppressionFeature).Assembly)
+                typeof(TasksFeature).Assembly
+            }.Concat(suppressHttpPrompt ? [typeof(HttpPromptSuppressionFeature).Assembly] : []).ToArray())
             .WithConfigurationProvider(configuration));
 
         var app = builder.Build();
