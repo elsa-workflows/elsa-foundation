@@ -109,7 +109,8 @@ internal static class PublishingLedgerNativeProviderSmoke
             await records.SaveAsync(upper);
             await records.SaveAsync(lower);
             await records.SaveAsync(opaque);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => records.SaveAsync(upper with { ArtifactId = "other-artifact" }).AsTask());
+            var duplicate = await Assert.ThrowsAsync<PublicationRecordAlreadyExistsException>(() => records.SaveAsync(upper with { ArtifactId = "other-artifact" }).AsTask());
+            Assert.Equal(upper.PublicationId, duplicate.PublicationId);
             for (var index = 0; index < pagedCount; index++)
                 await records.SaveAsync(EfPublicationRecordStoreTests.Record($"{prefix}-paged-{index:D3}", "slot-paged") with { CreatedAt = Now.AddSeconds(-(index % 5)) });
         }

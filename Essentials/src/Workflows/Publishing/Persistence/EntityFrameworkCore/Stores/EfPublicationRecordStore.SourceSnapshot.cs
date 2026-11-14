@@ -85,7 +85,7 @@ public sealed partial class EfPublicationRecordStore
                     if (EfPublishingStoreSupport.Encode(decoded) != encoded) throw SourceRefused("publication_source_stored_content_invalid");
                     return decoded;
                 }
-                if (EfSchemaVersion.NotReadable(PublishingLedgerEfModule.Chain, Raw("SchemaVersion"))) throw SourceRefused("publication_source_schema_unsupported", true);
+                if (!PublishingLedgerEfModule.Chain.ReadableVersions.Contains(Raw("SchemaVersion"), StringComparer.Ordinal)) throw SourceRefused("publication_source_schema_unsupported", true);
                 if (Raw("SchemaVersion") == PublishingLedgerEfModule.LegacyContentSchemaVersion && text["RequestFingerprint"] is not null)
                     throw SourceRefused("publication_source_stored_content_invalid");
                 var id = Decoded("PublicationId")!; var tenant = Decoded("TenantId"); var slot = Decoded("SlotId")!;
