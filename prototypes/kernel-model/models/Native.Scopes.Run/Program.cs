@@ -55,7 +55,9 @@ foreach (var c in cases)
         Check(State().LexicalScopes!.Single().Key == resource.Key && State().LexicalScopes!.Single().Value.Values["counter"]!.ToString() == "1", "L2: lexical handle/value changed on reload");
     }
     var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:entry-release");
-    Apply(new("add", M: Events.Deliver(new("event:entry-release", "release", null, world.Time + 120_000), wait))); Drain();
+    var accepted = world.Store.AddEventAsync(Events.Route(new("event:entry-release", "release", null, world.Time + 120_000), wait)).Result;
+    Check(accepted.Added && accepted.Target == target, "Scope release missed its registered creation.");
+    Drain();
     var state = State();
     Check(state.Variables.GetValueOrDefault("observed")?.ToString() == "1", "L1: ordinary phase work did not retain the scope value");
     Check(state.Variables["outer-read"]!.ToString() == "7" && !state.Variables.ContainsKey("counter"), "L3: normal fallback or local write ownership changed");
