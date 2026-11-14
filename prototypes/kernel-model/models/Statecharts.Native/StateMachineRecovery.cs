@@ -26,6 +26,8 @@ internal sealed partial class StateMachine
         catch (Exception error) when (error is ArgumentException or NotSupportedException)
         { throw new InvalidOperationException("Invalid statechart retry state.", error); }
         if (state.Scopes is null || state.LegacyScopes) throw new InvalidOperationException("Statechart retry requires materialized visit scopes.");
+        if (state.Inbox is { } inbox)
+            InvocationInputs.Validate(child.Inbox, child.Parent, inbox.Capacity, inbox.ReceiptCapacity, inbox.RetentionMilliseconds, state.SelectedInput);
         var progress = state.Progress;
         if (state.Pending is null || progress is null || !progress.Running.TryGetValue(child.Source, out var index) || progress.Done[index] ||
             progress.Requires[index].Any(i => !progress.Done[i]) || state.Pending.Steps[index].Activity != child.Node || progress.Running.ContainsKey(child.Successor))

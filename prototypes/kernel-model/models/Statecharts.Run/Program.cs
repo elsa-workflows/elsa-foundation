@@ -7,6 +7,13 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--clr-readers"]) { ClrBoundaryReaders.Run(); ClrLegacyWitness.Run(); return; }
+if (args is ["--clr"]) { ClrFaultWitness.Run(); return; }
+if (args is ["--clr-list"]) { foreach (var n in ClrFaultWitness.Names) Console.WriteLine(n); return; }
+if (args is ["--clr-red"]) { ClrFaultWitness.Red(); return; }
+if (args is ["--inbox-signal"]) { SignalReceiverWitness.Run(); return; }
+if (args is ["--inbox-settings"]) { MachineInboxSettingsWitness.Run(); return; }
+if (args is ["--inbox"]) { MachineInboxWitness.Run(); return; }
 if (args is ["--regional-recovery"]) { RegionalRecovery.Run(); return; }
 if (args is ["--recovery-refusals"]) { RecoveryRefusals.Run(); return; }
 if (args is ["--recovery-red"]) { RecoveryWitness.Run(baseline: true); return; }
