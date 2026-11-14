@@ -132,14 +132,27 @@ public sealed class RuntimeHistorySourceOwnerTests
     }
 
     [Fact]
-    public async Task Cancellation_during_policy_read_remains_the_original_failure()
+    public async Task Cancellation_during_policy_read_preserves_the_actual_caller_token()
     {
         using var cancellation = new CancellationTokenSource();
         var failure = new InvalidOperationException("provider context", new OperationCanceledException(cancellation.Token));
         var source = new DefaultRuntimeHistorySourceExtension(new FailingStore(failure, cancellation.Cancel));
-        var caught = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await source.AddFactsAsync(Commit(), _ => throw new InvalidOperationException("must not run"), cancellation.Token));
-        Assert.Same(failure, caught);
+        Assert.Equal(cancellation.Token, caught.CancellationToken);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Late_policy_IO_after_caller_cancellation_does_not_escape_or_activate_the_source_factory(bool wrapped)
+    {
+        using var cancellation = new CancellationTokenSource();
+        Exception failure = new IOException("late provider error");
+        if (wrapped) failure = new InvalidOperationException("provider context", failure);
+        var source = new DefaultRuntimeHistorySourceExtension(new FailingStore(failure, cancellation.Cancel)); var calls = 0;
+        var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await source.AddFactsAsync(Commit(), _ => { calls++; return [Fact("never")]; }, cancellation.Token));
+        Assert.Equal(cancellation.Token, caught.CancellationToken); Assert.Equal(0, calls);
     }
 
     [Fact]

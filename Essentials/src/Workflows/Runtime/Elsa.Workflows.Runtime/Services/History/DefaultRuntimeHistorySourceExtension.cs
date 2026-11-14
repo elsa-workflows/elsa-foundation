@@ -17,14 +17,17 @@ internal sealed class DefaultRuntimeHistorySourceExtension(IWorkflowExecutionSta
         try { native = await executions.FindAsync(commit.WorkflowExecutionId, cancellationToken); }
         catch (Exception exception) when (RuntimeHistoryReadFailures.IsMalformed(exception))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeHistoryIntegrityException(commit.WorkflowExecutionId,
                 "the semantic owner could not interpret its admitted policy", exception);
         }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && RuntimeHistoryReadFailures.IsUnavailable(exception))
+        catch (Exception exception) when (RuntimeHistoryReadFailures.IsUnavailable(exception))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
                 "The semantic owner could not read its admitted native policy.", exception);
         }
+        cancellationToken.ThrowIfCancellationRequested();
         // An existing native choice, including legacy absence, wins over a proposed new state.
         var policy = native is not null ? native.HistoryCapturePolicy : commit.StateChanges.WorkflowExecution?.State.HistoryCapturePolicy;
         if (!RuntimeHistorySourceFacts.IsFinalProfile(policy)) return commit;
