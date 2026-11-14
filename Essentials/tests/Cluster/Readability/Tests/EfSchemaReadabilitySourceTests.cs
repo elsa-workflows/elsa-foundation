@@ -26,7 +26,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     // declaration is dropped, or declared at another version, is caught here.
     private static readonly ReadabilityEntry[] PublishingFamilies =
     [
-        new(PublishingLedgerEfModule.SchemaFamily, Publishing, [PublishingLedgerEfModule.ContentSchemaVersion]),
+        new(PublishingLedgerEfModule.SchemaFamily, Publishing, [PublishingLedgerEfModule.LegacyContentSchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion]),
         new(PublishingPolicyProjectionEfModule.SchemaFamily, Publishing, [PublishingPolicyProjectionEfModule.SchemaVersion]),
         new(PublishingSnapshotReviewEfModule.SchemaFamily, Publishing, [PublishingSnapshotReviewEfModule.SchemaVersion])
     ];
