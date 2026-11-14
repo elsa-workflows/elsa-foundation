@@ -115,3 +115,40 @@ inputs (R3) and restrictions (R6) already handle null.
 
 **Decision**: the same throwaway import-host test as the baseline (import each of the 36 definitions on its own,
 publish each that converts, start each published one without an HTTP trigger), run on this branch and deleted.
+
+## R-12 #3281 source audit and shape boundary
+
+This follow-up's source baseline is tag `3.6.3` at `7eac7de6955718aea35870be125d54f080fc55dc`, checked against
+`3.5.3` at `7646867ac5365af35f0507fde72b2df98790bec9`. Exact source files were read from the existing local
+`elsa-core` Git objects; no historical build or runtime execution is claimed by this audit.
+
+- `src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs`: a supported empty wrapper with
+  no resolvable expression returns a null Input; a Literalnull is an actual wrapped expression. Do not treat arbitrary
+  malformed expression metadata as a supported empty wrapper.
+- `Extensions/ActivityExecutionContextExtensions.InputEvaluation.cs` in that module: a declared default replaces
+  only a null wrapped Input. A present wrapped expression is evaluated, even when its result is null. The generic
+  `ExpressionExecutionContextExtensions.Get`/`ObjectConverter.ConvertTo<T>` path then returns the type default.
+- `src/modules/Elsa.Expressions/Helpers/ObjectConverter.cs`: blank strings remain strings for a String target;
+  conversion to other types can return null, while enum parsing can fail before the blank-string fallback. Thus a
+  literal blank string and a missing input are not interchangeable, and a blank status enum is not assumed to be zero.
+- `src/modules/Elsa.Http/Activities/SendHttpRequestBase.cs`: Method additionally falls back to GET on null, while a
+  non-null blank method reaches `HttpMethod`. Content is attached only when ContentType and Content are non-null;
+  `SelectContentWriter` selects `JsonContentFactory` for a whitespace ContentType. An explicit blank string is not
+  the no-body behavior of an absent/null ContentType.
+- `src/modules/Elsa.Http/Activities/FlowSendHttpRequest.cs`: the input default provider supplies `[200]`; evaluated
+  null/empty ExpectedStatusCodes instead produce no numeric outcome. Preserve explicit empty lists.
+- `src/modules/Elsa.Scheduling/Activities/Delay.cs`/`Timer.cs`: declared defaults are one minute; a deliberate null
+  reads as zero TimeSpan. Elsa 4's recurring interval calculator requires a positive interval, so zero must be refused
+  instead of silently selecting one minute.
+- `src/modules/Elsa.Http/Activities/WriteHttpResponse.cs`: status is read from the typed input and assigned to the
+  actual HTTP response. Elsa 4's current WriteHttpResponse explicitly normalizes values below one to 200; blindly
+  emitting zero would therefore not preserve the legacy invalid-status behavior.
+- `src/modules/Elsa.Scheduling/Activities/Cron.cs`: 3.6.3 completes and registers no trigger for blank expressions.
+  3.5.3 lacks that disabled-path handling. This difference is recorded rather than described as identical behavior;
+  the follow-up keeps the already selected 3.6.3 baseline.
+- `src/modules/Elsa.Expressions.JavaScript/Activities/RunJavaScript/RunJavaScript.cs` (3.6.3) is under
+  `src/modules/Elsa.JavaScript/Activities/RunJavaScript/RunJavaScript.cs` in 3.5.3. Both treat no script as no work.
+
+The earlier 267 research deliberately retained literal-null/default conflation and deferred it to #3281. The follow-up
+overrides only those named built-in cases; the bare JSON-null table remains delivered. Fault.Message's accepted
+silent difference remains unchanged. Current runtime/native/corpus acceptance is NOT RUN at this planning checkpoint.
