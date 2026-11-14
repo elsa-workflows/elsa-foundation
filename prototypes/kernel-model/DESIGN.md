@@ -268,6 +268,11 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   every active subscription, while retaining the last committed state, fault details and configured history. The
   parent still receives the faulted-child notice. Later arrivals are dropped. Suspension preserves subscriptions;
   a future explicit recovery operation must restore waits, with kept-event semantics needed for events in the gap.
+  Consuming a genuine job ticket retires only its exact typed key in the same commit. Unrelated already-entered jobs
+  retain their completion path; queued callbacks still cannot enter an ended, withheld or different creation. A due,
+  valid exhausted input is a pending Park and precedes sibling trial/admission. Terminal metadata keeps the original
+  status and fault, reports the committed status, and emits no second parent completion. Invalid earlier prototype
+  rows remain unsupported pre-GA; this adds no repair scan. Public job-ticket copies and supplied completions are refused.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
 - **Edge cases:** a message to a missing target without a start spec is dropped and journalled; to an ended instance,
   consumed and dropped.

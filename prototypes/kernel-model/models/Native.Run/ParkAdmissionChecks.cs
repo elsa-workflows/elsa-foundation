@@ -63,7 +63,7 @@ internal static class ParkAdmissionChecks
         {
             await Send("fault", "explode");
             await Pump(() => store.Instances[id].Status == InstanceStatus.Faulted);
-            scheduler.Drain();
+            if (mode != "recreated") scheduler.Drain();
             await owner.RunAsync();
             Require(model.Entered.ContainsKey((id, 1)) == (mode == "entered"), "queued terminal body entered, or real entry was lost");
             if (mode == "entered")
@@ -82,7 +82,7 @@ internal static class ParkAdmissionChecks
                 await Send("delete", Kinds.Delete);
                 await Pump(() => store.Instances[id].Retired);
                 await Send("restart", Kinds.Start, 2, new(model.Key, "d", Creation: new(2, 1, "new")));
-                await Pump(() => scheduler.Pending.Count > 0);
+                await Pump(() => store.Instances[id].Creation == 2 && scheduler.Pending.Count >= 2);
                 scheduler.Drain();
                 Require(model.Entered.ContainsKey((id, 2)) && !model.Entered.ContainsKey((id, 1)), "old callback entered a recreated target");
             }
@@ -110,9 +110,17 @@ internal static class ParkAdmissionChecks
         await owner.PollAsync();
         await owner.LoadAsync();
         await owner.FlushAsync();
+        if (mode == "unrelated")
+        {
+            await store.AddAsync(new("other", new("0/unrelated"), Kinds.Start,
+                Start: new(model.Key, "d", Creation: new(1, 0, "other"))));
+            await owner.WokenAsync(null);
+            await Pump(() => scheduler.Pending.Count >= 2);
+        }
         scheduler.Drain();
-        Require(model.Entered.ContainsKey((id, 1)) == (mode != "poison"), "poison boundary blocked eligible work or admitted a known doomed body");
-        if (mode == "poison")
+        if (mode == "unrelated") Require(model.Entered.ContainsKey(("0/unrelated", 1)), "actor-local poison blocked an unrelated actor");
+        Require(model.Entered.ContainsKey((id, 1)) == (mode is not ("poison" or "unrelated")), "poison boundary blocked eligible work or admitted a known doomed body");
+        if (mode is "poison" or "unrelated")
         {
             await Pump(() => store.Instances[id].Status == InstanceStatus.Faulted);
             Require(store.Instances[id].Fault!.Contains("on trial"), "exhausted input did not Park");
