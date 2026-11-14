@@ -7,13 +7,13 @@ using Kernel.Sim.Native;
 
 internal sealed class OwnershipWitness(string mode, bool nested, string kind)
 {
-    private static string[] Scenarios => ["fault-absorbed", "sibling-cancel", "kernel-terminate", "native-cancel", "borrow-parent"];
+    private static string[] Scenarios => ["fault-absorbed", "sibling-cancel", "kernel-terminate", "native-cancel", "borrow-parent", "queued-complete", "queued-fault", "queued-cancel"];
     internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from n in new[] { false, true } from k in Scenarios select $"lexical:ownership,{k},{m},nested={n}";
     internal static void Run()
     {
         foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var n in new[] { false, true }) foreach (var k in Scenarios)
             new OwnershipWitness(m, n, k).Execute();
-        Console.WriteLine("20/20 native lexical ownership/fault/cancellation schedules passed; not incident/retry recovery.");
+        Console.WriteLine("32/32 native lexical ownership/fault/cancellation schedules passed; not incident/retry recovery.");
     }
     private readonly World _world = new(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
     private readonly InstanceRef _target = InstanceRef.In(0, "scope-ownership");
@@ -26,7 +26,18 @@ internal sealed class OwnershipWitness(string mode, bool nested, string kind)
     private void Execute()
     {
         Node root;
-        if (kind == "borrow-parent") root = Wf.Node<BorrowingParent>("parent").With(
+        if (kind.StartsWith("queued-", StringComparison.Ordinal))
+        {
+            var disposal = kind["queued-".Length..];
+            var queued = Wf.Node<QueuedScopeOwner>("queued", ("Disposition", disposal)).With(Wf.Set("queued-work", "escaped", true));
+            root = disposal switch
+            {
+                "complete" => queued,
+                "fault" => Wf.Parallel("pair", 1, Wf.Event("survivor-wait", "survivor"), queued),
+                _ => Wf.Parallel("pair", 1, queued, Wf.Set("winner", "winner", true))
+            };
+        }
+        else if (kind == "borrow-parent") root = Wf.Node<BorrowingParent>("parent").With(
             Wf.Node<ScopeBorrower>("borrower", ("Ancestor", Binding.Var("ancestor"))).With(Wf.Sequence("borrow-work", Wf.Event("borrow-wait", "borrow"), Wf.Set("borrow-write", "total", Binding.Expr("total + 1")))),
             Wf.Set("read", "observed", Binding.Var("total")));
         else
@@ -39,7 +50,18 @@ internal sealed class OwnershipWitness(string mode, bool nested, string kind)
         if (nested) root = Wf.Flowchart("outer", [root, Wf.Set("returned", "returned", true)], [new(root.Id, "returned")]);
         NativeWorkflows.Registry.Add(Wf.Workflow("scope-ownership", root));
         Apply(new("take", Actor.Id)); Add(new("start", _target, Kinds.Start, Start: NativeModel.Spec("scope-ownership", mode) with { Creation = new(1, 0, "ownership") })); Drain();
-        if (kind is "kernel-terminate" or "native-cancel")
+        if (kind.StartsWith("queued-", StringComparison.Ordinal))
+        {
+            Check(Native.LexicalScopes is null && Native.Agenda.All(w => w.LexicalScope is null) && Native.Variables.GetValueOrDefault("escaped") is null,
+                "L9: owner disposition retained queued scoped work or resources");
+            if (kind == "queued-fault")
+            {
+                Check(_world.Store.Instances[_target.Id].Status == InstanceStatus.Running, "L9: queued owner fault was not absorbed");
+                Reload(); Release("survivor"); Drain();
+            }
+            Finished();
+        }
+        else if (kind is "kernel-terminate" or "native-cancel")
         {
             Check(Native.LexicalScopes is { Count: 2 }, "L9: cancellation did not start with live resources");
             Add(new("cancel", _target, kind == "kernel-terminate" ? Kinds.Terminate : NativeKinds.Cancel, TargetCreation: 1)); Drain();
@@ -72,6 +94,7 @@ internal sealed class OwnershipWitness(string mode, bool nested, string kind)
             Release("A"); Drain(); Finished();
         }
         var records = _world.Store.Journal.Values.Where(j => j.Instance == _target.Id).SelectMany(j => Json.Read<string[]>(j.Entries)).ToArray();
+        if (kind.StartsWith("queued-", StringComparison.Ordinal)) Check(records.Contains("lexical-queued:" + kind["queued-".Length..]), "L9: queued owner disposition proof did not execute");
         if (kind == "sibling-cancel") foreach (var guard in new[] { "foreign-schedule", "foreign-create", "foreign-release" })
             Check(records.Contains("lexical-refused:" + guard), "L5: foreign ownership guard proof was skipped");
         if (kind == "borrow-parent") Check(records.Contains("lexical-refused:ancestor-release"), "L5: borrowed scope owner guard proof was skipped");
@@ -183,4 +206,18 @@ internal sealed class ScopeBorrower : CompositeActivity
         context.ScheduleInScope(context.Children[0], own);
     }
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+}
+
+internal sealed class QueuedScopeOwner : CompositeActivity
+{
+    public QueuedScopeOwner() { }
+    [Input] public string Disposition { get; set; } = "";
+    protected internal override void Execute(CompositeContext context)
+    {
+        var scope = context.CreateLexicalScope(new Dictionary<string, JsonNode?> { ["local"] = Values.From(1) });
+        context.ScheduleInScope(context.Children[0], scope); context.Record("lexical-queued:" + Disposition);
+        if (Disposition == "complete") context.Complete();
+        else if (Disposition == "fault") context.Fault(new ActivityFault("expected-queued-fault", "ordinary queued disposal witness"));
+    }
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => throw new InvalidOperationException("L9: cancelled queued child executed");
 }

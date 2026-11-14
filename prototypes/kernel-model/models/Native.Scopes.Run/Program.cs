@@ -6,8 +6,8 @@ using Kernel.Sim;
 using Kernel.Sim.Native;
 
 var cases = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true } from reload in new[] { false, true }
-    select (mode, nested, reload)).ToArray();
-string Name((string mode, bool nested, bool reload) c) => $"lexical:cross-phase,{c.mode},nested={c.nested},reload={c.reload}";
+    select (mode, nested, reload, agenda: false)).Concat(from nested in new[] { false, true } select (mode: Modes.Durable, nested, reload: true, agenda: true)).ToArray();
+string Name((string mode, bool nested, bool reload, bool agenda) c) => c.agenda ? $"lexical:agenda-reload,{c.mode},nested={c.nested}" : $"lexical:cross-phase,{c.mode},nested={c.nested},reload={c.reload}";
 if (args is ["--list"]) { foreach (var c in cases) Console.WriteLine(Name(c)); foreach (var name in LifecycleWitness.Names.Concat(SafetyWitness.Names).Concat(OwnershipWitness.Names).Concat(ReaderWitness.Names)) Console.WriteLine(name); return; }
 if (args.Length != 0) throw new ArgumentException("Use --list or no argument.");
 foreach (var c in cases)
@@ -22,7 +22,7 @@ foreach (var c in cases)
     NativeWorkflows.Registry.Add(Wf.Workflow("scope-proof", root, ("outer", 7)));
     void Check(bool ok, string reason) { if (!ok) throw new InvalidOperationException(reason); }
     void Apply(Act act) { world.Apply(act); if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
-    void Drain()
+    void Drain(bool scheduledCut = false)
     {
         for (var i = 0; i < 100; i++)
         {
@@ -30,17 +30,25 @@ foreach (var c in cases)
             Apply(new("poll", actor.Id)); if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
             if (actor.Worker.Ready.Contains(target.Id)) Apply(new("turn", actor.Id, S: target.Id));
             else if (!actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
-            if (actor.Worker.NeedsFlush) Apply(new("flush", actor.Id)); if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
+            if (actor.Worker.NeedsFlush) Apply(new("flush", actor.Id));
+            if (scheduledCut && world.Store.Instances.TryGetValue(target.Id, out var row) && Json.Read<NativeState>(row.State).Agenda.Any(w => w.LexicalScope is not null)) return;
+            if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
         }
         throw new InvalidOperationException("L0: scope proof exceeded its bounded drain");
     }
     NativeState State() => Json.Read<NativeState>(world.Store.Instances[target.Id].State);
     Apply(new("take", Actor().Id));
-    Apply(new("add", M: new("start", target, Kinds.Start, Start: NativeModel.Spec("scope-proof", c.mode)))); Drain();
+    Apply(new("add", M: new("start", target, Kinds.Start, Start: NativeModel.Spec("scope-proof", c.mode)))); Drain(c.agenda);
     var saved = State();
     Check(saved.LexicalScopes is { Count: 1 }, "L2: lexical scope was not stored in the ordinary native checkpoint");
     var resource = saved.LexicalScopes!.Single(); var frame = saved.Frames.Values.Single(f => f.Node == "session");
-    Check(resource.Value.Owner == frame.Id && resource.Value.Values["counter"]!.ToString() == "1", "L2: lexical owner/value changed");
+    Check(resource.Value.Owner == frame.Id && resource.Value.Values["counter"]!.ToString() == (c.agenda ? "0" : "1"), "L2: lexical owner/value changed");
+    if (c.agenda)
+    {
+        Check(saved.Agenda.Any(w => w.LexicalScope == resource.Key), "L2: scheduled scoped work was not committed before the crash");
+        Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1 - owner; Apply(new("take", Actor().Id)); Drain();
+        Check(State().LexicalScopes!.Single().Key == resource.Key && State().LexicalScopes!.Single().Value.Values["counter"]!.ToString() == "1", "L2: scheduled lexical work lost its binding across a cold-owner restart");
+    }
     if (c.reload)
     {
         Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1 - owner; Apply(new("take", Actor().Id)); Drain();
@@ -59,7 +67,7 @@ LifecycleWitness.Run();
 SafetyWitness.Run();
 OwnershipWitness.Run();
 ReaderWitness.Run();
-Console.WriteLine("8/8 ordinary cross-phase scope schedules passed; StateMachine attachment, incident/retry and product/provider qualification remain separate.");
+Console.WriteLine("10/10 ordinary cross-phase scope schedules passed; StateMachine attachment, incident/retry and product/provider qualification remain separate.");
 
 // The resource belongs to this live composite; separate ordinary phases share its declared values.
 internal sealed class ScopeSession : CompositeActivity
