@@ -97,7 +97,7 @@ and `.Relational` (see [Cluster membership and EF module packages](#cluster-memb
 beside its three `CShells.*.Abstractions` ones; `Elsa.Workbench` shares the ten and the two plus the domain `.Core`
 packages its own features need, `Elsa.Workflows.Runtime.Core` among them. So each image refuses a feed
 package that needs a newer shared Elsa package than it carries. A host built from source records its Elsa
-packages at their line's dev version (`4.0.0-dev` today), which every Elsa feed package's range excludes, so
+packages at their line's dev version (`4.1.0-dev` today, `4.0.0-dev` for the contract packages on Line A), which every Elsa feed package's range excludes, so
 declaring them would refuse every Elsa feed package that depends on one. A source build therefore keeps the
 committed `appsettings.Production.json`, declares only its CShells/Nuplane shares (and, on `Elsa.Foundation.Host`, EF
 Core's, whose versions are real in any build), and carries a named exemption for the Elsa ones, which it leaves
