@@ -1,5 +1,9 @@
 # Write volume and bloat on PostgreSQL
 
+> **Historical scope (13 November 2026):** the original sections below describe earlier schema, cost and stress
+> experiments. Keep those observations separate from the [14 November scoped-inbox supplement](#14-november-scoped-inbox-foundation);
+> their stress, checkpoint, bloat and tuning conclusions are not requalified by the later finite cost run.
+
 Design-now question 7 of the sketch (`docs/reports/clean-slate-kernel/design-sketch-draft-5.md`, "Open questions"). A
 commit rewrites the instance's whole row, appends a journal row (at Full history), and inserts, then updates, then
 deletes inbox rows. The owner's direction of 12 November: keep snapshot plus journal as the default, measure bytes per
@@ -309,3 +313,63 @@ has:
 - the tuple and size table before, at the end and after the wait;
 - `pgstattuple`, including the Instances TOAST table;
 - the dead-tuple timeline.
+
+## 14 November: scoped-inbox foundation
+
+These are fresh, authored measurements of landed source `1b101defd87ae0275f0e2c2762ee317315a881e3`,
+complete tree `088cb73ed8b1279db0a1279d3902fbe882a08b94`, prototype tree
+`3070133d004df19cdc4a0fa2ddeb3d9085395a8a` (both trees identical to candidate `88cd3dec`). They use the
+actual generic `EngineRun.RunAsync` through an external reflection adapter, with no replacement workload.
+The earlier provisional R18 source had identical EF provider/schema/cost and conformance code; its Worker
+changed before landing. R18's numbers remain separate historical observations; no difference is assigned
+causally to that change. No independent evidence acceptance, architecture review, product qualification,
+provider capability or budget/default adoption is claimed here.
+
+PostgreSQL 17.11 ran in one newly owned isolated `postgres:17` container on a random loopback port,
+with batch fence and read committed isolation. `fsync`, `full_page_writes`, `synchronous_commit` and default
+autovacuum were on; autovacuum nap 60 s, checkpoint timeout 300 s, WAL retention 256 MB, max WAL 1024 MB,
+and table settings remained defaults. There was no hand-tuned index, fillfactor change, forced vacuum/checkpoint,
+session kill or chaos. The actual options were `cost postgres <private fresh connection> writes=1 sizes=1
+many=100,1000 fence=batch`, with Full, State, Minimal, or Full plus `pad=4096`.
+
+Every variant finished with **2,215 instances, zero unfinished instances and zero unconsumed messages**.
+The same 16 cases include owner/outside ephemeral, balanced and durable no-ops; a parent with three children;
+terminate/delete; an event that starts an instance; projector and heartbeat; and 100/1,000 owner/polled starts.
+Three additional 1 KB state trials per variant each verified ten landed revisions and expected history.
+Partition position was 2,272 for Full/State/padded Full and 1 for Minimal; it is not a commit count.
+This run does not qualify explicit commit windows, clock/creation facts, private Job stress/recovery, other
+providers, sustained turnover, checkpoint/vacuum capacity or physical-wire behavior.
+
+| Case: WAL bytes per landed instance commit (integer truncation) | Full | State | Minimal | Full + 4 kB pad |
+|---|---:|---:|---:|---:|
+| Ten durable no-ops started on owner | 919 | 911 | 655 | 5659 |
+| 1,000 balanced starts on owner | 711 | 583 | 292 | 5251 |
+| 1,000 balanced starts arriving by poll, commit window | 1953 | 1869 | 1528 | 6492 |
+
+Outside insertion setup for that last row is separate: 612,256 / 612,176 / 650,472 / 612,176 WAL bytes for
+Full / State / Minimal / padded Full. Full's combined observation is `(1,953,768 + 612,256) / 1,000 =
+2,566.024` bytes per start. The total is the actual harness's insert-LSN-window delta; its cost output does
+not print individual LSN boundary strings. Retained relation splits distinguish this database's relations.
+Catalog/background work, including another retained database's work, can enter the window: State poll and
+Minimal setup include `pg_statistic`/catalog WAL. Each variant is one finite window without repeated-window
+uncertainty bounds. These observations do not establish a causal ratio or universal storage/tuning rule.
+
+Commands and transaction ends are actual driver interception counters: durable no-ops use 10 + 10 = 20
+counted; 1,000 owner starts use 3 + 1 = 4 (Minimal 2 + 1 = 3); poll starts use 8 + 2 = 10 (Minimal 7 + 2 = 9).
+The harness's `sent` column is derived. No proxy/wire counter was enabled; none of these are observed physical
+wire counts. Incidental timing columns are not used as speed or throughput evidence.
+
+After closing workload pools, exact tuple scans were taken at end and after an unforced 70-second wait.
+Padded Full's TOAST live/dead/free tuple bytes were 9,496,302 / 141,939 / 2,535,372 at end and
+9,496,302 / 0 / 2,677,740 after. Its Instances total relation size stayed **12,877,824 bytes**: removing dead
+TOAST tuples did not shrink the files. Full's total grew 565,248 → 573,440 bytes; State and Minimal stayed
+565,248. This burst experiment does not establish steady-state bloat or guarantee vacuum at every relation.
+
+The [dated evidence folder](measurements/write-cost-2026-11-14/README.md) publishes all 64 cost cases, eight
+selected tuple snapshots, exact source/relevant binary/artifact hashes, settings/options and reproducible
+adapter text. Provenance also identifies all 38 retained local raw files by digest; it does not publish their
+contents. Each fresh random target was independently absent and passed the adapter's absence/loopback/port
+checks before the harness's existing `EnsureDeleted`. An existing populated target refused invocation;
+DDL logs recorded **zero DROP DATABASE**. Only the exact newly owned container was stopped after checking
+ID and labels; all four databases remain retained. Reproduction must refuse existing targets, preserve
+credentials privately, and retain databases. No earlier retained container or database was reset or deleted.

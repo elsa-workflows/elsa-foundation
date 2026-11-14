@@ -28,8 +28,8 @@ internal static class BpmnAuthoredDirectProjection
         {
             var state = ReadState(version);
             if (state is null || state.Variables is null || state.Inputs is null || state.Outputs is null ||
-                state.Variables.Any() || state.Inputs.Any() || state.Outputs.Any() || state.StrategyOptions is not null)
-                throw new BpmnModelValidationException("Direct authored BPMN currently requires a closed workflow without variables or strategy overrides.");
+                state.Variables.Any() || state.Outputs.Any() || state.StrategyOptions is not null)
+                throw new BpmnModelValidationException("Direct authored BPMN requires declared inputs without workflow variables, outputs or strategy overrides.");
             var root = state.RootActivity;
             if (root is null || root.Intrinsic is not null || root.ExecutionPlacement != ActivityExecutionPlacement.Inline ||
                 root.Inputs is null || root.Outputs is null || root.Inputs.Any() || root.Outputs.Any() ||
@@ -107,14 +107,34 @@ internal static class BpmnAuthoredDirectProjection
     {
         try
         {
-            return string.IsNullOrWhiteSpace(version.StateSource) ? version.State
-                : JsonSerializer.Deserialize<WorkflowDefinitionState>(version.StateSource, Strict);
+            if (string.IsNullOrWhiteSpace(version.StateSource))
+            {
+                if (version.State?.Inputs?.Any(input => input.DefaultValue is { ValueKind: JsonValueKind.Null }) == true)
+                    throw UnsupportedNullDefault();
+                return version.State;
+            }
+            // Inspect immutable source before nullable deserialization loses default presence.
+            // No-default declarations must omit this member; a null member is ambiguous in v1.
+            using var source = JsonDocument.Parse(version.StateSource);
+            var inputs = ReadMember(source.RootElement, "inputs");
+            if (inputs.ValueKind == JsonValueKind.Array && inputs.EnumerateArray().Any(input =>
+                    ReadMember(input, "defaultValue").ValueKind == JsonValueKind.Null))
+                throw UnsupportedNullDefault();
+            return JsonSerializer.Deserialize<WorkflowDefinitionState>(version.StateSource, Strict);
         }
         catch (JsonException exception)
         {
             throw new BpmnModelValidationException($"Authored BPMN version '{version.Id}' has invalid or unsupported source JSON.", exception);
         }
     }
+
+    private static JsonElement ReadMember(JsonElement value, string name) => value.ValueKind == JsonValueKind.Object
+        ? value.EnumerateObject().Where(property => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            .Select(property => property.Value).LastOrDefault()
+        : default;
+
+    private static BpmnModelValidationException UnsupportedNullDefault() =>
+        new("The foundation-inputs-v1 profile does not support explicit-null defaults or ambiguous null default members; omit defaultValue when no default is intended.");
 
     /// <summary>Validates one owned human binding and returns whether its completion requires a claim.</summary>
     private static bool ValidateHumanBinding(BpmnElement element, string metadata)
@@ -132,14 +152,31 @@ internal static class BpmnAuthoredDirectProjection
         return value.TryGetProperty("claimRequired", out var required) && required.ValueKind == JsonValueKind.True;
     }
 
-    internal sealed record ServiceSelection(BpmnNativeServiceBinding Binding, string SourceReferenceId);
+    internal static WorkflowExecutableInputContract InputContract(WorkflowDefinitionVersion version)
+    {
+        var inputs = ReadState(version)?.Inputs ?? throw new BpmnModelValidationException("The authored workflow inputs are missing.");
+        return new(WorkflowExecutableInputContract.CurrentVersion, inputs.Select(input =>
+        {
+            if (!string.IsNullOrWhiteSpace(input.DefaultSyntax) && input.DefaultSyntax != "Literal")
+                throw new BpmnModelValidationException($"Workflow input '{input.Name}' supports only a literal default.");
+            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue);
+        }).ToArray());
+    }
+
+    internal sealed record ServiceSelection(BpmnNativeServiceBinding Binding, string SourceReferenceId,
+        BpmnWorkerInputMapping? InputMapping = null);
 
     private static ServiceSelection ReadServiceBinding(string elementId, string metadata)
     {
         using var document = JsonDocument.Parse(BpmnDirectBindingMetadata.Validate(metadata, elementId));
         var value = document.RootElement;
-        RequireProperties(value, elementId, "formatVersion", "kind", "sourceReferenceId", "executable", "businessErrorCode", "faultPolicy");
-        if (ReadInteger(value, "formatVersion", elementId) != 1 || ReadString(value, "kind", elementId) != "nativeService")
+        var format = ReadInteger(value, "formatVersion", elementId);
+        if (format == 1)
+            RequireProperties(value, elementId, "formatVersion", "kind", "sourceReferenceId", "executable", "businessErrorCode", "faultPolicy");
+        else if (format == 2)
+            RequireProperties(value, elementId, "formatVersion", "kind", "sourceReferenceId", "executable", "businessErrorCode", "faultPolicy", "inputs");
+        else throw InvalidBinding(elementId);
+        if (ReadString(value, "kind", elementId) != "nativeService")
             throw InvalidBinding(elementId);
         var pin = value.GetProperty("executable");
         RequireProperties(pin, elementId, "artifactId", "definitionId", "definitionVersionId", "artifactVersion", "artifactHash");
@@ -157,8 +194,32 @@ internal static class BpmnAuthoredDirectProjection
         if (ReadInteger(policy, "formatVersion", elementId) != 1 || attempts is < 1 or > BpmnServiceFaultPolicy.MaximumAttempts ||
             disposition == BpmnServiceFaultDisposition.FinalFault && attempts != 1)
             throw InvalidBinding(elementId);
+        BpmnWorkerInputMapping? mapping = null;
+        if (format == 2)
+        {
+            var inputs = value.GetProperty("inputs");
+            if (inputs.ValueKind != JsonValueKind.Object || inputs.EnumerateObject().Select(item => item.Name)
+                    .Distinct(StringComparer.Ordinal).Count() != inputs.EnumerateObject().Count()) throw InvalidBinding(elementId);
+            var selections = new Dictionary<string, BpmnModelInputSource>(StringComparer.Ordinal);
+            foreach (var item in inputs.EnumerateObject())
+            {
+                var sourceKind = ReadString(item.Value, "kind", elementId);
+                if (sourceKind == "Input")
+                {
+                    RequireProperties(item.Value, elementId, "kind", "name");
+                    selections.Add(item.Name, new("Input", ReadString(item.Value, "name", elementId)));
+                }
+                else if (sourceKind == "Literal")
+                {
+                    RequireProperties(item.Value, elementId, "kind", "value");
+                    selections.Add(item.Name, new("Literal", value: item.Value.GetProperty("value")));
+                }
+                else throw InvalidBinding(elementId);
+            }
+            mapping = new("service:" + elementId, selections);
+        }
         return new(new("service:" + elementId, identity, ReadString(value, "businessErrorCode", elementId), new(1, disposition, attempts)),
-            ReadString(value, "sourceReferenceId", elementId));
+            ReadString(value, "sourceReferenceId", elementId), mapping);
     }
 
     private static void RequireProperties(JsonElement value, string elementId, params string[] names)
@@ -170,11 +231,11 @@ internal static class BpmnAuthoredDirectProjection
     }
 
     private static string ReadString(JsonElement value, string name, string elementId) =>
-        value.GetProperty(name) is { ValueKind: JsonValueKind.String } property && !string.IsNullOrWhiteSpace(property.GetString())
+        value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(property.GetString())
             ? property.GetString()! : throw InvalidBinding(elementId);
 
     private static int ReadInteger(JsonElement value, string name, string elementId) =>
-        value.GetProperty(name) is { ValueKind: JsonValueKind.Number } property && property.TryGetInt32(out var number)
+        value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var number)
             ? number : throw InvalidBinding(elementId);
 
     private static BpmnModelValidationException InvalidBinding(string elementId) =>

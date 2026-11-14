@@ -93,6 +93,27 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     public Task<EfIdentityWriteResult> DeleteExternalIdentityAsync(string tenantId, string userId, string provider, string providerSubject, long expectedUserVersion, CancellationToken cancellationToken = default) =>
         DeleteExternalIdentityCoreAsync(tenantId, userId, provider, providerSubject, expectedUserVersion, cancellationToken);
 
+    internal Task<EfIdentityWriteResult> DeleteQualifiedExternalIdentityAsync(ExternalIdentityKey key, IamRevisionGuard owner,
+        long expectedLinkVersion, CancellationToken cancellationToken) =>
+        ExecuteAsync(key.TenantId, "delete-qualified-external-login",
+            Fingerprint(key.TenantId, key.Provider, key.Issuer, key.Subject, owner.Id, owner.Revision,
+                expectedLinkVersion.ToString(CultureInfo.InvariantCulture)), async token =>
+        {
+            var user = await LoadUserAsync(key.TenantId, owner.Id, token);
+            if (user is null) return new(EfIdentityWriteStatus.NotFound);
+            if (EfIamRevisionGuards.User(user)?.Revision != owner.Revision) return Conflict(user.Id);
+            var id = EfIdentityStoreSupport.ExternalIdentityId(key.TenantId, key.Provider, key.Subject, key.Issuer);
+            var login = await context.ExternalIdentities.SingleOrDefaultAsync(row => row.Id == id, token);
+            if (login is null) return new(EfIdentityWriteStatus.NotFound);
+            EfIdentityStoreSupport.EnsureExternalIdentity(login, key.TenantId, key.Provider, key.Subject, issuer: key.Issuer);
+            if (!Same(login.UserId, owner.Id) || login.Revision != expectedLinkVersion) return Conflict(login.Id);
+            var ids = Registry(user, UserRegistry.Logins); ids.Remove(id); SetRegistry(user, UserRegistry.Logins, ids);
+            user.Revision = Math.Max(checked(user.Revision + 1), checked(login.Revision + 1));
+            user.SchemaVersion = IdentityIamEfModule.SchemaVersion;
+            context.ExternalIdentities.Remove(login);
+            return new(EfIdentityWriteStatus.Deleted, user.Revision, Id: id);
+        }, cancellationToken);
+
     public Task<EfIdentityWriteResult> AddUserRoleAsync(string tenantId, string userId, string roleId, long expectedUserVersion, UserRoleEntity link, CancellationToken cancellationToken = default) =>
         MutateUserRoleAsync(tenantId, userId, roleId, expectedUserVersion, link, delete: false, cancellationToken);
 
@@ -350,6 +371,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     {
         ArgumentNullException.ThrowIfNull(login);
         _ = EfIdentityStoreSupport.ExternalOrderKey(login.Provider, login.ProviderSubject);
+        EfIdentityStoreSupport.ValidateIssuer(login.Issuer);
         var operation = "save-external-login";
         var fingerprint = Fingerprint(
             operation,
@@ -358,6 +380,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             replaceProviderDisplayName ? "replace-display-name" : "preserve-display-name",
             replaceProviderDisplayName ? login.ProviderDisplayName : null,
             login.ProviderSubject,
+            login.Issuer,
             login.UserId,
             login.LinkedAt.ToString("O", CultureInfo.InvariantCulture),
             login.LastSeenAt?.ToString("O", CultureInfo.InvariantCulture),
@@ -368,11 +391,12 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             returnOwnerResult.ToString());
         return await ExecuteAsync(login.TenantId, operation, fingerprint, async token =>
         {
-            var id = EfIdentityStoreSupport.CompoundKey(login.TenantId, login.Provider, login.ProviderSubject);
+            var id = EfIdentityStoreSupport.ExternalIdentityId(login.TenantId, login.Provider, login.ProviderSubject, login.Issuer);
             login.Id = id;
             var existing = await context.ExternalIdentities.SingleOrDefaultAsync(x => x.Id == id, token);
             if (existing is not null)
-                EfIdentityStoreSupport.EnsureExternalIdentity(existing, login.TenantId, login.Provider, login.ProviderSubject);
+                EfIdentityStoreSupport.EnsureExternalIdentity(existing, login.TenantId, login.Provider, login.ProviderSubject, issuer: login.Issuer);
+            var changesOwner = existing is not null && !Same(existing.UserId, login.UserId);
             if (existing is not null &&
                 policy == EfExternalLoginOwnershipPolicy.CreateOrSameOwner &&
                 !Same(existing.UserId, login.UserId))
@@ -411,6 +435,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             if (existing is not null && !replaceProviderDisplayName)
                 login.ProviderDisplayName = existing.ProviderDisplayName;
             var newRevision = existing is null ? 1 : checked(existing.Revision + 1);
+            if (login.Issuer is not null) newRevision = Math.Max(checked(loaded[newOwnerKey].Revision + 1), newRevision);
             login.Revision = newRevision;
             if (existing is null)
                 context.ExternalIdentities.Add(login);
@@ -429,7 +454,11 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                     ids.Remove(id);
                 SetRegistry(pair.Value, UserRegistry.Logins, ids);
                 EnsureUserRelationshipCapacity(pair.Value, beforeCount);
-                pair.Value.Revision = checked(pair.Value.Revision + 1);
+                // A login returning to an earlier owner must not reactivate that owner's old
+                // cookie/access/refresh credentials. Fence both owners in this same IAM commit.
+                if (changesOwner) pair.Value.SecurityStamp = Guid.NewGuid().ToString("N");
+                pair.Value.Revision = login.Issuer is null ? checked(pair.Value.Revision + 1) : Math.Max(checked(pair.Value.Revision + 1), newRevision);
+                pair.Value.SchemaVersion = IdentityIamEfModule.SchemaVersion;
                 if (string.Equals(pair.Key, newOwnerKey, StringComparison.Ordinal))
                     ownerResult = Updated(pair.Value.Id, pair.Value.Revision);
             }
@@ -545,7 +574,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Prepare(RoleClaimEntity row, string tenant, string role) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.RoleId = role; row.RoleLookupKey = EfIdentityStoreSupport.Lookup(tenant, role); row.ClaimKey = EfIdentityStoreSupport.CompoundKey(tenant, row.ClaimType, row.ClaimValue); row.Id = ClaimId(tenant, role, row.ClaimType, row.ClaimValue); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     private static void Prepare(UserRoleEntity row, string tenant, string user, string role) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.RoleId = role; row.RoleLookupKey = EfIdentityStoreSupport.Lookup(tenant, role); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     private static void Prepare(UserTokenEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.TokenKey = EfIdentityStoreSupport.CompoundKey(tenant, row.LoginProvider, row.Name); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
-    private static void Prepare(ExternalIdentityEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.ProviderLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.Provider); row.ProviderSubjectLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.ProviderSubject); row.ExternalOrderKey = EfIdentityStoreSupport.ExternalOrderKey(row.Provider, row.ProviderSubject); row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
+    private static void Prepare(ExternalIdentityEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.ProviderLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.Provider); row.ProviderSubjectLookupKey = EfIdentityStoreSupport.ExternalSubjectLookup(tenant, row.ProviderSubject, row.Issuer); row.ExternalOrderKey = EfIdentityStoreSupport.ExternalOrderKey(row.Provider, row.ProviderSubject); row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     // A fresh row (no prior SchemaVersion) carries only current-format registries already, set by the caller before
     // this runs; a row this ever receives with a prior stamp - not the case today - upcasts from it instead, so this
     // restamps completely on its own (#2144).
@@ -571,7 +600,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Apply(RoleClaimEntity target, RoleClaimEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.RoleId = source.RoleId; target.RoleLookupKey = source.RoleLookupKey; target.ClaimType = source.ClaimType; target.ClaimValue = source.ClaimValue; target.ClaimKey = source.ClaimKey; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
     private static void Apply(UserTokenEntity target, UserTokenEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.LoginProvider = source.LoginProvider; target.Name = source.Name; target.TokenKey = source.TokenKey; target.Value = source.Value; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
     private static void Apply(UserRoleEntity target, UserRoleEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.RoleId = source.RoleId; target.RoleLookupKey = source.RoleLookupKey; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
-    private static void Apply(ExternalIdentityEntity target, ExternalIdentityEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.Provider = source.Provider; target.ProviderDisplayName = source.ProviderDisplayName; target.ProviderLookupKey = source.ProviderLookupKey; target.ProviderSubject = source.ProviderSubject; target.ProviderSubjectLookupKey = source.ProviderSubjectLookupKey; target.ExternalOrderKey = source.ExternalOrderKey; target.LinkedAt = source.LinkedAt; target.LastSeenAt = source.LastSeenAt; target.LinkPolicy = source.LinkPolicy; target.Revision = source.Revision; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
+    private static void Apply(ExternalIdentityEntity target, ExternalIdentityEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.Provider = source.Provider; target.ProviderDisplayName = source.ProviderDisplayName; target.ProviderLookupKey = source.ProviderLookupKey; target.Issuer = source.Issuer; target.ProviderSubject = source.ProviderSubject; target.ProviderSubjectLookupKey = source.ProviderSubjectLookupKey; target.ExternalOrderKey = source.ExternalOrderKey; target.LinkedAt = source.LinkedAt; target.LastSeenAt = source.LastSeenAt; target.LinkPolicy = source.LinkPolicy; target.Revision = source.Revision; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
     private static void Apply(TenantMembershipEntity target, TenantMembershipEntity source) { target.Status = source.Status; target.RoleIdsJson = source.RoleIdsJson; target.DirectPermissionsJson = source.DirectPermissionsJson; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
 
     /// <summary>

@@ -1174,6 +1174,140 @@ Every flaw is still caught within 20,000 seeds.
 
 **Not done:** the owner on another node still cannot tell a waiting node it was lost (504 at the deadline, as before).
 
+### 25.6 Short waits of an Ephemeral instance stay in memory (decision 4, F-N7). Run
+
+**What changed.** An Ephemeral instance that has never been written stays unwritten while its turns wait only for
+themselves. That holds for a turn when:
+- every message it sends goes to the instance itself and is a job's ticket, or is due within the short wait (a message
+  without a due time is due now);
+- it subscribes nothing, publishes nothing, and cancels or recalls only what is in memory;
+- it took no message that is a row (`DurableTurn.CanWaitInMemory`).
+
+Its row, state and those messages are then held in memory only (`Slot.Unwritten`), and it is never evicted. The short
+wait is `StartSpec.ShortWait`, which the native HTTP host sets to the request's timeout, else `WorkerOptions.ShortWait`
+(5 s).
+
+It is written, at the revision it has, in three cases:
+- **A turn that does anything else.** The turn's row is then inserted, not updated.
+- **The end of the short wait** (`Worker.Outgrown`, then `IActorType.Write`).
+- **Before anything durable reaches it.** A message that is a row, or a kernel command, finds it written first
+  (`Worker.RunTurn`). Then it is an ordinary instance for whatever the message does.
+
+The commit that writes it also writes, as rows:
+- what it still waits for in memory: timers, job tickets and held messages (`Worker.Promote`). A finished job is written
+  as its ticket, so a later owner runs it again and puts its result first (F7). Promotion preserves the current owner's
+  order among completed results, including results taken by an interrupted turn. While catching up, those results wait
+  for their ticket rows to be observed before they can run; they are not re-executed by the current owner. A later
+  owner's re-executed jobs can complete in a different order.
+- the history of its turns in memory, in the same commit's journal row (`TurnOutcome.Pending`). This holds for a park
+  too (`IActorType.Park` takes it).
+
+A park of an instance in memory whose write the store refused carries no state (`"null"`): there is no accepted row to
+fall back on. When an unwritten instance parks, its volatile jobs are retired with the faulted row, rather than creating
+new runnable tickets for a later owner; its last sealed model state and history are preserved when the row was accepted.
+Jobs already running may still complete external effects. This does not change how durable Park handles its other jobs.
+An instance that ends in memory before its deadline writes nothing at all. What it still waited for goes with it, and its
+jobs are cancelled (`Worker.ForgetInMemory`). An owner that gives its partition up (`Worker.ReleaseAsync`: a balancing
+round, a rolling deploy) writes its instances in memory first, so the next owner has them; if a commit is in flight
+then, they are lost with the memory, as in a crash.
+
+**What it loosens, said plainly.**
+The command boundary uses its explicit due time, or its stable first-observation time for an immediate command.
+An earlier durable sequence also proves that an input was accepted before that command; a timer still has to be
+due at the boundary. A late first poll therefore does not discard an earlier due durable timer. If a command matures
+while a selected trial commit's acknowledgement is delayed, the worker retains its cut before releasing the trial
+cohort. Newly arriving input cannot overtake it after that acknowledgement. These rules retain ordinary same-actor
+batching and the selected trial; they add no store call or provider state.
+
+- **Late journal start.** The instance's journal starts at the revision it is written at, not at 1. The simulation's I2
+  now allows a first revision equal to the last revision the instance had in memory (a write of it as it is) or the
+  next (a turn or a park) (`WorkerOptions.OnKeptInMemory`), for those instances only, with no gap after it. What
+  happened in memory is in that first row's entries.
+- **Lost with its process.** An unwritten instance is lost with its process, as an Ephemeral run always was, and its
+  caller is told "lost". It is held for up to its short wait, which for HTTP is the route's timeout, where before it
+  was written at its first wait: the window of that loss is longer.
+
+**Found on the way.**
+- **An outside start kept in memory.** An Ephemeral instance started by a message that is a row was first kept in
+  memory too. Its start was then consumed without a commit, so a crash would have lost it. The native simulation caught
+  it (I14). Such a turn is now always written.
+- **The review found more.** Round 1:
+  - a command or a park on an instance in memory updated a row that does not exist;
+  - a command that changes nothing dropped the running instance from memory;
+  - a held message stayed in memory only after the write;
+  - an instance that ended in memory with a recall still cost a commit, and its leftover timers were journalled later;
+  - the history was lost on the park and command paths;
+  - a finished job written as its result could be ordered behind a cancel (F7);
+  - I2's allowance was unbounded;
+  - the next wake-up was not filtered.
+
+  Round 2:
+  - I2's bound was vacuous;
+  - a stand-down lost the instances in memory.
+
+  All are fixed by the rules above.
+
+**The checks.**
+- **Ephemeral requests.** The simulation's HTTP requests are now Ephemeral for the timer and job modes too, half of
+  them, as the respond mode was.
+- **Commands reach instances in memory.** Its suspends and resumes also target instances held in memory (400 in 4,000
+  seeds).
+- **I9, rows.** An instance held in memory only has no row, unless the commit that writes it is in flight.
+- **I9, leaving memory.** An instance leaves memory without a row only when it has ended (`WorkerOptions.OnLeftMemory`).
+- **Mutations.**
+  - `Flaw.ForgetShortWaits` leaves the timers and tickets in memory when the instance is written. Caught at seed 10:
+    `END 0/h35 (job) ended as Running`.
+  - `Flaw.NoWriteFirst` gives a command to an instance in memory without writing it first. Caught at seed 2,551:
+    `I9 1/h10 left memory without a row while it was Running`.
+
+**Historical gates** (before: section 25.3, the original branch's base). These runs predate integration with the
+local lease guard and shared commit clock; they are not exact-head results:
+
+| Gate | Before | After |
+|---|---|---|
+| `$SIM --seeds 200000` | 0 failed, 0 parked | 0 failed, 0 parked |
+| `$SIM --seeds 20000 --actions 1000` | 0 failed, 13 innocent parked | 0 failed, 12 innocent parked |
+| `$SIM --native --seeds 20000 --actions 1000` | 0 failed, 15 parked; 408,758 matched; 980 reruns, all told | 0 failed, 14 parked; 408,370 matched; 1,011 reruns, all told |
+| `$SIM --mutations --seeds 20000` | every flaw caught (two only in combination) | the same, plus `ForgetShortWaits` at seed 10 and `NoWriteFirst` at seed 2,551 |
+| `$SIM --native-mutations --seeds 20000` | 5 of 5 | 5 of 5 |
+| `$NAT smoke` | 31 of 31 | 31 of 31 |
+| `$NAT cost sqlite`, case 3 Ephemeral (job; Delay) | 13 calls, 2 commits each | **0, 0** |
+| `$NAT cost postgres`, case 3 Ephemeral, checked / batch | 6 / 4 round trips, 2 commits | **0 / 0**, 0 commits |
+
+Every other row of both native cost runs is the same.
+
+**Integration checks.** After merging the lease guard, deadline handling and shared commit clock, native seed 16645
+at 1,000 actions, the 23 lease checks, the deadline witness and native smoke passed. A 2,000-seed native run at
+1,000 actions had no failures and three innocent parks. The delivery-history mutation failed N6 in 95 of 1,000 native
+seeds; the two short-wait mutations were detected in a separate 3,000-seed native run. A focused in-memory clock
+witness verifies that a fact stays unstamped during a short wait and is stamped and cached at its first durable commit.
+
+**Review corrections.** Stand-down drains every bounded promotion batch while the lease remains usable. A local
+completion at or beyond the short-wait deadline first writes the waiting instance. A targeted reply forces a
+checkpoint before release, including on an immediate terminal turn. The first wait is capped by an existing reply
+address's absolute deadline. Full history snapshots entries when recorded; State and Minimal keep no pending entries.
+Six focused controls failed on the previous integrated head and passed after these corrections; two additional
+checks cover State and Minimal retention. The integrated native simulation passed 2,000 seeds at 1,000 actions with
+one innocent park; the lease, deadline, native smoke, shared-clock, Agent, Statechart and Admission witnesses passed.
+The SQLite native cost run still measured zero calls for the Ephemeral short job and timer cases with both fences.
+
+Schedules moved. The generator draws Ephemeral for more requests and sends commands to instances in memory, and an
+instance kept in memory changes what later actions find. So the parked and native counts moved, and so did most first
+failing seeds of the mutation check. Every flaw is still caught within 20,000 seeds.
+
+**Original-round limits.** The original experiment did not change the stores or run the EF cost suite. Later integration
+changed EF's message insertion ordering: the revision 9-to-10 promotion witness on PostgreSQL 16.15, SQL Server and
+MySQL checked live and recovered order, unchanged message IDs and schema, and the measured wire trips for each engine's
+default fence. The integrated PostgreSQL witness also checked both fences: two trips in-batch and three checked. These
+focused measurements are not a general EF cost-suite result.
+
+**Not done or not run in the original experiment.**
+- A native cost row for an Ephemeral wait past its short wait. It would be written: two commits, as Balanced.
+- Paths no simulation model takes, so reasoned, not run:
+  - a message held while in memory;
+  - a turn that throws while in memory;
+  - a write of an instance in memory that the store refuses (the park with state `"null"`);
+  - an instance that ends in memory with a cancel or a recall (`EndsInMemory` with cancelled tickets, `ForgetInMemory` with leftovers).
 ### 25.8 The viewer's tail read and catch-up on request (decision 11). Run
 
 **What changed.**

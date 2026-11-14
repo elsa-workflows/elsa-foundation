@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Text.Json.Serialization;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Ownership;
 
@@ -22,6 +24,30 @@ public interface IAuthenticationProviderResolver
     ValueTask<IReadOnlyList<AuthenticationProviderDescriptor>> ListAsync(CancellationToken cancellationToken = default);
 
     ValueTask<AuthenticationProviderDescriptor?> FindAsync(string providerId, string? tenantId = null, bool allowGlobalFallback = false, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Live, bounded provider descriptors contributed by a managed connection authority.</summary>
+public interface IAuthenticationProviderSource
+{
+    ValueTask<IReadOnlyList<AuthenticationProviderDescriptor>> ListAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Issues the ordinary interactive session for an already admitted canonical user. Server-only input:
+/// callers must first validate authentication evidence and admit the identity; never bind this from a request.
+/// </summary>
+[ReplacementContract]
+public interface ICanonicalUserSignInService
+{
+    string AuthenticationScheme { get; }
+    bool SupportsDurableSessions => false;
+    /// <summary>Read-only account/session eligibility. Missing support never counts as a recovery path.</summary>
+    ValueTask<bool> CanSignInAsync(PrincipalFactoryContext context, bool requiresPassword = false, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    ValueTask<AuthSession?> SignInAsync(PrincipalFactoryContext context, CancellationToken cancellationToken = default);
+    /// <summary>Rechecks live account eligibility and the opaque account-version binding of an issued session.</summary>
+    ValueTask<bool> ValidateSessionAsync(AuthenticationSessionRecord session, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+    /// <summary>Reads and validates in a tenant scope owned by the signed identity, before resource-scope selection.</summary>
+    ValueTask<AuthenticationSessionRecord?> ReadSessionAsync(TokenSubject subject, string id, CancellationToken cancellationToken = default) => ValueTask.FromResult<AuthenticationSessionRecord?>(null);
 }
 
 public interface IPrincipalFactory
@@ -51,12 +77,13 @@ public interface ITokenService
 /// </summary>
 public sealed record TokenSubject
 {
-    private TokenSubject(string tenantId, string? userId, string? provider, string? providerSubject)
+    private TokenSubject(string tenantId, string? userId, string? provider, string? providerSubject, string? issuer = null)
     {
         TenantId = tenantId;
         UserId = userId;
         Provider = provider;
         ProviderSubject = providerSubject;
+        Issuer = issuer;
     }
 
     public string TenantId { get; }
@@ -69,6 +96,9 @@ public sealed record TokenSubject
 
     /// <summary>The provider's own subject, when the subject names no Elsa user.</summary>
     public string? ProviderSubject { get; }
+
+    /// <summary>Validated upstream issuer for an issuer-qualified non-user subject; absent on existing v1 subjects.</summary>
+    public string? Issuer { get; }
 
     public static TokenSubject ForUser(string tenantId, string userId)
     {
@@ -83,6 +113,16 @@ public sealed record TokenSubject
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(providerSubject);
         return new(tenantId, null, provider, providerSubject);
+    }
+
+    /// <summary>Creates a non-user subject bound to its exact validated upstream issuer.</summary>
+    public static TokenSubject ForProviderSubject(string tenantId, string provider, string providerSubject, string issuer)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerSubject);
+        ArgumentException.ThrowIfNullOrWhiteSpace(issuer);
+        return new(tenantId, null, provider, providerSubject, issuer);
     }
 }
 
@@ -116,6 +156,9 @@ public interface IAuthenticationSessionInvalidator
 {
     string ProviderId { get; }
 
+    /// <summary>Optional shared interactive scheme used by managed logical providers.</summary>
+    string? AuthenticationScheme => null;
+
     ValueTask InvalidateAsync(
         AuthenticationSessionInvalidationContext context,
         CancellationToken cancellationToken = default);
@@ -145,17 +188,24 @@ public sealed record AuthSession(
     IReadOnlySet<string> Roles,
     IReadOnlySet<string> Permissions,
     string TokenFreshness,
-    string? Provider);
+    string? Provider)
+{
+    /// <summary>Server-only durable session binding, never a client projection.</summary>
+    [JsonIgnore]
+    public string? AuthenticationSessionId { get; init; }
+}
 
 public sealed record AuthenticationSessionInvalidationContext(ClaimsPrincipal Principal);
 
-public sealed record PrincipalFactoryContext(
-    string TenantId,
-    string Provider,
-    string ProviderSubject,
-    ClaimsPrincipal ExternalPrincipal,
-    IReadOnlyCollection<ClaimMappingRule> MappingRules,
-    IReadOnlyCollection<Permission> CatalogPermissions);
+/// <summary>Projects an already admitted canonical Elsa user; this factory never provisions or imports claims.</summary>
+public sealed record PrincipalFactoryContext(string TenantId, string UserId, string? Provider = null)
+{
+    public ExternalIdentityKey? ExternalIdentity { get; init; }
+    public string? ConnectionRecordId { get; init; }
+    public string? ConnectionMaterialRevision { get; init; }
+    public string? ConnectionCredentialBinding { get; init; }
+    public string? ConnectionRedirectUri { get; init; }
+}
 
 public sealed record TokenIssueRequest(string SubjectId, string TenantId, IReadOnlyCollection<string> Scopes)
 {
@@ -167,6 +217,12 @@ public sealed record TokenIssueRequest(string SubjectId, string TenantId, IReadO
     /// together with <see cref="TenantId"/> it scopes the <see cref="TokenSubject"/> the tokens are stored under.
     /// </summary>
     public string? Provider { get; init; }
+
+    /// <summary>Validated upstream issuer for a subject that names no canonical Elsa user.</summary>
+    public string? SubjectIssuer { get; init; }
+
+    /// <summary>Trusted server-issued durable session binding; never accepted from upstream claims.</summary>
+    public string? SessionId { get; init; }
 }
 
 public sealed record TokenIssueResult(string AccessToken, DateTimeOffset ExpiresAt, string? RefreshToken = null);

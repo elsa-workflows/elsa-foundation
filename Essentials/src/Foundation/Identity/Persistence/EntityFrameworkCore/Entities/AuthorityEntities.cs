@@ -97,6 +97,7 @@ public sealed class ExternalIdentityEntity
     public string Provider { get; set; } = "";
     public string? ProviderDisplayName { get; set; }
     public string ProviderLookupKey { get; set; } = "";
+    public string? Issuer { get; set; }
     public string ProviderSubject { get; set; } = "";
     public string ProviderSubjectLookupKey { get; set; } = "";
     public byte[] ExternalOrderKey { get; set; } = [];

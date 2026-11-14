@@ -193,6 +193,9 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 if (user.Status == (int)status)
                     return Updated(id, user.Revision);
                 EfIdentityStoreSupport.Upgrade(user);
+                // Commit the account epoch with the status transition. Re-enabling an account must
+                // not resurrect cookies or session-bound access/refresh issued before its disable.
+                user.SecurityStamp = Guid.NewGuid().ToString("N");
                 user.Status = (int)status;
                 user.Revision = checked(user.Revision + 1);
                 return Updated(id, user.Revision);
@@ -247,7 +250,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 foreach (var childId in loginIds)
                 {
                     var login = RequireRegistered(loginRows.GetValueOrDefault(childId), "external login", childId);
-                    EfIdentityStoreSupport.EnsureExternalIdentity(login, tenantId, login.Provider, login.ProviderSubject, userId);
+                    EfIdentityStoreSupport.EnsureExternalIdentity(login, tenantId, login.Provider, login.ProviderSubject, userId, login.Issuer);
                     context.ExternalIdentities.Remove(login);
                 }
 
@@ -575,6 +578,9 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         entity.NormalizedEmail = EfIdentityStoreSupport.NormalizedEmail(LookupNormalizer, user.Email);
         entity.NormalizedEmailKey = EfIdentityStoreSupport.LookupKey(user.TenantId, entity.NormalizedEmail);
         entity.DisplayName = user.DisplayName;
+        if (entity.SchemaVersion is not null && entity.Status != (int)user.Status)
+            entity.SecurityStamp = Guid.NewGuid().ToString("N");
+        entity.SecurityStamp ??= Guid.NewGuid().ToString("N");
         entity.Status = (int)user.Status;
         entity.Ownership = (int)user.Ownership;
         entity.RoleIdsJson = EfIdentityStoreSupport.SerializeSet(user.RoleIds);
