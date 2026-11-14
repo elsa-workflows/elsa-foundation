@@ -113,7 +113,7 @@ public sealed class NativePlacementVerificationTests
     private sealed class Joined(params IReleaseContentReader[] readers) : IReleaseContentReader
     {
         public IReadOnlyList<ReleaseContentMember> Members => readers.SelectMany(value => value.Members).ToArray();
-        public ReleaseContentMember GetMember(ReleaseMemberKey key) => Members.Single(value => value.Key == key);
+        public ReleaseContentMember GetMember(ReleaseMemberKey key) => Members.SingleOrDefault(value => value.Key == key) ?? throw new KeyNotFoundException();
         public ReadOnlyMemory<byte> GetPayload(ReleaseMemberKey key) => readers.Single(value => value.Members.Any(member => member.Key == key)).GetPayload(key);
     }
     private sealed class Replaced(IReleaseContentReader actual, ReleaseContentMember member, byte[] bytes) : IReleaseContentReader
