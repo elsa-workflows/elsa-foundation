@@ -9,6 +9,7 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\runtime-e2e-build-receipt.json"
           CopyToOutputDirectory="PreserveNewest" />
+      <ProjectReference Include="../../../src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj" />
   </ItemGroup>
 
   <ItemGroup>
