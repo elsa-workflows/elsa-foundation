@@ -421,7 +421,8 @@ describe("structured logs module", () => {
     await flushPromises();
 
     expect(container.querySelector(".structured-logs-status")?.classList.contains("live")).toBe(true);
-    expect(container.querySelector(".structured-logs-empty")?.textContent).toBe("No structured logs received yet.");
+    expect(container.querySelector(".structured-logs-empty")?.textContent).toContain("No logs match these filters.");
+    expect(container.querySelector(".structured-logs-empty button")?.textContent).toBe("Reset filters");
     expect(container.textContent).not.toContain(permissionMessage);
   });
 });

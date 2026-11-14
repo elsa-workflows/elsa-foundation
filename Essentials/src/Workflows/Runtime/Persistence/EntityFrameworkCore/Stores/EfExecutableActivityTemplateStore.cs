@@ -310,21 +310,21 @@ public sealed partial class EfExecutableActivityTemplateStore(
     // Admits privileged maintenance of one partition, as every runtime artifact store does.
     private string RequireScope() => accessContextAccessor.Current.RequireScope(admitPrivileged: true).Value;
 
-    private static ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
+    private ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
     {
         Id = CreateId(identity.Scope, template.TemplateId), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateId = Encode(template.TemplateId),
         TemplateIdHash = Hash(template.TemplateId), TemplateHash = template.TemplateHash, TemplateHashHash = Hash(template.TemplateHash), TemplateIdOrderKey = OrderKey(template.TemplateId), ContentJson = json,
-        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
+        SchemaVersion = RuntimeSchemaWriteVersion.Artifact(context), Revision = 1, IncarnationId = incarnationId
     };
 
-    private static ExecutableActivityTemplateHashClaimEntity ToClaimEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string incarnationId) => new()
+    private ExecutableActivityTemplateHashClaimEntity ToClaimEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string incarnationId) => new()
     {
         Id = HashClaimId(identity.Scope, template.TemplateHash), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateHash = template.TemplateHash,
         TemplateHashHash = Hash(template.TemplateHash), TemplateId = Encode(template.TemplateId), ContentJson = RuntimeArtifactJson.Serialize(new HashClaim(template.TemplateHash, template.TemplateId)),
-        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
+        SchemaVersion = RuntimeSchemaWriteVersion.Artifact(context), Revision = 1, IncarnationId = incarnationId
     };
 
-    private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity)
+    private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity, RuntimeSourceReadLimits? sourceLimits = null)
     {
         if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
             identity.TemplateId is null || row.Id != CreateId(identity.Scope, identity.TemplateId) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
@@ -333,10 +333,25 @@ public sealed partial class EfExecutableActivityTemplateStore(
         try
         {
             var content = RuntimeArtifactEfModule.Chain.Upcast<ExecutableActivityTemplateEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
-            var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted executable activity template envelope is empty.");
-            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "templateHash")), row.TemplateHash) || envelope["template"] is null)
-                throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
-            var value = RuntimeArtifactJson.Deserialize<ExecutableActivityTemplate>(envelope["template"]!.ToJsonString());
+            ExecutableActivityTemplate value;
+            if (sourceLimits is null)
+            {
+                var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted executable activity template envelope is empty.");
+                if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "templateHash")), row.TemplateHash) || envelope["template"] is null)
+                    throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
+                value = RuntimeArtifactJson.Deserialize<ExecutableActivityTemplate>(envelope["template"]!.ToJsonString());
+            }
+            else
+            {
+                using var document = JsonDocument.Parse(content, new JsonDocumentOptions { MaxDepth = sourceLimits.MaxJsonDepth }); var envelope = document.RootElement;
+                if (envelope.EnumerateObject().Any(property => property.Name is not ("collection" or "templateHash" or "template")))
+                    throw new RuntimeSourceReadException("runtime_source_template_envelope_unsupported", true);
+                if (!envelope.TryGetProperty("collection", out _) || !envelope.TryGetProperty("templateHash", out _) || !envelope.TryGetProperty("template", out _))
+                    throw new RuntimeSourceReadException("runtime_source_stored_content_invalid");
+                if (envelope.GetProperty("collection").GetString() != "executableActivityTemplate" || Decode(envelope.GetProperty("templateHash").GetString()!) != row.TemplateHash)
+                    throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
+                value = RuntimeArtifactJson.DeserializeBounded<ExecutableActivityTemplate>(envelope.GetProperty("template").GetRawText(), sourceLimits.MaxJsonDepth);
+            }
             Validate(value);
             if (value.TemplateId != Decode(row.TemplateId) || value.TemplateHash != row.TemplateHash)
                 throw new InvalidDataException("The persisted executable activity template projection is corrupt.");

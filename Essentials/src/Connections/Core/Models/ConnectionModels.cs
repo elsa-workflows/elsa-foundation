@@ -122,6 +122,10 @@ public sealed class ConnectionDocument
 
 public sealed class ConnectionMetadata
 {
+    /// <summary>Opaque creation identity; null means the selected store has no trustworthy identity.</summary>
+    public string? IncarnationId { get; set; }
+    /// <summary>Observed metadata revision; zero means unknown. This does not pin credential versions.</summary>
+    public int Version { get; set; }
     public string TenantId { get; set; } = "";
     public string Name { get; set; } = "";
     public string DisplayName { get; set; } = "";
@@ -185,6 +189,10 @@ public sealed class ConnectionResolveRequest
     public required string Name { get; init; }
     public string? RequiredType { get; init; }
     public string Owner { get; init; } = ConnectionOwners.Tenant;
+    /// <summary>When supplied, refuse a different or unknown creation identity from the same document read.</summary>
+    public string? ExpectedIncarnationId { get; init; }
+    /// <summary>Optional preview observation guard. Omit for ordinary point-of-use rotation on a retained mapping.</summary>
+    public int? ExpectedVersion { get; init; }
 }
 
 public sealed class ConnectionCredentialRequest

@@ -1,5 +1,5 @@
 import { GitBranch, RefreshCcw, Save } from "lucide-react";
-import { StatusChip } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioField } from "@elsa-workflows/studio-ui";
 import type { SourceControlDiff, SourceControlStatus } from "../extensionBuilderApi";
 import { SourceControlFileList } from "./SourceControlFileList";
 
@@ -78,13 +78,13 @@ export function SourceControlPanel({
 
       <div className="extension-builder-inspector-section">
         <h4>Commit</h4>
-        <textarea
+        <StudioField label="Commit message"><textarea
           aria-label="Commit message"
           className="extension-builder-commit-message"
           value={commitMessage}
           disabled={busy}
           onChange={event => onCommitMessageChange(event.target.value)}
-        />
+        /></StudioField>
         <button type="button" className="studio-button" disabled={busy || stagedFiles.length === 0 || !commitMessage.trim()} onClick={onCommit}>
           <GitBranch size={14} />
           Commit staged

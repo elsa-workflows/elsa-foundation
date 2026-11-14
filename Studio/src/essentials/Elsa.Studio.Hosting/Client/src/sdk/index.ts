@@ -554,6 +554,8 @@ export interface StudioSettingEditorProps {
 
 export interface StudioSettingEditorContribution {
   id: string;
+  /** The editor owns its label, help and field presentation. Omit for legacy editors. */
+  presentsField?: boolean;
   order?: number;
   supports(setting: StudioSettingDescriptor): boolean;
   component: ComponentType<StudioSettingEditorProps>;
@@ -761,6 +763,8 @@ export interface StudioDraftValidationContext {
 
 export interface StudioActivityPropertyEditorContribution extends StudioBackendAwareContribution {
   id: string;
+  /** The editor presents its descriptor label in its own shared field. */
+  presentsField?: boolean;
   order?: number;
   /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
   supportsValidationReporting?: true;
@@ -1202,6 +1206,8 @@ export interface StudioExpressionSourceRenderer {
 
 export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
   id: string;
+  /** The inline editor presents its descriptor caption in its own shared field. */
+  presentsField?: boolean;
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;

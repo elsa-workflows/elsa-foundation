@@ -1,6 +1,6 @@
 import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import type { WorkflowTemplate } from "../workflowTemplates";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
@@ -179,9 +179,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
           </div>
           {suggestMetadataAction && intentOpen ? (
             <div className="wf-ai-suggest" role="group" aria-label="Suggest name and description">
-              <label className="wf-form-field">
-                <span>What should this workflow do?</span>
-                <textarea
+              <StudioField className="wf-form-field" label={<><span>What should this workflow do?</span></>}><textarea
                   autoFocus
                   aria-label="Workflow intent"
                   rows={2}
@@ -195,8 +193,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
                       runSuggest();
                     }
                   }}
-                />
-              </label>
+                /></StudioField>
               <div className="wf-ai-suggest-actions">
                 <button type="button" className="wf-ai-action" onClick={runSuggest} disabled={suggesting}>
                   <Sparkles size={13} /> {suggesting ? "Generating…" : "Generate"}
@@ -215,9 +212,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
               ) : null}
             </div>
           ) : null}
-          <label className="wf-form-field">
-            <span>Starting point</span>
-            <select
+          <StudioField className="wf-form-field" label={<><span>Starting point</span></>}><select
               data-dialog-initial-focus
               aria-label="Starting point"
               aria-busy={!templatesSettled}
@@ -228,27 +223,18 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
             >
               {builtInWorkflowTemplates.map(template => <option key={template.id} value={template.id} disabled={template.id === "http" && (catalogState !== "ready" || !httpStarterAvailable)}>{template.name}</option>)}
               {templates.map(({ template, reason }) => <option key={template.id} value={template.id} disabled={!!reason} title={reason}>{template.name}{reason ? " (unavailable)" : ""}</option>)}
-            </select>
-            {draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}
-            {catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}
-          </label>
-          <label className="wf-form-field">
-            <span>Display name</span>
-            <input
+            </select>{draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}{catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}</StudioField>
+          <StudioField className="wf-form-field" label={<><span>Display name</span></>}><input
               aria-label="Display name"
               value={draft.name}
               onChange={event => onChange({ ...draft, name: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), name: true } })}
-            />
-          </label>
-          <label className="wf-form-field">
-            <span>Description</span>
-            <textarea
+            /></StudioField>
+          <StudioField className="wf-form-field" label={<><span>Description</span></>}><textarea
               aria-label="Description"
               rows={3}
               value={draft.description}
               onChange={event => onChange({ ...draft, description: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), description: true } })}
-            />
-          </label>
+            /></StudioField>
           {catalogState === "failed" ? (
             <div className="wf-alert" id="wf-activity-catalog-error" role="alert">
               <span>{catalogError || "Couldn't load starting activities."}</span>

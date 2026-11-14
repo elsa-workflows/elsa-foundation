@@ -1,3 +1,4 @@
+import { getNotifications } from "./notifications";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Info, Undo2 } from "lucide-react";
 import { StudioButton } from "@elsa-workflows/studio-ui";
@@ -84,6 +85,7 @@ export function WorkflowActivityExecutionDetails({
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
   const selectedContextIdentity = runtimeValueContextId(context);
+  const copyScope = `${selectedContextIdentity}:${selectedWorkflowExecutionId ?? ""}:${selectedActivityExecutionId ?? ""}`;
   const preparedInspection = prepared?.contextIdentity === selectedContextIdentity && prepared?.inspection?.workflowExecutionId === selectedWorkflowExecutionId
     && prepared.inspection.activityExecutionId === selectedActivityExecutionId ? prepared.inspection : null;
   const [inspectionState, setInspectionState] = useState<ActivityExecutionInspectionState>({
@@ -203,7 +205,7 @@ export function WorkflowActivityExecutionDetails({
       code: true
     }] : [])
   ];
-  const markCopied = (label: string) => setCopyStatus(`Copied ${label}.`);
+  const markCopied = (label: string) => { setCopyStatus(""); getNotifications().notify({ level: "success", title: `Copied ${label}.` }); };
   const markCopyFailed = (label: string) => setCopyStatus(`Could not copy ${label}.`);
 
   return (
@@ -216,8 +218,9 @@ export function WorkflowActivityExecutionDetails({
           <div className="wf-activity-overview-title">
             <span className="wf-activity-overview-eyebrow">Selected activity</span>
             <div className="wf-activity-copy-line">
-              <h4>{activityLabel}</h4>
+              <h4 title={activityLabel}>{activityLabel}</h4>
               <CopyValueButton
+                scope={copyScope}
                 value={activityLabel}
                 ariaLabel="Copy activity name"
                 copiedLabel="activity name"
@@ -237,6 +240,7 @@ export function WorkflowActivityExecutionDetails({
           <span className="wf-activity-overview-status">
             <WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} />
             <CopyValueButton
+              scope={copyScope}
               value={statusLabel}
               ariaLabel="Copy activity status"
               copiedLabel="activity status"
@@ -247,9 +251,9 @@ export function WorkflowActivityExecutionDetails({
         </div>
 
         {!compact ? <dl className="wf-activity-summary-grid">
-          <ActivityMetadataValue label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          <ActivityMetadataValue label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          <ActivityMetadataValue label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          <ActivityMetadataValue scope={copyScope} label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          <ActivityMetadataValue scope={copyScope} label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          <ActivityMetadataValue scope={copyScope} label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
         </dl> : null}
 
         {isCompensationHandlerExecution(activity) && activity.provenance?.schedulingActivityExecutionId ? (
@@ -305,7 +309,7 @@ export function WorkflowActivityExecutionDetails({
           </summary>
           <dl className="wf-activity-detail-list">
             {executionDetailRows.map(row => (
-              <ActivityMetadataValue key={row.label} {...row} onCopied={markCopied} onCopyFailed={markCopyFailed} />
+              <ActivityMetadataValue scope={copyScope} key={row.label} {...row} onCopied={markCopied} onCopyFailed={markCopyFailed} />
             ))}
           </dl>
         </details>
@@ -386,6 +390,7 @@ function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionIn
 }
 
 function ActivityMetadataValue({
+  scope,
   label,
   value,
   copiedLabel,
@@ -393,6 +398,7 @@ function ActivityMetadataValue({
   onCopied,
   onCopyFailed
 }: {
+  scope?: object | string;
   label: string;
   value: string;
   copiedLabel: string;
@@ -408,6 +414,7 @@ function ActivityMetadataValue({
       <dd>
         <span className="wf-activity-meta-value">{content}</span>
         <CopyValueButton
+          scope={scope}
           value={value}
           ariaLabel={`Copy ${copiedLabel}`}
           copiedLabel={copiedLabel}

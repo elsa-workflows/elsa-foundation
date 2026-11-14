@@ -99,6 +99,42 @@ public sealed class UserTaskApiTests
         Assert.Equal(HttpStatusCode.BadRequest, (await host.Client.PostAsJsonAsync("/runtime/user-task-forms", new { id = "bad", version = "1", name = "Bad", provider = UserTaskProtocol.BasicForms, fields = new object?[] { null } })).StatusCode);
     }
 
+    [Fact]
+    public async Task Task_responses_name_people_and_groups_for_a_reader_who_cannot_read_the_target_directory()
+    {
+        await using var host = await Host.Start(); host.SignIn("alice");
+        host.Identity.Granted = new HashSet<string> { "user-tasks:read", "user-tasks:act" };
+        host.Identity.Others["bob"] = host.Identity.User with { Id = "bob", UserName = "bob", DisplayName = "Bob Builder", Status = UserStatus.Disabled };
+        host.Identity.Others["mallory"] = host.Identity.User with { Id = "mallory", TenantId = "other", DisplayName = "Mallory" };
+        host.Identity.Others["nameless"] = host.Identity.User with { Id = "nameless", UserName = "nameless", DisplayName = " " };
+        host.Identity.Groups["finance"] = "Finance team";
+        var at = DateTimeOffset.UtcNow;
+        await host.Rewrite(task => task with { History = [new("created", "workflow", at), new("claimed", "bob", at), new("released", "bob", at), new("claimed", "mallory", at), new("released", "zed", at), new("claimed", "nameless", at)] });
+        // The reader holds no manage permission, so the target directory is closed to them, yet every task response names the people it stores.
+        Assert.False((await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-task-identity")).GetProperty("canManage").GetBoolean());
+        host.Identity.UserLookups.Clear();
+        var row = Assert.Single((await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-tasks?view=queue")).GetProperty("items").EnumerateArray());
+        Assert.Equal("finance", row.GetProperty("groupId").GetString()); Assert.Equal("Finance team", row.GetProperty("groupName").GetString());
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("assigneeName").ValueKind); Assert.Equal(JsonValueKind.Null, row.GetProperty("claimantName").ValueKind);
+        // Disabled people keep their name; unknown and other-tenant IDs get none, and a blank display name falls back to the user name.
+        Assert.Equal(new[] { "workflow:", "bob:Bob Builder", "bob:Bob Builder", "mallory:", "zed:", "nameless:nameless" }, row.GetProperty("history").EnumerateArray()
+            .Select(entry => entry.GetProperty("actorId").GetString() + ":" + entry.GetProperty("actorName").GetString()));
+        // Each distinct ID is read from the directory once per response.
+        Assert.Single(host.Identity.UserLookups, id => id == "bob");
+        var detail = await host.Client.GetFromJsonAsync<JsonElement>("/runtime/user-tasks/task");
+        Assert.Equal("Finance team", detail.GetProperty("groupName").GetString());
+        Assert.Equal("Bob Builder", detail.GetProperty("history")[1].GetProperty("actorName").GetString());
+        var claimed = await (await host.Client.PostAsJsonAsync("/runtime/user-tasks/task/claim", new { revision = 2, requestId = "claim" })).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Alice", claimed.GetProperty("claimantName").GetString());
+        Assert.Equal("alice:Alice", claimed.GetProperty("history").EnumerateArray().Select(entry => entry.GetProperty("actorId").GetString() + ":" + entry.GetProperty("actorName").GetString()).Last());
+        // A directory failure only leaves a name out; it never turns a saved change into a failed response.
+        host.Identity.Failing.Add("bob");
+        var released = await host.Client.PostAsJsonAsync("/runtime/user-tasks/task/release", new { revision = 3, requestId = "release" });
+        Assert.Equal(HttpStatusCode.OK, released.StatusCode);
+        var history = (await released.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("history");
+        Assert.Equal(JsonValueKind.Null, history[1].GetProperty("actorName").ValueKind); Assert.Equal("Alice", history[history.GetArrayLength() - 1].GetProperty("actorName").GetString());
+    }
+
     private sealed class Host(WebApplication app, HttpClient client, Identity identity) : IAsyncDisposable
     {
         public HttpClient Client => client;
@@ -144,18 +180,19 @@ public sealed class UserTaskApiTests
     private sealed class Identity : IUserStore, IRoleStore, ITenantMembershipStore, ICurrentSubjectPermissionAuthorizer
     {
         public UserRecord User = new("alice", "default", "Alice", null, "Alice", UserStatus.Active, ResourceOwnership.Foundation, new HashSet<string> { "finance" }, new HashSet<string>());
-        public bool Revoked; public bool DenyResource;
-        public ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default) => ValueTask.FromResult<UserRecord?>(User with { TenantId = tenantId });
+        public bool Revoked; public bool DenyResource; public HashSet<string>? Granted;
+        public readonly Dictionary<string, UserRecord> Others = new(); public readonly Dictionary<string, string> Groups = new(); public readonly List<string> UserLookups = []; public readonly HashSet<string> Failing = [];
+        public ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default) { UserLookups.Add(userId); if (Failing.Contains(userId)) throw new InvalidOperationException("Directory unavailable."); return ValueTask.FromResult<UserRecord?>(Others.TryGetValue(userId, out var other) ? other : userId == User.Id ? User with { TenantId = tenantId } : null); }
         public ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default) => ValueTask.FromResult<UserRecord?>(null);
         public ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default) { User = user; return ValueTask.CompletedTask; }
         public ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default) { User = User with { Status = status }; return ValueTask.FromResult(true); }
         public ValueTask<bool> DeleteAsync(string tenantId, string userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        ValueTask<RoleRecord?> IRoleStore.FindAsync(string tenantId, string roleId, CancellationToken cancellationToken) => ValueTask.FromResult<RoleRecord?>(new(roleId, tenantId, roleId, null, new HashSet<string>(), false));
+        ValueTask<RoleRecord?> IRoleStore.FindAsync(string tenantId, string roleId, CancellationToken cancellationToken) => ValueTask.FromResult<RoleRecord?>(new(roleId, tenantId, Groups.GetValueOrDefault(roleId, roleId), null, new HashSet<string>(), false));
         ValueTask<IReadOnlyList<RoleRecord>> IRoleStore.ListAsync(string tenantId, CancellationToken cancellationToken) => ValueTask.FromResult<IReadOnlyList<RoleRecord>>([]);
         public ValueTask SaveAsync(RoleRecord role, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         ValueTask<TenantMembershipRecord?> ITenantMembershipStore.FindAsync(string tenantId, string userId, CancellationToken cancellationToken) => ValueTask.FromResult<TenantMembershipRecord?>(null);
         public ValueTask SaveAsync(TenantMembershipRecord membership, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-        public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken cancellationToken = default) => ValueTask.FromResult(Revoked || DenyResource && request.Resource is UserTaskRecord ? CurrentSubjectPermissionResult.Denied("Revoked") : CurrentSubjectPermissionResult.Granted);
+        public ValueTask<CurrentSubjectPermissionResult> AuthorizeAsync(CurrentSubjectPermissionRequest request, CancellationToken cancellationToken = default) => ValueTask.FromResult(Revoked || DenyResource && request.Resource is UserTaskRecord || Granted?.Contains(request.Permission) == false ? CurrentSubjectPermissionResult.Denied("Revoked") : CurrentSubjectPermissionResult.Granted);
     }
     private sealed class NoRuntime : IUserTaskRuntime
     {

@@ -18,15 +18,23 @@ public sealed class RunBpmnWorkbenchTests
     [InlineData("Sequence", true)]
     [InlineData("Flowchart", true)]
     [InlineData("CompensationScope", true)]
-    public async Task A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(string parent, bool cancel)
+    public Task A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(string parent, bool cancel) =>
+        ExerciseAsync(parent, cancel, authored: false);
+
+    [Fact]
+    public Task A_logically_published_model_keeps_its_compiled_native_dependency_after_unpublication_and_restart() =>
+        ExerciseAsync("Root", cancel: false, authored: true);
+
+    private static async Task ExerciseAsync(string parent, bool cancel, bool authored)
     {
-        await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, recoverySweepSeconds: 0.2);
+        await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, recoverySweepSeconds: 0.2, authoredDirectPublication: authored);
         await host.LoginAsync();
         var process = new BpmnProcessDefinition("embedded-human", Elements:
             [new("start", BpmnElementTypes.StartEvent), new("human", BpmnElementTypes.UserTask, bindingRef: "work"), new("end", BpmnElementTypes.EndEvent)],
             SequenceFlows: [new("to-work", "start", "human"), new("to-end", "human", "end")]);
         var definition = new BpmnModelDefinition(1, JsonSerializer.SerializeToElement(process, new JsonSerializerOptions(JsonSerializerDefaults.Web)), ["work"]);
-        var published = await host.PostAsync("/bpmn/artifacts", new { requestId = "publish-embedded", definition });
+        var published = authored ? await PublishAuthoredAsync(host) :
+            await host.PostAsync("/bpmn/artifacts", new { requestId = "publish-embedded", definition });
         var catalog = await host.GetAsync("/design/activities/definitions?search=Elsa.Activities.Bpmn.Activities.RunBpmn");
         var activity = Assert.Single(catalog["items"]!.AsArray(), item => item!["definition"]!["activityTypeKey"]!.GetValue<string>() == "Elsa.Activities.Bpmn.Activities.RunBpmn");
         object rootNode = new { nodeId = "run-bpmn", activityVersionId = activity!["definition"]!["headVersionId"]!.GetValue<string>(), outputs = Array.Empty<object>(),
@@ -53,6 +61,15 @@ public sealed class RunBpmnWorkbenchTests
                 rootActivity = rootNode }
         });
         var publication = await host.PostAsync($"/publishing/workflows/{native["version"]!["id"]!.GetValue<string>()}/publish", new { });
+        if (authored)
+        {
+            var logical = published["publication"]!;
+            var retired = await host.DeleteAsync("/publishing/workflows/" + Uri.EscapeDataString(logical["definitionId"]!.GetValue<string>()) +
+                "/slots/" + Uri.EscapeDataString(logical["slotName"]!.GetValue<string>()));
+            Assert.Null(retired["activePublicationId"]);
+            Assert.Empty((await host.GetAsync("/bpmn/publications?artifactId=" + Uri.EscapeDataString(published["executable"]!["artifactId"]!.GetValue<string>())))
+                ["items"]!.AsArray());
+        }
         var started = await host.PostAsync($"/runtime/workflows/executables/{publication["artifactId"]!.GetValue<string>()}/execute",
             new { sourceReferenceId = publication["sourceReferenceId"]!.GetValue<string>() });
         var execution = started["workflowExecutionId"]!.GetValue<string>();
@@ -81,13 +98,13 @@ public sealed class RunBpmnWorkbenchTests
         var before = await host.GetAsync(modelPath);
         Assert.Equal("Running", before["status"]!.GetValue<string>());
         string? directId = null; JsonNode? directWork = null;
-        if (!cancel)
+        if (!cancel && !authored)
         {
             directId = (await host.PostAsync("/bpmn/executions", new { sourceReferenceId = published["sourceReferenceId"]!.GetValue<string>(), requestId = "direct-counterpart" }))["executionId"]!.GetValue<string>();
             directWork = Assert.Single((await host.GetAsync("/bpmn/executions/" + directId + "/work"))["items"]!.AsArray())!;
         }
         var evidenceDirectory = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY");
-        var caseName = parent.ToLowerInvariant() + (cancel ? "-cancel" : "-complete");
+        var caseName = parent.ToLowerInvariant() + (cancel ? "-cancel" : "-complete") + (authored ? "-logical-publication" : "");
         if (evidenceDirectory is not null) Directory.CreateDirectory(Path.Combine(evidenceDirectory, caseName));
         var firstProcess = host.ProcessId;
         var nativeBefore = await host.GetAsync("/runtime/workflows/instances/" + execution);
@@ -130,11 +147,29 @@ public sealed class RunBpmnWorkbenchTests
         Assert.Single((await host.GetAsync("/runtime/workflows/instances")).AsArray());
         var final = await host.GetAsync(modelPath);
         Assert.Equal(cancel ? "Cancelled" : "Completed", final["result"]!["status"]!.GetValue<string>());
+        JsonNode? lateReceipt = null;
         if (cancel)
         {
-            await host.PostAsync(modelPath + "/work/" + waiting["invocationId"]!.GetValue<string>() + "/complete",
-                new { requestId = "late-embedded", attemptId = waiting["attemptId"]!.GetValue<string>() }, System.Net.HttpStatusCode.Conflict);
-            Assert.True(JsonNode.DeepEquals(final, await host.GetAsync(modelPath)));
+            var beforeLateNative = view.DeepClone();
+            var late = await host.PostCommandOutcomeAsync(modelPath + "/work/" + waiting["invocationId"]!.GetValue<string>() + "/complete",
+                new { requestId = "late-embedded", attemptId = waiting["attemptId"]!.GetValue<string>() });
+            Assert.Equal(late.Status == System.Net.HttpStatusCode.Accepted, late.Body["pending"]!.GetValue<bool>());
+            lateReceipt = late.Body;
+            deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+            while (lateReceipt["pending"]!.GetValue<bool>())
+            {
+                Assert.True(DateTimeOffset.UtcNow < deadline, "The durably admitted late completion did not settle.");
+                await Task.Delay(100);
+                lateReceipt = await host.GetAsync(modelPath + "/commands/late-embedded");
+            }
+            Assert.Equal(modelId, lateReceipt["executionId"]!.GetValue<string>());
+            Assert.Equal("late-embedded", lateReceipt["inputId"]!.GetValue<string>());
+            Assert.Equal("Rejected", lateReceipt["result"]!["status"]!.GetValue<string>());
+            Assert.Equal("execution-terminal", lateReceipt["result"]!["code"]!.GetValue<string>());
+            Assert.True(JsonNode.DeepEquals(final, await host.GetAsync(modelPath)), "Late completion changed the terminal model or revision.");
+            Assert.True(JsonNode.DeepEquals(beforeLateNative, await host.GetAsync("/runtime/workflows/instances/" + execution)),
+                "Late completion changed native activity occurrences, outcomes or continuation.");
+            Assert.Empty((await host.GetAsync(modelPath + "/work"))["items"]!.AsArray());
         }
         JsonNode checkedFinal;
         deadline = DateTimeOffset.UtcNow.AddSeconds(30);
@@ -155,6 +190,16 @@ public sealed class RunBpmnWorkbenchTests
         Assert.Equal(cancel ? "Cancelled" : "Completed", (await host.GetAsync("/runtime/workflows/instances/" + execution))["instance"]!["status"]!.GetValue<string>());
         var retainedPhysical = await host.ReadEmbeddingAsync(modelId, execution, directId);
         Assert.True(JsonNode.DeepEquals(finishedPhysical, retainedPhysical));
+        if (lateReceipt is not null)
+        {
+            var retainedLate = await host.GetAsync(modelPath + "/commands/late-embedded");
+            Assert.False(retainedLate["pending"]!.GetValue<bool>());
+            Assert.Equal(modelId, retainedLate["executionId"]!.GetValue<string>());
+            Assert.Equal("late-embedded", retainedLate["inputId"]!.GetValue<string>());
+            Assert.True(JsonNode.DeepEquals(lateReceipt["result"], retainedLate["result"]));
+            Assert.True(JsonNode.DeepEquals(view, await host.GetAsync("/runtime/workflows/instances/" + execution)));
+            Assert.Empty((await host.GetAsync(modelPath + "/work"))["items"]!.AsArray());
+        }
         if (evidenceDirectory is not null)
         {
             var sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION") ?? throw new InvalidOperationException("Embedding evidence requires its exact executing source.");
@@ -162,7 +207,7 @@ public sealed class RunBpmnWorkbenchTests
                 nativeExecutionId = execution, modelExecutionId = modelId, directCounterpartId = directId, published, publication,
                 firstProcess, secondProcess, thirdProcess, predecessorExit, termination = ".NET Process.Kill(entireProcessTree: true)",
                 binaries = host.DescribeBinaries(sourceRevision, includePublishing: true), before, nativeBefore, final, nativeFinal = view,
-                actualHumanWait = waiting, snapshots = new[] { waitingRuntime, waitingDesign, completedRuntime, completedDesign },
+                actualHumanWait = waiting, lateReceipt, snapshots = new[] { waitingRuntime, waitingDesign, completedRuntime, completedDesign },
                 limits = new[] { "Model-owned human-work profile only; native-service/ETL embedding is not yet admitted.",
                     "Same-source process loss; no upgraded-host, pending-parent-result crash or cancellation-before-admission acceptance.",
                     "Direct trace counterpart is qualified for completion only; no new direct-cancel endpoint is claimed.",
@@ -179,4 +224,39 @@ public sealed class RunBpmnWorkbenchTests
             return Assert.Single(catalog["items"]!.AsArray(), item => item!["definition"]!["activityTypeKey"]!.GetValue<string>() == type)!["definition"]!["headVersionId"]!.GetValue<string>();
         }
     }
+    private static async Task<JsonNode> PublishAuthoredAsync(OwnedWorkbench host)
+    {
+        var catalog = await host.GetAsync("/design/activities/definitions?search=Elsa.Activities.Bpmn.Activities.BpmnProcess");
+        var activity = Assert.Single(catalog["items"]!.AsArray(), item =>
+            item!["definition"]!["activityTypeKey"]!.GetValue<string>() == "Elsa.Activities.Bpmn.Activities.BpmnProcess");
+        var metadata = "{\"formatVersion\":1,\"kind\":\"human\"}";
+        var submitted = await host.PostAsync("/design/workflows/definitions/submit", new
+        {
+            name = "Logically published embedded human process",
+            state = new
+            {
+                variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(),
+                rootActivity = new
+                {
+                    nodeId = "model-root", activityVersionId = activity!["definition"]!["headVersionId"]!.GetValue<string>(),
+                    inputs = Array.Empty<object>(), outputs = Array.Empty<object>(),
+                    structure = new
+                    {
+                        kind = "elsa.bpmn.structure", schemaVersion = "1.0.0",
+                        payload = new
+                        {
+                            activities = Array.Empty<object>(),
+                            elements = new object[] { new { elementId = "start", elementType = "startEvent" },
+                                new { elementId = "human", elementType = "userTask", properties = new Dictionary<string, string> { ["elsa.direct.binding"] = metadata } },
+                                new { elementId = "end", elementType = "endEvent" } },
+                            sequenceFlows = new[] { new { flowId = "to-human", sourceRef = "start", targetRef = "human" }, new { flowId = "to-end", sourceRef = "human", targetRef = "end" } }
+                        }
+                    }
+                }
+            }
+        });
+        var promoted = await host.PostAsync("/design/workflows/drafts/" + submitted["draftId"]!.GetValue<string>() + "/promote", new { operationKey = "promote-embedded" });
+        return await host.PostAsync("/interchange/bpmn/versions/" + promoted["id"]!.GetValue<string>() + "/publish-direct", new { requestId = "publish-embedded" });
+    }
+
 }

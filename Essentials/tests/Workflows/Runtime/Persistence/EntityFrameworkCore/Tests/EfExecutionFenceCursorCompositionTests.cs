@@ -179,9 +179,9 @@ public sealed class EfExecutionFenceCursorCompositionTests
             if (row is null != (expectedRevision == 0) || row is not null && row.Revision != expectedRevision)
                 return new(ExecutionLivenessStateWriteStatus.RevisionConflict, row?.Revision);
             if (row is null)
-                context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(state, Scope, 1));
+                context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(context, state, Scope, 1));
             else
-                EfExecutionLivenessStateStore.Copy(row, state, Scope, expectedRevision + 1);
+                EfExecutionLivenessStateStore.Copy(context, row, state, Scope, expectedRevision + 1);
             await context.SaveChangesAsync(cancellationToken);
             context.ChangeTracker.Clear();
             return new(ExecutionLivenessStateWriteStatus.Saved, expectedRevision + 1);

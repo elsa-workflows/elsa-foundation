@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -267,7 +268,7 @@ export function ActivityDefinitionPublicationReview({
       </details> : <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact={mode === "toolbar"} />}
       {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
       {!publicationBlocked ? <div className="ad-publication-version">
-        <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></label>
+        <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
         <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>{mode === "toolbar" ? "Suggested version based on these changes. You can choose a higher version." : "The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version."}</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
         {versionError ? <p role="alert">{versionError}</p> : null}
       </div> : null}

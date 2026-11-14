@@ -115,6 +115,27 @@ public sealed class MemberReadMaterializationTests
         Assert.Equal(code, exception.Code);
     }
 
+    /// <summary>The same rule for a request member supplied as a CLR value when the run starts.</summary>
+    [Theory]
+    [InlineData("CustomerId", null)]
+    [InlineData("customerId", RuntimeReadSelectionException.AbsentMember)]
+    public async Task A_member_of_a_clr_seeded_request_member_is_read_by_its_stored_name(string segment, string? code)
+    {
+        var seeded = WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["customer"] = new SeededCustomer("c-1") })["customer"];
+        var context = new RuntimeInputBindingResolutionContext("workflow", "invocation-1",
+            workflowInputEnvelopes: new Dictionary<string, ValueEnvelope> { ["customer"] = ValueEnvelope.Inline(Customer, seeded, ValueProtectionPolicy.InstanceInline) });
+
+        if (code is null)
+        {
+            var snapshot = await MaterializeAsync(Member("request", [segment]), context, Store());
+            Assert.Equal("c-1", snapshot.Values["message"].InlineValue!.Value.GetString());
+            return;
+        }
+
+        var exception = await Assert.ThrowsAsync<RuntimeReadSelectionException>(() => MaterializeAsync(Member("request", [segment]), context, Store()).AsTask());
+        Assert.Equal(code, exception.Code);
+    }
+
     public sealed record SeededCustomer(string CustomerId);
 
     [Fact]
