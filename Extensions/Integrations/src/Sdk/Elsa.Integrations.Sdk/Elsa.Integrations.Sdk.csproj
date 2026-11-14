@@ -24,10 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\Essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\Essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\Essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
   </ItemGroup>
 
 </Project>

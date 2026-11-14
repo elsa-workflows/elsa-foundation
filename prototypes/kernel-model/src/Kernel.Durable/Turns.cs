@@ -23,8 +23,20 @@ public interface IActorType
     /// <summary>One turn of the actor's own code. If it throws, the durable layer parks the actor (<see cref="Park"/>).</summary>
     ValueTask<TurnOutcome> TurnAsync(TurnInput input);
 
-    /// <summary>Park: the actor faults with the error, its messages are consumed, the partition goes on.</summary>
+    /// <summary>
+    /// Park: the actor faults with the error, its messages are consumed, the partition goes on. <paramref name="pending"/>
+    /// is the history its turns in memory left, for an actor that was never written (decision 4).
+    /// </summary>
     TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error);
+    TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error, object? pending) =>
+        Park(row, actor, taken, spec, error);
+
+    /// <summary>
+    /// Decision 4: an actor kept in memory past its short wait is written as it is, without a turn of its own code.
+    /// <paramref name="pending"/> is what its turns in memory left for the history (<see cref="TurnOutcome.Pending"/>).
+    /// </summary>
+    TurnOutcome Write(InstanceRow row, object? state, object? pending) =>
+        throw new NotSupportedException("This actor type does not support unwritten short waits.");
 
     /// <summary>A background job, outside the actor's turns: the job's code is the actor type's, found by <paramref name="model"/>.</summary>
     ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken cancellationToken);
@@ -41,6 +53,9 @@ public interface ITurnServices
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }
 
+    /// <summary>Decision 4: how long an Ephemeral actor may wait in memory when its start spec does not say.</summary>
+    TimeSpan ShortWait { get; }
+
     bool Has(Flaw flaw);
 
     /// <summary>A job's ticket (or a recalled message) goes with this turn's commit: from here on its result is nobody's.</summary>
@@ -51,13 +66,21 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
-    internal long Seq = seq;
+    internal long Seq = seq;         // allocated store sequence, or local post order until promotion
+    internal long InboxOrder => CompletedOrder == 0 ? Seq : 0; // F7 priority among eligible inputs
+    internal long ObservedOrder;     // in-memory order of first observation, for local/durable tie-breaking
+    internal long ObservedAt;        // monotonic observation time, used when a command matures before trial selection
+    internal long CompletedOrder;    // ordinal when the driver published its result in this owner
+    internal long CompletedAt;       // a durable ticket alone cannot establish when its result became ready
     internal bool Durable;            // it is a row
+    internal bool AwaitPoll;          // promoted while catching up: poll must observe its row before marking it
     internal bool Marked;             // its row says seen at this epoch
+    internal bool RecoveryOrdering;   // a previously marked row read on takeover, or a command that matured during recovery
     internal bool Suspect;            // another owner had it: it is tried apart before anything else is believed of it
     internal bool Shelved;            // a suspect whose row says seen at this epoch, not yet tried
     internal bool Again;              // its polled row already had a seen or trial marker (DurableTurn.Redelivered)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
+    internal Message? Original;       // a job's ticket as it was before its result replaced it (decision 4: what is written)
     internal int Attempts;
     internal bool Ticket;             // a kernel message, not (yet) for the model
     internal bool Taken;              // a turn or a commit in flight has it
@@ -70,10 +93,12 @@ public sealed class Delivery(Message message, long seq)
 public sealed class TurnInput
 {
     private readonly Worker _worker;
+    private readonly ITurnServices _services;
 
     internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec)
     {
         _worker = worker;
+        _services = worker.ServicesFor(slot);
         Slot = slot;
         Actor = actor;
         Taken = taken;
@@ -102,8 +127,15 @@ public sealed class TurnInput
     /// <summary>The start spec that creates the actor, when it has no row.</summary>
     public StartSpec? Spec { get; }
 
+    /// <summary>Decision 4: the actor's row is in memory only, never written; <see cref="Until"/> is how long it may stay so.</summary>
+    public bool Unwritten => Slot.Unwritten;
+    public long Until => Slot.Until;
+
+    /// <summary>What the actor's turns in memory left for its history, to be written with it (opaque to the durable layer).</summary>
+    public object? Pending => Slot.Pending;
+
     public string Model => Row?.Model ?? Spec!.Model;
-    public ITurnServices Services => _worker;
+    public ITurnServices Services => _services;
 
     /// <summary>Say that the actor's code is about to run, with what it is given (for tests).</summary>
     public void Started(IReadOnlyList<Message> inbox) => _worker.Started(Actor, inbox);
@@ -130,7 +162,13 @@ public sealed class TurnOutcome(string instance)
     public List<SubscriptionRow> Subscribed = [], Unsubscribed = [];
     public bool Unsubscribe, Delete;
 
-    internal bool Durable => Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id));
+    /// <summary>Decision 4: the turn keeps its actor in memory, unwritten, until <see cref="Until"/>; <see cref="Row"/> is not written.</summary>
+    public bool InMemory;
+    public long Until;
+    public object? Pending;     // what the turns in memory left for the history, kept with the actor until it is written
+    internal HashSet<string> Promoted = [];     // messages held in memory only, written with this outcome
+
+    internal bool Durable => !InMemory && (Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.Id)));
 }
 
 /// <summary>A reply to one consumed request, after commit; it does not subscribe a workflow observer.</summary>
@@ -192,8 +230,8 @@ public sealed class DurableTurn
 
     public bool Redelivered(Message message) => !Services.Has(Flaw.HideDeliveryHistory) && (_input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false);
 
-    // A message's id is derived from its sender and the sender's revision. Finding F8: the ordinal has a fixed width,
-    // because Entity Framework sends the inserts of one commit in key order and the database hands out seq in that order.
+    // A message's id is derived from its sender and revision; fixed-width ordinals preserve order within one turn.
+    // EF's send-order comparer also preserves ordering across revisions promoted in the same commit (F8).
     public string Send(InstanceRef target, string kind, object? payload = null, SendOptions? options = null) =>
         Send($"{Origin}#{Revision}.{_ordinal++:D4}", target, kind, payload, options);
 
@@ -262,6 +300,19 @@ public sealed class DurableTurn
         return id;
     }
 
+    /// <summary>
+    /// Decision 4: what this turn leaves can wait in memory until <paramref name="until"/>. Everything it sends goes to the
+    /// actor itself and is a job's ticket, or a message due by then (one without a due time is due now); it subscribes nothing, publishes nothing, and cancels or recalls
+    /// only what is in memory too. And it took no message that is a row: consuming one needs a commit, and a start that is
+    /// a row (an outside start, say) must not be lost with the memory.
+    /// </summary>
+    public bool CanWaitInMemory(long until) =>
+        until > Services.Now && _replied.Count == 0 && _subscribed.Count == 0 && (_cancelled.Count == 0 || _input.Unwritten) && !_input.Taken.Any(i => i.Durable)
+        && _sent.TrueForAll(m => m.Target == Actor && m.Kind is not (Kinds.Publish or Kinds.Meet) && (m.Kind == Kinds.Job || (m.Due ?? Services.Now) <= until));
+
+    /// <summary>Everything this turn sends stays in memory: none of it is a row.</summary>
+    public void WaitInMemory() => _volatile.UnionWith(_sent.Select(m => m.Id));
+
     // ---- the end of the turn: the actor type calls these in this order ---------------------------------------------
 
     /// <summary>Nothing is held: every message of the turn is consumed.</summary>
@@ -294,7 +345,7 @@ public sealed class DurableTurn
             if (Services.Has(Flaw.MeetWithoutTicket)) _volatile.Add(_sent[^1].Id);
         }
         unit.Row = row with { CommitTimes = ((TurnClock)Clock).Snapshot() };
-        unit.Expected = _input.Previous?.Revision;
+        unit.Expected = _input.Unwritten ? null : _input.Previous?.Revision;
         unit.State = state;
         unit.Journal = journal;
         unit.Sent = _sent;

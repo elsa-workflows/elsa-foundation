@@ -1,7 +1,7 @@
 # Elsa 4 StateMachine: requirements and current status
 
-**Status, 12 November 2026:** resumed; M0 remains incomplete. This directory records the product requirements,
-historical design research and the remaining delivery order. It does not enable a StateMachine activity.
+**Status, 14 November 2026:** active; M0 remains incomplete. This directory records the product requirements,
+historical design research and the remaining delivery order. It does not enable a production StateMachine activity.
 
 The [specification](spec.md) preserves the 49 accepted decisions in
 [program #3815](https://github.com/elsa-workflows/elsa-foundation/issues/3815).
@@ -16,7 +16,20 @@ Approvals, revisions and withdrawal remain sample application concepts, not Elsa
 | Preserve superseded attempts during cancellation, #3886 | Merged as `b3653923e9`; this is a generic cancellation fix, not StateMachine delivery. |
 | StateMachine specification and runtime research, #3840 | Closed **unmerged** on 9 November at `9eaed8b330`; resubmit in reviewable slices. |
 | Shared Message and standalone-trigger drafts, #3904 and #3912 | Both closed **unmerged** on 9 November. Their candidate contracts are not installed dependencies. |
-| StateMachine runtime and Studio | No production StateMachine activity or designer was found on main `dff7c490d0`. M1–M3 remain open. |
+| Creation identity, [#4451](https://github.com/elsa-workflows/elsa-foundation/pull/4451) | Merged as `b82a8b75a6`; private exact-creation/addressing prerequisite, not provider/product rollout. |
+| Concurrent native phases, [#4479](https://github.com/elsa-workflows/elsa-foundation/pull/4479) | Merged as `45a7b6cde1`; ordinary regional work and hierarchy/phase barriers, not normal incident/retry. |
+| General structural selector, [#4485](https://github.com/elsa-workflows/elsa-foundation/pull/4485) | Merged as `5e11e96681`; one compiled engine, with explicitly proposed ancestor behavior; not full SCXML compliance. |
+| Full-graph native bridge, [#4487](https://github.com/elsa-workflows/elsa-foundation/pull/4487) | Merged as `d9fb8edc5d`; normal private hydration, durable current/planned visits and fixed phase work. |
+| Generic native lexical resources, [#4490](https://github.com/elsa-workflows/elsa-foundation/pull/4490) | Merged as `995a5e76ae`; values stay with the normal native owner. |
+| StateMachine visit scopes, [#4495](https://github.com/elsa-workflows/elsa-foundation/pull/4495) and [#4505](https://github.com/elsa-workflows/elsa-foundation/pull/4505) | Merged as `383c9eb9f8` and `db416ee7c8`; private literal defaults, exact visit ownership, source Action lifetime and fresh/retained scopes across durable phases. |
+| StateMachine runtime and Studio | The earlier inventory found no production activity/designer at `dff7c490d0`. The private prototypes above do not deliver M1–M3. |
+
+The latest visit-scope result's entire main tree matches its reviewed proof source. Its 55 cases are separately
+labelled as 24 actual workflows, 17 literal fixtures and 14 seeded context refusals; the runner
+[documents commands and limits](../../prototypes/kernel-model/models/Statecharts.Run/README.md).
+The [values proposal](contracts/values.md) keeps Action-after-Exit visibility explicit as engineering direction.
+Passing targeted prototypes does not establish full main CI health; [#4177](https://github.com/elsa-workflows/elsa-foundation/issues/4177)
+remains separately tracked. Exact review/run/merge receipts stay on the linked PRs and program issue.
 
 The closure instruction is on [#3840](https://github.com/elsa-workflows/elsa-foundation/pull/3840#issuecomment-6739908133).
 The archived branch and its evidence remain useful source material. Closure is neither rejection of the feature
@@ -52,8 +65,9 @@ integration, the Studio contract and the qualified native-compensation topology.
 production implementation slices claim that contract. Current-head tests, real durable and Studio journeys,
 independent acceptance, protected merge and resulting-main verification remain required.
 
-The [selection and phase contract](contracts/selection.md) is the next engineering proposal. It separates chart
-rules from storage/actor placement and labels its new choices and remaining qualification; it does not close Q1.
+The [selection and phase contract](contracts/selection.md) remains an engineering proposal. The compiled engine
+and native phases above qualify a bounded subset. Ordinary trigger/rearming, automatic/completion arbitration, loop
+recovery and complete source grouping remain open; neither the engine nor its phase proof closes Q1.
 
 The bounded [selection reference model](selection-model/README.md) makes candidate and phase-plan rules
 executable. Its tests are algorithm evidence only; actual runtime integration and the remaining Q1 rules stay open.
@@ -63,4 +77,11 @@ validation and operator journeys before implementation. Its acceptance journeys 
 
 The proposed [source-wave work unit](source-wave-plan.md) addresses shared-publication grouping and native
 readiness before chart selection. Source installation, transitive responsibility, catch-up/call boundaries
-and recovery remain planned qualification; it does not clear the separate draft identity review or product gates.
+and recovery remain planned qualification. The identity prerequisite has landed; applicable shared source-owner
+review before executable adoption and actual product architecture agreement remain separate gates.
+
+The proposed [ordinary recovery profile](contracts/recovery.md) maps existing intervention/successor semantics before
+new native implementation: fresh activity identity, pinned inputs/operation/provenance, atomic parent rebinding and
+completed-work preservation. Its initial leaf/known-parent profile is deliberately bounded; ordinary root and other
+activation boundaries, actual chart/admission integration and complete operator recovery remain required. It is a
+technical proposal with no executable recovery, source-owner or product agreement implied.

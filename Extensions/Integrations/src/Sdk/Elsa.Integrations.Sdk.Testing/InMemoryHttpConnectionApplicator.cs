@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Models;
 
-namespace Elsa.Integrations.Sdk.Harness;
+namespace Elsa.Integrations.Sdk.Testing;
 
 /// <summary>
 /// In-memory <see cref="IHttpConnectionApplicator"/> for connector tests. Register a name to an

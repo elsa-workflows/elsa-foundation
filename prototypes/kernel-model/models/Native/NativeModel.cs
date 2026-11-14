@@ -62,7 +62,7 @@ public sealed class NativeOptions
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
 
-public sealed class NativeState
+public sealed partial class NativeState
 {
     public string Mode { get; set; } = Modes.Balanced;
     public bool Started { get; set; }
@@ -78,8 +78,8 @@ public sealed class NativeState
     public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
 
-/// <summary>A live activity: a composite with children, or an activity that waits.</summary>
-public sealed class Frame
+/// <summary>Owned activity state: running/waiting, or a retained fault awaiting intervention.</summary>
+public sealed partial class Frame
 {
     public string Id { get; set; } = "";
     public string Node { get; set; } = "";
@@ -92,7 +92,7 @@ public sealed class Frame
 }
 
 /// <summary>Scheduled work: execute a node as a new frame, or resume a frame's wait.</summary>
-public sealed class Work
+public sealed partial class Work
 {
     public bool Resume { get; set; }
     public string Frame { get; set; } = "";
@@ -117,10 +117,19 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 3 captures optional terminal receipt policy; legacy identities remain protected without invented expiry.</summary>
-    public int StateVersion => 3;
-    public object UpgradeState(string state, int fromVersion) => fromVersion is 1 or 2 ? Json.Read<NativeState>(state)
-        : throw new NotSupportedException($"native state has no version {fromVersion}");
+    /// <summary>Version 6 adds private successor material, scheduling and control lineage.</summary>
+    public int StateVersion => 6;
+    public object UpgradeState(string state, int fromVersion)
+    {
+        if (fromVersion is not (1 or 2 or 3 or 4 or 5)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        var native = Json.Read<NativeState>(state);
+        // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
+        if (native is null) return null!;
+        if (fromVersion < 4 && LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
+        if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
+        if (NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
+        return native;
+    }
 
     internal WorkflowRegistry Registry => registry;
     internal NativeOptions Options { get; } = options ?? new NativeOptions();
@@ -137,8 +146,12 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         ? new Burst(this, turn, cancellationToken, status).MetadataAsync() : InvocationLifetime.Missing(turn);
     public void TerminateMetadata(object state)
     {
-        if (state is NativeState native) InvocationLifetime.Terminate(native, WorkflowCommitClock.Terminal, "cancelled", (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0,
-            (Options.AdmissionFlaws & AdmissionFlaw.RestampCompleted) != 0);
+        if (state is NativeState native)
+        {
+            InvocationLifetime.Terminate(native, WorkflowCommitClock.Terminal, "cancelled", (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0,
+                (Options.AdmissionFlaws & AdmissionFlaw.RestampCompleted) != 0);
+            LexicalScopes.Terminate(native);
+        }
     }
     public bool ProtectsDeletion(object state, long now, ICommitClock clock) => (Options.AdmissionFlaws & AdmissionFlaw.IgnoreRetention) == 0 &&
         ((Options.AdmissionFlaws & AdmissionFlaw.UnsafeNull) != 0
@@ -173,11 +186,14 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     public async ValueTask RunAsync()
     {
+        LexicalScopes.Validate(_s);
+        NativeInterventions.Validate(_s);
         if (AdmitPrefix()) return;
         foreach (var message in turn.Inbox)
             if (model.HandlesMetadata(message)) turn.Hold(message);
             else Accept(message);
-        await DrainAsync();
+        if (_retryAccepted) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        else await DrainAsync();
         FinishSignals();
         if (turn.Inbox.Any(model.HandlesMetadata)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
@@ -188,9 +204,17 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     {
         switch (m.Kind)
         {
+            case NativeRetry.Kind:
+            {
+                var result = Retry(m);
+                turn.Reply(m, Request.Response, result);
+                turn.Record($"recovery:{result.Id}:{result.Result}:{result.Successor}");
+                break;
+            }
             case Kinds.Start when !_s.Started:
             {
                 _s.Started = true;
+                InitializeIntervention();
                 var start = Json.Read<NativeStart>(m.Start?.Input ?? "{}");
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
@@ -259,7 +283,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 turn.Send(turn.Instance.Ref, NativeKinds.Continue);
                 return;
             }
-            var work = _s.Agenda.First(w => !w.Gone);
+            var work = _s.Agenda.FirstOrDefault(w => !w.Gone && Runnable(w));
+            if (work is null) return;
             if (!work.Resume && Durable && _wf.Nodes[work.Node!].External && work.Attempt == 0 && !Has(NativeFlaw.NoAttemptCommit))
             {
                 // Not replay-safe: commit the attempt first, run it in the next turn. After a crash the row says it may have run.
@@ -280,7 +305,14 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     {
         if (work.Parent is not null && !_s.Frames.ContainsKey(work.Parent)) return;     // its parent was cancelled meanwhile
         var node = _wf.Nodes[work.Node!];
-        var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope };
+        var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope, LexicalScope = work.LexicalScope };
+        if (work.RetrySource is not null)
+        {
+            frame.RetrySource = work.RetrySource; frame.OperationKey = work.OperationKey;
+            frame.RecoveryInputs = (JsonObject)work.RecoveryInputs!.DeepClone(); frame.RecoveryMaterial = (JsonObject)work.RecoveryMaterial!.DeepClone();
+            if (!JsonNode.DeepEquals(frame.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf)))
+                throw new InvalidOperationException("Scheduled retry material is unavailable.");
+        }
         var scope = new FrameScope(this, frame);
         if (node.Background)
         {
@@ -291,7 +323,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             turn.StartJob(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope))));
             return;
         }
-        var activity = Hydrator.Create(node, b => Evaluate(b, scope));
+        var pinned = frame.RecoveryInputs is { } saved ? (JsonObject)saved.DeepClone() : PinRecoveryInputs(frame, node, scope);
+        var activity = pinned is null ? Hydrator.Create(node, b => Evaluate(b, scope)) : Hydrator.Create(node, pinned);
         switch (activity)
         {
             case IIntrinsic set:
@@ -346,7 +379,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
     }
 
-    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation);
+    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -432,6 +465,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         CloseInbox(frame.Id, "completed");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
+        DisposeLexicalScopes(frame.Id);
         if (result is not null) _s.Results[frame.Node] = result;
         foreach (var (variable, path) in _wf.Nodes[frame.Node].Captures) Assign(frame, variable, Values.Path(result, path)?.DeepClone());
         turn.Record($"c:{frame.Id}:{frame.Node}");
@@ -470,9 +504,11 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     internal void Fail(Frame frame, ActivityFault fault)
     {
+        if (CaptureIntervention(frame, fault)) return;
         CloseInbox(frame.Id, "faulted");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
+        DisposeLexicalScopes(frame.Id);
         turn.Record($"f:{frame.Id}:{frame.Node}");
         if (frame.Parent is null || !_s.Frames.TryGetValue(frame.Parent, out var parent))
         {
@@ -484,9 +520,10 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
     }
 
-    internal string Schedule(Frame parent, Node child, string? tag, IReadOnlyDictionary<string, JsonNode?>? scope)
+    internal string Schedule(Frame parent, Node child, string? tag, IReadOnlyDictionary<string, JsonNode?>? scope, string? lexicalScope = null)
     {
-        var work = new Work { Frame = NewId("f"), Node = child.Id, Parent = parent.Id, Tag = tag };
+        if (lexicalScope is not null) _ = LexicalScopes.Accessible(_s, parent.Id, lexicalScope);
+        var work = new Work { Frame = NewId("f"), Node = child.Id, Parent = parent.Id, Tag = tag, LexicalScope = lexicalScope };
         if (scope is not null)
         {
             if (Has(NativeFlaw.ScopeInMemory)) work.LiveScope = new(scope);     // MUTATION: the iteration scope is not in the row
@@ -517,6 +554,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 Unregister(id, wait, cancel: true);
             }
             CancelChildren(frame);
+            DisposeLexicalScopes(frame);
             turn.Record($"x:{f.Id}:{f.Node}");
         }
         _s.Agenda.RemoveAll(w => !w.Resume && w.Frame == frame);
@@ -559,11 +597,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     internal JsonNode? Read(Frame? frame, string name)
     {
-        for (; frame is not null; frame = ParentOf(frame))
-        {
-            if (frame.LiveScope is { } live && live.TryGetValue(name, out var l)) return l;
-            if (frame.Scope is { } scope && scope.TryGetValue(name, out var v)) return v;
-        }
+        foreach (var scope in VisibleScopes(frame))
+            if (scope.TryGetValue(name, out var value)) return value;
         return _s.Variables.GetValueOrDefault(name);
     }
 
@@ -572,11 +607,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     /// <summary>A write goes to the nearest scope that declares the variable, else to the workflow's.</summary>
     private void Assign(Frame frame, string name, JsonNode? value)
     {
-        for (var f = (Frame?)frame; f is not null; f = ParentOf(f))
-        {
-            if (f.LiveScope?.ContainsKey(name) == true) { f.LiveScope[name] = value; return; }
-            if (f.Scope?.ContainsKey(name) == true) { f.Scope[name] = value; return; }
-        }
+        foreach (var scope in VisibleScopes(frame))
+            if (scope.ContainsKey(name)) { scope[name] = value; return; }
         _s.Variables[name] = value;
     }
 }

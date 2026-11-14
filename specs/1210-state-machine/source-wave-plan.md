@@ -6,10 +6,14 @@ Route: [StateMachine](../../docs/program-goals/state-machine.md), #3815/#3820, c
 [agreed input principles](m0-input-profile-proposal.md) and [selection proposal](contracts/selection.md) retain
 their authority; the historical [fence proposal](m0-shared-fence-control-contract.md) is not an installed dependency.
 
-Source basis: main `a756b579158dae8c534192b5dfa4bacd16baeb41`. Exact creation addressing remains a **draft
-prerequisite**, [#4451](https://github.com/elsa-workflows/elsa-foundation/pull/4451), whose review-limit exception
-is pending. This plan neither clears that gate nor adopts its deletion/naming/provider policy. Implementation
-follows this plan's own review and applicable shared-owner agreement; only the plan is being prepared now.
+Original plan source basis: main `a756b579158dae8c534192b5dfa4bacd16baeb41`. The then-draft exact-creation
+prerequisite [#4451](https://github.com/elsa-workflows/elsa-foundation/pull/4451) has since merged as `b82a8b75a6`;
+its independent review/owner-authorized extension is settled, not a pending blocker. Later generic lexical resources
+and StateMachine visit-scope prototypes also landed; [current status](README.md) records them. None supplies fixed
+publication membership or transitive runnable closure, adopts a product/provider/deletion policy or clears the
+shared-owner gate below. Source/store pre-code review remains requested in
+[#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6871030658); source installation
+implementation has not started. Implementation follows this plan's own review and applicable shared-owner agreement.
 
 ## Question and observed gap
 

@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http.Logging;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Integrations.Sdk.Harness;
+namespace Elsa.Integrations.Sdk.Testing;
 
 /// <summary>
 /// In-memory host for connector tests: fake <see cref="ISecretValueResolver"/>, fake

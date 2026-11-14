@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace Elsa.Integrations.Sdk.Harness;
+namespace Elsa.Integrations.Sdk.Testing;
 
 /// <summary>Captures outbound requests so tests can assert auth headers without a network.</summary>
 public sealed class RecordingHttpMessageHandler : HttpMessageHandler
