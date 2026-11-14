@@ -22,7 +22,6 @@ export function SecretScopePicker({
   onChange,
   onRetry,
   externalMatchingHintId,
-  compact = false,
   disabled = false
 }: {
   value: string;
@@ -58,7 +57,7 @@ export function SecretScopePicker({
   const selectedDescription = selectedScope?.description?.trim();
   const selectedSource = selectedScope?.source?.trim();
   const hintId = `scope-hint-${id}`;
-  const RefreshButton = compact ? StudioButton : "button";
+  const RefreshButton = StudioButton;
   const describedBy = externalMatchingHintId ? `${externalMatchingHintId} ${hintId}` : hintId;
 
   function renderSelect(attributes: React.SelectHTMLAttributes<HTMLSelectElement>) {
@@ -90,36 +89,21 @@ export function SecretScopePicker({
   return (
     <div className="secrets-scope-picker">
       <div className="secrets-scope-heading">
-        {compact ? null : <label htmlFor={`scope-select-${id}`}>Scope</label>}
         {onRetry ? (
           <RefreshButton type="button" onClick={onRetry} disabled={loading || disabled} aria-busy={loading}>
             Refresh scope suggestions
           </RefreshButton>
         ) : null}
       </div>
-      {searchable ? compact ? (
-        <SecretFormField label="Search scopes" disabled={disabled}>
-          {attributes => <input {...attributes} type="search" value={search} autoComplete="off" onChange={event => setSearch(event.target.value)} />}
-        </SecretFormField>
-      ) : (
-        <label htmlFor={`scope-search-${id}`}>
-          Search scopes
-          <input id={`scope-search-${id}`} type="search" value={search} disabled={disabled} onChange={event => setSearch(event.target.value)} placeholder="Search suggested scopes" autoComplete="off" />
-        </label>
-      ) : null}
-      {compact ? <SecretFormField label="Scope" controlId={`scope-select-${id}`} disabled={disabled}>
+      {searchable ? <SecretFormField label="Search scopes" disabled={disabled}>
+        {attributes => <input {...attributes} type="search" value={search} autoComplete="off" onChange={event => setSearch(event.target.value)} />}
+      </SecretFormField> : null}
+      <SecretFormField label="Scope" controlId={`scope-select-${id}`} disabled={disabled}>
         {attributes => renderSelect(attributes)}
-      </SecretFormField> : renderSelect({ id: `scope-select-${id}` })}
-      {isCustom ? compact ? (
-        <SecretFormField label="Custom scope value" controlId={`scope-custom-${id}`} disabled={disabled}>
-          {attributes => <input {...attributes} value={value} aria-describedby={describedBy} autoComplete="off" onChange={event => onChange(event.target.value)} />}
-        </SecretFormField>
-      ) : (
-        <label htmlFor={`scope-custom-${id}`}>
-          Custom scope value
-          <input id={`scope-custom-${id}`} value={value} disabled={disabled} aria-describedby={describedBy} onChange={event => onChange(event.target.value)} placeholder="Enter a scope value" autoComplete="off" />
-        </label>
-      ) : null}
+      </SecretFormField>
+      {isCustom ? <SecretFormField label="Custom scope value" controlId={`scope-custom-${id}`} disabled={disabled}>
+        {attributes => <input {...attributes} value={value} aria-describedby={describedBy} autoComplete="off" onChange={event => onChange(event.target.value)} />}
+      </SecretFormField> : null}
       <div id={hintId}>
         {externalMatchingHintId ? null : <ScopeMatchingHint />}
         {selectedDescription ? <p className="secrets-field-hint">{selectedDescription}</p> : null}

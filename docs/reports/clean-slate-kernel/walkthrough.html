@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elsa Kernel Walkthrough</title>
+<style>
+/* Layout idea: a technical field guide. Sticky chapter rail on the left, one reading column,
+   diagrams drawn as engineering schematics; blue = the durable layer and whatever is "lit" now. */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --ink: #16202a;
+  --muted: #5b6875;
+  --line: #d6dde4;
+  --line-strong: #9aa7b4;
+  --accent: #2f5bd3;
+  --accent-soft: #e6ecfb;
+  --hot: #c8582a;
+  --hot-soft: #fbe9e0;
+  --l1: #64748b;
+  --l1-soft: #eef1f5;
+  --l3: #1d7f55;
+  --l3-soft: #e3f3eb;
+  --st: #93650a;
+  --st-soft: #f8f0dc;
+  --code-bg: #eef1f5;
+  --display: "Avenir Next Condensed", "Arial Narrow", system-ui, sans-serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1318; --surface: #151c23; --ink: #e2e8ee; --muted: #93a1ae; --line: #26313b; --line-strong: #4f5e6c;
+    --accent: #5a86f0; --accent-soft: #1b2944; --hot: #d46a35; --hot-soft: #3a2218;
+    --l1: #8b9aab; --l1-soft: #1b232c; --l3: #45b884; --l3-soft: #16302a; --st: #d3a23f; --st-soft: #33290f;
+    --code-bg: #1b232c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1318; --surface: #151c23; --ink: #e2e8ee; --muted: #93a1ae; --line: #26313b; --line-strong: #4f5e6c;
+  --accent: #5a86f0; --accent-soft: #1b2944; --hot: #d46a35; --hot-soft: #3a2218;
+  --l1: #8b9aab; --l1-soft: #1b232c; --l3: #45b884; --l3-soft: #16302a; --st: #d3a23f; --st-soft: #33290f;
+  --code-bg: #1b232c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, pre, .mono { font-family: var(--mono); font-size: .88em; }
+code { background: var(--code-bg); padding: .08em .35em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 16px 18px; border-radius: 8px; overflow-x: auto; line-height: 1.5; margin: 0; }
+pre code { background: none; padding: 0; font-size: 13px; }
+pre .c { color: var(--muted); }
+pre .k { color: var(--accent); }
+
+.shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+nav.rail { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 28px 16px 28px 24px; border-right: 1px solid var(--line); }
+nav.rail .brand { font: 600 15px/1.25 var(--display); letter-spacing: .02em; text-transform: uppercase; color: var(--muted); margin-bottom: 18px; }
+nav.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: ch; }
+nav.rail li { counter-increment: ch; }
+nav.rail a { display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 14px; line-height: 1.35; }
+nav.rail ol a::before { content: counter(ch, decimal-leading-zero); font: 500 12px/1.6 var(--mono); color: var(--muted); }
+nav.rail p a { display: inline; padding: 0; color: var(--accent); }
+nav.rail a:hover { background: var(--surface); }
+nav.rail a.on { background: var(--accent-soft); color: var(--accent); }
+nav.rail ol a.on::before { color: var(--accent); }
+
+main { padding: 40px 48px 120px; min-width: 0; }
+header.top { max-width: 900px; padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+header.top .eyebrow { font: 500 13px var(--mono); color: var(--muted); letter-spacing: .02em; }
+h1 { font: 600 44px/1.1 var(--display); margin: 10px 0 14px; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font: 600 30px/1.15 var(--display); margin: 0 0 14px; text-wrap: balance; }
+h3 { font: 600 19px/1.3 var(--display); margin: 28px 0 8px; letter-spacing: .01em; }
+.lede { font-size: 18px; color: var(--ink); max-width: 68ch; margin: 0; }
+p, li { max-width: 70ch; }
+.muted { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chip { font: 500 12.5px/1 var(--sans); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); background: var(--surface); }
+.chip.ok { border-color: var(--l3); color: var(--l3); }
+.chip.warn { border-color: var(--hot); color: var(--hot); }
+
+section.ch { padding: 56px 0 8px; scroll-margin-top: 8px; max-width: 980px; }
+section.ch > .num { font: 500 13px var(--mono); color: var(--accent); }
+.principle { border-left: 3px solid var(--accent); background: var(--surface); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 20px 0; max-width: 72ch; }
+.principle strong { color: var(--accent); }
+.principle.hot { border-color: var(--hot); }
+.principle.hot strong { color: var(--hot); }
+
+figure { margin: 22px 0; }
+.fig { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+.fig svg { display: block; width: 100%; min-width: 760px; height: auto; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; max-width: 80ch; }
+
+/* SVG schematic language */
+.dg { color: var(--ink); }
+.dg text { fill: currentColor; font: 12.5px var(--sans); }
+.dg text.tt { font: 600 13.5px var(--sans); }
+.dg text.ts { fill: var(--muted); font-size: 11.5px; }
+.dg text.tm { font: 11.5px var(--mono); fill: var(--muted); }
+.dg text.el { fill: var(--muted); font-size: 11.5px; }
+.dg text.band-title { font: 600 14px var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.dg rect.box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+.dg rect.frame { fill: none; stroke: var(--line-strong); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.dg rect.b1 { fill: var(--l1-soft); stroke: var(--l1); stroke-width: 1.2; }
+.dg rect.b2 { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.dg rect.b3 { fill: var(--l3-soft); stroke: var(--l3); stroke-width: 1.2; }
+.dg rect.bs { fill: var(--st-soft); stroke: var(--st); stroke-width: 1.2; }
+.dg rect.dashed { stroke-dasharray: 5 4; }
+.dg .edge { fill: none; stroke: var(--muted); stroke-width: 1.6; marker-end: url(#ah); }
+.dg .edge.dash { stroke-dasharray: 5 4; }
+.dg .edge.both { marker-start: url(#ahs); }
+.dg .edge.plain { marker-end: none; }
+.dg line.axis { stroke: var(--line-strong); stroke-width: 1.2; }
+.dg line.grid { stroke: var(--line); stroke-width: 1; }
+.dg .hotline { stroke: var(--hot); stroke-width: 1.6; stroke-dasharray: 4 4; fill: none; }
+.dg text.hot { fill: var(--hot); font-weight: 600; }
+.dg text.acc { fill: var(--accent); font-weight: 600; }
+.dg text.l3 { fill: var(--l3); }
+.dg text.st { fill: var(--st); }
+.dg text.l1 { fill: var(--l1); }
+marker path.n { fill: var(--muted); }
+marker path.l { fill: var(--accent); }
+marker path.h { fill: var(--hot); }
+
+/* lit / dim for steppers and pickers */
+.dg [data-k], .dg [data-pick] { transition: opacity .25s; }
+.dg .dim { opacity: .22; }
+.dg g.lit > rect { stroke: var(--accent); stroke-width: 2.4; }
+.dg g.lit > rect.box { fill: var(--accent-soft); }
+.dg g.lit > .edge { stroke: var(--accent); stroke-width: 2.6; marker-end: url(#ahl); }
+.dg g.lit > text.el { fill: var(--accent); font-weight: 600; }
+.dg g.lit.hotlit > rect { stroke: var(--hot); fill: var(--hot-soft); }
+.dg g.lit.hotlit > .edge { stroke: var(--hot); marker-end: url(#ahh); }
+.dg g.lit.hotlit > text.el { fill: var(--hot); }
+.dg .only-lit { opacity: 0; }
+.dg .only-lit.lit { opacity: 1; }
+.dg [data-pick] { cursor: pointer; }
+.dg [data-pick]:hover > rect { stroke-width: 2.4; }
+.dg g.picked > rect { stroke-width: 3; }
+
+/* stepper */
+.stepper { margin: 22px 0; }
+.stepbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 10px; }
+button { font: 500 14px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 13px; cursor: pointer; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { filter: brightness(1.08); color: #fff; }
+button[disabled] { opacity: .4; cursor: default; }
+.count { font: 500 13px var(--mono); color: var(--muted); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.tabs button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+ol.steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; counter-reset: st; }
+ol.steps[hidden] { display: none; }
+ol.steps li { counter-increment: st; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px 13px; cursor: pointer; font-size: 14.5px; line-height: 1.5; max-width: none; }
+ol.steps li::before { content: counter(st); font: 600 12px/22px var(--mono); display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--line); color: var(--ink); margin-right: 8px; }
+ol.steps li b { font-weight: 600; }
+ol.steps li p { margin: 6px 0 0; color: var(--muted); }
+ol.steps li.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+ol.steps li.on::before { background: var(--accent); color: #fff; }
+ol.steps li.on p { color: var(--ink); }
+
+/* generic grids and cards */
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); margin: 18px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 14px 16px; font-size: 14.5px; line-height: 1.5; }
+.card h4 { font: 600 15.5px/1.3 var(--display); margin: 0 0 6px; letter-spacing: .01em; }
+.card p { margin: 6px 0 0; }
+.card .mono { color: var(--muted); font-size: 12.5px; }
+.card.picked { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.card.l1 { border-top: 3px solid var(--l1); }
+.card.l2 { border-top: 3px solid var(--accent); }
+.card.l3 { border-top: 3px solid var(--l3); }
+.card.st { border-top: 3px solid var(--st); }
+.card dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 8px 0 0; }
+.card dt { font-weight: 600; color: var(--muted); font-size: 13px; }
+.card dd { margin: 0; }
+dl.vocab { display: grid; grid-template-columns: minmax(120px, 170px) 1fr; gap: 8px 20px; margin: 18px 0; max-width: 860px; }
+dl.vocab dt { font: 600 15px var(--display); letter-spacing: .01em; }
+dl.vocab dd { margin: 0; font-size: 15px; color: var(--ink); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; background: var(--surface); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; margin: 18px 0; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 13px var(--sans); color: var(--muted); background: var(--code-bg); }
+tr:last-child td { border-bottom: 0; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 13.5px; white-space: nowrap; }
+tr.picked td { background: var(--accent-soft); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line-strong); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+ol.stmts { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 6px; max-width: 860px; }
+ol.stmts li { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; max-width: none; font-size: 14.5px; }
+ol.stmts li .rt { font: 600 12px/22px var(--mono); text-align: center; border-radius: 5px; background: var(--accent-soft); color: var(--accent); }
+ol.stmts li.fence { border-color: var(--hot); }
+ol.stmts li.fence .rt { background: var(--hot-soft); color: var(--hot); }
+ol.stmts li.check { background: transparent; border-style: dashed; }
+ol.stmts li.check .rt { background: transparent; color: var(--muted); }
+ol.stmts li.commitrow .rt { background: var(--l3-soft); color: var(--l3); }
+ol.stmts code { font-size: 12.5px; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); margin: 8px 0 0; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.axes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+.axis-col { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 14px; }
+.axis-col h4 { font: 600 15px var(--display); margin: 0 0 4px; }
+.axis-col .who { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.opt { display: block; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; margin-top: 6px; font-size: 14px; color: var(--muted); transition: all .2s; }
+.opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); font-weight: 500; }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 13px; padding: 6px 9px; border-radius: 6px; opacity: 0; transition: opacity .12s; z-index: 10; max-width: 280px; }
+.note { font-size: 13.5px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  nav.rail { position: sticky; top: 0; height: auto; z-index: 5; background: var(--bg); border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; overflow-x: visible; }
+  nav.rail .brand { display: none; }
+  nav.rail ol { display: flex; gap: 4px; width: auto; overflow-x: auto; }
+  nav.rail a { grid-template-columns: auto auto; white-space: nowrap; font-size: 13px; }
+  main { padding: 24px 16px 80px; }
+  h1 { font-size: 34px; }
+  .two, .axes { grid-template-columns: 1fr; }
+  dl.vocab { grid-template-columns: 1fr; gap: 2px 0; }
+  dl.vocab dd { margin-bottom: 10px; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="n" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="n" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ahl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="l" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ahls" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="l" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="h" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+</svg>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="shell">
+<nav class="rail" aria-label="Chapters">
+  <div class="brand">Kernel walkthrough</div>
+  <ol>
+    <li><a href="#overview">The kernel in one picture</a></li>
+    <li><a href="#vocabulary">Words used here</a></li>
+    <li><a href="#seam">The runtime seam</a></li>
+    <li><a href="#data">What is stored</a></li>
+    <li><a href="#step">Life of a turn</a></li>
+    <li><a href="#commit">The commit</a></li>
+    <li><a href="#ownership">Ownership and takeover</a></li>
+    <li><a href="#messages">Messages, timers, poison</a></li>
+    <li><a href="#models">Execution models</a></li>
+    <li><a href="#events">Events and correlation</a></li>
+    <li><a href="#http">Synchronous HTTP</a></li>
+    <li><a href="#profiles">Deployment profiles</a></li>
+    <li><a href="#costs">What it costs</a></li>
+    <li><a href="#proof">How it is tested</a></li>
+    <li><a href="#tradeoffs">Trade-offs and defaults</a></li>
+    <li><a href="#open">Open and not built</a></li>
+  </ol>
+  <p style="margin:14px 0 0;font-size:13px"><a href="kernel-in-motion.html">The kernel in motion ↗</a><br><span style="color:var(--muted)">one workflow animated through every part, the three persistence modes, faults, and the fence lab</span></p>
+</nav>
+<main>
+<header class="top">
+  <div class="eyebrow">Design draft 5 · 12 November 2026 · prototypes/kernel-model</div>
+  <h1>How the clean-slate Elsa kernel fits together</h1>
+  <p class="lede">A walk through the new execution kernel, from the three layers down to the rows a commit writes. The diagrams with step buttons can be played through; every step is also written out beside them. New to the words used here? Start with the companion <a href="kernel-in-motion.html">The kernel in motion</a>, which follows one order workflow through every part, with a visual glossary and a lab for the fence.</p>
+  <div class="chips">
+    <span class="chip">Standalone model, not product code</span>
+    <span class="chip warn">Design not yet approved</span>
+    <span class="chip">Fable review pending</span>
+    <span class="chip ok">Prototype on main: prototypes/kernel-model; gates green</span>
+  </div>
+</header>
+
+<!-- 1 ─────────────────────────────────────────── -->
+<section class="ch" id="overview">
+  <div class="num">01</div>
+  <h2>The kernel in one picture</h2>
+  <p>The kernel is three layers and one storage contract. The <b>actor runtime</b> decides where things run. The <b>durable layer</b> makes every guarantee: nothing is lost, nothing applies twice, and a stale node can never write. The <b>actor types</b> on top do the actual work, and a workflow instance is one of them. Click a layer to see what it owns.</p>
+  <div class="picker" id="layers-picker" data-default="l2">
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 470" role="img" aria-label="Three layers: actor types on top of durable actors on top of an actor runtime, with the durable layer using a persistence provider through IKernelStore.">
+      <!-- hosts -->
+      <g>
+        <rect class="box" x="740" y="20" width="200" height="130" rx="8"/>
+        <text class="tt" x="756" y="46">Hosts</text>
+        <text class="ts" x="756" y="68">HTTP routes · API · Studio</text>
+        <text class="ts" x="756" y="88">add messages to the inbox,</text>
+        <text class="ts" x="756" y="106">observe what an instance emits</text>
+      </g>
+      <g><path class="edge" d="M780,150 L780,166 L612,166 L612,180"/><text class="el" x="788" y="172">add message</text></g>
+      <!-- layer 3 -->
+      <g data-pick="l3" tabindex="0" role="button" aria-label="Layer 3, actor types">
+        <rect class="b3" x="20" y="20" width="620" height="130" rx="10"/>
+        <text class="band-title l3" x="36" y="44">3 · Actor types</text>
+        <rect class="box" x="36" y="56" width="330" height="82" rx="7"/>
+        <text class="tt" x="52" y="78">Workflow instance</text>
+        <text class="ts" x="52" y="96">definition · status · parent and children · history</text>
+        <rect class="box" x="52" y="108" width="56" height="20" rx="4"/><text class="ts" x="80" y="122" text-anchor="middle">Native</text>
+        <rect class="box" x="114" y="108" width="50" height="20" rx="4"/><text class="ts" x="139" y="122" text-anchor="middle">BPMN</text>
+        <rect class="box" x="170" y="108" width="40" height="20" rx="4"/><text class="ts" x="190" y="122" text-anchor="middle">ETL</text>
+        <rect class="box" x="216" y="108" width="58" height="20" rx="4"/><text class="ts" x="245" y="122" text-anchor="middle">Agents</text>
+        <rect class="box dashed" x="280" y="108" width="76" height="20" rx="4"/><text class="ts" x="318" y="122" text-anchor="middle">your model</text>
+        <rect class="box" x="380" y="56" width="120" height="82" rx="7"/>
+        <text class="tt" x="392" y="78">Correlation key</text>
+        <text class="ts" x="392" y="96">one actor per key</text>
+        <text class="ts" x="392" y="114">optional</text>
+        <rect class="box" x="510" y="56" width="116" height="82" rx="7"/>
+        <text class="tt" x="522" y="78">Durable entity</text>
+        <text class="ts" x="522" y="96">a value, changed</text>
+        <text class="ts" x="522" y="114">by operations</text>
+      </g>
+      <g><path class="edge both" d="M120,152 L120,178"/></g>
+      <text class="tm" x="330" y="170" text-anchor="middle">IExecutionModel · ITurn</text>
+      <!-- layer 2 -->
+      <g data-pick="l2" tabindex="0" role="button" aria-label="Layer 2, durable actors">
+        <rect class="b2" x="20" y="180" width="620" height="150" rx="10"/>
+        <text class="band-title acc" x="36" y="204">2 · Durable actors</text>
+        <rect class="box" x="36" y="214" width="140" height="40" rx="6"/><text x="106" y="238" text-anchor="middle">Durable inbox</text>
+        <rect class="box" x="188" y="214" width="140" height="40" rx="6"/><text x="258" y="238" text-anchor="middle">Fenced commit</text>
+        <rect class="box" x="340" y="214" width="140" height="40" rx="6"/><text x="410" y="238" text-anchor="middle">Timers</text>
+        <rect class="box" x="492" y="214" width="140" height="40" rx="6"/><text x="562" y="238" text-anchor="middle">Background jobs</text>
+        <rect class="box" x="36" y="266" width="140" height="40" rx="6"/><text x="106" y="290" text-anchor="middle">Events</text>
+        <rect class="box" x="188" y="266" width="140" height="40" rx="6"/><text x="258" y="290" text-anchor="middle">Poison trials</text>
+        <rect class="box" x="340" y="266" width="140" height="40" rx="6"/><text x="410" y="290" text-anchor="middle">Journal</text>
+        <rect class="box" x="492" y="266" width="140" height="40" rx="6"/><text x="562" y="290" text-anchor="middle">Instances in memory</text>
+      </g>
+      <g><path class="edge both" d="M120,332 L120,358"/></g>
+      <text class="tm" x="330" y="350" text-anchor="middle">IActorRuntime · IScopeHost · IScopeActivation</text>
+      <!-- storage -->
+      <g><path class="edge both" d="M642,255 L738,255"/></g>
+      <text class="tm" x="690" y="244" text-anchor="middle">IKernelStore</text>
+      <g data-pick="st" tabindex="0" role="button" aria-label="Persistence provider">
+        <rect class="bs" x="740" y="180" width="200" height="150" rx="10"/>
+        <text class="band-title st" x="756" y="204">Persistence</text>
+        <text class="tt" x="756" y="230">EF Core</text>
+        <text class="ts" x="756" y="248">PostgreSQL · SQL Server</text>
+        <text class="ts" x="756" y="265">MySQL · SQLite</text>
+        <text class="tt" x="756" y="290">MongoDB 8 (replica set)</text>
+        <text class="ts" x="756" y="312">Later: a replicated log store</text>
+      </g>
+      <text class="ts" x="840" y="350" text-anchor="middle">correct = passes the store suite</text>
+      <!-- layer 1 -->
+      <g data-pick="l1" tabindex="0" role="button" aria-label="Layer 1, actor runtime">
+        <rect class="b1" x="20" y="360" width="620" height="92" rx="10"/>
+        <text class="band-title l1" x="36" y="384">1 · Actor runtime</text>
+        <rect class="box" x="36" y="398" width="190" height="40" rx="6"/><text x="131" y="422" text-anchor="middle">Built-in: partitions</text>
+        <rect class="box" x="240" y="398" width="190" height="40" rx="6"/><text x="335" y="422" text-anchor="middle">Orleans adapter (tests)</text>
+        <rect class="box dashed" x="444" y="398" width="182" height="40" rx="6"/><text x="535" y="422" text-anchor="middle">Your adapter</text>
+      </g>
+      <text class="ts" x="840" y="422" text-anchor="middle">runtime conformance suite (planned)</text>
+    </svg>
+    </div>
+    <figcaption>Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer, the workflow instance and the native model, with a few of the workflow instance's types and columns still in layer 2 (DESIGN.md lists these seam leaks); the other runtimes, models and actor types shown are planned or samples.</figcaption>
+  </figure>
+  <div class="grid">
+    <div class="card l1" data-pick-card="l1"><h4>1 · Actor runtime</h4>
+      <dl><dt>Owns</dt><dd>Placing actors on nodes, running each scope one pass at a time, wake-ups between nodes.</dd>
+      <dt>Not</dt><dd>Any guarantee about messages or state.</dd>
+      <dt>Swap</dt><dd>Built in: partitions. Integrators: Orleans, Proto.Actor, Akka.NET, Dapr actors.</dd></dl></div>
+    <div class="card l2" data-pick-card="l2"><h4>2 · Durable actors</h4>
+      <dl><dt>Owns</dt><dd>The durable inbox; a turn's new state and sent messages committed atomically; the fence against a stale owner; timers; background jobs; events; poison handling; the journal.</dd>
+      <dt>Not</dt><dd>Where an actor runs.</dd>
+      <dt>Swap</dt><dd>Never. Its storage can be swapped.</dd></dl></div>
+    <div class="card l3" data-pick-card="l3"><h4>3 · Actor types</h4>
+      <dl><dt>Owns</dt><dd>What an actor does with its messages. A workflow instance holds what all workflows share and runs an execution model for the rest.</dd>
+      <dt>Not</dt><dd>Persistence, placement.</dd>
+      <dt>Swap</dt><dd>Extended by adding actor types and execution models.</dd></dl></div>
+    <div class="card st" data-pick-card="st"><h4>Persistence provider</h4>
+      <dl><dt>Owns</dt><dd>Nine core guarantees: atomic commit, a fence inside it, conditional take, create-only inserts, an order key, reads in key order, reads by key, its own clock, failures told apart. The prototype's store also carries the node heartbeat, start subscriptions, held messages, delete and the projector's rows, each tested by the conformance suite.</dd>
+      <dt>Not</dt><dd>Any SQL in the kernel.</dd>
+      <dt>Swap</dt><dd>Any store that passes the conformance suite.</dd></dl></div>
+  </div>
+  </div>
+  <div class="principle"><strong>Why layer 2 is ours on any runtime.</strong> Orleans grain calls are at most once, a grain saves its state on its own, and saving state and sending a message are never one atomic act; when the network splits Orleans can briefly run two activations of one grain. Proto.Actor's messages are not durable. So the runtime only places and wakes; the guarantees come from layer 2 and its fence, which catches a second activation.</div>
+  <h3>The idea in five sentences</h3>
+  <ol>
+    <li>The durable layer knows nothing about workflows. It runs <b>durable actors</b> that own a piece of state and react to <b>messages</b>.</li>
+    <li>An <b>execution model</b> turns an instance's state and incoming messages into new state and outgoing messages. It is the only extension point.</li>
+    <li>Everything that crosses an instance boundary is a message: a start, a child finishing, a timer, an external event, a cancel, an alteration. No code reads another instance's state.</li>
+    <li>Under the built-in runtime, actors are grouped into <b>partitions</b>. One node owns a partition at a time and is its only writer, so the hot path needs no reads, no per-instance lease and no read before a turn.</li>
+    <li>A <b>commit</b> writes everything a turn changed in one transaction, and the owner batches the commits of many instances into one.</li>
+  </ol>
+  <div class="principle"><strong>The inbox alone says what is owed.</strong> Anything the kernel still has to do for an instance after a commit (continue, start a background job, look for events) is a message written in that commit. A new owner needs nothing but the rows. The simulation forced this rule three times.</div>
+</section>
+
+<!-- 2 ─────────────────────────────────────────── -->
+<section class="ch" id="vocabulary">
+  <div class="num">02</div>
+  <h2>Words used here</h2>
+  <dl class="vocab">
+    <dt>Actor</dt><dd>Something with its own state that handles one message batch at a time. A workflow instance is one kind.</dd>
+    <dt>Turn</dt><dd>An instance's turn to run: it takes the messages in its inbox, runs as many activities as its persistence mode allows, changes its state and sends messages. Temporal calls this a workflow task. One turn is not one activity.</dd>
+    <dt>Pass</dt><dd>The runtime's call into a partition it hosts: it runs the turns that are due and commits them in batches. One pass holds many turns.</dd>
+    <dt>Partition</dt><dd>A fixed bucket of instances (64 on server databases, 1 on SQLite). Its owner is the only node that writes its instances.</dd>
+    <dt>Epoch</dt><dd>A counter on the partition row, raised every time a node takes the partition. Work started under an older epoch is thrown away.</dd>
+    <dt>Position</dt><dd>How many journal rows a partition has written (a turn at the Minimal history level writes none). The commit checks it, so two commits can never land at the same position.</dd>
+    <dt>Fence</dt><dd>The conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.</dd>
+    <dt>Lease</dt><dd>How long the owner may hold the partition without writing (10 s). It decides who should write; the fence decides who can.</dd>
+    <dt>Message</dt><dd>A row in the inbox table: target, kind, payload, an order key <code>seq</code>, optionally a due time (a timer) and a start spec (create the target if missing).</dd>
+    <dt>Job</dt><dd>A background job: something slow an instance starts during a turn, whose result comes back later as a message while the instance keeps taking other messages.</dd>
+    <dt>Journal</dt><dd>One compact row per instance commit, written in the commit: the record of what happened. The viewer's tables are built from it.</dd>
+    <dt>Persistence mode</dt><dd>Where a workflow ends its turns: Ephemeral (only at a wait, if ever), Balanced (at each wait), Durable (after each activity). Chosen per workflow.</dd>
+  </dl>
+</section>
+
+<!-- 3 ─────────────────────────────────────────── -->
+<section class="ch" id="seam">
+  <div class="num">03</div>
+  <h2>The seam between the runtime and the durable layer</h2>
+  <p>Layer 2 hands the runtime a set of <b>ownership scopes</b>, one per partition, and the runtime decides which node hosts each one. The runtime runs a scope one pass at a time; a pass runs the turns that are due. Layer 2 does not trust it to be right: the fence catches a second activation on another node.</p>
+  <pre><code><span class="k">public interface</span> IActorRuntime
+{
+    ScopeId ScopeOf(ActorId actor);                  <span class="c">// the actor's partition</span>
+    ValueTask StartAsync(IScopeHost host, CancellationToken ct);
+    ValueTask WakeAsync(ActorId actor, CancellationToken ct);   <span class="c">// a hint: there is work</span>
+    ValueTask StopAsync(CancellationToken ct);
+}
+
+<span class="k">public interface</span> IScopeHost                       <span class="c">// implemented by layer 2</span>
+{
+    ValueTask&lt;IScopeActivation?&gt; ActivateAsync(ScopeId scope, CancellationToken ct);  <span class="c">// takes the fence, or declines</span>
+}
+
+<span class="k">public interface</span> IScopeActivation : IAsyncDisposable
+{
+    ValueTask WokenAsync(ActorId actor, CancellationToken ct);
+    ValueTask&lt;TimeSpan?&gt; RunAsync(CancellationToken ct);        <span class="c">// one pass: turns until idle; when to call again</span>
+}</code></pre>
+  <p class="note">The prototype was split this way in round 4 stage A.</p>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 330" role="img" aria-label="Hosting partitions batches many instances behind one fence; one grain per instance, which is not built, would give every instance its own fence and commit, plus a sweep that wakes idle instances.">
+      <text class="tt" x="20" y="24">Every runtime hosts partitions (Orleans: a partition per grain)</text>
+      <rect class="frame" x="20" y="40" width="440" height="180" rx="9"/>
+      <text class="tt" x="36" y="62">Node A · owns partition 17 at epoch 8</text>
+      <g>
+        <rect class="box" x="36" y="78" width="56" height="34" rx="5"/><text x="64" y="100" text-anchor="middle">i1</text>
+        <rect class="box" x="106" y="78" width="56" height="34" rx="5"/><text x="134" y="100" text-anchor="middle">i2</text>
+        <rect class="box" x="176" y="78" width="56" height="34" rx="5"/><text x="204" y="100" text-anchor="middle">i3</text>
+        <rect class="box" x="246" y="78" width="56" height="34" rx="5"/><text x="274" y="100" text-anchor="middle">i4</text>
+        <rect class="box" x="316" y="78" width="56" height="34" rx="5"/><text x="344" y="100" text-anchor="middle">i5</text>
+        <rect class="box" x="386" y="78" width="56" height="34" rx="5"/><text x="414" y="100" text-anchor="middle">…</text>
+      </g>
+      <path class="edge" d="M64,112 L64,140"/><path class="edge" d="M134,112 L134,140"/><path class="edge" d="M204,112 L204,140"/>
+      <path class="edge" d="M274,112 L274,140"/><path class="edge" d="M344,112 L344,140"/><path class="edge" d="M414,112 L414,140"/>
+      <rect class="b2" x="36" y="142" width="406" height="36" rx="6"/>
+      <text x="239" y="165" text-anchor="middle">One committer: many instances, one transaction</text>
+      <path class="edge" d="M239,178 L239,248"/>
+      <text class="el" x="250" y="212">1 fence · 1 poll · 2–3 round trips per flush (PostgreSQL)</text>
+      <rect class="bs" x="20" y="250" width="440" height="62" rx="8"/>
+      <text class="tt" x="36" y="274">partition 17: epoch 8 · position 1,204</text>
+      <text class="ts" x="36" y="294">Server engines: 100 commits cost the round trips of one</text>
+
+      <text class="tt" x="500" y="24">Dropped 12 November: one grain per instance</text>
+      <rect class="frame" x="500" y="40" width="440" height="180" rx="9"/>
+      <text class="tt" x="516" y="62">Grains, placed by Orleans</text>
+      <rect class="box" x="516" y="76" width="124" height="98" rx="6"/>
+      <text class="tt" x="530" y="98">i1</text><text class="ts" x="530" y="118">own fence row</text><text class="ts" x="530" y="136">inbox read on wake</text><text class="ts" x="530" y="154">commits alone</text>
+      <rect class="box" x="662" y="76" width="124" height="98" rx="6"/>
+      <text class="tt" x="676" y="98">i2</text><text class="ts" x="676" y="118">own fence row</text><text class="ts" x="676" y="136">inbox read on wake</text><text class="ts" x="676" y="154">commits alone</text>
+      <rect class="box" x="808" y="76" width="124" height="98" rx="6"/>
+      <text class="tt" x="822" y="98">i3</text><text class="ts" x="822" y="118">own fence row</text><text class="ts" x="822" y="136">inbox read on wake</text><text class="ts" x="822" y="154">commits alone</text>
+      <text class="ts" x="516" y="204">Sweep (layer 2): wakes idle actors that have due work and no live owner</text>
+      <path class="edge" d="M578,174 L578,248"/><path class="edge" d="M724,174 L724,248"/><path class="edge" d="M870,174 L870,248"/>
+      <rect class="bs" x="500" y="250" width="440" height="62" rx="8"/>
+      <text class="tt" x="516" y="274">a fence per actor</text>
+      <text class="ts" x="516" y="294">each commit 2–3 round trips (PostgreSQL); no batching</text>
+    </svg>
+    </div>
+    <figcaption>Decided 12 November: every runtime hosts whole partitions, and the Orleans adapter hosts each partition as a grain. One conditional update fences many instances and their commits share a transaction. One grain per instance is left out: it loses batching, and since nothing polls an idle grain it needs a sweep. It can come later as a new grain type, with an owner epoch on the instance row. User code that wants to call an instance like a grain gets a reference that forwards to the partition's grain.</figcaption>
+  </figure>
+</section>
+
+<!-- 4 ─────────────────────────────────────────── -->
+<section class="ch" id="data">
+  <div class="num">04</div>
+  <h2>What is stored</h2>
+  <p>Eight record kinds, shown as tables; a document store keeps the same records as documents. The instance row is the truth about the present, the journal the truth about the past. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker or timer table. Click a table.</p>
+  <p class="note">These eight cards use the sketch's proposed record names. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md">Storage model reference</a> maps the physical EF tables and MongoDB collections, with lifecycles, writers, indexes and retention costs.</p>
+  <div class="picker" id="data-picker" data-default="message">
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 390" role="img" aria-label="The eight tables and how they refer to each other: instances live in partitions, messages target instances, journal rows take positions in a partition, subscriptions and events meet by key.">
+      <g><path class="edge" d="M385,59 L222,59"/><text class="el" x="303" y="52" text-anchor="middle">lives in</text></g>
+      <g><path class="edge" d="M480,170 L480,90"/><text class="el" x="488" y="134">target</text></g>
+      <g><path class="edge" d="M385,199 L262,199 L262,80 L222,80"/><text class="el" x="270" y="150">seq order per partition</text></g>
+      <g><path class="edge" d="M385,333 L242,333 L242,90"/><text class="el" x="252" y="326">position n+1 … n+k</text></g>
+      <g><path class="edge" d="M220,356 L383,356"/><text class="el" x="302" y="374" text-anchor="middle">cursor, its own row</text></g>
+      <g><path class="edge dash plain" d="M125,170 L125,90"/><text class="el" x="133" y="134">fair share</text></g>
+      <g><path class="edge" d="M740,59 L577,59"/><text class="el" x="658" y="52" text-anchor="middle">waits of</text></g>
+      <g><path class="edge dash both" d="M835,170 L835,90"/><text class="el" x="843" y="134">meet by key</text></g>
+      <g><path class="edge" d="M740,199 L577,199"/><text class="el" x="658" y="192" text-anchor="middle">delivered as a message</text></g>
+
+      <g data-pick="partition" tabindex="0" role="button"><rect class="bs" x="30" y="30" width="190" height="58" rx="7"/><text class="tt" x="46" y="54">partition</text><text class="tm" x="46" y="74">epoch · position · lease</text></g>
+      <g data-pick="node" tabindex="0" role="button"><rect class="box" x="30" y="170" width="190" height="58" rx="7"/><text class="tt" x="46" y="194">node</text><text class="tm" x="46" y="214">id · seen_at</text></g>
+      <g data-pick="projection" tabindex="0" role="button"><rect class="box" x="30" y="310" width="190" height="58" rx="7"/><text class="tt" x="46" y="334">projection</text><text class="tm" x="46" y="354">partition · position</text></g>
+      <g data-pick="instance" tabindex="0" role="button"><rect class="b3" x="385" y="30" width="190" height="58" rx="7"/><text class="tt" x="401" y="54">instance</text><text class="tm" x="401" y="74">state · revision · jobs</text></g>
+      <g data-pick="message" tabindex="0" role="button"><rect class="b2" x="385" y="170" width="190" height="58" rx="7"/><text class="tt" x="401" y="194">message</text><text class="tm" x="401" y="214">seq · target · due · seen</text></g>
+      <g data-pick="journal" tabindex="0" role="button"><rect class="box" x="385" y="310" width="190" height="58" rx="7"/><text class="tt" x="401" y="334">journal</text><text class="tm" x="401" y="354">position · entries</text></g>
+      <g data-pick="subscription" tabindex="0" role="button"><rect class="box" x="740" y="30" width="190" height="58" rx="7"/><text class="tt" x="756" y="54">subscription</text><text class="tm" x="756" y="74">key · instance · wait</text></g>
+      <g data-pick="event" tabindex="0" role="button"><rect class="box" x="740" y="170" width="190" height="58" rx="7"/><text class="tt" x="756" y="194">event</text><text class="tm" x="756" y="214">key · id · keep_until</text></g>
+      <text class="ts" x="740" y="318">Not here: outbox, dispatcher,</text>
+      <text class="ts" x="740" y="336">scheduler queue, timer table,</text>
+      <text class="ts" x="740" y="354">per-run lease, commit marker.</text>
+    </svg>
+    </div>
+    <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; its DESIGN.md gives the prototype's schema in "Data".</figcaption>
+  </figure>
+  <div class="grid">
+    <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: partition lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="node"><h4>node</h4><div class="mono">id, seen_at</div><p>A heartbeat, so nodes can count each other and take a fair share of partitions. Liveness only, never correctness.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: node lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. Lists and counts read this row directly.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: instance lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card l2" data-pick-card="message"><h4>message</h4><div class="mono">seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done</div><p>The inbox. <code>seq</code> from the database gives the order; the unique <code>id</code> makes adding idempotent; a future <code>due</code> makes it a timer or a retry; <code>start</code> creates the target if missing.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: message lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="subscription"><h4>subscription</h4><div class="mono">key, instance, wait, partition, kind</div><p>Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start).</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: subscription lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="event"><h4>event</h4><div class="mono">key, id, payload, keep_until</div><p>A published event. By default it reaches only waits committed before it; a wait that asks for kept events also gets events published within their window before it.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: event lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="journal"><h4>journal</h4><div class="mono">partition, position, instance, entries</div><p>One row per instance commit, written in that commit, according to the history level (Full by default). At Minimal no row is written.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: journal lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="projection"><h4>projection</h4><div class="mono">partition, position</div><p>How far the projector has got. Its own row, so the projector never touches the fence row and never slows a commit.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: projection lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+  </div>
+  </div>
+</section>
+
+<!-- 5 ─────────────────────────────────────────── -->
+<section class="ch" id="step">
+  <div class="num">05</div>
+  <h2>Life of a turn</h2>
+  <p>Follow one message from the moment someone adds it until its effects are durable, handed on and visible in the viewer. Use the buttons or click a step below the diagram.</p>
+  <div class="stepper" id="step-stepper">
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 -14 960 446" role="img" aria-label="A message is inserted, the owner is woken, polls it, marks it seen, runs the turn in memory, commits a batch under the fence, hands messages over in memory, releases the response, and the projector later reads the journal.">
+      <g data-k="e-add"><path class="edge" d="M170,56 L190,56 L190,12 L660,12 L660,80 L698,80"/><text class="el" x="425" y="6" text-anchor="middle">insert, unique id</text></g>
+      <g data-k="e-wake"><path class="edge dash" d="M170,88 L234,88"/><text class="el" x="200" y="80" text-anchor="middle">hint</text></g>
+      <g data-k="e-poll"><path class="edge" d="M700,98 L606,98"/><text class="el" x="653" y="92" text-anchor="middle">poll</text></g>
+      <g data-k="e-step"><path class="edge" d="M420,108 L420,148"/><text class="el" x="428" y="133">deliver in seq order</text></g>
+      <g data-k="e-tocommit"><path class="edge" d="M420,220 L420,260"/><text class="el" x="428" y="245">turn result</text></g>
+      <g data-k="e-commit"><path class="edge" d="M604,285 L650,285 L650,145 L698,145"/><text class="el" x="612" y="302">fenced commit</text></g>
+      <g data-k="e-hand"><path class="edge" d="M321,308 L321,348"/><text class="el" x="329" y="333">after commit</text></g>
+      <g data-k="e-emit"><path class="edge" d="M519,308 L519,348"/><text class="el" x="527" y="333">after commit</text></g>
+      <g data-k="e-reply"><path class="edge" d="M519,396 L519,410 L95,410 L95,106"/><text class="el" x="300" y="426" text-anchor="middle">response to the caller</text></g>
+      <g data-k="e-proj"><path class="edge" d="M810,288 L810,354"/><text class="el" x="818" y="326">in position order</text></g>
+
+      <g data-k="caller"><rect class="box" x="20" y="40" width="150" height="64" rx="7"/><text class="tt" x="95" y="66" text-anchor="middle">Caller</text><text class="ts" x="95" y="86" text-anchor="middle">API, HTTP, other node</text></g>
+      <g><rect class="frame" x="210" y="24" width="420" height="392" rx="10"/><text class="tt" x="226" y="46">Owner of partition 17 · epoch 8</text></g>
+      <g data-k="poll"><rect class="box" x="236" y="62" width="368" height="46" rx="6"/><text class="tt" x="252" y="84">Poller</text><text class="ts" x="252" y="100">reads rows not yet seen at this epoch</text></g>
+      <g data-k="inst"><rect class="box" x="236" y="150" width="368" height="70" rx="6"/><text class="tt" x="252" y="174">Instance i42, state in memory</text><text class="ts" x="252" y="194">the model's turn: consume, send, record, emit</text><text class="ts" x="252" y="210">reads nothing from the database</text></g>
+      <g data-k="commit"><rect class="box" x="236" y="262" width="368" height="46" rx="6"/><text class="tt" x="252" y="284">Committer</text><text class="ts" x="252" y="300">one transaction per flush, many instances</text></g>
+      <g data-k="hand"><rect class="box" x="236" y="350" width="170" height="46" rx="6"/><text class="tt" x="252" y="372">i43, same partition</text><text class="ts" x="252" y="388">its message, in memory</text></g>
+      <g data-k="emit"><rect class="box" x="434" y="350" width="170" height="46" rx="6"/><text class="tt" x="450" y="372">Live channel</text><text class="ts" x="450" y="388">HTTP response, stream</text></g>
+      <g><rect class="frame" x="680" y="24" width="260" height="300" rx="10"/><text class="tt" x="696" y="46">Database</text></g>
+      <g data-k="t-msg"><rect class="box" x="700" y="62" width="220" height="46" rx="6"/><text class="tt" x="716" y="82">message</text><text class="ts" x="716" y="98">the inbox</text></g>
+      <g data-k="t-part"><rect class="box" x="700" y="122" width="220" height="46" rx="6"/><text class="tt" x="716" y="142">partition</text><text class="ts" x="716" y="158">the fence: epoch, position</text></g>
+      <g data-k="t-inst"><rect class="box" x="700" y="182" width="220" height="46" rx="6"/><text class="tt" x="716" y="202">instance</text><text class="ts" x="716" y="218">current state, revision</text></g>
+      <g data-k="t-jour"><rect class="box" x="700" y="242" width="220" height="46" rx="6"/><text class="tt" x="716" y="262">journal</text><text class="ts" x="716" y="278">one row per commit</text></g>
+      <g data-k="proj"><rect class="box" x="680" y="356" width="260" height="50" rx="7"/><text class="tt" x="696" y="378">Projector</text><text class="ts" x="696" y="396">journal into the viewer's tables, later</text></g>
+    </svg>
+    </div>
+  </figure>
+  <div class="stepbar"><button data-prev aria-label="Previous step">← Back</button><button class="primary" data-next>Next step →</button><span class="count" data-count></span></div>
+  <ol class="steps">
+    <li data-on="caller e-add t-msg"><b>Add a message.</b><p>Anyone may insert one: the API, an event router, another partition's commit. The unique id makes it idempotent. A message from outside carries <code>keep_until</code>, so a retried command gets a duplicate-key answer instead of a second effect.</p></li>
+    <li data-on="caller e-wake poll"><b>Wake the owner.</b><p>The adder signals the owner, in process or through a notifier between nodes. It is only a hint; the poll is the guarantee.</p></li>
+    <li data-on="e-poll poll t-msg"><b>Poll.</b><p>A plain read: rows of the partition not seen at this epoch, not done, due within the horizon, in <code>seq</code> order. No locks and no watermark, so a row whose insert commits late is found next time.</p></li>
+    <li data-on="commit e-commit t-part t-msg"><b>Mark it seen.</b><p>A message that came by poll is not acted on until a fenced commit marks it <code>seen = 8</code>. If this node dies, the next owner knows exactly which messages it was holding. Messages sent inside a partition are written as seen and skip this.</p></li>
+    <li data-on="e-step inst"><b>Run the turn.</b><p>The execution model gets the state from memory and the inbox in order. It changes state, sends, subscribes, starts jobs, records journal entries and emits live output. Nothing is read from the database.</p></li>
+    <li data-on="e-tocommit commit e-commit t-part t-msg t-inst t-jour"><b>Commit.</b><p>The committer takes every finished turn of the partition: fence, instance rows, consumed messages deleted, sent messages inserted, journal rows. One transaction, 2 to 3 round trips on PostgreSQL, measured at 100 instances; rows per flush are capped (500 by default in the prototype); SQLite's calls grow with the rows.</p></li>
+    <li data-on="e-hand hand e-emit emit e-reply caller"><b>Hand over and release.</b><p>Only after the commit lands: a message to an instance in the same partition goes over in memory, and a held HTTP response is released to the caller. A caller never sees a response for work that was then lost.</p></li>
+    <li data-on="e-proj proj t-jour"><b>Project.</b><p>Later, the projector reads journal rows in position order per partition and writes the viewer's tables. The hot path never waits for it. The run view stays current by reading the journal tail past the projector (decided, not built); lists over projected rows lag it slightly.</p></li>
+  </ol>
+  </div>
+</section>
+
+<!-- 6 ─────────────────────────────────────────── -->
+<section class="ch" id="commit">
+  <div class="num">06</div>
+  <h2>The commit</h2>
+  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Switch between the two PostgreSQL paths. The list groups possible writes by table. Their order can vary with the operations in the batch.</p>
+  <div class="seg" role="group" aria-label="How the fence is sent">
+    <button type="button" data-mode="tok" aria-pressed="true">Fence in the batch (2 round trips)</button>
+    <button type="button" data-mode="first" aria-pressed="false">Fence first (3 round trips)</button>
+  </div>
+  <ol class="stmts" id="stmts">
+    <li class="fence" data-o-tok="6" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
+    <li class="check" data-o-tok="8" data-o-first="2" data-rt-tok="check" data-rt-first="check"><span class="rt"></span><span><b>Exactly one row changed?</b> If not, roll back and reset. This check must come before COMMIT is sent.</span></li>
+    <li data-o-tok="1" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the instance rows the batch changed, each update <code>WHERE revision = r</code>.</span></li>
+    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
+    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
+    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. <code>Send</code> derives IDs from the sender, revision and ordinal; repeats are refused. Its fixed-width ordinal orders sends within one revision. The provider must preserve send order across revisions too.</span></li>
+    <li data-o-tok="7" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
+    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
+    <li class="commitrow" data-o-tok="9" data-o-first="9" data-rt-tok="RT 2" data-rt-first="RT 3"><span class="rt"></span><span><b>COMMIT.</b></span></li>
+  </ol>
+  <p id="commit-note" class="note"></p>
+  <div class="principle hot"><strong>Why not one round trip?</strong> A commit sent in the same packet as a fence that matched nothing would still land. The owner has to learn the fence held before it lets COMMIT go.</div>
+  <h3>When a commit fails</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What happened</th><th>What the owner does</th></tr></thead>
+    <tbody>
+      <tr><td>Unknown outcome: the connection broke mid-commit</td><td>Reset: drop everything in memory for the partition and take it again. Recovery is the start-up path.</td></tr>
+      <tr><td>The fence matched nothing</td><td>Reset. Another node owns the partition now, or this node's memory is stale.</td></tr>
+      <tr><td>Deadlock victim, <code>SQLITE_BUSY</code> (transient)</td><td>Retry the batch as it is.</td></tr>
+      <tr><td>Definite error: a value too long, a key violation</td><td>No reset. Commit the batch's instances one by one and park the one that fails (faulted, with the error). The rest go on.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 7 ─────────────────────────────────────────── -->
+<section class="ch" id="ownership">
+  <div class="num">07</div>
+  <h2>Ownership and takeover</h2>
+  <p>Leases decide who <i>should</i> write. The fence decides who <i>can</i>. Play through a takeover where the old owner was only paused, the case that breaks most designs.</p>
+  <div class="principle" id="fence-rationale"><strong>Why the lease needs a fence.</strong> A paused owner or a slow packet can outlive a lease. The commit atomically checks the partition's epoch and journal position, so a superseded owner's durable writes roll back. After a lost answer, reset and a new take change the epoch; the position chiefly orders the journal. <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/ownership-and-fencing.md">Ownership and fencing</a> explains the row lock, conflict retries, round-trip cost and alternatives.</div>
+  <div class="stepper" id="own-stepper" data-follow-step>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 310" role="img" aria-label="Node A takes partition 17 at epoch 7 and commits, then pauses; its lease runs out and node B takes it at epoch 8; when A wakes, its commit at epoch 7 matches no row and is rejected.">
+      <text class="tt" x="20" y="74">Node A</text>
+      <text class="tt" x="20" y="154">Node B</text>
+      <text class="tt" x="20" y="234">partition 17</text>
+      <line class="grid" x1="130" y1="70" x2="940" y2="70"/>
+      <line class="grid" x1="130" y1="150" x2="940" y2="150"/>
+      <line class="grid" x1="130" y1="230" x2="940" y2="230"/>
+      <text class="ts" x="940" y="300" text-anchor="end">time →</text>
+
+      <g data-k="a-take"><path class="edge dash" d="M150,80 L150,222"/><rect class="b2" x="142" y="62" width="16" height="16" rx="4"/><text class="el" x="150" y="50" text-anchor="middle">take</text><text class="tm" x="150" y="252" text-anchor="middle">epoch 7 · pos 40</text></g>
+      <g data-k="a-commit"><path class="edge dash" d="M270,80 L270,222"/><rect class="b2" x="262" y="62" width="16" height="16" rx="4"/><text class="el" x="270" y="50" text-anchor="middle">commit 3 turns</text><text class="tm" x="270" y="270" text-anchor="middle">pos 43, lease renewed</text></g>
+      <g data-k="a-pause"><rect class="frame" x="360" y="62" width="400" height="16" rx="4"/><text class="el" x="560" y="50" text-anchor="middle">Node A paused: GC pause or network split</text></g>
+      <g data-k="lease"><path class="hotline" d="M500,40 L500,236"/><text class="hot" x="500" y="296" text-anchor="middle">lease runs out</text></g>
+      <g data-k="b-take"><path class="edge dash" d="M560,160 L560,222"/><rect class="b2" x="552" y="142" width="16" height="16" rx="4"/><text class="el" x="560" y="130" text-anchor="middle">take</text><text class="tm" x="560" y="252" text-anchor="middle">epoch 8 · pos 43</text><text class="tm" x="560" y="270" text-anchor="middle">+1 attempt on trial</text></g>
+      <g data-k="b-poll"><rect class="b2" x="652" y="142" width="16" height="16" rx="4"/><text class="el" x="660" y="180" text-anchor="middle">poll: every row seen &lt; 8</text></g>
+      <g data-k="a-stale" class="hotlit"><path class="edge dash" d="M800,80 L800,222"/><rect class="box" x="792" y="62" width="16" height="16" rx="4"/><text class="el" x="800" y="50" text-anchor="middle">wakes, commits at epoch 7</text><text class="tm" x="800" y="252" text-anchor="middle">0 rows: refused</text><text class="el" x="800" y="100" text-anchor="middle">resets, drops memory</text></g>
+      <g data-k="b-commit"><path class="edge dash" d="M890,160 L890,222"/><rect class="b2" x="882" y="142" width="16" height="16" rx="4"/><text class="el" x="890" y="130" text-anchor="middle">commit</text><text class="tm" x="890" y="270" text-anchor="middle">pos 44</text></g>
+    </svg>
+    </div>
+  </figure>
+  <div class="stepbar"><button data-prev aria-label="Previous step">← Back</button><button class="primary" data-next>Next step →</button><span class="count" data-count></span></div>
+  <ol class="steps">
+    <li data-on="a-take"><b>A takes the partition.</b><p>The take succeeds only if the partition is free, its lease has expired, or A already owns it. Every take raises the epoch: now 7.</p></li>
+    <li data-on="a-take a-commit"><b>A commits.</b><p>The fence checks epoch 7 and position 40 and moves the position to 43. The same update renews the lease. An idle owner sends an empty fenced commit as its heartbeat.</p></li>
+    <li data-on="a-commit a-pause"><b>A stops.</b><p>A long GC pause or a network split. A still believes it owns the partition and still holds instances in memory.</p></li>
+    <li data-on="a-pause lease"><b>The lease runs out.</b><p>Nobody has written, so nothing is wrong yet. A wrong lease costs availability, never correctness.</p></li>
+    <li data-on="lease b-take"><b>B takes the partition.</b><p>Epoch 8, position 43. In the same transaction every message A had on trial gets one more attempt: that is how a message that kills its owner gets counted.</p></li>
+    <li data-on="b-take b-poll"><b>B polls everything.</b><p>Every row with <code>seen &lt; 8</code> comes back, so B finds all A was holding. B builds memory from rows alone, and hands nothing over in memory until a poll comes back short.</p></li>
+    <li data-on="a-stale"><b>A wakes and tries to commit.</b><p>Its commit is fenced on epoch 7. It matches no row, so nothing lands. A resets and drops its memory. This is the Orleans two-activations case, caught.</p></li>
+    <li data-on="b-commit"><b>B carries on.</b><p>B commits position 43 to 44. No two commits ever landed at the same position, and nothing prepared under epoch 7 got in.</p></li>
+  </ol>
+  </div>
+  <ul>
+    <li><b>Fair share.</b> A node counts the others from the <code>node</code> heartbeats, holds its share of partitions and releases the surplus.</li>
+    <li><b>Reset is start-up.</b> After any doubt the owner drops its memory and takes again. A successful take obtains the true position: relational stores wait behind the transaction; MongoDB may return a transient conflict and require a retry. A take that changes no row returns nothing.</li>
+    <li><b>Failover becomes eligible after one lease</b> (10 s by default); contention and recovery reads can add time. The epoch fence prevents a superseded owner from committing.</li>
+  </ul>
+</section>
+
+<!-- 8 ─────────────────────────────────────────── -->
+<section class="ch" id="messages">
+  <div class="num">08</div>
+  <h2>Messages, timers and poison</h2>
+  <p>The inbox is the outbox: a message to another instance is a row inserted in the sender's own transaction, and nothing is relayed afterwards.</p>
+  <div class="grid">
+    <div class="card l2"><h4>Order</h4><p>A target handles its messages in <code>seq</code> order. A sender's commits are serial, so messages from one sender to one target arrive in the order sent.</p></div>
+    <div class="card l2"><h4>Once in state</h4><p>A state change and the delete of the message that caused it are one transaction. A message changes state exactly once, though a turn's code may run more than once after a crash.</p></div>
+    <div class="card l2"><h4>Outside commands</h4><p>Carry <code>keep_until</code>. The consuming commit marks them <code>done</code> and a sweep deletes them later, so a client retrying a handled command gets a duplicate-key answer, not a second effect. Messages between instances need no window: a repeat cannot exist.</p></div>
+    <div class="card l2"><h4>Timers</h4><p>A message with a future <code>due</code>. The poll returns database time; the owner anchors it and schedules on a monotonic clock. Cancel a timer by deleting its message, whose id the sender knows.</p></div>
+    <div class="card l3"><h4>Creating instances</h4><p>A message may carry a start spec: if its target does not exist, the owner creates it on delivery. Starting a child, starting on an event and signal-with-start are all this one mechanism.</p></div>
+    <div class="card l3"><h4>Placement</h4><p>A start without a caller's key goes into a partition the starting node owns and runs there, with no hop. A keyed start hashes the key to a partition. A child goes into its parent's partition, so a call tree commits together.</p></div>
+    <div class="card"><h4>Poison</h4><p>A new owner puts its predecessor's held messages on trial, one at a time by default (an optional larger group halves with every attempt). If that owner is lost too, the next take adds one attempt to exactly the messages on trial, so a poison message ends up alone and a death stops counting against its neighbours. Past the threshold it is parked and its instance faulted, so a message that kills its process cannot walk the cluster.</p></div>
+    <div class="card"><h4>Edge cases</h4><p>A message to an instance that does not exist and carries no start spec is dropped and journalled. A message to a finished instance is consumed and dropped. A turn that throws parks its instance at once; retries are the model's business.</p></div>
+  </div>
+</section>
+
+<!-- 9 ─────────────────────────────────────────── -->
+<section class="ch" id="models">
+  <div class="num">09</div>
+  <h2>Execution models</h2>
+  <p>A workflow instance runs an execution model. The model is a plug-in with one job: given the state and the inbox, produce new state and outgoing messages. Everything else is the kernel's.</p>
+  <div class="two">
+  <pre><code><span class="k">public interface</span> IExecutionModel
+{
+    string Key { get; }         <span class="c">// "elsa.native", "bpmn", ...</span>
+    int StateVersion { get; }
+    object CreateState(StartSpec start);
+    object UpgradeState(object state, int from);
+    ValueTask TurnAsync(ITurn turn, CancellationToken ct);
+    ValueTask&lt;object?&gt; ExecuteJobAsync(IJob job, CancellationToken ct);
+    InstanceSummary Describe(object state);
+}</code></pre>
+  <p class="note">The proposed contract. The prototype already uses turn, job and pass; where its signatures still differ, its DESIGN.md lists most of them.</p>
+  <pre><code><span class="k">public interface</span> ITurn
+{
+    InstanceInfo Instance { get; }
+    IReadOnlyList&lt;Message&gt; Inbox { get; }
+    IAmbient Ambient { get; }   <span class="c">// this activation only</span>
+    object State { get; set; }
+    string Send(...);  void Recall(id);  InstanceRef Start(spec, placement, detached);
+    void StartJob(key, args);  void CancelJob(key);
+    void Hold(message);
+    void Subscribe(key, wait, keep);  void Unsubscribe(...);
+    string Publish(key, payload, keep);  bool Redelivered(message);
+    void Record(entry);         <span class="c">// journal</span>
+    void Emit(channel, item);   <span class="c">// live, not durable</span>
+    void Rebind(definition);  void SetStatus(...);
+}</code></pre>
+  </div>
+  <h3>A persistence mode is just where a turn ends</h3>
+  <p>A turn commits at its end and only there. A model that wants a durable boundary ends the turn and sends itself a "continue" message, which the owner hands over in memory. That is all a persistence mode is. Here are ten activities with no wait, measured on PostgreSQL:</p>
+  <figure>
+    <div class="fig">
+      <svg class="dg" id="modes-svg" viewBox="0 0 960 250" role="img" aria-label="Ten activities: Ephemeral commits nothing, Balanced commits once at the end, Durable commits after every activity."></svg>
+    </div>
+    <figcaption>With a wait in the middle, Balanced also commits once at the wait. After a crash, Balanced runs again the activities since its last commit: activity code runs at least once, its effect on the workflow's state exactly once.</figcaption>
+  </figure>
+  <h3>How the known models sit on the contract</h3>
+  <p class="note">Only Native is built, as a spike; the others are the planned fit.</p>
+  <div class="grid">
+    <div class="card l3"><h4>Native (Elsa)</h4><p>State is the live activity frames, variables and scheduled work. Slow activities are jobs. Each container brings its own semantics (below). Built as a spike; it passes its own simulation checks.</p></div>
+    <div class="card l3"><h4>BPMN</h4><p>Hosted on <a href="https://github.com/valence-works/bpmn">Bpmn.Semantics</a>, a pure interpreter: definition, token state and one event in; next state and commands out. A turn feeds it the message; its commands become jobs, timers, subscriptions and sends. State is tokens and scopes. A task is a job, so an interrupting boundary event can cancel it. A call activity is a start. A message that arrives early waits in <code>event</code>.</p></div>
+    <div class="card l3"><h4>ETL</h4><p>State is stage cursors and references to data held elsewhere. Partitions of work are children spread over partitions. Backpressure is a credit protocol between instances.</p></div>
+    <div class="card l3"><h4>Agents</h4><p>State is the conversation checkpoint (a Microsoft Agent Framework thread). A tool call is a job; streamed output is emitted; another agent is another instance; a human approval is a subscription.</p></div>
+    <div class="card l3"><h4>Standalone jobs</h4><p>Elsa.Jobs rebuilt on the kernel: a job is an actor type next to the workflow instance, so a .NET app gets durable jobs without workflows. A workflow's job is the same thing, in the same commit, with no bridge between stores.</p></div>
+    <div class="card l3"><h4>Durable entities</h4><p>State is the entity's value; operations are messages with a reply-to. The reviewers' test of a fifth model: it fits with no change.</p></div>
+    <div class="card l3"><h4>Replay-style authoring</h4><p>Temporal and Durable Task style code, or Restate's journaled awaits, fit as models on the same contract. The kernel imposes neither.</p></div>
+  </div>
+  <h3>Containers and their semantics</h3>
+  <p>The native model is one activity tree. Each container brings its own semantics, runtime state and kind of diagram, and containers nest freely. The kernel sees none of this; it sees turns. Decided 12 November.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Container</th><th>What drives it</th><th>Runtime state</th><th>Semantics</th></tr></thead>
+    <tbody>
+      <tr><td>Sequence, If, ForEach, While, Parallel</td><td>The previous child completing</td><td>An index; a fixed join</td><td>Built in. The structure says whether more can arrive, so no tokens</td></tr>
+      <tr><td>Flowchart</td><td>Outcomes choose the flows</td><td>Tokens (execution paths) and join arrivals per loop round</td><td><b>Graph engine</b>: today's Elsa 4 Flowchart engine (dead-path joins, BPMN's gateway kinds) lifted into a library for the native model</td></tr>
+      <tr><td>StateMachine</td><td>Events fire guarded transitions; exit, transition and entry actions run</td><td>The active configuration of every region</td><td><b>Statechart engine</b>: one event per turn; later events wait with <code>Hold</code> while an action is suspended. A native composite (recommended; #3815's design milestone decides), so it works as a root and nested</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The plan: extract the graph engine and port the prototype's Flowchart to it (by the prototype's own reasoning, its All join after a decision does not fire; the first step shows it with a test), a BPMN spike that hosts the Bpmn.Semantics interpreter on the kernel, then a StateMachine spike with nested states and parallel regions. Each step is gated by new simulation invariants and mutation checks, and none may move the cost table.</p>
+  <h3>Background jobs</h3>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 210" role="img" aria-label="A turn starts a job and commits a ticket; the kernel runs it outside the turn while the instance keeps taking messages; the result comes back as a message and changes state once.">
+      <text class="tt" x="20" y="64">Instance i42</text>
+      <text class="tt" x="20" y="144">Background job</text>
+      <line class="grid" x1="150" y1="60" x2="940" y2="60"/>
+      <line class="grid" x1="150" y1="140" x2="940" y2="140"/>
+      <rect class="b2" x="160" y="44" width="176" height="32" rx="6"/><text x="248" y="65" text-anchor="middle">turn: StartJob("charge")</text>
+      <text class="ts" x="160" y="96">commit: jobs entry + ticket</text>
+      <path class="edge" d="M318,78 L330,124"/><text class="el" x="338" y="108">ExecuteJobAsync</text>
+      <rect class="b3" x="320" y="126" width="340" height="28" rx="6"/><text x="490" y="145" text-anchor="middle">outside the turn; may run again after a crash</text>
+      <rect class="box" x="400" y="44" width="170" height="32" rx="6"/><text x="485" y="65" text-anchor="middle">a timer or cancel: turns run</text>
+      <path class="edge" d="M660,128 L716,78"/><text class="el" x="700" y="112">result as a message</text>
+      <rect class="b2" x="718" y="44" width="212" height="32" rx="6"/><text x="824" y="65" text-anchor="middle">applied once, ahead of others</text>
+      <text class="ts" x="20" y="186">A new owner finds the ticket by polling and starts the work again. A cancelled job's result is never applied.</text>
+      <text class="ts" x="20" y="204">A result is handled before other messages, so a model never sees a result after its own cancel.</text>
+    </svg>
+    </div>
+  </figure>
+  <p><b>Models compose through messages only.</b> A parent of any model starts a child of any model and gets a message when it finishes. A cancel goes to the children the parent itself started, so admitting a child and cancelling the parent cannot race. The kernel owns suspend and resume, terminating a tree, tenant checks on sends and trace headers.</p>
+</section>
+
+<!-- 10 ─────────────────────────────────────────── -->
+<section class="ch" id="events">
+  <div class="num">10</div>
+  <h2>Events and correlation</h2>
+  <p>An external event (an approval, a payment notice, a BPMN message) must reach every instance waiting for its key, even when the event and the wait are committed at nearly the same moment. Each side checks for the other after its own commit.</p>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 270" role="img" aria-label="The subscriber commits a subscription and an owed read; the publisher commits the event and then reads subscriptions; when they cross, at least one sees the other and the derived id refuses the double delivery.">
+      <text class="tt" x="40" y="30">Waiting instance</text>
+      <text class="tt" x="540" y="30">Publisher</text>
+      <rect class="b2" x="40" y="46" width="380" height="44" rx="6"/><text x="56" y="73">commit: subscription row + "read events for k"</text>
+      <rect class="box" x="40" y="116" width="380" height="44" rx="6"/><text x="56" y="143">read the event table for k (the owed read)</text>
+      <rect class="box" x="40" y="186" width="380" height="44" rx="6"/><text x="56" y="213">deliver what is there; next commit clears the debt</text>
+      <rect class="b2" x="540" y="46" width="380" height="44" rx="6"/><text x="556" y="73">commit: insert the event</text>
+      <rect class="box" x="540" y="116" width="380" height="44" rx="6"/><text x="556" y="143">read the subscriptions for k</text>
+      <rect class="box" x="540" y="186" width="380" height="44" rx="6"/><text x="556" y="213">add one delivery message per match</text>
+      <path class="edge" d="M230,90 L230,114"/><path class="edge" d="M230,160 L230,184"/>
+      <path class="edge" d="M730,90 L730,114"/><path class="edge" d="M730,160 L730,184"/>
+      <path class="edge dash" d="M540,82 L424,134"/><path class="edge dash" d="M420,82 L536,134"/>
+      <text class="el" x="480" y="112" text-anchor="middle">each sees</text>
+      <text class="el" x="480" y="126" text-anchor="middle">the other</text>
+      <text class="ts" x="480" y="258" text-anchor="middle">Both sides derive the same delivery id, ev:{event}:{instance}:{wait}, so the double is refused.</text>
+    </svg>
+    </div>
+    <figcaption>Default since the owner's decision of 12 November: events are not kept. Only a wait that asks for kept events (BPMN message correlation) pays for the owed read; the publisher still inserts the event row.</figcaption>
+  </figure>
+  <h3>The alternative: correlation as an ordinary instance per key</h3>
+  <p>Built as a 50-line model with no kernel change: subscribing and publishing are messages to the key's instance, which holds the waits and the kept events. It passed every run. It costs a hop, measured on PostgreSQL for one waiter, one event:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Version</th><th class="n">Commits</th><th class="n">Round trips</th></tr></thead>
+    <tbody>
+      <tr><td>Tables (subscription, event, owed read)</td><td class="n">4</td><td class="n">17 (13)</td></tr>
+      <tr><td>Key instance in the waiter's partition</td><td class="n">6</td><td class="n">21 (15)</td></tr>
+      <tr><td>Key instance in another partition</td><td class="n">9</td><td class="n">33 (24)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">In brackets: with the fence in the batch. Decided 12 November: the tables stay the kernel's one mechanism; the instance per key remains a sample model.</p>
+</section>
+
+<!-- 11 ─────────────────────────────────────────── -->
+<section class="ch" id="http">
+  <div class="num">11</div>
+  <h2>Synchronous HTTP</h2>
+  <p>A workflow handles a request and writes the response itself. The response travels on the live <code>Emit</code> channel, not as a durable message: if it cannot reach the caller, the caller gets an error and the workflow is unaffected. Pick a case.</p>
+  <div class="stepper" id="http-stepper">
+  <div class="tabs" role="tablist" aria-label="HTTP cases">
+    <button type="button" role="tab" data-tab="a" aria-selected="true">Start, Ephemeral</button>
+    <button type="button" role="tab" data-tab="b" aria-selected="false">Start, Balanced</button>
+    <button type="button" role="tab" data-tab="c" aria-selected="false">Resume on another node</button>
+    <button type="button" role="tab" data-tab="d" aria-selected="false">Owner lost</button>
+  </div>
+  <figure>
+    <div class="fig">
+    <svg class="dg" viewBox="0 0 960 330" role="img" aria-label="A client, node A that receives the request, node B that owns a waiting instance, and the database, with the paths a request takes in each case.">
+      <g data-k="h-req"><path class="edge" d="M140,140 L218,96"/><text class="el" x="168" y="108" text-anchor="middle">request</text></g>
+      <g data-k="h-run"><path class="edge" d="M355,112 L355,138"/></g>
+      <g data-k="h-resp"><path class="edge" d="M220,166 L142,166"/><text class="el" x="181" y="160" text-anchor="middle">response</text></g>
+      <g data-k="h-commitA"><path class="edge" d="M490,152 L540,152 L540,20 L880,20 L880,108"/><text class="el" x="710" y="14" text-anchor="middle">commit, then release</text></g>
+      <g data-k="h-msg"><path class="edge" d="M490,224 L540,224 L540,316 L900,316 L900,222"/><text class="el" x="720" y="310" text-anchor="middle">resume message + reply address</text></g>
+      <g data-k="h-pollB"><path class="edge" d="M818,135 L752,135"/><text class="el" x="785" y="128" text-anchor="middle">poll</text></g>
+      <g data-k="h-commitB"><path class="edge" d="M752,158 L818,158"/><text class="el" x="785" y="174" text-anchor="middle">commit</text></g>
+      <g data-k="h-reply"><path class="edge" d="M630,174 L630,246 L492,246"/><text class="el" x="566" y="240" text-anchor="middle">reply, not durable</text></g>
+      <g data-k="h-respB"><path class="edge" d="M220,240 L80,240 L80,202"/><text class="el" x="150" y="234" text-anchor="middle">response</text></g>
+      <g data-k="h-503" class="hotlit only-lit"><path class="edge" d="M220,240 L80,240 L80,202"/><text class="el" x="150" y="234" text-anchor="middle">503</text></g>
+
+      <g data-k="client"><rect class="box" x="20" y="120" width="120" height="80" rx="8"/><text class="tt" x="80" y="156" text-anchor="middle">Client</text><text class="ts" x="80" y="176" text-anchor="middle">HTTP request</text></g>
+      <g data-k="na"><rect class="frame" x="200" y="30" width="310" height="270" rx="10"/><text class="tt" x="216" y="54">Node A · received the request</text></g>
+      <g data-k="route"><rect class="box" x="220" y="72" width="270" height="40" rx="6"/><text x="236" y="97">Route table, in memory</text></g>
+      <g data-k="ia"><rect class="box" x="220" y="140" width="270" height="50" rx="6"/><text class="tt" x="236" y="162">New instance, runs inline</text><text class="ts" x="236" y="180">request as Ambient, in a partition A owns</text></g>
+      <g data-k="wait"><rect class="box" x="220" y="212" width="270" height="46" rx="6"/><text class="tt" x="236" y="232">Request held open</text><text class="ts" x="236" y="249">reply address: node A + request id</text></g>
+      <g data-k="nb"><rect class="frame" x="570" y="30" width="200" height="270" rx="10"/><text class="tt" x="586" y="54">Node B · owns i42</text></g>
+      <g data-k="ib"><rect class="box" x="590" y="110" width="160" height="64" rx="6"/><text class="tt" x="606" y="136">i42, waiting</text><text class="ts" x="606" y="156">state in memory</text></g>
+      <g data-k="db"><rect class="bs" x="820" y="110" width="120" height="110" rx="8"/><text class="tt" x="880" y="160" text-anchor="middle">Database</text><text class="ts" x="880" y="180" text-anchor="middle">message, instance</text></g>
+      <g data-k="lost" class="only-lit"><path class="hotline" d="M580,40 L760,290"/><path class="hotline" d="M760,40 L580,290"/><text class="hot" x="670" y="284" text-anchor="middle">Node B lost</text></g>
+    </svg>
+    </div>
+  </figure>
+  <div class="stepbar"><button data-prev aria-label="Previous step">← Back</button><button class="primary" data-next>Next step →</button><span class="count" data-count></span></div>
+  <ol class="steps" data-set="a">
+    <li data-on="client h-req route na"><b>The request arrives.</b><p>Any node can take it. The route table is built when definitions are published, so finding the workflow reads nothing.</p></li>
+    <li data-on="h-run ia na"><b>It runs inline.</b><p>The node places the new instance in a partition it owns and runs it in the request, with the request as <code>Ambient</code>. No hop.</p></li>
+    <li data-on="ia h-resp client"><b>Respond and finish.</b><p>The workflow writes the response and ends without waiting. In Ephemeral mode nothing is committed: zero database calls.</p></li>
+  </ol>
+  <ol class="steps" data-set="b" hidden>
+    <li data-on="client h-req route na"><b>The request arrives.</b><p>Same as before: the route table is in memory.</p></li>
+    <li data-on="h-run ia na"><b>It runs inline.</b><p>The instance is placed locally and runs in the request.</p></li>
+    <li data-on="ia h-commitA db"><b>The turn commits.</b><p>The response is held until the commit of the turn that wrote it lands: 2 to 3 round trips of latency on PostgreSQL. A caller never sees a response for work that was then lost.</p></li>
+    <li data-on="ia h-resp client"><b>The response is released.</b><p>Writing the response does not end the workflow; the request returns and the workflow goes on. A route can opt out and respond before the commit.</p></li>
+  </ol>
+  <ol class="steps" data-set="c" hidden>
+    <li data-on="client h-req route na"><b>A resume arrives at node A.</b><p>The workflow it resumes is waiting, and node B owns its partition.</p></li>
+    <li data-on="h-msg wait db"><b>A adds a resume message.</b><p>It carries a reply address, node A and the request's id, and A keeps the request open.</p></li>
+    <li data-on="h-pollB ib nb db"><b>B runs the turn.</b><p>B finds the message by poll or wake hint, marks it seen and runs the turn.</p></li>
+    <li data-on="h-commitB ib db"><b>B commits.</b><p>The turn that wrote the response commits, so the response may now be released.</p></li>
+    <li data-on="h-reply ib wait"><b>B replies to A.</b><p>Over the runtime's transport between nodes, the same one wake-ups use. It is not durable. On one node this is all in process.</p></li>
+    <li data-on="h-respB wait client"><b>A answers the request.</b><p>One hop paid, because B owns the instance. Moving the instance to the receiving node is left out unless measurements show the hop matters.</p></li>
+  </ol>
+  <ol class="steps" data-set="d" hidden>
+    <li data-on="client h-req route na"><b>A resume arrives at node A.</b><p>Node B owns the waiting workflow.</p></li>
+    <li data-on="h-msg wait db"><b>A adds the resume message</b><p>and holds the request open with a reply address.</p></li>
+    <li data-on="lost nb"><b>Node B dies.</b><p>After its lease runs out another node takes the partition and resumes the workflow from the rows, as usual.</p></li>
+    <li data-on="h-503 wait client"><b>The request ends with 503.</b><p>By default, never a hang and never two responses. The workflow's later output is not sent to a caller that is gone. In the prototype an owner lost on another node is noticed only at the deadline (504): that signal is not built yet.</p></li>
+  </ol>
+  </div>
+  <ul>
+    <li><b>Waiting before responding</b> (a background job, a short timer): the instance stays in memory on the receiving node and the request waits, up to the route's timeout.</li>
+    <li><b>Client disconnect and timeout</b> end the observation. They do not cancel the workflow, unless the route maps them to a cancel message.</li>
+    <li><b>Streaming</b> (chunked responses, server-sent events, an agent's tokens) uses the same channel. Large bodies stay out of state; the workflow holds a reference.</li>
+  </ul>
+</section>
+
+<!-- 12 ─────────────────────────────────────────── -->
+<section class="ch" id="profiles">
+  <div class="num">12</div>
+  <h2>Deployment profiles</h2>
+  <p>Three things vary independently, each behind its own seam. There is no fourth "runtime" plug-in: a deployment profile is a named preset of the last two. A workflow behaves the same under every profile, and synchronous HTTP works on all of them. Pick a profile.</p>
+  <div class="seg" role="group" aria-label="Deployment profile" id="profile-seg">
+    <button type="button" data-profile="embedded" aria-pressed="false">Embedded</button>
+    <button type="button" data-profile="cluster" aria-pressed="true">Cluster</button>
+    <button type="button" data-profile="orleans" aria-pressed="false">Orleans</button>
+    <button type="button" data-profile="log" aria-pressed="false">Log (later)</button>
+  </div>
+  <div class="axes">
+    <div class="axis-col"><h4>Persistence mode</h4><p class="who">Chosen per workflow by its author. Gives the workflow its guarantees.</p>
+      <span class="opt on">Ephemeral</span><span class="opt on">Balanced</span><span class="opt on">Durable</span></div>
+    <div class="axis-col"><h4>Actor runtime</h4><p class="who">Layer 1. Where actors run.</p>
+      <span class="opt" data-in="embedded">Built-in, one node, no transport</span>
+      <span class="opt" data-in="cluster">Built-in, partitions shared over nodes</span>
+      <span class="opt" data-in="orleans">Orleans adapter</span>
+      <span class="opt" data-in="log">Built-in, partitions as replicated-log groups</span></div>
+    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What stores the rows.</p>
+      <span class="opt" data-in="embedded orleans">SQLite (1 partition)</span>
+      <span class="opt" data-in="embedded cluster orleans">PostgreSQL</span>
+      <span class="opt" data-in="embedded cluster orleans">SQL Server (RCSI on)</span>
+      <span class="opt" data-in="embedded cluster orleans">MySQL</span>
+      <span class="opt" data-in="embedded cluster orleans">MongoDB 8 (replica set)</span>
+      <span class="opt" data-in="log">A Zeebe-like log provider</span></div>
+  </div>
+  <p id="profile-note"></p>
+  <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
+</section>
+
+<!-- 13 ─────────────────────────────────────────── -->
+<section class="ch" id="costs">
+  <div class="num">13</div>
+  <h2>What it costs</h2>
+  <p>PostgreSQL round trips per workflow run: today's core, counted on 11 November, against the native model on the new kernel. Hover a row for both figures.</p>
+  <div class="legend"><span><i style="background:var(--hot)"></i>Today's core</span><span><i style="background:var(--accent)"></i>New kernel, native model</span></div>
+  <figure>
+    <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 424" role="img" aria-label="Round trips per run: today's core needs 48 to 680; the new kernel needs 0 to 123 for the same workflows."></svg></div>
+    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 8, 82). The fork-join figures are from the merged kernel. The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
+  </figure>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Engine</th><th class="n">Balanced run on the owner</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>PostgreSQL</td><td class="n">3 (2)</td><td>Round trips; in brackets the fence in the batch.</td></tr>
+      <tr><td>SQL Server</td><td class="n">4 (3)</td><td>Needs read-committed snapshot isolation.</td></tr>
+      <tr><td>MySQL</td><td class="n">7 (6)</td><td>Oracle's EF provider; upserts and <code>INSERT IGNORE</code>.</td></tr>
+      <tr><td>MongoDB 8</td><td class="n">3 (2)</td><td>Needs a replica set for transactions; the store assigns the order key.</td></tr>
+      <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Measured by the prototype's own cost runs, as reported in its findings; not re-measured for this record.</p>
+</section>
+
+<!-- 14 ─────────────────────────────────────────── -->
+<section class="ch" id="proof">
+  <div class="num">14</div>
+  <h2>How it is tested</h2>
+  <p>The model is attacked by a deterministic simulation: several nodes against one store, one random action at a time (takes, polls, turns, commits, crashes, a paused owner that wakes with stale memory, commits whose answer is lost, retried commands, clocks that disagree). After every action it checks these invariants. A failing seed replays exactly.</p>
+  <div class="grid">
+    <div class="card"><h4>1 · One writer</h4><p>No two commits land at the same position; nothing prepared under an old epoch lands.</p></div>
+    <div class="card"><h4>2 · Atomic turn</h4><p>State, consumed and sent messages, subscriptions and journal row: all or none.</p></div>
+    <div class="card"><h4>3 · No lost message</h4><p>A committed message reaches a turn that consumes it while any node owns the partition.</p></div>
+    <div class="card"><h4>4 · Once in state</h4><p>A message changes state at most once, including a retried outside command.</p></div>
+    <div class="card"><h4>5 · Timers</h4><p>Never delivered early, never lost.</p></div>
+    <div class="card"><h4>6 · Journal order</h4><p>Rows present plus rows removed by deletes equal the position; the projector never passes an unwritten position.</p></div>
+    <div class="card"><h4>7 · Takeover</h4><p>After a take at e + 1 nothing from e commits, and the new owner sees all that did.</p></div>
+    <div class="card"><h4>8 · Index matches state</h4><p>An instance's subscriptions are exactly the waits in its committed state.</p></div>
+    <div class="card"><h4>9 · Memory matches rows</h4><p>What an owner holds equals the committed row plus its own uncommitted turn.</p></div>
+    <div class="card"><h4>10 · Create once</h4><p>Two messages that would create one instance create one, in any order, across takeovers.</p></div>
+    <div class="card"><h4>11 · Order</h4><p>One sender's messages to one target are handled in the order sent.</p></div>
+    <div class="card"><h4>12 · Jobs</h4><p>A job's result is applied once; a cancelled job's result never.</p></div>
+    <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
+    <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
+  </div>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB (run commands are in the <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">prototype README</a>); a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
+</section>
+
+<!-- 15 ─────────────────────────────────────────── -->
+<section class="ch" id="tradeoffs">
+  <div class="num">15</div>
+  <h2>Trade-offs and the chosen defaults</h2>
+  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
+  <div class="chips">
+    <span class="chip">Side effects at least once in Balanced</span>
+    <span class="chip">History: Full</span>
+    <span class="chip">Lease: 10 s</span>
+    <span class="chip">64 partitions, 1 on SQLite</span>
+    <span class="chip">HTTP response after commit</span>
+    <span class="chip">No reads across instances</span>
+    <span class="chip">Events not kept unless asked</span>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>Gain</th><th>Price</th><th>Lever</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td>No reads while a workflow runs: state is in memory</td><td>Memory per active instance; the whole state is rewritten at each commit</td><td>Bound on instances held; large values by reference</td></tr>
+      <tr><td class="n">2</td><td>One writer per partition: no locks, many instances per commit</td><td>Failover takes about one lease; a hot partition has one writer; partition count fixed at creation</td><td>Partition count; lease length</td></tr>
+      <tr><td class="n">3</td><td>An idle owner needs no traffic…</td><td>…except an empty fenced commit about three times per lease, per partition</td><td>Lease length</td></tr>
+      <tr><td class="n">4</td><td>Batching under load</td><td>A commit waits for the one before it: latency rises a little, throughput a lot</td><td>Rows per flush</td></tr>
+      <tr><td class="n">5</td><td>Balanced: one commit per wait</td><td>After a crash, activities since the last commit run again; outside side effects may repeat</td><td>Persistence mode; Durable for what must not repeat</td></tr>
+      <tr><td class="n">6</td><td>Background jobs do not block the instance</td><td>It can run more than once; external calls need idempotency keys</td><td>None: inherent, as in Temporal</td></tr>
+      <tr><td class="n">7</td><td>The run viewer costs nothing on the hot path</td><td>The run view stays current by reading the journal tail (decided, not built); lists over projected rows lag the projector; its writes still cost calls</td><td>History level per workflow</td></tr>
+      <tr><td class="n">8</td><td>Instances only talk through messages: no races</td><td>No code reads another instance's state; a question is a message or a lagging projection</td><td>None: it is the design</td></tr>
+      <tr><td class="n">9</td><td>State is a snapshot: no determinism rules for authors</td><td>History is a record, not the source; old state needs upgrade code</td><td>State versions, <code>UpgradeState</code></td></tr>
+      <tr><td class="n">10</td><td>State is opaque: any model fits</td><td>The kernel cannot search inside state; indexes cost writes</td><td><code>Describe</code>; indexed fields per workflow</td></tr>
+      <tr><td class="n">11</td><td>A message from outside costs little</td><td>One extra small commit (mark before running) and a poll; another node's resume pays a hop</td><td>Poll interval; notifier</td></tr>
+      <tr><td class="n">12</td><td>One shared database: simple, transactional across everything</td><td>The cluster's ceiling is that database's write throughput; a turn is never free of calls, unlike Zeebe</td><td>Later, if needed</td></tr>
+      <tr><td class="n">13</td><td>Persistence is abstracted: any store</td><td>No provider shortcuts in the kernel; each provider needs tuning; MongoDB needs a replica set</td><td>Store conformance suite</td></tr>
+      <tr><td class="n">14</td><td>The actor runtime can be swapped</td><td>Runtimes host partitions only; one grain per instance is deferred</td><td>Ship one runtime; adapters on demand</td></tr>
+      <tr><td class="n">15</td><td>A poison message cannot walk the cluster</td><td>Suspects are retried one at a time after a takeover; an innocent one is rarely parked</td><td>Threshold; trial group size</td></tr>
+      <tr><td class="n">16</td><td>No HTTP response for lost work</td><td>The response waits 2–3 round trips on PostgreSQL for its commit; a resume on another node pays a hop</td><td>Release before commit, per route</td></tr>
+      <tr><td class="n">17</td><td>A clean break: the smallest, fastest design</td><td>No migration of existing runs; the native interpreter is rewritten as a model; two cores until the switch</td><td>None: accepted 11 and 12 November</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 16 ─────────────────────────────────────────── -->
+<section class="ch" id="open">
+  <div class="num">16</div>
+  <h2>Open and not built</h2>
+  <div class="two">
+    <div class="card"><h4>Not built yet</h4>
+      <ul>
+        <li>The Orleans reference adapter and the runtime conformance suite</li>
+        <li>Deployment profiles as code; inline execution on every profile</li>
+        <li>The graph engine extracted from the Flowchart; spikes for BPMN on Bpmn.Semantics, StateMachine, agents, standalone jobs (Elsa.Jobs as a job actor type, with the worker protocol) and ETL's fan-out pattern</li>
+        <li>Short timers and jobs of an Ephemeral instance kept in memory; the stress test with native instances; a three-node MongoDB replica set</li>
+        <li>Streaming HTTP responses; a route mapping a client's disconnect to a cancel; the owner's signal to the receiving node</li>
+        <li>SQL Server's checked fence as its default</li>
+      </ul></div>
+    <div class="card"><h4>Decided 12 November</h4>
+      <p class="note">The prototype's <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">README</a> and <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/FINDINGS.md">findings</a> track current implementation coverage and its limits. The decisions below record the proposed design.</p>
+      <ul>
+        <li>Commit fence in the batch by default (2 round trips on PostgreSQL); fence first stays an option</li>
+        <li>A pluggable wake signal between nodes; polling remains the guarantee</li>
+        <li>Short timers and jobs of an Ephemeral instance stay in memory, up to the route timeout or a few seconds</li>
+        <li>Events: subscription and event tables are the one kernel mechanism</li>
+        <li>Reply addresses expire at the route's timeout, then the instance is unpinned</li>
+        <li>Recreate after delete: generated ids never return; caller keys may after <code>keep_until</code></li>
+        <li>The projector batches each round into set-based writes, off the hot path</li>
+        <li>Jobs are counted for poison like messages</li>
+        <li>Large values stored by reference; segments only if measurements need them</li>
+        <li>The viewer reads projected rows plus the journal tail, so it is always current</li>
+        <li>Orleans hosts partitions as grains; no grain per instance, no sweep</li>
+              <li>13 November: SQL Server defaults to the fence as its own statement (E9); the architecture section goes in <code>docs/architecture/</code>, published at the switch</li>
+      </ul></div>
+    <div class="card"><h4>To answer in the design proposal</h4>
+      <ul>
+        <li>Migrating running instances: a hook per container engine, and versioned activity state</li>
+        <li>Data lifecycle: retention, the right to erasure in an append-only journal, encryption at rest</li>
+        <li>Fairness, per-tenant quotas, admission control and bounded inboxes</li>
+        <li>Fan-out and fan-in over 100,000 children without flooding the parent</li>
+        <li>Job workers outside the process, in any language, with leases and heartbeats, built from Elsa.Jobs's worker protocol</li>
+        <li>Observability: trace context, stable metrics, operator actions on parked work</li>
+        <li>Write volume and bloat: bytes per commit and PostgreSQL dead rows, measured</li>
+      </ul></div>
+    <div class="card"><h4>Still open</h4>
+      <ul>
+        <li>What the store contract says about subscribing twice and removing what is absent</li>
+        <li>Tenant and trace headers; <code>Describe</code> for lists</li>
+        <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
+        <li>The default join for a Flowchart node with several inbound connections</li>
+        <li>BPMN's scope for its first release</li>
+      </ul></div>
+  </div>
+  <h3>Release 1 scope (decided 12 November)</h3>
+  <div class="two">
+    <div class="card"><h4>In release 1</h4>
+      <ul>
+        <li>The kernel, the built-in runtime, the Embedded and Cluster profiles</li>
+        <li>The native model: structured containers and the Flowchart on the graph engine</li>
+        <li>Synchronous HTTP</li>
+        <li>PostgreSQL, SQL Server and SQLite, tuned; MySQL supported, not tuned</li>
+        <li>Studio on the new core</li>
+        <li>Basic trace context and metrics, retention and delete, admission control, simple instance migration</li>
+        <li>StateMachine, unless its design milestone is late; then 1.1</li>
+        <li>Agents as native activities, agent calls as background jobs</li>
+      </ul></div>
+    <div class="card"><h4>After release 1</h4>
+      <ul>
+        <li>BPMN, the Orleans adapter and ETL, each proven by a spike now</li>
+        <li>MongoDB in 1.1; proven in CI against a replica set from release 1</li>
+        <li>The aggregating fan-out pattern, with ETL; release 1 caps a parallel ForEach</li>
+        <li>The out-of-process job worker protocol (1.x); its contract designed now</li>
+        <li>A dedicated agent execution model</li>
+      </ul></div>
+  </div>
+  <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
+  <p>Program <a href="https://github.com/elsa-workflows/elsa-foundation/issues/4229">#4229</a> tracks the remaining prototype work and its evidence. The design proposal includes a new ADR, a program plan, the architecture references and a list of ADRs to retire, followed by the Fable review and owner approval. No product code until the design is approved.</p>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (name, attrs, text) => {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  };
+
+  /* chapter rail */
+  const links = [...document.querySelectorAll("nav.rail a")];
+  const byId = new Map(links.map(a => [a.getAttribute("href").slice(1), a]));
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        if (en.isIntersecting) {
+          links.forEach(a => a.classList.remove("on"));
+          const a = byId.get(en.target.id);
+          if (a) { a.classList.add("on"); if (window.innerWidth <= 900) a.scrollIntoView({ block: "nearest", inline: "center" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -65% 0px" });
+    document.querySelectorAll("section.ch").forEach(s => io.observe(s));
+  }
+
+  /* pickers: click a shape or a card, both light up */
+  document.querySelectorAll(".picker").forEach(root => {
+    const shapes = [...root.querySelectorAll("[data-pick]")];
+    const cards = [...root.querySelectorAll("[data-pick-card]")];
+    const select = key => {
+      shapes.forEach(s => s.classList.toggle("picked", s.dataset.pick === key));
+      cards.forEach(c => c.classList.toggle("picked", c.dataset.pickCard === key));
+    };
+    shapes.forEach(s => {
+      s.addEventListener("click", () => select(s.dataset.pick));
+      s.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(s.dataset.pick); } });
+    });
+    cards.forEach(c => c.addEventListener("click", () => select(c.dataset.pickCard)));
+    select(root.dataset.default);
+  });
+
+  /* steppers */
+  document.querySelectorAll(".stepper").forEach(root => {
+    const svg = root.querySelector("svg");
+    const parts = [...svg.querySelectorAll("[data-k]")];
+    const prev = root.querySelector("[data-prev]");
+    const next = root.querySelector("[data-next]");
+    const count = root.querySelector("[data-count]");
+    const tabs = [...root.querySelectorAll("[data-tab]")];
+    let list, items, i = 0;
+    const pick = () => {
+      list = [...root.querySelectorAll("ol.steps")].find(o => !o.hidden);
+      items = [...list.children];
+      items.forEach((li, n) => { li.onclick = () => { i = n; render(); }; });
+    };
+    const render = () => {
+      const on = new Set(items[i].dataset.on.split(/\s+/));
+      parts.forEach(p => {
+        const lit = on.has(p.dataset.k);
+        p.classList.toggle("lit", lit);
+        p.classList.toggle("dim", !lit);
+      });
+      items.forEach((li, n) => li.classList.toggle("on", n === i));
+      count.textContent = "Step " + (i + 1) + " of " + items.length;
+      prev.disabled = i === 0;
+      next.disabled = i === items.length - 1;
+      // Keep the current action visible in a narrow diagram without moving the page vertically.
+      if (root.hasAttribute("data-follow-step")) {
+        const frame = svg.closest(".fig");
+        const focus = parts.find(p => p.dataset.k === [...on].at(-1));
+        if (focus && frame.scrollWidth > frame.clientWidth) {
+          const action = focus.getBoundingClientRect();
+          const viewport = frame.getBoundingClientRect();
+          frame.scrollLeft += action.left - viewport.left - (frame.clientWidth - action.width) / 2;
+        }
+      }
+    };
+    prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
+    next.addEventListener("click", () => { if (i < items.length - 1) { i++; render(); } });
+    tabs.forEach(t => t.addEventListener("click", () => {
+      tabs.forEach(x => x.setAttribute("aria-selected", x === t ? "true" : "false"));
+      root.querySelectorAll("ol.steps").forEach(o => { o.hidden = o.dataset.set !== t.dataset.tab; });
+      i = 0; pick(); render();
+    }));
+    pick(); render();
+  });
+
+  /* commit: two ways to send the fence */
+  const stmts = document.getElementById("stmts");
+  const note = document.getElementById("commit-note");
+  const notes = {
+    tok: "In a traced PostgreSQL batch, EF wrote the instance, journal and messages, updated the partition fence, then inserted a subscription. Epoch and position are concurrency tokens. EF checks the affected-row count before COMMIT and rolls back a stale batch. This took 2 round trips, using the node clock for the lease. On SQL Server, locking messages before the partition can deadlock with a take (E9).",
+    first: "The fence goes alone and returns the database's time. Only when its count checks out are the writes sent. 3 round trips on PostgreSQL; the lease time comes from the database."
+  };
+  const setMode = mode => {
+    const suffix = mode === "tok" ? "Tok" : "First";
+    const rows = [...stmts.children].sort((a, b) => Number(a.dataset["o" + suffix]) - Number(b.dataset["o" + suffix]));
+    rows.forEach(li => {
+      li.querySelector(".rt").textContent = li.dataset["rt" + suffix];
+    });
+    stmts.replaceChildren(...rows); // Native list reading order follows the visible statement order.
+    document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"));
+    note.textContent = notes[mode];
+  };
+  document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  setMode("tok");
+
+  /* persistence modes strip */
+  const ms = document.getElementById("modes-svg");
+  const rows = [
+    { name: "Ephemeral", a: "no commit", b: "0 round trips", commits: () => false },
+    { name: "Balanced", a: "one commit, at the end", b: "3 round trips (2)", commits: n => n === 9 },
+    { name: "Durable", a: "a commit per activity, 11 in all: the ten WriteLines and their Sequence", b: "33 round trips (22)", commits: () => true }
+  ];
+  rows.forEach((r, ri) => {
+    const y = 26 + ri * 78;
+    ms.appendChild(el("text", { class: "tt", x: 20, y: y + 10 }, r.name));
+    ms.appendChild(el("text", { class: "ts", x: 20, y: y + 28 }, r.a));
+    ms.appendChild(el("text", { class: "ts", x: 20, y: y + 44 }, r.b));
+    for (let n = 0; n < 10; n++) {
+      const x = 210 + n * 72;
+      ms.appendChild(el("rect", { class: "box", x, y: y - 6, width: 56, height: 34, rx: 5 }));
+      ms.appendChild(el("text", { x: x + 28, y: y + 16, "text-anchor": "middle" }, "A" + (n + 1)));
+      if (r.commits(n)) ms.appendChild(el("rect", { class: "b2", x: x + 59, y: y - 10, width: 8, height: 42, rx: 2 }));
+    }
+  });
+  ms.appendChild(el("text", { class: "ts", x: 210, y: 246 }, "Blue bars are commits. Native model, ten WriteLines, PostgreSQL; in brackets with the fence in the batch."));
+
+  /* cost chart */
+  const tip = document.getElementById("tip");
+  const showTip = (e, text) => { tip.textContent = text; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; tip.style.opacity = 1; };
+  const hideTip = () => { tip.style.opacity = 0; };
+  const cs = document.getElementById("cost-svg");
+  const data = [
+    ["HTTP request to response, Ephemeral", 80, 0],
+    ["HTTP request to response, Balanced", 80, 3],
+    ["HTTP request to response, Durable", 153, 12],
+    ["WriteLine sequence, Balanced", 48, 3],
+    ["Ten WriteLines, Durable", 230, 33],
+    ["Fork, wait, resume, join, Balanced", 142, 11],
+    ["Forty WriteLines, Durable", 680, 123]
+  ];
+  const x0 = 320, k = 0.8, top = 20, rh = 52;
+  for (let v = 0; v <= 700; v += 100) {
+    const x = x0 + v * k;
+    cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + data.length * rh }));
+    cs.appendChild(el("text", { class: "ts", x, y: top + data.length * rh + 18, "text-anchor": "middle" }, String(v)));
+  }
+  cs.appendChild(el("text", { class: "ts", x: x0 + 280, y: top + data.length * rh + 36, "text-anchor": "middle" }, "PostgreSQL round trips per run"));
+  data.forEach(([label, today, model], n) => {
+    const y = top + n * rh;
+    cs.appendChild(el("text", { x: x0 - 14, y: y + 30, "text-anchor": "end" }, label));
+    const tw = Math.max(today * k, 2), mw = Math.max(model * k, 2);
+    const t = el("rect", { x: x0, y: y + 10, width: tw, height: 14, rx: 3 }); t.style.fill = "var(--hot)";
+    const m = el("rect", { x: x0, y: y + 27, width: mw, height: 14, rx: 3 }); m.style.fill = "var(--accent)";
+    cs.appendChild(t); cs.appendChild(m);
+    cs.appendChild(el("text", { class: "ts", x: x0 + tw + 6, y: y + 22 }, String(today)));
+    cs.appendChild(el("text", { class: "ts", x: x0 + mw + 6, y: y + 39 }, String(model)));
+    const hit = el("rect", { x: 0, y: y + 4, width: 960, height: rh - 4, fill: "transparent" });
+    const msg = label + ": today " + today + ", new kernel " + model + " round trips";
+    hit.addEventListener("mousemove", e => showTip(e, msg));
+    hit.addEventListener("mouseleave", hideTip);
+    cs.appendChild(hit);
+  });
+
+  /* deployment profiles */
+  const pnotes = {
+    embedded: "Embedded: one node, no transport between nodes. For a Windows service, a desktop app or a single API. Any provider; SQLite is typical.",
+    cluster: "Cluster: partitions shared fairly over the nodes, which count each other by heartbeat. For scaling out on a server database.",
+    orleans: "Orleans: an adapter for hosts that already run Orleans, written by the integrator; Elsa keeps one in its tests. Any provider. Each partition is a grain, so commits still batch.",
+    log: "Log, later: partitions as replicated-log groups on a Zeebe-like provider, for very high throughput. Synchronous HTTP still works, as Zeebe's create-instance-with-result shows."
+  };
+  const setProfile = p => {
+    document.querySelectorAll("#profile-seg [data-profile]").forEach(b => b.setAttribute("aria-pressed", b.dataset.profile === p ? "true" : "false"));
+    document.querySelectorAll(".opt[data-in]").forEach(o => o.classList.toggle("on", o.dataset.in.split(" ").includes(p)));
+    document.getElementById("profile-note").textContent = pnotes[p];
+  };
+  document.querySelectorAll("#profile-seg [data-profile]").forEach(b => b.addEventListener("click", () => setProfile(b.dataset.profile)));
+  setProfile("cluster");
+})();
+</script>
+</body>
+</html>

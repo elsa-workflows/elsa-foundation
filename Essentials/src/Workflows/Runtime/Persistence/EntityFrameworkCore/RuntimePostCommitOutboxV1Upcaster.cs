@@ -17,7 +17,10 @@ internal sealed class RuntimePostCommitOutboxV1Upcaster : IEfSchemaUpcaster
         if (document.RootElement.EnumerateObject().Any(property =>
             property.Name.Equals("recipientSnapshot", StringComparison.OrdinalIgnoreCase) ||
             property.Name.Equals("stimulusDeliveryProtocolVersion", StringComparison.OrdinalIgnoreCase) ||
-            property.Name.Equals("stimulusDeliverySourceScope", StringComparison.OrdinalIgnoreCase)))
+            property.Name.Equals("stimulusDeliverySourceScope", StringComparison.OrdinalIgnoreCase) ||
+            property.Name.Equals("standaloneIngress", StringComparison.OrdinalIgnoreCase) ||
+            property.Name.Equals("subscriptionDeliveryProtocolVersion", StringComparison.OrdinalIgnoreCase) ||
+            property.Name.Equals("subscriptionDelivery", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("A legacy outbox family cannot carry recipient protocol state.");
         // Byte-for-byte identity and absent recipients are preserved, even for attempt zero or Delivered rows.
         return row;

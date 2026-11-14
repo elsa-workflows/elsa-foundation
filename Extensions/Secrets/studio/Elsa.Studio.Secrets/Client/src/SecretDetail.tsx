@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import type { StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { CopySecretNameButton } from "./CopySecretNameButton";
@@ -11,6 +12,8 @@ interface SecretDetailProps {
   secret: SecretMetadata;
   descriptors: SecretDescriptorsResponse | null;
   busy?: boolean;
+  notifications?: StudioNotificationApi;
+  copyScope?: object;
   presentation?: "dialog" | "page";
   onStateChange?(state: SecretEditorState): void;
   onSave(name: string, request: { displayName: string; description?: string }): Promise<void>;
@@ -30,7 +33,7 @@ function SecretDetailDialog(props: SecretDetailProps) {
     <SecretMetadataForm {...props} onStateChange={report} />
   </section></div>;
 }
-function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose, onStateChange }: SecretDetailProps) {
+function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose, onStateChange, notifications, copyScope }: SecretDetailProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const initiallyFocused = useRef(false);
   useLayoutEffect(() => { if (!initiallyFocused.current) { initiallyFocused.current = true; formRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus(); } }, []);
@@ -59,7 +62,7 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
     finally { savingRef.current = false; setSaving(false); }
   }
   return <form ref={formRef} className="secrets-edit-form secrets-tabbed-form" aria-busy={cannotClose} onSubmit={event => void submit(event)}>
-    <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} /></p>
+    <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={copyScope} /></p>
     {error ? <p ref={errorRef} className="secrets-field-error" role="alert" tabIndex={-1}>{error}</p> : null}
     <fieldset className="secrets-editor-fields" disabled={cannotClose}>
     <SecretEditorTabs active={active} onSelect={setActive}>

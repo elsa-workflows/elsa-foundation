@@ -69,6 +69,11 @@ It also does not perform the temporary source-edit exercise, prove a clean bare 
 Windows acceptance or a .NET support policy. Use the [backend source quickstart](../docs/contributing/backend-source-quickstart.md)
 for the interactive contributor route.
 
+The opt-in [Activity data selection proof](activity-data-selection/README.md) is a separate, currently blocked
+checkpoint lane. It requires Python 3 and **PowerShell 7.3+ (`pwsh`)**, including on Windows; the general
+Windows PowerShell 5.1 invocation above does not apply to that folder. Its typed fixture is not part of
+default Workbench builds. No Windows qualification or complete five-family runtime pass is claimed.
+
 ## Running these tests — READ THIS (agents included)
 
 > [!WARNING]
