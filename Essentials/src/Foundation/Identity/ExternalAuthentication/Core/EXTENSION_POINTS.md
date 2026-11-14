@@ -23,8 +23,8 @@ terms: [authentication architecture](../../../../../../docs/reference/authentica
 | `IConnectionSignInEvidence` | Replacement | Records successful normal external administrator sign-ins in a private protected observation envelope. Preview and ordinary reader sign-ins never establish recovery evidence. |
 
 At the lifecycle stage, `AddFoundationExternalAuthentication` installs catalog/registry, admission policies,
-writer/delegation, protected observation, readiness/recovery and link authorization contracts. Protocol implementations are optional contributions (the managed OIDC adapter is available separately). Artifact,
-flow and canonical session implementations are introduced by their owning later slices. Missing dependencies
+writer/delegation, protected observation, readiness/recovery and link authorization contracts. Protocol implementations are optional contributions (the managed OIDC adapter is available separately). Artifact stores are optional persistence contributions.
+Flow and canonical session implementations are introduced by their owning later slices. Missing dependencies
 never count as a usable path. Register replacements before Foundation and preserve duplicate-contract diagnostics.
 Readiness describes installed configuration; recovery additionally requires current eligible authority and
 protected successful normal-sign-in evidence. A preview cannot supply that evidence.

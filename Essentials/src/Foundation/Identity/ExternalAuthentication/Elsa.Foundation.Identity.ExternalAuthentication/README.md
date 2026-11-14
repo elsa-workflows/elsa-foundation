@@ -66,3 +66,9 @@ The [managed OIDC package](../Oidc/README.md) contributes the `oidc` protocol th
 code/PKCE/nonce/issuer validation with secret references resolved when used. Installing the adapter does not
 install callback/chooser/API routes, enable a connection or establish recovery evidence. The existing direct
 bearer OIDC feature remains a separate composition.
+
+## Optional one-time artifact persistence
+
+The [EF artifact package](../Persistence/EntityFrameworkCore/README.md) supplies the optional durable
+`IAuthenticationArtifactStore` at its initial schema stage. It does not yet supply durable interactive
+sessions or callback routes. Deployment-only catalog composition still avoids the optional database.

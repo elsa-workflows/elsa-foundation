@@ -49,6 +49,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
     <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
+    <ProjectReference Include="../../../../src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
 </Project>
