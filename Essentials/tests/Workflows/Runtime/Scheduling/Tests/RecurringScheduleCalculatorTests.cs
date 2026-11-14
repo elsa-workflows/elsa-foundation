@@ -8,6 +8,14 @@ public sealed class RecurringScheduleCalculatorTests
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly RecurringScheduleCalculator _calculator = new();
 
+    [Theory]
+    [InlineData("2026-03-07T15:00:00Z", "2026-03-08T13:00:00Z")]
+    [InlineData("2026-10-31T15:00:00Z", "2026-11-01T14:00:00Z")]
+    public void Resource_cron_keeps_local_nine_am_across_both_DST_transitions(string after, string expected)
+    {
+        Assert.Equal(DateTimeOffset.Parse(expected), _calculator.ComputeNext(RecurringScheduleKind.Cron, "0 9 * * *", DateTimeOffset.Parse(after), "America/New_York"));
+    }
+
     [Fact]
     public void Interval_Iso8601_ReturnsAfterPlusInterval()
     {
