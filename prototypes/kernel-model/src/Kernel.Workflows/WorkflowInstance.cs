@@ -12,6 +12,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 {
     private readonly Dictionary<string, IExecutionModel> _models = models.ToDictionary(m => m.Key, StringComparer.Ordinal);
     public bool SingleMessage(Message message) => message.Kind == WorkflowKinds.ChildFinished;
+    public bool SingleMessage(InstanceRow? row, Delivery delivery) => row is { Status: not InstanceStatus.Running } &&
+        delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.Job;
 
     /// <summary>
     /// A running instance is suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model
@@ -90,7 +92,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
                 Creation: spec.Creation?.Generation ?? 0, ParentCreation: spec.ParentCreation); // owner binds its staged start envelope, even when the model held all input
         if (next is not null && row is not { Status: not InstanceStatus.Running }) next = WorkflowCommitClock.End(next);
         var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Spec = spec, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
-        if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
+        if (next?.Parent is not null && row is not { Status: not InstanceStatus.Running }) unit.Sent.Add(Finished(next, null));
         return unit;
     }
 
@@ -99,7 +101,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     private static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
     {
         if (row.Jobs is null) return null;
-        var consumed = taken.Where(i => i.Message.Kind is Kinds.Job or Kinds.JobFinished).Select(i => i.Message.Id).ToHashSet(StringComparer.Ordinal);
+        var consumed = taken.Where(i => i.IsDurableJobTicket && i.Message.Kind is Kinds.Job or Kinds.JobFinished).Select(i => i.Message.Id).ToHashSet(StringComparer.Ordinal);
         if (consumed.Count == 0) return row.Jobs;
         var jobs = Json.Read<List<string>>(row.Jobs);
         if (jobs.RemoveAll(key => consumed.Contains(Worker.TicketId(row.Id, key, row.Creation))) == 0) return row.Jobs;

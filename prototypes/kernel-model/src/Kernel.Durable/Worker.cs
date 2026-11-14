@@ -367,7 +367,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!Has(Flaw.PollWithoutSkip) && (_items.ContainsKey(message.Id) || _consumed.Contains(message.Id))) return;
         _behind.Remove(message.Id);
         // A recalled message (Recall) whose row a poll brings in before the commit that deletes it lands: taken, never given.
-        var item = new Delivery(message, seq) { Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts, Again = again, Taken = _cancelling.Contains(message.Id) };
+        var item = new Delivery(message, seq) { Durable = durable, IsDurableJobTicket = durable && message.Kind == Kinds.Job, Marked = marked, Suspect = suspect, Attempts = attempts, Again = again, Taken = _cancelling.Contains(message.Id) };
         _items[message.Id] = item;
         if (message.Kind is Kinds.Meet or Kinds.Publish)     // NATIVE N1: a publish ticket is handled like a meet ticket
         {
@@ -473,7 +473,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (suspended && !control && !identityReply) continue;    // identity refusal does not activate suspended authored work
             if (Awaits(item)) break;    // nothing overtakes a message that waits for its mark
             // Keep lifecycle changes/refusals separate. Compatible messages of this creation retain normal batching.
-            if (item.Message.Start?.Creation is not null && !continuingStart || identityReply ||
+            if (item.Message.Start?.Creation is not null && !continuingStart || identityReply || _type.SingleMessage(slot.CurrentRow, item) ||
                 slot.Row?.Creation > 0 && (item.Message.Start is not null && !continuingStart || _type.SingleMessage(item.Message)))
             {
                 if (due.TrueForAll(i => i.Held) && (item.Message.Due is not { } dueAt || dueAt <= now)) due = [item];

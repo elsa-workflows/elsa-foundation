@@ -11,6 +11,9 @@ public interface IActorType
     /// <summary>An owner command that needs a single-message boundary but still obeys normal withholding.</summary>
     bool SingleMessage(Message message) => false;
 
+    /// <summary>Whether this delivery must be dispatched alone for the current committed row.</summary>
+    bool SingleMessage(InstanceRow? row, Delivery delivery) => false;
+
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);
 
@@ -48,6 +51,8 @@ public interface ITurnServices
 public sealed class Delivery(Message message, long seq)
 {
     public Message Message { get; internal set; } = message;
+    /// <summary>True only for a persisted kernel job ticket, including its in-memory completion.</summary>
+    public bool IsDurableJobTicket { get; internal set; }
     internal long Seq = seq;
     internal bool Durable;            // it is a row
     internal bool Marked;             // its row says seen at this epoch
@@ -155,8 +160,9 @@ public sealed class DurableTurn
         Actor = new InstanceRef(input.Actor);
         Inbox = input.Taken.Skip(input.From).Select(i => i.Message).ToList();   // messages ahead of the one that creates the target had no target
         _jobs = input.Row?.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : [];
-        foreach (var message in Inbox)
-            if (message.Kind == Kinds.JobFinished) _jobs.Remove(message.Read<JobFinished>().Key);    // its result is being handled: no longer in flight
+        foreach (var delivery in input.Taken.Skip(input.From))
+            if (delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.JobFinished)
+                _jobs.Remove(delivery.Message.Read<JobFinished>().Key);    // its persisted ticket is being consumed
         Revision = (input.Row?.Revision ?? 0) + 1;
         Clock = new TurnClock(input.Row, Revision, input.Services);
     }
@@ -265,8 +271,9 @@ public sealed class DurableTurn
     /// <summary>A held job result is still in flight; then the row's <c>Jobs</c>.</summary>
     public string? Jobs()
     {
-        foreach (var message in Inbox)
-            if (message.Kind == Kinds.JobFinished && _held.Contains(message.Id)) _jobs.Add(message.Read<JobFinished>().Key);   // a held result: still in flight
+        foreach (var delivery in _input.Taken.Skip(_input.From))
+            if (delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.JobFinished && _held.Contains(delivery.Message.Id))
+                _jobs.Add(delivery.Message.Read<JobFinished>().Key);   // a held result: still in flight
         return _jobs.Count == 0 ? null : Json.Write(_jobs);
     }
 
