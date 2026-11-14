@@ -1586,6 +1586,7 @@
 }
 
 .wf-instance-section.wf-activity-overview {
+  container: workflow-activity-overview / inline-size;
   overflow: hidden;
   padding: 0;
 }
@@ -1672,6 +1673,26 @@
 
 .wf-activity-overview-status {
   justify-content: flex-end;
+}
+
+@container workflow-activity-overview (max-width: 30rem) {
+  .wf-activity-overview-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .wf-activity-overview-status {
+    grid-column: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .wf-instance-section .wf-activity-overview-title h4 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
 }
 
 .wf-activity-summary-grid,

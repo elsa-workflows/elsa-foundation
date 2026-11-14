@@ -31,7 +31,12 @@ public sealed class CodeFirstDynamicConformanceTests
     [Fact]
     public async Task EquivalentGeneratedCodeFirstAndDynamicDefinitionsCompileToTheSameCanonicalBindingsAndHash()
     {
-        var codeFirstState = new ConformanceWorkflow().Compile("version-1");
+        // Declare the same canonical request boundary on both fixture states. This preserves the
+        // generated-node/binding/hash comparison; it does not add a code-first builder input API.
+        var codeFirstState = new ConformanceWorkflow().Compile("version-1") with
+        {
+            Inputs = [InputDefinition("customer-id", "Object")]
+        };
         var dynamicState = DynamicState();
 
         var codeFirst = await CompileAsync(codeFirstState);
@@ -135,7 +140,7 @@ public sealed class CodeFirstDynamicConformanceTests
             Input("literal", "fixed", "Literal"),
             Input("fallback", null, "Default"));
 
-        return State([producer, consumer], [retry]);
+        return State([producer, consumer], [retry]) with { Inputs = [InputDefinition("customer-id", "Object")] };
     }
 
     private static WorkflowDefinitionState InvalidLiteralDynamicState() =>

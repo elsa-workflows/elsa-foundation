@@ -916,33 +916,67 @@ describe("Choose data with member capability", () => {
     expect(document.querySelector(".wf-expression-transition-confirmation")).toBeNull();
   });
 
-  it.each(["variable", "input", "open request"])("selects exact nested and empty keys from a %s using only server offers", async family => {
+  it.each(["WorkflowRequest", "WorkflowRequestMember"])("preserves an undeclared %s until explicit clear", async kind => {
+    const changes = vi.fn();
+    const value = kind === "WorkflowRequest"
+      ? { memberKey: "OldPayload", path: null, futureField: { preserved: true } }
+      : { memberKey: "OldPayload", memberPath: ["a.b", ""], futureField: { preserved: true } };
+    const dataHost = host({ findingsFor: () => [], requestSources: vi.fn(async () => answer("invalid", {
+      findings: [{ path: "node-1/inputs/customerId", type: "ActivityData/UnknownInput", message: "Declare the input." }]
+    })) });
+    const activity = { nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
+      customerId: { typeName: "System.String", expression: { type: kind, value } } };
+    const before = JSON.stringify(activity);
+    const container = render({ dataHost, activity, onChange: changes });
+    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem")?.textContent).toContain("Declare it"));
+    expect(JSON.stringify(activity)).toBe(before);
+    expect(changes).not.toHaveBeenCalled();
+    const replace = container.querySelector<HTMLButtonElement>("button[aria-label='Replace data for Customer ID']")!;
+    expect(replace.disabled).toBe(false);
+    flushSync(() => replace.click());
+    await vi.waitFor(() => expect(document.querySelector(".wf-data-chooser")).not.toBeNull());
+    flushSync(() => document.querySelector<HTMLElement>(".wf-data-chooser")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(changes).not.toHaveBeenCalled();
+    expect(JSON.stringify(activity)).toBe(before);
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Clear data for Customer ID']")!.click());
+    expect(changes).toHaveBeenCalledTimes(1);
+    expect(changes.mock.calls[0]![0]).not.toHaveProperty("customerId");
+  });
+
+  it("does not offer an undeclared request-name entry, including an obsolete host flag", async () => {
+    const changes = vi.fn();
+    const dataHost = Object.assign(host({ requestSources: vi.fn(async () => answer("supported", {
+      memberReadsEnabled: true, target: { displayName: "Customer ID", constraint: null }, sources: [{ ...sources[0]!, shape: memberShape() }]
+    })) }), { openWorkflowRequest: true });
+    const container = render({ dataHost, onChange: changes });
+    await openChooser(container);
+    await vi.waitFor(() => expect(document.querySelector(".wf-data-members")).not.toBeNull());
+    expect(document.querySelector("input[aria-label='Request member']")).toBeNull();
+    expect(document.body.textContent).not.toContain("Open request member");
+    expect(changes).not.toHaveBeenCalled();
+  });
+
+  it.each(["variable", "input"])("selects exact nested and empty keys from a %s using only server offers", async family => {
     const changes = vi.fn();
     const rootBinding = family === "variable" ? { expressionType: "Variable", value: { referenceKey: "stable-key", declaringScopeId: "scope" } }
       : { expressionType: "WorkflowRequest", value: { memberKey: "Payload", path: null } };
-    const id = family === "variable" ? "variable:scope:stable-key" : family === "input" ? "input:stable-key" : "request:Payload";
+    const id = family === "variable" ? "variable:scope:stable-key" : "input:stable-key";
     const rootSource = { id, displayName: "Payload", binding: rootBinding, reasonCode: null, availability: "definite", activityResultSource: null,
       type: null, shape: memberShape({ state: "unknown", kind: "unknown", type: null }) };
     let commitOffer: NonNullable<ActivityDataSourceFacts["binding"]> | null = null;
     let choosing = false;
-    const dataHost = host({ openWorkflowRequest: family === "open request", requestSources: vi.fn(async (_target, _signal, _skip, query) => {
+    const dataHost = host({ requestSources: vi.fn(async (_target, _signal, _skip, query) => {
       const path = [...query?.memberPath ?? []];
       const binding = path.length ? { expressionType: family === "variable" ? "VariableMember" : "WorkflowRequestMember",
         value: { ...(family === "variable" ? rootBinding.value : { memberKey: "Payload" }), memberPath: path } } : rootBinding;
       if (choosing && !commitOffer) commitOffer = binding;
       return answer("supported", { memberReadsEnabled: true, target: { displayName: "Customer ID", constraint: null },
-        sources: family === "open request" && !query?.source ? [] : [{ ...rootSource, binding }] });
+        sources: [{ ...rootSource, binding }] });
     }) });
     const container = render({ dataHost, onChange: changes });
     await openChooser(container);
-    if (family === "open request") {
-      await vi.waitFor(() => expect(document.querySelector("input[aria-label='Request member']")).not.toBeNull());
-      enterMemberText("Request member", "Payload");
-      flushSync(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Open request member")!.click());
-    } else {
-      await vi.waitFor(() => expect(dataOption("Payload")).toBeDefined());
-      flushSync(() => dataOption("Payload")!.click());
-    }
+    await vi.waitFor(() => expect(dataOption("Payload")).toBeDefined());
+    flushSync(() => dataOption("Payload")!.click());
     await vi.waitFor(() => expect(document.querySelector("input[aria-label='Member name']")).not.toBeNull());
     enterMemberText("Member name", "a.b");
     flushSync(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Open member")!.click());
@@ -959,7 +993,7 @@ describe("Choose data with member capability", () => {
     expect(changes.mock.calls[0]![0].customerId.expression.value).toBe(commitOffer!.value);
   });
 
-  it.each(["ValueFlow/UnavailableProducer", "ActivityData/UnknownMember"])("shows current unsaved reference refusal %s without saved findings or an edit", async type => {
+  it.each(["ValueFlow/UnavailableProducer", "ActivityData/UnknownMember", "ActivityData/UnknownInput"])("shows current unsaved reference refusal %s without saved findings or an edit", async type => {
     const changes = vi.fn();
     const { memberBinding } = nestedHost();
     const dataHost = host({ documentRevision: "unsaved-2", findingsFor: () => [], requestSources: vi.fn(async () => answer("invalid", {
@@ -971,7 +1005,7 @@ describe("Choose data with member capability", () => {
       nodeId: "node-1", activityVersionId: "invoice-1", inputs: [], outputs: [],
       customerId: { typeName: "System.String", expression: { type: memberBinding.expressionType, value: memberBinding.value } }
     } });
-    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem")?.textContent).toContain("Replace it or clear it"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-data-reference-problem")?.textContent).toContain(type === "ActivityData/UnknownInput" ? "Declare it" : "Replace it or clear it"));
     expect(container.querySelector(".wf-data-reference")?.getAttribute("data-problem")).toBe("true");
     expect(container.textContent).not.toContain("LEAK");
     expect(container.textContent).not.toContain("Raw server text");
