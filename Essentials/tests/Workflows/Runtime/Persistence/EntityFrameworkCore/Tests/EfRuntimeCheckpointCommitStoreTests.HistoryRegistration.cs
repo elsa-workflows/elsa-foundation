@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.History;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,7 +23,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Same(reader, first.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>());
         Assert.NotSame(reader, second.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>());
         var writer = first.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
-        Assert.False(writer.SupportsHistory); Assert.False(writer.CanCommitHistory(reader));
+        Assert.True(writer.SupportsHistory); Assert.True(writer.CanCommitHistory(reader));
+        Assert.False(writer.CanCommitHistory(second.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>()));
+        Assert.Null(first.ServiceProvider.GetService<RuntimeHistoryOptions>());
     }
 
     [Theory]

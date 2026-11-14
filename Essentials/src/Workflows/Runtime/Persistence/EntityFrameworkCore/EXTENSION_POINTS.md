@@ -133,3 +133,9 @@ Production hosts enroll semantic metadata history with AddWorkflowRuntimeHistory
 capture policy, requires qualified actual source/native/read support at admission and selects no
 persistence or payload capture. Native EF registration alone adds no history options; EF capability
 remains separately qualified. The same public entry supports the default-order integration controls.
+
+Native history support now qualifies the actual reader/context/accessor/owner chain, ordinary scope
+and complete declared projection model. Independent observation uses that same metadata-only model
+check. CanCommitHistory never reads diagnostic content. Backend capability installs no history
+options: explicit production enrollment must still qualify actual source/value/cleanup/delivery
+inputs before admitting new captured runs. Authored workflow/default-source acceptance is separate.
