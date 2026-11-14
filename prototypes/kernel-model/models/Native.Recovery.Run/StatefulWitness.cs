@@ -105,12 +105,12 @@ internal sealed class StatefulProbe : StatefulActivity<int, ProbePrivate, string
     internal static readonly List<(string Phase, string Frame, string Operation, int Value, int Kept, string? Payload)> Calls = [];
     protected override ValueTask<Transition> ExecuteAsync(StartContext<string> context)
     {
-        Calls.Add(("start", context.Activity.FrameId, context.Activity.OperationKey, Value, Data["kept"]!.GetValue<int>(), null)); Data["kept"] = -1;
+        Calls.Add(("start", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), null)); Data["kept"] = -1;
         return ValueTask.FromResult(Calls.Count == 1 && StartFault ? Fault("stateful-dependency", "repair") : Suspend(new ProbePrivate(Calls.Count == 1 ? "first" : "fresh"), new EventTrigger("go"), new EventTrigger("other")));
     }
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<ProbePrivate, string> context)
     {
-        Calls.Add(("resume", context.Activity.FrameId, context.Activity.OperationKey, Value, Data["kept"]!.GetValue<int>(), context.Trigger)); Data["kept"] = -2;
+        Calls.Add(("resume", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), context.Trigger)); Data["kept"] = -2;
         return ValueTask.FromResult(Calls.Count == 2 && !StartFault ? Fault("stateful-dependency", "repair") : Complete(Value));
     }
 }
