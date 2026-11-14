@@ -55,9 +55,11 @@
 
 .studio-workspace-tab-button {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
   height: 34px;
   margin: 0;
   padding: 0 4px 0 12px;
@@ -92,6 +94,7 @@
 }
 
 .studio-workspace-tab-title {
+  flex: 1 1 0%;
   overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
@@ -140,6 +143,7 @@
 }
 
 .studio-workspace-tab-close {
+  flex: 0 0 auto;
   width: 22px;
   height: 22px;
   margin-right: 6px;
@@ -160,11 +164,15 @@
 }
 
 .studio-workspace-tab-actions {
+  /* Cover tabs that scroll under the + and All tabs controls. */
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 2px;
   padding: 0 6px;
+  background: var(--studio-surface-muted);
 }
 
 .studio-workspace-tab-action {
@@ -239,7 +247,13 @@
 
 @media (max-width: 600px) {
   .studio-workspace-tab {
+    flex: 0 0 auto;
     max-width: 168px;
+  }
+
+  .studio-workspace-tab[data-active="true"] {
+    flex: 1 0 auto;
+    max-width: min(168px, 100%);
   }
 
   .studio-workspace-tab-detail {
