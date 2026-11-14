@@ -53,7 +53,7 @@ internal static class StatefulWitness
         void Reload() { Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1 - owner; Apply(new("take", Actor().Id)); Drain(); }
         void Name(string id, string name, string payload) => Apply(new("add", M: new(id, target, NativeKinds.Resume, Json.Write(new ResumeStimulus(name, Values.From(payload))), TargetCreation: 1)));
         Apply(new("take", Actor().Id)); Apply(new("add", M: new("start", target, Kinds.Start, Start: NativeModel.Spec(wf.Id, mode) with { Creation = new(1, 0, "stateful-proof") }))); Drain();
-        Subscription? oldWait = null;
+        SubscriptionRow? oldWait = null;
         if (!startFault)
         {
             oldWait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:go"); Reload();
