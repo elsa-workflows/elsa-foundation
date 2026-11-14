@@ -188,6 +188,18 @@ public static class ParkChecks
         await Case("cold future metadata", JobPoisonChecks.FutureMetadataAsync);
         foreach (var options in new[] { (true, true, false), (true, false, false), (false, true, false), (false, true, true) })
             await Case($"cancellation rollback {options}", () => JobPoisonChecks.CancellationAsync(options.Item1, options.Item2, options.Item3));
+        foreach (var options in new[] { (false, false), (false, true), (true, false) })
+        {
+            await Case($"held metadata unique snapshot {options}", () => ParkTicketChecks.HoldAsync(options.Item1, options.Item2));
+            foreach (var metadata in new[] { false, true })
+                await Case($"duplicate issuance rejected {options}/{metadata}", () => ParkTicketChecks.CopyAsync(options.Item1, options.Item2, metadata));
+        }
+        foreach (var mode in new[] { "normal", "refused", "throw", "running", "finished", "future" })
+            foreach (var qualified in new[] { false, true })
+                foreach (var history in Enum.GetValues<History>())
+                    await Case($"metadata failure/status {mode}/{qualified}/{history}", () => ParkMetadataFailureChecks.RunAsync(mode, qualified, history));
+        foreach (var mode in new[] { "entered", "queued", "recreated", "suspended", "poison", "future", "wrong", "discarded", "unrelated" })
+            await Case("physical entry boundary " + mode, () => ParkAdmissionChecks.RunAsync(mode));
         Console.WriteLine($"park: {cases - failures} passed, {failures} failed");
         return failures == 0 ? 0 : 1;
     }
