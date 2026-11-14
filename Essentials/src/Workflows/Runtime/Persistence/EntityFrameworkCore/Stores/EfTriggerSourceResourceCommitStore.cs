@@ -23,8 +23,19 @@ internal sealed class EfTriggerSourceResourceCommitStore(RuntimeDbContext contex
         targets.Executables is EfWorkflowExecutableStore material && ReferenceEquals(material.Context, context) &&
         targets.Sources is EfWorkflowExecutableSourceReferenceStore references && ReferenceEquals(references.Context, context);
 
-    public async ValueTask<TriggerMutationReceipt> CommitAsync(TriggerScope scope, TriggerStoreWrite write,
+    /// <exception cref="TriggerOperationException">Stored-data/provider failure; preserves scope/resource identity and the original cause.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates unchanged.</exception>
+    public ValueTask<TriggerMutationReceipt> CommitAsync(TriggerScope scope, TriggerStoreWrite write,
         IReadOnlyList<RuntimeIngressReservationDescriptor> reservations, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope); ArgumentNullException.ThrowIfNull(write);
+        ArgumentNullException.ThrowIfNull(write.Trigger); ArgumentNullException.ThrowIfNull(reservations);
+        cancellationToken.ThrowIfCancellationRequested();
+        return EfTriggerBoundary.RunAsync(() => CommitCoreAsync(scope, write, reservations, cancellationToken), scope.Persistence.Value, write.Trigger.Id);
+    }
+
+    private async ValueTask<TriggerMutationReceipt> CommitCoreAsync(TriggerScope scope, TriggerStoreWrite write,
+        IReadOnlyList<RuntimeIngressReservationDescriptor> reservations, CancellationToken cancellationToken)
     {
         access.Current.RequireScope(); access.Current.EnsureScope(scope.Persistence);
         if (resources is not EfStandaloneTriggerStore store || !ReferenceEquals(store.Context, context))

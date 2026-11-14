@@ -17,6 +17,29 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class StimulusDeliveryStoreTests
 {
+    [Fact]
+    public async Task Source_resource_transaction_failure_is_contextual_and_accepts_no_resource_write()
+    {
+        var interceptor = new InterleavingSave();
+        await using var harness = await Harness.Create(true, interceptor);
+        var ingress = await PrepareIngressAsync(harness);
+        var fixture = harness.Management(ingress);
+        var write = ManagedWrite("unavailable-resource", 1, TriggerDesiredState.Paused, []) with { ObservedTargets = [] };
+        var cause = new SqliteException("Injected transaction-start provider failure.", 5);
+        interceptor.Action = () => Task.FromException(cause);
+        var refusal = await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Writer.CommitAsync(fixture.Scope, write, []).AsTask());
+        Assert.Equal("unavailable", refusal.Code); Assert.Same(cause, refusal.InnerException);
+        Assert.Equal(fixture.Scope.Persistence.Value, refusal.Fields!["scope"]);
+        Assert.Equal(write.Trigger.Id, refusal.Fields["identity"]);
+        Assert.Null(await fixture.Resources.FindAsync(fixture.Scope, write.Trigger.Id));
+        Assert.Null(await fixture.Resources.FindMutationAsync(fixture.Scope, write.ActorId, write.RequestId));
+        Assert.Null(harness.Context!.Database.CurrentTransaction);
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        var cancelled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Writer.CommitAsync(fixture.Scope, write, [], cancellation.Token).AsTask());
+        Assert.Equal(cancellation.Token, cancelled.CancellationToken);
+        Assert.Null(await fixture.Resources.FindAsync(fixture.Scope, write.Trigger.Id));
+    }
+
     [Theory]
     [InlineData(false, false)] [InlineData(true, false)]
     [InlineData(false, true)] [InlineData(true, true)]
