@@ -83,7 +83,8 @@ async function mount(nested?: "start" | "end", supporting?: "hint" | "error" | "
   const controller = createNotificationController();
   await update(() => root.render(<Fixture controller={controller} nested={Boolean(nested)} supporting={supporting} />));
   const scrollport = port()!;
-  const extra = () => (nested ? 420 : 0) + Math.max(0, (parseFloat(scrollport.style.paddingBlockEnd) || 20) - 20);
+  const extra = () => (nested ? 420 : 0) + (supporting ? 36 : 0)
+    + Math.max(0, (parseFloat(scrollport.style.paddingBlockEnd) || 20) - 20);
   Object.defineProperties(scrollport, {
     clientHeight: { configurable: true, get: () => 380 },
     clientWidth: { configurable: true, get: () => 390 },
