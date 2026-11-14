@@ -117,11 +117,11 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 8 pins qualified stateful activations; existing policies retain their original behavior.</summary>
-    public int StateVersion => 8;
+    /// <summary>Version 9 qualifies StateMachine phase-parent recovery without expanding existing policies.</summary>
+    public int StateVersion => 9;
     public object UpgradeState(string state, int fromVersion)
     {
-        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
@@ -129,7 +129,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
         if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
         if (fromVersion < 7 && native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
-        if (native.InterventionPolicy is < 0 or > 2 || NativeStatefulRecovery.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported stateful recovery data.");
+        if (native.InterventionPolicy < 0 || (fromVersion < 8 ? native.InterventionPolicy > 2 || NativeStatefulRecovery.Present(native) : native.InterventionPolicy > 3)) throw new InvalidOperationException("Legacy native state contains unsupported stateful recovery data.");
         return native;
     }
 

@@ -60,7 +60,7 @@ internal static class NativeInterventions
         }
         if (!state.Started || state.Mode is not (Modes.Balanced or Modes.Durable))
             throw new InvalidOperationException("Invalid native intervention profile state.");
-        if (state.InterventionPolicy is < 0 or > 3) throw new NotSupportedException("Unsupported native intervention policy.");
+        if (state.InterventionPolicy is < 0 or > 4) throw new NotSupportedException("Unsupported native intervention policy.");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var f in state.Frames.Values)
         {
@@ -86,7 +86,7 @@ internal sealed partial class Burst
         if (turn.Instance.Creation <= 0 || _s.Mode is not (Modes.Balanced or Modes.Durable))
             throw new NotSupportedException("Native intervention requires a qualified Balanced/Durable invocation.");
         _s.InterventionEnabled = true;
-        _s.InterventionPolicy = 3;
+        _s.InterventionPolicy = 4;
     }
 
     private bool InterventionParent(Frame frame) => frame.Parent is { } id && _s.Frames.TryGetValue(id, out var parent) &&
