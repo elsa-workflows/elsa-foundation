@@ -115,6 +115,11 @@ internal static class SelectionWitness
 
     private static IEnumerable<(string Name, Action Run)> Extra()
     {
+        yield return ("empty-action-phase", () =>
+        {
+            var chart = new SelectionChart(Simple(), []);
+            Check(chart.Prerequisites([("exit", "Checking"), ("entry", "Changes")])[1].SequenceEqual([0]), "Q4: empty action phase lost the exit barrier");
+        });
         yield return ("guard-fault", () =>
         {
             var chart = new SelectionChart(Simple(), [R("child", 0, "Checking", "Changes")]); var visits = Visits(chart); var before = visits.ToArray();

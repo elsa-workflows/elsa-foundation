@@ -23,7 +23,7 @@ Eight literal checkpoint-reader fixtures are listed separately from those workfl
 
 ## General structural planner
 
-`--selection-list` discovers63 logical graph/visit fixtures and `--selection` runs them. The private compiled engine supports hierarchical and regional conflicts, action-without-exit, explicit self/parent re-entry, compound-parent preservation, whole-parallel re-entry, targeted/default regional entry and nested finals. It validates complete entered configurations and returns exited/source visit identities and structural phase dependencies. Input matching and guard results are supplied by the host; the engine does not admit inputs, discover cohorts, allocate physical visits or own values.
+`--selection-list` discovers64 logical graph/visit fixtures and `--selection` runs them. The private compiled engine supports hierarchical and regional conflicts, action-without-exit, explicit self/parent re-entry, compound-parent preservation, whole-parallel re-entry, targeted/default regional entry and nested finals. It validates complete entered configurations and returns exited/source visit identities and structural phase dependencies. Input matching and guard results are supplied by the host; the engine does not admit inputs, discover cohorts, allocate physical visits or own values.
 
 The existing public `Chart` constructors adapt the legacy sibling-only definition to that same engine; there is no second selector. The original20 and phase56 native schedules exercise this adapter. Full-graph fixtures are logical data, not actual native state-local scopes or support through a new public authored schema. That bridge remains mandatory before full hierarchy/product claims.
 

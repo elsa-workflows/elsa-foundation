@@ -163,7 +163,7 @@ internal sealed class SelectionChart
         {
             "exit" => exits.Where(i => work[i].State != w.State && Nearest(work[i].State, exits) == w.State).ToArray(),
             "transition" => exits.ToArray(),
-            _ => Nearest(w.State, entries) is { } parent ? entries.Where(i => work[i].State == parent).ToArray() : actions.ToArray()
+            _ => Nearest(w.State, entries) is { } parent ? entries.Where(i => work[i].State == parent).ToArray() : (actions.Length == 0 ? exits : actions).ToArray()
         }).ToArray();
     }
 
