@@ -112,8 +112,11 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     public DbSet<ProjectionEntity> Projections => Set<ProjectionEntity>();
     public DbSet<ViewEntity> Views => Set<ViewEntity>();
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
         optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
+        MySqlCommandBatchPreparer.Configure(optionsBuilder);
+    }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
