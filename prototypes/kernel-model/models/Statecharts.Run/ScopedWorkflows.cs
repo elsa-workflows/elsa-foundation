@@ -107,7 +107,7 @@ internal sealed class ScopedWorkflows(string mode, bool nested, bool reverse)
             "V4: parent re-entry failed to reset visits while preserving machine values");
         Signal("finish");
         Release("a-exit"); Release("parent-exit"); Release("action");
-        Check(State!.Pending is not null && Resources.Count == 2 && Observation("final-label") == "final" && Observation("final-count") == "3",
+        Check(State is { Pending: not null } && Resources.Count == 2 && Observation("final-label") == "final" && Observation("final-count") == "3",
             "V7: final Entry lost its scope, leaked exits or completed before durable work");
         Reload(); Release("final");
         Check(State is null && Resources.Count == 0 && _world.Store.Instances[_target.Id].Status == InstanceStatus.Finished, "V7: final completion leaked resources or did not return");
