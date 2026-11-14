@@ -1218,8 +1218,11 @@ internal sealed class DefaultWeaverTurnOrchestrator(
     private async Task<WeaverError?> AdmitRetainedOutcomeAsync(WeaverSession session, WeaverToolResult result, bool continuation, bool historical,
         CancellationToken token)
     {
-        // Engine-created refusal text has no successful resource payload to disclose.
-        if (!result.Succeeded && result.Payload is null && result.Receipt is null && result.Access is null) return null;
+        // Bare engine diagnostics have no resource identity or owner callback. Their new typed error
+        // representation still requires current selected-effects admission, including in later history.
+        // Legacy refusal text without Error keeps its original effects-free compatibility.
+        if (!result.Succeeded && result.Payload is null && result.Receipt is null && result.Access is null)
+            return result.Error is null ? null : await effects.CheckResultAsync(token);
         var tool = await toolRegistry.FindAsync(result.ToolName, token);
         if (result.Access is not { } access || tool is null || access.ModuleId != tool.Descriptor.ModuleId
             || access.ContractVersion != tool.Descriptor.ContractVersion
