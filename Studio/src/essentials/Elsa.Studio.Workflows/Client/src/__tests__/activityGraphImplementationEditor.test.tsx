@@ -54,7 +54,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     const rendered = renderControlledDesigner(sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]));
     click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
     click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
-    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.control as HTMLInputElement;
     setInput(input, "First saved name");
     const saved = rendered.onChange.mock.calls.at(-1)![0];
     rendered.acknowledge({ ...saved, activityPresentation: [{ nodeId: "write-line-1", displayName: "First saved name", description: null }] });
@@ -72,7 +72,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     const rendered = renderControlledDesigner(sequenceImplementationValue([{ nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }]));
     click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
     click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
-    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.control as HTMLInputElement;
     setInput(input, "Approve ");
     const saved = rendered.onChange.mock.calls.at(-1)![0];
     rendered.acknowledge({ ...saved, activityPresentation: [{ nodeId: "write-line-1", displayName: "Approve", description: null }] });
@@ -111,7 +111,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     });
     click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
     click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
-    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    const input = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.control as HTMLInputElement;
     setInput(input, "Approve ");
     expect(input.value).toBe("Approve ");
     setInput(input, input.value + "order");
@@ -129,7 +129,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
     expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Review order");
     click([...rendered.container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Details")!);
-    const displayName = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.querySelector<HTMLInputElement>("input")!;
+    const displayName = [...rendered.container.querySelectorAll<HTMLLabelElement>("label")].find(label => label.textContent?.startsWith("Display name"))!.control as HTMLInputElement;
     setInput(displayName, "Approve order");
     expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([{ nodeId: "write-line-1", displayName: "Approve order", description: "Keep this context" }]);
     click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);

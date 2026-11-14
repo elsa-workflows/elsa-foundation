@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useState } from "react";
 import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { bpmnElementTypeLabel, isDecisionGatewayType, type BpmnElement, type BpmnSequenceFlow } from "./bpmnTypes";
@@ -57,15 +58,10 @@ export function BpmnElementConfiguration({
     && (directHumanAvailable || element.properties?.[directBindingProperty] !== undefined);
   return (
     <section aria-label="BPMN routing">
-      <label className="wf-form-field">
-        <span>Name</span>
-        <input type="text" value={element.name ?? ""} placeholder={bpmnElementTypeLabel(element)}
-          disabled={readOnly} onChange={event => onChangeElement(element.elementId, { name: event.target.value || null })} />
-      </label>
+      <StudioField className="wf-form-field" label={<><span>Name</span></>}><input type="text" value={element.name ?? ""} placeholder={bpmnElementTypeLabel(element)}
+          disabled={readOnly} onChange={event => onChangeElement(element.elementId, { name: event.target.value || null })} /></StudioField>
       {directControl ? <>
-        <label className="wf-form-field">
-          <span>Task execution</span>
-          <select aria-label="Task execution" value={humanMode}
+        <StudioField className="wf-form-field" label={<><span>Task execution</span></>}><select aria-label="Task execution" value={humanMode}
             disabled={readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported"}
             onChange={event => {
               if (readOnly || !directHumanAvailable || humanMode === "native" || humanMode === "unsupported") return;
@@ -77,8 +73,7 @@ export function BpmnElementConfiguration({
             {humanMode === "service" ? <option value="service">Published native service</option> : null}
             {humanMode === "native" ? <option value="native">Native activity</option> : null}
             {humanMode === "unsupported" ? <option value="unsupported">Unsupported binding</option> : null}
-          </select>
-        </label>
+          </select></StudioField>
         {humanMode === "human" && (directHumanClaimsAvailable || directHumanClaimRequired(element)) ? <label className="wf-bpmn-claim-choice">
           <input type="checkbox" checked={directHumanClaimRequired(element)}
             disabled={readOnly || !directHumanAvailable || !directHumanClaimsAvailable}
@@ -103,15 +98,12 @@ export function BpmnElementConfiguration({
         </> : null}
       </> : null}
       {gateway || isDecision ? <>
-        <label className="wf-form-field">
-          <span>Gateway type</span>
-          <select value={element.elementType} disabled={readOnly || !!conversionBlockedReason}
+        <StudioField className="wf-form-field" label={<><span>Gateway type</span></>}><select value={element.elementType} disabled={readOnly || !!conversionBlockedReason}
             onChange={event => onChangeElement(element.elementId, { elementType: event.target.value })}>
             {!gateway ? <option value={element.elementType}>{bpmnElementTypeLabel(element)} (existing)</option> : null}
             <option value="exclusiveGateway">Exclusive gateway — one path</option>
             <option value="inclusiveGateway">Inclusive gateway — matching paths</option>
-          </select>
-        </label>
+          </select></StudioField>
         {conversionBlockedReason ? <p className="wf-muted" role="note">{conversionBlockedReason}</p> : null}
         {isDecision ? <p className="wf-muted">
           Outcome returns a path name, such as High or Low. Choose an expression syntax for rules based on
@@ -132,10 +124,10 @@ export function BpmnElementConfiguration({
             return (
               <div className="wf-bpmn-flow-row wf-property-row" key={flow.flowId}>
                 <span className="wf-bpmn-flow-target" title={flow.flowId}>→ {targetLabelFor(flow)}</span>
-                <input type="text" value={flow.conditionOutcome ?? ""} placeholder="Any outcome"
+                <StudioField label={`Condition outcome for flow to ${targetLabelFor(flow)}`}><input type="text" value={flow.conditionOutcome ?? ""} placeholder="Any outcome"
                   aria-label={`Condition outcome for flow to ${targetLabelFor(flow)}`}
                   disabled={readOnly || isDefault}
-                  onChange={event => onChangeFlow(flow.flowId, { conditionOutcome: event.target.value || null })} />
+                  onChange={event => onChangeFlow(flow.flowId, { conditionOutcome: event.target.value || null })} /></StudioField>
                 <label className="wf-bpmn-flow-default">
                   <input type="checkbox" checked={isDefault} aria-label={`Default flow to ${targetLabelFor(flow)}`}
                     disabled={readOnly}

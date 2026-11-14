@@ -7,7 +7,7 @@ import { EtlPublishedSelectionEditor } from "./EtlPublishedSelectionEditor";
 import { etlNativeRunLinks, runEtlActivityType } from "./etlRunNavigation";
 import "./styles.css";
 
-export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "propertyEditors" | "backend" | "dialogs" | "backendSession" | "workflowRunRelatedLinks">) {
+export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "propertyEditors" | "backend" | "dialogs" | "backendSession" | "workflowRunRelatedLinks" | "notifications">) {
   const design = [{id:"elsa.api.etl-design-v2",contractVersion:"1"}];
   const runtime = [{id:"elsa.api.etl-runtime",contractVersion:"1"}];
   const authoringAvailable = evaluateBackendRequirements(api.backendSession,design).state === "available";
@@ -26,9 +26,9 @@ export function register(api: Pick<ElsaStudioModuleApi, "featureAreas" | "proper
     },
     routes: [
       { id: "etl-definitions", path: "/etl/definitions", label: "ETL definitions", requiresBackend:design,
-        component: () => <EtlDefinitionsPage context={api.backend} dialogs={api.dialogs} /> },
+        component: () => <EtlDefinitionsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} /> },
       { id: "etl-connectors", path: "/etl/connectors", label: "Connector pipelines", requiresBackend:design,
-        component: () => <EtlDefinitionsPage context={api.backend} dialogs={api.dialogs} profile="connector" /> },
+        component: () => <EtlDefinitionsPage context={api.backend} dialogs={api.dialogs} notifications={api.notifications} profile="connector" /> },
       { id: "etl-runs", path: "/etl/runs", label: "ETL runs", requiresBackend:runtime,
         component: () => <EtlRunsPage context={api.backend} backendSession={api.backendSession} dialogs={api.dialogs} /> }
     ]

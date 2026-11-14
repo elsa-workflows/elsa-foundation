@@ -144,13 +144,25 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
     {
         var row = Prepare(document, increment: true);
         var expectedVersion = row.Version - 1;
+        var expectedIncarnation = Read(row).Definition.IncarnationId;
         try
         {
             await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
             var owned = transaction.Context<DbContext>();
-            var changed = await owned.Set<ConnectionRecord>().Where(x => x.TenantLookupKey == row.TenantLookupKey && x.NormalizedName == row.NormalizedName &&
+            var selected = owned.Set<ConnectionRecord>().Where(x => x.TenantLookupKey == row.TenantLookupKey && x.NormalizedName == row.NormalizedName);
+            // Reserve the CAS with a real write before decoding the old identity. Its row write lock fences
+            // delete/recreate until settlement, including providers whose ordinary reads are not serializable.
+            var reserved = await selected.Where(x =>
                 x.Version == expectedVersion && x.SchemaVersion == ConnectionsEfModule.SchemaVersion &&
                 !owned.Set<ConnectionSecretReferenceRecord>().Any(reference => reference.TenantLookupKey == row.TenantLookupKey && reference.NormalizedName == row.NormalizedName && reference.SchemaVersion != ConnectionsEfModule.SchemaVersion))
+                .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Version, row.Version), cancellationToken);
+            if (reserved != 1) throw new ConnectionConflictException(row.NormalizedName, "The connection changed before its metadata could be saved.");
+            var locked = await selected.AsNoTracking().SingleAsync(x => x.Version == row.Version, cancellationToken);
+            // Only this private snapshot is adjusted: the reserved row still contains its original payload.
+            locked.Version = expectedVersion;
+            if (!string.Equals(Read(locked).Definition.IncarnationId, expectedIncarnation, StringComparison.Ordinal))
+                throw new ConnectionConflictException(row.NormalizedName, "The connection creation identity changed before its metadata could be saved.");
+            var changed = await selected.Where(x => x.Version == row.Version && x.SchemaVersion == ConnectionsEfModule.SchemaVersion)
                 .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.Version, row.Version).SetProperty(x => x.Payload, row.Payload)
                 .SetProperty(x => x.NameSearchKey, row.NameSearchKey).SetProperty(x => x.DisplayNameSearchKey, row.DisplayNameSearchKey)
@@ -230,6 +242,7 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
     {
         var definition = document.Definition;
         // JSON replacement must not change a routing, setting or credential-reference identity.
+        ConnectionKeys.Fold(definition.IncarnationId);
         ConnectionKeys.Fold(definition.TypeName);
         ConnectionKeys.Fold(definition.AuthScheme);
         ConnectionKeys.Fold(definition.DisplayName);

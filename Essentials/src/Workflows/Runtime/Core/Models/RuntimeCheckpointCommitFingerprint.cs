@@ -272,9 +272,16 @@ public static class RuntimeCheckpointCommitFingerprint
             commit.Metadata
         };
 
-        var element = commit.ExpectedBookmarkResume is null
-            ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
-            : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        JsonElement element;
+        if (commit.ExpectedBookmarkResume is not null)
+            element = JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        else if (commit.StateChanges.ActivityExecutionInspections.Any(change => change.State.CheckpointValueCapture is not null))
+            // Preserve the new raw owner identifiers before the historical JSON conversion can replace UTF-16 units.
+            element = JsonSerializer.SerializeToElement(new { CheckpointValueCaptureVersion = 1, Payload = payload }, ExactBookmarkOptions);
+        else
+            element = JsonSerializer.SerializeToElement(payload, SerializerOptions);
+        if (commit.IngressWaitOrigin is not null)
+            element = JsonSerializer.SerializeToElement(new { IngressWaitOriginVersion = 1, Payload = element, commit.IngressWaitOrigin }, ExactBookmarkOptions);
         if (commit.HistorySourceFacts is { Count: > 0 } facts)
             element = JsonSerializer.SerializeToElement(new { RuntimeHistorySourceVersion = 1, Payload = element, SourceFacts = facts }, ExactBookmarkOptions);
         if (commit.HistoryBatches is { Count: > 0 } history)

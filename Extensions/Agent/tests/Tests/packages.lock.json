@@ -317,8 +317,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.12",
-        "contentHash": "8D2uJaKL1v+0GPt38HafW7+JVvvb8gyb8TNBFPcU6k45u+i5X61hWNWuUs0ROCgBAfDy0Gsr0tm8uq+hQH0t5A=="
+        "resolved": "0.0.13",
+        "contentHash": "3QaKweEyDncmytmpGKT9I0zYtpRg2ZSgzzU092yo/iVeon3d7q9LBW7J79yB7kDzQMxEriP8pl1VfrmkezQxTw=="
       },
       "SourceGear.sqlite3": {
         "type": "Transitive",
@@ -802,7 +802,7 @@
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
-          "Nuplane.Loading.Abstractions": "[0.0.12, )"
+          "Nuplane.Loading.Abstractions": "[0.0.13, )"
         }
       },
       "elsa.connections": {
@@ -1076,6 +1076,7 @@
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Capture.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
@@ -1112,6 +1113,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
@@ -1131,6 +1133,23 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.capture.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.core": {
+        "type": "Project"
+      },
+      "elsa.workflows.publishing.releases.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {
@@ -1159,6 +1178,7 @@
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Inspection.Core": "[4.0.0-dev, )",
           "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
         }
       },
@@ -1171,6 +1191,13 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.workflows.runtime.inspection.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime.persistence.entityframeworkcore": {
@@ -1547,11 +1574,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "uCLhTsG1kPWU5fNJBEstCJuT9D0p2r0oKaFGJpauvvrmtMBeIsvE7ATqdJZONpOLOANOJ14qqRIwDqmd+cSKog==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "HC2V7HnZXL6p2SHkn7ronHT8qZhgiW9HTkULJ+Y8TfCZjdev9aD43ST44Gws7Dh2/sG5SVCiilOJx+LtR6ZGRw==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.12"
+          "Nuplane.Abstractions": "0.0.13"
         }
       },
       "OpenAI": {

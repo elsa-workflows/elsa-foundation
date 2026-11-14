@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The kernel in motion</title>
+<style>
+/* Design tokens: copied unchanged from walkthrough-src/01-head.html, so this page reads as the walkthrough's companion.
+   Layer colours: --l1 the actor runtime, --accent the durable layer, --l3 actor types, --st storage, --hot highlights. */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --ink: #16202a;
+  --muted: #5b6875;
+  --line: #d6dde4;
+  --line-strong: #9aa7b4;
+  --accent: #2f5bd3;
+  --accent-soft: #e6ecfb;
+  --hot: #a4441b;
+  --hot-soft: #fbe9e0;
+  --l1: #64748b;
+  --l1-soft: #eef1f5;
+  --l3: #1d7f55;
+  --l3-soft: #e3f3eb;
+  --st: #93650a;
+  --st-soft: #f8f0dc;
+  --code-bg: #eef1f5;
+  --display: "Avenir Next Condensed", "Arial Narrow", system-ui, sans-serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1318; --surface: #151c23; --ink: #e2e8ee; --muted: #93a1ae; --line: #26313b; --line-strong: #4f5e6c;
+    --accent: #5a86f0; --accent-soft: #1b2944; --hot: #d46a35; --hot-soft: #3a2218;
+    --l1: #8b9aab; --l1-soft: #1b232c; --l3: #45b884; --l3-soft: #16302a; --st: #d3a23f; --st-soft: #33290f;
+    --code-bg: #1b232c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1318; --surface: #151c23; --ink: #e2e8ee; --muted: #93a1ae; --line: #26313b; --line-strong: #4f5e6c;
+  --accent: #5a86f0; --accent-soft: #1b2944; --hot: #d46a35; --hot-soft: #3a2218;
+  --l1: #8b9aab; --l1-soft: #1b232c; --l3: #45b884; --l3-soft: #16302a; --st: #d3a23f; --st-soft: #33290f;
+  --code-bg: #1b232c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } .scene, .scene * { animation: none !important; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); overflow-x: hidden; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+code { background: var(--code-bg); padding: .08em .35em; border-radius: 4px; }
+h1 { font: 600 44px/1.1 var(--display); margin: 10px 0 14px; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font: 600 30px/1.15 var(--display); margin: 0 0 14px; text-wrap: balance; }
+h3 { font: 600 19px/1.3 var(--display); margin: 0 0 8px; letter-spacing: .01em; }
+p, li { max-width: 72ch; }
+.muted { color: var(--muted); }
+.note { font-size: 13.5px; color: var(--muted); }
+
+/* page */
+.page { max-width: 1260px; margin: 0 auto; padding: 36px 28px 110px; }
+header.top { max-width: 900px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+header.top .eyebrow { font: 500 13px var(--mono); color: var(--muted); letter-spacing: .02em; }
+.lede { font-size: 18px; margin: 0; max-width: 68ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.chip { font: 500 12.5px/1 var(--sans); padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); background: var(--surface); }
+.chip.ok { border-color: var(--l3); color: var(--l3); }
+.chip.warn { border-color: var(--hot); color: var(--hot); }
+.links { margin: 14px 0 0; font-size: 14.5px; }
+section.part { padding: 44px 0 0; }
+section.part > .num { font: 500 13px var(--mono); color: var(--accent); }
+
+/* controls */
+button { font: 500 14px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 13px; cursor: pointer; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 104px; }
+button.primary:hover { filter: brightness(1.08); color: #fff; }
+button[disabled] { opacity: .4; cursor: default; }
+button[aria-pressed="true"]:not(.primary) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 8px; }
+.controls .grow { flex: 1; }
+.count { font: 500 13.5px var(--mono); color: var(--muted); min-width: 108px; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line-strong); padding: 7px 10px; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.dots { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+.dots button { width: 32px; padding: 3px 0; font: 500 12px var(--mono); }
+.dots button[aria-current="step"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+.tabs button { font-weight: 600; }
+.tabs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.whatif { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 12px 0 0; font-size: 14px; }
+.whatif .lbl { font-weight: 600; }
+.whatif .seg button { font-size: 13.5px; }
+.caption { font-weight: 600; margin: 12px 0 0; }
+.scenebox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px; overflow-x: auto; }
+.scenebox svg { display: block; width: 100%; min-width: 900px; height: auto; }
+.below { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-top: 14px; align-items: start; }
+.narration { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 9px 9px 0; padding: 14px 18px; min-height: 186px; }
+.narration p { margin: 0 0 8px; }
+.narration .layerline { font: 500 13px var(--mono); color: var(--accent); margin: 10px 0 0; }
+.wf { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; font-size: 14px; }
+.wf h3 { font-size: 16px; margin: 0 0 6px; }
+.wf ol { list-style: none; margin: 0; padding: 0; font: 13px/1.5 var(--mono); }
+.wf li { padding: 2px 6px; border-radius: 5px; display: grid; grid-template-columns: 18px 1fr; }
+.wf li .t { color: var(--muted); grid-column: 2; font-size: 12px; }
+.wf li.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.wf p { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+
+/* glossary */
+.gtools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0 4px; }
+.ggroup h3 { margin: 22px 0 8px; }
+.ggroup.l1 h3 { color: var(--l1); } .ggroup.l2 h3 { color: var(--accent); } .ggroup.l3 h3 { color: var(--l3); }
+.ggrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); }
+.term { text-align: left; display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto 1fr auto; gap: 4px 10px; padding: 11px 13px 12px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line); font: 14px/1.45 var(--sans); color: var(--ink); }
+.term:hover { color: var(--ink); }
+.term svg { width: 32px; height: 32px; grid-row: 1 / 3; grid-column: 1; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.term svg text { stroke: none; fill: currentColor; font: 700 10px var(--mono); }
+.term svg .f { fill: currentColor; stroke: none; opacity: .35; }
+.term b { font: 600 15px/1.3 var(--display); letter-spacing: .01em; }
+.term b, .term span { grid-column: 2; }
+.term .lv { font: 500 12px var(--mono); color: var(--muted); }
+.ggroup.l1 .term { border-top: 3px solid var(--l1); } .ggroup.l1 .term svg { color: var(--l1); }
+.ggroup.l2 .term { border-top: 3px solid var(--accent); } .ggroup.l2 .term svg { color: var(--accent); }
+.ggroup.l3 .term { border-top: 3px solid var(--l3); } .ggroup.l3 .term svg { color: var(--l3); }
+.term[aria-pressed="true"], .term.preview { border-color: var(--hot); box-shadow: inset 3px 0 0 var(--hot); }
+
+/* the scene: the walkthrough's schematic language, plus moving parts */
+.dg { color: var(--ink); }
+.dg text { fill: currentColor; font: 12px var(--sans); }
+.dg text.tt { font: 600 13px var(--sans); }
+.dg text.ts { fill: var(--muted); font-size: 11px; }
+.dg text.tm { font: 10.5px var(--mono); fill: var(--muted); }
+.dg text.band-title { font: 600 13px var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.dg text.big { font: 600 22px var(--mono); }
+.dg rect.box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+.dg rect.b1 { fill: var(--l1-soft); stroke: var(--l1); stroke-width: 1.2; }
+.dg rect.b2 { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.dg rect.b3 { fill: var(--l3-soft); stroke: var(--l3); stroke-width: 1.2; }
+.dg rect.bs { fill: var(--st-soft); stroke: var(--st); stroke-width: 1.2; }
+.dg .dashed { stroke-dasharray: 5 4; }
+.dg .edge { fill: none; stroke: var(--muted); stroke-width: 1.6; marker-end: url(#ah); }
+.dg text.acc { fill: var(--accent); font-weight: 600; }
+.dg text.hot { fill: var(--hot); font-weight: 600; }
+.dg text.l1 { fill: var(--l1); } .dg text.l3 { fill: var(--l3); } .dg text.st { fill: var(--st); }
+.dg .ico { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+marker path.n { fill: var(--muted); }
+.scene { --k: 1; }
+.scene .gone { opacity: 0; pointer-events: none; }
+.scene [data-part] { transition: opacity calc(.3s * var(--k)); }
+.scene .lit > .pf { stroke: var(--accent); stroke-width: 2.6; }
+.scene .lit > text.tt { fill: var(--accent); }
+.scene.focusing [data-part]:not(.hl):not(.hl-in) { opacity: .13; }
+.scene.focusing [data-part].gone { opacity: 0; visibility: hidden; }   /* the dimming rule outranks .gone */
+.scene .hl:not(.gone) { opacity: 1 !important; }
+.scene .hl > .pf { stroke: var(--hot); stroke-width: 3; }
+.scene .layer { transition: transform calc(.8s * var(--k)) cubic-bezier(.4, 0, .2, 1); }
+.scene.exploded .up { transform: translateY(-130px); }
+.scene.exploded .down { transform: translateY(130px); }
+.scene .chassis { transition: opacity .4s; }
+.scene.exploded .chassis { opacity: 0; }
+.scene .band { opacity: 0; transition: opacity .3s; pointer-events: none; }
+.scene.seams .band { opacity: 1; }
+.scene .band rect { stroke-width: 1.4; stroke-dasharray: 6 4; }
+.scene .band.l1 rect { fill: var(--l1); fill-opacity: .09; stroke: var(--l1); }
+.scene .band.l2 rect { fill: var(--accent); fill-opacity: .07; stroke: var(--accent); }
+.scene .band.l3 rect { fill: var(--l3); fill-opacity: .08; stroke: var(--l3); }
+.scene .bandlabel { opacity: 0; transition: opacity .3s; }
+.scene.seams .bandlabel, .scene.exploded .bandlabel { opacity: 1; }
+.scene .seam { display: none; }
+.scene.seams .seam.on { display: inline; }
+.scene .seam rect { fill: var(--surface); stroke: var(--hot); stroke-width: 1.4; }
+.scene .seam text { fill: var(--hot); font: 600 10.5px var(--mono); }
+/* parts */
+.scene .card-ghost > rect.pf { fill: none; stroke-dasharray: 5 4; }
+.scene .card-ghost text { opacity: .65; }
+.scene .card-done > rect.pf { fill: var(--surface); }
+.scene .card-fault > rect.pf { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 2.2; }
+.scene .act text.st8 { font: 600 10px var(--mono); }
+.scene .act.done text.lbl { fill: var(--l3); }
+.scene .act.done text.st8 { fill: var(--l3); }
+.scene .act.wait text.lbl, .scene .act.wait text.st8 { fill: var(--accent); font-weight: 600; }
+.scene .act.again text { fill: var(--hot); font-weight: 600; }
+.scene .act.lost text.lbl { fill: var(--muted); text-decoration: line-through; }
+.scene .act.lost text.st8 { fill: var(--hot); }
+.scene #ptr1, .scene #ptr1-b, .lanes .lptr { transition: transform calc(.45s * var(--k)) ease-out; }
+.scene .badge rect { fill: var(--accent); }
+.scene .badge text { fill: #fff; font: 600 10px var(--sans); }
+.scene .msg rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.3; }
+.scene .msg path { fill: none; stroke: var(--accent); stroke-width: 1.2; }
+.scene .msg text { font: 500 10.5px var(--sans); }
+.scene .msg.ticket rect { stroke-dasharray: 4 3; }
+.scene .msg.result rect { stroke-width: 2.2; fill: var(--accent-soft); }
+.scene .msg.suspect rect { stroke: var(--hot); stroke-dasharray: 4 3; }
+.scene .msg.poison rect { stroke: var(--hot); stroke-width: 2; fill: var(--hot-soft); }
+.scene .msg.suspect path, .scene .msg.poison path { stroke: var(--hot); }
+.scene .env > rect.pf { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.scene .env path.flap { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+.scene .stamp rect { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 1.4; }
+.scene .stamp text { fill: var(--hot); font: 700 10.5px var(--mono); }
+.scene .reject { transform-box: fill-box; transform-origin: center; }
+.scene .reject rect { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 2.4; }
+.scene .reject text { fill: var(--hot); font: 700 19px var(--mono); }
+.scene .reject text.rj2 { font: 600 11px var(--sans); }
+.scene .token > rect.pf { fill: var(--surface); stroke: var(--accent); stroke-width: 1.4; }
+.scene .token.resp > rect.pf { stroke: var(--l3); }
+.scene .token.lost > rect.pf { stroke: var(--hot); stroke-dasharray: 4 3; }
+.scene .take text.tm { fill: var(--ink); }
+.scene .jobbox > rect.pf { fill: var(--accent); stroke: var(--accent); }
+.scene .jobbox text { fill: #fff; font: 600 10.5px var(--sans); }
+.scene .leasefill { fill: var(--l1); transform-box: fill-box; transform-origin: left center; transition: transform calc(.6s * var(--k)); }
+.scene .scanbeam { fill: var(--l1); opacity: .16; }
+.scene .scanbar { fill: var(--l1); }
+.scene .shelf-lost > rect.pf { fill: transparent !important; stroke-dasharray: 5 4; }
+.scene .p-ghost { opacity: .45; }
+.scene .receipt.bad text.tt { fill: var(--hot); }
+.scene .receipt.bad rect { stroke: var(--hot); }
+/* act two: what a death, a pause or a reset does to a node */
+.scene .nodeov .veil { fill: var(--bg); opacity: .74; }
+.scene .nodeov.frozen .veil { fill: var(--accent-soft); opacity: .6; }
+.scene .nodeov .crack { fill: none; stroke: var(--hot); stroke-width: 2.4; stroke-linejoin: round; }
+.scene .nodeov.frozen .crack, .scene .nodeov.note .crack, .scene .nodeov.note .veil { display: none; }
+.scene .nodeov .ovlabel rect { fill: var(--surface); stroke: var(--hot); stroke-width: 1.6; }
+.scene .nodeov.frozen .ovlabel rect { stroke: var(--accent); }
+.scene .nodeov.note .ovlabel rect { stroke: var(--l1); }
+.scene .nodeov.note .ovlabel { transform: translateY(126px); }        /* a note sits below the shelf, clear of the lane */
+.scene .row rect { fill: transparent; }
+.scene .row text { font: 10.5px var(--sans); }
+.scene .row text.c0 { font: 10.5px var(--mono); }
+.scene .row.fresh rect { fill: var(--l3-soft); }
+.scene .row.fresh text.tag { fill: var(--l3); }
+.scene .row.del text { fill: var(--hot); text-decoration: line-through; }
+.scene .row.del text.tag { text-decoration: none; }
+.scene .row text.chg { fill: var(--accent); font-weight: 700; }
+.scene .row text.tag { font: 700 9.5px var(--mono); fill: var(--accent); }
+.scene .sline { font: 11px var(--sans); }
+.scene.animate .row.fresh { animation: rowin calc(.7s * var(--k)) var(--fd, 0ms) both; }
+.scene.animate .row.del { animation: rowdel calc(.7s * var(--k)) var(--fd, 0ms) both; }
+.scene.animate .row text.chg, .scene.animate .row.chgrow text.tag { animation: flash calc(1s * var(--k)) var(--fd, 0ms) both; }
+.scene.animate .receipt:not(.gone) { animation: rowin calc(.5s * var(--k)) var(--fd, 0ms) both; }
+.scene.animate .sline.new { animation: rowin calc(.5s * var(--k)) both; }
+@keyframes rowin { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes rowdel { from { opacity: 1; } 40% { opacity: 1; } to { opacity: .6; } }
+@keyframes flash { 0%, 30% { opacity: 0; } 60% { opacity: 1; } 75% { opacity: .35; } 100% { opacity: 1; } }
+/* the three lanes */
+.lanes .lanebg { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.lanes text.mode { font: 600 19px var(--display); }
+.lanes text.tag { font: 700 11px var(--mono); fill: var(--hot); }
+.lanes text.mid { font: 600 15px var(--mono); }
+.lanes text.nt { fill: var(--ink); }
+.lanes .cyl { fill: var(--st-soft); stroke: var(--st); stroke-width: 1.3; }
+.lanes .mini rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.3; }
+.lanes .mini path { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+.lanes .ghostcard > rect.pf { fill: none; stroke-dasharray: 5 4; }
+.lanes .ghostcard text.tt { opacity: .6; }
+.lanes .crashmark rect { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 1.6; }
+.lanes .crashmark text { fill: var(--hot); }
+.lanes .notesbox.bad { stroke: var(--hot); }
+/* the fence lab */
+.lab text.big { font: 600 24px var(--mono); }
+.lab text.mem { font: 600 12.5px var(--mono); }
+.lab text.l2 { font: 600 10.5px var(--mono); fill: var(--muted); }
+.lab text.st-res { fill: var(--ink); font-weight: 700; }
+.lab .cellbox { fill: none; stroke: none; }
+.lab .badge rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; } .lab .badge text { fill: var(--ink); }   /* white on the dark accent is 3.4:1 */
+.lab .slot { fill: none; stroke: var(--line-strong); stroke-dasharray: 5 4; }
+.lab .lock path, .lab .lock > rect:not(.slot) { fill: none; stroke: var(--muted); stroke-width: 2.2; }
+.lab .lock.held path, .lab .lock.held > rect:not(.slot) { stroke: var(--hot); }
+.lab .lock.held path.open, .lab .lock:not(.held) path.shut { display: none; }
+.lab .prow.pend text.big { fill: var(--accent); font-style: italic; }
+.lab .prow.whatif text.big { fill: var(--muted); font-style: italic; }
+.lab .prow.whatif > rect.pf { stroke-dasharray: 6 4; }
+.lab .tok > rect.pf { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.lab .tok.take > rect.pf { stroke: var(--l1); stroke-width: 2; }
+.lab .tok.ok text.l2 { fill: var(--l3); }
+.lab .tok.bad > rect.pf { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 2.4; }
+.lab .tok.bad text.l2 { fill: var(--ink); font-weight: 700; }
+.lab .tok.ghost > rect.pf { stroke-dasharray: 5 4; }
+.lab .tok.ghost text { opacity: .75; }
+.lab #lab-callg > rect { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+.lab #lab-callg.sent > rect { stroke: var(--l3); stroke-width: 2; } .lab #lab-callg.sent text.tt { fill: var(--l3); }
+.lab #lab-callg.lost > rect { stroke: var(--hot); stroke-width: 2; stroke-dasharray: 4 3; } .lab #lab-callg.lost text.tt { fill: var(--hot); }
+.lab .tbl .row.pend text { fill: var(--accent); font-style: italic; }
+.lab .tbl .row.rolled text { fill: var(--hot); text-decoration: line-through; }
+.lab .tbl .row text.tag { text-decoration: none; font-style: normal; }
+.lab .veil { fill: var(--accent-soft); opacity: .6; }
+.lab .ovlabel rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.lab .leasefill.out { fill: var(--hot); }
+.lab .banner rect { fill: var(--l3-soft); stroke: var(--l3); stroke-width: 1.6; }
+.lab .banner text { font: 600 14.5px var(--sans); fill: var(--ink); }
+.lab .banner.bad rect { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 2.4; }
+.lab .banner.info rect { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: 6 4; }
+.whatif .seg button[disabled] { opacity: .45; }
+.lab.animate .tbl .row.in { animation: rowin calc(.7s * var(--k)) var(--fd, 0ms) both; }
+.lab .tbl .row.chgrow text { fill: var(--accent); font-weight: 600; }
+.labfoot { margin-top: 18px; }
+
+@media (max-width: 900px) {
+  .page { padding: 22px 14px 80px; }
+  h1 { font-size: 34px; }
+  .below { grid-template-columns: 1fr; }
+  .controls .grow { display: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="n" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+</svg>
+<div class="page">
+<header class="top">
+  <div class="eyebrow">Companion to the kernel walkthrough · design draft 5 · prototypes/kernel-model</div>
+  <h1>The kernel in motion</h1>
+  <p class="lede">One order workflow, followed through every part of the proposed kernel; then the three persistence modes side by side, what the kernel does when things go wrong, and a lab where you try to beat the fence.</p>
+  <div class="chips">
+    <span class="chip warn">Proposed design, not approved</span>
+    <span class="chip ok">Prototype on main: prototypes/kernel-model</span>
+    <span class="chip">No product code yet</span>
+  </div>
+  <p class="links"><a href="walkthrough.html">Back to the walkthrough</a> · <a href="https://vowful-mustard-pd8t.here.now/">the published walkthrough</a></p>
+</header>
+
+<!-- 01 · the scene and act one ────────────────────────────────── -->
+<section class="part" id="act-one">
+  <div class="num">01</div>
+  <h2>Act one: an order, step by step</h2>
+  <p>Every part of the kernel is drawn as a physical thing and named. Press <b>Next</b> or <b>Play</b> to follow one order from the HTTP request to the Studio run view. <b>Show seams</b> outlines the three layers and names the interface at each crossing; the glossary below can light up any part.</p>
+  <div class="controls" role="group" aria-label="Controls for act one"></div>
+  <div class="dots" role="group" aria-label="Go to a step of act one"></div>
+  <div class="scenebox" id="scenebox">
+  <svg id="scene" class="dg scene" viewBox="0 0 1200 720" role="img" aria-labelledby="scene-title scene-desc">
+    <title id="scene-title">The kernel drawn as a machine</title>
+    <desc id="scene-desc">On the left an HTTP client and an SMTP server. In the middle Node A, holding partition 17 with the instances order #1 and order #7, and Node B, holding partition 42 with order #3. Each instance card sits on its inbox tray, which sits on the partition shelf. On the right the database with the partition, instance, message and journal tables, and below it the projector and the Studio run view. The narration under the scene says what each step shows.</desc>
+
+    <!-- Layer 1, back: node chassis, partition shelves, leases, the wake signal -->
+    <g id="g-l1" class="layer down">
+      <g class="chassis" data-part="nodeA"><rect class="b1 pf" x="175" y="60" width="400" height="528" rx="10"/><text class="tt" x="187" y="80">Node A (a server process)</text></g>
+      <g class="chassis" data-part="nodeB"><rect class="b1 pf" x="590" y="60" width="180" height="528" rx="10"/><text class="tt" x="602" y="80">Node B</text></g>
+      <g class="band l1"><rect x="172" y="482" width="604" height="112" rx="6"/></g>
+      <g class="bandlabel"><rect x="2" y="490" width="4" height="92" fill="var(--l1)"/><text class="band-title l1" x="12" y="502">Layer 1</text><text class="ts" x="12" y="517">actor runtime:</text><text class="ts" x="12" y="531">where things run</text><text class="tm" x="12" y="549">IActorRuntime</text><text class="tm" x="12" y="563">IScopeActivation</text><text class="tm" x="24" y="577">.RunAsync (a pass)</text></g>
+      <g data-part="shelf17" id="shelf17">
+        <rect class="b1 pf" x="185" y="486" width="380" height="12" rx="3" style="fill:var(--l1)"/>
+        <text class="tt" x="189" y="518">partition 17</text><text class="ts" id="sh17" x="282" y="518">on Node A · epoch 8</text>
+        <g data-part="lease17"><text class="ts" x="189" y="541">lease: 10 s</text><rect class="box pf" x="252" y="533" width="160" height="9" rx="3"/><rect class="leasefill" id="lf17" x="252" y="533" width="160" height="9" rx="3"/><text class="tm" id="lt17" x="420" y="541">7.4 s left</text></g>
+      </g>
+      <g data-part="shelf42">
+        <rect class="b1 pf" x="600" y="486" width="160" height="12" rx="3" style="fill:var(--l1)"/>
+        <text class="tt" x="604" y="518">partition 42</text><text class="ts" id="sh42" x="604" y="534">on Node B · epoch 5</text>
+        <g data-part="lease42"><text class="ts" x="604" y="554">lease: 10 s</text><rect class="box pf" x="604" y="561" width="120" height="9" rx="3"/><rect class="leasefill" id="lf42" x="604" y="561" width="120" height="9" rx="3"/><text class="tm" id="lt42" x="604" y="583">8.9 s left</text></g>
+      </g>
+      <g data-part="wake"><path class="edge dashed" d="M545,590 C556,628 630,628 640,592"/><path class="ico" d="M596,602 l-7,11 h6 l-3,9 l9,-12 h-6 z" style="stroke:var(--l1)"/><text class="ts" x="592" y="644" text-anchor="middle">wake signal (a hint)</text></g>
+    </g>
+
+    <!-- Layer 2: inbox trays, fence records, the committer lane, the projector -->
+    <g id="g-l2" class="layer">
+      <g class="band l2"><rect x="172" y="334" width="604" height="148" rx="6"/></g>
+      <g class="bandlabel"><rect x="2" y="360" width="4" height="106" fill="var(--accent)"/><text class="band-title acc" x="12" y="372">Layer 2</text><text class="ts" x="12" y="387">durable actors:</text><text class="ts" x="12" y="401">every guarantee</text><text class="ts" x="12" y="419">inbox · commit · fence</text><text class="ts" x="12" y="433">timers · jobs · journal</text><text class="tm" x="12" y="451">IKernelStore</text><text class="ts" x="12" y="464">(the storage contract)</text></g>
+      <g data-part="tray1"><rect class="b2 pf" x="185" y="338" width="212" height="36" rx="5"/><text class="ts" x="191" y="360">inbox</text><g id="chips1"></g></g>
+      <g data-part="tray7"><rect class="b2 pf" x="407" y="338" width="158" height="36" rx="5"/><text class="ts" x="413" y="360">inbox</text><g id="chips7"></g></g>
+      <g data-part="tray3" id="tray3"><rect class="b2 pf" x="600" y="338" width="160" height="36" rx="5"/><text class="ts" x="606" y="360">inbox</text><text class="ts" x="644" y="360">empty</text></g>
+      <g data-part="fence17"><rect class="b2 pf" x="427" y="382" width="138" height="30" rx="5"/><text class="tm" id="fe17" x="435" y="394">fence: epoch 8</text><text class="tm" id="pos17" x="435" y="407">position 1204</text></g>
+      <g data-part="fence42"><rect class="b2 pf" x="600" y="382" width="160" height="30" rx="5"/><text class="tm" x="608" y="394">fence: epoch 5</text><text class="tm" x="608" y="407">position 311</text></g>
+      <g data-part="lane"><rect class="box dashed pf" x="185" y="380" width="236" height="96" rx="6"/><text class="ts" id="lanehint" x="303" y="432" text-anchor="middle">committer: one flush at a time</text><g id="lanelines"></g></g>
+      <g data-part="projector">
+        <rect class="b2 pf" x="790" y="482" width="190" height="230" rx="9"/>
+        <text class="tt" x="802" y="502">projector</text><text class="ts" x="882" y="502">layer 2</text><text class="ts" x="802" y="518">a background worker,</text><text class="ts" x="802" y="532">off the hot path</text>
+        <rect class="box" x="802" y="542" width="166" height="50" rx="6"/><text class="ts" x="810" y="558">cursor (its projection row)</text><text class="big" id="pcur" x="810" y="584">1204</text>
+        <g id="plines"></g>
+      </g>
+    </g>
+
+    <!-- Layer 3, front: the instance cards with the native model -->
+    <g id="g-l3" class="layer up">
+      <g class="band l3"><rect x="172" y="88" width="604" height="246" rx="6"/></g>
+      <g class="bandlabel"><rect x="2" y="64" width="4" height="78" fill="var(--l3)"/><text class="band-title l3" x="12" y="76">Layer 3</text><text class="ts" x="12" y="91">actor types:</text><text class="ts" x="12" y="105">what runs</text><text class="tm" x="12" y="123">IExecutionModel</text><text class="tm" x="24" y="137">.TurnAsync</text></g>
+      <g data-part="card1" id="card1" class="gone">
+        <rect class="b3 pf" x="185" y="92" width="212" height="238" rx="8"/>
+        <text class="tt" x="197" y="112">order #1</text>
+        <g class="badge gone" id="turn1"><rect x="306" y="100" width="82" height="17" rx="8"/><text x="347" y="112" text-anchor="middle">turn running</text></g>
+        <text class="ts" x="197" y="128">workflow instance · Order</text>
+        <text class="ts" data-part="mode1" x="197" y="143">persistence mode: Balanced</text>
+        <g data-part="model1">
+          <rect class="box pf" x="193" y="151" width="196" height="146" rx="6"/>
+          <text class="tm" x="201" y="166">native model</text><text class="ts" x="383" y="166" text-anchor="end">execution model</text>
+          <g data-part="acts1" id="acts1"></g>
+          <path id="ptr1" class="gone" d="M200,175 l7,4.5 l-7,4.5 z" style="fill:var(--accent)"/>
+        </g>
+        <text class="ts" id="s1" x="197" y="317"></text>
+      </g>
+      <g data-part="card7" id="card7">
+        <rect class="b3 pf" x="407" y="92" width="158" height="160" rx="8"/>
+        <text class="tt" x="419" y="112">order #7</text>
+        <g class="badge gone" id="turn7"><rect x="480" y="100" width="78" height="17" rx="8"/><text x="519" y="112" text-anchor="middle">turn running</text></g>
+        <text class="ts" x="419" y="128">workflow instance · Order</text>
+        <text x="419" y="154" id="c7a">Running</text><text class="ts" x="419" y="170" id="c7b">waiting: timer</text>
+        <text class="ts" x="419" y="232">same partition, so its turns</text><text class="ts" x="419" y="245">share order #1's commits</text>
+      </g>
+      <g data-part="card3" id="card3">
+        <rect class="b3 pf" x="600" y="92" width="160" height="160" rx="8"/>
+        <text class="tt" x="612" y="112">order #3</text>
+        <text class="ts" x="612" y="128">workflow instance · Order</text>
+        <text x="612" y="154">Running</text><text class="ts" x="612" y="170">waiting: event</text>
+        <text class="ts" x="612" y="232">idle: nothing is due</text><text class="ts" x="612" y="245">owner: Node B</text>
+      </g>
+    </g>
+
+    <!-- Layer 1, front: the pass scanner and the placement arrow, drawn over the cards -->
+    <g id="g-l1b" class="layer down">
+      <g data-part="scanner" id="scanner" class="gone">
+        <rect class="scanbeam chassis" x="176" y="92" width="16" height="400"/>
+        <rect class="scanbar chassis" x="182" y="92" width="4" height="400"/>
+        <rect class="scanbar" x="179" y="480" width="10" height="24" rx="2"/>
+        <text class="tt l1" x="184" y="476" text-anchor="middle">pass</text>
+      </g>
+      <g data-part="placement" id="placement" class="gone"><path class="edge chassis" d="M168,212 C200,236 222,290 236,334" style="stroke:var(--l1)"/></g>
+    </g>
+
+    <!-- act two only (hidden in act one): order #9, Node B's copy of partition 17, and what a death or a pause does to a node -->
+    <g id="g-act2">
+      <g data-part="card9" id="card9" class="gone"><rect class="b3 pf" x="407" y="258" width="158" height="72" rx="8"/><text class="tt" x="419" y="275">order #9</text><text class="ts" id="c9a" x="419" y="290"></text><g id="chips9"></g></g>
+      <g data-part="p17b" id="p17b" class="gone">
+        <rect class="pf" x="600" y="92" width="160" height="22" rx="4" style="fill:var(--l1)"/>
+        <text id="p17bh" x="608" y="107" style="fill:#fff;font-weight:600">partition 17</text>
+        <rect class="b3" x="600" y="118" width="160" height="134" rx="8"/>
+        <text class="tt" id="p17bt" x="610" y="137"></text>
+        <g class="badge gone" id="turnB"><rect x="680" y="124" width="74" height="17" rx="8"/><text x="717" y="136" text-anchor="middle">turn running</text></g>
+        <text class="ts" id="p17b0" x="610" y="155"></text><text class="ts" id="p17b1" x="610" y="169"></text><text class="ts" id="p17b2" x="610" y="183"></text><text class="ts" id="p17b3" x="610" y="197"></text>
+        <rect class="b2" x="604" y="212" width="152" height="36" rx="5"/><g id="chipsB"></g>
+      </g>
+      <g data-part="ovA" id="ovA" class="nodeov gone"><rect class="veil" x="175" y="60" width="400" height="528" rx="10"/><path class="crack" d="M392,62 l-18,58 l26,40 l-22,64 l20,48 l-16,70 l14,60 l-12,66 l10,60"/><g class="ovlabel"><rect x="200" y="418" width="350" height="44" rx="6"/><text class="tt" id="ovA0" x="375" y="436" text-anchor="middle"></text><text class="ts" id="ovA1" x="375" y="453" text-anchor="middle"></text></g></g>
+      <g data-part="ovB" id="ovB" class="nodeov gone"><rect class="veil" x="590" y="60" width="180" height="528" rx="10"/><path class="crack" d="M690,62 l-12,58 l16,40 l-14,64 l12,48 l-10,70 l10,60 l-8,66 l8,60"/><g class="ovlabel"><rect x="594" y="418" width="172" height="44" rx="6"/><text class="tt" id="ovB0" x="680" y="436" text-anchor="middle"></text><text class="ts" id="ovB1" x="680" y="453" text-anchor="middle"></text></g></g>
+    </g>
+
+    <!-- outside the kernel: the clock, the HTTP client, the SMTP server -->
+    <g data-part="clock"><rect class="box pf" x="1040" y="4" width="150" height="28" rx="6"/><text class="ts" x="1050" y="22">scene clock</text><text class="tt" id="clock" x="1120" y="22">t = 0.0 s</text></g>
+    <g data-part="caller">
+      <rect class="box pf" x="8" y="148" width="138" height="76" rx="8"/>
+      <rect class="ico" x="52" y="158" width="50" height="32" rx="3"/><path class="ico" d="M44,196 h66 l-6,6 h-54 z"/>
+      <text class="tt" x="77" y="218" text-anchor="middle">HTTP client</text>
+    </g>
+    <g data-part="smtp">
+      <rect class="box pf" x="8" y="262" width="58" height="58" rx="6"/>
+      <rect class="ico" x="18" y="272" width="38" height="10" rx="2"/><rect class="ico" x="18" y="287" width="38" height="10" rx="2"/><rect class="ico" x="18" y="302" width="38" height="10" rx="2"/>
+      <text class="ts" x="8" y="336">SMTP server (external)</text>
+    </g>
+
+    <!-- the database (storage, behind IKernelStore) -->
+    <g data-part="vault">
+      <rect class="bs pf" x="790" y="40" width="400" height="432" rx="10"/>
+      <text class="tt st" x="802" y="60">Database</text><text class="ts" x="866" y="60">the vault: one shared store behind IKernelStore</text>
+      <text class="ts" id="dockhint" x="914" y="128" text-anchor="middle">commits land here</text>
+      <g class="receipt gone" id="receipt"><rect class="box" x="1036" y="78" width="150" height="88" rx="6"/><text class="tt l3" id="rc0" x="1046" y="97"></text><text class="ts" id="rc1" x="1046" y="115"></text><text class="ts" id="rc2" x="1046" y="130"></text><text class="ts" id="rc3" x="1046" y="145"></text><text class="ts" id="rc4" x="1046" y="160"></text></g>
+      <g data-part="t-partition" id="t-partition"></g>
+      <g data-part="t-instance" id="t-instance"></g>
+      <g data-part="t-message" id="t-message"></g>
+      <g data-part="t-journal" id="t-journal"></g>
+    </g>
+
+    <!-- Studio, which reads the projected history (layer 3's history envelope, read through the API) -->
+    <g data-part="studio">
+      <rect class="b3 pf" x="995" y="482" width="195" height="230" rx="9"/>
+      <rect x="995.6" y="482.6" width="193.8" height="22" rx="8" style="fill:var(--l3);opacity:.25"/>
+      <text class="tt" x="1005" y="498">Studio run view</text>
+      <text class="ts" x="1005" y="522">order #1 · history</text>
+      <g id="slines"></g>
+      <text class="ts" x="1005" y="702">reads committed history only</text>
+    </g>
+
+    <!-- moving tokens, drawn on top of everything -->
+    <g id="g-tokens">
+      <g data-part="req" id="req" class="token gone"><rect class="pf" x="0" y="0" width="138" height="24" rx="5"/><path class="ico" d="M8,6 h18 v12 h-18 z M8,7 l9,6 l9,-6" style="stroke:var(--accent)"/><text x="32" y="16">POST /orders</text></g>
+      <g data-part="resp" id="resp" class="token resp gone"><rect class="pf" x="0" y="0" width="138" height="26" rx="5"/><text id="resptext" class="tt" x="8" y="17">202 Accepted · held</text></g>
+      <g data-part="job" id="job" class="jobbox gone"><rect class="pf" x="0" y="0" width="76" height="22" rx="5"/><text x="38" y="15" text-anchor="middle">job: email</text></g>
+      <g data-part="take" id="take" class="token take gone"><rect class="pf" x="0" y="0" width="232" height="88" rx="5"/><text class="tt" id="tk0" x="8" y="16" style="font-size:11.5px"></text><text class="tm" id="tk1" x="8" y="31"></text><text class="tm" id="tk2" x="8" y="44"></text><text class="tm" id="tk3" x="8" y="57"></text><text class="tm" id="tk4" x="8" y="70"></text><text class="tm" id="tk5" x="8" y="83"></text></g>
+      <g data-part="envelope" id="env" class="env gone">
+        <rect class="pf" x="0" y="0" width="228" height="96" rx="5"/><path class="flap" d="M0,0 L114,22 L228,0"/>
+        <text class="tt" x="8" y="15" style="font-size:11.5px">commit · one transaction</text>
+        <text class="ts" id="el0" x="8" y="32"></text><text class="ts" id="el1" x="8" y="45"></text><text class="ts" id="el2" x="8" y="58"></text><text class="ts" id="el3" x="8" y="71"></text>
+        <g class="stamp" id="stamp"><rect x="2" y="77" width="224" height="17" rx="3"/><text id="stamptext" x="114" y="89.5" text-anchor="middle"></text></g>
+        <g class="reject gone" id="reject"><rect x="20" y="18" width="188" height="52" rx="5" transform="rotate(-7 114 44)"/><text x="114" y="42" text-anchor="middle" transform="rotate(-7 114 44)">REJECTED</text><text class="rj2" x="114" y="60" text-anchor="middle" transform="rotate(-7 114 44)">the fence changed 0 rows</text></g>
+      </g>
+      <g id="rowtoken" opacity="0"><rect x="0" y="0" width="94" height="20" rx="4" style="fill:var(--surface);stroke:var(--st);stroke-width:1.4"/><text class="tm" x="47" y="14" text-anchor="middle" style="fill:var(--st)">journal rows</text></g>
+      <g id="ghosts"></g>
+    </g>
+
+    <!-- seam markers: shown with "Show seams" when a step crosses a layer boundary -->
+    <g id="g-seams">
+      <g class="seam" data-seam="place"><rect x="230" y="474" width="292" height="17" rx="4"/><text x="376" y="486" text-anchor="middle">seam · IActorRuntime: partitions Node A hosts</text></g>
+      <g class="seam" data-seam="pass"><rect x="250" y="474" width="252" height="17" rx="4"/><text x="376" y="486" text-anchor="middle">seam · IScopeActivation.RunAsync (a pass)</text></g>
+      <g class="seam" data-seam="turn"><rect x="190" y="326" width="200" height="17" rx="4"/><text x="290" y="338" text-anchor="middle">seam · IExecutionModel.TurnAsync</text></g>
+      <g class="seam" data-seam="job"><rect x="190" y="326" width="236" height="17" rx="4"/><text x="308" y="338" text-anchor="middle">seam · IExecutionModel.ExecuteJobAsync</text></g>
+      <g class="seam" data-seam="store"><rect x="598" y="440" width="190" height="17" rx="4"/><text x="693" y="452" text-anchor="middle">seam · IKernelStore.CommitAsync</text></g>
+      <g class="seam" data-seam="projector"><rect x="794" y="462" width="300" height="17" rx="4"/><text x="944" y="474" text-anchor="middle">seam · IKernelStore: ReadJournalAsync, ProjectAsync</text></g>
+      <g class="seam" data-seam="view"><rect x="996" y="462" width="192" height="17" rx="4"/><text x="1092" y="474" text-anchor="middle">seam · IKernelStore.ReadViewsAsync</text></g>
+      <g class="seam" data-seam="take"><rect x="560" y="464" width="240" height="17" rx="4"/><text x="680" y="476" text-anchor="middle">seam · IScopeHost.ActivateAsync: the take</text></g>
+      <g class="seam" data-seam="takeA"><rect x="256" y="464" width="240" height="17" rx="4"/><text x="376" y="476" text-anchor="middle">seam · IScopeHost.ActivateAsync: the take</text></g>
+      <g class="seam" data-seam="turnB"><rect x="580" y="254" width="200" height="17" rx="4"/><text x="680" y="266" text-anchor="middle">seam · IExecutionModel.TurnAsync</text></g>
+    </g>
+  </svg>
+  </div>
+  <div class="below">
+    <div class="narration" aria-live="polite"><h3 class="ntitle"></h3><div class="ntext"></div><p class="layerline nlayer"></p></div>
+    <aside class="wf" aria-label="The order workflow">
+      <h3>The workflow "Order"</h3>
+      <ol id="wf">
+        <li><span>▸</span>HTTP POST /orders<span class="t">HttpEndpoint, the trigger</span></li>
+        <li><span>1</span>Save order<span class="t">WriteLine</span></li>
+        <li><span>2</span>Respond 202<span class="t">WriteHttpResponse</span></li>
+        <li><span>3</span>Wait 5 s<span class="t">Delay: a timer</span></li>
+        <li><span>4</span>Send confirmation<span class="t">SendEmail: slow, runs as a background job</span></li>
+        <li><span>5</span>Done</li>
+      </ol>
+      <p>Persistence mode: Balanced, the default: a turn ends, and commits, at each wait.</p>
+      <p>SendEmail stands for any activity marked Background; the prototype's own is <code>CallService</code>. Ids, times, epochs and positions in the scene are illustrative. The tables show a few of each table's columns; <code>sub_status</code> is shown as what the instance waits for.</p>
+    </aside>
+  </div>
+</section>
+
+<!-- 02 · three persistence modes ────────────────────────────────── -->
+<section class="part" id="modes">
+  <div class="num">02</div>
+  <h2>Three persistence modes, side by side</h2>
+  <p>A persistence mode chooses where a turn ends, and a turn commits where it ends; Ephemeral alone writes nothing when the run ends in its first turn and sent nothing. So the mode decides what a run costs and what a crash can lose. Three instances of one request-response workflow run at the same time, one per mode; one set of controls steps all three together, activity by activity.</p>
+  <div class="controls" role="group" aria-label="Controls for the three lanes"></div>
+  <div class="dots" role="group" aria-label="Go to a step of the three lanes"></div>
+  <div class="scenebox">
+  <svg id="lanes" class="dg scene lanes" viewBox="0 0 1200 546" role="img" aria-labelledby="lanes-title lanes-desc">
+    <title id="lanes-title">Three persistence modes running the same workflow</title>
+    <desc id="lanes-desc">Three lanes, Ephemeral, Balanced and Durable. Each lane shows its HTTP caller, its instance card with the activity list and a pointer, a database that keeps one envelope per commit, a commit counter, a counter of database round trips on PostgreSQL, and notes. The narration under the lanes says what each step shows.</desc>
+    <g class="ts"><text class="ts" x="18" y="26">persistence mode</text><text class="ts" x="168" y="26">its caller</text><text class="ts" x="300" y="26">the instance, inline on Node A</text><text class="ts" x="700" y="26">the database</text><text class="ts" x="800" y="26">what it costs</text><text class="ts" x="996" y="26">notes</text></g>
+  </svg>
+  </div>
+  <div class="whatif">
+    <span class="lbl" id="wait-label">Add a Wait 5 s after Save quote:</span>
+    <span class="seg" role="group" aria-labelledby="wait-label">
+      <button data-v="plain" aria-pressed="true">No wait</button>
+      <button data-v="today" aria-pressed="false">Wait: today (prototype)</button>
+      <button data-v="decided" aria-pressed="false">Wait: decided, not built</button>
+    </span>
+  </div>
+  <div class="whatif">
+    <span class="lbl" id="crash-label">Crash here:</span>
+    <span class="seg" role="group" aria-labelledby="crash-label">
+      <button data-c="none" aria-pressed="true">No crash</button>
+      <button data-c="compute" aria-pressed="false">after Compute quote</button>
+      <button data-c="save" aria-pressed="false">after Save quote</button>
+      <button data-c="wait" aria-pressed="false" hidden>during the wait</button>
+      <button data-c="respond" aria-pressed="false">after Respond 200</button>
+    </span>
+  </div>
+  <p class="caption">The mode is chosen per workflow by its author. The deployment never changes it.</p>
+  <div class="below">
+    <div class="narration" aria-live="polite"><h3 class="ntitle"></h3><div class="ntext"></div><p class="layerline nlayer"></p></div>
+    <aside class="wf" aria-label="The quote workflow">
+      <h3>The workflow "Quote"</h3>
+      <ol id="qwf"></ol>
+      <p>Three instances of one workflow that differ only in their persistence mode. Round trips are the prototype's PostgreSQL counts with the fence in the batch, the default (NATIVE.md, "What it costs").</p>
+      <p>Durable is drawn with a commit after the trigger and after each activity. The prototype also ends a turn after the root Sequence that holds them, so it makes one commit more: it measured 4 for http-reference (trigger, SetVariable, response).</p>
+    </aside>
+  </div>
+</section>
+
+<!-- 03 · act two ───────────────────────────────────────────────── -->
+<section class="part" id="act-two">
+  <div class="num">03</div>
+  <h2>Act two: when things go wrong</h2>
+  <p>The same machine, in three short scenarios. Each starts from its own state; the controls, narration and seams work as in act one. Ids, times, epochs and positions are illustrative.</p>
+  <div class="tabs" role="group" aria-label="Scenarios">
+    <button data-sc="b1" aria-pressed="true">A node dies</button>
+    <button data-sc="b2" aria-pressed="false">A paused owner wakes up</button>
+    <button data-sc="b3" aria-pressed="false">A poison message</button>
+  </div>
+  <div class="controls" role="group" aria-label="Controls for act two"></div>
+  <div class="dots" role="group" aria-label="Go to a step of this scenario"></div>
+  <div class="scenebox" id="scenebox2"></div>
+  <div class="below">
+    <div class="narration" aria-live="polite"><h3 class="ntitle"></h3><div class="ntext"></div><p class="layerline nlayer"></p></div>
+    <aside class="wf" aria-label="The scenario"><h3 id="sc-title"></h3><div id="sc-text"></div></aside>
+  </div>
+</section>
+
+<!-- 04 · the fence lab ─────────────────────────────────────────── -->
+<section class="part" id="fence-lab">
+  <div class="num">04</div>
+  <h2>The fence lab: try to make two owners both write</h2>
+  <p>Act two showed one paused owner bounced by the fence. Here you choose the order of events. Node A owns partition 17 at epoch 8 and has a batch to commit; Node B would take the partition if it could. Whatever you choose, at most one of them writes, and a commit lands at most once. The lease is the decided 10 s; times and positions are illustrative.</p>
+  <div class="whatif">
+    <span class="lbl" id="lp-label">Node A pauses:</span>
+    <span class="seg" role="group" aria-labelledby="lp-label">
+      <button data-lp="0" aria-pressed="true">No pause</button>
+      <button data-lp="2" aria-pressed="false">2 s</button>
+      <button data-lp="15" aria-pressed="false">15 s</button>
+    </span>
+  </div>
+  <div class="whatif">
+    <span class="lbl" id="lo-label">Who reaches the row first:</span>
+    <span class="seg" role="group" aria-labelledby="lo-label">
+      <button data-lo="early" aria-pressed="true">B's take, while A sleeps</button>
+      <button data-lo="A" aria-pressed="false">Together: A's commit</button>
+      <button data-lo="B" aria-pressed="false">Together: B's take</button>
+    </span>
+    <span class="note" id="lo-note"></span>
+  </div>
+  <div class="whatif">
+    <span class="lbl" id="ll-label">The answer to A's commit is lost:</span>
+    <span class="seg" role="group" aria-labelledby="ll-label">
+      <button data-ll="off" aria-pressed="true">Off</button>
+      <button data-ll="on" aria-pressed="false">On</button>
+    </span>
+    <span class="note" id="ll-note"></span>
+  </div>
+  <div class="controls" role="group" aria-label="Controls for the fence lab"></div>
+  <div class="dots" role="group" aria-label="Go to a step of the fence lab"></div>
+  <div class="scenebox" id="labbox">
+  <svg id="lab" class="dg scene lab" viewBox="0 0 1200 412" role="img" aria-labelledby="lab-title lab-desc">
+    <title id="lab-title">The fence lab: Node A, the partition row and Node B</title>
+    <desc id="lab-desc">On the left Node A, the owner, with what its HTTP caller sees, its memory, the turns in its batch and its commit envelope. On the right Node B with its take. In the middle the database: the statement at the partition row, the row lock with its holder and its queue, the row itself (owner, epoch, lease_until, position), the lease against the database clock, and the instance, message and journal tables. A banner at the bottom gives the result. The narration under the picture says what each step shows.</desc>
+    <g data-part="labA"><rect class="b1 pf" x="10" y="6" width="298" height="346" rx="10"/><text class="tt" x="22" y="26">Node A · owns partition 17</text></g>
+    <g data-part="labCall" id="lab-callg"><rect class="pf" x="22" y="36" width="274" height="26" rx="6"/><text class="ts" x="30" y="53">caller sees:</text><text class="tt" id="lab-call" x="100" y="53"></text></g>
+    <g data-part="labMemA"><rect class="b2 pf" x="22" y="70" width="274" height="52" rx="6"/><text class="ts" x="30" y="85">memory</text><text class="mem" id="lab-memA0" x="30" y="102"></text><text class="ts" id="lab-memA1" x="30" y="116"></text></g>
+    <g data-part="labTurn"><rect class="b3 pf" x="22" y="130" width="274" height="72" rx="6"/><text class="tt" x="30" y="147">turns in this batch</text><g class="badge"><rect x="192" y="136" width="98" height="17" rx="8"/><text id="lab-badge" x="241" y="148" text-anchor="middle"></text></g><text class="ts" id="lab-turn0" x="30" y="165"></text><text class="ts" id="lab-turn1" x="30" y="180"></text><text class="ts" id="lab-turn2" x="30" y="195"></text></g>
+    <g data-part="labB"><rect class="b1 pf" x="892" y="6" width="298" height="346" rx="10"/><text class="tt" x="904" y="26">Node B · would take partition 17</text></g>
+    <g data-part="labMemB"><rect class="b2 pf" x="904" y="70" width="274" height="52" rx="6"/><text class="ts" x="912" y="85">memory</text><text class="mem" id="lab-memB0" x="912" y="102"></text><text class="ts" id="lab-memB1" x="912" y="116"></text></g>
+    <text class="ts" x="904" y="150">Its take is a conditional update too: it</text><text class="ts" x="904" y="165">lands only on a partition nobody owns, one</text><text class="ts" x="904" y="180">whose lease ran out by the database's</text><text class="ts" x="904" y="195">clock, or one Node B already owns.</text>
+    <g data-part="labDb"><rect class="bs pf" x="322" y="6" width="556" height="346" rx="10"/><text class="tt st" x="334" y="25">Database</text><text class="ts" x="398" y="25">the partition row and the payload tables</text><text class="ts" x="790" y="25" text-anchor="end">db clock</text><text class="tt" id="lab-clock" x="866" y="25" text-anchor="end">t = 0.0 s</text></g>
+    <g data-part="labStmt"><rect class="box pf" x="334" y="32" width="532" height="46" rx="6"/><text class="tm" id="lab-st0" x="342" y="46"></text><text class="tm" id="lab-st1" x="342" y="59"></text><text class="tm st-res" id="lab-st2" x="342" y="72"></text></g>
+    <g data-part="labLock" id="lab-lock" class="lock">
+      <path class="shut" d="M341,110 v-6 a7,7 0 0 1 14,0 v6"/><path class="open" d="M341,110 v-6 a7,7 0 0 1 14,0 v-3"/><rect x="336" y="110" width="24" height="18" rx="3"/>
+      <text class="tm" x="368" y="89">holds the row lock</text><rect class="slot" x="368" y="93" width="220" height="40" rx="5"/><text class="ts" x="478" y="117" text-anchor="middle">free</text>
+      <text class="tm" x="640" y="89">waits in the lock queue</text><rect class="slot" x="640" y="93" width="220" height="40" rx="5"/><text class="ts" x="750" y="117" text-anchor="middle">empty</text>
+    </g>
+    <g data-part="labRow" id="lab-row" class="prow">
+      <rect class="box pf" x="334" y="139" width="532" height="64" rx="6"/>
+      <text class="tm" x="346" y="153">id</text><text class="big" x="346" y="181">17</text>
+      <g data-part="labOwner"><rect class="pf cellbox" x="394" y="142" width="84" height="46" rx="4"/><text class="tm" x="400" y="153">owner</text><text class="big" id="lab-c0" x="400" y="181"></text></g>
+      <g data-part="labEpoch"><rect class="pf cellbox" x="480" y="142" width="84" height="46" rx="4"/><text class="tm" x="486" y="153">epoch</text><text class="big" id="lab-c1" x="486" y="181"></text></g>
+      <g data-part="labLeaseUntil"><rect class="pf cellbox" x="566" y="142" width="162" height="46" rx="4"/><text class="tm" x="572" y="153">lease_until</text><text class="big" id="lab-c2" x="572" y="181"></text></g>
+      <g data-part="labPos"><rect class="pf cellbox" x="730" y="142" width="130" height="46" rx="4"/><text class="tm" x="736" y="153">position</text><text class="big" id="lab-c3" x="736" y="181"></text></g>
+      <text class="ts" id="lab-rowcap" x="346" y="198"></text>
+    </g>
+    <g data-part="labLease">
+      <text class="ts" x="334" y="223">lease</text><rect class="box" x="380" y="213" width="480" height="11" rx="3"/><rect class="leasefill" id="lab-lf" x="380" y="213" width="480" height="11" rx="3"/>
+      <text class="tm" x="380" y="237">0 s</text><text class="tm" x="540" y="237" text-anchor="middle">10 s</text><text class="tm" x="700" y="237" text-anchor="middle">20 s</text><text class="tm" x="860" y="237" text-anchor="end">30 s</text>
+      <g id="lab-now"><path d="M380,207 v23" style="stroke:var(--ink);stroke-width:2"/><path d="M375,203 h10 l-5,6 z" style="fill:var(--ink)"/></g>
+      <text class="ts" id="lab-lcap" x="334" y="251"></text>
+    </g>
+    <g data-part="labInstance" id="lab-t0"></g><g data-part="labMessage" id="lab-t1"></g><g data-part="labJournal" id="lab-t2"></g>
+    <g id="lab-pause" class="gone"><rect class="veil" x="10" y="6" width="298" height="346" rx="10"/><g class="ovlabel"><rect x="34" y="272" width="250" height="44" rx="6"/><text class="tt" id="lab-pause0" x="159" y="290" text-anchor="middle"></text><text class="ts" x="159" y="307" text-anchor="middle">a GC pause or a suspended VM: not dead</text></g></g>
+    <g data-part="labEnv" id="lab-envA" class="tok env gone"><rect class="pf" width="220" height="40" rx="5"/><path class="flap" d="M0,0 L110,11 L220,0"/><text class="tt" x="8" y="18" style="font-size:11.5px">A's commit · one transaction</text><text class="l2" id="lab-envA2" x="8" y="33"></text></g>
+    <g data-part="labTakeB" id="lab-takeB" class="tok take gone"><rect class="pf" width="220" height="40" rx="5"/><text class="tt" x="8" y="18" style="font-size:11.5px">B's take · a conditional update</text><text class="l2" id="lab-takeB2" x="8" y="33"></text></g>
+    <g data-part="labTakeA" id="lab-takeA" class="tok take gone"><rect class="pf" width="220" height="40" rx="5"/><text class="tt" x="8" y="18" style="font-size:11.5px">A's take · after its reset</text><text class="l2" id="lab-takeA2" x="8" y="33"></text></g>
+    <g id="lab-banner" class="banner gone"><rect x="10" y="362" width="1180" height="42" rx="8"/><text id="lab-bt" x="600" y="388" text-anchor="middle"></text></g>
+  </svg>
+  </div>
+  <div class="below">
+    <div class="narration" aria-live="polite"><h3 class="ntitle"></h3><div class="ntext"></div><p class="layerline nlayer"></p></div>
+    <aside class="wf" aria-label="This case"><h3 id="lab-case"></h3><div id="lab-aside"></div></aside>
+  </div>
+  <p class="note labfoot"><b>Why the check is its own round trip.</b> Sent in one packet, a fence that matched nothing does not stop what follows it: a COMMIT in the same packet would still land. So the owner must see "1 row" before it sends COMMIT, which makes 2 round trips on PostgreSQL. The fence travels one of two ways: in the batch, as EF concurrency tokens on the epoch and the position (the default: 2 round trips, the lease time from the owner's clock), or as its own statement first (3 round trips, the lease time from the database's), which is SQL Server's default since finding E9. <b>Leases decide who should write. The fence decides who can.</b> The invariant: after a take at epoch e + 1, nothing prepared under e commits, and the new owner sees everything that did commit.</p>
+  <p class="note"><b>Built and measured in the prototype:</b> both ways of sending the fence and their round trips; a response released only after its commit (decided 12 November, and built); the take; the reset after an unknown outcome or a fence that matched nothing; a simulation that injects paused owners and lost answers and checks the invariant after every action; and a mutation check showing that the position decides only when a reset is missing (FINDINGS.md, section 3). <b>Decided:</b> the 10 s lease and the fence in the batch by default; the prototype uses a separate checked fence by default on SQL Server. <b>Illustrative:</b> the times and positions, and the moment Node B tries. The lab draws only the partition row's lock, with the fence sent separately. In a traced PostgreSQL batch, EF wrote messages before the partition fence and a subscription after it. On SQL Server, taking a message lock before the partition lock can cause the E9 deadlock.</p>
+</section>
+
+<!-- 05 · the visual glossary ─────────────────────────────────── -->
+<section class="part" id="glossary">
+  <div class="num">05</div>
+  <h2>Dissect the kernel</h2>
+  <p>Each word below is a part of the machine above. Select a card to light that part and dim the rest; select it again to clear. Most light act one's scene; the words act two needs (take, reset, suspect and trial, parked) open their scenario and light act two's; fence, epoch and position light the fence lab. The exploded view pulls act one's three layers apart.</p>
+  <div class="gtools">
+    <button id="explode" aria-pressed="false">Exploded view</button>
+    <span class="note">Layer 3 lifts off, layer 1 drops away, layer 2 stays where every guarantee is made.</span>
+  </div>
+  <div id="gloss"></div>
+</section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const motionOn = () => !reduced.matches;
+const EASE = 'cubic-bezier(.45,0,.2,1)';
+
+function svg(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  return e;
+}
+const tr = ([x, y]) => `translate(${x}px, ${y}px)`;
+const at = (e, xy) => { e.style.transform = tr(xy); };
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// Act two draws on a copy of act one's scene: the same parts, with "-b" on every id. Copied before any part is filled in.
+const sceneB = $('scene').cloneNode(true);
+sceneB.querySelectorAll('[id]').forEach(e => { e.id += '-b'; });
+sceneB.id = 'scene-b';
+sceneB.setAttribute('aria-labelledby', 'scene-title-b scene-desc-b');
+$('scenebox2').append(sceneB);
+$('scene-title-b').textContent = 'The kernel drawn as a machine, in act two';
+$('scene-desc-b').textContent = 'The same machine as act one: the HTTP client, Node A with partition 17, Node B with partition 42, and the database with the partition, instance, message and journal tables. In act two a node can be dead, paused or restarted, Node B can hold its own copy of partition 17, and tokens carry takes and polls to the database. The narration under the scene says what each step shows.';
+
+// ==== the player: steps, controls and narration, shared by every scene on the page ====================================
+// A player shows step N of a list of states: it fills the narration and the counter, and calls the scene's renderer,
+// which draws step N from the state at N alone (the previous state only shapes the motion into it), so Back works.
+const CONTROLS = seams => `
+  <button data-do="back" aria-label="Back: previous step">⟨ Back</button>
+  <button data-do="play" class="primary" aria-label="Play: run the steps">▶ Play</button>
+  <button data-do="next" aria-label="Next: next step">Next ⟩</button>
+  <span class="count" aria-live="off"></span>
+  <span class="grow"></span>
+  <span class="seg" role="group" aria-label="Speed">
+    <button data-speed="0.5" aria-pressed="false" aria-label="0.5× speed">0.5×</button>
+    <button data-speed="1" aria-pressed="true" aria-label="1× speed">1×</button>
+    <button data-speed="2" aria-pressed="false" aria-label="2× speed">2×</button>
+  </span>
+  ${seams ? '<button data-do="seams" aria-pressed="false">Show seams</button>' : ''}
+  <button data-do="reset" aria-label="Reset to step 1">Reset</button>`;
+
+function makePlayer(root, cfg) {
+  const q = sel => root.querySelector(sel);
+  q('.controls').innerHTML = CONTROLS(cfg.seams);
+  const b = name => q(`[data-do="${name}"]`);
+  const P = { n: 0, speed: 1, playing: false, timer: 0, states: [], prev0: null };
+  const k = () => 1 / P.speed;
+  const last = () => P.states.length - 1;
+  function show(i, animate) {
+    const s = P.states[i];
+    q('.ntitle').textContent = `${i + 1}. ${s.title}`;
+    const box = q('.ntext');
+    box.textContent = '';
+    s.text.forEach(t => { const para = document.createElement('p'); para.textContent = t; box.append(para); });
+    q('.nlayer').textContent = s.layer;
+    q('.count').textContent = `Step ${i + 1} of ${P.states.length}`;
+    [...q('.dots').children].forEach((d, j) => { if (j === i) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current'); });
+    b('back').disabled = i === 0; b('next').disabled = i === last();
+    cfg.svg.style.setProperty('--k', k());
+    return cfg.render(s, i ? P.states[i - 1] : P.prev0 || s, animate && motionOn(), k(), i);
+  }
+  P.go = (i, animate) => { P.n = Math.max(0, Math.min(last(), i)); return show(P.n, animate); };
+  function schedule(motionMs) {
+    clearTimeout(P.timer);
+    if (!P.playing) return;
+    if (P.n === last()) { setPlaying(false); return; }
+    const read = Math.max(4000, P.states[P.n].text.join(' ').split(/\s+/).length * 150) * k();
+    P.timer = setTimeout(() => { schedule(P.go(P.n + 1, true)); }, motionMs + read);
+  }
+  function setPlaying(on) {
+    P.playing = on;
+    b('play').textContent = on ? '❚❚ Pause' : '▶ Play';
+    b('play').setAttribute('aria-label', on ? 'Pause: stop playing' : 'Play: run the steps');
+    if (!on) clearTimeout(P.timer);
+  }
+  function setSeams(on) {
+    const s = b('seams');
+    if (!s) return;
+    s.setAttribute('aria-pressed', String(on));
+    s.textContent = 'Show seams';
+    cfg.svg.classList.toggle('seams', on);
+  }
+  P.stop = () => setPlaying(false);
+  P.setSteps = (states, prev0, i, animate) => {
+    setPlaying(false);
+    P.states = states; P.prev0 = prev0;
+    const dots = q('.dots');
+    dots.textContent = '';
+    states.forEach((s, j) => {
+      const d = document.createElement('button');
+      d.textContent = j + 1;
+      d.setAttribute('aria-label', `Go to step ${j + 1}: ${s.title}`);
+      d.addEventListener('click', () => { setPlaying(false); P.go(j, j === P.n + 1); });
+      dots.append(d);
+    });
+    P.go(i || 0, animate);
+  };
+  b('play').addEventListener('click', () => {
+    if (P.playing) { setPlaying(false); return; }
+    setPlaying(true);
+    schedule(P.go(P.n === last() ? 0 : P.n, true));       // play the current step's motion, then move on
+  });
+  b('next').addEventListener('click', () => { setPlaying(false); P.go(P.n + 1, true); });
+  b('back').addEventListener('click', () => { setPlaying(false); P.go(P.n - 1, false); });
+  b('reset').addEventListener('click', () => {
+    setPlaying(false); setSeams(false); setFocus(null, null);
+    if (cfg.onReset) cfg.onReset();
+    P.go(0, false);
+  });
+  if (b('seams')) b('seams').addEventListener('click', () => setSeams(!cfg.svg.classList.contains('seams')));
+  root.querySelectorAll('[data-speed]').forEach(btn => btn.addEventListener('click', () => {
+    P.speed = Number(btn.dataset.speed);
+    root.querySelectorAll('[data-speed]').forEach(o => o.setAttribute('aria-pressed', String(o === btn)));
+    cfg.svg.style.setProperty('--k', k());
+    if (P.playing) schedule(0);
+  }));
+  return P;
+}
+
+// ==== the machine: data shared by act one and act two ===================================================================
+// where the moving tokens sit (scene coordinates)
+const POS = {
+  reqCaller: [8, 228], reqNode: [150, 196],
+  respHeld: [427, 418], respCaller: [8, 228],
+  envLane: [189, 380], envB: [548, 300], envVault: [800, 76],
+  jobHome: [427, 452], jobSmtp: [72, 268],
+  rowsJournal: [900, 400], rowsProjector: [840, 600],
+  takeA: [300, 392], takeB: [548, 392], takeVault: [800, 92],
+  shelfA: [185, 486], shelfB: [600, 92], msgRow: [900, 330],
+};
+// The database tables: rows are keyed by their first cell. Times are seconds on the scene clock. Message ids are derived
+// from the sender and its revision (with a fixed-width ordinal); a job ticket's id from the instance and the job's key.
+const COLS = {
+  partition: { y: 184, x: [876, 916, 966, 1036], head: ['id', 'epoch', 'position', 'lease_until'] },
+  instance: { y: 240, x: [876, 946, 1016], head: ['id', 'status', 'sub_status'] },
+  message: { y: 311, x: [876, 986, 1046, 1134], head: ['id', 'target', 'kind', 'due'] },
+  journal: { y: 367, x: [876, 938, 1000], head: ['position', 'instance', 'entries'] },
+};
+// Act two shows the partition's owner and the message columns that decide poison: seen, trial and attempts.
+const A2COLS = {
+  partition: { y: 184, x: [876, 910, 954, 1004, 1066], head: ['id', 'owner', 'epoch', 'position', 'lease_until'] },
+  instance: { y: 236, x: [876, 946, 1016], head: ['id', 'status', 'sub_status'] },
+  message: { y: 302, x: [876, 958, 1004, 1068, 1098, 1134], head: ['id', 'target', 'kind', 'seen', 'trial', 'attempts'] },
+  journal: { y: 386, x: [876, 938, 1000], head: ['position', 'instance', 'entries'] },
+};
+const RECEIPT = ['✓ commit landed', 'about 2 round trips on', 'PostgreSQL, with the', 'fence in the batch', '(the default)'];
+const ACTS = ['trigger: POST /orders', '1 Save order', '2 Respond 202', '3 Wait 5 s', '4 Send confirmation', '5 Done'];
+
+// messages as they sit in an inbox tray
+const START = { id: 'start', label: 'start', kind: 'start' };
+const T7 = { id: 't7', label: 'timer (due)', kind: 'timer' };
+const T1 = { id: 't1', label: 'timer 5 s · due 5.0', kind: 'timer' };
+const TICKET = { id: 'job', label: 'job ticket: email', kind: 'ticket' };
+const RESULT = { id: 'job', label: 'job-finished: email', kind: 'result' };
+
+// what each commit envelope carries
+const C1 = ['instance rows: order #1 (new), order #7', 'consumed: order #7\'s timer (delete)', 'sent: timer 5 s → order #1 (insert)', 'journal: 2 rows, at 1205 and 1206'];
+const C2 = ['instance row: order #1, jobs: [email]', 'consumed: the timer (delete)', 'sent: job ticket "email" (insert)', 'journal: 1 row, at 1207'];
+const C3 = ['instance row: order #1, Finished', 'consumed: the result (ticket row deleted)', 'sent: nothing', 'journal: 1 row, at 1208'];
+
+// Every state is a patch over the previous one's lasting fields (BASE); fields in TRANSIENT hold for one step only.
+//   acts: one letter per row of order #1's native model (trigger, 1 to 5): . idle, d done, w waiting. ptr: its pointer.
+//   card1, card7: hidden, ghost (placed, not yet run), lost (gone from memory), live or done.
+//   own17: who owns partition 17 in the database; ep17, posA: the epoch and position Node A holds it at.
+//   ovA, ovB: a dead, frozen or noted node.
+//   p17b: Node B's own copy of partition 17 (act two); card9: order #9 (act two). lit: parts lit. seams: markers shown.
+const BASE = {
+  t: '0.0', db: null, req: 'none', resp: 'none', card1: 'hidden', acts: '......', ptr: -1, s1: '',
+  card7: 'live', c7: ['Running', 'waiting: timer'], turn1: false, turn7: false,
+  tray1: [], tray7: [T7], lane: null, env: null, job: 'none', lease: [0.74, 0.89], cursor: 1204,
+  proj: ['idle: nudged after commits', 'and on a timer'], studio: [],
+  own17: 'A', ep17: 8, posA: '', sh17: '', lt17: '', sh42: '', ovA: null, ovB: null, p17b: null, card9: null, cols: null,
+};
+const TRANSIENT = { lit: [], seams: [], scan: false, receipt: null, receiptBad: false, take: null, motion: [] };
+const build = (base, steps) => {
+  const out = [];
+  steps.reduce((prev, patch) => { const s = { ...prev, ...TRANSIENT, ...patch }; out.push(s); return s; }, base);
+  return out;
+};
+
+// ==== act one: the order workflow ======================================================================================
+const DB0 = {
+  partition: [['17', '8', '1204', '7.4'], ['42', '5', '311', '8.9']],
+  instance: [['order #3', 'Running', 'event'], ['order #7', 'Running', 'timer']],
+  message: [['o7:r2:00', 'order #7', 'native.timer', '0.0']],
+  journal: [['1204', 'order #7', 'Delay: waiting']],
+};
+// After commit 1: the fence moved 1204 → 1206 and renewed the lease; order #1 inserted, order #7 finished;
+// order #7's timer consumed (deleted); order #1's timer inserted; two journal rows.
+const DB1 = {
+  partition: [['17', '8', '1206', '10.0'], ['42', '5', '311', '8.9']],
+  instance: [['order #3', 'Running', 'event'], ['order #7', 'Finished', '—'], ['order #1', 'Running', 'timer 5 s']],
+  message: [['o1:r1:00', 'order #1', 'native.timer', '5.0']],
+  journal: [['1204', 'order #7', 'Delay: waiting'], ['1205', 'order #1', 'start · Save · Respond · Wait'], ['1206', 'order #7', 'timer · Done · Finished']],
+};
+// Heartbeats while nothing is due: empty fenced commits renew both leases; positions do not move.
+const DB1H = { ...DB1, partition: [['17', '8', '1206', '13.3'], ['42', '5', '311', '12.0']] };
+// After commit 2: the timer consumed; the job's ticket inserted; one journal row.
+const DB2 = {
+  partition: [['17', '8', '1207', '15.0'], ['42', '5', '311', '12.0']],
+  instance: [['order #3', 'Running', 'event'], ['order #7', 'Finished', '—'], ['order #1', 'Running', 'job email']],
+  message: [['o1:job:email', 'order #1', 'kernel.job', '—']],
+  journal: [...DB1.journal, ['1207', 'order #1', 'timer · job email started']],
+};
+// After commit 3: the result consumed, so its ticket row is deleted; order #1 finished; one journal row.
+const DB3 = {
+  partition: [['17', '8', '1208', '15.8'], ['42', '5', '311', '12.0']],
+  instance: [['order #3', 'Running', 'event'], ['order #7', 'Finished', '—'], ['order #1', 'Finished', '—']],
+  message: [],
+  journal: [...DB2.journal, ['1208', 'order #1', 'job-finished · Done · Finished']],
+};
+const ACT1 = [
+  { title: 'A request arrives.', layer: 'Layer: the host on Node A, before the kernel (its HTTP route table)',
+    text: ['An HTTP client sends POST /orders. Node A receives it and looks the route up in its in-memory route table, built when definitions are published, so routing reads nothing from the database.', 'The route maps the request to the workflow "Order".'],
+    db: DB0, req: 'node', lit: ['caller', 'req', 'nodeA'], motion: [{ fly: 'req', from: POS.reqCaller, to: POS.reqNode }] },
+  { title: 'Placement.', layer: 'Layer: 1 places · 2 owns the partition',
+    text: ['The start has no caller key, so Node A places the new instance in a partition it owns: partition 17. It runs right here, in the request, with no hop to another node.', 'The start is handed over in memory as a "start" message: no row is written until the instance commits.', 'Layer 1 decides which partitions Node A hosts; layer 2 owns the partition and its inbox.'],
+    req: 'none', card1: 'ghost', s1: 'placed here · in memory · no row', tray1: [START],
+    lit: ['placement', 'card1', 'tray1', 'shelf17'], seams: ['place'], motion: [{ chip: 'start', from: POS.reqNode }] },
+  { title: 'A pass begins.', layer: 'Layer: 1 calls the pass · 2 runs it',
+    text: ['The runtime calls partition 17 for a pass (IScopeActivation.RunAsync). A pass runs every instance that has work due, and commits their turns in batches.', 'Order #1 has its start message, handed over in memory, with no database row yet. Order #7, already on this shelf, has a timer that is due.'],
+    card1: 'live', s1: 'start message due', c7: ['Running', 'timer due'], scan: true,
+    lit: ['scanner', 'shelf17', 'tray1', 'tray7'], seams: ['pass'], motion: [{ sweep: true }] },
+  { title: 'The turn: the model runs.', layer: 'Layer: 3, the native model inside the turn',
+    text: ['Order #1 takes its turn: the workflow instance hands its inbox to the native model (IExecutionModel.TurnAsync). The model runs "Save order", then "Respond 202".', 'The response is emitted on the live channel but held: it is released only after the commit of the turn that wrote it.', 'Order #7 takes its own turn in the same pass.'],
+    tray1: [], tray7: [], acts: 'ddd...', ptr: 2, s1: 'turn running', turn1: true, turn7: true, c7: ['turn running', ''], resp: 'held',
+    lit: ['card1', 'model1', 'card7', 'resp'], seams: ['turn'] },
+  { title: 'The turn ends at a wait.', layer: 'Layer: 3 returns its outcome · 2 holds it',
+    text: ['"Wait 5 s" is a wait. In Balanced mode a turn runs until all its work waits or ends, so the turn ends here.', 'The model hands back its outcome: the new state, one message sent to itself (a timer due in 5 s) and the journal entries. Nothing has touched the database yet.'],
+    acts: 'dddw..', ptr: 3, s1: 'turn ended at a wait', turn1: false,
+    lane: ['outcome of order #1\'s turn:', 'new state: waiting at "Wait 5 s"', 'sent: timer 5 s → itself', 'journal entries · the held response'],
+    lit: ['card1', 'model1', 'lane'], seams: ['turn'] },
+  { title: 'Batching.', layer: 'Layer: 2',
+    text: ['In the same pass, order #7\'s turn also ended: its last activity ran and it finished.', 'Both turns go into one commit envelope. The partition\'s one committer writes the turns of many instances in one transaction, and flushes as soon as the previous flush returns. On the server databases 100 instance-commits cost the round trips of one.'],
+    turn7: false, c7: ['Finished', 'waiting for the commit'], s1: 'waiting for the commit', lane: null,
+    env: { id: 'c1', at: 'lane', lines: C1, stamp: null }, lit: ['envelope', 'card1', 'card7'] },
+  { title: 'The commit and the fence.', layer: 'Layer: 2, through IKernelStore',
+    text: ['The envelope is stamped with the fence, "epoch 8 · position 1204 → 1206", and goes to the database as one transaction.', 'The partition row\'s update is the fence: it lands only if the epoch is still 8 and the position still 1204, and it renews the lease. With it the instance rows are written, order #7\'s consumed timer is deleted, order #1\'s timer is inserted and two journal rows are written, at 1205 and 1206.', 'With the fence in the batch, the default, that is 2 round trips on PostgreSQL.'],
+    env: { id: 'c1', at: 'vault', lines: C1, stamp: 'epoch 8 · position 1204 → 1206' }, db: DB1, card7: 'done', c7: ['Finished', ''],
+    s1: 'Running · waiting: timer 5 s', tray1: [T1], lease: [1, 0.89], receipt: true,
+    lit: ['envelope', 'fence17', 't-partition', 't-instance', 't-message', 't-journal'], seams: ['store'] },
+  { title: 'The response is released.', layer: 'Layer: 2 releases the live output',
+    text: ['The commit landed, so Node A sends "202 Accepted" to the HTTP client. A caller never gets a response for work that was then lost.', 'Writing the response does not end the workflow: order #1 goes on waiting for its timer.'],
+    env: null, resp: 'sent', lit: ['resp', 'caller'], motion: [{ fly: 'resp', from: POS.respHeld, to: POS.respCaller }] },
+  { title: 'Time passes.', layer: 'Layer: 2 (timers and the lease)',
+    text: ['The timer waits as a row in the message table, with its due time. The owner also holds it in memory and schedules it on a monotonic clock, so it wakes the instance on time without reading the table.', 'Meanwhile each owner keeps its lease with an empty fenced commit, its heartbeat, about three times per lease; the position does not move.', 'If Node A died, the next owner of partition 17 would find the timer by polling the table: act two, "A node dies", shows it.'],
+    t: '5.0', db: DB1H, lease: [0.83, 0.70], lit: ['tray1', 't-message', 'clock', 'lease17', 'lease42', 't-partition'],
+    motion: [{ clock: [0, 5] }, { lease: true }] },
+  { title: 'The timer fires and a new turn starts.', layer: 'Layer: 1 calls the pass · 3 runs the turn',
+    text: ['At 5 s a pass on partition 17 picks order #1 with its due timer message.', 'The model continues after the wait. "Send confirmation" is a slow activity marked Background, so the model starts a background job ("email") instead of waiting for it, and the turn ends at that wait.'],
+    tray1: [], acts: 'ddddw.', ptr: 4, s1: 'turn running: starts job "email"', turn1: true, scan: true,
+    lane: ['outcome of order #1\'s turn:', 'new state: jobs [email]', 'StartJob("email"): its ticket', 'consumed: the timer · journal entries'],
+    lit: ['scanner', 'tray1', 'card1', 'model1', 'lane'], seams: ['pass', 'turn'], motion: [{ sweep: true }] },
+  { title: 'Commit 2.', layer: 'Layer: 2, through IKernelStore',
+    text: ['The envelope carries the instance\'s state, with an entry in its jobs list; the consumed timer, deleted; a job ticket, a message to the instance whose id comes from the instance and the job\'s key, which is the job\'s durable intent; and one journal row.', 'The fence is stamped "position 1206 → 1207". The owner keeps the ticket in memory.'],
+    turn1: false, lane: null, env: { id: 'c2', at: 'vault', lines: C2, stamp: 'epoch 8 · position 1206 → 1207' }, db: DB2,
+    s1: 'Running · waiting: job "email"', tray1: [TICKET], lease: [1, 0.70], receipt: true,
+    lit: ['envelope', 'fence17', 't-partition', 't-instance', 't-message', 't-journal'], seams: ['store'] },
+  { title: 'The job runs outside the turn.', layer: 'Layer: 2 runs the job · the model\'s ExecuteJobAsync (layer 3) does the work',
+    text: ['Once the ticket is committed, the kernel runs the job\'s code (ExecuteJobAsync) outside the instance\'s turn: the job goes to the SMTP server.', 'The instance is not blocked; it could take a cancel or a timer meanwhile.', 'After a crash a new owner finds the ticket by polling and runs the job again, so external calls carry an idempotency key.'],
+    env: null, t: '5.4', job: 'smtp', tray1: [{ ...TICKET, label: 'ticket: email · running' }], lease: [0.96, 0.66],
+    lit: ['job', 'smtp', 'tray1'], seams: ['job'], motion: [{ fly: 'job', from: POS.jobHome, to: POS.jobSmtp }] },
+  { title: 'The result comes back as a message.', layer: 'Layer: 2',
+    text: ['The email is sent, and the job\'s result arrives as a "job-finished" message in order #1\'s inbox. In memory the ticket becomes the result, with the same id, so it is consumed once; no new row is written.', 'A result is handled ahead of other messages, so a model never sees it after its own cancel, and it changes state exactly once.'],
+    t: '5.8', job: 'none', tray1: [RESULT], lease: [0.92, 0.62], lit: ['tray1', 'card1'], motion: [{ chip: 'job', from: POS.jobSmtp }] },
+  { title: 'The last turn.', layer: 'Layer: 3 (1 calls the pass)',
+    text: ['A pass picks order #1 up again. The model applies the result: "Send confirmation" completes, then "Done".', 'The instance\'s status becomes Finished.'],
+    tray1: [], acts: 'dddddd', ptr: 5, s1: 'turn running · Finished', turn1: true, scan: true,
+    lane: ['outcome of order #1\'s turn:', 'status: Finished', 'consumed: the job result', 'journal entries'],
+    lit: ['scanner', 'card1', 'model1', 'lane'], seams: ['pass', 'turn'], motion: [{ sweep: true }] },
+  { title: 'Commit 3.', layer: 'Layer: 2, through IKernelStore',
+    text: ['The envelope carries the finished instance row, the consumed result (its ticket row is deleted) and one journal row. Fence: position 1207 → 1208.', 'Order #1 is done. Its row stays: the instance row is the truth about the present, the journal the truth about the past.'],
+    turn1: false, lane: null, card1: 'done', s1: 'Finished', env: { id: 'c3', at: 'vault', lines: C3, stamp: 'epoch 8 · position 1207 → 1208' },
+    db: DB3, lease: [1, 0.62], receipt: true, lit: ['envelope', 'fence17', 't-partition', 't-instance', 't-message', 't-journal'], seams: ['store'] },
+  { title: 'The projector catches up.', layer: 'Layer: 2 (the prototype\'s projector is in Kernel.Durable)',
+    text: ['In the background, off the hot path and in its own transaction, the projector reads the journal rows past its cursor (1205 to 1208) and writes the history rows Studio reads. Its cursor, its own row apart from the fence, moves to 1208.', 'The prototype\'s projector writes one statement per instance; set-based rounds, about 2 to 3 round trips per round on PostgreSQL, are decided, not built.'],
+    env: null, t: '6.0', cursor: 1208, proj: ['read journal 1205 to 1208', 'wrote the view rows of', 'order #1 and order #7'], lease: [0.98, 0.60],
+    lit: ['projector', 't-journal'], seams: ['projector'], motion: [{ rows: true }] },
+  { title: 'Studio shows the run.', layer: 'Layer: 3, the history the viewer reads, shown by Studio',
+    text: ['The Studio run view lists order #1\'s history from the projected rows.', 'Decided, not built: the API also reads the journal tail past the projector\'s cursor and expands it in memory, so the view is never behind. Studio never makes an owner commit and never shows uncommitted state.'],
+    t: '6.1', studio: ['1205 · started: POST /orders', '› Save order', '› Respond 202', '› Wait 5 s (timer)', '1207 · timer fired', '› job "email" started', '1208 · job finished', '› Send confirmation, Done', 'status: Finished'],
+    lease: [0.97, 0.59], lit: ['studio'], seams: ['view'], motion: [{ studio: true }] },
+];
+const STATES = build(BASE, ACT1);
+
+// ==== act two: three scenarios on the same machine ======================================================================
+// The take is one conditional update (the sketch's "Ownership"); the poll a plain read (its "Messages").
+const TAKE = (node, title) => [title, 'UPDATE partition', `SET owner = ${node}, epoch = epoch + 1 …`, 'WHERE id = 17 AND (owner IS NULL', ' OR lease_until < database time', ` OR owner = ${node})`];
+const POLL = ['poll by Node B: a plain read', 'SELECT … FROM message', 'WHERE partition = 17 AND seen < 9', ' AND done = false AND due <=', ' database time + horizon', 'ORDER BY seq LIMIT m'];
+const ACT2 = { cols: A2COLS, tray7: [], c7: ['Finished', ''] };
+const lostNote = ['gone with', 'Node A\'s memory'];
+
+// "A node dies". Starts as act one after commit 1. Only partition 17's row is shown in act two.
+const B1J = [['1205', 'order #1', 'start · Save · Respond · Wait'], ['1206', 'order #7', 'timer · Done · Finished']];
+const B1I = [['order #7', 'Finished', '—'], ['order #1', 'Running', 'timer 5 s']];
+const B1DB = (p, m, i = B1I, j = B1J) => ({ partition: [p], instance: i, message: m, journal: j });
+const B1T = seen => [['o1:r1:00', 'order #1', 'native.timer', seen, seen === '8' ? '—' : seen, '0']];
+const B1 = {
+  label: 'A node dies',
+  aside: ['Start: act one after commit 1. Order #1 waits for its timer, due at 5.0 s, on partition 17, owned by Node A at epoch 8.', 'Fault: Node A\'s process dies at 1.0 s.', 'Watch: the lease run out, the epoch rise, and partition 17 change hands.', 'Source: the sketch\'s "Ownership" and "Messages" (Polling, Marked before run), and invariant 7.'],
+  base: { posA: '1206', db: B1DB(['17', 'A', '8', '1206', '10.0'], B1T('8')), card1: 'live', acts: 'dddw..', ptr: 3, s1: 'Running · waiting: timer 5 s', card7: 'done', tray1: [T1], lease: [1, 0.89] },
+  steps: [
+    { title: 'The start: order #1 waits for its timer.', layer: 'Layer: 2 (the state this scenario starts from)',
+      text: ['This is act one just after commit 1. Order #1 waits at "Wait 5 s" for its timer, due at 5.0 s, on partition 17, which Node A owns at epoch 8.', 'The timer is a row in the message table, marked seen at epoch 8, and Node A also holds it in memory.'],
+      lit: ['card1', 'tray1', 'shelf17', 't-message'] },
+    { title: 'Node A dies.', layer: 'Layer: 1, the process is gone · 2, the rows hold',
+      text: ['At 1.0 s Node A\'s process dies. Nothing it held in memory survives: the instance cards, the timer it had scheduled, its view of the fence.', 'The database still holds everything that committed: order #1\'s instance row, its timer message and the journal rows. The partition row still names Node A as the owner.'],
+      t: '1.0', memEmpty: true, ovA: { kind: 'dead', l0: 'Node A: dead', l1: 'the process is gone, and with it everything in its memory' },
+      card1: 'lost', card7: 'lost', s1: 'gone with Node A\'s memory', c7: lostNote, tray1: [], lease: [0.9, 0.8], lt17: '9.0 s left · nobody renews',
+      lit: ['ovA', 't-partition', 't-instance', 't-message', 't-journal'] },
+    { title: 'The lease runs out.', layer: 'Layer: 1 (the lease) · 2 (the partition row)',
+      text: ['Nobody renews partition 17\'s lease. The last commit set it to run until 10.0 s, one lease, the decided 10 s, after it. The timer was due at 5.0 s; it waits in its row.', 'Failover takes about one lease. Leases decide who should write; the fence decides who can.'],
+      t: '10.0', lease: [0, 0.7], lt17: 'ran out at 10.0 s', lit: ['lease17', 't-partition', 'clock'], motion: [{ clock: [1, 10] }, { drain: [0.9, 0] }] },
+    { title: 'Node B takes partition 17.', layer: 'Layer: 1 asks for the partition · 2 takes it, through IKernelStore',
+      text: ['Node B\'s runtime finds partition 17 without a live owner and asks layer 2 to take it. The take is one conditional update: it sets owner B and raises the epoch, only where nobody owns the partition, its lease has run out, or Node B already owns it.', 'The epoch becomes 9, the take returns the position, 1206, and Node B starts from empty memory. Every take bumps the epoch, so anything prepared under epoch 8 can never commit.'],
+      t: '10.1', own17: 'B', db: B1DB(['17', 'B', '9', '1206', '20.1'], B1T('8')), take: TAKE('B', 'take by Node B: epoch 8 → 9'),
+      receipt: ['✓ take landed', 'owner B, epoch 8 → 9,', 'lease until 20.1 s;', 'position stays 1206'],
+      p17b: { ep: 9, title: 'empty memory', lines: ['Node B holds nothing', 'for partition 17 yet:', 'every take starts from', 'empty memory'], chips: [] },
+      sh17: 'Node B\'s now · epoch 9', lease: [1, 0.7], lt17: 'Node B\'s · 10.0 s left',
+      lit: ['take', 'p17b', 't-partition'], seams: ['take'], motion: [{ fly: 'take', from: POS.takeB, to: POS.takeVault }, { slide: 'AtoB', delay: 900 }] },
+    { title: 'Node B polls the inbox.', layer: 'Layer: 2',
+      text: ['A plain read of the message table finds order #1\'s timer, seen at epoch 8: below 9, so another owner had it. That makes it a suspect: it might be what killed Node A.', 'Node B loads order #1\'s row by key. Before any turn runs, a fenced commit marks the timer seen at epoch 9 and puts it on trial.'],
+      t: '10.2', db: B1DB(['17', 'B', '9', '1206', '20.2'], B1T('9')), take: POLL,
+      receipt: ['✓ marked before run', 'a fenced commit set', 'seen 9 and trial 9:', 'the timer is on trial'],
+      p17b: { ep: 9, title: 'order #1', lines: ['loaded by key from', 'its row: waiting at', '"Wait 5 s"'], chips: [{ id: 't1', label: 'timer · suspect', kind: 'suspect' }] },
+      lit: ['take', 'p17b', 't-message'], motion: [{ fly: 'take', from: POS.takeB, to: POS.takeVault }, { chip: 't1', from: POS.msgRow }] },
+    { title: 'The timer fires on Node B.', layer: 'Layer: 2 runs the trial · 3, the native model, runs the turn',
+      text: ['The timer is overdue, about 5 s late, so its turn runs at once, and alone: nothing else is in flight while a suspect is on trial. The turn is told the message was redelivered: it may have run before, never "it did run".', 'The model goes on exactly where the last commit left it, after "Wait 5 s": it starts the job "email". The commit is fenced at epoch 9, position 1206 → 1207.'],
+      t: '10.4', db: B1DB(['17', 'B', '9', '1207', '20.4'], [['o1:job:email', 'order #1', 'kernel.job', '9', '—', '0']], [['order #7', 'Finished', '—'], ['order #1', 'Running', 'job email']], [...B1J, ['1207', 'order #1', 'timer · job email started']]),
+      env: { id: 'b1c', at: 'vault', from: 'B', lines: C2, stamp: 'epoch 9 · position 1206 → 1207' }, receipt: true,
+      p17b: { ep: 9, title: 'order #1', turn: true, lines: ['on trial: alone, told', '"may have run before"', 'runs on after the wait:', 'starts job "email"'], chips: [TICKET] },
+      lit: ['p17b', 'envelope', 't-partition', 't-instance', 't-message', 't-journal'], seams: ['turnB', 'store'] },
+    { title: 'Nothing was lost, and nothing changed state twice.', layer: 'Layer: 2 (invariant 7, takeover)',
+      text: ['Everything that committed under epoch 8 is there for Node B, and nothing Node A had not committed can ever land. Nothing was in flight when Node A died, so nothing ran again here.', 'Had a turn been running, its activities since the last commit would run again (Balanced: at least once), but each message still changes state exactly once, because consuming it and changing state are one transaction.', 'Invariant 7: after a take at epoch e + 1, nothing prepared under e commits, and the new owner sees everything that did commit.'],
+      t: '10.5', env: null, p17b: { ep: 9, title: 'order #1', lines: ['Running on Node B,', 'where its last commit', 'left it: waiting for', 'the job "email"'], chips: [TICKET] },
+      lit: ['p17b', 't-partition', 't-instance', 't-message', 't-journal'] },
+  ],
+};
+
+// "A paused owner wakes up". Node A freezes mid-turn, is taken over, and its stale commit bounces off the fence.
+const B2DB = p => B1DB(p, B1T('8'));
+const B2 = {
+  label: 'A paused owner wakes up',
+  aside: ['Start: 5.0 s. Node A owns partition 17 at epoch 8; order #1\'s timer has fired and its turn is running.', 'Fault: Node A freezes for longer than its lease.', 'Watch: the fence stamp on the envelope, and the epoch in the partition row.', 'Source: the sketch\'s "The commit", "What a failed commit means" and "Ownership".'],
+  base: { t: '5.0', posA: '1206', db: B2DB(['17', 'A', '8', '1206', '13.3']), card1: 'live', acts: 'ddddw.', ptr: 4, s1: 'turn running: starts job "email"', turn1: true, card7: 'done', lease: [0.83, 0.7] },
+  steps: [
+    { title: 'The start: order #1\'s turn is running.', layer: 'Layer: 3 runs the turn on Node A',
+      text: ['It is 5.0 s. Node A owns partition 17 at epoch 8, and order #1\'s timer has fired: its turn is running, and the model is starting the job "email", as in act one.'],
+      lit: ['card1', 'model1', 'fence17'] },
+    { title: 'Node A freezes.', layer: 'Layer: 1, a process that does not run',
+      text: ['In the middle of order #1\'s turn, Node A stops: a long garbage-collection pause, or its VM is suspended. It is not dead.', 'Its memory, its turn and its belief that it owns partition 17 at epoch 8 are all intact. It just does not run, so it renews nothing.'],
+      t: '5.1', ovA: { kind: 'frozen', l0: '❚❚ Node A: paused', l1: 'a long GC pause or a suspended VM: not dead, just not running' },
+      lit: ['ovA', 'card1'] },
+    { title: 'The lease runs out, and Node B takes partition 17.', layer: 'Layer: 1 asks · 2 takes, through IKernelStore',
+      text: ['The lease runs out at 13.3 s. Node B takes partition 17 with the same conditional update as in "A node dies", and the epoch becomes 9.', 'Node A knows nothing of it: it still believes it owns the partition at epoch 8. Two nodes now believe they own partition 17. That is allowed, because only one of them can write.'],
+      t: '13.4', own17: 'B', db: B2DB(['17', 'B', '9', '1206', '23.4']), take: TAKE('B', 'take by Node B: epoch 8 → 9'),
+      receipt: ['✓ take landed', 'owner B, epoch 8 → 9,', 'lease until 23.4 s;', 'position stays 1206'],
+      p17b: { ep: 9, title: 'empty memory', lines: ['next: it polls and', 'finds order #1\'s timer,', 'a suspect, as in', '"A node dies"'], chips: [] },
+      lease: [1, 0.65], lt17: 'Node B\'s · 10.0 s left', sh17: 'Node A believes: its own, epoch 8',
+      lit: ['take', 'p17b', 't-partition', 'lease17'], seams: ['take'],
+      motion: [{ clock: [5.1, 13.4] }, { drain: [0.82, 0] }, { fly: 'take', from: POS.takeB, to: POS.takeVault, delay: 1500 }, { slide: 'AtoB', delay: 2400 }] },
+    { title: 'Node A wakes up, unaware.', layer: 'Layer: 3 ends the turn · 2 builds the commit',
+      text: ['Node A resumes where it stopped. Its turn finishes: "Send confirmation" starts the job "email".', 'Its committer builds the envelope and stamps it with what Node A believes: epoch 8, position 1206 → 1207.'],
+      t: '13.5', ovA: { kind: 'note', l0: 'Node A: awake again', l1: 'unaware that partition 17 was taken' }, turn1: false, s1: 'turn ended: commit prepared',
+      env: { id: 'b2c', at: 'lane', lines: C2, stamp: 'epoch 8 · position 1206 → 1207' }, lit: ['card1', 'envelope', 'fence17'] },
+    { title: 'The fence matches nothing.', layer: 'Layer: 2, through IKernelStore',
+      text: ['The fence is a conditional update on epoch 8 and position 1206, but the partition row now says epoch 9, so it changes zero rows. The transaction rolls back: no instance row, no message and no journal row from it lands.', 'Had the turn written an HTTP response, that response would still be held, and it is never released.'],
+      t: '13.6', env: { id: 'b2c', at: 'lane', lines: C2, stamp: 'epoch 8 · position 1206 → 1207', bounce: true },
+      receipt: ['✗ nothing landed', 'the fence changed', '0 rows: partition 17', 'is at epoch 9, not 8'], receiptBad: true,
+      lit: ['envelope', 't-partition', 'vault'], seams: ['store'] },
+    { title: 'Node A resets.', layer: 'Layer: 2 resets · 1 learns the partition is not Node A\'s',
+      text: ['A fence that matched nothing means reset: Node A drops everything it holds in memory for partition 17 and tries to take it again, the same path as start-up.', 'The lease is Node B\'s, so the take changes no row and Node A stands down. A request waiting on Node A for that work gets a clear error (503), never the response.', 'A wrong lease costs availability, never correctness.'],
+      t: '13.7', env: null, card1: 'lost', card7: 'lost', s1: 'dropped by the reset', c7: ['dropped by', 'the reset'],
+      ovA: { kind: 'note', l0: 'Node A: reset, then stood down', l1: 'it holds nothing for partition 17' }, memEmpty: true, sh17: 'not Node A\'s: Node B owns it at epoch 9',
+      take: TAKE('A', 'take by Node A: refused'), receipt: ['✗ take refused', 'the lease is Node B\'s', 'until 23.4 s, so', 'Node A stands down'], receiptBad: true,
+      lit: ['ovA', 'take', 't-partition'], seams: ['takeA'], motion: [{ fly: 'take', from: POS.takeA, to: POS.takeVault }] },
+  ],
+};
+
+// "A poison message". An event for order #9 kills every process that runs its turn; the threshold is MaxAttempts = 3.
+const B3I = st9 => [['order #1', 'Running', 'timer'], ['order #7', 'Running', 'timer'], ['order #9', ...st9]];
+const B3T = [['o1:r3:00', 'order #1', 'native.timer', '8', '—', '0'], ['o7:r4:00', 'order #7', 'native.timer', '8', '—', '0']];
+const B3J = [['1310', 'order #7', 'timer set · Wait'], ['1311', 'order #1', 'timer set · Wait']];
+const B3DB = (p, ev, st9 = ['Running', 'event'], j = B3J) => ({ partition: [p], instance: B3I(st9), message: ev ? [...B3T, ev] : B3T, journal: j });
+const EV = (seen, trial, attempts) => ['ext:0091', 'order #9', 'event', seen, trial, attempts];
+const B3 = {
+  label: 'A poison message',
+  aside: ['Start: partition 17 on Node A at epoch 8, with order #1, order #7 and order #9.', 'Fault: an event for order #9 makes its turn crash the whole process, say a stack overflow in an activity.', 'Threshold: 3 owners lost with it on trial, the prototype\'s MaxAttempts (src/Kernel.Durable/Worker.cs).', 'Source: the sketch\'s "Messages" (Poison), invariant 14 and trade-off 15.'],
+  base: { t: '0.0', posA: '1311', db: B3DB(['17', 'A', '8', '1311', '9.2'], EV('8', '—', '0')), card1: 'live', acts: 'dddw..', ptr: 3, s1: 'Running · waiting: timer',
+    card7: 'live', c7: ['Running', 'waiting: timer'], card9: { line: 'its turn takes the event', chips: [{ id: 'e9', label: 'event', kind: '' }] }, lease: [0.92, 0.89] },
+  steps: [
+    { title: 'The start: an event arrives for order #9.', layer: 'Layer: 2 delivers · 3 runs the turn',
+      text: ['Partition 17, on Node A at epoch 8, holds order #1, order #7 and order #9. An event for order #9 was polled and marked seen at epoch 8 before its turn, and the turn starts.', 'Nobody knows yet that an activity in it overflows the stack, so the envelope looks like any other.'],
+      lit: ['card9', 't-message'] },
+    { title: 'The turn kills Node A.', layer: 'Layer: 1, the process is gone · 2, the rows hold',
+      text: ['Order #9\'s turn overflows the stack, and the whole process dies, with every partition Node A owned.', 'The event was marked seen at epoch 8, and it is still in the table, not done.'],
+      t: '0.5', memEmpty: true, ovA: { kind: 'dead', l0: 'Node A: dead', l1: 'order #9\'s turn overflowed the stack' }, card1: 'lost', card7: 'lost', s1: 'gone with Node A\'s memory', c7: lostNote,
+      card9: { lost: true, line: 'gone with Node A', chips: [] }, lease: [0.87, 0.85], lt17: 'nobody renews', lit: ['ovA', 't-message'] },
+    { title: 'Node B takes partition 17, and the event goes on trial.', layer: 'Layer: 1 asks · 2 takes and runs the trial',
+      text: ['After the lease, Node B takes partition 17 at epoch 9 and polls. The event was seen at epoch 8 by another owner: a suspect, drawn red from now on.', 'A fenced commit puts it on trial at epoch 9, and its turn runs alone, with nothing else in flight in the process. Suspects are tried one at a time by default, so a poison message cannot take its neighbours down with it.'],
+      t: '9.4', own17: 'B', db: B3DB(['17', 'B', '9', '1311', '19.4'], EV('9', '9', '0')), take: TAKE('B', 'take by Node B: epoch 8 → 9'),
+      receipt: ['✓ take landed', 'epoch 8 → 9; then a', 'fenced commit put the', 'event on trial at 9'],
+      p17b: { ep: 9, title: 'order #9', turn: true, lines: ['loaded by key;', 'on trial: its turn runs', 'alone, nothing else', 'in flight'], chips: [{ id: 'e9', label: 'event · suspect', kind: 'poison' }] },
+      lease: [1, 0.8], lt17: 'Node B\'s · 10.0 s left', sh17: 'Node B\'s now · epoch 9',
+      lit: ['take', 'p17b', 't-partition', 't-message'], seams: ['take'],
+      motion: [{ fly: 'take', from: POS.takeB, to: POS.takeVault }, { slide: 'AtoB', delay: 900 }, { chip: 'e9', from: POS.msgRow }] },
+    { title: 'The trial kills Node B too.', layer: 'Layer: 1, a second process is gone',
+      text: ['The event overflows the stack again, and Node B dies, with partition 42 as well. Node A has restarted meanwhile, as a new process with empty memory.', 'The event\'s row still says: on trial at epoch 9.'],
+      t: '9.5', ovB: { kind: 'dead', l0: 'Node B: dead', l1: 'the trial killed it' }, memEmpty: true, ovA: { kind: 'note', l0: 'Node A: restarted', l1: 'a new process, with empty memory' },
+      p17b: { ep: 9, title: 'order #9', lost: true, lines: ['gone with Node B'], chips: [] }, sh42: 'its owner is lost too', lt17: 'Node B\'s · nobody renews',
+      lit: ['ovB', 'ovA', 't-message'] },
+    { title: 'Node A takes partition 17 again (epoch 10).', layer: 'Layer: 2, the take counts a death',
+      text: ['This take is from another owner, so it counts as a death: in the take\'s own transaction, one attempt is added to exactly the messages on trial at Node B\'s epoch, 9. The event now has 1 attempt of 3.', 'Node A puts it on trial again, alone. Order #1 and order #7 are not loaded yet; their timers are not due.'],
+      t: '19.6', own17: 'A', ep17: 10, memEmpty: false, ovA: null, p17b: null, db: B3DB(['17', 'A', '10', '1311', '29.6'], EV('10', '10', '1')),
+      take: TAKE('A', 'take by Node A: epoch 9 → 10'), receipt: ['✓ take landed', 'epoch 9 → 10; the same', 'transaction added an', 'attempt to the row', 'on trial at epoch 9'],
+      card1: 'lost', s1: 'not loaded yet: its timer is not due', c7: ['not loaded yet', ''],
+      card9: { line: 'on trial again, alone', chips: [{ id: 'e9', label: 'event · attempts 1/3', kind: 'poison' }] },
+      sh17: '', lt17: '', lease: [1, 0], lt42: 'ran out: its owner is lost', lit: ['take', 'card9', 't-partition', 't-message'], seams: ['takeA'],
+      motion: [{ fly: 'take', from: POS.takeA, to: POS.takeVault }, { slide: 'BtoA', delay: 900 }, { chip: 'e9', from: POS.msgRow }] },
+    { title: 'Two more owners are lost.', layer: 'Layer: 2, each take counts a death',
+      text: ['The same thing happens twice more: the trial kills Node A, and Node B, restarted as a new process, takes at epoch 11 (2 attempts); that trial kills Node B, and Node A, restarted again, takes at epoch 12 (3 attempts).', 'Each take adds its attempt in its own transaction, to exactly the messages that were on trial.'],
+      t: '40.0', ep17: 12, lease: [1, 0], lt42: 'ran out: its owner is lost', sh42: 'its owner is lost again', db: B3DB(['17', 'A', '12', '1311', '50.0'], EV('11', '11', '3')),
+      ovB: { kind: 'dead', l0: 'Node B: dead again', l1: 'the third owner lost' }, receipt: ['✓ take landed', 'epoch 11 → 12; the same', 'transaction added the', 'third attempt'],
+      card9: { line: 'attempts 3 of 3', chips: [{ id: 'e9', label: 'event · attempts 3/3', kind: 'poison' }] },
+      lit: ['card9', 't-partition', 't-message'], seams: ['takeA'],
+      motion: [{ ticks: [['c9a', ['Node A dies at epoch 10', 'B takes at 11 · attempts 2 of 3', 'Node B dies at epoch 11', 'A takes at 12 · attempts 3 of 3']], ['sh17', ['on Node A · epoch 10', 'on Node B · epoch 11', 'on Node B · epoch 11', 'on Node A · epoch 12']]] }] },
+    { title: 'Past the threshold: parked.', layer: 'Layer: 2 parks the message · 3, the instance is faulted',
+      text: ['At 3, the prototype\'s default, the event is no longer tried: it is parked, consumed with its instance faulted and the reason journalled. It came from outside the kernel, so consuming it marks its row done, and a sweep deletes it after its keep_until. The rest of the partition goes on: order #1 and order #7 run as before. A poison message cannot walk the cluster.'],
+      db: B3DB(['17', 'A', '12', '1312', '50.0'], EV('11', '11', '3 · done'), ['Faulted', '—'], [...B3J, ['1312', 'order #9', 'parked: 3 owners lost']]),
+      receipt: ['✓ parked', 'order #9 Faulted: "on', 'trial when 3 owners', 'were lost"'],
+      card1: 'live', s1: 'Running · goes on', card7: 'live', c7: ['Running', 'goes on'], card9: { fault: true, line: 'Faulted: parked', chips: [] },
+      lit: ['card9', 'card1', 'card7', 't-instance', 't-message', 't-journal'], seams: ['store'] },
+    { title: 'An honest caveat, and a contrast.', layer: 'Layer: 2 (invariant 14, one bad instance)',
+      text: ['The caveat: an owner lost for an unrelated reason while a message is on trial still costs that message an attempt, so an innocent message is occasionally parked: 12 innocent instances across 20,000 simulation runs of 1,000 actions. The sketch calls poison counting the design\'s weakest part. Proposed, not built: an owner with a trial in flight renews its lease on a short timer, so only a real death counts.', 'The contrast: a turn that merely throws, without killing the process, parks its instance at once; retries are the model\'s business.'],
+      lit: ['card9', 't-instance'] },
+  ],
+};
+const SCEN = { b1: B1, b2: B2, b3: B3 };
+const scStart = sc => ({ ...BASE, ...ACT2, ...sc.base, ...TRANSIENT });
+const scStates = sc => build(scStart(sc), sc.steps);
+
+// ==== the scene renderer, shared by act one and act two ================================================================
+function view(svgEl, sfx) {
+  const cache = new Map();
+  const v = { svg: svgEl, renders: 0 };
+  v.el = id => { if (!cache.has(id)) cache.set(id, document.getElementById(id + sfx)); return cache.get(id); };
+  v.actRows = ACTS.map((label, i) => {
+    const g = svg('g', { class: 'act' }), y = 183 + i * 18;
+    g.append(svg('text', { class: 'lbl', x: 212, y }, label), svg('text', { class: 'st8', x: 383, y, 'text-anchor': 'end' }, ''));
+    v.el('acts1').append(g);
+    return g;
+  });
+  return v;
+}
+const A1 = view($('scene'), ''), A2 = view(sceneB, '-b');
+
+function renderTable(v, name, c, rows, prevRows) {
+  const g = v.el('t-' + name);
+  g.textContent = '';
+  g.append(svg('text', { class: 'tt', x: 800, y: c.y + 11, style: 'font-size:11.5px' }, name));
+  c.head.forEach((h, i) => g.append(svg('text', { class: 'tm', x: c.x[i], y: c.y + 11 }, h)));
+  g.append(svg('line', { x1: 800, x2: 1180, y1: c.y + 15, y2: c.y + 15, stroke: 'var(--st)', 'stroke-width': 0.8 }));
+  const prevByKey = new Map(prevRows.map(r => [r[0], r]));
+  const keys = new Set(rows.map(r => r[0]));
+  const shown = [...rows.map(r => ({ r, kind: prevByKey.has(r[0]) ? 'keep' : 'fresh' })),
+                 ...prevRows.filter(r => !keys.has(r[0])).map(r => ({ r, kind: 'del' }))];
+  shown.forEach(({ r, kind }, i) => {
+    const y = c.y + 16 + i * 15, old = prevByKey.get(r[0]);
+    const changed = kind === 'keep' && r.some((val, j) => val !== old[j]);
+    const row = svg('g', { class: 'row' + (kind === 'keep' ? '' : ' ' + kind) + (changed ? ' chgrow' : '') });
+    row.append(svg('rect', { x: 798, y, width: 384, height: 15, rx: 2 }));
+    r.forEach((val, j) => row.append(svg('text', { class: (j === 0 ? 'c0' : '') + (changed && val !== old[j] ? ' chg' : ''), x: c.x[j], y: y + 11 }, val)));
+    const tag = kind === 'fresh' ? 'new' : kind === 'del' ? 'deleted' : changed ? 'changed' : '';
+    if (tag) row.append(svg('text', { class: 'tag', x: name === 'journal' ? 1182 : 870, y: y + 11, 'text-anchor': 'end' }, tag));
+    g.append(row);
+  });
+}
+
+function chipNodes(chips, x0, y) {
+  let x = x0;
+  return chips.map(c => {
+    const w = Math.round(c.label.length * 5.6 + 30);
+    const g = svg('g', { class: 'msg ' + c.kind });
+    g.append(svg('rect', { x, y, width: w, height: 24, rx: 5 }),
+             svg('path', { d: `M${x + 7},${y + 6} h14 v11 h-14 z M${x + 7},${y + 7} l7,5 l7,-5` }),
+             svg('text', { x: x + 25, y: y + 16 }, c.label));
+    g.dataset.id = c.id; g.dataset.x = x;
+    x += w + 6;
+    return g;
+  });
+}
+
+// A message that arrives drops in (or flies from where it came from); one that leaves rises into its card (rise < 0:
+// a turn takes it) or fades where it was (rise 0: the memory that held it is gone).
+function renderTray(v, id, x0, y, chips, prevChips, anim, delay, from, kk, rise) {
+  const g = v.el(id);
+  g.textContent = '';
+  const nodes = chipNodes(chips, x0, y);
+  nodes.forEach(node => g.append(node));
+  if (!anim) return;
+  nodes.forEach(node => {
+    const f = from[node.dataset.id];
+    if (!f && prevChips.some(c => c.id === node.dataset.id)) return;
+    const start = f ? `translate(${f[0] - node.dataset.x}px, ${f[1] - y}px)` : 'translate(0px, -34px)';
+    node.animate([{ transform: start, opacity: f ? 1 : 0 }, { transform: 'translate(0px, 0px)', opacity: 1 }],
+                 { duration: 700 * kk, delay, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'backwards' });
+  });
+  chipNodes(prevChips.filter(c => !chips.some(q => q.id === c.id)), x0, y).forEach(node => {
+    v.el('ghosts').append(node);
+    node.animate([{ transform: 'translate(0px, 0px)', opacity: 1 }, { transform: `translate(0px, ${rise}px)`, opacity: 0 }],
+                 { duration: 700 * kk, easing: 'ease-in', fill: 'forwards' }).onfinish = () => node.remove();
+  });
+}
+
+function overlay(v, id, o) {
+  const g = v.el(id);
+  g.classList.toggle('gone', !o);
+  g.classList.remove('dead', 'frozen', 'note');
+  if (!o) return;
+  g.classList.add(o.kind);
+  v.el(id + '0').textContent = o.l0;
+  v.el(id + '1').textContent = o.l1 || '';
+}
+
+function drawScene(v, s, p, anim, kk) {
+  const E = v.el, sc = v.svg, motion = anim ? s.motion : [];
+  v.renders++;
+  E('ghosts').textContent = '';
+  sc.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  sc.classList.toggle('animate', anim);
+
+  // lit parts and seam markers
+  sc.querySelectorAll('[data-part]').forEach(e => e.classList.toggle('lit', s.lit.includes(e.dataset.part)));
+  sc.querySelectorAll('.seam').forEach(e => e.classList.toggle('on', s.seams.includes(e.dataset.seam)));
+
+  // clock and leases
+  E('clock').textContent = `t = ${s.t} s`;
+  E('lf17').style.transform = `scaleX(${s.lease[0]})`;
+  E('lf42').style.transform = `scaleX(${s.lease[1]})`;
+  E('lt17').textContent = s.lt17 || `${(s.lease[0] * 10).toFixed(1)} s left`;
+  E('lt42').textContent = s.lt42 || `${(s.lease[1] * 10).toFixed(1)} s left`;
+
+  // partition 17: who owns it in the database, the epoch Node A holds it at, and Node A's fence record
+  const cols = s.cols || COLS, row17 = s.db.partition.find(r => r[0] === '17');
+  E('shelf17').classList.toggle('shelf-lost', s.own17 !== 'A');
+  E('sh17').textContent = s.sh17 || `on Node A · epoch ${s.ep17}`;
+  E('fe17').textContent = s.memEmpty ? 'fence: none' : `fence: epoch ${s.ep17}`;
+  E('pos17').textContent = s.memEmpty ? 'memory empty' : `position ${s.own17 === 'A' ? row17[cols.partition.head.indexOf('position')] : s.posA}`;   // Node A's own record
+  E('sh42').textContent = s.sh42 || 'on Node B · epoch 5';
+  overlay(v, 'ovA', s.ovA);
+  overlay(v, 'ovB', s.ovB);
+
+  // order #1: card, model, pointer, status
+  const c1 = E('card1');
+  c1.classList.toggle('gone', s.card1 === 'hidden');
+  c1.classList.toggle('card-ghost', s.card1 === 'ghost' || s.card1 === 'lost');
+  c1.classList.toggle('card-done', s.card1 === 'done');
+  v.actRows.forEach((g, j) => {
+    const st = s.acts[j];
+    g.setAttribute('class', 'act' + (st === 'd' ? ' done' : st === 'w' ? ' wait' : ''));
+    g.lastChild.textContent = st === 'd' ? '✓' : st === 'w' ? (j === 4 ? 'job' : 'waiting') : '';
+  });
+  E('ptr1').classList.toggle('gone', s.ptr < 0);
+  E('ptr1').style.transform = `translateY(${Math.max(s.ptr, 0) * 18}px)`;
+  E('s1').textContent = s.s1;
+  E('turn1').classList.toggle('gone', !s.turn1);
+  // order #7, and order #9 (act two)
+  E('card7').classList.toggle('card-done', s.card7 === 'done');
+  E('card7').classList.toggle('card-ghost', s.card7 === 'lost');
+  E('c7a').textContent = s.c7[0]; E('c7b').textContent = s.c7[1];
+  E('turn7').classList.toggle('gone', !s.turn7);
+  const c9 = s.card9 || { line: '', chips: [] }, pc9 = p.card9 || { chips: [] };
+  E('card9').classList.toggle('gone', !s.card9);
+  E('card9').classList.toggle('card-ghost', !!c9.lost);
+  E('card9').classList.toggle('card-fault', !!c9.fault);
+  E('c9a').textContent = c9.line;
+  // Node B's own copy of partition 17 (act two), drawn where order #3 sits
+  const pb = s.p17b, ppb = p.p17b || { chips: [] };
+  E('p17b').classList.toggle('gone', !pb);
+  E('p17b').classList.toggle('p-ghost', !!(pb && pb.lost));
+  E('card3').classList.toggle('gone', !!pb);
+  E('tray3').classList.toggle('gone', !!pb);
+  E('turnB').classList.toggle('gone', !(pb && pb.turn));
+  if (pb) {
+    E('p17bh').textContent = `partition 17 · epoch ${pb.ep}`;
+    E('p17bt').textContent = pb.title;
+    for (let j = 0; j < 4; j++) E('p17b' + j).textContent = pb.lines[j] || '';
+  }
+
+  // the committer lane: a turn's outcome waiting to be enveloped
+  const lane = E('lanelines');
+  lane.textContent = '';
+  (s.lane || []).forEach((t, j) => lane.append(svg('text', { class: j ? 'ts' : 'tt', x: 193, y: 398 + j * 16, style: j ? '' : 'font-size:11.5px' }, t)));
+  E('lanehint').classList.toggle('gone', !!s.lane || !!(s.env && s.env.at === 'lane'));
+  if (anim && s.lane && !p.lane) lane.animate([{ opacity: 0, transform: 'translate(0px, -40px)' }, { opacity: 1, transform: 'translate(0px, 0px)' }], { duration: 600 * kk, easing: 'ease-out', fill: 'backwards' });
+
+  // the commit envelope: assembled in the lane (or on Node B), flown to the vault, or bounced by the fence
+  let fd = 0;                                   // when a token reaches the vault: rows, receipts and polled messages change then
+  const env = E('env'), e = s.env || { lines: C1, stamp: null, at: 'lane' }, home = e.from === 'B' ? POS.envB : POS.envLane;
+  e.lines.forEach((t, j) => { E('el' + j).textContent = t; });
+  E('stamp').classList.toggle('gone', !e.stamp);
+  E('stamptext').textContent = e.stamp || '';
+  E('reject').classList.toggle('gone', !e.bounce);
+  env.classList.toggle('gone', !s.env);
+  at(env, e.at === 'vault' ? POS.envVault : home);
+  E('dockhint').classList.toggle('gone', !!((s.env && (s.env.at === 'vault' || s.env.bounce)) || s.take));
+  if (anim && s.env) {
+    const fresh = !p.env || p.env.id !== s.env.id;
+    const stampIn = delay => E('stamp').animate([{ opacity: 0, transform: 'scale(1.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 350 * kk, delay: delay * kk, easing: 'ease-out', fill: 'backwards' });
+    if (s.env.bounce) {
+      const d = 2400 * kk;
+      env.animate([{ transform: tr(home) }, { transform: tr(POS.envVault), offset: .4 }, { transform: tr(POS.envVault), offset: .62 }, { transform: tr(home) }], { duration: d, easing: 'ease-in-out' });
+      E('reject').animate([{ opacity: 0, transform: 'scale(1.7)' }, { opacity: 0, transform: 'scale(1.7)', offset: .4 }, { opacity: 1, transform: 'scale(1)', offset: .48 }, { opacity: 1, transform: 'scale(1)' }], { duration: d });
+      fd = .45 * d;
+    } else if (s.env.at === 'lane' && fresh) {
+      env.animate([{ opacity: 0, transform: tr(home) + ' scale(.6)' }, { opacity: 1, transform: tr(home) }], { duration: 600 * kk, easing: 'ease-out', fill: 'backwards' });
+      if (e.stamp) stampIn(650);
+    } else if (s.env.at === 'vault') {
+      const appear = fresh ? 600 : 0, stampAt = appear + 150, fly = 1100 * kk;
+      if (fresh) env.animate([{ opacity: 0, transform: tr(home) }, { opacity: 1, transform: tr(home) }], { duration: appear * kk, fill: 'backwards' });
+      stampIn(stampAt);
+      const flyAt = (stampAt + 500) * kk;
+      env.animate([{ transform: tr(home) }, { transform: tr(POS.envVault) }], { duration: fly, delay: flyAt, easing: EASE, fill: 'backwards' });
+      fd = flyAt + fly;
+    }
+  }
+
+  // the take or poll token: a statement on its way to the vault
+  E('take').classList.toggle('gone', !s.take);
+  if (s.take) { s.take.forEach((t, j) => { E('tk' + j).textContent = t; }); at(E('take'), POS.takeVault); }
+  for (const m of motion) {
+    if (m.fly === 'take') fd = Math.max(fd, ((m.delay || 0) + 1000) * kk);
+    if (m.ticks) fd = Math.max(fd, 2400 * kk);
+  }
+  sc.style.setProperty('--fd', fd + 'ms');
+  const rc = s.receipt === true ? RECEIPT : s.receipt;
+  E('receipt').classList.toggle('gone', !rc);
+  E('receipt').classList.toggle('bad', !!s.receiptBad);
+  for (let j = 0; j < 5; j++) E('rc' + j).textContent = rc ? rc[j] || '' : '';
+
+  // the database tables: rows appear (new), change (changed) and disappear (deleted) against the previous step
+  for (const name of Object.keys(cols)) renderTable(v, name, cols[name], s.db[name], p.db[name]);
+
+  // inbox trays
+  const from = {};
+  for (const m of motion) if (m.chip) from[m.chip] = m.from;
+  renderTray(v, 'chips1', 224, 344, s.tray1, p.tray1, anim, fd, from, kk, s.card1 === 'lost' ? 0 : -90);
+  renderTray(v, 'chips7', 446, 344, s.tray7, p.tray7, anim, 0, from, kk, -90);
+  renderTray(v, 'chips9', 413, 300, c9.chips, pc9.chips, anim, fd, from, kk, c9.lost ? 0 : -24);
+  renderTray(v, 'chipsB', 608, 218, pb ? pb.chips : [], ppb.chips, anim, fd, from, kk, pb && pb.lost ? 0 : -40);
+
+  // tokens: request, response, job
+  const req = E('req');
+  req.classList.toggle('gone', s.req === 'none');
+  at(req, s.req === 'caller' ? POS.reqCaller : POS.reqNode);
+  const resp = E('resp');
+  resp.classList.toggle('gone', s.resp === 'none');
+  at(resp, s.resp === 'sent' ? POS.respCaller : POS.respHeld);
+  E('resptext').textContent = s.resp === 'sent' ? '202 Accepted ✓' : '202 Accepted · held';
+  const job = E('job');
+  job.classList.toggle('gone', s.job === 'none');
+  at(job, s.job === 'smtp' ? POS.jobSmtp : POS.jobHome);
+
+  // the pass scanner and the placement arrow
+  E('scanner').classList.toggle('gone', !s.scan);
+  E('scanner').style.transform = 'translateX(378px)';
+  E('placement').classList.toggle('gone', s.card1 !== 'ghost');
+
+  // projector and Studio
+  E('pcur').textContent = s.cursor;
+  E('plines').textContent = '';
+  s.proj.forEach((t, j) => E('plines').append(svg('text', { class: 'ts', x: 802, y: 614 + j * 15 }, t)));
+  E('plines').append(svg('text', { class: 'ts', x: 802, y: 686 }, 'prototype: one statement'), svg('text', { class: 'ts', x: 802, y: 700 }, 'per instance'));
+  const sl = E('slines');
+  sl.textContent = '';
+  const lines = s.studio.length ? s.studio : ['no history projected yet'];
+  lines.forEach((t, j) => {
+    const line = svg('text', { class: 'sline' + (s.studio.length ? '' : ' ts') + (anim && s.studio.length && !p.studio.length ? ' new' : ''), x: t.startsWith('›') ? 1015 : 1005, y: 542 + j * 15 }, t);
+    line.style.animationDelay = (j * 220 * kk) + 'ms';
+    sl.append(line);
+  });
+
+  // one-off motions of this step
+  let end = fd;
+  for (const m of motion) {
+    if (m.fly) {
+      const d = 1000 * kk, delay = (m.delay || 0) * kk;
+      E(m.fly).animate([{ transform: tr(m.from) }, { transform: tr(m.to) }], { duration: d, delay, easing: EASE, fill: 'backwards' });
+      end = Math.max(end, d + delay);
+    }
+    if (m.sweep) {
+      E('scanner').animate([{ transform: 'translateX(0px)' }, { transform: 'translateX(378px)' }], { duration: 1100 * kk, easing: 'ease-in-out' });
+      end = Math.max(end, 1100 * kk);
+    }
+    if (m.clock) tick(v, m.clock[0], m.clock[1], 1600 * kk);
+    if (m.lease) {
+      const d = 1600 * kk;
+      E('lf17').animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(.67)', offset: .66 }, { transform: 'scaleX(1)', offset: .7 }, { transform: 'scaleX(.83)' }], { duration: d });
+      E('lf42').animate([{ transform: 'scaleX(.89)' }, { transform: 'scaleX(.69)', offset: .4 }, { transform: 'scaleX(1)', offset: .44 }, { transform: 'scaleX(.7)' }], { duration: d });
+      end = Math.max(end, d);
+    }
+    if (m.drain) {
+      const d = 1400 * kk;
+      E('lf17').animate([{ transform: `scaleX(${m.drain[0]})` }, { transform: `scaleX(${m.drain[1]})` }], { duration: d });
+      end = Math.max(end, d);
+    }
+    if (m.slide) {                               // a copy of partition 17's shelf slides to its new owner
+      const g = svg('g', {});
+      g.append(svg('rect', { x: 0, y: 0, width: 160, height: 22, rx: 4, style: 'fill:var(--l1)' }), svg('text', { x: 8, y: 15, style: 'fill:#fff;font-weight:600' }, 'partition 17'));
+      E('ghosts').append(g);
+      const [a, b] = m.slide === 'AtoB' ? [POS.shelfA, POS.shelfB] : [POS.shelfB, POS.shelfA], d = 1200 * kk, delay = (m.delay || 0) * kk;
+      g.animate([{ transform: tr(a), opacity: 1 }, { transform: tr(b), opacity: 1, offset: .85 }, { transform: tr(b), opacity: 0 }], { duration: d, delay, easing: EASE, fill: 'both' });
+      end = Math.max(end, d + delay);
+    }
+    if (m.ticks) for (const [id, texts] of m.ticks) ticker(v, id, texts, 2400 * kk);
+    if (m.rows) {
+      E('rowtoken').animate([{ opacity: 0, transform: tr(POS.rowsJournal) }, { opacity: 1, offset: .15 }, { opacity: 1, offset: .85 }, { opacity: 0, transform: tr(POS.rowsProjector) }], { duration: 1300 * kk, easing: 'ease-in-out' });
+      E('pcur').animate([{ opacity: .2 }, { opacity: .2, offset: .8 }, { opacity: 1 }], { duration: 1300 * kk });
+      end = Math.max(end, 1300 * kk);
+    }
+    if (m.studio) end = Math.max(end, lines.length * 220 * kk + 500);
+    if (m.chip) end = Math.max(end, fd + 700 * kk);
+  }
+  return end;
+}
+
+// The scene clock counts up during a step, and a ticker steps a label through a few values; a later render stops both.
+function tick(v, from, to, duration) {
+  const t0 = performance.now(), id = v.renders, el = v.el('clock');
+  const frame = now => {
+    if (id !== v.renders) return;
+    const f = Math.min(1, (now - t0) / duration);
+    el.textContent = `t = ${(from + (to - from) * f).toFixed(1)} s`;
+    if (f < 1) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+function ticker(v, id, texts, duration) {
+  const t0 = performance.now(), r = v.renders, el = v.el(id), final = el.textContent;
+  const frame = now => {
+    if (r !== v.renders) return;
+    const f = (now - t0) / duration;
+    el.textContent = f >= 1 ? final : texts[Math.floor(f * texts.length)];
+    if (f < 1) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+// ==== 01 · act one ======================================================================================================
+const act1 = makePlayer($('act-one'), {
+  svg: A1.svg, seams: true,
+  render: (s, p, anim, kk, i) => {
+    [...$('wf').children].forEach((li, j) => li.classList.toggle('on', j === s.ptr || (s.ptr < 0 && j === 0 && i < 3)));
+    return drawScene(A1, s, p, anim, kk);
+  },
+  onReset: () => setExploded(false),
+});
+
+// ==== 02 · three persistence modes, side by side ========================================================================
+const LS = $('lanes');
+const LY = [40, 208, 376];                    // the top of each lane; a lane is 160 high
+const MODES = [
+  { key: 'E', name: 'Ephemeral', sub: ['writes nothing when it', 'ends in its first turn', 'and sent nothing'] },
+  { key: 'B', name: 'Balanced', sub: ['the default: a turn', 'ends when everything', 'waits or ends'] },
+  { key: 'D', name: 'Durable', sub: ['a turn ends after', 'every activity'] },
+];
+const QROWS = {
+  plain: [['▸', 'POST /quote', 'HttpEndpoint, the trigger'], ['1', 'Compute quote', 'SetVariable'], ['2', 'Save quote', 'WriteLine'], ['3', 'Respond 200', 'WriteHttpResponse'], ['4', 'Done', '']],
+  wait: [['▸', 'POST /quote', 'HttpEndpoint, the trigger'], ['1', 'Compute quote', 'SetVariable'], ['2', 'Save quote', 'WriteLine'], ['3', 'Wait 5 s', 'Delay: a timer'], ['4', 'Respond 200', 'WriteHttpResponse'], ['5', 'Done', '']],
+};
+const NOTES = {
+  E: {
+    plain: ['Ends in its first turn and', 'sends nothing, so the kernel', 'writes nothing at all. The', 'response is released when', 'the turn ends: there was', 'nothing to write.'],
+    today: ['Today (prototype): an', 'Ephemeral instance that does', 'not end in its first turn', 'commits like Balanced.'],
+    decided: ['Decided, not built', '(decision 4): short timers', 'and jobs of an Ephemeral', 'instance stay in memory, up', 'to the route timeout or a', 'few seconds: no database', 'calls.'],
+  },
+  B: {
+    plain: ['One turn until everything', 'waits or ends: one commit.', 'With the fence in the batch,', 'the default: 2 round trips', '(3 with the fence apart).', 'Today\'s core: 48 to 80.'],
+    wait: ['A commit at the wait and', 'one at the end: 4 round trips', '(6 with the fence apart),', 'measured with a 20 ms Delay', 'before the response.'],
+  },
+  D: ['After every activity the', 'turn ends and sends itself', 'a "continue" message,', 'handed over in memory: a', 'commit each time, each', 'about 2 round trips (fence', 'in the batch).'],
+};
+const LAYER_LANES = 'Layer: 3, the execution model, decides where a turn ends · 2 commits it';
+
+// One beat is one moment of all three lanes. done: how many rows are done; wait: the row waiting; ends: lanes whose turn
+// ends here; commits: lanes whose turn end writes a commit; emit: the response is written in this beat.
+function beats(v) {
+  const today = v === 'today';
+  const B = [
+    { done: 0, ptr: 0, ends: '', commits: '', title: 'Three requests arrive.',
+      text: ['The same POST /quote reaches Node A three times, once for each lane. The three workflows are identical but for the persistence mode their author chose.', 'Each request places a new instance in a partition Node A owns and runs it right there, inline, with the start handed over in memory: no row yet. Watch where each lane\'s turns end: that is all a persistence mode decides.'] },
+    { done: 1, ptr: 0, ends: 'D', commits: 'D', title: 'The trigger runs.',
+      text: ['Each instance takes its first turn, and the trigger hands it the request.', 'Durable ends its turn after every activity: it sends itself a "continue" message, handed over in memory, and the turn commits. Its first envelope goes to the database. Ephemeral and Balanced run on.'] },
+    { done: 2, ptr: 1, ends: 'D', commits: 'D', title: 'Compute quote.',
+      text: ['SetVariable computes the quote. Durable ends another turn and commits again.', 'Ephemeral and Balanced are still in their first turn and have written nothing.'] },
+    { done: 3, ptr: 2, ends: 'D', commits: 'D', title: 'Save quote.',
+      text: ['WriteLine saves the quote. Durable commits a third time.', 'If saving had an effect outside Elsa, all three lanes have now caused it once. Choose "Crash here" below the lanes to see what each lane would lose.'] },
+  ];
+  if (v === 'plain') return B.concat(
+    { done: 5, ptr: 4, ends: 'EBD', commits: 'BD', emit: true, title: 'Respond 200, then Done.',
+      text: ['All three write the response and finish.', 'Ephemeral ended in its first turn and sent nothing, so the kernel writes nothing, and the response is released at once: there was nothing to write.', 'Balanced ends its one turn and commits once; Durable commits its fourth envelope. Both hold the response until their commit lands.'] },
+    { done: 5, ptr: 4, ends: '', commits: '', title: 'The commits land, and the responses go out.',
+      text: ['Balanced and Durable release their responses: a caller never gets a response for work that was then lost.', 'On PostgreSQL, Ephemeral cost no round trips; Balanced 2 with the fence in the batch, the default (3 with the fence apart), where today\'s core needs 48 to 80; Durable about 2 per commit.'] });
+  return B.concat(
+    { done: 3, wait: 3, ptr: 3, ends: 'EBD', commits: today ? 'EBD' : 'BD', title: 'Wait 5 s: the turns end at the wait.',
+      text: ['Balanced ends its turn at the wait and commits once: the instance row and a timer message due in 5 s. Durable commits too, its fourth envelope. The requests stay open meanwhile.',
+        today ? 'Ephemeral no longer ends in its first turn, so today, in the prototype, it commits like Balanced.'
+              : 'Ephemeral, decided but not built (decision 4): short timers of an Ephemeral instance stay in memory up to a threshold, the route timeout or a few seconds; if 5 s is under it, Ephemeral writes nothing.'] },
+    { done: 4, ptr: 3, ends: 'D', commits: 'D', title: 'Five seconds later, the timer fires.',
+      text: ['The owner holds each timer in memory on a monotonic clock, so it wakes each instance on time without reading the table.', 'Ephemeral and Balanced start their second turn. Durable runs the end of the wait as one activity and commits again: its fifth envelope.'] },
+    { done: 6, ptr: 5, ends: 'EBD', commits: today ? 'EBD' : 'BD', emit: true, title: 'Respond 200, then Done.',
+      text: ['All three respond and finish. Balanced commits a second time and holds the response for it; Durable holds it for its sixth commit.',
+        today ? 'Ephemeral, today, does as Balanced does.' : 'Ephemeral, as decided: it has written nothing at all, so its response is released at once.'] },
+    { done: 6, ptr: 5, ends: '', commits: '', title: 'The commits land, and the responses go out.',
+      text: ['Every held response goes out once its commit lands.', `On PostgreSQL with the fence in the batch: Balanced 4 round trips (6 with the fence apart), as measured with a 20 ms Delay before the response; Durable about 2 per commit; Ephemeral ${today ? 'the same as Balanced, today' : 'none, once decision 4 is built'}.`] });
+}
+
+function cost(key, commits) {
+  if (key === 'D') return { rt: commits ? '≈ 2 per commit' : '0', rtn: 'fence in the batch' };
+  return { rt: String(commits * 2), rtn: key === 'B' ? 'fence in the batch' : commits ? 'like Balanced, today' : 'nothing to write' };
+}
+// One lane's state at beat b of the normal run.
+function laneAt(B, b, m, v, rows) {
+  const key = m.key, cur = B[b];
+  let commits = 0, ends = 0;
+  B.slice(0, b + 1).forEach((x, i) => { if (x.commits.includes(key)) commits++; if (i < b && x.ends.includes(key)) ends++; });
+  const e = B.findIndex(x => x.emit);
+  const resp = e < 0 || b < e ? 'none' : b === e && B[e].commits.includes(key) ? 'held' : 'sent';
+  const finished = cur.done === rows.length, waiting = cur.wait != null;
+  const inMemory = key === 'E' && v === 'decided';
+  return {
+    acts: rows.map((_, r) => r < cur.done ? 'd' : r === cur.wait ? 'w' : '.'),
+    ptr: finished ? -1 : cur.ptr,
+    badge: b === 0 ? '' : finished ? 'finished' : waiting ? 'turn ended' : `turn ${ends + 1}`,
+    status: b === 0 ? 'start in memory · no row yet'
+      : finished ? (commits ? `Finished · ${plural(commits, 'commit')}` : 'Finished · nothing written')
+      : waiting ? (inMemory ? 'waiting · its timer in memory only' : 'waiting · its timer committed')
+      : commits ? `running · ${plural(commits, 'commit')} landed` : 'running · nothing written yet',
+    commits, fly: cur.commits.includes(key), resp,
+    call: resp === 'sent' ? ['got 200 OK', ''] : b === 0 ? ['sent POST /quote', ''] : ['waiting for', 'the response'],
+    notes: key === 'D' ? NOTES.D : key === 'B' ? NOTES.B[v === 'plain' ? 'plain' : 'wait'] : NOTES.E[v],
+    ...cost(key, commits),
+  };
+}
+
+// The steps for one choice of workflow (v) and crash point. A crash point is "Node A dies just after this activity
+// ran, before any commit that follows it", or "during the wait" (after the commits at the wait landed).
+function laneSteps(v, crash) {
+  const rows = QROWS[v === 'plain' ? 'plain' : 'wait'], B = beats(v), ri = rows.length - 2;      // ri: Respond 200
+  const steps = B.map((beat, b) => ({ title: beat.title, text: beat.text, layer: LAYER_LANES, v, rows, row: beat.ptr, lanes: MODES.map(m => laneAt(B, b, m, v, rows)) }));
+  if (crash === 'none') return steps;
+  const landed = crash === 'wait', crow = { compute: 1, save: 2, wait: -1, respond: ri }[crash];
+  const k = landed ? B.findIndex(x => x.wait != null) : B.findIndex(x => x.done > crow);         // the beat that ran it
+  const upto = landed ? k : k - 1, name = r => rows[r][1];
+  const atCrash = [], after = [];
+  MODES.forEach(m => {
+    const base = laneAt(B, upto, m, v, rows), kept = base.commits;
+    let last = -1;
+    for (let i = 0; i <= upto; i++) if (B[i].commits.includes(m.key)) last = i;
+    const ran = landed ? base.acts : rows.map((_, r) => r <= crow ? 'd' : '.');
+    const dead = { ...base, acts: ran, ptr: -1, badge: '', ghost: true, fly: false, status: 'gone from memory with Node A',
+      crash: ['✕ Node A dies', landed ? 'during the wait' : m.key === 'D' ? 'before its commit' : 'mid-turn'],
+      resp: !landed && crow === ri ? 'lost' : 'none', call: ['no response: the', 'connection died'],
+      notes: ['What survives is only what', 'committed:', kept ? `${plural(kept, 'commit')} in the database.` : 'nothing at all.'] };
+    atCrash.push(dead);
+    if (last < 0) {
+      const timerOnly = landed && m.key === 'E';
+      after.push({ ...dead, crash: null, gone: true, acts: ran.map(a => a === '.' ? '.' : 'x'), status: 'gone: no row says it existed',
+        notes: m.key === 'B' ? ['Nothing was committed yet,', 'and the start was handed over', 'in memory: no row says the', 'run existed. It is gone too.', 'A retry is a new run: the', 'code runs again.']
+          : [timerOnly ? 'The timer was in memory' : 'Nothing was written, so', timerOnly ? 'only, so the run is gone.' : 'the run is gone.', 'A retry is a new run: the', 'code runs again.'],
+        say: m.key === 'B' ? 'Balanced had committed nothing yet, and the start was handed over in memory, so no row says its run existed: it is gone as well.'
+          : timerOnly ? 'Ephemeral kept its timer in memory only, so its run is gone.' : 'Ephemeral wrote nothing, so its run is gone.' });
+    } else {
+      // what ran on Node A after the last commit runs again; a wait's end is its timer, delivered again
+      const from = B[last].done, again = [];
+      const acts = rows.map((_, r) => {
+        if (r >= from && !landed && r <= crow) { again.push(r === B[last].wait ? 'the timer fires again' : `"${name(r)}" runs again`); return 'a'; }
+        return 'd';
+      });
+      after.push({ ...dead, crash: null, ghost: false, acts, status: 'Finished on another node', resp: 'nowhere',
+        notes: ['After the lease (about 10 s)', 'another node takes the', 'partition and runs on from', `commit ${kept}.`, ...(again.length ? again.map(a => a[0].toUpperCase() + a.slice(1) + '.') : ['Nothing runs again.']), 'Its response has no caller.'],
+        say: `${m.name} had ${plural(kept, 'commit')}: after the lease, about 10 s, another node takes the partition and runs on from the last one${again.length ? `, so ${again.join(' and ')}` : ', and nothing runs again'}.` });
+    }
+  });
+  const where = landed ? 'during the wait' : `just after "${name(crow)}"`;
+  return steps.slice(0, upto + 1).concat(
+    { title: `Node A dies ${where}.`, layer: 'Layer: 1, the process is gone · 2, only what committed survives', v, rows, row: landed ? 3 : crow, lanes: atCrash,
+      text: [`Node A, which runs all three instances inline in their requests, dies ${landed ? 'while they wait' : `just after "${name(crow)}" ran, before any commit that would follow it`}. Everything it held in memory is gone: the instances, any commit not yet sent and every held response.`,
+        `What survives is only what committed: ${MODES.map((m, j) => `${m.name} ${atCrash[j].commits ? plural(atCrash[j].commits, 'commit') : 'nothing'}`).join(', ')}.`] },
+    { title: 'After the crash.', layer: 'Layer: 2, takeover and redelivery', v, rows, row: -1, lanes: after,
+      text: [after.map(a => a.say).join(' '),
+        'No caller got a response: each connection died with Node A. A response is handed over only when the turn that wrote it ends, and held until that turn\'s commit lands if it writes one; Ephemeral releases it at once only because its turn writes nothing. A retry is a new run, so code that already ran runs again: activity code runs at least once, its effect on workflow state once, and side effects outside Elsa may repeat.',
+        'Durable narrows the window, but no mode prevents a repeat after a crash between an effect and its commit: effects that must not repeat need idempotency keys (decision 1).'] });
+}
+
+// The lanes' fixed parts, drawn once.
+const LANE = MODES.map((m, j) => {
+  const y = LY[j], g = svg('g', { class: 'lane' }), L = { y };
+  LS.append(g);
+  const add = (parent, tag, attrs, text) => { const e = svg(tag, attrs, text); parent.append(e); return e; };
+  const T = (cls, x, dy, text, more) => add(g, 'text', { class: cls, x, y: y + dy, ...more }, text);
+  const mid = { 'text-anchor': 'middle' };
+  add(g, 'rect', { class: 'lanebg', x: 4, y, width: 1192, height: 160, rx: 9 });
+  add(g, 'rect', { x: 4, y: y + 12, width: 4, height: 136, style: 'fill:var(--l3)' });
+  T('mode', 18, 30, m.name);
+  m.sub.forEach((t, i) => T('ts', 18, 50 + i * 14, t));
+  L.tag = T('tag', 18, 118, '');
+  // its HTTP caller
+  add(g, 'rect', { class: 'box', x: 168, y: y + 14, width: 122, height: 132, rx: 7 });
+  add(g, 'rect', { class: 'ico', x: 207, y: y + 24, width: 44, height: 28, rx: 3 });
+  add(g, 'path', { class: 'ico', d: `M200,${y + 58} h58 l-5,5 h-48 z` });
+  T('tt', 229, 82, 'HTTP caller', mid);
+  L.c0 = T('ts', 229, 100, '', mid); L.c1 = T('ts', 229, 114, '', mid);
+  // the instance card: the activity list and its pointer
+  L.card = add(g, 'g', {});
+  add(L.card, 'rect', { class: 'b3 pf', x: 300, y: y + 8, width: 240, height: 146, rx: 8 });
+  add(L.card, 'text', { class: 'tt', x: 312, y: y + 27 }, `quote · ${m.name}`);
+  L.badge = add(L.card, 'g', { class: 'badge' });
+  add(L.badge, 'rect', { x: 452, y: y + 15, width: 80, height: 17, rx: 8 });
+  L.badgeT = add(L.badge, 'text', { x: 492, y: y + 27, 'text-anchor': 'middle' }, '');
+  L.rows = [0, 1, 2, 3, 4, 5].map(r => {
+    const a = add(L.card, 'g', { class: 'act' }), yy = y + 48 + r * 16;
+    add(a, 'text', { class: 'lbl', x: 324, y: yy });
+    add(a, 'text', { class: 'st8', x: 532, y: yy, 'text-anchor': 'end' });
+    return a;
+  });
+  L.ptr = add(L.card, 'path', { class: 'lptr', d: `M312,${y + 40} l7,4.5 l-7,4.5 z`, style: 'fill:var(--accent)' });
+  L.status = add(L.card, 'text', { class: 'ts', x: 312, y: y + 146 });
+  // where Node A dies
+  L.crash = add(g, 'g', { class: 'crashmark gone' });
+  add(L.crash, 'rect', { x: 550, y: y + 50, width: 138, height: 42, rx: 6 });
+  L.cr0 = add(L.crash, 'text', { class: 'tt', x: 619, y: y + 67, 'text-anchor': 'middle' }, '');
+  L.cr1 = add(L.crash, 'text', { x: 619, y: y + 83, 'text-anchor': 'middle', style: 'font-size:11px' }, '');
+  // the database, which keeps one envelope per commit
+  add(g, 'path', { class: 'cyl', d: `M700,${y + 34} v62 a40,10 0 0 0 80,0 v-62` });
+  add(g, 'ellipse', { class: 'cyl', cx: 740, cy: y + 34, rx: 40, ry: 10 });
+  L.pile = add(g, 'g', {});
+  L.vt = T('ts', 740, 128, '', mid); T('ts', 740, 143, 'database', mid);
+  // what it costs
+  add(g, 'rect', { class: 'box', x: 800, y: y + 12, width: 188, height: 136, rx: 7 });
+  T('ts', 812, 32, 'commits'); L.n = T('big', 812, 60, '0');
+  T('ts', 812, 82, 'database round trips'); T('ts', 812, 95, '(PostgreSQL)');
+  L.rt = T('big', 812, 123, '0'); L.rtn = T('ts', 812, 140, '');
+  // notes
+  L.notesbox = add(g, 'rect', { class: 'box notesbox', x: 996, y: y + 12, width: 196, height: 136, rx: 7 });
+  L.notes = [0, 1, 2, 3, 4, 5, 6, 7].map(i => T('ts nt', 1006, 30 + i * 15, ''));
+  // the response: held on Node A, then sent to the caller
+  L.resp = add(g, 'g', { class: 'token resp gone' });
+  add(L.resp, 'rect', { class: 'pf', x: 0, y: 0, width: 96, height: 20, rx: 5 });
+  L.respT = add(L.resp, 'text', { class: 'tt', x: 7, y: 14, style: 'font-size:11.5px' }, '');
+  return L;
+});
+function miniEnv(x, y) {
+  const g = svg('g', { class: 'mini' });
+  g.append(svg('rect', { x, y, width: 36, height: 20, rx: 3 }), svg('path', { d: `M${x},${y} l18,9 l18,-9` }));
+  return g;
+}
+
+function drawLanes(s, p, anim, kk) {
+  LS.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  const ol = $('qwf');
+  if (ol.dataset.v !== s.rows.length + '') {                // the workflow panel lists the rows of this variant
+    ol.dataset.v = s.rows.length;
+    ol.innerHTML = '';
+    s.rows.forEach(([n, label, type]) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span></span><span class="t"></span>`;
+      li.firstChild.textContent = n;
+      li.insertBefore(document.createTextNode(label), li.lastChild);
+      if (type) li.lastChild.textContent = type; else li.lastChild.remove();
+      ol.append(li);
+    });
+  }
+  [...ol.children].forEach((li, j) => li.classList.toggle('on', j === s.row));
+  let end = 0;
+  s.lanes.forEach((ls, j) => {
+    const L = LANE[j], pl = p.lanes[j], y = L.y;
+    L.tag.textContent = j === 0 && s.v !== 'plain' ? (s.v === 'today' ? 'today (prototype)' : 'decided, not built') : '';
+    L.c0.textContent = ls.call[0]; L.c1.textContent = ls.call[1];
+    L.card.setAttribute('class', ls.ghost ? 'ghostcard' : '');
+    L.badge.classList.toggle('gone', !ls.badge);
+    L.badgeT.textContent = ls.badge;
+    L.rows.forEach((g, r) => {
+      const st = ls.acts[r] || '.';
+      g.setAttribute('class', 'act' + ({ d: ' done', w: ' wait', a: ' again', x: ' lost' }[st] || ''));
+      g.firstChild.textContent = !s.rows[r] ? '' : r === 0 ? `trigger: ${s.rows[r][1]}` : `${s.rows[r][0]} ${s.rows[r][1]}`;
+      g.lastChild.textContent = { d: '✓', w: 'waiting', a: '↻ again', x: '✕ lost' }[st] || '';
+    });
+    L.ptr.classList.toggle('gone', ls.ptr < 0);
+    L.ptr.style.transform = `translateY(${Math.max(ls.ptr, 0) * 16}px)`;
+    L.status.textContent = ls.status;
+    L.crash.classList.toggle('gone', !ls.crash);
+    if (ls.crash) { L.cr0.textContent = ls.crash[0]; L.cr1.textContent = ls.crash[1]; }
+    // a commit is an envelope that flies from the instance into the database and stays there
+    L.pile.textContent = '';
+    for (let e = 0; e < Math.min(ls.commits, 7); e++) {
+      const env = miniEnv(722, y + 84 - e * 8);
+      L.pile.append(env);
+      if (anim && e >= pl.commits) {
+        env.animate([{ opacity: 0, transform: 'translate(-180px, 14px)' }, { opacity: 1, offset: .2 }, { opacity: 1, transform: 'translate(0px, 0px)' }], { duration: 1000 * kk, delay: 200 * kk, easing: EASE, fill: 'backwards' });
+        end = Math.max(end, 1200 * kk);
+      }
+    }
+    L.vt.textContent = !ls.commits ? 'nothing written' : ls.resp === 'held' ? `${plural(ls.commits, 'commit')}, 1 in flight` : `${plural(ls.commits, 'commit')} landed`;
+    L.n.textContent = ls.commits;
+    L.rt.textContent = ls.rt;
+    L.rt.setAttribute('class', ls.rt.length > 4 ? 'mid' : 'big');
+    L.rtn.textContent = ls.rtn;
+    L.notes.forEach((t, i) => { t.textContent = ls.notes[i] || ''; });
+    L.notesbox.classList.toggle('bad', !!(ls.crash || ls.gone));
+    // the response: held on Node A, sent to the caller, or never sent
+    L.resp.classList.toggle('gone', ls.resp === 'none');
+    L.resp.classList.toggle('lost', ls.resp === 'lost' || ls.resp === 'nowhere');
+    L.respT.textContent = { held: '200 · held', sent: '200 OK ✓', lost: '200 · never sent', nowhere: '200 · no caller' }[ls.resp] || '';
+    const held = [546, y + 122], caller = [181, y + 122];
+    at(L.resp, ls.resp === 'sent' ? caller : held);
+    if (anim && ls.resp === 'sent' && pl.resp !== 'sent') {
+      L.resp.animate([{ transform: tr(held) }, { transform: tr(caller) }], { duration: 1000 * kk, delay: 300 * kk, easing: EASE, fill: 'backwards' });
+      end = Math.max(end, 1300 * kk);
+    }
+  });
+  return end;
+}
+
+let variant = 'plain', crashAt = 'none';
+const modes = makePlayer($('modes'), { svg: LS, seams: false, render: drawLanes, onReset: () => setWhatIf('plain', 'none') });
+function setWhatIf(v, c) {
+  if (v === 'plain' && c === 'wait') c = 'none';
+  const keep = modes.n;
+  variant = v; crashAt = c;
+  document.querySelectorAll('[data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  document.querySelectorAll('[data-c]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.c === c)));
+  document.querySelector('[data-c="wait"]').hidden = v === 'plain';
+  const st = laneSteps(v, c);
+  // a crash jumps to the moment Node A dies; another workflow keeps the step number where it can
+  if (c === 'none') modes.setSteps(st, st[0], Math.min(keep, st.length - 1), false);
+  else modes.setSteps(st, st[0], st.length - 2, true);
+}
+document.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => setWhatIf(b.dataset.v, crashAt)));
+document.querySelectorAll('[data-c]').forEach(b => b.addEventListener('click', () => setWhatIf(variant, b.dataset.c)));
+
+// ==== 03 · act two ======================================================================================================
+const act2 = makePlayer($('act-two'), { svg: A2.svg, seams: true, render: (s, p, anim, kk) => drawScene(A2, s, p, anim, kk) });
+function selectScenario(id, step, animate) {
+  const sc = SCEN[id];
+  document.querySelectorAll('[data-sc]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sc === id)));
+  $('sc-title').textContent = sc.label;
+  $('sc-text').textContent = '';
+  sc.aside.forEach(t => { const para = document.createElement('p'); para.textContent = t; $('sc-text').append(para); });
+  act2.setSteps(scStates(sc), scStart(sc), step, animate);
+}
+document.querySelectorAll('[data-sc]').forEach(b => b.addEventListener('click', () => { if (pinned || preview) setFocus(null, null); selectScenario(b.dataset.sc, 0, true); }));
+
+// ---- exploded view (act one): layer 3 lifts, layer 1 drops; the view box grows to hold them ------------------------
+const VIEW = { closed: [0, 0, 1200, 720], open: [0, -76, 1200, 862] };
+let viewAnim = 0;
+function setExploded(on) {
+  const sc = A1.svg;
+  $('explode').setAttribute('aria-pressed', String(on));
+  $('explode').textContent = 'Exploded view';
+  sc.classList.toggle('exploded', on);
+  const from = sc.getAttribute('viewBox').split(' ').map(Number), to = on ? VIEW.open : VIEW.closed;
+  cancelAnimationFrame(viewAnim);
+  if (!motionOn()) { sc.setAttribute('viewBox', to.join(' ')); return; }
+  const t0 = performance.now(), d = 800 / act1.speed;
+  const frame = now => {
+    const f = Math.min(1, (now - t0) / d), ease = f < .5 ? 2 * f * f : 1 - (-2 * f + 2) ** 2 / 2;
+    sc.setAttribute('viewBox', from.map((val, j) => val + (to[j] - val) * ease).join(' '));
+    if (f < 1) viewAnim = requestAnimationFrame(frame);
+  };
+  viewAnim = requestAnimationFrame(frame);
+}
+$('explode').addEventListener('click', () => {
+  setExploded(!A1.svg.classList.contains('exploded'));
+  $('scenebox').scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'center' });
+});
+
+// ==== 04 · the fence lab ================================================================================================
+// One partition row between two nodes. The controls pick a case; a case is a list of states, each a patch over the
+// lasting fields of the state before it (as in the acts), and drawLab draws state N from itself alone.
+//   row: owner, epoch, lease_until, position as the database holds them; rowSt 'pend' is uncommitted, 'whatif' a counterfactual.
+//   envA, takeB, takeA: a token at 'home' (its node), 'hold' (it holds the row lock), 'queue' (it waits for it) or 'out'
+//   (back from the row with its answer, beside its node: refused, matched nothing, committed or unknown), or null.
+//   pay: Node A's batch in the payload tables: none, pending (its open transaction), landed, once or rolled.
+//   call: what Node A's HTTP caller sees. stmt: the statement at the row and its result. banner: the outcome. t: db clock.
+const LAB = $('lab'), LE = id => $('lab-' + id);
+const LV = { renders: 0, el: LE };                                   // what tick() needs to run the db clock
+const LSLOT = { hold: [368, 93], queue: [640, 93] }, LHOME = { envA: [44, 214], takeA: [44, 214], takeB: [930, 214] };
+const LOUT = { envA: [44, 262], takeA: [44, 262], takeB: [930, 262] };
+const LBASE = {
+  t: 0, row: ['A', '8', '10.0', '1204'], rowSt: '', rowcap: '', envA: null, takeB: null, takeA: null, pay: 'none', call: 'held',
+  paused: '', memA: ['I own 17 · epoch 8 · position 1204', 'my last commit renewed the lease to 10.0 s'],
+  memB: ['holds nothing of partition 17', 'it owns partitions of its own'], badge: 'turns ended',
+  turn: ['order #1: Save order, Respond 202, then waits', 'order #7: its timer fired, and it finished', 'one commit for both: position 1204 → 1206'],
+};
+const LTRANS = { stmt: null, banner: null, lit: [] };
+// the payload tables: [name, x, rows before Node A's batch, the batch's rows (ins, upd or del)]; like act one's first commit
+const LPAY = [
+  ['instance', 334, [['order #7', 'Running']], [['order #7', 'Finished', 'upd'], ['order #1', 'Running', 'ins']]],
+  ['message', 514, [['timer → order #7', 'due']], [['timer → order #7', 'consumed', 'del'], ['timer → order #1', 'in 5 s', 'ins']]],
+  ['journal', 694, [['1204', 'order #7']], [['1205', 'order #1', 'ins'], ['1206', 'order #7', 'ins']]],
+];
+const FENCE = (res, ep = '8') => [`A's fence · UPDATE partition SET position = 1206, lease_until = now + 10 s`, `WHERE id = 17 AND epoch = ${ep} AND position = 1204`, res];
+const TAKESQL = (who, res) => [`${who}'s take · UPDATE partition SET owner = ${who}, epoch = epoch + 1, lease_until = …`, `WHERE id = 17 AND (owner IS NULL OR lease_until < db now OR owner = ${who})`, res];
+const L_COMMIT = 'Layer 2 · IKernelStore.CommitAsync · built; 2 round trips measured on PostgreSQL';
+const L_TAKE = 'Layer 2 · the take (IKernelStore.TakeAsync) · built';
+const L_WHEN = 'Layer 2 · built · the moment both arrive is illustrative';
+const DROPPED = { badge: 'dropped', turn: ['dropped by the reset', 'what landed is in the rows; the rest is gone', ''] };
+
+// The steps of one case. w: when Node A, awake, sends its commit; the fence sets lease_until from Node A's clock.
+function labCase(pause, order, lost) {
+  const w = pause === 2 ? 2.1 : 0.1, lu = (w + 10).toFixed(1);
+  const S = [{ title: 'The start: Node A has a batch to commit.', layer: 'Layer 2 · the owner, its commit and the partition row',
+    text: ['Node A owns partition 17 at epoch 8, and the last position it wrote is 1204. Its last commit renewed the lease to 10.0 s on the database clock; it is 0.0 s now.',
+      'Two turns have just ended in one pass: order #1 ran "Save order" and "Respond 202" and now waits 5 s; order #7 finished. Their commit is like act one\'s first. The 202 is written but held: it goes out only after this commit lands.',
+      'Node B would take partition 17 if it could. It can only if its take finds no live lease.'],
+    lit: ['labMemA', 'labTurn', 'labRow'] }];
+  if (pause === 2) S.push({ title: 'Node A pauses for 2 s.', layer: 'Layer 1 · a process that does not run · the 10 s lease is decided',
+    text: ['A garbage-collection pause stops Node A for 2 s, between the end of its turns and its commit. It is not dead; it just does not run, and renews nothing.',
+      'Its lease runs to 10.0 s and it runs again at 2.1 s: the pause is shorter than the time left on the lease, so nobody may take the partition meanwhile.'],
+    t: 2.1, paused: '❚❚ Node A: paused for 2 s', badge: 'paused', lit: ['labLease'] });
+  if (pause === 15) S.push({ title: 'Node A pauses for 15 s.', layer: 'Layer 1 · a process that does not run',
+    text: ['Just as its turns end, before its commit goes out, Node A stops: a long garbage-collection pause, or its VM is suspended. It is not dead, and it still believes it owns partition 17 at epoch 8.',
+      'Its lease runs to 10.0 s, and 15 s is longer than that. While it does not run it renews nothing.'],
+    t: 0.1, paused: '❚❚ Node A: paused for 15 s', badge: 'paused', lit: ['labMemA'] },
+  { title: 'The lease runs out, and nobody has taken the partition yet.', layer: 'Layer 2 · the 10 s lease is decided · when Node B tries is illustrative',
+    text: ['At 10.0 s the lease runs out. The row does not change by itself: it still says owner A, epoch 8, position 1204. Only a take changes the owner and the epoch.',
+      order === 'early' ? 'Node B\'s next try comes soon after.'
+        : 'Note what the fence does not check: lease_until. Until somebody takes the partition, a commit from Node A would still land, because the epoch and the position it fences on have not changed. Say Node B\'s next try comes at 15.0 s, just as Node A wakes.'],
+    t: 10, lit: ['labLease', 'labLeaseUntil'] });
+
+  // Node A's commit, within its lease: round trip 1 (the batch with the fence, checked), then round trip 2 (COMMIT)
+  const send = { title: 'Node A sends its commit: round trip 1.', layer: L_COMMIT,
+    text: ['The batch goes to the database in one transaction, with the fence: a conditional update of the partition row on the epoch and the position Node A believes in. The same update renews the lease.',
+      'Node A holds the row lock while its transaction is open. The fence changed 1 row, and Node A sees that count before it sends anything more. The payload rows are written too, but nobody else can see them yet.'],
+    t: w, paused: '', badge: 'committing', envA: { at: 'hold', l2: 'epoch 8 · position 1204 → 1206' }, pay: 'pending',
+    row: ['A', '8', lu, '1206'], rowSt: 'pend', rowcap: 'uncommitted: only Node A\'s transaction sees this',
+    stmt: FENCE('→ 1 row: the check passes · round trip 1 of 2 (PostgreSQL)'), lit: ['labEnv', 'labStmt', 'labLock', 'labRow'] };
+  const landed = { row: ['A', '8', lu, '1206'], rowSt: '', rowcap: '', pay: 'landed', envA: null };
+
+  if (pause < 15 && !lost) return { title: 'Case 1: Node A commits within its lease.',
+    aside: [`Node A ${pause ? 'pauses for 2 s, less than the time left on its lease' : 'does not pause'}, so its fence finds the row as it left it.`, 'Watch: the count the fence returns, and that COMMIT goes only after it; then the renewed lease against Node B\'s take.', 'Source: the sketch\'s "The commit" and "Ownership".'],
+    steps: [...S, send,
+      { title: '1 row, so Node A sends COMMIT: round trip 2.', layer: L_COMMIT,
+        text: ['The check passed, so COMMIT goes out and everything lands at once: order #1\'s new row, order #7 finished, order #7\'s timer consumed, order #1\'s timer sent, and the journal rows at 1205 and 1206.',
+          `The fence also renewed the lease, to ${lu} s. A busy partition needs no heartbeat: every commit is one.`],
+        ...landed, badge: 'committed', memA: ['I own 17 · epoch 8 · position 1206', `the fence renewed the lease to ${lu} s`], stmt: ['COMMIT', '', '→ committed · round trip 2 of 2'], lit: ['labRow', 'labInstance', 'labMessage', 'labJournal', 'labLease'] },
+      { title: 'The 202 goes out.', layer: 'Layer 2 · live output waits for its commit · decided and built',
+        text: ['The commit landed, so Node A releases the held response: the HTTP client gets 202 Accepted.', 'A caller never gets a response for work that was then lost: a response waits for the commit of the turn that wrote it (the owner\'s default of 12 November; a route may opt out).'],
+        call: 'sent', lit: ['labCall'] },
+      { title: 'Node B tries to take partition 17, and is refused.', layer: L_TAKE + ' · the moment is illustrative',
+        text: ['Suppose Node B tries to take partition 17 now. Its take is a conditional update too: it lands only if nobody owns the partition, the lease has run out by the database\'s clock, or Node B already owns it.',
+          `Node A owns it and the lease runs to ${lu} s, so the take changes 0 rows and Node B leaves the partition alone.`],
+        t: w + 0.2, takeB: { at: 'out', bad: true, l2: 'refused: 0 rows' }, stmt: TAKESQL('B', `→ 0 rows: owner A, lease_until ${lu} s, db now ${(w + 0.2).toFixed(1)} s`),
+        banner: ['ok', 'A\'s commit landed: 1 row, then COMMIT. B\'s take found a live lease and changed 0 rows.'], lit: ['labTakeB', 'labStmt', 'labLease'] }] };
+
+  if (pause < 15) return { title: 'Case 5: the answer to Node A\'s commit is lost.',
+    aside: ['The commit lands, but the connection breaks before Node A hears back.', 'Watch: Node A resets instead of retrying, and its take reads the true position. The last step is a what-if, not what the kernel does.', 'Source: the sketch\'s "What a failed commit means" and "Ownership"; FINDINGS.md section 3 for the position.'],
+    steps: [...S, send,
+      { title: 'COMMIT lands, but the answer is lost.', layer: 'Layer 2 · a lost answer is one of the faults the simulation injects',
+        text: ['Node A sends COMMIT and the database commits: the row now says position 1206, and every payload row has landed.', 'Then the connection breaks before the answer reaches Node A. Node A cannot tell whether its commit landed: the outcome is unknown.'],
+        ...landed, envA: { at: 'out', ghost: true, bad: true, l2: 'answer lost: outcome unknown' }, badge: 'outcome unknown',
+        memA: ['epoch 8 · position 1204 → 1206 ?', 'no answer came back: it cannot know'], stmt: ['COMMIT', '', '→ committed, but the answer never reaches Node A'], lit: ['labEnv', 'labRow', 'labMemA'] },
+      { title: 'Unknown outcome: Node A resets. It does not retry.', layer: 'Layer 2 · the reset · built',
+        text: ['The rule for an unknown outcome is reset, not retry. Node A drops everything it holds in memory for partition 17: its turns, its timers, its belief about the position.',
+          'The reset tells every caller waiting on that memory that the work is lost: the HTTP client gets an error (503 by default), never the 202, although this time the commit did land.'],
+        t: w + 0.1, envA: null, call: 'lost', ...DROPPED, memA: ['memory empty: reset', 'it holds nothing for partition 17'], lit: ['labMemA', 'labTurn', 'labCall'] },
+      { title: 'Node A takes partition 17 again: epoch 9, position 1206.', layer: L_TAKE,
+        text: ['Recovery after a doubt is the same path as start-up: a take. Node A still owns the row, so the take\'s "owner = A" lets it land although the lease is live.',
+          'Every take bumps the epoch, now 9, and returns the position: 1206, the true one. Node A starts from empty memory; what landed is in the rows, so the next poll finds order #1\'s timer and the workflow goes on.'],
+        t: w + 0.2, takeA: { at: 'out', ok: true, l2: 'landed: epoch 9, position 1206' }, row: ['A', '9', (w + 10.2).toFixed(1), '1206'],
+        stmt: TAKESQL('A', 'RETURNING epoch, position → 1 row: epoch 9, position 1206'), memA: ['I own 17 · epoch 9 · position 1206', 'taken again, from empty memory'],
+        banner: ['ok', 'A\'s commit landed once. A never heard back, so it reset and took the partition again: epoch 9, the true position 1206.'], lit: ['labTakeA', 'labEpoch', 'labPos', 'labMemA'] },
+      { title: 'What if Node A had re-sent the commit instead? Not what the kernel does.', layer: 'A counterfactual · the position check is built; the mutation check is in FINDINGS.md section 3',
+        text: ['Suppose Node A had skipped the reset and re-sent the same batch at once. No take had happened, so the epoch still matched: 8. But its fence also says position = 1204, and the row says 1206: the fence matches 0 rows, and the batch does not land a second time.',
+          'That is the position\'s job. With every doubt answered by a reset and every take bumping the epoch, the position decides only when a reset is missing; the prototype\'s mutation check found exactly that. It makes a wrong guess harmless, and a commit can never apply twice.'],
+        takeA: null, envA: { at: 'out', ghost: true, bad: true, l2: 'what if: re-sent · 0 rows' }, row: ['A', '8', lu, '1206'], rowSt: 'whatif', rowcap: 'what if: the row right after the lost answer, before any take',
+        t: w + 0.1, pay: 'once', call: 'held', badge: 'what if', turn: LBASE.turn, memA: ['what if: "epoch 8 · position 1204"', 'no reset: it guesses the commit failed'],
+        stmt: FENCE('→ 0 rows: epoch 8 matches, but the position is 1206, not 1204'),
+        banner: ['info', 'What if: a re-sent commit matches 0 rows, because the position moved. The kernel resets instead; this step is a counterfactual.'], lit: ['labPos', 'labStmt', 'labEnv'] }] };
+
+  // a long pause: Node A's lease runs out. The fence fails (B first) or lands (A first, before any take).
+  const wake = { paused: '', badge: 'committing', envA: { at: 'hold', l2: 'epoch 8 · position 1204 → 1206' }, pay: 'pending' };
+  const tail = lease => [
+    { title: '0 rows: Node A rolls back. Nothing from its batch lands.', layer: 'Layer 2 · built and tested in the prototype',
+      text: ['Node A checks the count before it sends COMMIT. 0 rows, so it rolls back: no instance row, no message and no journal row from its batch lands, and Node B never sees any of it.',
+        'This is why the check must come first: sent in one packet with a fence that matched nothing, a COMMIT would still land.'],
+      t: 15.2, envA: { at: 'out', bad: true, l2: 'REJECTED: 0 rows' }, pay: 'rolled', badge: 'rolled back',
+      banner: ['bad', 'A\'s commit bounced: 0 rows; nothing from it landed. Node B owns partition 17 at epoch 9.'], lit: ['labEnv', 'labInstance', 'labMessage', 'labJournal'] },
+    { title: 'Node A resets and stands down.', layer: 'Layer 2 · the reset and the take · built',
+      text: ['A fence that matched nothing means reset: Node A drops everything it holds for partition 17 and tries to take it again, the same path as start-up.',
+        `Node B holds a live lease to ${lease} s, so Node A's take changes 0 rows and Node A stands down. The HTTP client gets an error (503 by default), never the 202: a caller never gets a response for work that was then lost.`],
+      t: 15.3, envA: null, pay: 'none', takeA: { at: 'out', bad: true, l2: 'refused: 0 rows' }, call: 'lost', ...DROPPED,
+      memA: ['not the owner: stood down', 'Node B owns 17 at epoch 9'], stmt: TAKESQL('A', `→ 0 rows: owner B, lease_until ${lease} s, db now 15.3 s`),
+      banner: ['bad', 'A\'s commit bounced: 0 rows, nothing from it landed. A reset, its take was refused, and it stood down.'], lit: ['labTakeA', 'labMemA', 'labCall'] }];
+  const tookB = lease => ({ row: ['B', '9', lease, '1204'], memB: ['I own 17 · epoch 9 · position 1204', 'from empty memory: it will poll the rows'] });
+
+  if (order === 'early') return { title: 'Case 2: a long pause; Node B takes while Node A sleeps.',
+    aside: ['Node A pauses for longer than its lease. Node B\'s take comes well before Node A wakes, so they never meet at the row lock.', 'Watch: the epoch in the row, and the epoch = 8 in Node A\'s fence statement.', 'Source: the sketch\'s "Ownership", "The commit" and "What a failed commit means".'],
+    steps: [...S,
+      { title: 'Node B takes partition 17: epoch 9.', layer: L_TAKE,
+        text: ['Node B\'s take finds the lease run out by the database\'s clock, so it lands: owner B, epoch 9, a lease to 20.2 s. It returns the position, 1204; no commit was in flight, so that is the true one.',
+          'Node B starts from empty memory. Every take bumps the epoch, so nothing Node A prepared under epoch 8 can commit any more.'],
+        t: 10.2, takeB: { at: 'out', ok: true, l2: 'landed: epoch 9, position 1204' }, ...tookB('20.2'),
+        stmt: TAKESQL('B', 'RETURNING epoch, position → 1 row: epoch 9, position 1204'), lit: ['labTakeB', 'labEpoch', 'labMemB'] },
+      { title: 'Node A wakes and sends its commit.', layer: L_COMMIT,
+        text: ['At 15.0 s Node A runs again, unaware. Its turns are done, so it sends the batch it prepared, fenced on what it believes: epoch 8, position 1204.', 'The row says epoch 9. The fence matches nothing: 0 rows.'],
+        t: 15, takeB: null, ...wake, envA: { at: 'out', bad: true, l2: '0 rows: the row says epoch 9' }, stmt: FENCE('→ 0 rows: the row says epoch 9, not 8'), lit: ['labEnv', 'labStmt', 'labEpoch'] },
+      ...tail('20.2')] };
+
+  if (order === 'A') return { title: 'Case 3: they overlap; Node A\'s commit reaches the row first.',
+    aside: ['Node A\'s lease has run out, but nobody has taken the partition. Node A\'s commit and Node B\'s take arrive together, and the row lock lets Node A\'s fence in first.', 'Watch: the fence lands although the lease ran out, because it checks the epoch and the position, not lease_until; then the take re-checks the row as the commit left it.', 'Source: the sketch\'s "The commit" and "Ownership" ("The take waits behind a commit that is still in flight, so it reads the true position").'],
+    steps: [...S,
+      { title: 'Both arrive together, and Node A\'s fence gets the row first.', layer: L_WHEN,
+        text: ['At 15.0 s Node A runs again and sends its batch; at the same moment Node B tries to take partition 17. Both need the partition row\'s lock. Node A\'s fence reaches it first, and Node B\'s take waits in the lock queue.',
+          'The fence checks the epoch and the position, not lease_until. Both still match, because nobody has taken the partition, so it changes 1 row although Node A\'s lease ran out 5 s ago. Leases decide who should write; the fence decides who can.'],
+        t: 15, ...wake, takeB: { at: 'queue', l2: 'waits for the row lock' }, row: ['A', '8', '25.0', '1206'], rowSt: 'pend', rowcap: 'uncommitted: only Node A\'s transaction sees this',
+        stmt: FENCE('→ 1 row: lease_until 10.0 s is past, but the fence does not check it'), lit: ['labEnv', 'labTakeB', 'labLock', 'labStmt'] },
+      { title: '1 row, so COMMIT: Node A\'s commit lands.', layer: L_COMMIT,
+        text: ['Node A sends COMMIT and the whole batch lands. It was a legitimate write: Node A still held epoch 8 when it wrote, and no take had happened.',
+          'The fence renewed the lease, to 25.0 s, and the held 202 goes out. The row lock is free again, and Node B\'s take is next.'],
+        t: 15.1, ...landed, row: ['A', '8', '25.0', '1206'], badge: 'committed', call: 'sent', memA: ['I own 17 · epoch 8 · position 1206', 'the fence renewed the lease to 25.0 s'],
+        stmt: ['COMMIT', '', '→ committed · round trip 2 of 2'], lit: ['labRow', 'labInstance', 'labMessage', 'labJournal', 'labCall'] },
+      { title: 'Node B\'s take runs behind the commit, and is refused.', layer: L_TAKE,
+        text: ['The take waited behind a commit that was still in flight, so it re-checks the row as that commit left it, never half a commit: the lease was just renewed.',
+          'So the take\'s condition fails: owner A, a live lease to 25.0 s. 0 rows, refused, and Node B leaves the partition alone; a refused take returns nothing. A take that lands after a commit returns the true position, as Node A\'s own take does after a lost answer (the lost-answer case). A take never reads half a commit. In the other "Together" choice the take comes first and reads 1204, because Node A\'s commit has not landed.'],
+        t: 15.2, takeB: { at: 'out', bad: true, l2: 'refused: 0 rows' }, stmt: TAKESQL('B', '→ 0 rows: owner A, lease_until 25.0 s, db now 15.2 s'),
+        banner: ['ok', 'A\'s commit landed; B\'s take waited, then re-checked the row as the commit left it: the lease was just renewed, 0 rows, refused.'], lit: ['labTakeB', 'labStmt', 'labLeaseUntil'] }] };
+
+  return { title: 'Case 4: they overlap; Node B\'s take reaches the row first.',
+    aside: ['Node A\'s lease has run out. Node A\'s commit and Node B\'s take arrive together, and the row lock lets the take in first.', 'Watch: the epoch the waiting fence meets when it finally gets the row.',
+      'On SQL Server with the fence in the batch, this overlap can deadlock instead (finding E9): the take is the victim and is tried again, and nothing wrong lands. So SQL Server\'s default is the fence as its own statement (the prototype applies the 13 November decision).', 'Source: the sketch\'s "The commit" and "Ownership"; ENGINES.md, E9.'],
+    steps: [...S,
+      { title: 'Both arrive together, and Node B\'s take gets the row first.', layer: L_WHEN,
+        text: ['At 15.0 s Node A runs again and sends its batch; at the same moment Node B tries to take partition 17. This time Node B\'s take reaches the row lock first, and Node A\'s fence waits in the lock queue.',
+          'The lease ran out at 10.0 s by the database\'s clock, so the take\'s condition holds: 1 row, owner B, epoch 9, a lease to 25.0 s. It returns position 1204, the true one: Node A\'s commit has not landed.'],
+        t: 15, ...wake, envA: { at: 'queue', l2: 'epoch 8 · position 1204 → 1206' }, takeB: { at: 'hold', ok: true, l2: '1 row: epoch 9, position 1204' },
+        row: ['B', '9', '25.0', '1204'], rowSt: 'pend', rowcap: 'uncommitted: only Node B\'s take sees this',
+        stmt: TAKESQL('B', 'RETURNING epoch, position → 1 row: epoch 9, position 1204'), lit: ['labTakeB', 'labEnv', 'labLock', 'labStmt'] },
+      { title: 'Node B\'s take commits; then Node A\'s fence gets the row: 0 rows.', layer: L_COMMIT,
+        text: ['Node B\'s take commits: Node B owns partition 17 at epoch 9, and starts from empty memory.', 'Node A\'s fence, next in the queue, now meets the committed row: epoch 9, not 8. It changes 0 rows.'],
+        t: 15.1, takeB: null, envA: { at: 'out', bad: true, l2: '0 rows: the row says epoch 9' }, ...tookB('25.0'), rowSt: '', rowcap: '', stmt: FENCE('→ 0 rows: the row now says epoch 9'), lit: ['labEnv', 'labEpoch', 'labMemB'] },
+      ...tail('25.0')] };
+}
+
+function labTable([name, x, before, batch], j, pay, anew) {
+  const g = LE('t' + j);
+  g.textContent = '';
+  g.classList.add('tbl');
+  const tag = { none: '', pending: 'uncommitted', landed: 'landed', once: 'landed once', rolled: 'rolled back' }[pay];
+  g.append(svg('rect', { class: 'box pf', x, y: 258, width: 172, height: 86, rx: 6 }), svg('text', { class: 'tt', x: x + 8, y: 274, style: 'font-size:11.5px' }, name),
+           svg('text', { class: 'tm', x: x + 164, y: 274, 'text-anchor': 'end' }, tag));
+  const done = pay === 'landed' || pay === 'once';
+  const rows = done ? [...before.filter(r => !batch.some(b => b[0] === r[0])).map(r => [r, '']), ...batch.filter(b => b[2] !== 'del').map(b => [b, anew ? (b[2] === 'ins' ? 'fresh' : 'chgrow') : ''])]
+                    : [...before.map(r => [r, '']), ...(pay === 'none' ? [] : batch.map(b => [b, (pay === 'pending' ? 'pend' : 'rolled') + (anew ? ' in' : '')]))];
+  rows.forEach(([r, cls], i) => {
+    const y = 280 + i * 15, row = svg('g', { class: 'row ' + cls });
+    const second = done || !r[2] ? r[1] : { ins: 'insert', upd: '→ ' + r[1], del: 'delete' }[r[2]];
+    row.append(svg('rect', { x: x + 2, y, width: 168, height: 15, rx: 2 }), svg('text', { x: x + 8, y: y + 11 }, r[0]), svg('text', { x: x + 164, y: y + 11, 'text-anchor': 'end' }, second));
+    g.append(row);
+  });
+}
+
+function drawLab(s, p, anim, kk) {
+  LV.renders++;
+  LAB.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  LAB.querySelectorAll('.labcopy').forEach(e => e.remove());
+  LAB.classList.toggle('animate', anim);
+  LAB.querySelectorAll('[data-part]').forEach(e => e.classList.toggle('lit', s.lit.includes(e.dataset.part)));
+  // the db clock runs first when time passes; the lease bar's "now" marker moves with it
+  const run = anim && s.t - p.t >= 1 ? 1500 * kk : 0;
+  LE('clock').textContent = `t = ${s.t.toFixed(1)} s`;
+  if (run) tick(LV, p.t, s.t, run);
+  at(LE('now'), [Math.min(s.t, 30) * 16, 0]);
+  if (anim && s.t !== p.t) LE('now').animate([{ transform: tr([Math.min(p.t, 30) * 16, 0]) }, { transform: tr([Math.min(s.t, 30) * 16, 0]) }], { duration: run || 500 * kk, easing: 'linear' });
+  const lu = parseFloat(s.row[2]), left = lu - s.t;
+  LE('lf').style.transform = `scaleX(${Math.min(1, lu / 30)})`;
+  LE('lf').classList.toggle('out', left <= 0);
+  LE('lcap').textContent = `▲ db now ${s.t.toFixed(1)} s · lease_until ${s.row[2]} s: ` + (left > 0 ? `${left.toFixed(1)} s left for Node ${s.row[0]}`
+    : `ran out; until a take lands the row still says ${s.row[0]}, epoch ${s.row[1]}`) + (s.rowSt === 'pend' ? ' (uncommitted)' : s.rowSt === 'whatif' ? ' (what if)' : '');
+
+  // the tokens fly between their node, the row lock and its queue
+  let fly = run;
+  ['envA', 'takeB', 'takeA'].forEach(n => {
+    const g = LE(n), c = s[n], o = p[n], pos = x => x.at === 'home' ? LHOME[n] : x.at === 'out' ? LOUT[n] : LSLOT[x.at];
+    if (!c && o && anim) {                  // a token that leaves fades out as a copy, so the part itself stays clean
+      const copy = g.cloneNode(true);
+      copy.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+      copy.removeAttribute('id'); copy.removeAttribute('data-part'); copy.classList.add('labcopy');
+      LAB.append(copy);
+      copy.animate([{ opacity: 1, transform: tr(pos(o)) }, { opacity: 0, transform: tr(pos(o)) }], { duration: 600 * kk, delay: run, fill: 'both' }).onfinish = () => copy.remove();
+    }
+    g.classList.toggle('gone', !c);
+    ['bad', 'ok', 'ghost'].forEach(k => g.classList.toggle(k, !!(c && c[k])));
+    LE(n + '2').textContent = c ? c.l2 : '';
+    if (!c) { g.style.transform = ''; return; }
+    const to = pos(c);
+    at(g, to);
+    if (!anim || (o && o.at === c.at)) return;
+    const from = o ? pos(o) : c.at === 'home' ? to : LHOME[n];
+    const via = c.at === 'out' && (!o || o.at !== 'hold') ? [{ transform: tr(LSLOT.hold), opacity: 1, offset: .5 }] : [];   // it went to the row first
+    const d = (via.length ? 1600 : 900) * kk;
+    g.animate([{ transform: tr(from), opacity: o || c.at !== 'home' ? 1 : 0 }, ...via, { transform: tr(to), opacity: 1 }], { duration: d, delay: run, easing: EASE, fill: 'backwards' });
+    fly = Math.max(fly, run + (via.length ? 800 : 900) * kk);
+  });
+  LE('lock').classList.toggle('held', ['envA', 'takeB', 'takeA'].some(n => s[n] && s[n].at === 'hold'));
+
+  // the statement at the row, then its result, then what changed
+  const st = s.stmt || ['', 'no statement at the row', ''], said = fly + 500 * kk, changed = JSON.stringify(s.stmt) !== JSON.stringify(p.stmt);
+  st.forEach((line, i) => {
+    LE('st' + i).textContent = line;
+    if (anim && changed) LE('st' + i).animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 * kk, delay: i === 2 ? said : fly, fill: 'backwards' });
+  });
+  LE('row').classList.toggle('pend', s.rowSt === 'pend');
+  LE('row').classList.toggle('whatif', s.rowSt === 'whatif');
+  LE('rowcap').textContent = s.rowcap;
+  s.row.forEach((val, i) => {
+    LE('c' + i).textContent = val;
+    if (anim && val !== p.row[i]) LE('c' + i).animate([{ opacity: 0 }, { opacity: 0, offset: .3 }, { opacity: 1 }], { duration: 900 * kk, delay: said, fill: 'backwards' });
+  });
+  LAB.style.setProperty('--fd', said + 'ms');
+  const kept = x => x === 'once' ? 'landed' : x;                         // "landed once" is the same rows, seen again
+  LPAY.forEach((t, j) => labTable(t, j, s.pay, kept(s.pay) !== kept(p.pay)));   // rows marked new come from the states, not the motion
+
+  // Node A, Node B, the caller and the outcome
+  LE('pause').classList.toggle('gone', !s.paused);
+  LE('pause0').textContent = s.paused;
+  ['memA0', 'memA1', 'memB0', 'memB1'].forEach(id => { LE(id).textContent = s[id.slice(0, 4)][+id[4]]; });
+  LE('badge').textContent = s.badge;
+  s.turn.forEach((line, i) => { LE('turn' + i).textContent = line; });
+  LE('callg').classList.toggle('sent', s.call === 'sent');
+  LE('callg').classList.toggle('lost', s.call === 'lost');
+  LE('call').textContent = { held: '202 held for the commit', sent: '202 Accepted ✓', lost: '503 "lost" · never the 202' }[s.call];
+  LE('banner').classList.toggle('gone', !s.banner);
+  ['ok', 'bad', 'info'].forEach(k => LE('banner').classList.toggle(k, !!s.banner && s.banner[0] === k));
+  LE('bt').textContent = s.banner ? s.banner[1] : '';
+  if (s.banner) {
+    if (anim && JSON.stringify(s.banner) !== JSON.stringify(p.banner)) LE('banner').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500 * kk, delay: said + 400 * kk, fill: 'backwards' });
+  }
+  return said + 900 * kk;
+}
+
+const lab = makePlayer($('fence-lab'), { svg: LAB, seams: false, render: drawLab, onReset: () => setLab(0, 'early', false) });
+let labPause = 0, labOrder = 'early', labLost = false;
+function setLab(pause, order, lost) {
+  if (pause === 15) lost = false;                    // a lost answer is shown on top of case 1 only
+  labPause = pause; labOrder = order; labLost = lost;
+  document.querySelectorAll('[data-lp]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.lp === pause)));
+  document.querySelectorAll('[data-lo]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.lo === order)); b.disabled = pause !== 15; });
+  document.querySelectorAll('[data-ll]').forEach(b => { b.setAttribute('aria-pressed', String((b.dataset.ll === 'on') === lost)); b.disabled = pause === 15; });
+  $('lo-note').textContent = pause === 15 ? '' : 'Matters only once the lease has run out: choose a 15 s pause.';
+  $('ll-note').textContent = pause === 15 ? 'Shown on top of case 1: choose no pause or 2 s.' : '';
+  const c = labCase(pause, order, lost);
+  $('lab-case').textContent = c.title;
+  $('lab-aside').textContent = '';
+  c.aside.forEach(t => { const para = document.createElement('p'); para.textContent = t; $('lab-aside').append(para); });
+  const states = [];
+  c.steps.reduce((prev, patch) => { const st = { ...prev, ...LTRANS, ...patch }; states.push(st); return st; }, { ...LBASE, ...LTRANS });
+  lab.setSteps(states, states[0], 0, false);
+}
+document.querySelectorAll('[data-lp]').forEach(b => b.addEventListener('click', () => setLab(+b.dataset.lp, labOrder, labLost)));
+document.querySelectorAll('[data-lo]').forEach(b => b.addEventListener('click', () => setLab(labPause, b.dataset.lo, labLost)));
+document.querySelectorAll('[data-ll]').forEach(b => b.addEventListener('click', () => setLab(labPause, labOrder, b.dataset.ll === 'on')));
+
+// ==== 05 · the visual glossary ==========================================================================================
+// Each term: its icon (drawn like the scene's part), one sentence, and the scene parts it lights. A term with "go" opens
+// act one at that step, or that act two scenario at that step and lights act two's scene, or ('lab') lights the fence lab.
+const ICON = {
+  node: '<rect x="7" y="3" width="18" height="26" rx="2"/><line x1="10" y1="24" x2="22" y2="24"/>',
+  partition: '<rect x="7" y="8" width="8" height="12" rx="1"/><rect x="17" y="8" width="8" height="12" rx="1"/><rect class="f" x="4" y="22" width="24" height="4"/>',
+  lease: '<rect x="3" y="13" width="26" height="7" rx="2"/><rect class="f" x="3" y="13" width="16" height="7" rx="2"/>',
+  pass: '<rect x="4" y="5" width="24" height="20" rx="2"/><line x1="14" y1="2" x2="14" y2="28" stroke-width="3"/>',
+  placement: '<rect x="15" y="15" width="13" height="13" rx="2" stroke-dasharray="3 2"/><path d="M3 5 C11 5 18 8 21 13"/><path d="M17 12 l4 1 l1 -4"/>',
+  wake: '<path d="M18 3 L9 17 h6 l-3 12 l10 -15 h-6 z"/>',
+  actor: '<rect x="4" y="4" width="24" height="24" rx="4"/><circle cx="16" cy="13" r="3.5"/><path d="M9 25 c2 -5 12 -5 14 0"/>',
+  message: '<rect x="3" y="8" width="26" height="16" rx="2"/><path d="M3 9 l13 8 l13 -8"/>',
+  turn: '<path d="M25 16 a9 9 0 1 1 -3 -6.7"/><path d="M23 3 v6.5 h-6.5"/>',
+  commit: '<rect x="3" y="5" width="26" height="22" rx="2"/><path d="M3 6 l13 7 l13 -7"/><rect class="f" x="3" y="20" width="26" height="7"/>',
+  fence: '<rect x="4" y="10" width="24" height="12" rx="2" transform="rotate(-8 16 16)"/><path d="M8 16 h16" transform="rotate(-8 16 16)"/>',
+  epoch: '<rect x="5" y="5" width="22" height="22" rx="11"/><text x="16" y="20" text-anchor="middle">8</text>',
+  position: '<path d="M4 24 h24 M4 18 h24 M4 12 h18"/><path d="M24 8 l4 4 l-4 4"/>',
+  timer: '<circle cx="16" cy="17" r="11"/><path d="M16 10 v7 l5 3 M12 3 h8"/>',
+  job: '<rect x="3" y="10" width="15" height="13" rx="2"/><path d="M19 16 h9 M24 12 l4 4 l-4 4"/>',
+  journal: '<rect x="6" y="3" width="20" height="26" rx="2"/><path d="M10 10 h12 M10 15 h12 M10 20 h8"/>',
+  poison: '<rect x="3" y="9" width="26" height="15" rx="2"/><path d="M11 12 l10 9 M21 12 l-10 9"/>',
+  take: '<rect class="f" x="4" y="23" width="24" height="4"/><path d="M8 19 v-9 h16 v9"/><path d="M16 2 v11 M12 9 l4 4 l4 -4"/>',
+  reset: '<path d="M25 16 a9 9 0 1 1 -3 -6.7"/><path d="M23 3 v6.5 h-6.5"/><path d="M13 13 l6 6 M19 13 l-6 6"/>',
+  suspect: '<rect x="3" y="8" width="26" height="16" rx="2" stroke-dasharray="3 2"/><text x="16" y="20.5" text-anchor="middle">?</text>',
+  parked: '<rect x="3" y="9" width="19" height="14" rx="2"/><path d="M3 10 l9.5 7 l9.5 -7"/><circle cx="24" cy="22" r="5.5"/><path d="M21 22 h6"/>',
+  store: '<ellipse cx="16" cy="7" rx="11" ry="4"/><path d="M5 7 v18 c0 5 22 5 22 0 v-18 M5 16 c0 5 22 5 22 0"/>',
+  instance: '<rect x="4" y="4" width="24" height="24" rx="4"/><path d="M9 11 h14 M9 16 h10 M9 21 h12"/>',
+  model: '<circle cx="16" cy="16" r="5"/><path d="M16 3 v5 M16 24 v5 M3 16 h5 M24 16 h5 M7 7 l3.5 3.5 M21.5 21.5 l3.5 3.5 M25 7 l-3.5 3.5 M10.5 21.5 l-3.5 3.5"/>',
+  activity: '<path class="f" d="M4 10 l6 4 l-6 4 z"/><path d="M13 9 h15 M13 14 h12 M13 19 h15 M13 24 h9"/>',
+  mode: '<path d="M3 16 h26"/><circle cx="7" cy="16" r="2.5"/><circle cx="16" cy="16" r="2.5"/><circle class="f" cx="25" cy="16" r="3.5"/>',
+  projector: '<rect x="3" y="8" width="16" height="16" rx="2"/><path d="M19 12 l10 -5 v18 l-10 -5"/>',
+  studio: '<rect x="3" y="5" width="26" height="22" rx="2"/><path d="M3 10 h26 M8 15 h14 M8 20 h10"/>',
+};
+const TERMS = [
+  ['l1', 'Layer 1 · actor runtime: where things run', [
+    ['node', 'Node', 'A server process that runs the kernel and hosts the partitions it owns; nodes count each other by heartbeats to share partitions fairly.', ['nodeA', 'nodeB']],
+    ['partition', 'Partition', 'A fixed bucket of instances (64 on server databases, 1 on SQLite) whose owner is the only node that writes its instances.', ['shelf17', 'shelf42']],
+    ['lease', 'Lease', 'How long the owner may hold a partition without writing (10 s): it decides who should write, and the fence decides who can.', ['lease17', 'lease42', 't-partition']],
+    ['pass', 'Pass', 'The runtime\'s call into a partition it hosts, which runs the turns that are due and commits them in batches; one pass holds many turns.', ['scanner'], null, ['a1', 2]],
+    ['placement', 'Placement', 'Where a new instance goes: a start without a caller\'s key into a partition the receiving node owns (no hop), one with a key into the key\'s partition, a child into its parent\'s.', ['placement', 'card1'], null, ['a1', 1]],
+    ['wake', 'Wake signal', 'A hint to a partition\'s owner that a message was added, in process or pluggable between nodes; polling is the guarantee, so a lost hint only costs latency.', ['wake']],
+  ]],
+  ['l2', 'Layer 2 · durable actors: every guarantee', [
+    ['actor', 'Actor', 'Something with its own state that handles one message batch at a time; a workflow instance is one kind.', ['card1', 'card7', 'card3']],
+    ['message', 'Inbox and message', 'A message is a row in the inbox table (target, kind, payload, an order key, optionally a due time and a start spec); the outbox is the recipient\'s inbox.', ['tray1', 'tray7', 'tray3', 't-message']],
+    ['turn', 'Turn', 'An instance\'s turn to run: it takes the messages in its inbox, runs as many activities as its persistence mode allows, changes its state and sends messages; one turn is not one activity.', ['card1', 'model1', 'lane'], null, ['a1', 3]],
+    ['commit', 'Commit (batch)', 'One transaction that writes everything the turns changed (state, consumed and sent messages, journal rows), for many instances at once.', ['envelope', 'lane', 'vault'], null, ['a1', 6]],
+    ['fence', 'Fence', 'The conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.', ['labStmt', 'labEnv', 'labEpoch', 'labPos'], null, ['lab', 1]],
+    ['epoch', 'Epoch', 'A counter on the partition row, raised every time a node takes the partition; work started under an older epoch is thrown away.', ['labEpoch', 'labMemA', 'labMemB'], null, ['lab']],
+    ['position', 'Position', 'How many journal rows a partition has written; the commit checks it, so two commits can never land at the same position.', ['labPos', 'labJournal', 'labMemA'], null, ['lab']],
+    ['timer', 'Timer', 'A message with a future due time: the owner holds it in memory on a monotonic clock, a new owner finds it by polling, and deleting the message cancels it.', ['t-message', 'tray1', 'clock']],
+    ['job', 'Background job (ticket, result)', 'Slow work a turn starts: its ticket is committed as a message to the instance, the kernel runs it outside the turn, and the ticket becomes the job-finished result, applied once.', ['job', 'smtp', 'tray1', 't-message'], null, ['a1', 11]],
+    ['journal', 'Journal', 'One compact row per instance commit, written in the commit: the record of what happened, from which the viewer\'s tables are built.', ['t-journal']],
+    ['poison', 'Poison and parking', 'A message that keeps killing its owners is tried alone after each takeover and, past a threshold, parked with its instance faulted, so it cannot walk the cluster.', ['card9', 't-message'], null, ['b3', 2]],
+    ['take', 'Take', 'The conditional update that makes a node a partition\'s owner: it lands only if nobody holds a live lease (or the node already does), and it raises the epoch.', ['take', 'p17b', 't-partition'], 'Layer 2 · asked for by layer 1', ['b1', 3]],
+    ['reset', 'Reset', 'What an owner does when a commit\'s outcome is unknown or its fence matched nothing: it drops everything it holds for the partition and takes it again, or stands down; the same path as start-up.', ['ovA', 'take', 'shelf17'], null, ['b2', 5]],
+    ['suspect', 'Suspect and trial', 'A suspect is a message another owner had, so it may have killed that owner; on trial, its turn runs alone, with nothing else in flight in the process.', ['p17b', 't-message'], null, ['b1', 4]],
+    ['parked', 'Parked', 'An instance set aside, faulted with the reason, so the rest of its partition goes on: after a definite commit error, a turn that throws, or a message on trial when too many owners died (3 in the prototype).', ['card9', 't-instance', 't-journal'], 'Layer 2 · the instance is layer 3\'s', ['b3', 6]],
+    ['store', 'IKernelStore', 'The one storage contract the kernel depends on, stated by guarantees, not SQL; a provider (EF Core, MongoDB) is correct when it passes the store conformance suite.', ['vault']],
+  ]],
+  ['l3', 'Layer 3 · actor types: what runs', [
+    ['instance', 'Workflow instance', 'The actor type that holds what all workflows share (definition and version, status, parent and children, the history envelope) and runs an execution model for the rest.', ['card1', 'card7', 'card3', 't-instance']],
+    ['model', 'Execution model', 'A plug-in that turns an instance\'s state and incoming messages into new state and outgoing messages (TurnAsync); native is built as a spike, BPMN and others come later.', ['model1'], null, ['a1', 3]],
+    ['activity', 'Activity', 'One step of a native workflow, such as WriteLine or Delay; one turn can run many, and a slow one marked Background runs as a background job.', ['acts1'], null, ['a1', 3]],
+    ['mode', 'Persistence mode', 'Where a workflow ends its turns: Ephemeral (only at a wait, if ever), Balanced (at each wait), Durable (after each activity); chosen per workflow. Section 02 runs all three side by side.', ['mode1', 'lane'], null, ['a1', 3]],
+    ['projector', 'History and projector', 'The projector, a background worker off the hot path, expands journal rows into the history rows the viewer reads; the history level (Full, State only, Minimal) decides what is recorded.', ['projector', 't-journal'], 'Layer 3 · the projector code is in layer 2'],
+    ['studio', 'Studio run view', 'Shows a run\'s committed history from the projected rows; decided, not built: it also reads the journal tail past the projector\'s cursor, so it is never behind.', ['studio'], 'Layer 3 · shown by Studio'],
+  ]],
+];
+let pinned = null, preview = null;
+const termButtons = [];
+TERMS.forEach(([layer, heading, terms]) => {
+  const group = document.createElement('div');
+  group.className = 'ggroup ' + layer;
+  group.innerHTML = `<h3>${heading}</h3><div class="ggrid"></div>`;
+  terms.forEach(([id, name, sentence, parts, lv, go]) => {
+    const b = document.createElement('button'), level = lv || 'Layer ' + layer.slice(1);
+    b.className = 'term';
+    b.setAttribute('aria-pressed', 'false');
+    const scene = !go || go[0] === 'a1' ? 'a' : go[0] === 'lab' ? 'lab' : 'b';
+    b.setAttribute('aria-label', `${name}. ${sentence} ${level}. Lights it in ${{ a: 'the', b: 'act two\'s', lab: 'the fence lab\'s' }[scene]} scene.`);
+    b.dataset.parts = parts.join(' ');
+    b.dataset.scene = scene;
+    b.innerHTML = `<svg viewBox="0 0 32 32" aria-hidden="true">${ICON[id]}</svg><b></b><span></span><span class="lv"></span>`;
+    b.querySelector('b').textContent = name;
+    b.querySelector('span').textContent = sentence;
+    b.querySelector('.lv').textContent = level;
+    let fromPointer = false;
+    b.addEventListener('pointerdown', () => { fromPointer = true; });
+    b.addEventListener('focus', () => { if (!fromPointer && !go) setFocus(pinned, b); fromPointer = false; });
+    b.addEventListener('blur', () => { if (preview === b) setFocus(pinned, null); });
+    b.addEventListener('click', () => {
+      if (pinned === b) { setFocus(null, null); return; }
+      if (scene === 'b') selectScenario(go[0], go[1], false);
+      else if (go && scene === 'a') { act1.stop(); act1.go(go[1], false); }      // these parts show only at some steps: open one that shows them
+      else if (go && go[1] != null) {                                             // a lab step is a step of case 1, no pause (step 2: the fence at the row)
+        if (labPause !== 0 || labLost) setLab(0, 'early', false);
+        lab.stop(); lab.go(go[1], false);
+      }
+      setFocus(b, null);
+      $({ a: 'scenebox', b: 'scenebox2', lab: 'labbox' }[scene]).scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'center' });
+    });
+    termButtons.push(b);
+    group.querySelector('.ggrid').append(b);
+  });
+  $('gloss').append(group);
+});
+function setFocus(pin, prev) {
+  pinned = pin; preview = prev;
+  const active = preview || pinned;
+  termButtons.forEach(b => { b.setAttribute('aria-pressed', String(b === pinned)); b.classList.toggle('preview', b === preview && b !== pinned); });
+  [A1.svg, A2.svg, LAB].forEach(sc => {
+    sc.querySelectorAll('.hl, .hl-in').forEach(e => e.classList.remove('hl', 'hl-in'));
+    sc.classList.remove('focusing');
+  });
+  if (!active) return;
+  const sc = { a: A1.svg, b: A2.svg, lab: LAB }[active.dataset.scene];
+  sc.classList.add('focusing');
+  for (const part of active.dataset.parts.split(' ')) {
+    sc.querySelectorAll(`[data-part="${part}"]`).forEach(e => {
+      e.classList.add('hl');
+      e.querySelectorAll('[data-part]').forEach(c => c.classList.add('hl'));
+      for (let a = e.parentElement; a && a !== sc; a = a.parentElement) if (a.dataset.part) a.classList.add('hl-in');
+    });
+  }
+}
+
+// ---- start: size each seam marker's box to its text, then show the first step of every scene ----
+[A1.svg, A2.svg].forEach(sc => sc.querySelectorAll('.seam').forEach(m => {
+  m.style.display = 'inline';
+  const t = m.querySelector('text').getBBox(), r = m.querySelector('rect');
+  r.setAttribute('x', t.x - 7); r.setAttribute('width', t.width + 14);
+  m.style.display = '';
+}));
+act1.setSteps(STATES, { ...BASE, ...TRANSIENT, db: DB0, tray7: [] }, 0, true);
+setWhatIf('plain', 'none');
+selectScenario('b1', 0, false);
+setLab(0, 'early', false);
+reduced.addEventListener('change', () => { act1.go(act1.n, false); modes.go(modes.n, false); act2.go(act2.n, false); lab.go(lab.n, false); });
+})();
+</script>
+</body>
+</html>

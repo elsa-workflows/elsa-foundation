@@ -254,6 +254,16 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
       },
+      "elsa.integrations.sdk.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Integrations.Sdk": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
+          "Microsoft.Extensions.Http": "[10.0.10, )",
+          "Microsoft.Extensions.Logging": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
+        }
+      },
       "elsa.pipelines.core": {
         "type": "Project",
         "dependencies": {

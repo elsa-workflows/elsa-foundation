@@ -190,6 +190,10 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
 
+    /// <summary>Optional immutable accepted external source; it carries no expiring delivery claim.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressWaitOrigin? IngressWaitOrigin { get; init; }
+
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public string BookmarkId { get; }
     public string ActivityExecutionId { get; }

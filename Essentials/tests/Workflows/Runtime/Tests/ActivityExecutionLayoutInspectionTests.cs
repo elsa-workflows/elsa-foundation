@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Inspection.Core;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Api.Contracts;

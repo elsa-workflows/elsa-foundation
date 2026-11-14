@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Authoring composition exercises the real event publisher and startup aggregation. -->
+    <ProjectReference Include="../Fixtures/StandaloneTriggerConsumer/IndependentTriggers.Consumer.csproj" />
+    <ProjectReference Include="../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />

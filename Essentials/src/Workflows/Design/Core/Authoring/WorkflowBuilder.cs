@@ -9,7 +9,7 @@ public interface IWorkflowBuilder<TRequest, TResult> : ISequenceBuilder
 {
     WorkflowRequestSource<TRequest> Request { get; }
     ISequenceBuilder Sequence { get; }
-    WorkflowRequestMember<T> From<T>(System.Linq.Expressions.Expression<Func<TRequest, T>> member);
+    WorkflowRequestRead<T> From<T>(System.Linq.Expressions.Expression<Func<TRequest, T>> member);
     WorkflowValue<T> Value<T>(T? literal);
     ExpressionSource<T> Expression<T>(string language, string source);
     void Return(WorkflowValue<TResult> result);
@@ -65,7 +65,7 @@ public interface IActivityInputBuilder<TActivity>
 
 public sealed class WorkflowRequestSource<TRequest>
 {
-    public WorkflowRequestMember<T> Member<T>(string memberKey, string? path = null) => new(memberKey, path);
+    public WorkflowRequestRead<T> Member<T>(string memberKey, string? path = null) => new(memberKey, path);
 }
 
 public sealed class Variable<T>
@@ -115,12 +115,12 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
 
     public Variable<T> Variable<T>(string name, T? initialValue = default) => _root.Variable(name, initialValue);
 
-    public WorkflowRequestMember<T> From<T>(System.Linq.Expressions.Expression<Func<TRequest, T>> member)
+    public WorkflowRequestRead<T> From<T>(System.Linq.Expressions.Expression<Func<TRequest, T>> member)
     {
         ArgumentNullException.ThrowIfNull(member);
         var path = ReadMemberPath(member.Body);
         var memberKey = ToStableKey(path.Split('.')[0]);
-        return new WorkflowRequestMember<T>(memberKey, path);
+        return new WorkflowRequestRead<T>(memberKey, path);
     }
 
     public WorkflowValue<T> Value<T>(T? literal) => new LiteralWorkflowValue<T>(literal);

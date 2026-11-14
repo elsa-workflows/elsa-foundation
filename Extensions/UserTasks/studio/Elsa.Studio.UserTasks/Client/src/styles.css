@@ -70,6 +70,16 @@
 }
 .user-task-response[data-final] textarea:disabled { field-sizing: content; min-height: 0; }
 
+/* Shared fields retain the existing final-response record presentation. */
+.user-task-response[data-final] .studio-field.studio-form-field > .studio-form-control {
+  border: 0; border-radius: 0; background: transparent; opacity: 1;
+}
+.user-task-response[data-final] .studio-field > .studio-form-control > .studio-form-legend { margin-inline: 0; padding-inline: 0; }
+.user-task-response[data-final] .studio-field .studio-form-control :is(input, textarea, select):disabled {
+  padding: 0; min-block-size: 0; border: 0; background: transparent; color: var(--studio-text);
+  opacity: 1; resize: none; cursor: default; -webkit-text-fill-color: currentColor; appearance: none;
+}
+
 /* At phone widths each row stacks into a labelled block, so every value and its action stay with the row's name. */
 @media (width <= 640px) {
   .user-task-table, .user-task-forms-table { min-width: 0; }

@@ -195,16 +195,14 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     }
 
     [Fact]
-    public async Task Only_legacy_workflow_requests_are_open_when_no_input_contract_is_declared()
+    public async Task Workflow_requests_are_closed_even_when_no_inputs_are_declared()
     {
         using var provider = Provider();
         var document = Document(Sequence(Node("consumer"))) with { ResourceKind = "Workflow" };
         var query = new ActivityDataSelectionQuery { Source = new(JsonSerializer.SerializeToElement(new { memberKey = "legacy", path = "CustomerId" }), "WorkflowRequest") };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query);
-        Assert.Empty(result.Findings);
-        var source = Assert.Single(result.Sources);
-        Assert.Equal(ActivitySerializedShapeState.Unknown, source.Shape.State);
-        Assert.Null(source.Shape.Type);
+        Assert.Equal("ActivityData/UnknownInput", Assert.Single(result.Findings).Type);
+        Assert.Empty(result.Sources);
         var closed = await Analyzer(provider).AnalyzeAsync(document with { ResourceKind = "ActivityDefinition" }, new("consumer", "CustomerId"), query);
         Assert.Contains(closed.Findings, finding => finding.Type == "ActivityData/UnknownInput");
         var stable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
@@ -474,14 +472,18 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     public async Task Focused_literal_member_names_are_not_split_and_the_response_has_one_global_budget()
     {
         var shape = new TestShapeSource();
-        using var provider = Provider(services => services.AddSingleton<IActivitySerializedShapeSource>(shape));
+        using var provider = Provider(services =>
+        {
+            MemberReadsOn(services);
+            services.AddSingleton<IActivitySerializedShapeSource>(shape);
+        });
         var document = Document(Sequence(Node("producer"), Node("consumer"))) with { Inputs = [Definition("first"), Definition("second")] };
         var query = new ActivityDataSelectionQuery { ShapeLimits = new(4, 3) };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query);
         Assert.Equal(3, result.Sources.Sum(source => Count(source.Shape)));
         Assert.Contains(result.Sources, source => source.Shape.State == ActivitySerializedShapeState.Truncated);
         var focused = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), new() {
-            Source = Result("producer"), MemberPath = ["a.b", ""], ShapeLimits = new(2, 2)
+            Source = ScopeFree("producer"), MemberPath = ["a.b", ""], ShapeLimits = new(2, 2)
         });
         Assert.Empty(focused.Findings);
         Assert.Equal(new[] { "a.b", "" }, shape.LastPath);

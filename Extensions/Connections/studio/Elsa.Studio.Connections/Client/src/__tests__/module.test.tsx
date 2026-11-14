@@ -1,5 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioContributionRegistry } from "@elsa-workflows/studio-sdk";
+import { describe, expect, it } from "vitest";
+import {
+  createWeaverRegistry,
+  createContributionRegistry,
+  createDashboardWidgetRegistry,
+  createDialogController,
+  createEndpointContext,
+  studioSlots,
+  type ElsaStudioModuleApi
+} from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 
 describe("connections module", () => {
@@ -15,6 +23,7 @@ describe("connections module", () => {
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({
         id: "elsa.connection-reference-editor",
+        presentsField: true,
         surfaces: expect.objectContaining({ inline: expect.any(Function) }),
         createDefaultValue: expect.any(Function)
       })
@@ -33,29 +42,38 @@ describe("connections module", () => {
 });
 
 function stubApi(): ElsaStudioModuleApi {
+  const dashboardWidgets = createDashboardWidgetRegistry();
+  const weaver = createWeaverRegistry();
   return {
-    backend: {
-      baseUrl: "https://server.example",
-      http: {
-        requestJson: vi.fn(),
-        getJson: vi.fn(),
-        postJson: vi.fn(),
-        putJson: vi.fn(),
-        deleteJson: vi.fn()
-      }
+    host: {
+      ...createEndpointContext("https://studio.example/"),
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0"
     },
-    featureAreas: registry(),
-    propertyEditors: registry(),
-    expressionEditors: registry(),
-    dialogs: { confirm: vi.fn(), prompt: vi.fn(), alert: vi.fn() }
-  };
-}
-
-function registry<T>(): StudioContributionRegistry<T> & { items: T[] } {
-  const items: T[] = [];
-  return {
-    items,
-    add: item => items.push(item),
-    list: () => items
+    backend: createEndpointContext("https://server.example/"),
+    runtime: {},
+    featureAreas: createContributionRegistry({ slot: studioSlots.featureAreas }),
+    navigation: createContributionRegistry({ slot: studioSlots.navigation }),
+    routes: createContributionRegistry({ slot: studioSlots.routes }),
+    dashboardWidgets,
+    homeWidgets: dashboardWidgets,
+    diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
+    panels: createContributionRegistry({ slot: studioSlots.panels }),
+    toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
+    activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
+    propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
+    expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
+    workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
+    workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
+    settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
+    weaver,
+    workflowDesigner: {
+      nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
+      toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
+      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
+    },
+    ai: weaver,
+    dialogs: createDialogController().api,
+    diagnostics: createContributionRegistry({ slot: studioSlots.diagnostics })
   };
 }
