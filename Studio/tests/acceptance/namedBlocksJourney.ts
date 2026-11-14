@@ -3,13 +3,14 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } };
 type Content = { state: { rootActivity: Node; variables: unknown[]; inputs: unknown[]; outputs: unknown[] }; layout: unknown[]; activityPresentation: { nodeId: string; displayName: string; description?: string }[] };
-type GraphDraft = { draftId: string; definitionId: string; revision: number; provider: { payload: { rootActivity: Node } }; activityPresentation: Content["activityPresentation"] };
+type GraphDraft = { draftId: string; definitionId: string; revision: number; layout: unknown[]; provider: { payload: { rootActivity: Node } }; activityPresentation: Content["activityPresentation"] };
 
 /** Normal API setup and publication, real composed editors and runtime; no simulated browser responses. */
 export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Capture, profile: "commands" | "expression-results" = "commands") {
   const backend = process.env.ELSA_WORKBENCH_URL!;
   const multipleKey: "Meta" | "Control" = await page.evaluate(() => /Mac/.test(navigator.platform) ? "Meta" : "Control");
   const workflowIds: string[] = [], runIds: string[] = [], activityIds: string[] = [];
+  const creationProof: unknown[] = [];
   const proof: { host: string; kind: string; before: unknown; after?: unknown; blockId?: string; saved?: unknown; baselineVersion?: string; changedVersion?: string }[] = [];
   async function api<T>(route: string, method = "GET", data?: unknown): Promise<T> {
     const response = await page.request.fetch(`${backend}${route}`, { method, data });
@@ -262,30 +263,54 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         await page.locator(".wf-breadcrumb").getByRole("button", { name: "Root", exact: true }).click();
         await canvas(); await expect(row(blockId)).toBeVisible();
       }
-      // Exercise the blank-container and inverse commands through the same host authority/history path.
+      // Exercise blank creation repeatedly without concealing or moving existing Flowchart steps.
+      const retainedLayout = structuredClone((await saved()).layout);
+      const retainedIds = new Set(retainedLayout.map(value => (value as { nodeId: string }).nodeId));
+      async function createEmptyNativeBlock(displayName: string) {
+        await page.getByRole("button", { name: `Create ${kind === "sequence" ? "Sequence" : "Flowchart"} block`, exact: true }).click();
+        const createDialog = page.getByRole("dialog", { name: `Create ${kind === "sequence" ? "Sequence" : "Flowchart"} block`, exact: true });
+        await createDialog.getByRole("textbox", { name: "Name", exact: true }).fill(displayName);
+        const chooseVersion = createDialog.getByRole("combobox");
+        if (await chooseVersion.count()) await chooseVersion.selectOption(versions[kind]);
+        await createDialog.getByRole("button", { name: "Preview change", exact: true }).click();
+        await expect(createDialog.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled();
+        await createDialog.getByRole("button", { name: "Apply change", exact: true }).click();
+        await expect(createDialog).toBeHidden();
+        let blankId: string | undefined;
+        await expect.poll(async () => { blankId = (await saved()).activityPresentation.find(value => value.displayName === displayName)?.nodeId; return !!blankId; }).toBe(true);
+        await expect(row(blankId!)).toBeVisible();
+        expect((await saved()).layout.filter(value => retainedIds.has((value as { nodeId: string }).nodeId))).toEqual(retainedLayout);
+        if (kind === "flowchart") {
+          await page.getByRole("button", { name: "Fit View", exact: true }).click();
+          const bounds = () => page.locator(".react-flow__node").evaluateAll(elements => elements.map(element => {
+            const box = element.getBoundingClientRect();
+            return { nodeId: element.getAttribute("data-id"), left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+          }).filter(box => box.width > 0 && box.height > 0));
+          await expect.poll(async () => {
+            const boxes = await bounds(), created = boxes.find(box => box.nodeId === blankId);
+            return !!created && boxes.every(box => box.nodeId === blankId || created.right <= box.left || box.right <= created.left || created.bottom <= box.top || box.bottom <= created.top);
+          }).toBe(true);
+          creationProof.push({ host, kind, nodeId: blankId, bounds: await bounds(), existingLayoutPreserved: true });
+        }
+        return blankId!;
+      }
       await row(blockId).click();
-      await page.getByRole("button", { name: `Create ${kind === "sequence" ? "Sequence" : "Flowchart"} block`, exact: true }).click();
-      const createDialog = page.getByRole("dialog", { name: `Create ${kind === "sequence" ? "Sequence" : "Flowchart"} block`, exact: true });
-      const emptyName = `Empty ${host} ${kind}`;
-      await createDialog.getByRole("textbox", { name: "Name", exact: true }).fill(emptyName);
-      const chooseVersion = createDialog.getByRole("combobox");
-      if (await chooseVersion.count()) await chooseVersion.selectOption(versions[kind]);
-      await createDialog.getByRole("button", { name: "Preview change", exact: true }).click();
-      await expect(createDialog.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled();
-      await createDialog.getByRole("button", { name: "Apply change", exact: true }).click();
-      await expect(createDialog).toBeHidden();
-      let blankId: string | undefined;
-      await expect.poll(async () => { blankId = (await saved()).activityPresentation.find(value => value.displayName === emptyName)?.nodeId; return !!blankId; }).toBe(true);
-      await expect(row(blankId!)).toBeVisible();
+      const blankIds = [await createEmptyNativeBlock(`Empty ${host} ${kind}`)];
       await capture(page, info, `${host}-${kind}-created-empty`);
-      await row(blankId!).click();
-      await page.getByRole("button", { name: "Ungroup…", exact: true }).click();
+      if (kind === "flowchart") {
+        blankIds.push(await createEmptyNativeBlock(`Second empty ${host} ${kind}`));
+        await capture(page, info, `${host}-${kind}-created-repeat`);
+      }
       const ungroup = page.getByRole("dialog", { name: "Ungroup block", exact: true });
-      await ungroup.getByRole("button", { name: "Preview change", exact: true }).click();
-      await expect(ungroup.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled();
-      await ungroup.getByRole("button", { name: "Apply change", exact: true }).click();
-      await expect(ungroup).toBeHidden(); await expect(row(blankId!)).toHaveCount(0);
-      await expect.poll(async () => (await saved()).activityPresentation.some(value => value.nodeId === blankId)).toBe(false);
+      for (const blankId of [...blankIds].reverse()) {
+        await row(blankId).click();
+        await page.getByRole("button", { name: "Ungroup…", exact: true }).click();
+        await ungroup.getByRole("button", { name: "Preview change", exact: true }).click();
+        await expect(ungroup.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled();
+        await ungroup.getByRole("button", { name: "Apply change", exact: true }).click();
+        await expect(ungroup).toBeHidden(); await expect(row(blankId)).toHaveCount(0);
+        await expect.poll(async () => (await saved()).activityPresentation.some(value => value.nodeId === blankId)).toBe(false);
+      }
       await expect(row(blockId)).toBeVisible();
       await capture(page, info, `${host}-${kind}-empty-ungrouped`);
       await row(blockId).click();
@@ -388,7 +413,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       try { await api(`${prefix}/${id}`, "DELETE"); cleanup.push({ kind, id, status: "deleted" }); }
       catch (error) { failures.push(error); cleanup.push({ kind, id, status: "failed" }); }
     }
-    await info.attach("named-blocks-proof.json", { body: JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, proof, terminalRefusalProof, cleanup, disposableActivityDefinitionIds: activityIds }, null, 2), contentType: "application/json" });
+    await info.attach("named-blocks-proof.json", { body: JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, proof, creationProof, terminalRefusalProof, cleanup, disposableActivityDefinitionIds: activityIds }, null, 2), contentType: "application/json" });
   }
   if (failures.length === 1) throw failures[0];
   if (failures.length) throw new AggregateError(failures, "Named-block journey or owned fixture cleanup failed");

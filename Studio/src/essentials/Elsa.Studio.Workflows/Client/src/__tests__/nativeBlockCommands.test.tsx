@@ -8,14 +8,16 @@ import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputW
 import { normalizeActivityStructures } from "../workflowAdapter";
 import type { ActivityNode } from "../workflowTypes";
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
-import { sequenceActivity, sequenceNode, writeLine, leafNode, setVariableActivity } from "./fixtures";
+import { sequenceActivity, flowchartActivity, sequenceNode, writeLine, leafNode, setVariableActivity } from "./fixtures";
 
 let root: Root, container: HTMLDivElement;
 let context: NativeBlockContext;
+let createPosition: { x: number; y: number };
 const validate = vi.fn<(document: NativeBlockDocument) => Promise<NativeBlockValidation>>();
 const apply = vi.fn();
 const open = vi.fn();
 beforeEach(() => {
+  createPosition = { x: 800, y: 100 };
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   context = { document: { rootActivity: sequenceNode("root", [leafNode("one"), leafNode("two")]), layout: [], activityPresentation: [] },
     catalog: [sequenceActivity, writeLine], scope: [], canEdit: true, referenceContext: [], sourceKey: "resource:1/selection:one,two" };
@@ -23,7 +25,7 @@ beforeEach(() => {
   render();
 });
 afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
-function render() { flushSync(() => root.render(<NativeBlockCommands context={context} selectedNodeIds={["one", "two"]} validate={validate} apply={apply} open={open} />)); }
+function render() { flushSync(() => root.render(<NativeBlockCommands context={context} selectedNodeIds={["one", "two"]} createPosition={createPosition} validate={validate} apply={apply} open={open} />)); }
 function button(label: string) { const item = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label); if (!item) throw new Error(label); return item; }
 function click(label: string) { flushSync(() => button(label).click()); }
 function name(value: string) {
@@ -145,4 +147,14 @@ it("preserves explicit result bindings through the expanded editor input boundar
   expect(apply).toHaveBeenCalledTimes(1);
   expect(canonicalizeStateForWire({ rootActivity: apply.mock.calls[0][0].rootActivity }).rootActivity).toEqual(wire);
   expect(context.document).toEqual(before);
+});
+
+it("creates at the host's free position and refuses a changed placement before confirmation", async () => {
+  context = { ...context, catalog: [...context.catalog, flowchartActivity] }; render();
+  click("Create Flowchart block"); name("Separate block"); click("Preview change"); await settle();
+  const candidate = validate.mock.calls[0][0];
+  expect(candidate.layout.find(node => candidate.activityPresentation.some(item => item.nodeId === node.nodeId && item.displayName === "Separate block"))).toMatchObject(createPosition);
+  createPosition = { x: 1200, y: 100 }; render();
+  expect(button("Apply change").disabled).toBe(true);
+  expect(container.textContent).toContain("preview is stale"); expect(apply).not.toHaveBeenCalled();
 });

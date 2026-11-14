@@ -18,6 +18,7 @@ type ReadyPlan = Extract<NativeBlockPlan, { status: "ready" }>;
 export function NativeBlockCommands(props: {
   context: NativeBlockContext;
   selectedNodeIds: string[];
+  createPosition: { x: number; y: number };
   validate(document: NativeBlockDocument): Promise<NativeBlockValidation>;
   apply(document: NativeBlockDocument, selection: string[], isCurrent: () => boolean): void | Promise<void>;
   open(nodeId: string): void;
@@ -54,18 +55,18 @@ export function NativeBlockCommands(props: {
   const preview = async () => {
     if (!action || busy) return;
     const original = current.current;
-    const plannerContext = nativeBlockPlannerContext(original.context);
+    const plannerContext = nativeBlockPlannerContext(original.context, original.createPosition);
     const identity = { nodeId: crypto.randomUUID(), activityVersionId: version || (choices.length === 1 ? choices[0].activityVersionId : ""), displayName: name, description };
     const proposed = action === "ungroup" ? planUngroupNativeBlock(plannerContext, original.selectedNodeIds[0] ?? "") :
       action === "extract" ? planExtractNativeBlock(plannerContext, { ...identity, selectedNodeIds: original.selectedNodeIds }) :
-        planCreateNativeBlock(plannerContext, { ...identity, kind: action, position: { x: 100, y: 100 }, beforeNodeId: original.selectedNodeIds[0] });
+        planCreateNativeBlock(plannerContext, { ...identity, kind: action, position: original.createPosition, beforeNodeId: original.selectedNodeIds[0] });
     if (proposed.status === "refused") { setMessages(proposed.diagnostics.map(item => item.message)); return; }
     const id = ++request.current;
     setBusy(true); setPlan(null); setMessages([]);
     try {
       const result = await original.validate(nativeBlockEditorDocument(proposed.document, original.context.catalog));
       if (id !== request.current) return;
-      if (applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), proposed).status !== "ready") { refuseStale(); return; }
+      if (applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context, current.current.createPosition), proposed).status !== "ready") { refuseStale(); return; }
       setMessages(result.messages);
       if (result.state === "validated") setPlan(proposed);
       else setMessages(result.messages.length ? result.messages : ["The owning resource could not validate this proposal. Refresh the resource and try again."]);
@@ -74,7 +75,7 @@ export function NativeBlockCommands(props: {
   };
   const apply = async () => {
     if (!plan || busy) return;
-    const checked = applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), plan);
+    const checked = applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context, current.current.createPosition), plan);
     if (checked.status !== "ready") { setPlan(null); refuseStale(); return; }
     const id = ++request.current;
     setBusy(true); setMessages([]);
@@ -82,18 +83,18 @@ export function NativeBlockCommands(props: {
       // Recheck normal resource authority at confirmation, including server-side revision and access changes.
       const result = await current.current.validate(nativeBlockEditorDocument(checked.document, current.current.context.catalog));
       if (id !== request.current) return;
-      const final = applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), checked);
+      const final = applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context, current.current.createPosition), checked);
       if (final.status !== "ready") { setPlan(null); refuseStale(); return; }
       if (result.state !== "validated") { setPlan(null); setMessages(result.messages.length ? result.messages : ["The resource or its authority changed. Preview again."]); return; }
       committingRef.current = true; setCommitting(true);
-      await current.current.apply(nativeBlockEditorDocument(final.document, current.current.context.catalog), final.selection, () => request.current === id && applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), checked).status === "ready");
+      await current.current.apply(nativeBlockEditorDocument(final.document, current.current.context.catalog), final.selection, () => request.current === id && applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context, current.current.createPosition), checked).status === "ready");
       committingRef.current = false; setCommitting(false);
       if (id === request.current) close();
     } catch { if (id === request.current) setMessages(["The change was not applied. Refresh the resource and preview again."]); }
     finally { committingRef.current = false; if (id === request.current) { setCommitting(false); setBusy(false); } }
   };
-  const stale = plan && applyNativeBlockPlan(nativeBlockPlannerContext(props.context), plan).status !== "ready";
-  const changes = plan ? describeNativeBlockChange(nativeBlockPlannerContext(props.context).document, plan.document, props.context.catalog) : null;
+  const stale = plan && applyNativeBlockPlan(nativeBlockPlannerContext(props.context, props.createPosition), plan).status !== "ready";
+  const changes = plan ? describeNativeBlockChange(nativeBlockPlannerContext(props.context, props.createPosition).document, plan.document, props.context.catalog) : null;
   const title = action === "extract" ? "Extract named block" : action === "ungroup" ? "Ungroup block" : `Create ${action === "sequence" ? "Sequence" : "Flowchart"} block`;
   const label = selected && props.context.document.activityPresentation.find(item => item.nodeId === selected.nodeId)?.displayName;
   const childCount = selected ? getChildSlots(selected, props.context.catalog).reduce((sum, slot) => sum + slot.activities.length, 0) : 0;
@@ -124,7 +125,7 @@ export function NativeBlockCommands(props: {
           {changes.addedSteps.length ? <details open><summary>Add {changes.addedSteps.length} result-transfer steps</summary><ul>{changes.addedSteps.map((label, index) => <li key={index}>{label}</li>)}</ul></details> : null}
           {changes.addedVariables.length ? <details open><summary>Add {changes.addedVariables.length} result variables</summary><ul>{changes.addedVariables.map((label, index) => <li key={index}>{label}</li>)}</ul></details> : null}
           {changes.removedConnections.length || changes.addedConnections.length ? <details open><summary>Rewire connections</summary><ul>{changes.removedConnections.map((label, index) => <li key={`old-${index}`}>Remove: {label}</li>)}{changes.addedConnections.map((label, index) => <li key={`new-${index}`}>Add: {label}</li>)}</ul></details> : null}
-        </> : null}<details><summary>Current graph, layout and names</summary><pre>{JSON.stringify(nativeBlockPlannerContext(props.context).document, null, 2)}</pre></details><details><summary>Complete proposed graph, connections, bindings, layout and names</summary><pre>{JSON.stringify(plan.document, null, 2)}</pre></details></div> : null}
+        </> : null}<details><summary>Current graph, layout and names</summary><pre>{JSON.stringify(nativeBlockPlannerContext(props.context, props.createPosition).document, null, 2)}</pre></details><details><summary>Complete proposed graph, connections, bindings, layout and names</summary><pre>{JSON.stringify(plan.document, null, 2)}</pre></details></div> : null}
       <div className="wf-block-dialog-actions"><button type="button" disabled={committing} onClick={close}>Cancel</button><button type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : "Preview change"}</button><button type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</button></div>
     </NativeBlockDialog> : null}
   </>;

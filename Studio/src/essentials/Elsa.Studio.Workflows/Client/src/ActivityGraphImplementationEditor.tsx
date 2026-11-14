@@ -1,3 +1,4 @@
+import { nextNativeBlockPosition } from "./graph-authoring/nativeBlockPlacement";
 import type { GraphAuthoringView } from "./graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "./graph-authoring/presentationScopeFrames";
 import { NativeBlockCommands } from "./graph-authoring/NativeBlockCommands";
@@ -1002,6 +1003,7 @@ export function ActivityGraphImplementationEditor({
             expressionScopePreservation: composeExpressionScopePreservation(expressionEditors)
           }}
           selectedNodeIds={nodes.filter(node => node.selected).map(node => node.id)}
+          createPosition={nextNativeBlockPosition(nodes, selectedNodeId)}
           validate={async document => blockAuthority ? blockAuthority.validate({ ...activityGraphDocumentAdapter.replaceGraph(value, document.rootActivity, document.layout), activityPresentation: document.activityPresentation }) : { state: "unavailable", messages: [] }}
           apply={(document, selection) => {
             if (readOnly || !blockAuthority?.canApply()) throw new Error("The resource changed before commit.");

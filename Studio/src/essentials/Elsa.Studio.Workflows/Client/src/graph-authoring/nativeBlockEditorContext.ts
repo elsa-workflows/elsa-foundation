@@ -4,8 +4,8 @@ import type { ActivityCatalogItem } from "../workflowTypes";
 import type { NativeBlockContext, NativeBlockDocument } from "./nativeBlocks";
 
 /** The pure planner reads wire bindings; resource editors own expanded input properties. */
-export function nativeBlockPlannerContext(context: NativeBlockContext): NativeBlockContext {
-  return { ...context, document: { ...context.document,
+export function nativeBlockPlannerContext(context: NativeBlockContext, createPosition: { x: number; y: number }): NativeBlockContext {
+  return { ...context, sourceKey: JSON.stringify([context.sourceKey, createPosition.x, createPosition.y]), document: { ...context.document,
     rootActivity: canonicalizeStateForWire({ rootActivity: context.document.rootActivity }).rootActivity ?? context.document.rootActivity
   } };
 }

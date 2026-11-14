@@ -2,6 +2,7 @@ import { useWorkflowNativeBlockCommit } from "./useWorkflowNativeBlockCommit";
 import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "../graph-authoring/presentationScopeFrames";
 import { NativeBlockCommands } from "../graph-authoring/NativeBlockCommands";
+import { nextNativeBlockPosition } from "../graph-authoring/nativeBlockPlacement";
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
 import { validateWorkflowCandidate } from "../api/nativeBlockValidation";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
@@ -1665,6 +1666,7 @@ export function WorkflowEditor({
               expressionScopePreservation: composeExpressionScopePreservation(expressionEditors)
             }}
             selectedNodeIds={selectedCanvasNodeIds}
+            createPosition={nextNativeBlockPosition(authoringNodes, selectedNodeId)}
             validate={async document => {
               if (!editorDoc.canEdit() || editorDoc.pinned || (!documentAdapter && !persistedDraft)) return { state: "unavailable", messages: ["Candidate validation is unavailable for this resource."] };
               const candidate = { ...draft, state: { ...draft.state, rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
