@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -10,15 +11,30 @@ namespace Kernel.Durable;
 /// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, string? PendingStart = null);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, string? PendingStart = null, string? CustomHandles = null);
+
+/// <summary>A requested spelling, its stored actor identity (or first equivalent candidate if missing), and its snapshot.</summary>
+public sealed record ActorLookup(string Requested, string Canonical, InstanceRow? Row)
+{
+    public static IReadOnlyList<ActorLookup> Ordinal(IReadOnlyCollection<string> ids, IReadOnlyList<InstanceRow> rows)
+    {
+        var found = rows.ToDictionary(row => row.Id, StringComparer.Ordinal);
+        return ids.Select(id => new ActorLookup(id, id, found.GetValueOrDefault(id))).ToList();
+    }
+}
 
 /// <summary>A message row as a poll returns it.</summary>
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
-public sealed record SubscriptionRow(string Key, string Instance, string Wait, StartSpec? Start = null, long Creation = 0);
+public sealed record SubscriptionRow(
+    [property: JsonConverter(typeof(DurableKeyJson))] string Key,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Wait, StartSpec? Start = null, long Creation = 0);
 
-public sealed record EventRow(string Key, string Id, string? Payload, long KeepUntil);
+public sealed record EventRow(
+    [property: JsonConverter(typeof(DurableKeyJson))] string Key,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Id, string? Payload, long KeepUntil);
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries);
 
@@ -75,16 +91,26 @@ public sealed record CommitBatch(
 {
     /// <summary>How far the position moves: one per journal row.</summary>
     public int Positions => Turns.Count(s => s.Journal is not null);
+
+    /// <summary>Optional closed-open authority interval required by this transaction's guarded turns.</summary>
+    public CommitWindow? Window { get; init; }
 }
 
 /// <summary><c>Landed</c> is false when the fence matched nothing. <c>Seqs</c> are those of the inserted messages, in order.</summary>
 public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs);
+
+public sealed record CommitWindow(long FromInclusive, long UntilExclusive)
+{
+    public CommitWindow Intersect(CommitWindow next) =>
+        new(Math.Max(FromInclusive, next.FromInclusive), Math.Min(UntilExclusive, next.UntilExclusive));
+}
 
 public enum Failure
 {
     Unknown,    // the outcome is not known: reset
     Transient,  // it did not happen and may be tried again as it is: a deadlock victim, SQLITE_BUSY
     Definite,   // it did not happen and never will: a value too long, a constraint
+    WindowExpired, // the entire transaction rolled back and its time-dependent decisions must be reconsidered
 }
 
 public sealed class StoreException(Failure failure, string message, Exception? inner = null) : Exception(message, inner)
@@ -98,8 +124,11 @@ public sealed class StoreException(Failure failure, string message, Exception? i
 /// </summary>
 public interface IKernelStore : IMembership
 {
+    /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
+    bool SupportsCommitWindow => false;
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;
+    bool HasActorAliases => false;
 
     /// <summary>
     /// Qualified immutable clock facts in the same atomic commit; unavailable by default. A qualified store returns
@@ -127,7 +156,14 @@ public interface IKernelStore : IMembership
     /// <summary>Add a message. False when the id exists already.</summary>
     ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default);
 
+    /// <summary>Insert the delivery derived from an event and subscription. Repeating the match is idempotent.</summary>
+    ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
     ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>One load under the provider's actor-key equality. Ordinal providers use their existing indexed read.</summary>
+    async ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
+        ActorLookup.Ordinal(ids, await LoadAsync(ids, cancellationToken));
 
     ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default);
 
@@ -137,6 +173,10 @@ public interface IKernelStore : IMembership
     ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default);
 
     ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default);
+
+    /// <summary>Read canonical persisted rows using this store's correlation and identity equality.</summary>
+    ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
     ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default);
 
@@ -162,6 +202,36 @@ public interface IKernelStore : IMembership
 
     /// <summary>Delete handled outside commands and events whose window has passed.</summary>
     ValueTask<int> SweepAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>A read-only event delivery. Only the event router constructs this envelope.</summary>
+public sealed class EventDelivery
+{
+    internal EventDelivery(Message message, EventMatch match) => Message = message.WithInboxScope(-2, match.Encode());
+    public Message Message { get; }
+    public Message At(long serial) => Message.Start is null ? Message : Message with { Target = InstanceRef.ForEvent(Message.Target.Partition, serial) };
+}
+
+public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
+{
+    public EventDelivery Delivery(int partitions = 1, string? replyTo = null) =>
+        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
+}
+
+public sealed record EventAcceptance(bool Added, InstanceRef Target)
+{
+    public static implicit operator bool(EventAcceptance result) => result.Added;
+}
+
+public sealed record EventMatch(
+    [property: JsonConverter(typeof(DurableKeyJson))] string Key,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Event,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Instance,
+    [property: JsonConverter(typeof(DurableKeyJson))] string Wait,
+    long Creation = 0)
+{
+    public string Encode() => Json.Write(this);
+    public static EventMatch Decode(string text) => Json.Read<EventMatch>(text);
 }
 
 public static class Events
