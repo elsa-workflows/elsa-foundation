@@ -79,6 +79,7 @@ import type {
 import { getTheme, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 import { applyMaterialVariables } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/forms/Field.css";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/disclosure/disclosure.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
@@ -635,6 +636,7 @@ const connectionReferenceDescriptor: StudioActivityDescriptor = {
 const connectionPickerContext = createEndpointContext(searchParams.get("backend") ?? window.location.origin);
 const connectionPickerExpressionEditor: StudioExpressionEditorContribution = {
   id: "browser.connection-reference-editor",
+  presentsField: true,
   order: 100,
   supports: context => context.syntax === "Connection" || context.descriptor.uiHint === "connection-picker",
   surfaces: { inline: props => <ConnectionPickerEditor {...props} endpointContext={connectionPickerContext} /> },
@@ -648,6 +650,7 @@ const scalarInputValues: Record<string, unknown> = {
 
 const secretPickerExpressionEditor: StudioExpressionEditorContribution = {
   id: "browser.secret-reference-editor",
+  presentsField: true,
   order: 100,
   supports: context => context.syntax === "Secret",
   surfaces: {
@@ -1760,7 +1763,7 @@ if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture &&
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || classicVariant || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
+  if (darkVariant || classicVariant || scalarInputsFixture || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
