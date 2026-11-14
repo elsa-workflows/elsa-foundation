@@ -6,9 +6,10 @@ using Kernel.Sim.Native;
 
 internal static class PolicyWitness
 {
-    private static string[] Parents => ["sequence", "parallel", "foreach", "disabled"];
+    private static string[] Parents => ["sequence", "parallel", "foreach", "disabled", "unmarked"];
+    private static string Origin(string kind) => kind == "disabled" ? "disabled-policy" : kind == "unmarked" ? "unmarked-policy" : "seeded-v6-policy";
     internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from k in Parents
-        select $"recovery:{(k == "disabled" ? "disabled-policy" : "seeded-v6-policy")},{m},parent={k}";
+        select $"recovery:{Origin(k)},{m},parent={k}";
     internal static void Run()
     {
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var kind in Parents)
@@ -17,7 +18,7 @@ internal static class PolicyWitness
             var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true }; var target = InstanceRef.In(0, "policy-next"); var owner = 0;
             Actor Actor() => world.Of(owner, 0);
             var leaf = Wf.Node<RootLeaf>("leaf", ("Value", Binding.Literal(7)), ("Index", Binding.Literal(0)));
-            var work = kind == "foreach" ? Wf.ForEach("work", Binding.Literal(new[] { 7, 9 }), leaf) : kind == "parallel" ? Wf.Parallel("work", null, leaf) : Wf.Sequence("work", leaf);
+            var work = kind == "foreach" ? Wf.ForEach("work", Binding.Literal(new[] { 7, 9 }), leaf) : kind == "parallel" ? Wf.Parallel("work", null, leaf) : kind == "unmarked" ? Wf.Node<UnmarkedFaultParent>("work").With(leaf) : Wf.Sequence("work", leaf);
             var workflow = Wf.Workflow("policy-next", Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.Sequence("serial", Wf.Event("gate", "start"), work)));
             workflow.InterventionRequested = kind != "disabled"; NativeWorkflows.Registry.Add(workflow);
             void Apply(Act a) { world.Apply(a); if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
@@ -34,7 +35,7 @@ internal static class PolicyWitness
             }
             NativeState State() => Json.Read<NativeState>(world.Store.Instances[target.Id].State);
             Apply(new("take", Actor().Id)); Apply(new("add", M: new("start", target, Kinds.Start, Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "policy-proof") }))); Drain();
-            if (kind != "disabled")
+            if (kind is "sequence" or "parallel" or "foreach")
             {
                 // Deliberately constructed v6 migration context, not a historical writer/binary guarantee.
                 var legacy = State(); legacy.InterventionPolicy = 0;
@@ -46,11 +47,20 @@ internal static class PolicyWitness
             var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:start");
             Apply(new("add", M: Events.Deliver(new("event:start", "release", null, world.Time + 120_000), wait))); Drain();
             var state = State(); var expected = kind is "sequence" or "parallel";
-            if (state.InterventionPolicy != 0 || RootLeaf.Calls.Count != 1 ||
+            if (state.InterventionPolicy != (kind == "unmarked" ? 2 : 0) || RootLeaf.Calls.Count != 1 ||
                 (expected ? world.Store.Instances[target.Id].Status != InstanceStatus.Running || !state.Frames.Values.Any(f => f.Node == "leaf" && f.Intervention is not null)
                     : world.Store.Instances[target.Id].Status != InstanceStatus.Finished || state.Frames.Count != 0))
                 throw new InvalidOperationException("R29: latest host or new parent support silently changed an existing invocation policy");
-            Console.WriteLine($"PASS recovery:{(kind == "disabled" ? "disabled-policy" : "seeded-v6-policy")},{mode},parent={kind}");
+            Console.WriteLine($"PASS recovery:{Origin(kind)},{mode},parent={kind}");
         }
     }
+}
+// Having a preparation method does not grant interception: explicit versioned parent support is required.
+internal sealed class UnmarkedFaultParent : CompositeActivity, IInterventionParent
+{
+    public UnmarkedFaultParent() { }
+    protected internal override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
+    System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child) => state?.DeepClone();
 }
