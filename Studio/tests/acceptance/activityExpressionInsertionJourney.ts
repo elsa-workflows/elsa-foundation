@@ -91,6 +91,8 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
   text += syntax === "JavaScript" ? "args.data2" : "{{ data2 }}";
   await insert("data2", [], async () => {
     await chooser().getByRole("group", { name: "Workflow inputs", exact: true }).getByRole("option", { name: /Suffix/ }).press("Enter");
+    const whole = chooser().getByRole("button", { name: "Use whole value", exact: true });
+    await expect(whole).toBeEnabled(); await whole.press("Enter");
   }, text);
   expect((await value()).parameters.data2).toEqual({ kind: "WorkflowRequest", memberKey: "suffix", path: null });
   const suffixAfter = await s.stored(created);
