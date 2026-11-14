@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "a48ec7b0daaa64d8db51667029809918fce668f9",
+  "publishStateRef": "c531beda43033460b39c669af6329bf81a1c873b",
+  "computationSha256": "879be65e142042b6dec9b43d7d730b091612d317abb74efd23a891b0b33cfe63",
+  "lastPublishCommit": "9daaa3206cdd98dfb5978468ea354d711415352d",
+  "lines": {
+    "A": "4.0",
+    "B": "4.0"
+  },
+  "packages": [
+    {
+      "package_id": "Elsa.Etl.Core",
+      "path": "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj",
+      "line": "B",
+      "version": "4.0.13",
+      "affected": true,
+      "last_published": {
+        "version": "4.0.12-preview",
+        "commit": "73040cd7b1368818820d2a60902443a9f8a82c7f"
+      },
+      "fingerprint": "sha256:8339c66a57b939b257fdf1213e6fa3870d563bcb88d6768531b681f6f9e669e0",
+      "reasons": [
+        "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj (changed)",
+        "Extensions/Etl/src/Core/PublicAPI.Unshipped.txt (changed)",
+        "Extensions/Etl/src/Core/Runtime/EtlStoreException.cs (added)",
+        "Extensions/Etl/src/Core/Runtime/IEtlConnectorRuntimeInspector.cs (changed)",
+        "Extensions/Etl/src/Core/Runtime/IEtlConnectorRuntimeStore.cs (changed)",
+        "Extensions/Etl/src/Core/Runtime/IEtlRuntimeStore.cs (changed)"
+      ]
+    },
+    {
+      "package_id": "Elsa.Etl.Persistence.EntityFrameworkCore",
+      "path": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj",
+      "line": "B",
+      "version": "4.0.15",
+      "affected": true,
+      "last_published": {
+        "version": "4.0.14-preview",
+        "commit": "2a2b6578159dea38d75974d49e9cdb478d857853"
+      },
+      "fingerprint": "sha256:26b00240c48d6e6aaa4afaa3b92fc1afc4982dd17c684153e5230b6b2aac6595",
+      "reasons": [
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/AssemblyInfo.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/DependencyInjection/EtlDesignEntityFrameworkCoreRegistration.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/DependencyInjection/EtlRuntimeEntityFrameworkCoreRegistration.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlDesignDbContext.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlDesignEntityFrameworkCoreFeature.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeConstraintDialect.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeDbContext.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeEntityFrameworkCoreFeature.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/MySql/20261103193622_Initial.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/MySql/20261103193622_Initial.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/MySql/EtlDesignMySqlDbContextModelSnapshot.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/PostgreSql/20261103193620_Initial.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/PostgreSql/20261103193620_Initial.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/PostgreSql/EtlDesignPostgreSqlDbContextModelSnapshot.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/SqlServer/20261103193617_Initial.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/SqlServer/20261103193617_Initial.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlDesign/SqlServer/EtlDesignSqlServerDbContextModelSnapshot.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/MySql/20261103232024_Initial.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/MySql/20261103232024_Initial.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/MySql/20261104081803_ContinuousCompaction.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/MySql/20261104081803_ContinuousCompaction.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/MySql/EtlRuntimeMySqlDbContextModelSnapshot.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/PostgreSql/20261103232022_Initial.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/PostgreSql/20261103232022_Initial.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/PostgreSql/20261104081759_ContinuousCompaction.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/PostgreSql/20261104081759_ContinuousCompaction.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/PostgreSql/EtlRuntimePostgreSqlDbContextModelSnapshot.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/SqlServer/20261103232019_Initial.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/SqlServer/20261103232019_Initial.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/SqlServer/20261104081717_ContinuousCompaction.Designer.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/SqlServer/20261104081717_ContinuousCompaction.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations/EtlRuntime/SqlServer/EtlRuntimeSqlServerDbContextModelSnapshot.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceHistory.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorAcceptanceStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorBatchStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorCompletionStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHistory.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHttpDeliveryStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorHttpPageStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorOutputStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeInspector.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorSourceStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionCatalog.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlDefinitionStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlRuntimeOperation.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlRuntimeStore.cs (changed)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlDesignReadRetry.cs (added)",
+        "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EtlRuntimeRecordCodec.cs (changed)"
+      ]
+    }
+  ],
+  "apiDelta": "Additive public sealed EtlStoreException with its constructor and three identity properties; store signatures and persisted/wire shapes unchanged.",
+  "behaviorDelta": "Infrastructure failures are normalized at the runtime store boundary; bounded whole-operation retry and server activation are intentional behavior changes. Cancellation, validation/corruption and schema-write refusal remain distinct.",
+  "normalMagnitude": "The additive Core type normally requires at least Minor under framework section 4.2. Binary compatibility alone does not satisfy version magnitude.",
+  "scopedDecision": "For PR 3804 retain the computed 4.0 preview line under Elsa E5 / ADR 0080 D4, using the owner standing delegation to make these decisions autonomously. Do not represent patch increments as ordinary Minor compliance. No literal versions, shared version-line changes, packages or release are authored here.",
+  "authority": "Owner instruction in this session: You have my standing authorization to make these decisions autonomously.",
+  "published": false
+}

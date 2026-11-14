@@ -15,24 +15,32 @@ namespace Elsa.Etl.Core.Runtime;
 /// </remarks>
 public interface IEtlConnectorRuntimeStore
 {
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorAdmissionResult> AdmitConnectorAsync(EtlConnectorRunAdmission admission, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorRunView?> FindConnectorRunAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlPreparationLease?> ClaimConnectorPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
     /// <summary>Commits verified preparation and makes the run's partitions claimable.</summary>
     /// <remarks>A file input with zero records has no partition that could complete the run, so the same transaction
     /// settles it as success with its terminal result and owed native delivery. An identical replay returns Replay
     /// without settling again.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default);
     /// <summary>Reserves source capacity and records a bounded permit before issuing a GET.</summary>
     /// <remarks>Only a returned permit authorizes transport. Retry and replacement preserve the original request identity.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorHttpSourceFetchResult> BeginConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
         string requestId, CancellationToken cancellationToken = default);
     /// <summary>Records an issued source attempt's non-success or uncertain outcome without advancing input.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorHttpSourceFetchResult> CompleteConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
         EtlHttpSourceFetchAttempt attempt, EtlHttpSourceFetchOutcome outcome, CancellationToken cancellationToken = default);
     /// <summary>Retains a verified capture from its exact historical permit under current ownership.</summary>
     /// <remarks>The caller verifies the immutable cache bytes. Capture does not attach or advance the page.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorHttpSourceFetchResult> CaptureConnectorHttpSourceAsync(EtlConnectorPartitionLease lease,
         EtlHttpSourceFetchAttempt attempt, EtlRetainedHttpPage page, DateTimeOffset responseReceivedAtUtc,
         CancellationToken cancellationToken = default);
@@ -40,9 +48,11 @@ public interface IEtlConnectorRuntimeStore
     /// <remarks>The caller verifies the immutable body and records its capture first. New attachments require matching capture evidence. RequestHash is produced by
     /// <see cref="EtlRuntimeIdentity.HttpRequestHash"/>. Null continuation ends the shard; empty is invalid.
     /// Replays do not charge retained bytes again. Use the returned position for subsequent operations.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorPositionResult> AttachHttpPageAsync(EtlConnectorPartitionLease lease, EtlRetainedHttpPage page, CancellationToken cancellationToken = default);
     /// <summary>Advances only a retained empty page; nonempty pages require batch acceptance.</summary>
     /// <remarks>In a continuous run a moving empty page makes the next request wait one poll interval, also while a completion drains.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     /// <summary>Records a continuous run's caught-up response (no records, no cursor movement) from the live latest attempt.</summary>
     /// <remarks>
@@ -51,40 +61,50 @@ public interface IEtlConnectorRuntimeStore
     /// attempt started. Final means completion was requested at or before the attempt started: nothing changes and the
     /// caller retains the response as the shard's final page instead. Providers without continuous support return Invalid.
     /// </remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlHttpCaughtUpResult> RecordConnectorHttpCaughtUpAsync(EtlConnectorPartitionLease lease,
         EtlHttpSourceFetchAttempt attempt, DateTimeOffset responseReceivedAtUtc, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(new EtlHttpCaughtUpResult(EtlStoreStatus.Invalid, false));
     /// <summary>Durably requests completion of a continuous run and makes its idle partitions due at once.</summary>
     /// <remarks>Retry waits keep their time. The first terminal outcome still wins. A finite run reports NotContinuous whether or not
     /// it has settled; Terminal is only for a settled continuous run. Providers without continuous support report NotContinuous.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlRunCompletionOutcome> RequestConnectorRunCompletionAsync(EtlScope scope, string runId,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(EtlRunCompletionOutcome.NotContinuous);
     /// <summary>Reserves measured input at the current position. Replacement workers inherit the same owed batch and quota charges.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(EtlConnectorPartitionLease lease, EtlConnectorBatchDescriptor batch, CancellationToken cancellationToken = default);
     /// <summary>Retains the complete verified transformation output before any route is dispatched.</summary>
     /// <remarks>The caller verifies immutable bodies before retention. Identical replay does not recharge output.
     /// Call before dispatch, including recovered output: a replay also reserves any missing acceptance capacity for migrated checkpoints.
     /// Retention neither acknowledges delivery nor advances input.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorOutputResult> RetainConnectorBatchOutputAsync(EtlConnectorPartitionLease lease, string batchId, EtlConnectorBatchOutput output, CancellationToken cancellationToken = default);
     /// <summary>Allocates a bounded attempt before transport. Conflict with retained Waiting state means not yet eligible.</summary>
     /// <remarks>Only a returned permit authorizes sending. Identical begin replay can return the original live permit;
     /// the caller must not dispatch it concurrently or interpret it as proof that an earlier send did not happen.
     /// A replacement or expired in-flight attempt is first recorded as uncertain and delayed; it is not immediately resent.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorHttpDeliveryResult> BeginConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease, string batchId,
         EtlOutputRoute route, string requestId, CancellationToken cancellationToken = default);
     /// <summary>Records an exact allocated attempt's synchronous outcome without advancing input.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorHttpDeliveryResult> CompleteConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease, string batchId,
         EtlOutputRoute route, EtlHttpDeliveryAttempt attempt, EtlHttpDeliveryResponse response, CancellationToken cancellationToken = default);
     /// <summary>Records a verified immutable file publication matching the retained route body and destination key.</summary>
     /// <remarks>The caller verifies actual published bytes before recording; this operation does not advance input.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> RecordConnectorFilePublicationAsync(EtlConnectorPartitionLease lease, string batchId,
         EtlOutputRoute route, EtlObjectReference publication, CancellationToken cancellationToken = default);
     /// <summary>Accepts all retained route evidence, advances input and releases its reservation exactly once.</summary>
     /// <remarks>Final work also commits the terminal result/outbox. A matching replay never repeats accounting.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchAsync(EtlConnectorPartitionLease lease, string batchId,
         CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     /// <summary>
     /// The high watermark of the last completed run for a SQL source checkpoint, or null when none completed (spec 1199). A
@@ -92,6 +112,7 @@ public interface IEtlConnectorRuntimeStore
     /// business error with <c>etl.rows-rejected</c>. A run settled by any other failure, including a rejected delivery,
     /// leaves it unchanged.
     /// </summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<long?> FindConnectorSourceWatermarkAsync(EtlScope scope, EtlConnectorSourceWatermarkKey key,
         CancellationToken cancellationToken = default) => ValueTask.FromResult<long?>(null);
 

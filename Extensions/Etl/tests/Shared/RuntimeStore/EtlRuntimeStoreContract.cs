@@ -96,7 +96,7 @@ public abstract partial class EtlRuntimeStoreContract
         await AssertFinalBatchRaceStateAsync(database, admission, acceptance, accepted, cancelled, acceptanceWins, clock);
     }
 
-    private protected static async Task<(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance)> SeedFinalBatchAsync(
+    internal static async Task<(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance)> SeedFinalBatchAsync(
         IEtlRuntimeTestDatabase database, EtlRunAdmission admission, TimeProvider clock)
     {
         await using var seedContext = database.CreateContext();
@@ -110,7 +110,7 @@ public abstract partial class EtlRuntimeStoreContract
         return (lease, CreateAcceptance(admission, batch, 2, 0, 0));
     }
 
-    private protected static async Task AssertFinalBatchRaceStateAsync(IEtlRuntimeTestDatabase database, EtlRunAdmission admission,
+    internal static async Task AssertFinalBatchRaceStateAsync(IEtlRuntimeTestDatabase database, EtlRunAdmission admission,
         EtlBatchAcceptance acceptance, EtlAcceptanceResult accepted,
         EtlTerminalSettlementResult cancelled, bool acceptanceWins, TimeProvider clock)
     {
@@ -958,7 +958,7 @@ public abstract partial class EtlRuntimeStoreContract
         }
     }
 
-    private protected static EtlRunAdmission CreateAdmission(string runId, EtlScope scope, EtlPipeline? pipeline = null)
+    internal static EtlRunAdmission CreateAdmission(string runId, EtlScope scope, EtlPipeline? pipeline = null)
     {
         var template = EtlRuntimeFixtures.Admission(runId, scope);
         var source = pipeline ?? EtlTestPipelines.Create();
@@ -966,14 +966,14 @@ public abstract partial class EtlRuntimeStoreContract
         return template with { Invocation = template.Invocation with { Artifact = artifact } };
     }
 
-    private protected static async Task StartAsync(IEtlRuntimeStore store, EtlRunAdmission admission, long recordCount)
+    internal static async Task StartAsync(IEtlRuntimeStore store, EtlRunAdmission admission, long recordCount)
     {
         Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitAsync(admission)).Status);
         var preparation = Assert.IsType<EtlPreparationLease>(await store.ClaimPreparationAsync(admission.Invocation.Scope, "prep-worker"));
         Assert.Equal(EtlStoreStatus.Applied, await store.CommitPreparationAsync(preparation, EtlRuntimeFixtures.Prepared(recordCount)));
     }
 
-    private protected static EtlBatchDescriptor CreateBatch(EtlRunAdmission admission, EtlPreparedRun prepared, int partition,
+    internal static EtlBatchDescriptor CreateBatch(EtlRunAdmission admission, EtlPreparedRun prepared, int partition,
         long start, long end, string marker)
     {
         var inputHash = EtlRuntimeRecordCodec.HashText(marker);
@@ -982,7 +982,7 @@ public abstract partial class EtlRuntimeStoreContract
             start, end, inputBytes, inputHash);
     }
 
-    private protected static EtlBatchAcceptance CreateAcceptance(EtlRunAdmission admission, EtlBatchDescriptor batch,
+    internal static EtlBatchAcceptance CreateAcceptance(EtlRunAdmission admission, EtlBatchDescriptor batch,
         long accepted, long rejected, long filtered)
     {
         var effects = new List<EtlOutputEffect>();
@@ -1015,7 +1015,7 @@ public abstract partial class EtlRuntimeStoreContract
     /// <summary>A fresh, migrated runtime database on the engine under test.</summary>
     protected abstract Task<IEtlRuntimeTestDatabase> CreateDatabaseAsync();
 
-    private protected sealed class MutableTimeProvider : TimeProvider
+    internal sealed class MutableTimeProvider : TimeProvider
     {
         private DateTimeOffset _now = DateTimeOffset.Parse("2026-10-20T12:00:00Z");
         public override DateTimeOffset GetUtcNow() => _now;

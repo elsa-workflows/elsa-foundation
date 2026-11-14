@@ -350,7 +350,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Empty(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
     }
 
-    private protected static async Task<IReadOnlyList<EtlConnectorPartitionLease>> StartHttpRunAsync(
+    internal static async Task<IReadOnlyList<EtlConnectorPartitionLease>> StartHttpRunAsync(
         IEtlConnectorRuntimeStore store, EtlConnectorRunAdmission admission, string workerId)
     {
         Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitConnectorAsync(admission)).Status);
@@ -386,7 +386,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(exhausted.Lease));
     }
 
-    private protected static EtlRetainedHttpPage RetainedPage(EtlConnectorPartitionLease lease, string key,
+    internal static EtlRetainedHttpPage RetainedPage(EtlConnectorPartitionLease lease, string key,
         long byteLength, int recordCount, string? nextContinuation = null)
     {
         var position = Assert.IsType<EtlConnectorHttpPosition>(lease.Position);

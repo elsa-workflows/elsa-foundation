@@ -11,9 +11,16 @@ internal sealed partial class EfEtlRuntimeStore
     public async ValueTask<EtlStoreStatus> RecordConnectorFilePublicationAsync(EtlConnectorPartitionLease lease,
         string batchId, EtlOutputRoute route, EtlObjectReference publication, CancellationToken cancellationToken = default)
     {
+        PrepareOperation(nameof(RecordConnectorFilePublicationAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return await RunOperationAsync(nameof(RecordConnectorFilePublicationAsync), lease?.Scope, lease?.RunId,
+            () => RecordConnectorFilePublicationOnceAsync(lease, batchId, route, publication, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlStoreStatus> RecordConnectorFilePublicationOnceAsync(EtlConnectorPartitionLease? lease,
+        string batchId, EtlOutputRoute route, EtlObjectReference publication, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(lease);
         if (!Enum.IsDefined(route) || publication is null) return EtlStoreStatus.Invalid;
-        db.ChangeTracker.Clear();
         var key = RunKey(lease.Scope, lease.RunId);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var run = await FindRunRowAsync(lease.Scope, lease.RunId, cancellationToken);
@@ -67,8 +74,15 @@ internal sealed partial class EfEtlRuntimeStore
     public async ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchAsync(EtlConnectorPartitionLease lease,
         string batchId, CancellationToken cancellationToken = default)
     {
+        PrepareOperation(nameof(AcceptConnectorBatchAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return await RunOperationAsync(nameof(AcceptConnectorBatchAsync), lease?.Scope, lease?.RunId,
+            () => AcceptConnectorBatchOnceAsync(lease, batchId, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlConnectorPositionResult> AcceptConnectorBatchOnceAsync(EtlConnectorPartitionLease? lease,
+        string batchId, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(lease);
-        db.ChangeTracker.Clear();
         var key = RunKey(lease.Scope, lease.RunId);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var run = await FindRunRowAsync(lease.Scope, lease.RunId, cancellationToken);
@@ -266,6 +280,14 @@ internal sealed partial class EfEtlRuntimeStore
     }
 
     public async ValueTask<long?> FindConnectorSourceWatermarkAsync(EtlScope scope, EtlConnectorSourceWatermarkKey key,
+        CancellationToken cancellationToken = default)
+    {
+        PrepareOperation(nameof(FindConnectorSourceWatermarkAsync), scope, null, cancellationToken);
+        return await RunOperationAsync(nameof(FindConnectorSourceWatermarkAsync), scope, null,
+            () => FindConnectorSourceWatermarkOnceAsync(scope, key, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<long?> FindConnectorSourceWatermarkOnceAsync(EtlScope scope, EtlConnectorSourceWatermarkKey key,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(scope);

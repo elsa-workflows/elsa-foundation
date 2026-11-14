@@ -12,34 +12,53 @@ public interface IEtlRuntimeStore
     /// <summary>Positive maximum accepted take for each list call; consumers may compose bounded keyset pages.</summary>
     int MaximumPageSize { get; }
 
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlAdmissionResult> AdmitAsync(EtlRunAdmission admission, CancellationToken cancellationToken = default);
     /// <summary>Durably returns a safe admission refusal to the waiting parent, even when no binding can be resolved.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlTerminalSettlementResult> RejectAdmissionAsync(EtlInvocation invocation, EtlRunDiagnostic diagnostic, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlRunView?> FindRunAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlPreparationLease?> ClaimPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> RenewPreparationAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default);
     /// <summary>Commits verified input and ranges; empty input atomically settles success and its terminal outbox.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> CommitPreparationAsync(EtlPreparationLease lease, EtlPreparedRun prepared, CancellationToken cancellationToken = default);
     /// <summary>Claims work in the exact scope; a null run ID selects across runnable runs in that scope.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlPartitionLease?> ClaimPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> RenewPartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default);
     /// <summary>Relinquishes only the current claim; owed reservations and quota survive. The old fence becomes invalid.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> ReleasePartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlReservationResult> ReserveBatchAsync(EtlPartitionLease lease, EtlBatchDescriptor batch, CancellationToken cancellationToken = default);
     /// <summary>Accepts effects/cursor/quota atomically; final work also settles the run and outbox in that transaction.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlAcceptanceResult> AcceptBatchAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlTerminalSettlementResult> SettleTerminalAsync(EtlTerminalProposal proposal, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlTerminalSettlementResult> CancelAsync(EtlInvocation invocation, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlDeliveryLease?> ClaimDeliveryAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
     /// <summary>Claims one persisted pending terminal delivery across this store's scopes for a composition-local worker.</summary>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlDeliveryLease?> ClaimNextDeliveryAsync(string workerId, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<EtlStoreStatus> AcknowledgeDeliveryAsync(EtlDeliveryLease lease, EtlDeliveryDisposition disposition, CancellationToken cancellationToken = default);
     /// <summary>Lists exact-scope runs in a stable total identity order. The supplied run ID is an exclusive boundary in that same provider order, not necessarily raw-string order.</summary>
     /// <remarks>Return up to take rows; a short page means the current query is exhausted. Consumers must preserve this order. Pages are live views, not a frozen snapshot.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<IReadOnlyList<EtlRunView>> ListRunsAsync(EtlScope scope, string? afterRunId, int take, CancellationToken cancellationToken = default);
     /// <summary>Lists exact-scope run partitions by ascending ordinal, strictly after the supplied ordinal (-1 starts the traversal).</summary>
     /// <remarks>Return up to take rows; a short page means the current query is exhausted. Retained claim metadata does not prove worker liveness.</remarks>
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<IReadOnlyList<EtlPartitionView>> ListPartitionsAsync(EtlScope scope, string runId, int afterPartitionOrdinal, int take, CancellationToken cancellationToken = default);
+    /// <exception cref="EtlStoreException">The storage operation failed; the original cause is retained in its inner exception.</exception>
     ValueTask<IReadOnlyList<EtlManifestEntry>> ListManifestAsync(EtlScope scope, string runId, EtlManifestPosition? after, int take, CancellationToken cancellationToken = default);
 }
 

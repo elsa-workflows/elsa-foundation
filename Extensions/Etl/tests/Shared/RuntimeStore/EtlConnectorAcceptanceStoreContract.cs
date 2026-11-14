@@ -323,7 +323,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Single(await context.Outbox.AsNoTracking().ToListAsync());
     }
 
-    private protected static async Task AcknowledgeHttpRouteAsync(IEtlConnectorRuntimeStore store,
+    internal static async Task AcknowledgeHttpRouteAsync(IEtlConnectorRuntimeStore store,
         EtlConnectorPartitionLease lease, string batchId, EtlOutputRoute route, int requestNumber)
     {
         var begun = await store.BeginConnectorHttpDeliveryAsync(lease, batchId, route, DeliveryRequestId(requestNumber));
@@ -334,7 +334,7 @@ public abstract partial class EtlRuntimeStoreContract
         Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, completed.Delivery!.Phase);
     }
 
-    private protected static EtlConnectorBatchDescriptor HttpAcceptanceBatch(EtlConnectorRunAdmission admission,
+    internal static EtlConnectorBatchDescriptor HttpAcceptanceBatch(EtlConnectorRunAdmission admission,
         EtlConnectorPreparedRun prepared, EtlConnectorPartitionLease lease, int startItem,
         int endItemExclusive, string marker)
     {

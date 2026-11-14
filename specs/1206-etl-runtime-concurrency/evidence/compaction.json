@@ -1,0 +1,99 @@
+{
+  "productionSource": "eaeec794dbc9bca3fc1a88eda356ca7279adc884",
+  "workingTreeParent": "e58bb1b064f84e5da2ab8afebee657719c6ff5a4",
+  "testSources": {
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeConcurrencyTests.cs": "18306c8e3003ab310eb55865ca24160cac14cf0e3392385361038415a0a0d7bc",
+    "Extensions/Etl/tests/Persistence/ProviderTests/EtlRuntimeConcurrencyTests.Compaction.cs": "20d17b495ff86f9f9297fbafe2fe86a83bcfaf6fec2ca539ebdfe5cdca7be367",
+    "Extensions/Etl/tests/Shared/RuntimeStore/EtlConnectorHttpPageStoreContract.cs": "9f5bb7cb8d203be7c43967da6d7156d0865726a30218385dc8076b34452cc912",
+    "Extensions/Etl/tests/Shared/RuntimeStore/EtlConnectorAcceptanceStoreContract.cs": "5efc493029d0f108a62443e67b34b37812bc3aa59ffb621282cef1005c773d3d",
+    "Extensions/Etl/tests/Shared/RuntimeStore/EtlConnectorOutputStoreContract.cs": "f5a7bca090edaa3ba7c060e4f46c10613eeb5815716b5958bb936585061a2d25"
+  },
+  "results": [
+    {
+      "name": "compaction-native",
+      "executed": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "b0c5811235c232d20ac0e70ae78f7a5413900ec2578292b6b337487c67bea5b6",
+      "nativeContention": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: SqlException:1205"
+        }
+      ],
+      "limit": "Intermediate filtered-only seed; positive accepted/rejected/effect counters not exercised."
+    },
+    {
+      "name": "compaction-native-mixed",
+      "executed": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "c164c04965abb57337799146db95938099588218b406556d054e1bb043f6432c",
+      "nativeContention": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: PostgresException:40001"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: SqlException:1205"
+        }
+      ],
+      "limit": "Mixed seed, before metadata/identity oracles strengthened."
+    },
+    {
+      "name": "compaction-native-exact",
+      "executed": 9,
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "06edc076abe78f2a63cba4838aa5d0c65579219f2d4aa8b319860789254d2e85",
+      "nativeContention": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: SqlException:1205"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: MySqlException:1213"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Competing_continuous_claims_compact_once_with_a_command_barrier",
+          "observation": "Observed native conflict: PostgresException:40001"
+        }
+      ]
+    }
+  ],
+  "oracles": [
+    "Failure injected after real final request deletion and before claim SaveChanges; all 16 failed attempts roll back the entire persisted/tracked state; context can be reused.",
+    "Competing writers rendezvous once before first set-based update, not at SaveChanges; require a classified native conflict and one live claim.",
+    "Nonzero compacted accepted/rejected/filtered/effect counters, exact input/output retention and metadata reclamation from captured pre-compaction balances.",
+    "Surviving rows preserve full seeded identities/payloads; only intended base predecessor columns are normalized."
+  ],
+  "focusedFindings": [
+    "Metadata-reclamation oracle omitted.",
+    "Surviving history identity oracle partial."
+  ],
+  "corrections": [
+    "Captured exact remaining metadata balances and charge of surviving batches.",
+    "Compared entire surviving page, batch and request rows."
+  ],
+  "limits": [
+    "Single run and shard; no independent cross-run/peer-shard or old-writer/host recovery claim.",
+    "No mutation proof for the two newly strengthened oracles yet; complete implementation review and final qualification remain pending."
+  ]
+}

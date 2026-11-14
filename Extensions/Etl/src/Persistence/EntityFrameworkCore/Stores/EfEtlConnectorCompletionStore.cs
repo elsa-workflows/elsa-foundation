@@ -10,7 +10,14 @@ internal sealed partial class EfEtlRuntimeStore
     public async ValueTask<EtlRunCompletionOutcome> RequestConnectorRunCompletionAsync(EtlScope scope, string runId,
         CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(RequestConnectorRunCompletionAsync), scope, runId, cancellationToken);
+        return await RunOperationAsync(nameof(RequestConnectorRunCompletionAsync), scope, runId,
+            () => RequestConnectorRunCompletionOnceAsync(scope, runId, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlRunCompletionOutcome> RequestConnectorRunCompletionOnceAsync(EtlScope scope, string runId,
+        CancellationToken cancellationToken = default)
+    {
         var key = RunKey(scope, runId);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var run = await FindRunRowAsync(scope, runId, cancellationToken);

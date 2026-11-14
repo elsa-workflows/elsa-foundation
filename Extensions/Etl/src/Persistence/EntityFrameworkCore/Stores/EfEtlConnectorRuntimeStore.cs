@@ -10,7 +10,7 @@ internal sealed partial class EfEtlRuntimeStore
 {
     public async ValueTask<EtlConnectorAdmissionResult> AdmitConnectorAsync(EtlConnectorRunAdmission admission, CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(AdmitConnectorAsync), admission?.Invocation?.Scope, admission?.Invocation?.RunId, cancellationToken);
         EtlInvocation invocation;
         string bindingsJson;
         try
@@ -25,32 +25,43 @@ internal sealed partial class EfEtlRuntimeStore
         }
         var key = RunKey(invocation.Scope, invocation.RunId);
         var fingerprint = EtlRuntimeIdentity.InvocationFingerprint(invocation);
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var run = await FindRunRowAsync(invocation.Scope, invocation.RunId, cancellationToken);
-        if (run is not null)
+        return await RunOperationAsync(nameof(AdmitConnectorAsync), admission?.Invocation?.Scope, admission?.Invocation?.RunId, AdmitConnectorOnceAsync, cancellationToken);
+
+        async ValueTask<EtlConnectorAdmissionResult> AdmitConnectorOnceAsync()
         {
-            var prior = await ConnectorRowAsync(key, cancellationToken);
-            if (prior is null) return new(EtlStoreStatus.Conflict, null);
-            var status = run.InvocationFingerprint == fingerprint && prior.BindingsJson == bindingsJson ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
-            return new(status, await ConnectorViewAsync(run, prior, cancellationToken));
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            var run = await FindRunRowAsync(invocation.Scope, invocation.RunId, cancellationToken);
+            if (run is not null)
+            {
+                var prior = await ConnectorRowAsync(key, cancellationToken);
+                if (prior is null) return new(EtlStoreStatus.Conflict, null);
+                var status = run.InvocationFingerprint == fingerprint && prior.BindingsJson == bindingsJson ? EtlStoreStatus.Replay : EtlStoreStatus.Conflict;
+                return new(status, await ConnectorViewAsync(run, prior, cancellationToken));
+            }
+            run = EtlRuntimeRecordCodec.RunRecord(invocation, key.RunKey, fingerprint, null, NowTicks());
+            var connector = new EtlConnectorRunRecord
+            {
+                ScopeKey = key.ScopeKey, RunKey = key.RunKey, BindingsJson = bindingsJson,
+                Revision = 1, SchemaVersion = EtlRuntimeEfModule.SchemaVersion
+            };
+            db.Runs.Add(run);
+            db.ConnectorRuns.Add(connector);
+            await db.SaveChangesAsync(cancellationToken);
+            var view = await ConnectorViewAsync(run, connector, cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return new(EtlStoreStatus.Applied, view);
         }
-        run = EtlRuntimeRecordCodec.RunRecord(invocation, key.RunKey, fingerprint, null, NowTicks());
-        var connector = new EtlConnectorRunRecord
-        {
-            ScopeKey = key.ScopeKey, RunKey = key.RunKey, BindingsJson = bindingsJson,
-            Revision = 1, SchemaVersion = EtlRuntimeEfModule.SchemaVersion
-        };
-        db.Runs.Add(run);
-        db.ConnectorRuns.Add(connector);
-        await db.SaveChangesAsync(cancellationToken);
-        var view = await ConnectorViewAsync(run, connector, cancellationToken);
-        await tx.CommitAsync(cancellationToken);
-        return new(EtlStoreStatus.Applied, view);
     }
 
     public async ValueTask<EtlConnectorRunView?> FindConnectorRunAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(FindConnectorRunAsync), scope, runId, cancellationToken);
+        return await RunOperationAsync(nameof(FindConnectorRunAsync), scope, runId,
+            () => FindConnectorRunOnceAsync(scope, runId, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlConnectorRunView?> FindConnectorRunOnceAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default)
+    {
         var key = RunKey(scope, runId);
         // One SQL snapshot for the base state, connector pins and terminal decision.
         var snapshot = await (from run in RunSnapshots(key.ScopeKey)
@@ -70,7 +81,13 @@ internal sealed partial class EfEtlRuntimeStore
 
     public async ValueTask<EtlPreparationLease?> ClaimConnectorPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(ClaimConnectorPreparationAsync), scope, null, cancellationToken);
+        return await RunOperationAsync(nameof(ClaimConnectorPreparationAsync), scope, null,
+            () => ClaimConnectorPreparationOnceAsync(scope, workerId, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlPreparationLease?> ClaimConnectorPreparationOnceAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default)
+    {
         EtlRuntimeRecordCodec.ValidateIdentity(workerId, "worker id");
         var scopeKey = EtlRuntimeRecordCodec.Scope(scope).Key;
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -101,7 +118,13 @@ internal sealed partial class EfEtlRuntimeStore
 
     public async ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(CommitConnectorPreparationAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return await RunOperationAsync(nameof(CommitConnectorPreparationAsync), lease?.Scope, lease?.RunId,
+            () => CommitConnectorPreparationOnceAsync(lease, prepared, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlStoreStatus> CommitConnectorPreparationOnceAsync(EtlPreparationLease? lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(lease);
         var key = RunKey(lease.Scope, lease.RunId);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -176,7 +199,13 @@ internal sealed partial class EfEtlRuntimeStore
 
     public async ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(ClaimConnectorPartitionAsync), scope, runId, cancellationToken);
+        return await RunOperationAsync(nameof(ClaimConnectorPartitionAsync), scope, runId,
+            () => ClaimConnectorPartitionOnceAsync(scope, runId, workerId, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionOnceAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default)
+    {
         EtlRuntimeRecordCodec.ValidateIdentity(workerId, "worker id");
         var scopeKey = EtlRuntimeRecordCodec.Scope(scope).Key;
         var runKey = runId is null ? null : db.RunKeyOf(runId);
@@ -224,13 +253,27 @@ internal sealed partial class EfEtlRuntimeStore
         };
     }
 
-    public ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
+    public ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default)
+    {
+        PrepareOperation(nameof(RenewConnectorPartitionAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return RunOperationAsync(nameof(RenewConnectorPartitionAsync), lease?.Scope, lease?.RunId,
+            () => RenewConnectorPartitionOnceAsync(lease, cancellationToken), cancellationToken);
+    }
+
+    private ValueTask<EtlStoreStatus> RenewConnectorPartitionOnceAsync(EtlConnectorPartitionLease? lease, CancellationToken cancellationToken = default) =>
         UpdateConnectorLeaseAsync(lease, release: false, cancellationToken);
 
-    public ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default) =>
+    public ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default)
+    {
+        PrepareOperation(nameof(ReleaseConnectorPartitionAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return RunOperationAsync(nameof(ReleaseConnectorPartitionAsync), lease?.Scope, lease?.RunId,
+            () => ReleaseConnectorPartitionOnceAsync(lease, cancellationToken), cancellationToken);
+    }
+
+    private ValueTask<EtlStoreStatus> ReleaseConnectorPartitionOnceAsync(EtlConnectorPartitionLease? lease, CancellationToken cancellationToken = default) =>
         UpdateConnectorLeaseAsync(lease, release: true, cancellationToken);
 
-    private async ValueTask<EtlStoreStatus> UpdateConnectorLeaseAsync(EtlConnectorPartitionLease lease, bool release, CancellationToken cancellationToken)
+    private async ValueTask<EtlStoreStatus> UpdateConnectorLeaseAsync(EtlConnectorPartitionLease? lease, bool release, CancellationToken cancellationToken)
     {
         db.ChangeTracker.Clear();
         ArgumentNullException.ThrowIfNull(lease);

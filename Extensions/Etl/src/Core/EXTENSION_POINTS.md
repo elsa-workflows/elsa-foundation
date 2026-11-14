@@ -200,3 +200,7 @@ public interface IEtlRabbitMqReceipt : IAsyncDisposable
 - **What depends on it:** `HostRabbitMqBindings`, `EtlConnectorPreparer` and `EtlConnectorExecution` in `Elsa.Etl.Runtime`.
 - **Known implementations** (intra-domain, ETL): `RabbitMqEtlConsumer` (`Elsa.Etl.RabbitMq`).
 
+
+## Runtime store failures
+
+`IEtlRuntimeStore`, `IEtlConnectorRuntimeStore` and `IEtlConnectorRuntimeInspector` document `EtlStoreException` for terminal storage failures. It preserves the operation, known scope/run identity and original cause. Cancellation, established corruption/validation handling and schema-write refusals remain distinct. The EF implementation owns its transaction unit and refuses caller-owned transactions before changing tracking or storage. Server registration follows the concurrency controls; [actual both-store host receipts](../../../../specs/1206-etl-runtime-concurrency/evidence/workbench-journey.json) cover native Flowchart → JSONL ETL → Done and completed-state restart on three server engines. Native persistence remains SQLite in that proof; mid-work/old-writer recovery and Studio remain separate. Physical connector I/O is outside database retries.

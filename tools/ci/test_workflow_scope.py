@@ -134,6 +134,9 @@ class WorkflowScopeTests(unittest.TestCase):
                 self.assertEqual(sorted(expected), sorted(name for name, enabled in selected.items() if enabled))
         self.assertFalse(any(self.selected('workflow_dispatch', inputs={'suite': 'ci'}).values()))
 
+    def test_manual_etl_host_does_not_select_other_focused_proofs(self):
+        self.assertFalse(any(self.selected('workflow_dispatch', inputs={'suite': 'etl-host'}).values()))
+
     def test_nightly_only_adds_shuffle(self):
         self.assertEqual(['studio-order'], [name for name, enabled in self.selected('schedule').items() if enabled])
 
