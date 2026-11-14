@@ -195,7 +195,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             if (model.HandlesMetadata(message)) turn.Hold(message);
             else Accept(message);
         if (_retryAccepted) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
-        else await DrainAsync();
+        else { await DrainAsync(); DrainInputs(); }
         FinishSignals();
         if (turn.Inbox.Any(model.HandlesMetadata)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }

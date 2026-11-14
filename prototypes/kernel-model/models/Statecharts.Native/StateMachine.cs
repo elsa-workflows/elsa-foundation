@@ -8,7 +8,8 @@ internal sealed record MachineState(string[] Active, Reaction? Pending, int Curs
     PhaseProgress? Progress = null, int Version = 1,
     StateVisit[]? Visits = null, StateVisit[]? PlannedVisits = null, long VisitSerial = 0,
     GraphPlan? Selection = null, bool LegacyPending = false,
-    VisitScopes? Scopes = null, bool LegacyScopes = false);
+    VisitScopes? Scopes = null, bool LegacyScopes = false,
+    MachineInboxSettings? Inbox = null, string? SelectedInput = null);
 
 [InterventionParent(4)]
 internal sealed partial class StateMachine : CompositeActivity, ISignalledComposite, IInterventionParent
@@ -40,7 +41,12 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
         var requires = graph.Prerequisites(work.Select(w => (w.Phase, w.State)).ToArray());
         var plan = new GraphPlan([], [], initial, work.Select((w, i) => w with { After = requires[i].Select(j => work[j].Id).ToArray() }).ToArray());
         var scopes = new VisitScopes(context.CreateLexicalScope(graph.MachineDefaults), [], false);
-        Run(context, Begin(new([], null, Version: 4, Visits: [], Scopes: scopes), plan, null, context.FrameId));
+        if (InputInbox is { } inbox)
+        {
+            if (inbox.RetentionMilliseconds <= 0) throw new ArgumentOutOfRangeException(nameof(InputInbox));
+            context.RegisterInputInbox(inbox.Capacity, inbox.ReceiptCapacity, TimeSpan.FromMilliseconds(inbox.RetentionMilliseconds));
+        }
+        Run(context, Begin(new([], null, Version: InputInbox is null ? 4 : 5, Visits: [], Scopes: scopes, Inbox: InputInbox), plan, null, context.FrameId));
     }
 
     public bool CanAccept(CompositeContext context) => State(context).Pending is null;
@@ -48,13 +54,20 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
     public void Accept(CompositeContext context, string messageId, CompositeSignal signal)
     {
         var state = MaterializeScopes(context, State(context));
-        var plan = Compile(context).Select(state.Visits!, (r, _) => r.Trigger == signal.Name,
-            (r, _) => r.When is null || r.When == signal.Value);
-        Record(context, messageId, "evaluated", signal.Name);
+        if (state.Inbox is not null) throw new InvalidOperationException("Statechart requires an admitted input.");
+        React(context, state, messageId, signal.Name, signal.Value);
+    }
+
+    private void React(CompositeContext context, MachineState state, string messageId, string name, string? value)
+    {
+        var plan = Compile(context).Select(state.Visits!, (r, _) => r.Trigger == name,
+            (r, _) => r.When is null || r.When == value);
+        Record(context, messageId, "evaluated", name);
         if (plan.Selected.Length == 0)
         {
-            context.SetState(state);
-            Record(context, messageId, "unhandled", signal.Name);
+            if (state.SelectedInput is { } unhandled) context.FinishInput(unhandled, "unhandled");
+            context.SetState(state with { SelectedInput = null });
+            Record(context, messageId, "unhandled", name);
             return;
         }
         Run(context, Begin(state, plan, messageId, context.FrameId));
@@ -77,7 +90,7 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
         var next = plan.Next.Select(id => entering.Contains(id) ? new StateVisit(id, frame + "/state/" + checked(++serial)) : current[id]).ToArray();
         var indices = plan.Steps.Select((s, i) => (s.Id, i)).ToDictionary(p => p.Id, p => p.i, StringComparer.Ordinal);
         return state with { Pending = new(eventId, plan.Next, plan.Steps.Select(s => new Step(s.Phase, s.State, s.Activity)).ToArray()),
-            Cursor = 0, Child = null, Version = 4, Scopes = state.Scopes! with { Retired = false }, VisitSerial = serial, PlannedVisits = next, Selection = plan, LegacyPending = false,
+            Cursor = 0, Child = null, Scopes = state.Scopes! with { Retired = false }, VisitSerial = serial, PlannedVisits = next, Selection = plan, LegacyPending = false,
             Progress = new(plan.Steps.Select(s => s.After.Select(id => indices[id]).ToArray()).ToArray(), new bool[plan.Steps.Length], []) };
     }
 
@@ -117,8 +130,9 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
             return;
         }
         RetireSources(context, state);
-        context.SetState(new MachineState(reaction.Next, null, Version: 4, Visits: state.PlannedVisits, VisitSerial: state.VisitSerial,
-            Scopes: state.Scopes! with { Retired = false }));
+        if (state.SelectedInput is { } handled) context.FinishInput(handled, "handled");
+        context.SetState(new MachineState(reaction.Next, null, Version: state.Version, Visits: state.PlannedVisits, VisitSerial: state.VisitSerial,
+            Scopes: state.Scopes! with { Retired = false }, Inbox: state.Inbox));
         if (reaction.EventId is { } id) Record(context, id, "handled", "");
         if (Compile(context).IsTopFinal(reaction.Next)) context.Complete();
     }
@@ -128,6 +142,7 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
         var state = Restore(context.ReadState<MachineState>() ?? throw new InvalidOperationException("Statechart has not entered."), Compile(context), context.FrameId);
         ValidateResources(context, state);
         ValidateScopeParents(context, state, Compile(context));
+        ValidateInbox(context, state);
         return state;
     }
 
@@ -137,6 +152,7 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
     internal static MachineState Restore(MachineState state, SelectionChart chart, string frame)
     {
         var oldVersion = state.Version;
+        ValidateInboxState(state);
         if (oldVersion < 3 && (state.Visits is not null || state.PlannedVisits is not null || state.VisitSerial != 0 || state.Selection is not null || state.LegacyPending))
             throw new InvalidOperationException("Mixed statechart identity checkpoint.");
         if (state.Version == 1)
@@ -159,7 +175,7 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
                 state = state with { Version = 2, Cursor = 0, Child = null, Progress = progress };
             }
         }
-        if (state.Version is not (2 or 3 or 4)) throw new NotSupportedException("Unsupported statechart phase checkpoint version.");
+        if (state.Version is not (2 or 3 or 4 or 5)) throw new NotSupportedException("Unsupported statechart phase checkpoint version.");
         if (state.Cursor != 0 || state.Child is not null) throw new InvalidOperationException("Invalid statechart phase checkpoint.");
         if (state.Pending is null && state.Progress is not null)
             throw new InvalidOperationException("Invalid statechart phase checkpoint.");

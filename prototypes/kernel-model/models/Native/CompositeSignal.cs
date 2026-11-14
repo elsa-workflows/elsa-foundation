@@ -36,6 +36,11 @@ internal sealed partial class Burst
             return;
         }
         var (receiver, context) = target.Value;
+        if (receiver is IInvocationInputReceiver && _s.Inboxes?.ContainsKey(signal.Frame) == true)
+        {
+            turn.Record($"signal-rejected:{message.Id}:{signal.Frame}:admitted-input-required");
+            return;
+        }
         _signalledFrames ??= [];
         if (!_signalledFrames.Contains(signal.Frame) && receiver.CanAccept(context))
         {
