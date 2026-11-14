@@ -175,6 +175,27 @@ public sealed class LiquidExplicitParametersTests
             Assert.Equal(2, result[1].GetInt32());
     }
 
+    [Theory]
+    [InlineData("Elsa.Any", "{{ 5 }}", "5")]
+    [InlineData("elsa.any", "{{ 5 }}", "5")]
+    [InlineData("Elsa.Any", "true", "true")]
+    [InlineData("Elsa.Any", "false", "false")]
+    [InlineData("Elsa.Any", "null", "null")]
+    [InlineData("Elsa.Any", "{\"count\":{{ 5 }}}", "{\"count\":5}")]
+    [InlineData("Elsa.Any", "[{{ 5 }}]", "[5]")]
+    [InlineData("Elsa.Any", "\"5\"", "\"5\"")]
+    [InlineData("Elsa.Any", "draft", "\"draft\"")]
+    [InlineData("String", "{{ 5 }}", "\"5\"")]
+    public async Task Preserves_json_result_kinds_for_the_canonical_dynamic_alias_without_coercing_strings(
+        string resultType, string source, string expectedJson)
+    {
+        var request = Request(source, new Dictionary<string, JsonElement>(), resultType);
+
+        var result = await Handler().EvaluateAsync(request);
+
+        Assert.True(JsonElement.DeepEquals(JsonSerializer.Deserialize<JsonElement>(expectedJson), result));
+    }
+
     private static PortableLiquidExpressionHandler Handler() => new(new FluidParser());
 
     private static ExpressionEvaluationRequest Request(
