@@ -45,7 +45,12 @@ internal static class PolicyWitness
             workflow.InterventionRequested = kind == "disabled"; // latest request must neither enable nor replace saved policy
             Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1; Apply(new("take", Actor().Id)); Drain();
             var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:start");
-            Apply(new("add", M: Events.Deliver(new("event:start", "release", null, world.Time + 120_000), wait))); Drain();
+            var release = Events.Route(new("event:start", "release", null, world.Time + 120_000), wait);
+            var accepted = world.Store.AddEventAsync(release).Result;
+            if (!accepted.Added || accepted.Target != target) throw new InvalidOperationException("Policy release missed the registered creation.");
+            world.Oracle.Note(release.Message);
+            if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
+            Drain();
             var state = State(); var expected = kind is "sequence" or "parallel";
             if (state.InterventionPolicy != (kind == "unmarked" ? 4 : 0) || RootLeaf.Calls.Count != 1 ||
                 (expected ? world.Store.Instances[target.Id].Status != InstanceStatus.Running || !state.Frames.Values.Any(f => f.Node == "leaf" && f.Intervention is not null)

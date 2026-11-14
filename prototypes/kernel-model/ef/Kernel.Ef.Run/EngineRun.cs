@@ -201,11 +201,13 @@ static class EngineRun
                         // Round 3: an instance started by an event, the subscription registered before or after the publish.
                         var start = new SubscriptionRow("on" + n, "", "s", OnEvent.Spec("o"));
                         var published = new EventRow("on" + n, "f" + n, "f" + n, keep);
-                        onEvents.Add(Events.Deliver(published, start, partitions).Target.Id);
+                        string? matchedTarget = null;
+                        void Matched(EventRoute _, EventAcceptance receipt) => matchedTarget = receipt.Target.Id;
                         var first = random.Next(2) == 0;
-                        if (first) await Retry(() => Events.SubscribeAsync(outside, start, partitions));
-                        await Retry(() => Events.PublishAsync(outside, published, partitions));
-                        if (!first) await Retry(() => Events.SubscribeAsync(outside, start, partitions));
+                        if (first) await Retry(() => Events.SubscribeAsync(outside, start, partitions, matched: Matched));
+                        await Retry(() => Events.PublishAsync(outside, published, partitions, matched: Matched));
+                        if (!first) await Retry(() => Events.SubscribeAsync(outside, start, partitions, matched: Matched));
+                        onEvents.Add(matchedTarget ?? throw new InvalidOperationException("Neither side accepted the start match."));
                         break;
                     default:
                         var count = random.Next(1, 6);
@@ -940,7 +942,7 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     {
         // A batch that names one message twice is the worker's doing, not the engine's: say which lists it is in.
         var named = batch.Seen.Select(id => (id, list: "seen"))
-            .Concat(batch.Turns.SelectMany(s => s.Consumed.Select(id => (id, list: "consumed")).Concat(s.Done.Select(id => (id, list: "done"))).Concat(s.Sent.Select(m => (id: m.Id, list: "sent")))))
+            .Concat(batch.Turns.SelectMany(s => s.Consumed.Select(id => (id, list: "consumed")).Concat(s.Done.Select(id => (id, list: "done"))).Concat(s.Sent.Select(m => (id: m.InboxKey, list: "sent")))))
             .GroupBy(x => x.id).Where(g => g.Count() > 1).ToList();
         if (named.Count > 0)
         {
