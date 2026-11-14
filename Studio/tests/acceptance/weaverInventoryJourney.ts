@@ -1,5 +1,5 @@
+import { desiredFeatureState } from "./weaverInventorySelection";
 import { expect, type Page, type TestInfo } from "@playwright/test";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dashboardBackend, attachDashboardJson, type Capture } from "./dashboardJourneySupport";
 
 export const weaverInventoryJourneys = {
@@ -10,11 +10,8 @@ export const weaverInventoryJourneys = {
 type Feature = { id: string; enabled: boolean; runtimeAvailable: boolean; configuration: unknown };
 type Catalog = { revision: string; features: Feature[] };
 type Registry = { complete: boolean; modules: { id: string; status: string }[] };
-type Attachment = { id: string; contentType: string; origin: string; content: unknown };
 type Support = { completeness: string; tools: unknown[]; contexts: unknown[] };
-type Protocol = { evidenceKind: string; kind: string; data: { commandId: string; prompt?: string; toolCount?: number; tools?: unknown[] } };
-
-/** Only real HTTP, current module discovery and actual admitted/provider payloads supply these facts. */
+/** Only real HTTP, current module discovery and the shipped bootstrap/support APIs supply these facts. */
 export async function weaverInventoryJourney(page: Page, info: TestInfo, capture: Capture) {
   const enabled = process.env.UX_WEAVER_PHASE === "enabled";
   const backend = await dashboardBackend(page.request);
@@ -40,19 +37,35 @@ export async function weaverInventoryJourney(page: Page, info: TestInfo, capture
     if (!path.endsWith("/stream") && /weaver|modularity|module-registry/.test(path)) failedRequests.push(path);
   };
   page.on("requestfailed", onFailed);
+  const recordNative = (side: string, path: string, value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    const body = value as { features?: Feature[]; complete?: boolean; modules?: { id: string; status: string }[] };
+    if (path === "/modularity/features" && Array.isArray(body.features)) observations.push({ kind: "native-features", side,
+      features: body.features.map(({ id, enabled, runtimeAvailable }) => ({ id, enabled, runtimeAvailable })) });
+    if (path === "/_elsa/studio/module-registry" && Array.isArray(body.modules)) observations.push({ kind: "native-modules", side,
+      complete: body.complete, modules: body.modules.map(({ id, status }) => ({ id, status })) });
+  };
+  const recordFailure = (side: string, path: string, status: number) => {
+    if (status < 400) return;
+    observations.push({ kind: "native-failure", side, path, status,
+      category: status === 401 ? "unauthenticated" : status === 403 ? "forbidden" : status === 409 ? "conflict"
+        : status === 400 ? "invalid-input" : status === 503 ? "unavailable" : "http-failure" });
+  };
   const host = async <T>(path: string, data?: unknown): Promise<T> => {
     // Studio's ordinary bridge scheme requires the native session bearer; a backend cookie alone is insufficient.
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = data === undefined ? await page.request.get(path, { headers }) : await page.request.post(path, { data, headers });
     network.push({ side: "studio", path, method: data === undefined ? "GET" : "POST", status: response.status() });
+    recordFailure("studio", path, response.status());
     expect(response.ok(), `Studio native ${path}: HTTP ${response.status()}`).toBe(true);
-    return response.json() as Promise<T>;
+    const value = await response.json() as T; recordNative("studio", path, value); return value;
   };
   const server = async <T>(path: string, method = "GET", data?: unknown): Promise<T> => {
     const response = await backend.response(path, method, data);
     network.push({ side: "backend", path, method, status: response.status() });
+    recordFailure("backend", path, response.status());
     expect(response.ok(), `Backend native ${path}: HTTP ${response.status()}`).toBe(true);
-    return response.json() as Promise<T>;
+    const value = await response.json() as T; recordNative("backend", path, value); return value;
   };
   const selected = (catalog: Catalog, id: string, value: boolean) => {
     const rows = catalog.features.filter(feature => feature.id === id);
@@ -67,22 +80,44 @@ export async function weaverInventoryJourney(page: Page, info: TestInfo, capture
   };
   const apply = async (side: "studio" | "backend", states: Record<string, boolean>) => {
     const catalog = side === "studio" ? await host<Catalog>("/modularity/features") : await server<Catalog>("/modularity/features");
-    const features = Object.entries(states).map(([id, value]) => {
-      const current = selected(catalog, id, !value);
-      return { id, enabled: value, configuration: current.configuration };
-    });
+    for (const [id, value] of Object.entries(states)) selected(catalog, id, !value);
+    const features = desiredFeatureState(catalog.features, states);
     const body = { revision: catalog.revision, features };
     const result = side === "studio" ? await host<{ catalog: Catalog }>("/modularity/features/apply", body)
       : await server<{ catalog: Catalog }>("/modularity/features/apply", "POST", body);
     for (const [id, value] of Object.entries(states)) selected(result.catalog, id, value);
+    for (const retained of catalog.features.filter(feature => feature.enabled && !Object.hasOwn(states, feature.id))) {
+      const returned = selected(result.catalog, retained.id, true);
+      expect(returned.configuration, "Unrelated native configuration and masked secrets must survive Apply").toEqual(retained.configuration);
+    }
     observations.push({ kind: "selection", side, beforeRevision: catalog.revision, afterRevision: result.catalog.revision,
-      states, unrelatedConfigurationSubmitted: false });
+      states, retainedEnabledIds: catalog.features.filter(feature => feature.enabled).map(feature => feature.id),
+      submittedIds: features.map(feature => feature.id), retainedConfigurationMatched: true });
   };
   const observe = async (state: string, route: string) => {
     const registry = await host<Registry>("/_elsa/studio/module-registry");
     const studioCatalog = await host<Catalog>("/modularity/features");
     const backendCatalog = await server<Catalog>("/modularity/features");
     const support = await server<{ data: { policyScope: string; support: Support } }>("/_elsa/weaver/support");
+    const readiness = await server<{ status: string; shell: string; generation: number }>("/health/ready");
+    const live = await server<{ status: string }>("/health/live");
+    expect(live.status).toBe("live"); expect(readiness.status).toBe("ready");
+    const bootstrap = await server<{ data: { enabled: boolean; providerStatus: string } }>("/_elsa/weaver/bootstrap");
+    const unavailable = bootstrap.data.enabled === false && bootstrap.data.providerStatus === "unavailable";
+    const question = state === "baseline" ? "What support is installed for structured logs and ExtensionBuilder?"
+      : state === "unknown" ? "What module owns this unknown route?"
+      : state === "enabled" ? "What support is available for ExtensionBuilder now?" : "What support remains for structured logs after deselection?";
+    observations.push({ kind: "inventory", state, route, registry,
+      studioFeatures: studioCatalog.features.map(({ id, enabled, runtimeAvailable }) => ({ id, enabled, runtimeAvailable })),
+      backendFeatures: backendCatalog.features.map(({ id, enabled, runtimeAvailable }) => ({ id, enabled, runtimeAvailable })),
+      support: support.data, readiness,
+      provider: { enabled: bootstrap.data.enabled, providerStatus: bootstrap.data.providerStatus },
+      question: { text: question, status: unavailable ? "unanswered-provider-unavailable" : "unverified-not-submitted" },
+      disclosure: { status: "not-observed", reason: unavailable ? "provider-unavailable" : "not-submitted" } });
+    const packages = await host<{ status: string; registry?: { modules: { packageId: string; version: string; status: string }[] } }>("/_elsa/studio/backend-management/registry");
+    observations.push({ kind: "native-packages", state, status: packages.status,
+      modules: packages.registry?.modules?.map(({ packageId, version, status }) => ({ packageId, version, status })) ?? [] });
+    expect(packages.registry, "Actual selected-backend package registry must be available").toBeTruthy();
     expect(support.data.support.completeness).toBe("complete");
     selected(studioCatalog, "StructuredLogsStudio", state === "baseline");
     selected(backendCatalog, "DiagnosticsStructuredLogs", state === "baseline");
@@ -90,84 +125,17 @@ export async function weaverInventoryJourney(page: Page, info: TestInfo, capture
     selected(studioCatalog, "ExtensionBuilderStudio", enabled);
     module(registry, "structured-logs", state === "baseline" ? "available" : "disabled");
     module(registry, "extension-builder", enabled ? "available" : "disabled");
-    const fixture = process.env.UX_WEAVER_COMMAND;
-    let disclosure: { request: unknown; admitted: Attachment[]; provider: Protocol[] } | undefined;
-    if (fixture) {
-      selected(backendCatalog, "AcmeCopilotProtocolFixture", true);
-      selected(backendCatalog, "WeaverGitHubCopilot", true);
-      const native = await host<{ registry: { modules: { packageId: string; version: string; status: string }[] } }>("/_elsa/studio/backend-management/registry");
-      expect(native.registry.modules.filter(row => row.packageId === "Acme.Weaver.ProtocolFixtures")).toEqual([
-        expect.objectContaining({ version: process.env.UX_WEAVER_FIXTURE_VERSION, status: "loaded" })
-      ]);
-      observations.push({ kind: "native-package-admission", state,
-        modules: native.registry.modules.map(({ packageId, version, status }) => ({ packageId, version, status })) });
-      const commandId = `${info.project.name}-${state}`;
-      const temporary = `${fixture}.next`;
-      writeFileSync(temporary, JSON.stringify({ commandId, mode: "observe" }), { mode: 0o600 });
-      renameSync(temporary, fixture);
-      const launcher = page.getByRole("button", { name: "Weaver", exact: true });
-      await expect(launcher).toBeEnabled(); // Ready-shell marker; never navigate through the temporary shell.
-      const composer = page.getByRole("textbox", { name: "Ask Weaver", exact: true });
-      if (!await composer.isVisible()) { await launcher.focus(); await launcher.press("Enter"); }
-      await expect(composer).toBeEditable();
-      await composer.fill(`Observe current module support: ${state}.`);
-      const sent = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/weaver\/sessions\/[^/]+\/messages$/.test(new URL(response.url()).pathname));
-      await page.getByRole("button", { name: "Send message", exact: true }).click();
-      const response = await sent; expect(response.ok()).toBe(true);
-      const accepted = await response.json() as { data: { message: { context: Attachment[] } } };
-      const admitted = accepted.data.message.context;
-      const studio = admitted.find(item => item.id === "weaver.studio-support");
-      const server = admitted.find(item => item.id === "weaver.backend-support");
-      expect(studio).toMatchObject({ origin: "clientSnapshot", contentType: "weaver.host-support",
-        content: { side: "studio", clientAsserted: true, completeness: "complete", registrationCompleteness: "complete" } });
-      expect(server).toMatchObject({ origin: "authoritativeRead", contentType: "weaver.host-support", content: { side: "backend" } });
-      const projected = studio!.content as Registry & { loader: { moduleId: string; status: string }[]; registrations: { originModuleId: string }[] };
-      module(projected, "structured-logs", state === "baseline" ? "available" : "disabled");
-      module(projected, "extension-builder", enabled ? "available" : "disabled");
-      expect(projected.loader.some(item => item.moduleId === "workflows" && item.status === "loaded")).toBe(true);
-      if (state !== "baseline") expect(projected.registrations.filter(item => item.originModuleId === "structured-logs")).toEqual([]);
-      if (state === "unknown") {
-        expect(admitted.filter(item => item.contentType !== "weaver.host-support"), "Unknown route offers no resource or module context").toEqual([]);
-      }
-      const tracePath = process.env.UX_WEAVER_TRACE!;
-      const trace = () => existsSync(tracePath) ? readFileSync(tracePath, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line) as Protocol)
-        .filter(item => item.data.commandId === commandId) : [];
-      await expect.poll(() => trace().filter(item => item.kind === "copilot.observation").length).toBe(1);
-      const provider = trace();
-      expect(provider.every(item => item.evidenceKind === "deterministic-provider-protocol")).toBe(true);
-      expect(provider.map(item => item.kind)).toEqual(["copilot.request", "copilot.observation"]);
-      const submission = response.request().postDataJSON() as { activeSurface: { route: string; resourceId?: string; resourceType?: string } };
-      if (state === "unknown") {
-        expect(submission.activeSurface.route).toBe(route);
-        expect(submission.activeSurface.resourceId ?? null).toBeNull();
-        expect(submission.activeSurface.resourceType ?? null).toBeNull();
-        expect(provider[0].data.tools).toEqual([]);
-      }
-      const prompt = provider[0].data.prompt!;
-      // Compare typed contents at the actual adapter boundary; the fixture's fixed answer has no semantic oracle.
-      const contents = prompt.split("\n").filter(line => line.startsWith("  Content: ")).map(line => JSON.parse(line.slice(11)) as unknown);
-      expect(contents).toContainEqual(studio!.content); expect(contents).toContainEqual(server!.content);
-      await expect(page.locator('.weaver-message[data-role="assistant"]').last()).toContainText("Observed the supplied context and tool declarations. No tool was requested.");
-      await expect(composer).toBeEditable();
-      await composer.fill("A new explicit observation remains available.");
-      await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
-      await composer.fill("");
-      disclosure = { request: submission, admitted, provider };
-    }
-    observations.push({ kind: "inventory", state, route, side: { studio: new URL(page.url()).origin, backend: backend.base },
-      registry, studioFeatures: studioCatalog.features.map(({ id, enabled, runtimeAvailable }) => ({ id, enabled, runtimeAvailable })),
-      backendFeatures: backendCatalog.features.map(({ id, enabled, runtimeAvailable }) => ({ id, enabled, runtimeAvailable })),
-      support: support.data, disclosure: disclosure ?? { status: "blocked", reason: "No same-source independently packed provider fixture was supplied" } });
+    expect(bootstrap.data).toMatchObject({ enabled: false, providerStatus: "unavailable" });
+    const launcher = page.getByRole("button", { name: "Weaver", exact: true });
+    await expect(launcher).toBeEnabled();
+    const composer = page.getByRole("textbox", { name: "Ask Weaver", exact: true });
+    if (!await composer.isVisible()) { await launcher.focus(); await launcher.press("Enter"); }
+    await expect(page.getByTestId("weaver-provider-status")).toContainText("Weaver is unavailable");
+    await expect(composer).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeDisabled();
     await capture(page, info, `inventory-${state}`);
   };
   try {
-    if (process.env.UX_WEAVER_COMMAND) {
-      // Ordinary Nuplane admission/reload may finish after the initial root readiness observation.
-      await expect.poll(async () => (await server<Catalog>("/modularity/features")).features
-        .some(row => row.id === "AcmeCopilotProtocolFixture" && row.enabled && row.runtimeAvailable), { timeout: 60_000 }).toBe(true);
-      await page.reload();
-      await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();
-    }
     if (!enabled) {
       await observe("baseline", "/workflows/definitions");
       const disabled = await backend.response("/_elsa/extension-builder/capabilities");
@@ -199,8 +167,8 @@ export async function weaverInventoryJourney(page: Page, info: TestInfo, capture
     page.off("response", onResponse); page.off("requestfailed", onFailed);
     await attachDashboardJson(info, "weaver-inventory.json", { source: process.env.UX_SOURCE_SHA,
       studioSource: process.env.UX_STUDIO_SOURCE_SHA, phase: enabled ? "enabled" : "baseline", observations, network,
-      failedRequests, providerEvidence: process.env.UX_WEAVER_COMMAND ? "deterministic-provider-protocol" : "blocked",
-      excluded: ["independent module nested removal belongs to the packaged probe", "live providers", "effects/review/result UX belongs to its assigned probe journeys"],
+      failedRequests, providerEvidence: "not-observed", storyAnswers: "unanswered-provider-unavailable", t045Acceptance: "incomplete",
+      excluded: ["independent module nested removal belongs to the packaged probe", "live providers", "Studio loader/context and admitted/provider disclosure are not observed while the provider is unavailable", "effects/review/result UX belongs to its assigned probe journeys"],
       completed });
   }
 }

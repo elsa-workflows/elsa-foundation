@@ -2,10 +2,8 @@
 import copy
 import json
 from pathlib import Path
-import struct
 import tempfile
 import unittest
-import uuid
 
 import weaver_inventory as inventory
 
@@ -15,46 +13,40 @@ def receipt(phase='baseline'):
     observations = []
     for state in states:
         logs = state == 'baseline'
-        modules = [{'id': 'structured-logs', 'status': 'available' if logs else 'disabled'},
-                   {'id': 'extension-builder', 'status': 'available' if phase == 'enabled' else 'disabled'}]
-        studio = {'id': 'weaver.studio-support', 'origin': 'clientSnapshot', 'contentType': 'weaver.host-support',
-                  'content': {'side': 'studio', 'clientAsserted': True, 'completeness': 'complete', 'registrationCompleteness': 'complete',
-                              'modules': modules, 'loader': [{'moduleId': 'workflows', 'status': 'loaded'}], 'registrations': []}}
-        backend = {'id': 'weaver.backend-support', 'origin': 'authoritativeRead', 'contentType': 'weaver.host-support',
-                   'content': {'side': 'backend'}}
-        prompt = '\n'.join('  Content: ' + json.dumps(item['content']) for item in [studio, backend])
         def feature(identity, enabled): return {'id': identity, 'enabled': enabled, 'runtimeAvailable': True}
         observations.append({'kind': 'inventory', 'state': state, 'route': '/qualification-unknown-module' if state == 'unknown' else '/observed',
-            'registry': {'complete': True, 'modules': modules}, 'support': {'support': {'completeness': 'complete'}},
+            'registry': {'complete': True, 'modules': [{'id': 'structured-logs', 'status': 'available' if logs else 'disabled'},
+                {'id': 'extension-builder', 'status': 'available' if phase == 'enabled' else 'disabled'}]},
+            'support': {'support': {'completeness': 'complete'}},
             'studioFeatures': [feature('StructuredLogsStudio', logs), feature('ExtensionBuilderStudio', phase == 'enabled')],
             'backendFeatures': [feature('DiagnosticsStructuredLogs', logs), feature('DiagnosticsStructuredLogsEntityFrameworkCore', logs)],
-            'disclosure': {'admitted': [studio, backend], 'provider': [
-                {'kind': 'copilot.request', 'evidenceKind': 'deterministic-provider-protocol', 'data': {'prompt': prompt}},
-                {'kind': 'copilot.observation', 'evidenceKind': 'deterministic-provider-protocol'}]}})
-        observations.append({'kind': 'native-package-admission', 'state': state,
-                             'modules': [{'packageId': 'Acme.Weaver.ProtocolFixtures', 'status': 'loaded'}]})
-    if phase == 'enabled':
-        observations.append({'kind': 'selection', 'side': 'studio', 'states': {'ExtensionBuilderStudio': True}})
-    else:
-        observations.extend([{'kind': 'selection', 'side': 'backend', 'states': {'DiagnosticsStructuredLogsEntityFrameworkCore': False, 'DiagnosticsStructuredLogs': False}},
-                             {'kind': 'selection', 'side': 'studio', 'states': {'StructuredLogsStudio': False}}])
+            'provider': {'enabled': False, 'providerStatus': 'unavailable'},
+            'question': {'text': 'What support is installed?', 'status': 'unanswered-provider-unavailable'},
+            'readiness': {'status': 'ready', 'shell': 'default', 'generation': 1},
+            'disclosure': {'status': 'not-observed', 'reason': 'provider-unavailable'}})
+    selections = [('studio', {'ExtensionBuilderStudio': True})] if phase == 'enabled' else [
+        ('backend', {'DiagnosticsStructuredLogsEntityFrameworkCore': False, 'DiagnosticsStructuredLogs': False}),
+        ('studio', {'StructuredLogsStudio': False})]
+    for side, states in selections:
+        observations.append({'kind': 'selection', 'side': side, 'states': states,
+                             'retainedEnabledIds': ['unrelated'], 'submittedIds': ['unrelated', *states], 'retainedConfigurationMatched': True})
     observations.append({'kind': 'root-extension', 'enabled': phase == 'enabled', 'status': 401 if phase == 'enabled' else 404})
     return {'source': 'a' * 40, 'phase': phase, 'completed': True, 'failedRequests': [],
-            'providerEvidence': 'deterministic-provider-protocol', 'observations': observations}
+            'providerEvidence': 'not-observed', 'observations': observations}
 
 
 class InventoryVerdictTests(unittest.TestCase):
-    def validate(self, value, phase='baseline', **options):
-        return inventory.inventory_verdict(value, source='a' * 40, phase=phase, **options)
+    def validate(self, value, phase='baseline'):
+        return inventory.inventory_verdict(value, source='a' * 40, phase=phase)
 
-    def test_both_native_phase_receipts(self):
+    def test_both_native_phase_receipts_preserve_unanswered_provider_boundary(self):
         self.assertEqual(3, self.validate(receipt()))
         self.assertEqual(1, self.validate(receipt('enabled'), 'enabled'))
 
     def test_failed_missing_stale_and_incomplete_observations_cannot_pass(self):
         for mutation in ['failure', 'request', 'source', 'missing-state', 'duplicate-state', 'unknown-discovery',
-                         'ef-still-selected', 'studio-module-missing', 'native-admission-missing', 'loader-missing',
-                         'missing-admission', 'wrong-origin', 'fixture-tool-call', 'provider-content-missing', 'root-not-restarted']:
+                         'ef-still-selected', 'studio-module-missing', 'answer-claimed', 'provider-claimed',
+                         'admission-claimed', 'missing-generation', 'omitted-enabled-feature', 'root-not-restarted']:
             with self.subTest(mutation=mutation):
                 value = receipt()
                 row = value['observations'][0]
@@ -66,66 +58,27 @@ class InventoryVerdictTests(unittest.TestCase):
                 if mutation == 'unknown-discovery': row['registry']['complete'] = None
                 if mutation == 'ef-still-selected': row['backendFeatures'][1]['enabled'] = False
                 if mutation == 'studio-module-missing': row['registry']['modules'].pop()
-                if mutation == 'native-admission-missing': value['observations'].pop(1)
-                if mutation == 'loader-missing': row['disclosure']['admitted'][0]['content']['loader'] = []
-                if mutation == 'missing-admission': row['disclosure']['admitted'] = []
-                if mutation == 'wrong-origin': row['disclosure']['admitted'][0]['origin'] = 'authoritativeRead'
-                if mutation == 'fixture-tool-call': row['disclosure']['provider'][1]['kind'] = 'copilot.call'
-                if mutation == 'provider-content-missing': row['disclosure']['provider'][0]['data']['prompt'] = 'Fixed answer only'
+                if mutation == 'answer-claimed': row['question']['status'] = 'answered'
+                if mutation == 'provider-claimed': row['provider']['enabled'] = True
+                if mutation == 'admission-claimed': row['disclosure'] = {'status': 'admitted'}
+                if mutation == 'missing-generation': row['readiness'].pop('generation')
+                if mutation == 'omitted-enabled-feature': value['observations'][-2]['submittedIds'] = []
                 if mutation == 'root-not-restarted': value['observations'][-1]['status'] = 401
                 with self.assertRaises(ValueError): self.validate(value)
 
-    def test_unknown_route_cannot_acquire_resource_context(self):
-        value = receipt()
-        row = next(item for item in value['observations'] if item.get('state') == 'unknown')
-        row['disclosure']['admitted'].append({'id': 'inferred-module', 'contentType': 'invented.resource'})
-        with self.assertRaisesRegex(ValueError, 'Unknown route'): self.validate(value)
+    def test_shipped_health_failure_keeps_only_bounded_native_cause(self):
+        value = inventory.readiness_fact(503, json.dumps({'status': 'failed', 'code': 'shell_activation_failed',
+            'message': 'Bearer secret /Users/private.json', 'generation': 2}).encode())
+        self.assertEqual({'httpStatus': 503, 'status': 'failed', 'code': 'shell_activation_failed', 'generation': 2}, value)
+        self.assertEqual({'httpStatus': 503, 'status': 'unclassified'}, inventory.readiness_fact(503, b'Bearer secret'))
 
-    def test_independent_reads_do_not_replace_provider_gate(self):
-        value = receipt()
-        value['providerEvidence'] = 'blocked'
-        for row in value['observations']:
-            if row.get('kind') == 'inventory': row['disclosure'] = {'status': 'blocked'}
-        self.assertEqual(3, self.validate(value, require_protocol=False))
-        with self.assertRaisesRegex(ValueError, 'backend-admitted'): self.validate(value)
-
-    def test_mvid_refuses_non_cli_data(self):
-        for data in [b'', bytes(256)]:
-            with self.subTest(size=len(data)), self.assertRaises((ValueError, IndexError, inventory.struct.error)):
-                inventory.mvid(data)
-
-    def test_mvid_reads_actual_module_guid_heap_entry(self):
-        # Small PE/CLI image: one Module row, narrow string/GUID indices, a real GUID heap.
-        data = bytearray(1024)
-        def u16(offset, value): struct.pack_into('<H', data, offset, value)
-        def u32(offset, value): struct.pack_into('<I', data, offset, value)
-        u32(0x3c, 0x80); data[0x80:0x84] = b'PE\0\0'
-        u16(0x86, 1); u16(0x94, 224); u16(0x98, 0x10b)
-        u32(0x98 + 96 + 14 * 8, 0x2000)
-        section = 0x98 + 224
-        u32(section + 8, 512); u32(section + 12, 0x2000); u32(section + 16, 512); u32(section + 20, 0x200)
-        u32(0x208, 0x2080)
-        metadata = 0x280
-        data[metadata:metadata + 4] = b'BSJB'; u32(metadata + 12, 4)
-        data[metadata + 16:metadata + 20] = b'v4\0\0'; u16(metadata + 22, 2)
-        u32(metadata + 24, 64); u32(metadata + 28, 40); data[metadata + 32:metadata + 36] = b'#~\0\0'
-        u32(metadata + 36, 112); u32(metadata + 40, 16); data[metadata + 44:metadata + 52] = b'#GUID\0\0\0'
-        tables = metadata + 64
-        struct.pack_into('<Q', data, tables + 8, 1); u32(tables + 24, 1); u16(tables + 32, 1)
-        value = uuid.UUID('f3c01412-fb1e-4d6b-8f21-84731fabf6fe')
-        data[metadata + 112:metadata + 128] = value.bytes_le
-        self.assertEqual(str(value), inventory.mvid(bytes(data)))
-
-    def test_witness_input_refuses_foreign_source_and_source_reference_receipts(self):
+    def test_build_failure_keeps_exit_and_codes_without_log_body(self):
+        import subprocess
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root / 'report.json').write_text(json.dumps({'source': 'b' * 40}))
-            with self.assertRaisesRegex(ValueError, 'source differs'):
-                inventory.witness_input(root, 'a' * 40)
-            (root / 'report.json').write_text(json.dumps({'source': 'a' * 40, 'version': '4.0.0-inventory.local1',
-                'authors': {'protocol': {'source': 'a' * 40, 'status': 'passed', 'sourceReferences': ['local-project']}}}))
-            with self.assertRaisesRegex(ValueError, 'package-only'):
-                inventory.witness_input(root, 'a' * 40)
+            log = Path(temporary) / 'private.log'
+            log.write_text('NU1101 secret /Users/private.json\nCS0006 Bearer secret\n')
+            value = inventory.failure_fact(subprocess.CalledProcessError(1, ['private-command']), 'build-workbench', log)
+            self.assertEqual({'stage': 'build-workbench', 'category': 'process-failed', 'exitCode': 1, 'buildCodes': ['CS0006', 'NU1101']}, value)
 
 
 class SafeExportTests(unittest.TestCase):
@@ -157,7 +110,7 @@ class SafeExportTests(unittest.TestCase):
                 root = Path(temporary)
                 report, private, destination = self.export_case(root, failed=failed)
                 exported = inventory.safe_export(report, private, destination, source='a' * 40, project='desktop-light',
-                    title=inventory.BASELINE, phase='baseline', require_protocol=True)
+                    title=inventory.BASELINE, phase='baseline')
                 self.assertFalse((destination / 'trace').exists())
                 self.assertFalse((destination / 'unselected-auth-state.json').exists())
                 for path in destination.iterdir():
@@ -186,7 +139,7 @@ class SafeExportTests(unittest.TestCase):
                     report, private, destination = self.export_case(root, failed=failed, canary=canary)
                     with self.assertRaises(ValueError):
                         inventory.safe_export(report, private, destination, source='a' * 40, project='desktop-light',
-                            title=inventory.BASELINE, phase='baseline', require_protocol=True)
+                            title=inventory.BASELINE, phase='baseline')
                     self.assertFalse(destination.exists())
                     self.assertFalse(destination.with_name(destination.name + '.exporting').exists())
 
