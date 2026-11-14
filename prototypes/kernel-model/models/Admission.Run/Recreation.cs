@@ -4,14 +4,14 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
-// Expected counterexample, separate from the passing admission schedules. No kernel defect is fixed here.
+// Qualified regression replacing the historical #4394 counterexample. Historical source and failed evidence remain unchanged.
 internal static class InvocationRecreation
 {
     public static void Run()
     {
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
         foreach (var nested in new[] { false, true }) Reproduce(mode, nested);
-        Console.WriteLine("4/4 delete/recreate counterexamples observed; I10 rejects ended-to-running recreation before I22. Shared identity gate remains OPEN.");
+        Console.WriteLine("4/4 qualified delete/recreate regressions passed. Wider shared propagation and provider gates remain separate.");
     }
 
     private static void Reproduce(string mode, bool nested)
@@ -22,28 +22,19 @@ internal static class InvocationRecreation
         var receiver = Wf.Node<RecreationReceiver>("receiver").With(Wf.Event("finish", "finish"));
         var root = nested ? Wf.Sequence("parent", receiver, Wf.Set("after", "returned", true)) : receiver;
         NativeWorkflows.Registry.Add(Wf.Workflow("recreation-probe", root));
-        var recreated = false;
-        var sawI10 = false;
-        long endedRevision = 0;
         var serial = 0;
         void Require(bool ok, string message)
         { if (!ok) throw new InvalidOperationException("R1: " + message); }
         void Apply(Act act)
         {
             world.Apply(act);
-            if (world.Check() is not { } error) return;
-            // The existing oracle deliberately forbids reused IDs. Preserve this failure; do not call the run green.
-            var row = world.Store.Instances.GetValueOrDefault(target.Id);
-            var expected = $"I10 {target.Id} went from revision {endedRevision} Finished to revision {row?.Revision} Running";
-            if (!recreated || row?.Status != InstanceStatus.Running || error != expected)
-                throw new InvalidOperationException("Kernel: " + error);
-            sawI10 = true;
+            if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
         }
-        void Add(string kind, string? payload = null, StartSpec? start = null, bool reply = false)
+        void Add(string kind, string? payload = null, StartSpec? start = null, bool reply = false, long generation = 1)
         {
             var id = "recreation-message-" + ++serial;
-            Apply(new("add", M: new Message(id, target, kind, payload, Start: start,
-                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000) : null)));
+            Apply(new("add", M: CreationFixture.Pin(new Message(id, target, kind, payload, Start: start,
+                ReplyTo: reply ? ReplyTo.Of("outside", id, world.Time + 30_000) : null, TargetCreation: generation))));
         }
         void Drain()
         {
@@ -69,23 +60,22 @@ internal static class InvocationRecreation
         Add(NativeKinds.Resume, Json.Write(new ResumeStimulus("finish"))); Drain();
         Require(world.Store.Instances[target.Id].Status == InstanceStatus.Finished, "ordinary child did not complete workflow");
         if (nested) Require(State().Variables["returned"]!.GetValue<bool>(), "caller did not continue");
-        endedRevision = world.Store.Instances[target.Id].Revision;
         // Let the receipt promise expire while renewing the real owner lease in bounded steps.
         for (var elapsed = 0; elapsed < 60_000; elapsed += 5000)
         { Apply(new("tick", 5000)); Apply(new("beat", actor.Id)); }
         Add(Kinds.Delete); Drain();
-        Require(!world.Store.Instances.ContainsKey(target.Id), "normal delete did not remove ended row");
-        recreated = true;
-        Add(Kinds.Start, start: NativeModel.Spec("recreation-probe", mode)); Drain();
+        Require(world.Store.Instances[target.Id].Retired, "normal delete did not retire ended creation");
+        Add(Kinds.Start, start: NativeModel.Spec("recreation-probe", mode) with { Creation = new(2, 1, "recreation-next") }, generation: 2); Drain();
         var newFrame = State().Frames.Values.Single(f => f.Node == "receiver").Id;
         Require(newFrame == oldFrame && State().Inboxes![newFrame].Receipts.Count == 0,
             "fixture no longer recreates the same local address; reassess the counterexample");
         Add(InvocationInput.Kind, Json.Write(oldInput), reply: true); Drain();
-        var inbox = State().Inboxes![newFrame];
-        Require(Last().Result == "Accepted" && Last().Order == 1 && inbox.Pending.Single() == oldInput,
-            "old invocation input no longer aliases the new creation; replace this expected-counterexample probe with a regression");
-        Require(sawI10, "existing non-recreation oracle did not report its coverage boundary");
-        Console.WriteLine($"COUNTEREXAMPLE {mode},nested={nested}: {target.Id}/{oldFrame} reused; old input accepted fresh into new creation; I10 observed; I22 not reached");
+        var response = world.Deliveries.Last().Reply.Item;
+        Require(response is CreationResult { Result: "WrongCreation" } && State().Inboxes![newFrame].Receipts.Count == 0,
+            "old invocation reached the replacement creation");
+        Add(InvocationInput.Kind, Json.Write(oldInput), reply: true, generation: 2); Drain();
+        Require(Last().Result == "Accepted" && Last().Order == 1, "correct replacement invocation input failed");
+        Console.WriteLine($"PASS recreation:{mode},nested={nested}: same local frame, distinct shared creation; old input refused");
     }
 }
 

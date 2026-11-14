@@ -61,7 +61,7 @@ internal sealed partial class PublishedNativeFixture : IAsyncDisposable
     public int SelectedMaterialReads { get; private set; }
     public Dictionary<string, string> OriginalSources { get; } = new(StringComparer.Ordinal);
 
-    public static async Task<PublishedNativeFixture> Create()
+    public static async Task<PublishedNativeFixture> Create(bool graphOwner = false)
     {
         var f = new PublishedNativeFixture(); Directory.CreateDirectory(f._directory); var access = new Accessor();
         var services = new ServiceCollection(); services.AddOptions();
@@ -73,6 +73,7 @@ internal sealed partial class PublishedNativeFixture : IAsyncDisposable
         services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = "sqlite", ConnectionString = f.Connection("activities") });
         services.AddScoped<IWorkflowExecutableHasher, Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher>();
         var profile = new WorkflowReleaseRuntimeFeature(); profile.ConfigureServices(services); profile.PostConfigureServices(services);
+        if (graphOwner) new Elsa.Activities.Graph.Releases.GraphActivitiesReleaseVerificationFeature().ConfigureServices(services);
         f._services = services.BuildServiceProvider(); f._scope = f._services.CreateScope(); var sp = f._scope.ServiceProvider; f.Codec = sp.GetRequiredService<IReleaseRuntimeArtifactCodec>();
         await sp.GetRequiredService<WorkflowsDesignDbContext>().Database.EnsureCreatedAsync();
         await sp.GetRequiredService<ActivitiesDesignDbContext>().Database.EnsureCreatedAsync();
