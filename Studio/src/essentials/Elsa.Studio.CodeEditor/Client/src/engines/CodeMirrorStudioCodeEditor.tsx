@@ -3,6 +3,7 @@ import {
   defaultKeymap,
   history,
   historyKeymap,
+  isolateHistory,
   indentLess,
   indentMore,
   insertNewlineAndIndent,
@@ -12,7 +13,7 @@ import {
 import { bracketMatching, HighlightStyle, foldGutter, indentOnInput, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
-import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type KeyBinding } from "@codemirror/view";
+import { EditorView, type ViewUpdate, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type KeyBinding } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { applyCodeMirrorDiagnostics } from "./codeMirrorDiagnostics";
 import { markCodeEditorReady } from "./markCodeEditorReady";
@@ -28,7 +29,8 @@ import {
   setStudioCodeEditorSessionEntry,
   subscribeToStudioCodeEditorSessionRevocation
 } from "../sessions/studioCodeEditorSessions";
-import type { StudioCodeDiagnostic, StudioCodeEditorEngineProps } from "../types";
+import type { StudioCodeDiagnostic, StudioCodeEditorEngineProps, StudioCodeEditorSnapshot, StudioCodeEditorSelection, StudioCodeEditorBookmark } from "../types";
+import { ownerHistoryValue, ownerHistoryInversion, ownerValueKey, setOwnerHistoryValue, snapshotOwnerValue } from "./codeMirrorDocumentEditing";
 
 const studioHighlightStyle = HighlightStyle.define([
   { tag: tags.string, color: "var(--studio-success-fg)" },
@@ -43,6 +45,9 @@ interface CodeMirrorSessionEntry {
   presentation: Compartment;
   editability: Compartment;
   language: Compartment;
+  revision: number;
+  editingEnabled: boolean;
+  pendingSelection?: { source: string; key: string; selection: StudioCodeEditorSelection };
 }
 
 interface CodeMirrorRuntime {
@@ -71,6 +76,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | undefined>(undefined);
   const entryRef = useRef<CodeMirrorSessionEntry | undefined>(undefined);
+  const controllerRef = useRef<ReturnType<typeof createEditingController> | undefined>(undefined);
 
   const entry = resolveEntry(props);
   entry.runtime.props = props;
@@ -92,10 +98,14 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       effects: entry.presentation.reconfigure(presentationExtensions(props.profile))
     });
     if (props.autoFocus) view.focus();
+    const generation = authorizationGeneration;
+    const controller = createEditingController(view, entry, generation);
+    controllerRef.current = controller;
     applyDiagnostics(view, entry.runtime.props.diagnostics);
     void loadLanguageSupport(view, props.document.language, entry);
 
     return () => {
+      controllerRef.current = undefined;
       markCodeEditorReady(root instanceof HTMLElement ? root : container, false);
       entry.runtime.tabEscapeArmed = false;
       entry.state = view.state;
@@ -112,19 +122,32 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
   // A session survives profile remounts. A changed URI/session intentionally mounts a new view.
   }, [entry, props.autoFocus, props.document.language, props.document.uri, props.profile, props.session]);
 
+  const registerController = props.documentEditing?.onController;
+  useEffect(() => {
+    registerController?.(controllerRef.current ?? null);
+    return () => registerController?.(null);
+  }, [entry, props.profile, registerController]);
+
   useEffect(() => {
     const view = viewRef.current;
     const current = entryRef.current;
     if (!view || !current) return;
+    const latest = current.runtime.props;
 
-    if (props.document.value !== view.state.doc.toString() && props.document.value !== current.runtime.lastEmittedValue) {
+    if (current.editingEnabled !== !!latest.documentEditing || latest.documentEditing && (ownerValueKey(latest.documentEditing.historyValue) !== ownerValueKey(view.state.field(ownerHistoryValue, false)) ||
+        latest.document.value !== view.state.doc.toString() && latest.document.value !== current.runtime.lastEmittedValue)) {
+      current.revision++;
+      current.state = createEntryState(latest, current);
+      view.setState(current.state);
+      void loadLanguageSupport(view, latest.document.language, current);
+    } else if (latest.document.value !== view.state.doc.toString() && latest.document.value !== current.runtime.lastEmittedValue) {
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: props.document.value },
+        changes: { from: 0, to: view.state.doc.length, insert: latest.document.value },
         annotations: Transaction.addToHistory.of(false)
       });
     }
-    applyDiagnostics(view, props.diagnostics);
-  }, [props.document.value, props.document.version, props.diagnostics]);
+    applyDiagnostics(view, latest.diagnostics);
+  }, [props.document.value, props.document.version, props.documentEditing, props.diagnostics]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -203,12 +226,17 @@ function destroyCodeMirrorView(view: EditorView) {
 function resolveEntry(props: StudioCodeEditorEngineProps): CodeMirrorSessionEntry {
   const existing = getStudioCodeEditorSessionEntry<CodeMirrorSessionEntry>(props.session, props.document.uri);
   if (existing) {
-    if (props.document.value !== existing.state.doc.toString() &&
-        props.document.value !== existing.runtime.lastEmittedValue) {
-      existing.state = existing.state.update({
-        changes: { from: 0, to: existing.state.doc.length, insert: props.document.value },
-        annotations: Transaction.addToHistory.of(false)
-      }).state;
+    if (props.documentEditing) {
+      // Mounted views synchronize in the effect. A remounted profile adopts the current owner before mounting.
+      const mounted = [...activeCodeMirrorViews].some(view => view.state === existing.state);
+      if (!mounted && (existing.editingEnabled !== !!props.documentEditing || ownerValueKey(props.documentEditing.historyValue) !== ownerValueKey(existing.state.field(ownerHistoryValue, false)) ||
+          props.document.value !== existing.state.doc.toString() && props.document.value !== existing.runtime.lastEmittedValue)) {
+        existing.revision++;
+        existing.state = createEntryState(props, existing);
+      }
+    } else if (props.document.value !== existing.state.doc.toString() && props.document.value !== existing.runtime.lastEmittedValue) {
+      existing.state = existing.state.update({ changes: { from: 0, to: existing.state.doc.length, insert: props.document.value },
+        annotations: Transaction.addToHistory.of(false) }).state;
     }
     return existing;
   }
@@ -218,50 +246,112 @@ function resolveEntry(props: StudioCodeEditorEngineProps): CodeMirrorSessionEntr
   const editability = new Compartment();
   const language = new Compartment();
   const entry = {} as CodeMirrorSessionEntry;
-  const state = EditorState.create({
+  entry.runtime = runtime;
+  entry.presentation = presentation;
+  entry.editability = editability;
+  entry.language = language;
+  entry.revision = 0;
+  entry.state = createEntryState(props, entry);
+  setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
+  return entry;
+}
+
+function createEntryState(props: StudioCodeEditorEngineProps, entry: CodeMirrorSessionEntry): EditorState {
+  entry.editingEnabled = !!props.documentEditing;
+  return EditorState.create({
       doc: props.document.value,
+      selection: restoredSelection(props, entry),
       extensions: [
         history(),
-        presentation.of(presentationExtensions(props.profile)),
-        editability.of(editabilityExtensions(props.readOnly, props.ariaLabel)),
-        language.of([]),
+        ...(props.documentEditing ? [ownerHistoryValue.init(() => snapshotOwnerValue(props.documentEditing!.historyValue)), ownerHistoryInversion] : []),
+        entry.presentation.of(presentationExtensions(props.profile)),
+        entry.editability.of(editabilityExtensions(props.readOnly, props.ariaLabel)),
+        entry.language.of([]),
         indentOnInput(),
         bracketMatching(),
         syntaxHighlighting(studioHighlightStyle, { fallback: true }),
-        Prec.highest(keymap.of(editorKeymap(runtime))),
+        Prec.highest(keymap.of(editorKeymap(entry.runtime))),
         createCodeMirrorCodeIntelligenceExtensions({
           document: props.document,
-          completionProvider: request => runtime.props.completionProvider
-            ? runtime.props.completionProvider(request)
-            : runtime.props.completions ?? null,
-          hoverProvider: (document, position, signal) => runtime.props.hoverProvider?.(document, position, signal) ?? null,
-          signatureProvider: (document, position, signal) => runtime.props.signatureProvider?.(document, position, signal) ?? null
+          completionProvider: request => entry.runtime.props.completionProvider
+            ? entry.runtime.props.completionProvider(request)
+            : entry.runtime.props.completions ?? null,
+          hoverProvider: (document, position, signal) => entry.runtime.props.hoverProvider?.(document, position, signal) ?? null,
+          signatureProvider: (document, position, signal) => entry.runtime.props.signatureProvider?.(document, position, signal) ?? null
         }),
         EditorView.domEventHandlers({
           focus: () => {
-            runtime.props.onFocus?.();
+            entry.runtime.props.onFocus?.();
             return false;
           },
           blur: () => {
-            runtime.tabEscapeArmed = false;
-            runtime.props.onBlur?.();
+            entry.runtime.tabEscapeArmed = false;
+            entry.runtime.props.onBlur?.();
             return false;
           },
           keydown: event => {
-            if (event.key !== "Escape" && event.key !== "Tab") runtime.tabEscapeArmed = false;
+            if (event.key !== "Escape" && event.key !== "Tab") entry.runtime.tabEscapeArmed = false;
             return false;
           }
         }),
         EditorView.updateListener.of(update => handleUpdate(update, entry))
       ]
     });
-  entry.runtime = runtime;
-  entry.state = state;
-  entry.presentation = presentation;
-  entry.editability = editability;
-  entry.language = language;
-  setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
-  return entry;
+
+}
+
+function restoredSelection(props: StudioCodeEditorEngineProps, entry: CodeMirrorSessionEntry) {
+  const pending = entry.pendingSelection;
+  const selection = pending && pending.source === props.document.value && pending.key === ownerValueKey(props.documentEditing?.historyValue)
+    ? pending.selection : entry.state?.selection.main ?? { anchor: 0, head: 0 };
+  if (pending) entry.pendingSelection = undefined;
+  return { anchor: Math.min(selection.anchor, props.document.value.length), head: Math.min(selection.head, props.document.value.length) };
+}
+
+const capturedEdits = new WeakMap<StudioCodeEditorSnapshot, { entry: CodeMirrorSessionEntry; revision: number; generation: number }>();
+function createEditingController(view: EditorView, entry: CodeMirrorSessionEntry, generation: number) {
+  const available = () => generation === authorizationGeneration && activeCodeMirrorViews.has(view) &&
+    !entry.runtime.props.readOnly && !!entry.runtime.props.documentEditing;
+  return {
+    capture(): StudioCodeEditorSnapshot | null {
+      if (!available()) return null;
+      const range = view.state.selection.main;
+      const snapshot = Object.freeze({ source: view.state.doc.toString(), selection: Object.freeze({ anchor: range.anchor, head: range.head }) });
+      capturedEdits.set(snapshot, { entry, revision: entry.revision, generation });
+      return snapshot;
+    },
+    apply(edit: { expected: StudioCodeEditorSnapshot; insert: string; historyValue: unknown; selection?: StudioCodeEditorSelection }) {
+      const captured = capturedEdits.get(edit.expected);
+      if (!available() || !captured || captured.entry !== entry || captured.revision !== entry.revision || captured.generation !== generation) return false;
+      let payload: unknown;
+      try { payload = snapshotOwnerValue(edit.historyValue); } catch { return false; }
+      const { anchor, head } = edit.expected.selection;
+      const from = Math.min(anchor, head), to = Math.max(anchor, head);
+      const length = view.state.doc.length - (to - from) + edit.insert.length;
+      const selection = edit.selection ?? { anchor: from + edit.insert.length, head: from + edit.insert.length };
+      if (![selection.anchor, selection.head].every(position => Number.isInteger(position) && position >= 0 && position <= length)) return false;
+      view.dispatch({ changes: { from, to, insert: edit.insert }, selection,
+        effects: setOwnerHistoryValue.of(payload), annotations: [isolateHistory.of("full"), Transaction.userEvent.of("input.insert.data")] });
+      capturedEdits.delete(edit.expected);
+      view.focus();
+      return true;
+    }
+  };
+}
+
+function editingBookmark(state: EditorState, entry: CodeMirrorSessionEntry): StudioCodeEditorBookmark {
+  const source = state.doc.toString(), key = ownerValueKey(state.field(ownerHistoryValue, false));
+  const { anchor, head } = state.selection.main;
+  const generation = authorizationGeneration;
+  return { restore() {
+    if (generation !== authorizationGeneration || entry.runtime.props.readOnly) return;
+    entry.pendingSelection = { source, key, selection: { anchor, head } };
+    for (const view of activeCodeMirrorViews) if (view.state === entry.state && view.state.doc.toString() === source &&
+        ownerValueKey(view.state.field(ownerHistoryValue, false)) === key) {
+      view.dispatch({ selection: { anchor, head }, annotations: Transaction.addToHistory.of(false) });
+      entry.pendingSelection = undefined;
+    }
+  } };
 }
 
 function presentationExtensions(profile: StudioCodeEditorEngineProps["profile"]) {
@@ -326,10 +416,12 @@ function editorKeymap(runtime: CodeMirrorRuntime): KeyBinding[] {
   ];
 }
 
-function handleUpdate(update: { state: EditorState; docChanged: boolean; changes: { iterChanges(callback: (fromA: number, toA: number, fromB: number, toB: number, inserted: { toString(): string }) => void): void } }, entry: CodeMirrorSessionEntry) {
+function handleUpdate(update: ViewUpdate, entry: CodeMirrorSessionEntry) {
   entry.state = update.state;
   const { runtime } = entry;
-  if (!update.docChanged) return;
+  const ownerChanged = update.startState.field(ownerHistoryValue, false) !== update.state.field(ownerHistoryValue, false);
+  if (!update.docChanged && !ownerChanged) return;
+  entry.revision++;
 
   let insertedNewline = false;
   update.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
@@ -337,7 +429,13 @@ function handleUpdate(update: { state: EditorState; docChanged: boolean; changes
   });
   const document = { ...runtime.props.document, value: update.state.doc.toString() };
   runtime.lastEmittedValue = document.value;
-  runtime.props.onChange(document);
+  if (runtime.props.documentEditing) {
+    const origin = update.transactions.some(transaction => transaction.isUserEvent("undo")) ? "undo"
+      : update.transactions.some(transaction => transaction.isUserEvent("redo")) ? "redo"
+        : update.transactions.some(transaction => transaction.isUserEvent("input.insert.data")) ? "insertion" : "input";
+    runtime.props.onChange(document, { historyValue: update.state.field(ownerHistoryValue), origin,
+      before: editingBookmark(update.startState, entry), after: editingBookmark(update.state, entry) });
+  } else runtime.props.onChange(document);
   if (insertedNewline) {
     runtime.props.onNewline?.();
     if (runtime.props.profile === "compact") runtime.props.onExpand?.();

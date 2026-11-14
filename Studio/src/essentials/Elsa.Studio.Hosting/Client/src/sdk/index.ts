@@ -1131,6 +1131,33 @@ export interface StudioExpressionEditorContext {
   onBlur?(): void;
 }
 
+/** Optional installed syntax adapter. The workflow host does not parse member-access syntax. */
+export interface StudioExpressionSourceInsertion {
+  render(request: { alias: string; memberPath: readonly string[]; source: string; selection: { anchor: number; head: number } }):
+    { supported: true; insert: string } | { supported: false; reason: string };
+}
+/** Ephemeral editor state never enters the authored workflow document. */
+export interface StudioExpressionEditorBookmark { restore(): void }
+export interface StudioExpressionEditorSnapshot {
+  readonly source: string;
+  readonly selection: Readonly<{ anchor: number; head: number }>;
+}
+export interface StudioExpressionEditorController {
+  capture(): StudioExpressionEditorSnapshot | null;
+  apply(edit: { expected: StudioExpressionEditorSnapshot; insert: string; historyValue: unknown; selection?: { anchor: number; head: number } }): boolean;
+}
+export interface StudioExpressionEditorEdit {
+  historyValue: unknown;
+  origin: "input" | "insertion" | "undo" | "redo";
+  before: StudioExpressionEditorBookmark;
+  after: StudioExpressionEditorBookmark;
+}
+export interface StudioExpressionDocumentEditing {
+  /** Immutable JSON owner data apart from source text. */
+  historyValue: unknown;
+  onController(controller: StudioExpressionEditorController | null): void;
+}
+
 export interface StudioExpressionEditorProps {
   descriptor: StudioActivityInputDescriptor;
   syntax: string;
@@ -1138,7 +1165,8 @@ export interface StudioExpressionEditorProps {
   disabled?: boolean;
   initialFocus?: boolean;
   context: StudioExpressionEditorContext;
-  onChange(value: unknown): void;
+  documentEditing?: StudioExpressionDocumentEditing;
+  onChange(value: unknown, edit?: StudioExpressionEditorEdit): void;
   /** Requests the host to reveal the same document in its expanded editor surface. */
   onExpand?(): void;
   /** Reports only whether this mounted editor currently has a local blocking error. */
@@ -1188,6 +1216,7 @@ export interface StudioExpressionSourceRenderer {
 }
 
 export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
+  sourceInsertion?: StudioExpressionSourceInsertion;
   id: string;
   /** The inline editor presents its descriptor caption in its own shared field. */
   presentsField?: boolean;

@@ -31,6 +31,7 @@ function subscribeToCompactSessions(notify: (activeSession: string | undefined) 
 
 export function StudioCodeEditor({
   document,
+  documentEditing,
   profile = "expanded",
   sessionKey,
   session: suppliedSession,
@@ -93,6 +94,7 @@ export function StudioCodeEditor({
   const isCompactPreview = profile === "compact" && !compactActive;
   const engineProps: StudioCodeEditorEngineProps = {
     document,
+    documentEditing,
     profile,
     session,
     readOnly,

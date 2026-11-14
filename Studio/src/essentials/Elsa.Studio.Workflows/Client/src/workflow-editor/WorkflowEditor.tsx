@@ -1,3 +1,4 @@
+import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
@@ -267,7 +268,7 @@ export function WorkflowEditor({
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path);
   }, [editableDoc]);
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, transitions: editableDoc.state.historyTransitions, onTransitionsCaptured: editableDoc.acknowledgeHistoryTransitions });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -826,7 +827,7 @@ export function WorkflowEditor({
     return (ownerNodeId, ownerLabel, slot) => enterSlotScope(ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot));
   }, [enterSlotScope, isUnsupportedDesigner]);
 
-  const updateSelectedActivity = useCallback((activity: ActivityNode) => {
+  const updateSelectedActivity = useCallback((activity: ActivityNode, edit?: StudioExpressionEditorEdit) => {
     editDraft(({ draft: current }) => {
       const rootActivity = current?.state.rootActivity;
       if (!current || !rootActivity) return null;
@@ -843,7 +844,7 @@ export function WorkflowEditor({
           rootActivity: updateActivity(rootActivity, activity.nodeId, () => activity, catalogByVersion)
         }
       };
-    });
+    }, edit && edit.origin !== "input" ? { before: edit.before, after: edit.after } : undefined);
   }, [catalogByVersion, editDraft]);
 
   const updateSelectedStructure = useCallback((activity: ActivityNode) => {

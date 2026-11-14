@@ -1,3 +1,4 @@
+import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
@@ -75,7 +76,7 @@ import { DictionaryValueEditor } from "./DictionaryValueEditor";
 import { ReportedPropertyEditor } from "./ReportedPropertyEditor";
 import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
-import { createActivityExpressionDocument } from "./activityExpressionDocument";
+import { advanceActivityExpressionRevision, createActivityExpressionDocument } from "./activityExpressionDocument";
 import type { ActivityDataBinding } from "./api/activityDataSelection";
 import {
   activityResultExpressionDescriptor,
@@ -134,7 +135,7 @@ export interface ActivityPropertiesPanelProps {
    * one; without it no input offers Choose data, and a stored activity output still renders as a reference.
    */
   activityDataSelection?: ActivityDataSelectionHost | null;
-  onChange(activity: ActivityNode): void;
+  onChange(activity: ActivityNode, edit?: StudioExpressionEditorEdit): void;
 }
 
 export function ActivityPropertiesPanel({
@@ -172,11 +173,11 @@ export function ActivityPropertiesPanel({
     latestActivity.current = activity;
     renderedActivity.current = activity;
   }
-  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]) => {
+  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[], edit?: StudioExpressionEditorEdit) => {
     if (latestReadOnly.current) return;
     const current = latestActivity.current;
     if (current.nodeId !== nextActivity.nodeId) {
-      onChange(nextActivity);
+      onChange(nextActivity, edit);
       return;
     }
     const next = { ...current };
@@ -186,7 +187,7 @@ export function ActivityPropertiesPanel({
       else delete next[propertyName];
     }
     latestActivity.current = next;
-    onChange(next);
+    onChange(next, edit);
   }, [onChange]);
   const conversionProfiles = useConversionProfiles(context);
   const [activeToolingProperty, setActiveToolingProperty] = useState<string>();
@@ -504,7 +505,7 @@ type PropertyRowProps = {
   onDisclosureErrorChange(key: string, hasError: boolean): void;
   onDisclosureFailureChange(key: string, hasFailure: boolean): void;
   onDisclosureFallbackChange(key: string, shouldForceOpen: boolean): void;
-  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[]): void;
+  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor | StudioActivityInputDescriptor[], edit?: StudioExpressionEditorEdit): void;
 };
 
 function PropertyRow({
@@ -640,17 +641,14 @@ function PropertyRow({
   });
   const editorValue = portableDefinition?.source ?? value;
   const expressionSource = valueMasked || secretOnly || editorValue == null ? "" : String(editorValue);
-  const documentVersions = useRef(new Map<string, { source: string; version: number }>());
+  const documentVersions = useRef(new Map<string, { key: string; version: number }>());
   const propertyKey = input.referenceKey?.trim() || input.name;
   const toolingPropertyKey = `${activity.nodeId}\u001f${propertyKey}`;
   const activateTooling = useCallback(() => onToolingFocus(toolingPropertyKey), [onToolingFocus, toolingPropertyKey]);
   const documentKey = `${draftId}\u001f${activity.nodeId}\u001f${propertyKey}\u001f${syntax}`;
   const previousDocumentVersion = documentVersions.current.get(documentKey);
-  const documentVersion = previousDocumentVersion
-    ? previousDocumentVersion.source === expressionSource
-      ? previousDocumentVersion
-      : { source: expressionSource, version: previousDocumentVersion.version + 1 }
-    : { source: expressionSource, version: 0 };
+  const documentVersion = advanceActivityExpressionRevision(previousDocumentVersion, expressionSource,
+    valueMasked || secretOnly ? null : portableDefinition);
   documentVersions.current.set(documentKey, documentVersion);
   const expressionDocument = useMemo(() => createActivityExpressionDocument({
     draftId,
@@ -869,7 +867,7 @@ function PropertyRow({
     requestAnimationFrame(() => conversionToggleRef.current?.focus());
   };
 
-  const setRaw = useCallback((nextValue: unknown) => {
+  const setRaw = useCallback((nextValue: unknown, edit?: StudioExpressionEditorEdit) => {
     const current = latestProperty.current;
     const currentWrapped = current.input.isWrapped !== false
       ? readWrappedInput(current.activity, current.input)
@@ -898,7 +896,7 @@ function PropertyRow({
         ? { ...portableDefinition, source: nextValue }
         : nextValue)
       : nextValue;
-    current.onChange(writeInputValue(current.activity, current.input, next), current.input);
+    current.onChange(writeInputValue(current.activity, current.input, next), current.input, edit);
   }, []);
 
   const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
@@ -1529,7 +1527,7 @@ function ExpandedPropertyEditor({
   disabled: boolean;
   wrapped: WrappedActivityInputValue | null;
   conversionProfiles: ConversionProfileReference[];
-  onChange(value: unknown): void;
+  onChange(value: unknown, edit?: StudioExpressionEditorEdit): void;
   onConversionChange(next: WrappedActivityInputValue): void;
   onSyntaxChange(value: string): void;
   onClose(): void;
