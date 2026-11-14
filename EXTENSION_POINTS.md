@@ -269,6 +269,7 @@ not automatic constitution violations.
 - [Dashboard query, resource and authoring contracts](Essentials/src/Studio/Dashboard/Core/EXTENSION_POINTS.md)
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
+- [Language-owned expression scope preservation](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md#expression-scope-preservation-sdk--elsastudiohosting)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)
 
 - [Workflow inspection authorization](Essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md)

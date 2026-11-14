@@ -44,6 +44,37 @@ public sealed class ReusableActivityAuthoringService(
     IEnumerable<IActivityDataSelectionDocumentProjector>? candidateProjectors = null,
     IActivityStructureService? candidateStructures = null) : IReusableActivityAuthoringService
 {
+    // Preserve the original public constructor for existing binary consumers. Compositions that do
+    // not install the request-only candidate dependencies retain their existing authoring behavior.
+    public ReusableActivityAuthoringService(
+        IActivityDefinitionStore definitions,
+        IActivityDefinitionAuthoringStore authoringStore,
+        IActivityDefinitionDraftStore draftStore,
+        IActivityDefinitionVersionPublicationStore publicationStore,
+        IActivityDefinitionLayoutStore layoutStore,
+        IActivityDraftValidationStore validationStore,
+        ICreateActivityDefinitionCommand createDefinition,
+        IUpdateActivityDefinitionPresentationCommand updateDefinitionPresentation,
+        ICreateActivityDraftCommand createDraft,
+        IUpdateActivityDraftPresentationCommand updateDraftPresentation,
+        ICreateActivityDraftConflictCopyCommand createConflictCopy,
+        IReplaceActivityDraftCommand replaceDraft,
+        IDiscardActivityDraftCommand discardDraft,
+        IStoreActivityDraftValidationCommand storeValidation,
+        IActivityProviderRegistry providers,
+        IActivityDraftValidator validator,
+        ActivityContractAuthoringValidator contractAuthoringValidator,
+        IActivityTypeKeyPolicy typeKeyPolicy,
+        IIdentityGenerator identityGenerator,
+        TimeProvider timeProvider,
+        IActivityAuthoringContextAsync context) : this(
+        definitions, authoringStore, draftStore, publicationStore, layoutStore, validationStore,
+        createDefinition, updateDefinitionPresentation, createDraft, updateDraftPresentation, createConflictCopy,
+        replaceDraft, discardDraft, storeValidation, providers, validator, contractAuthoringValidator,
+        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null)
+    {
+    }
+
     public async Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(
         CreateReusableActivityDefinition command,
         CancellationToken cancellationToken)
@@ -879,7 +910,8 @@ public interface IReusableActivityAuthoringService
     Task<ReusableActivityDraftView> CreateConflictCopyAsync(CreateReusableActivityDraftConflictCopy command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> MigrateDraftAsync(MigrateReusableActivityDraft command, CancellationToken cancellationToken);
     Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken);
-    Task<ActivityCandidateValidationView> ValidateCandidateAsync(ValidateReusableActivityCandidate command, CancellationToken cancellationToken);
+    Task<ActivityCandidateValidationView> ValidateCandidateAsync(ValidateReusableActivityCandidate command, CancellationToken cancellationToken) =>
+        Task.FromResult(new ActivityCandidateValidationView("unavailable"));
     Task<ActivityDraftValidationView> ValidateDraftAsync(ValidateReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> GetDraftAsync(GetReusableActivityDraft request, CancellationToken cancellationToken);
     Task<ReusableActivityVersionView> GetVersionAsync(GetReusableActivityVersion request, CancellationToken cancellationToken);
