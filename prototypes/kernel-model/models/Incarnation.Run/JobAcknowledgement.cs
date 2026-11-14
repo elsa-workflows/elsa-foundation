@@ -26,6 +26,11 @@ internal static class JobAcknowledgement
         Require(calls == 0 && (caughtUp || worker.Messages.Any(m => m.Id == Worker.TicketId(target.Id, "work", qualified ? 1 : 0))),
             "job did not wait behind the staged owner checkpoint");
         wire.Reply.TrySetResult(); await flush;
+        if (!caughtUp) await worker.PollAsync();
+        var completion = worker.JobCompletion(target.Id, "work", qualified ? 1 : 0);
+        Require(completion is not null, "actual job driver was not available for observation");
+        await completion!.WaitAsync(TimeSpan.FromSeconds(5));
+        Require(worker.JobResultReady(target.Id, "work"), "completed job result was invisible to its observer");
         for (var i = 0; i < 100 && store.Instances[target.Id].Status == InstanceStatus.Running; i++)
         {
             await worker.PollAsync(); if (worker.NeedsLoad) await worker.LoadAsync();
@@ -34,6 +39,7 @@ internal static class JobAcknowledgement
         }
         Require(calls == 1 && store.Instances[target.Id].Status == InstanceStatus.Finished, caughtUp
             ? "handed-over job was not started after acknowledgement" : "polled-before-ack job was lost after acknowledgement");
+        Require(!worker.JobResultReady(target.Id, "work"), "consumed job result remained ready");
         Console.WriteLine($"PASS creation:job-ack,qualified={qualified},caughtUp={caughtUp}");
     }
 
