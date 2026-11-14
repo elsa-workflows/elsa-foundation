@@ -1222,7 +1222,7 @@ internal sealed class DefaultWeaverTurnOrchestrator(
         // representation still requires current selected-effects admission, including in later history.
         // Legacy refusal text without Error keeps its original effects-free compatibility.
         if (!result.Succeeded && result.Payload is null && result.Receipt is null && result.Access is null)
-            return result.Error is null ? null : await effects.CheckAsync(token);
+            return result.Error is null ? null : await effects.CheckResultAsync(token);
         var tool = await toolRegistry.FindAsync(result.ToolName, token);
         if (result.Access is not { } access || tool is null || access.ModuleId != tool.Descriptor.ModuleId
             || access.ContractVersion != tool.Descriptor.ContractVersion
