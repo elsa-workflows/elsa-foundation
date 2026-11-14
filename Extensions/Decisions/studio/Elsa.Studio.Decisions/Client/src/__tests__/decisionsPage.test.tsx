@@ -11,6 +11,57 @@ const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
 describe("Decisions Studio journeys", () => {
+  it("does not redirect entry from Description when delayed initial focus finally runs", async () => {
+    const frames: FrameRequestCallback[] = [];
+    const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
+    try {
+      const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
+      await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
+      await vi.waitFor(() => expect(frames).toHaveLength(1));
+      const inputs = Array.from(host.querySelectorAll<HTMLInputElement>(".decision-metadata input"));
+      const name = inputs.find(input => input.labels?.[0]?.textContent === "Name")!;
+      const description = inputs.find(input => input.labels?.[0]?.textContent === "Description")!;
+      type(name, "Approval policy"); description.focus();
+      frames[0](0);
+      expect(document.activeElement).toBe(description);
+      type(description, "Determine purchase approval requirements.");
+      api.backend.http.postJson.mockResolvedValue(asset as never);
+      click(button(host, "Save decision"));
+      await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions", expect.objectContaining({
+        name: "Approval policy", description: "Determine purchase approval requirements."
+      })));
+    } finally { animation.mockRestore(); }
+  });
+
+  it("keeps initial keyboard focus when the author has not selected another control", async () => {
+    const frames: FrameRequestCallback[] = [];
+    const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
+    try {
+      const { host } = mount(<DecisionsPage api={stubApi()} navigate={vi.fn()} isNew />);
+      await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
+      await vi.waitFor(() => expect(frames).toHaveLength(1));
+      frames[0](0);
+      expect(document.activeElement).toBe(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name"));
+    } finally { animation.mockRestore(); }
+  });
+
+  it("retires a pending new-decision focus callback when the route changes", async () => {
+    const frames: FrameRequestCallback[] = [];
+    const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
+    try {
+      const api = stubApi(), { host, update } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
+      await vi.waitFor(() => expect(frames).toHaveLength(1));
+      update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+      await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>(".decision-metadata input")?.value).toBe(asset.name));
+      await vi.waitFor(() => expect(frames).toHaveLength(2));
+      const prior = document.activeElement;
+      frames[0](0);
+      expect(document.activeElement).toBe(prior);
+      frames[1](0);
+      expect(document.activeElement).toBe(host.querySelector("h2[tabindex]"));
+    } finally { animation.mockRestore(); }
+  });
+
   it("enables draft actions after a create navigates within the mounted editor", async () => {
     const api = stubApi(); api.backend.http.postJson.mockResolvedValue(asset as never);
     const navigate = (path: string) => update(<DecisionsPage api={api} navigate={navigate} assetId={new URL(path, "https://studio.test").searchParams.get("decision") ?? undefined} />);

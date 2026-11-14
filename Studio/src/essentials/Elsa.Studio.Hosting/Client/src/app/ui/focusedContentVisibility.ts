@@ -104,7 +104,9 @@ function createFocusObserver(document: Document) {
     const previousScrollTop = previousPadding?.element.scrollTop;
     restoreStyle(padding); padding = null;
     focused.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
-    const field = focused.closest<HTMLElement>(".studio-form-control, .studio-choice-field, label") ?? focused;
+    // Supporting help and validation belong to the reveal target as well as its border.
+    const field = focused.closest<HTMLElement>(".studio-field")
+      ?? focused.closest<HTMLElement>(".studio-form-control, label") ?? focused;
     let { port, visible, innerHeight } = geometry(field);
     if (previousPadding && previousPadding.element !== port) clearance = 0;
     if (!port || visible.bottom <= visible.top) { release(); return; }
@@ -211,7 +213,7 @@ function createFocusObserver(document: Document) {
     resize?.disconnect(); mutations.disconnect();
     const measured = new Set<HTMLElement>();
     for (const root of roots.keys()) {
-      mutations.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+      mutations.observe(root, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
       for (let parent: HTMLElement | null = root; parent; parent = parent.parentElement) {
         if (!measured.has(parent)) { resize?.observe(parent); measured.add(parent); }
       }

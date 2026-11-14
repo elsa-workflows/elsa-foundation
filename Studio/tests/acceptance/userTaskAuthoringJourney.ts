@@ -201,6 +201,11 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(runtimeTask.locator('.source[data-handleid="Approve"]')).toBeVisible();
   await expect(runtimeTask.locator('.source[data-handleid="Reject"]')).toBeVisible();
   await page.setViewportSize(projectViewport);
+  const runTitle = page.getByRole("heading", { name: `Run · ${title}`, exact: true });
+  await expect(runTitle).toBeVisible();
+  await expect(runTitle).toHaveAccessibleName(`Run · ${title}`);
+  await expect(runTitle).toHaveAttribute("title", `Run · ${title}`);
+  expect((await runTitle.boundingBox())!.height).toBeLessThanOrEqual(36);
   const runCanvas = page.getByRole("region", { name: "Workflow run canvas", exact: true });
   const outcomeLabels = runtimeTask.locator(".wf-node-port-label").filter({ hasText: /^(Approve|Reject|Unmatched)$/ });
   const renderedOutcomeFont = () => outcomeLabels.first().evaluate(element => {

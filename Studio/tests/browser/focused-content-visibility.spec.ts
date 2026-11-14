@@ -1,6 +1,51 @@
 import { expect, test } from "@playwright/test";
 import { isFieldUnobscured } from "../visibleContent";
 
+for (const appearance of ["light", "dark"]) for (const height of [600, 844]) for (const state of ["hint", "error"]) {
+  test(`keeps supporting ${state} text readable above persistent notices (${appearance}, ${height}px)`, async ({ page }, info) => {
+    await page.setViewportSize({ width: 390, height });
+    await page.goto(`/settings/feature-management?mode=settings&appearance=${appearance}&focus-notices&supporting-text=${state}`);
+    await page.evaluate(() => document.fonts.ready);
+    const field = page.getByRole("textbox", { name: "Setting 12", exact: true });
+    await field.fill("Retained supporting-text value");
+    await field.evaluate(element => (element as HTMLInputElement).setSelectionRange(3, 9));
+    for (let notice = 0; notice < 3; notice++) {
+      await page.getByRole("button", { name: "Show focus notice", exact: true }).click();
+      await expect(page.locator(".studio-toast")).toHaveCount(notice + 1);
+      await expect.poll(() => field.evaluate(isFieldUnobscured)).toBe(true);
+    }
+    const helper = page.locator(".studio-field-hint, .studio-field-error");
+    await expect(helper).toHaveText(state === "error" ? "This name is already in use. Choose a different name before saving."
+      : "Use a readable name. Supporting instructions remain available while editing this field.");
+    await page.screenshot({ path: info.outputPath("supporting-text-above-notices.png") });
+    await info.attach("supporting-text.aria.yml", { body: await page.locator("body").ariaSnapshot(), contentType: "text/yaml" });
+
+    // Refute the visibility oracle with an overlay over only the supporting message.
+    const bounds = (await helper.boundingBox())!;
+    await page.evaluate(box => {
+      const overlay = document.createElement("div"); overlay.id = "supporting-text-overlay";
+      Object.assign(overlay.style, { position: "fixed", left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px`, zIndex: "99999", background: "black" });
+      document.body.append(overlay);
+    }, bounds);
+    expect(await field.evaluate(isFieldUnobscured)).toBe(false);
+    await page.locator("#supporting-text-overlay").evaluate(element => element.remove());
+    await expect.poll(() => field.evaluate(isFieldUnobscured)).toBe(true);
+
+    await page.getByRole("button", { name: state === "error" ? "Show supporting instructions" : "Show field validation", exact: true }).click();
+    await expect(helper).toHaveClass(state === "error" ? "studio-field-hint" : "studio-field-error");
+    await expect.poll(() => field.evaluate(isFieldUnobscured)).toBe(true);
+    await page.setViewportSize({ width: 390, height: height === 600 ? 844 : 600 });
+    await expect.poll(() => field.evaluate(isFieldUnobscured)).toBe(true);
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue("Retained supporting-text value");
+    expect(await field.evaluate(element => [(element as HTMLInputElement).selectionStart, (element as HTMLInputElement).selectionEnd])).toEqual([3, 9]);
+    while (await page.locator(".studio-toast").count()) await page.getByRole("button", { name: "Dismiss notification", exact: true }).first().click();
+    await expect.poll(() => page.locator(".content").evaluate(element => (element as HTMLElement).style.paddingBlockEnd)).toBe("");
+    await field.focus();
+    await expect.poll(() => field.evaluate(isFieldUnobscured)).toBe(true);
+  });
+}
+
 for (const appearance of ["light", "dark"]) for (const height of [600, 844]) {
   test(`keeps the last Settings field clear of wrapped persistent toasts (${appearance}, ${height}px)`, async ({ page }, info) => {
     await page.setViewportSize({ width: 390, height });
