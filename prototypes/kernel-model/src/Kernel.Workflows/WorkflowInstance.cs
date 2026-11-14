@@ -46,7 +46,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             var result = new TurnOutcome(input.Actor) { Row = next, Expected = row.Revision, Revision = next.Revision,
                 Status = row.Status, Consumed = [.. input.Taken], Journal = Journal(row.History, [unavailable]) };
             foreach (var item in input.Taken.Where(d => reader.HandlesMetadata(d.Message)))
-                if (item.Message.ReplyTo is { } route) result.Replied.Add(new(item.Message.Id, route, Request.Response, unavailable));
+                result.ReplyTo(item, unavailable);
             return result;
         }
         if (row is { Status: not InstanceStatus.Running } &&
@@ -134,8 +134,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             Row = next, Expected = row.Revision, Consumed = [item], Status = next.Status, Revision = next.Revision, Unsubscribe = running,
             Journal = Journal(row.History, ["terminated"]),
             Sent = children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id), Kinds.Terminate, Sender: instance,
-                TargetCreation: child.Creation > 0 ? child.Creation : null)).ToList(),
-            Cancelled = (row.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : []).Select(key => Worker.TicketId(instance, key, row.Creation)).ToList(),
+                TargetCreation: child.Creation > 0 ? child.Creation : null, SenderCreation: row.Creation).AsIssued()).ToList(),
+            Cancelled = (row.Jobs is { } jobs ? DurableKeyJson.ReadKeys(jobs) : []).Select(key => InboxKey.Ticket(instance, key, row.Creation)).ToList(),
         };
         foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));
@@ -148,8 +148,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     /// <summary>The parent's notice that a child ended.</summary>
     internal static Message Finished(InstanceRow row, string? output) =>
-        new($"{Origin(row)}#{row.Revision}.end", new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
-            TargetCreation: row.ParentCreation > 0 ? row.ParentCreation : null);
+        new Message($"{Origin(row)}#{row.Revision}.end", new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
+            TargetCreation: row.ParentCreation > 0 ? row.ParentCreation : null, SenderCreation: row.Creation).AsIssued();
 
     private static string Origin(InstanceRow row) => CreationProtocol.Origin(row.Id, row.Creation);
 }
