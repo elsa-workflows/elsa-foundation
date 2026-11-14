@@ -3,7 +3,7 @@ param([Parameter(Mandatory)][string] $EvidenceDirectory)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/_Assertions.ps1"
 $receipt = Get-Content (Join-Path $EvidenceDirectory 'receipt.json') -Raw | ConvertFrom-Json -AsHashtable
-if ($receipt.status -ne 'passed' -or @($receipt.cases).Count -ne 5) { throw 'Controls require a real complete five-family receipt' }
+if ($receipt.status -ne 'passed' -or @($receipt.cases).Count -ne 4 -or @($receipt.undeclaredRequests | Where-Object status -eq passed).Count -ne 2) { throw 'Controls require a real complete four-runtime/two-refusal receipt' }
 foreach ($case in $receipt.cases) { Assert-CommittedText $case.runtime.committedInput $case.expected }
 $refused = $false
 try { Assert-CommittedText $receipt.cases[0].runtime.committedInput 'WRONG-SENTINEL' } catch { $refused = $true; Write-Host "Expected negative committed-input control: $_" }

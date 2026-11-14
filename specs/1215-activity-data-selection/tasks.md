@@ -235,7 +235,7 @@ catalog/member choice but exposed long canonical type labels squeezing source na
 wrapped type notes address that observed issue. That exploratory run is not accepted proof; final composed proof
 must use the corrected committed head. No task completion or runtime success is claimed from these source fixes.
 
-#4309 S4 recoverable checkpoint (partial; T024 remains unchecked): the opt-in backend REST journey and
+#4309 S4 recoverable checkpoint13Nov (historical; superseded by owner resume below; T024 remains unchecked): the opt-in backend REST journey and
 single-object Customer test fixture live in `e2e-tests/activity-data-selection/`. Ordinary Workbench builds
 and MemberReads defaults are unchanged. Exploratory runs against merged S3 base `06d61975` plus uncommitted
 proof files observed canonical save/reopen/publication and committed consumer inputs for typed activity
@@ -252,6 +252,18 @@ of this checkpoint commit. This lane explicitly requires PowerShell 7.3+ and Pyt
 or Windows-run success claim. All owned hosts are stopped. Final source/head qualification, independent
 review, S5 composed acceptance and the broader source/recovery/editor tasks remain pending. No T024, P1
 or program-completion box is closed here.
+
+#4309 S4 owner-resume source receipt14Nov (still partial): the owner chose explicit workflow inputs and
+removal of the undeclared-request proposal. Discovery/admission/publication now require declared input
+names for workflow request reads, including whole/member/legacy-path forms; reusable input keys remain
+closed to their own boundary. Studio removes the proposal/host flag and preserves unsupported authored
+references with a declare-input problem and explicit Replace/Clear. No runtime validator relaxation,
+inferred public declaration, hidden rewrite or legacy artifact migration is introduced. The permanent REST
+lane retains four positive runtimes and adds undeclared-root discovery, preserved draft payloads, snapshot
+publication compiler refusal, promotion refusal and scoped no-write checks. New owning source tests cover
+these boundaries; final frozen-head whole project checks, real REST/composed UI proof and independent
+reviews remain required. Earlier checkpoint observations retain their original failed/dirty-base status.
+This receipt does not mark full T024/T025, spec1215 or the program complete.
 
 **Checkpoint:** US1 passes actual persisted journeys; #3094 can close only on its narrower own evidence.
 Whole-output UI completion does not close nested binding/runtime obligations.

@@ -28,14 +28,17 @@ function Api([string] $Path, [string] $Method = 'Get', $Body = $null) {
     Invoke-RestMethod @args
 }
 function Canonical($Value) { ConvertTo-Json -InputObject $Value -Depth 100 -Compress }
-function Member-Offer($Draft, $Source, [array] $Path) {
-    $answer = Api '/design/workflows/activity-data/context' 'Post' @{
+function Get-Context($Draft, $Source, [array] $Path) {
+    Api '/design/workflows/activity-data/context' 'Post' @{
         contractVersion = '1'; definitionId = $Draft.definitionId; draftId = $Draft.id
         expectedBaseRevision = $Draft.authoringRevision; documentRevision = [guid]::NewGuid().ToString()
         nodeId = 'consumer'; inputKey = 'text'; snapshot = $Draft.state
         query = @{ includeSources = $true; skip = 0; take = 100; source = $Source; memberPath = $Path
             shapeLimits = @{ maximumDepth = 4; maximumMembers = 128 } }
     }
+}
+function Member-Offer($Draft, $Source, [array] $Path) {
+    $answer = Get-Context $Draft $Source $Path
     Assert-That ($answer.state -eq 'supported' -and $answer.analysis.memberReadsEnabled -eq $true) 'Expected supported member analysis'
     $offers = @($answer.analysis.sources | Where-Object { $null -ne $_.binding -and $_.binding.expressionType -like '*Member' })
     Assert-That ($offers.Count -eq 1) "Expected one canonical focused member offer; got $($offers.Count)"
@@ -91,8 +94,7 @@ try {
         @{name='result';expected='cust-1042';path=@('customerId');source=@{expressionType='ActivityResult';value=@{producerNodeId='producer';projectionKey='Customer';isOptional=$false}}},
         @{name='inner-variable';expected='inner-id';path=@('a.b','');scope='root'},
         @{name='outer-variable';expected='outer-id';path=@('a.b','');scope='workflow'},
-        @{name='declared-request';expected='declared-id';path=@('a.b','');request='payload'},
-        @{name='open-request';expected='open-id';path=@('a.b','');request='requestPayload'}
+        @{name='declared-request';expected='declared-id';path=@('a.b','');request='payload'}
     )
     foreach ($plan in $plans) {
         $rootId = "root-$([guid]::NewGuid().ToString('N'))"
@@ -132,6 +134,9 @@ try {
     # A previous valid publication makes every scoped no-write filter a positive control.
     $result = $receipt.cases[0]
     $draft = Api "/design/workflows/drafts/$($result.draftId)"
+    $rootContext = Get-Context $draft $null @()
+    Save-Json 'no-input-root-discovery' $rootContext
+    Assert-That (@($rootContext.analysis.sources | Where-Object {$_.binding.expressionType -in @('WorkflowRequest','WorkflowRequestMember')}).Count -eq 0) 'A workflow without input declarations must not discover request roots'
     $bad = Member-Offer $draft @{expressionType='ActivityResult';value=@{producerNodeId='producer';projectionKey='$result';isOptional=$false}} @('customer')
     Save-Json 'typefit-analysis' $bad.answer
     $null = Save-Binding $draft $bad.offer.binding
@@ -147,6 +152,37 @@ try {
     Save-Json 'publication-after' $after
     Assert-PublicationUnchanged $before $after
     $receipt.publicationRefusal = @{status='passed';code=$problem.errorCode;fingerprintsUnchanged=$true}
+    # Existing unsupported authored values remain saved; the compiler and promotion gate refuse them.
+    $receipt.undeclaredRequests = @()
+    foreach ($kind in @('WorkflowRequest', 'WorkflowRequestMember')) {
+        $draft = Api "/design/workflows/drafts/$($result.draftId)"
+        $legacy = @{expressionType=$kind;value=@{memberKey='requestPayload';futureField=@{preserved=$true}}}
+        $path = @()
+        if ($kind -eq 'WorkflowRequestMember') { $legacy.value.memberPath=@('a.b',''); $path=@('a.b','') }
+        else { $legacy.value.path=$null }
+        $null = Save-Binding $draft $legacy
+        $reopened = Api "/design/workflows/drafts/$($draft.id)"
+        Assert-That ($reopened.state.rootActivity.structure.payload.activities[-1].inputs[0].value.expressionType -ceq $legacy.expressionType -and (Canonical $reopened.state.rootActivity.structure.payload.activities[-1].inputs[0].value.value) -ceq (Canonical $legacy.value)) 'Unsupported authored reference was changed'
+        $context = Get-Context $reopened @{expressionType='WorkflowRequest';value=@{memberKey='requestPayload';path=$null}} $path
+        Save-Json "undeclared-$kind-context" $context
+        Assert-That ($context.state -eq 'invalid' -and @($context.analysis.sources).Count -eq 0 -and @($context.analysis.findings | Where-Object type -eq 'ActivityData/UnknownInput').Count -gt 0) 'Undeclared request must have a finding and no focused canonical offer'
+        $before = Read-Snapshot $result.definitionId $result.rootNodeId
+        $preflightBody = @{definitionId=$result.definitionId;state=$reopened.state;layout=@($reopened.layout | Where-Object {$null -ne $_})}
+        $response = Invoke-WebRequest "$BaseUrl/publishing/workflows/preflight" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body (Canonical $preflightBody) -SkipHttpErrorCheck
+        $problemText = if ($response.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($response.Content) } else { $response.Content }
+        $problem = $problemText | ConvertFrom-Json -AsHashtable
+        Save-Json "undeclared-$kind-preflight" @{statusCode=[int]$response.StatusCode;problem=$problem}
+        Assert-That ($response.StatusCode -eq 400 -and $problem.errorCode -eq 'activity-data.invalid' -and @($problem.diagnostics | Where-Object code -eq 'ActivityData/UnknownInput').Count -gt 0) 'Actual publication compiler must reject undeclared requests'
+        $promotion = Invoke-WebRequest "$BaseUrl/design/workflows/drafts/$($draft.id)/promote" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body '{}' -SkipHttpErrorCheck
+        Assert-That ($promotion.StatusCode -eq 409) 'Promotion must preserve the invalid-draft gate'
+        $after = Read-Snapshot $result.definitionId $result.rootNodeId
+        Save-Json "undeclared-$kind-before" $before
+        Save-Json "undeclared-$kind-after" $after
+        Assert-PublicationUnchanged $before $after
+        $unchanged = Api "/design/workflows/drafts/$($draft.id)"
+        Assert-That ($unchanged.state.rootActivity.structure.payload.activities[-1].inputs[0].value.expressionType -ceq $legacy.expressionType -and (Canonical $unchanged.state.rootActivity.structure.payload.activities[-1].inputs[0].value.value) -ceq (Canonical $legacy.value)) 'Refusal rewrote the authored value'
+        $receipt.undeclaredRequests += @{kind=$kind;status='passed';authoredBinding=$legacy;compilerStatus=400;promotionStatus=409;fingerprintsUnchanged=$true}
+    }
     Restart-OwnedElsaServer
     $receipt.ownedProcessIds += $script:OwnedElsaServer.Process.Id
     $receipt.restart = 'passed-after-save-and-publish-before-execution'

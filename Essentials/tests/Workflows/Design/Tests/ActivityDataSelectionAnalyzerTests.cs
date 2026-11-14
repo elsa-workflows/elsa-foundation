@@ -195,16 +195,14 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
     }
 
     [Fact]
-    public async Task Only_legacy_workflow_requests_are_open_when_no_input_contract_is_declared()
+    public async Task Workflow_requests_are_closed_even_when_no_inputs_are_declared()
     {
         using var provider = Provider();
         var document = Document(Sequence(Node("consumer"))) with { ResourceKind = "Workflow" };
         var query = new ActivityDataSelectionQuery { Source = new(JsonSerializer.SerializeToElement(new { memberKey = "legacy", path = "CustomerId" }), "WorkflowRequest") };
         var result = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query);
-        Assert.Empty(result.Findings);
-        var source = Assert.Single(result.Sources);
-        Assert.Equal(ActivitySerializedShapeState.Unknown, source.Shape.State);
-        Assert.Null(source.Shape.Type);
+        Assert.Equal("ActivityData/UnknownInput", Assert.Single(result.Findings).Type);
+        Assert.Empty(result.Sources);
         var closed = await Analyzer(provider).AnalyzeAsync(document with { ResourceKind = "ActivityDefinition" }, new("consumer", "CustomerId"), query);
         Assert.Contains(closed.Findings, finding => finding.Type == "ActivityData/UnknownInput");
         var stable = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"), query with
