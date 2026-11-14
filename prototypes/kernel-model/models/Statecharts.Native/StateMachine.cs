@@ -3,8 +3,8 @@ using Kernel.Native;
 
 namespace Kernel.Statecharts.Native;
 
-public sealed record PhaseProgress(int[][] Requires, bool[] Done, Dictionary<string, int> Running);
-public sealed record MachineState(string[] Active, Reaction? Pending, int Cursor = 0, string? Child = null,
+internal sealed record PhaseProgress(int[][] Requires, bool[] Done, Dictionary<string, int> Running);
+internal sealed record MachineState(string[] Active, Reaction? Pending, int Cursor = 0, string? Child = null,
     PhaseProgress? Progress = null, int Version = 1);
 
 public sealed class StateMachine : CompositeActivity, ISignalledComposite
