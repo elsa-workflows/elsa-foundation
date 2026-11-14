@@ -31,6 +31,11 @@ The atomic writer persists the operation marker in the same transaction as stage
 version, draft, and layout changes. Replays and marker-race losers do not publish duplicate
 post-commit lifecycle events.
 
+Headless submit runs the composed `DraftValidationGate` before staging its definition, draft, version or layouts.
+Blocking findings raise `DraftHasValidationErrorsException`, as promotion does; warning-only results pass.
+Validation runs inside the atomic stage, so a refused submit writes no authored rows or operation marker,
+while an already-committed operation replays without revalidating its original state against new rules.
+
 Promotion takes the `WorkflowDraftStateHash` of the draft its caller read and admitted (spec 188, research R7). Under
 the promotion lock, before any row is added, `EfPromoteDraftToVersionCommand` compares it with the hash of the draft it
 reads there and throws `WorkflowDraftChangedException` when they differ, so a promotion writes exactly the content its
