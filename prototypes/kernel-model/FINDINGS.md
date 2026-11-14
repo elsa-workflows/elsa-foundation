@@ -1156,6 +1156,74 @@ Every flaw is still caught within 20,000 seeds.
 
 **Not done:** the owner on another node still cannot tell a waiting node it was lost (504 at the deadline, as before).
 
+### 25.10 State size: the benchmark (decision 10, first part). Run
+
+**What changed.** The EF cost run (`$EFR x cost`) ends with a state-size table. A new benchmark model (`Blob`, in
+`ef/Kernel.Ef.Run/EngineRun.cs`) holds a state of N kilobytes of lowercase letters from a fixed seed. Compression
+has not been measured; this alphabet is compressible. The instance changes its state at each turn and ends each
+turn with a message to itself, so each of its ten commits rewrites the whole state (the Durable shape of the cost run's other rows, a commit
+per turn).
+
+For N = 1, 10, 100 and 1,000 (`sizes=` to choose) the table prints:
+- the characters per commit, from the verified persisted state's JSON, including any configured `pad=` (on SQL
+  Server's `nvarchar` that is two bytes each);
+- the counted round trips per commit, counted as the rest of the run counts them;
+- the median of three runs of the milliseconds per commit.
+
+The final `check` line reports total instances across the cost run, unfinished instances, pending messages and the
+partition position. Each Blob trial separately verifies its persisted final row and landed commits; Full and State
+history also require the exact journal revision sequence, as described below.
+
+**Historical measurements before the per-trial acceptance checks below.** The reported round trips stayed flat as
+state grew. These tables are retained as historical evidence. The milliseconds come from one session on a machine
+shared with other sessions' runs, with SQL Server under amd64 emulation, so they are only indicative:
+
+| Engine, fence | Counted per commit | ms per commit at 1 / 10 / 100 / 1,000 KB |
+|---|---|---|
+| PostgreSQL 17, batch | 2 | 3.2 / 3.2 / 4.8 / 8.2 |
+| PostgreSQL 17, checked | 3 | 3.7 / 2.9 / 5.0 / 9.6 |
+| SQLite (WAL), batch | 7.7 | 1.4 / 1.4 / 2.0 / 3.9 |
+| SQLite (WAL), checked | 7.7 | 1.6 / 1.2 / 1.5 / 3.9 |
+| SQL Server 2022 (RCSI), default (checked) | 4 | 7.3 / 7.1 / 20.1 / 36.4 |
+| MySQL 8.4, default (batch) | 3 | 5.8 / 5.2 / 7.5 / 19.3 |
+
+The characters per commit are 1,044, 10,260, 102,420 and 1,024,020. Below 100 KB the differences are small and not
+monotonic run to run. At 1 MB a commit costs about two to three times a 1 KB one on PostgreSQL and SQLite, three times
+on MySQL, and five times on SQL Server (whose 1 MB state is about 2 MB on the wire).
+
+An earlier run with a state of one repeated letter, which PostgreSQL compresses, gave about the same PostgreSQL
+figures (8.3 to 8.7 ms at 1 MB). In that run MySQL's 100 KB median (32.8 ms) was above its 1 MB median (18.9 ms),
+which is unexplained, and it did not recur here.
+
+**Per-trial acceptance checks (13 November integration).** Each of the three trials must have its start accepted,
+land exactly ten commits writing ten instance rows, and persist a Finished row at revision 10 with `Left=0` and the
+requested payload length. The effective requested history (the target override, when present, otherwise the start
+specification) is carried separately into verification and must match the persisted row. At Full or State history
+its persisted journal must contain exactly revisions 1–10, each with `[]` because Blob records no entries;
+Minimal must contain no journal rows. The clock
+and command counts are captured before the verification reads. A refused or incomplete trial fails the run instead
+of printing a successful per-commit number. `sizes=` is validated for positive integer kilobytes and checked byte
+multiplication before constructing the target, starting a proxy or resetting the database. This is CLI input
+validation, not a kernel state-size limit.
+
+`$EFR x size-check` runs the real in-memory Worker: ten-commit Full and Minimal positives, including padded states;
+owner-declined start, accepted start with commits omitted, nine commits, and a missing persisted journal revision as negative controls;
+and invalid size inputs. The extracted original trial accepted all four incomplete outcomes in the red baseline.
+After the 13 November checks, all nine groups passed. The 14 November repair adds ten groups, including target
+overrides at all three levels, and ten-real-commit negative controls that replace requested Full with Minimal plus
+zero journal rows and requested Minimal with Full plus ten journal rows. Both wrong-policy controls were accepted
+before the independent oracle. Additional controls reject an unexpected Minimal journal row and incorrect Full or
+State entries. Fresh SQLite cost runs at 1/10/100/1,000 KB passed with both fences (three
+trials per size, ten commits each); their counted work remains 7.7 per commit. A Minimal-history 1 KB run also
+passes. Zero, negative, overflow and mixed invalid CLI inputs exit 2 while an existing database sentinel remains
+unchanged. A follow-up `sizes=1 pad=1024` run originally printed 1,044 characters while SQLite held 2,077; the
+size column now uses the existing post-measurement verification read. Padded Full and Minimal runs with both
+SQLite fences report the actual 2,077-character state. Other engines were not rerun for this validation-only
+integration.
+
+**Not done in this benchmark:** values by reference (the second part of decision 10). This benchmark does not choose
+an inline threshold, retention policy or host default; "segments only if measurements show the need".
+
 ## 26. Round 4: the graph engine. Run
 
 The owner's decision of 12 November (design sketch draft 5, "Containers and their semantics"): the native model stays
