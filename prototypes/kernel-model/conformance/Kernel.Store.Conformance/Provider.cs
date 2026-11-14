@@ -26,6 +26,11 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// <summary>The store the workers use. Its connections are the ones <see cref="KillAsync"/> breaks.</summary>
     public abstract IKernelStore Store { get; }
 
+    public virtual bool CaseEquivalentTopic => false;
+    public virtual bool ProbeUnpairedTopicUnits => Store is InMemoryStore;
+    public virtual bool LargeEventKey => false;
+    public virtual string? LargestInboxId => null;
+
     /// <summary>
     /// A store on its own client (its own connections), for the outside world and for reading the end state. Each call
     /// may return a new client, so that adds come "from another node".

@@ -113,6 +113,7 @@ public sealed class TurnInput
     internal TurnInput(Worker worker, Slot slot, string actor, List<Delivery> taken, int from, StartSpec? spec)
     {
         _worker = worker;
+        ChildIds = worker.ChildIds;
         _services = worker.ServicesFor(slot);
         Slot = slot;
         Actor = actor;
@@ -121,8 +122,11 @@ public sealed class TurnInput
         Spec = spec;
     }
 
+    internal ChildIssuer ChildIds { get; }
     internal Slot Slot { get; }
     public string Actor { get; }
+    public bool IsSelf(Message delivery, string? address) => address == Actor || address == delivery.Target.Id ||
+        address is not null && (Slot.Aliases?.Contains(address) == true || Slot.SelfReferences?.GetValueOrDefault(address) == true);
     public InstanceRow? Row => Slot.CurrentRow;
     public InstanceRow? Previous => Slot.Row;
     public long Creation => Row?.Creation ?? Spec?.Creation?.Generation ?? 0;
@@ -215,6 +219,7 @@ public sealed class DurableTurn
     private readonly HashSet<SubscriptionRow> _kept = [];
     private readonly List<string> _jobs, _cancelled = [];
     private int _ordinal;
+    private CommitWindow? _window;
 
     public DurableTurn(TurnInput input)
     {
@@ -245,6 +250,13 @@ public sealed class DurableTurn
     private string Origin => CreationProtocol.Origin(Id, _input.Creation);
     private ITurnServices Services => _input.Services;
 
+    /// <summary>All authorized decisions in this turn must still hold when the database commits.</summary>
+    public void RequireWindow(long fromInclusive, long untilExclusive)
+    {
+        var next = new CommitWindow(fromInclusive, untilExclusive);
+        _window = _window?.Intersect(next) ?? next;
+    }
+
     public void Emit(string channel, object? item) => _emitted.Add((channel, item));
 
     public void Reply(Message request, string channel, object? item)
@@ -252,6 +264,20 @@ public sealed class DurableTurn
         if (!Inbox.Contains(request) || _held.Contains(request.Id) || _replied.Any(r => r.Message == request.Id))
             throw new InvalidOperationException("Reply must name one consumed request of this turn, once.");
         if (request.ReplyTo is { } to) _replied.Add(new(request.Id, to, channel, item));
+    }
+
+    /// <summary>Answer a volatile RPC through the committed per-request reply pipeline. Other deliveries use their
+    /// own reply contract. A fresh attempt after transport failure can recover the committed decision.</summary>
+    public bool HasRequestRoute(Message request) => _input.Taken.Any(i => ReferenceEquals(i.Message, request) && i.RequestAddress is not null);
+
+    public bool TryReply(Message request, object? item)
+    {
+        var delivery = _input.Taken.FirstOrDefault(i => ReferenceEquals(i.Message, request));
+        if (delivery?.RequestAddress is not { } to) return false;
+        if (_held.Contains(request.Id) || _replied.Any(r => r.Message == request.InboxKey))
+            throw new InvalidOperationException("An RPC reply must consume its request once.");
+        _replied.Add(new RequestReply(request.InboxKey, to, Request.Response, item) { Rpc = true });
+        return true;
     }
 
     public bool Redelivered(Message message) => !Services.Has(Flaw.HideDeliveryHistory) && (_input.Taken.FirstOrDefault(i => i.Message.Id == message.Id)?.Again ?? false);
@@ -274,6 +300,15 @@ public sealed class DurableTurn
 
     /// <summary>The last message sent goes to an actor whose id was just minted in this partition: it cannot exist, so no read.</summary>
     public void Fresh() => _fresh.Add(_sent[^1].Id);
+
+    /// <summary>The terminal notification, addressed under this actor and revision.</summary>
+    public void AddTerminalNotice(Message message)
+    {
+        Kinds.RequireApplicationSend(message.Kind);
+        if (message.Sender != Id || message.Id != $"{Origin}#{Revision}.end")
+            throw new ArgumentException("A terminal notice must use its issuing actor and revision.", nameof(message));
+        _sent.Add((message with { SenderCreation = _input.Creation }).AsIssued());
+    }
 
     public void Recall(string message)
     {

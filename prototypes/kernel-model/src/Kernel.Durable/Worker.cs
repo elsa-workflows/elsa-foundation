@@ -89,6 +89,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly IActorType _type;
     private readonly WorkerOptions _options;
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
     private readonly Dictionary<InboxKey, Delivery> _items = [];    // every message held, by id
     private readonly List<Delivery> _meets = [];
     private readonly HashSet<InboxKey> _cancelling = [];        // tickets of jobs cancelled by a commit in flight
@@ -125,6 +126,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public string Node { get; }
     public int Partition { get; }
     public long Epoch { get; private set; }
+    internal ChildIssuer ChildIds { get; private set; } = null!;
     public long Position { get; private set; }
     public bool Owns => Epoch != 0;
     public long Evicted { get; private set; }
@@ -345,6 +347,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Observe(lease.Now);
         _renewed = lease.Now;
         Epoch = lease.Epoch;
+        ChildIds = new(Partition, Epoch);
         Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         Position = lease.Position;
         _mine.Add(lease.Epoch);
@@ -722,6 +725,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Evict();
     }
 
+    private string Canonical(string target) => _aliases.GetValueOrDefault(target, target);
+
+    private void RemoveSlot(string key)
+    {
+        if (_slots.Remove(key, out var slot) && slot.Aliases is { } aliases)
+            foreach (var alias in aliases) _aliases.Remove(alias);
+    }
+
     // ---- turns ---------------------------------------------------------------------------------------------------
 
     /// <summary>
@@ -830,6 +841,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     internal void Started(string instance, IReadOnlyList<Message> inbox) => _options.OnTurn?.Invoke(new InstanceRef(instance), inbox, Now);
 
     // ---- background jobs -------------------------------------------------------------------------------------------
+
+    private void PublishJobEligibility(Slot slot)
+    {
+        var current = slot.CurrentRow;
+        Volatile.Write(ref slot.ActiveCreation, current?.Creation ?? -1);
+        Volatile.Write(ref slot.RunnableCreation, current is { Status: InstanceStatus.Running } && !Withheld(slot) ? current.Creation : -1);
+    }
 
     private void StartJob(Delivery ticket)
     {
@@ -1326,6 +1344,10 @@ public sealed class TrialGate
 
 internal sealed class Slot
 {
+    public int PendingReferences;
+    public Dictionary<string, bool>? SelfReferences; // exact provider equality only, held for the slot lifetime
+    public HashSet<string>? Aliases; // resolved database spellings, retained only while this slot is cached
+    public long RunnableCreation = -1; // checked at physical entry, including after waiting on a scheduler
     public long ActiveCreation;    // volatile latch captured by background drivers; retired/missing is -1
     public InstanceRow? Row;        // committed actor row or retired lifecycle predecessor
     public InstanceRow? CurrentRow => Row is { Retired: false } row ? row : null;
@@ -1344,6 +1366,6 @@ internal sealed class Slot
     public object? Pending;                         // the history its turns in memory left, the actor type's
 }
 
-internal sealed record JobTicket(string Model, string Key, string? Arguments);
+internal sealed record JobTicket(string Model, [property: System.Text.Json.Serialization.JsonConverter(typeof(DurableKeyJson))] string Key, string? Arguments);
 
 internal sealed record JobContext(InstanceRef Instance, string Key, string? Arguments, long Creation = 0) : IJob;
