@@ -12,7 +12,7 @@ public interface IActorType
     bool SingleMessage(Message message) => false;
 
     /// <summary>Whether this delivery must be dispatched alone for the current committed row.</summary>
-    bool SingleMessage(InstanceRow? row, Delivery delivery) => false;
+    bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) => SingleMessage(delivery.Message);
 
     /// <summary>The actor cannot be given its messages now; commands still pass. Suspended, say.</summary>
     bool Withholds(InstanceRow row, ITurnServices services);

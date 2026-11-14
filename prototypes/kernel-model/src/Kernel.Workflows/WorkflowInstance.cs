@@ -12,8 +12,9 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 {
     private readonly Dictionary<string, IExecutionModel> _models = models.ToDictionary(m => m.Key, StringComparer.Ordinal);
     public bool SingleMessage(Message message) => message.Kind == WorkflowKinds.ChildFinished;
-    public bool SingleMessage(InstanceRow? row, Delivery delivery) => row is { Status: not InstanceStatus.Running } &&
-        delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.Job;
+    public bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) =>
+        row is { Status: not InstanceStatus.Running } && delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.Job ||
+        row is { Creation: > 0 } && SingleMessage(delivery.Message);
 
     /// <summary>
     /// A running instance is suspended, or its row was written by a newer version of its model than this node has (finding F14: an older model
