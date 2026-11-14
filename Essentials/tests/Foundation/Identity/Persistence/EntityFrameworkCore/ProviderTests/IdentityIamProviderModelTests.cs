@@ -21,7 +21,8 @@ public sealed class IdentityIamProviderModelTests
         var migrations = context.Database.GetMigrations().ToArray();
         Assert.Collection(migrations,
             migration => Assert.EndsWith("_Initial", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_IssuerQualifiedExternalLogins", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_IssuerQualifiedExternalLogins", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_QualifiedLinkSessionBinding", migration, StringComparison.Ordinal));
         var script = context.GetService<IMigrator>().GenerateScript(migrations[0], migrations[^1]);
         Assert.Contains("identity_external_logins", script, StringComparison.Ordinal);
         Assert.Contains("Issuer", script, StringComparison.Ordinal);
