@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Cluster.Readability;
 using CShells;
+using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
@@ -247,6 +248,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Services.AddAuthentication(AuthenticationScheme).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(AuthenticationScheme, _ => { });
             builder.Services.AddAuthorization();
             builder.Services.AddCShellsAspNetCore(shells => shells
+                .WithAuthorization()
                 .WithAssemblies(
                     typeof(Elsa.Foundation.Identity.FoundationIdentityAbstractionsFeature).Assembly,
                     typeof(PrimitivesFeature).Assembly,
@@ -296,9 +298,11 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                 .WithConfigurationProvider(configuration));
 
             var app = builder.Build();
+            app.MapShells();
+            // Select the shell before authentication/authorization resolve its services. Explicit calls
+            // also prevent WebApplication from automatically inserting root auth before ShellMiddleware.
             app.UseAuthentication();
             app.UseAuthorization();
-            app.MapShells();
             await app.StartAsync();
             IShell shell;
             try
