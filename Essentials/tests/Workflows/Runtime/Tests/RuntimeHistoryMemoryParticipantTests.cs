@@ -160,6 +160,33 @@ public sealed class RuntimeHistoryMemoryParticipantTests
         Assert.Single(f.Store.ListCommits());
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Optional_gap_owner_requires_the_same_native_writer_even_without_workflow_replacement(bool coherent)
+    {
+        var optional = new RuntimeHistoryCapturePolicy(Policy.PolicyId, Policy.Version, false, Policy.SupportedKinds);
+        var f = await Fixture.Create(optional); var start = Batch("optional-start", starts: true);
+        await f.Store.CommitAsync(Commit("initial", [new(optional, start.LogicalCheckpointId, start.OccurredAt, true, start.Candidates)]), Immediate);
+        var before = await f.Reader.FindHeadAsync("run"); Assert.NotNull(before);
+        var writer = coherent ? f.Store : new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: new InMemoryWorkflowExecutionStateStore(), state: f.State,
+            persistenceAccessContextAccessor: f.Access, timeProvider: f.Clock, rootWriteLeaseManager: new Lease());
+        Assert.Equal(coherent, ((IRuntimeCheckpointCommitStore)writer).SupportsHistory);
+        var gap = Commit("gap-only", null);
+        if (!coherent)
+        {
+            await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(async () => await writer.CommitAsync(gap, Immediate));
+            Assert.Equal(before, await f.Reader.FindHeadAsync("run")); Assert.Single(f.Store.ListCommits());
+        }
+        else
+        {
+            await writer.CommitAsync(gap, Immediate); var head = await f.Reader.FindHeadAsync("run");
+            Assert.True(head!.HasGaps); Assert.Equal(before.LastSequence, head.LastSequence);
+            await writer.CommitAsync(gap, Immediate);
+            Assert.Equal(head, await f.Reader.FindHeadAsync("run")); Assert.Equal(2, f.Store.ListCommits().Count);
+        }
+    }
+
     [Fact]
     public async Task Writer_qualification_requires_exact_state_native_owner_and_access_accessor()
     {
