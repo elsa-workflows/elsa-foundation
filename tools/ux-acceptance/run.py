@@ -40,6 +40,9 @@ CAPTURES = {
     'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control', 'capability-reference'],
     'choose nested activity data': ['reference', 'customer-sources', 'customer-members', 'customer-reference', 'customer-code-reopened', 'customer-flowchart', 'customer-held', 'customer-loading', 'customer-retry', 'customer-320'],
     'choose declared and scoped activity data': ['reference', 'source-groups', 'variable-literal', 'variable-empty', 'variable-reference', 'outer-variable-reference', 'declared-reference', 'unsupported-request', 'request-repaired', 'no-request-proposal', 'source-320'],
+    'insert JavaScript activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
+    'insert Liquid activity data': ['reference', 'expression-sources', 'expression-cancelled', 'expression-history', 'expression-expanded', 'expression-escaped-member', 'expression-transformed', 'expression-reopened', 'expression-completed', 'expression-320'],
+    'preserve expression data without optional modules': ['reference', 'missing-javascript', 'missing-javascript-reopened', 'missing-liquid', 'missing-liquid-reopened', 'missing-native-control', 'missing-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
     'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes-initial', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
     'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
@@ -62,7 +65,10 @@ CAPTURES['native dashboard questions and sharing'] += (
 )
 JOURNEYS = set(CAPTURES)
 MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped activity data'}
-DATA_JOURNEYS = MEMBER_JOURNEYS | {'choose data for activity outputs'}
+EXPRESSION_JOURNEYS = {'insert JavaScript activity data', 'insert Liquid activity data'}
+MINIMAL_ONLY_JOURNEYS = {'preserve expression data without optional modules'}
+NORMAL_JOURNEYS = JOURNEYS - MINIMAL_ONLY_JOURNEYS
+DATA_JOURNEYS = MEMBER_JOURNEYS | {'choose data for activity outputs'} | EXPRESSION_JOURNEYS | MINIMAL_ONLY_JOURNEYS
 COMPOSITIONS = {'normal', 'minimal', 'default-off'}
 
 
@@ -71,13 +77,17 @@ def selected_journeys(journeys=None, composition='normal'):
         raise ValueError('Nonnormal composition requires explicit journeys')
     if journeys is not None and not isinstance(journeys, str) and len(journeys) != len(set(journeys)):
         raise ValueError('Duplicate journey selections')
-    selected = JOURNEYS if journeys is None else {journeys} if isinstance(journeys, str) else set(journeys)
+    selected = NORMAL_JOURNEYS if journeys is None else {journeys} if isinstance(journeys, str) else set(journeys)
     if not selected or not selected <= JOURNEYS or composition not in COMPOSITIONS:
         raise ValueError('Unknown or empty journey/composition inventory')
     if composition != 'normal' and not selected <= DATA_JOURNEYS:
         raise ValueError('Minimal/default-off composition requires explicit activity-data journeys')
-    if composition == 'default-off' and selected != {'choose data for activity outputs'}:
+    if composition == 'normal' and selected & MINIMAL_ONLY_JOURNEYS or composition == 'minimal' and selected & EXPRESSION_JOURNEYS:
+        raise ValueError('Journey requires its actual installed-module composition')
+    if composition == 'default-off' and selected not in ({'choose data for activity outputs'}, {'choose data for activity outputs', 'insert JavaScript activity data'}):
         raise ValueError('Default-off requires the whole-output control; member journeys cannot be skipped')
+    if composition == 'minimal' and selected & MINIMAL_ONLY_JOURNEYS and 'choose data for activity outputs' not in selected:
+        raise ValueError('Minimal preservation requires the actual whole-output mapping control')
     return selected
 
 
@@ -97,6 +107,8 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
+    **{journey: {'activity-data-proof.json', 'expression-data-proof.json'} for journey in EXPRESSION_JOURNEYS},
+    'preserve expression data without optional modules': {'activity-data-proof.json', 'expression-preservation-proof.json'},
     'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
@@ -185,7 +197,7 @@ def recorded_browser_contexts(path):
 
 def verdict(report, artifacts, journeys=None, composition="normal"):
     """An exit code alone cannot certify that every intended journey actually ran."""
-    journeys = JOURNEYS if journeys is None else set(journeys)
+    journeys = selected_journeys(journeys, composition)
     if not journeys or not journeys <= JOURNEYS:
         raise ValueError("Unknown or empty journey inventory")
     rows = []
@@ -270,7 +282,8 @@ def validate_minimal_composition(observation, title):
     syntaxes, choices = observation.get('expressionTypes', []), observation.get('syntaxChoices', [])
     native_syntax = {'choose nested activity data': 'Activity output member',
                      'choose declared and scoped activity data': 'Variable member',
-                     'choose data for activity outputs': 'Activity output…'}.get(title)
+                     'choose data for activity outputs': 'Activity output…',
+                     'preserve expression data without optional modules': 'Activity output…'}.get(title)
     if native_syntax is None or 'Literal' not in syntaxes or 'Literal' not in choices or native_syntax not in choices or \
             any(re.search('JavaScript|Liquid', name, re.I) for name in [*syntaxes, *choices]):
         raise ValueError('Minimal backend descriptors or installed Studio menu are missing/optional')
@@ -290,6 +303,12 @@ def activity_data_verdict(title, attachments, composition):
         raise ValueError('Optional expression editor script requested in minimal composition')
     if composition == 'minimal':
         validate_minimal_composition(proof.get('compositionObservation') or {}, title)
+    if title in EXPRESSION_JOURNEYS:
+        validate_expression_data(proof, json.loads(Path(files['expression-data-proof.json']).read_text()), title, composition)
+        return
+    if title in MINIMAL_ONLY_JOURNEYS:
+        validate_expression_preservation(proof, json.loads(Path(files['expression-preservation-proof.json']).read_text()))
+        return
     selections = proof.get('selections', [])
     if any(item.get('binding') != item.get('offered') or not item.get('binding') for item in selections):
         raise ValueError('Selected binding differs from actual server offer')
@@ -325,6 +344,107 @@ def activity_data_verdict(title, attachments, composition):
             raise ValueError('Member-capable typed source control was not observed')
     if any(item.get('consumer', {}).get('status') != 'Completed' for item in runs):
         raise ValueError('Consumer did not complete')
+
+
+def expression_parameter(value):
+    """Independent whole-source wire check; never accept a native Member or a guessed parameter role."""
+    fields = {'ActivityResult': {'kind', 'producerNodeId', 'projectionKey', 'isOptional'},
+              'WorkflowRequest': {'kind', 'memberKey', 'path'}, 'Variable': {'kind', 'declaringScopeNodeId', 'variableKey'}}
+    if not isinstance(value, dict) or value.get('kind') not in fields or set(value) - fields[value['kind']]:
+        raise ValueError('Invalid expression whole-source parameter')
+    result = dict(value)
+    if result['kind'] == 'ActivityResult':
+        result.setdefault('isOptional', False)
+        if type(result['isOptional']) is not bool:
+            raise ValueError('Invalid expression optionality')
+        required = ('producerNodeId', 'projectionKey')
+    elif result['kind'] == 'WorkflowRequest':
+        result.setdefault('path', None)
+        if result['path'] is not None and not isinstance(result['path'], str):
+            raise ValueError('Invalid request parameter path')
+        required = ('memberKey',)
+    else:
+        required = ('declaringScopeNodeId', 'variableKey')
+    if any(not isinstance(result.get(key), str) or not result[key] for key in required):
+        raise ValueError('Missing expression source identity')
+    return result
+
+
+def validate_expression_data(native, proof, title, composition):
+    syntax = {'insert JavaScript activity data': 'JavaScript', 'insert Liquid activity data': 'Liquid'}[title]
+    if proof.get('syntax') != syntax or proof.get('composition') != composition or composition not in {'normal', 'default-off'} or \
+            composition == 'default-off' and syntax != 'JavaScript' or not re.fullmatch('[a-fA-F0-9]{40}', proof.get('sourceSha', '')) or proof.get('sourceSha') != native.get('sourceSha'):
+        raise ValueError('Expression source/composition mismatch')
+    expected_parameters = [{'kind': 'ActivityResult', 'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False},
+                           {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None},
+                           {'kind': 'Variable', 'declaringScopeNodeId': 'workflow', 'variableKey': 'escaped-payload'}]
+    paths = [['customerId'], [], ['a.b', '']]
+    sources = ['args.data["customerId"]', 'args.data["customerId"].toUpperCase() + "-" + args.data2',
+               'args.data["customerId"].toUpperCase() + "-" + args.data2 + "-" + args.data3["a.b"][""]'] if syntax == 'JavaScript' else [
+               '{{ data["customerId"] }}', '{{ data["customerId"] | upcase }}-{{ data2 }}',
+               '{{ data["customerId"] | upcase }}-{{ data2 }}-{{ data3["a.b"][""] }}']
+    insertions = proof.get('insertions', [])
+    if len(insertions) != 3 or len({item.get('definitionId') for item in insertions}) != 1:
+        raise ValueError('Expression insertion inventory incomplete')
+    for index, item in enumerate(insertions):
+        alias = ['data', 'data2', 'data3'][index]
+        before, after = item.get('before', {}), item.get('after', {})
+        definition = after.get('value', {})
+        if item.get('alias') != alias or item.get('path') != paths[index] or expression_parameter(item.get('parameter')) != expected_parameters[index] or \
+                after.get('expressionType') != syntax or definition.get('language') != syntax or definition.get('source') != sources[index] or \
+                definition.get('resultType', {}).get('alias') != 'String' or definition.get('resultType', {}).get('collectionKind', 'Single') != 'Single' or \
+                definition.get('capabilityProfile') != 'binding-pure-v1':
+            raise ValueError('Expression source/carrier differs from the installed adapter contract')
+        parameters = definition.get('parameters', {})
+        previous = before.get('value', {})
+        old_parameters = previous.get('parameters', {}) if isinstance(previous, dict) else {}
+        if {key: expression_parameter(value) for key, value in parameters.items()} != {**old_parameters, alias: expected_parameters[index]}:
+            raise ValueError('Expression insertion changed unrelated aliases or bindings')
+        if isinstance(previous, dict) and {key: value for key, value in previous.items() if key not in {'source', 'parameters'}} != \
+                {key: value for key, value in definition.items() if key not in {'source', 'parameters'}}:
+            raise ValueError('Expression insertion lost manual carrier fields')
+        if index == 0 and (previous != '' or definition.get('options') != {}):
+            raise ValueError('Raw source promotion changed compiler defaults')
+        admission = item.get('admission', {}); request, response = admission.get('request', {}), admission.get('response', {})
+        query, analysis = request.get('query', {}), response.get('analysis', {})
+        activities = request.get('snapshot', {}).get('rootActivity', {}).get('structure', {}).get('payload', {}).get('activities', [])
+        consumers = [node for node in activities if node.get('nodeId') == 'consumer']
+        inputs = [entry.get('value') for node in consumers for entry in node.get('inputs', []) if entry.get('referenceKey') == 'text']
+        if admission not in proof.get('contexts', []) or request.get('definitionId') != item.get('definitionId') or request.get('nodeId') != 'consumer' or request.get('inputKey') != 'text' or \
+                not request.get('documentRevision') or request['documentRevision'] != response.get('documentRevision') or \
+                not re.fullmatch('[a-fA-F0-9]{64}', request.get('expectedSnapshotHash', '')) or request['expectedSnapshotHash'] != response.get('snapshotHash') or \
+                query.get('source') is not None or query.get('expressionType') != syntax or query.get('memberPath', []) != paths[index] or \
+                expression_parameter(query.get('parameterSource')) != expected_parameters[index] or inputs != [before] or \
+                response.get('state') not in {'supported', 'empty'} or analysis.get('expressionParametersEnabled') is not True or analysis.get('expressionType') != syntax or \
+                analysis.get('memberReadsEnabled') is not (composition != 'default-off') or len(analysis.get('sources', [])) != 1:
+            raise ValueError('Expression insertion lacks exact fresh snapshot admission')
+        offer = analysis['sources'][0]
+        if expression_parameter(offer.get('parameterSource')) != expected_parameters[index] or offer.get('parameterPath') != paths[index]:
+            raise ValueError('Expression parameter/path differs from the actual canonical offer')
+    runs = native.get('runtime', [])
+    if len(runs) != 1 or not runs[0].get('workflowExecutionId') or runs[0].get('definitionId') != insertions[0].get('definitionId') or runs[0].get('committed') != 'CUST-1042-tail-escaped-id' or runs[0].get('expected') != 'CUST-1042-tail-escaped-id' or \
+            runs[0].get('consumer', {}).get('status') != 'Completed' or len(runs[0].get('producers', [])) != 1 or runs[0]['producers'][0].get('status') != 'Completed':
+        raise ValueError('Actual transformed expression consumer/producer runtime evidence incomplete')
+
+
+def validate_expression_preservation(native, proof):
+    if proof.get('composition') != 'minimal' or not re.fullmatch('[a-fA-F0-9]{40}', proof.get('sourceSha', '')) or proof.get('sourceSha') != native.get('sourceSha') or native.get('runtime'):
+        raise ValueError('Missing-module proof cannot claim an expression execution')
+    entries = proof.get('preserved', [])
+    if [item.get('syntax') for item in entries] != ['JavaScript', 'Liquid']:
+        raise ValueError('Missing-module carrier inventory incomplete')
+    for item in entries:
+        definition = item.get('before', {}).get('value', {})
+        argument = item.get('beforeArgument', {})
+        conversion = argument.get('conversion', {})
+        if item.get('before') != item.get('after') or item.get('noWritesOpeningOrCancelling') is not True or \
+                item.get('before', {}).get('expressionType') != item['syntax'] or definition.get('language') != item['syntax'] or \
+                definition.get('parameters') != {'manual': {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None}} or \
+                definition.get('options') != {'preserve': True} or definition.get('metadata') != {'original': 'keep'} or definition.get('capabilityProfile') != 'binding-pure-v1' or \
+                definition.get('futureCarrier') != {'opaque': ['keep', None, 7]} or argument != item.get('afterArgument') or argument.get('value') != item['before'] or \
+                argument.get('referenceKey') != 'text' or argument.get('autoEvaluate') is not False or conversion.get('mode') != 'profile' or \
+                conversion.get('profile') != {'id': 'partner.customer-json', 'version': '3'} or conversion.get('limits', {}).get('maxDepth') != 8 or conversion.get('options') != {'preserved': True}:
+            raise ValueError('Missing-module authoring did not preserve the original carrier')
 
 
 def field_gallery_verdict(report, artifacts, requested_port=None):

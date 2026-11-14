@@ -87,6 +87,11 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         var stored = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer",
             Input(declaresScope ? Result("producer", scope: "scope:root") : ScopeFreeResult("producer"))))));
         Assert.Equal(new[] { "ValueFlow/CyclicBackEdge" }, stored.Findings.Select(finding => finding.Type));
+
+        var portable = await Analyzer(provider).AnalyzeAsync(Document(Chart(Node("consumer"))), new("consumer", "CustomerId"),
+            new() { ExpressionType = "JavaScript", ParameterSource = new ActivityResultExpressionParameterBinding("producer", "$result"), MemberPath = ["customerId"] });
+        Assert.Empty(portable.Sources);
+        Assert.Contains(portable.Findings, finding => finding.Type == "ValueFlow/CyclicBackEdge");
     }
 
     [Fact]

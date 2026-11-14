@@ -29,12 +29,14 @@ const descriptor: StudioActivityDescriptor = { typeName: "Writer", inputs: [{ na
 const parameter = { kind: "ActivityResult" as const, producerNodeId: "fetch", projectionKey: "$result", isOptional: false };
 let root: Root, container: HTMLDivElement, doc: WorkflowDocumentApi, history: ReturnType<typeof useDraftHistory>;
 let ownerContext = {}, readOnly = false, installed = true, changes = 0;
+let serverRefusal: ActivityDataContextResult | null = null;
 const rangeRects = Object.getOwnPropertyDescriptor(Range.prototype, "getClientRects");
 const rangeBounds = Object.getOwnPropertyDescriptor(Range.prototype, "getBoundingClientRect");
 const shape = (scalar: boolean) => ({ state: "known" as const, kind: scalar ? "scalar" as const : "object" as const,
   type: { alias: scalar ? "String" : "Customer", collectionKind: "Single" }, sourceContractRevision: "source", profileRevision: "profile", metadataRevision: "metadata",
   isNullable: false, presence: "required" as const, representation: null, isSensitive: false, isCredential: false, reasonCode: null, members: [], element: null, mapValue: null });
 const request = vi.fn(async (_target: unknown, _signal: AbortSignal, _skip: number, query?: ActivityDataSourceQuery): Promise<ActivityDataContextResult> => {
+  if (serverRefusal) return serverRefusal;
   const path = [...query?.memberPath ?? []];
   const selected = shape(path.length > 0);
   const rootShape = path.length ? selected : { ...selected, members: [{ serializedName: "customerId", displayName: "Customer ID", shape: shape(true) }] };
@@ -64,7 +66,7 @@ beforeEach(() => {
   // jsdom has no text geometry; only the missing DOM APIs are supplied, never editor/history behavior.
   if (!rangeRects) Object.defineProperty(Range.prototype, "getClientRects", { configurable: true, value: () => [] });
   if (!rangeBounds) Object.defineProperty(Range.prototype, "getBoundingClientRect", { configurable: true, value: () => new DOMRect() });
-  window.dispatchEvent(new Event("elsa:auth-session-started")); ownerContext = {}; readOnly = false; installed = true; changes = 0; request.mockClear();
+  window.dispatchEvent(new Event("elsa:auth-session-started")); ownerContext = {}; readOnly = false; installed = true; changes = 0; serverRefusal = null; request.mockClear();
   container = document.createElement("div"); document.body.append(container); root = createRoot(container); render();
   const draft: WorkflowDraft = { id: "draft", definitionId: "definition", sourceVersionId: null, validationErrors: [], layout: [], state: { variables: [], inputs: [], outputs: [],
     rootActivity: { nodeId: "consumer", activityVersionId: "writer", inputs: [], outputs: [], Text: { typeName: "System.String", expression: { type: "JavaScript", value: "0" } } } } };
@@ -168,4 +170,17 @@ it.each(["read-only", "module-loss", "revoked"])("preserves the owner when an ac
   click(oldOption);
   await vi.waitFor(() => expect(document.querySelector("[role='dialog']")).toBeNull());
   expect(JSON.stringify(doc.state.draft)).toBe(before); expect(changes).toBe(0);
+});
+it("explains incompatible portable source capability without proposing a native fallback or changing content", async () => {
+  serverRefusal = { state: "incompatible", code: "activity-data.parameter-response-unreadable", sources: [], hasMoreSources: false,
+    documentRevision: getDraftContentRevision(doc.state.draft!), baseRevision: "base", target: null, expressionParametersEnabled: false };
+  click(insertButton());
+  await vi.waitFor(() => expect(document.querySelector(".wf-data-chooser-panel")?.textContent).toContain("Your expression is preserved."));
+  const panel = document.querySelector<HTMLElement>(".wf-data-chooser-panel")!;
+  await vi.waitFor(() => expect(document.activeElement).toBe(panel));
+  expect(panel.textContent).toContain("compatible expression data insertion");
+  expect(panel.textContent).not.toContain("Use an expression instead"); expect(panel.querySelector("[role='option']")).toBeNull();
+  key(panel, "Escape"); await vi.waitFor(() => expect(document.querySelector(".wf-data-chooser-panel")).toBeNull());
+  await vi.waitFor(() => expect(document.activeElement).toBe(insertButton()));
+  expect(stored()).toBe("0"); expect(changes).toBe(0); expect(history.canUndoNow).toBe(false);
 });

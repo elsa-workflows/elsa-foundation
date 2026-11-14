@@ -279,7 +279,7 @@ export function ActivityDataBrowser({ host, target, inputLabel, anchorRef, open,
           host={host} target={target} result={view.result} current={!!currentListing && view.result.baseRevision === host.baseRevision}
           refreshing={view.refreshing === true} onSelect={commit} onRefusal={refuse} onRefresh={retry}
           expression={expression ? { type: expression.type, onSelect: (result, source) => { expression.onSelect(result, source); onClose("none"); } } : undefined} />
-          : expression && view.status === "answered" && listsSources(view.result) ? <p className="wf-data-chooser-note" role="status">This server does not support expression data insertion. Your expression is preserved.</p>
+          : expression && view.status === "answered" && (listsSources(view.result) || view.result.state === "incompatible" && view.result.code === "activity-data.parameter-response-unreadable") ? <p className="wf-data-chooser-note" role="status">This server does not support compatible expression data insertion. Your expression is preserved.</p>
           : <ActivityDataBrowserContent
           view={view}
           awaitingSave={awaitingSave}
