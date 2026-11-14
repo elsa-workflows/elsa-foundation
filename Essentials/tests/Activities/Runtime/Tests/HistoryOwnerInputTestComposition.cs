@@ -16,6 +16,7 @@ internal static class HistoryOwnerInputTestComposition
 
     internal static void Configure(IServiceCollection services, IWorkflowExecutionStateStore executions, IRuntimeCheckpointCommitStore checkpoints)
     {
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         services.AddSingleton(executions);
         services.RemoveAll<RuntimeCheckpointCommitter>();
         var hadNativeAccess = services.Any(service => service.ServiceType == typeof(IPersistenceAccessContextAccessor));

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>Default scope-based coordinator for executable retention-root writes.</summary>
-public sealed class WorkflowExecutableRootWriteLeaseManager(
+public sealed partial class WorkflowExecutableRootWriteLeaseManager(
     IWorkflowExecutableStore executableStore,
     IOptions<WorkflowExecutableGarbageCollectionOptions> options,
     TimeProvider timeProvider,
@@ -66,7 +66,8 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         string leaseId,
         Func<IReadOnlyList<WorkflowExecutableRootWriteLease>, CancellationToken, ValueTask> write,
         CancellationToken cancellationToken,
-        bool verifyBeforeWrite = false)
+        bool verifyBeforeWrite = false,
+        BoundedSourceLease? boundedSource = null)
     {
         var orderedArtifactIds = artifactIds
             .Select(artifactId =>
@@ -91,12 +92,13 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
             foreach (var artifactId in orderedArtifactIds)
             {
                 var now = timeProvider.GetUtcNow();
-                var lease = await executableStore.TryAcquireRootWriteLeaseAsync(
+                var lease = boundedSource is null ? await executableStore.TryAcquireRootWriteLeaseAsync(
                     artifactId,
                     leaseId,
                     now.Add(duration),
                     now,
-                    cancellationToken);
+                    cancellationToken) : await boundedSource.Store.TryAcquireAsync(artifactId, leaseId, now.Add(duration), now,
+                        boundedSource.Scope, boundedSource.Limits, cancellationToken);
                 if (lease is null)
                     throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId);
                 if (verifyBeforeWrite && (lease.ArtifactId != artifactId || lease.LeaseId != leaseId ||
@@ -113,7 +115,8 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
                 {
                     var now = timeProvider.GetUtcNow();
                     var expiresAt = now.Add(duration);
-                    if (!await executableStore.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken))
+                    if (!(boundedSource is null ? await executableStore.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken) :
+                        await boundedSource.Store.RenewAsync(lease, expiresAt, now, boundedSource.Scope, boundedSource.Limits, cancellationToken)))
                         throw new WorkflowExecutableRootWriteLeaseLostException(lease.ArtifactId, lease.LeaseId);
                     grantDeadlines[lease.ArtifactId] = expiresAt;
                 }
@@ -122,7 +125,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         }
         catch
         {
-            await ReleaseAllAsync(leases);
+            await ReleaseAllAsync(leases, boundedSource);
             throw;
         }
 
@@ -135,7 +138,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         try
         {
             deadlineGuard = verifyBeforeWrite ? new LeaseDeadlineGuard(grantDeadlines, leaseId, timeProvider, writeCancellation) : null;
-            renewalTask = RenewUntilStoppedAsync(leases, duration, renewalStop.Token, writeCancellation, deadlineGuard);
+            renewalTask = RenewUntilStoppedAsync(leases, duration, renewalStop.Token, writeCancellation, deadlineGuard, boundedSource);
             deadlineGuard?.ThrowIfLost();
             await write(Array.AsReadOnly(leases.ToArray()), writeCancellation.Token);
         }
@@ -161,7 +164,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
             }
 
             if (deadlineGuard is not null) await deadlineGuard.ObserveCancellationAsync();
-            await ReleaseAllAsync(leases);
+            await ReleaseAllAsync(leases, boundedSource);
         }
 
         var leaseFailure = CombineFailures(renewalFailure, deadlineGuard?.GetFailure());
@@ -253,7 +256,8 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         TimeSpan duration,
         CancellationToken stopToken,
         CancellationTokenSource writeCancellation,
-        LeaseDeadlineGuard? deadlineGuard = null)
+        LeaseDeadlineGuard? deadlineGuard = null,
+        BoundedSourceLease? boundedSource = null)
     {
         try
         {
@@ -265,11 +269,11 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
                 {
                     var now = timeProvider.GetUtcNow();
                     var expiresAt = now.Add(duration);
-                    var renewed = await executableStore.RenewRootWriteLeaseAsync(
+                    var renewed = boundedSource is null ? await executableStore.RenewRootWriteLeaseAsync(
                         lease,
                         expiresAt,
                         now,
-                        stopToken);
+                        stopToken) : await boundedSource.Store.RenewAsync(lease, expiresAt, now, boundedSource.Scope, boundedSource.Limits, stopToken);
 
                     if (renewed)
                     {
@@ -395,13 +399,14 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
     // A release only shortens a lease that would otherwise expire on its own, so it never decides the outcome: a write
     // that succeeded stays a success, and a failed write surfaces its own exception. A lease that could
     // not be released holds its artifact from collection until it expires.
-    private async ValueTask ReleaseAllAsync(IEnumerable<WorkflowExecutableRootWriteLease> leases)
+    private async ValueTask ReleaseAllAsync(IEnumerable<WorkflowExecutableRootWriteLease> leases, BoundedSourceLease? boundedSource = null)
     {
         foreach (var lease in leases.Reverse())
         {
             try
             {
-                await executableStore.ReleaseRootWriteLeaseAsync(lease, CancellationToken.None);
+                if (boundedSource is null) await executableStore.ReleaseRootWriteLeaseAsync(lease, CancellationToken.None);
+                else await boundedSource.Store.ReleaseAsync(lease, boundedSource.Scope, boundedSource.Limits, CancellationToken.None);
             }
             catch (Exception exception)
             {

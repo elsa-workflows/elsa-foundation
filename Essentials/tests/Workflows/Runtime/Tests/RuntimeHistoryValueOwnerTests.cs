@@ -249,10 +249,27 @@ public sealed class RuntimeHistoryValueOwnerTests
         using var cancellation = new CancellationTokenSource();
         var normalized = new InvalidOperationException("cancelled boundary", new OperationCanceledException(cancellation.Token));
         var values = await FailingOwner(inspection, normalized, cancellation.Cancel);
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var failure = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
                 () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [Snapshot("value")], cancellationToken: cancellation.Token));
-        Assert.Same(normalized, failure);
+        Assert.Equal(cancellation.Token, failure.CancellationToken);
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public async Task Requested_cancellation_wins_a_late_IO_failure_without_exposing_raw_provider_errors(bool inspection, bool wrapped)
+    {
+        using var cancellation = new CancellationTokenSource();
+        Exception provider = new IOException("late provider error");
+        if (wrapped) provider = new InvalidOperationException("contextual provider boundary", provider);
+        var values = await FailingOwner(inspection, provider, cancellation.Cancel); var origins = 0;
+        var failure = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await values.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+                () => { origins++; return new("run", "work", ActivityValueCapturePhase.Invoke); },
+                valueSnapshots: [Snapshot("value")], cancellationToken: cancellation.Token));
+        Assert.Equal(cancellation.Token, failure.CancellationToken);
+        Assert.Equal(inspection ? 1 : 0, origins);
     }
 
     [Fact]

@@ -14,4 +14,7 @@ public interface IStimulusDeliveryIntentAdapter
     /// <exception cref="Exceptions.StimulusDeliveryIntentException">The kind or owning payload schema is invalid;
     /// preserves intent identity, kind and the original decoding cause.</exception>
     StimulusDispatchRequest CreateRequest(RuntimePostCommitIntent intent);
+
+    /// <summary>Describes independent subscription matching from this owner's canonical broadcast payload. Null is unsupported.</summary>
+    RuntimeWorkflowSubscriptionSource? CreateSubscriptionSource(RuntimePostCommitIntent intent) => null;
 }

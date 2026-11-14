@@ -1,5 +1,5 @@
 import React from "react";
-import { StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { editTable, parseTable, type Clause, type TableEdit } from "./decisionXml";
 export function TableEditor({ xml, readOnly, onChange, onError }: { xml: string; readOnly: boolean; onChange(xml: string): void; onError(message: string): void }) {
   let table;
@@ -14,10 +14,10 @@ export function TableEditor({ xml, readOnly, onChange, onError }: { xml: string;
     {!readOnly ? <StudioButton size="sm" variant="ghost" disabled={(output ? table.outputs : table.inputs).length <= 1} onClick={() => change({ kind: "delete-clause", id: item.id, output })}>Remove {output ? "output" : "input"} {index + 1}</StudioButton> : null}
   </th>;
   return <section aria-labelledby="decision-table-title" className="decision-table-section">
-    <div className="decision-section-heading"><h2 id="decision-table-title">Decision table</h2><label>Hit policy<select value={table.hitPolicy} disabled={readOnly} onChange={event => change({ kind: "policy", value: event.target.value })} aria-describedby="decision-policy-help">
+    <div className="decision-section-heading"><h2 id="decision-table-title">Decision table</h2><StudioField label="Hit policy"><select value={table.hitPolicy} disabled={readOnly} onChange={event => change({ kind: "policy", value: event.target.value })} aria-describedby="decision-policy-help">
       {!["UNIQUE", "ANY", "FIRST", "RULE ORDER", "COLLECT"].includes(table.hitPolicy) ? <option value={table.hitPolicy}>{table.hitPolicy} (unsupported)</option> : null}
       <option value="UNIQUE">Unique — one match</option><option value="ANY">Any — equal results</option><option value="FIRST">First — first match</option><option value="RULE ORDER">Rule order — all matches</option><option value="COLLECT">Collect — all matches</option>
-    </select></label></div>
+    </select></StudioField></div>
     <p id="decision-policy-help" className="decision-muted">Conditions use literals, comparisons, ranges or alternatives. Use - for any non-null value. Text results need double quotes. Validation on the server checks this profile.</p>
     <StudioTableContainer className="decision-table-scroll" tabIndex={0} role="region" aria-label="Decision rules, scroll horizontally for more columns"><table className="decision-table"><caption className="decision-visually-hidden">{table.name || "Decision"} rules</caption><thead><tr><th scope="col">Rule</th>{table.inputs.map((item, index) => clause(item, false, index))}{table.outputs.map((item, index) => clause(item, true, index))}<th scope="col">Annotation</th>{!readOnly ? <th scope="col">Actions</th> : null}</tr></thead><tbody>
       {table.rules.map((rule, index) => <tr key={rule.id}><th scope="row" id={`rule-${rule.id}`}>{index + 1}</th>

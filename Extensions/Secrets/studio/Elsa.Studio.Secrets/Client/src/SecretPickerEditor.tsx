@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
 import { pickSecrets } from "./secretsApi";
@@ -10,6 +11,7 @@ type LoadState =
   | { endpointContext: StudioEndpointContext; status: "error"; items: SecretPickerMetadata[] };
 
 export function SecretPickerEditor({
+  descriptor,
   value,
   disabled,
   initialFocus,
@@ -57,8 +59,8 @@ export function SecretPickerEditor({
   const selectionDisabled = !!disabled || visibleState.status !== "ready";
 
   return (
-    <div className="secret-picker-editor">
-      <label htmlFor={selectId}>Secret</label>
+    <div className="secret-picker-editor"><StudioField controlId={selectId} label={descriptor.displayName || descriptor.name}>
+
       <select
         ref={selectRef}
         id={selectId}
@@ -97,7 +99,7 @@ export function SecretPickerEditor({
             ? formatReference(reference, unavailable)
             : "Secret values are never displayed."}
       </p>
-    </div>
+    </StudioField></div>
   );
 }
 

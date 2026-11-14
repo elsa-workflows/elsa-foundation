@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
@@ -123,7 +124,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         IRuntimeActivityChildNotificationHandler, IRuntimeActivityChildCompletionHandler, IDisposable
     {
         public int Calls { get; private set; }
-        public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(RuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification)
+        public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(IRuntimeActivityExecutionContext context, ActivityChildNotifiedContext notification)
         { Calls++; return ValueTask.FromResult(RuntimeStructuralContinuation.Defer); }
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
         { Calls++; return ValueTask.FromResult(RuntimeStructuralContinuation.Defer); }

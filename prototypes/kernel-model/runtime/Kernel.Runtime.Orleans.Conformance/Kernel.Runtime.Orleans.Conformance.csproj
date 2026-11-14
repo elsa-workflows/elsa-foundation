@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The runtime conformance suite against the Orleans adapter, on Orleans' in-process test cluster: no network, no cloud. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kernel.Runtime.Orleans.Conformance</RootNamespace>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Orleans.TestingHost" Version="10.4.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Kernel.Runtime.Orleans/Kernel.Runtime.Orleans.csproj" />
+    <ProjectReference Include="../../conformance/Kernel.Runtime.Conformance/Kernel.Runtime.Conformance.csproj" />
+  </ItemGroup>
+</Project>

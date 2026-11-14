@@ -67,6 +67,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
         services.ClaimWorkflowAlterationProvider(typeof(InMemoryWorkflowAlterationStore), isInMemoryDefault: true);
         services.AddPersistenceCore();
+        StandaloneTriggerRuntimeRegistration.AddServices(services);
+        services.TryAddScoped<IAuthoredModelAdmission, AuthoredModelAdmission>();
         Elsa.Workflows.Runtime.UserTasks.UserTaskRegistration.AddUserTasks(services);
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
 
@@ -329,10 +331,16 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowDispatchCancellationStore>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchCancellationStore ??
             throw new InvalidOperationException("The configured workflow dispatch store does not provide atomic parent cancellation resolution."));
-        services.TryAddScoped(serviceProvider => ActivatorUtilities.CreateInstance<InMemoryRuntimeCheckpointCommitStore>(
-            serviceProvider, serviceProvider.GetRequiredService<IWorkflowExecutableStore>(),
-            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
-            ResolveUnderlyingStore<IActivityExecutionStateStore>(serviceProvider, typeof(CoalescingActivityExecutionStateStore))));
+        services.TryAddScoped(serviceProvider =>
+        {
+            var store = ActivatorUtilities.CreateInstance<InMemoryRuntimeCheckpointCommitStore>(serviceProvider,
+                serviceProvider.GetRequiredService<IWorkflowExecutableStore>(), serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+                ResolveUnderlyingStore<IActivityExecutionStateStore>(serviceProvider, typeof(CoalescingActivityExecutionStateStore)));
+            store.StimulusAdapters = serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>().ToArray();
+            store.StimulusInputValidator = serviceProvider.GetService<IWorkflowExecutableInputValidator>();
+            return store;
+        });
         services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());

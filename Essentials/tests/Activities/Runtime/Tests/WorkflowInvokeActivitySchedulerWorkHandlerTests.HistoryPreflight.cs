@@ -116,19 +116,52 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         await _executableStore.SaveAsync(NewTypedExecutable());
         await _activityStateStore.SaveAsync(NewTypedRunningState());
         await using var provider = NewProvider(activator, configure: services => services.AddSingleton<IWorkflowExecutionStateStore>(failedReader));
-        var caught = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
-        Assert.Same(failure, caught);
+        Assert.Equal(cancellation.Token, caught.CancellationToken);
         Assert.Equal(0, activator.ActivateCalls);
         Assert.Empty(_checkpointWriter.ListCommits());
         Assert.Empty(await _incidentStateStore.ListAsync("wfexec-1"));
     }
 
-    private sealed class FailingNativePolicyRead(IWorkflowExecutionStateStore inner, Exception failure, Action? beforeFailure = null) : IWorkflowExecutionStateStore
+    [Theory]
+    [InlineData("io")] [InlineData("wrapped-io")] [InlineData("json")] [InlineData("wrapped-json")]
+    [InlineData("legacy")] [InlineData("required")]
+    public async Task Cancellation_after_native_policy_read_precedes_read_classification_or_capture_resolution(string shape)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var native = CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore());
+        var state = (await native.FindAsync("wfexec-1"))!;
+        Exception? failure = shape switch
+        {
+            "legacy" or "required" => null,
+            "io" => new IOException("constructed dependency failure"),
+            _ => PolicyReadFailure(shape)
+        };
+        var result = shape == "required" ? state with
+            { HistoryCapturePolicy = new("runtime-history-v3", 3, true, ["ActivityContinuationStarted"]) } : null;
+        var reader = new FailingNativePolicyRead(native, failure, cancellation.Cancel, result);
+        var activator = new RecordingTypedActivator();
+        await _executableStore.SaveAsync(NewTypedExecutable());
+        await _activityStateStore.SaveAsync(NewTypedRunningState());
+        var resolutions = 0;
+        await using var provider = NewProvider(activator, configure: services =>
+        {
+            services.AddSingleton<IWorkflowExecutionStateStore>(reader);
+            services.AddSingleton<IRuntimeHistorySourceExtension>(_ => { resolutions++; throw new InvalidOperationException("must not resolve source"); });
+        });
+        var caught = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+        Assert.Equal(cancellation.Token, caught.CancellationToken);
+        Assert.Equal(1, reader.Reads); Assert.Equal(0, resolutions); Assert.Equal(0, activator.ActivateCalls);
+        Assert.Empty(_checkpointWriter.ListCommits());
+    }
+
+    private sealed class FailingNativePolicyRead(IWorkflowExecutionStateStore inner, Exception? failure, Action? beforeFailure = null, WorkflowExecutionState? result = null) : IWorkflowExecutionStateStore
     {
         internal int Reads { get; private set; }
         public ValueTask<WorkflowExecutionState?> FindAsync(string id, CancellationToken cancellationToken = default)
-        { Reads++; beforeFailure?.Invoke(); return ValueTask.FromException<WorkflowExecutionState?>(failure); }
+        { Reads++; beforeFailure?.Invoke(); return failure is null ? ValueTask.FromResult(result) : ValueTask.FromException<WorkflowExecutionState?>(failure); }
         public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => inner.SaveAsync(state, cancellationToken);
         public ValueTask<bool> DeleteAsync(string id, CancellationToken cancellationToken = default) => inner.DeleteAsync(id, cancellationToken);
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => inner.ListAsync(cancellationToken);

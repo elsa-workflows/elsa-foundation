@@ -10,6 +10,7 @@ internal static class RuntimeSchedulerWorkEfModule
 {
     public const string SchemaFamily = "RuntimeSchedulerWork";
     public const string SchemaVersion = "3.0.0";
+    public const string IngressSchemaVersion = "4.0.0";
     public const string ModelSchemaVersion = "2.0.0";
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeSchedulerWorkEfModule).Assembly, SchemaFamily);
 }

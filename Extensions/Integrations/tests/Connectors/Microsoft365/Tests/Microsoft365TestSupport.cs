@@ -3,7 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Integrations.Connectors.Microsoft365;
-using Elsa.Integrations.Sdk.Harness;
+using Elsa.Integrations.Sdk.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Integrations.Connectors.Microsoft365.Tests;

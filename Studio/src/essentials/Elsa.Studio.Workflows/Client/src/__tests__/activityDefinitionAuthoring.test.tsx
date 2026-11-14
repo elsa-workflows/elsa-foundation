@@ -83,7 +83,7 @@ describe("Activity Definition authoring", () => {
     expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
     resolveSave(fullDraft({ revision: 4, payload: { edit: 1 } }));
     await waitForText(rendered.container, "Saved revision 4");
-    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+    await waitFor(() => expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true));
     await rendered.unmount();
   });
   it("creates with the sole authorable provider and enters the exact initial draft", async () => {
@@ -2877,7 +2877,7 @@ function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTex
   const label = [...container.querySelectorAll("label")].find(candidate =>
     [...candidate.querySelectorAll(":scope > span")].some(span => span.textContent?.trim() === text)
   );
-  const control = label?.querySelector("input, select, textarea");
+  const control = label?.control;
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
 }
