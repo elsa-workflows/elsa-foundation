@@ -901,7 +901,7 @@ function focusContractDiagnostic(
   }
   target.closest("details")?.setAttribute("open", "");
   const disabledContext = target.matches(":disabled")
-    ? target.closest<HTMLElement>("label") ?? member
+    ? target.closest<HTMLElement>(".studio-form-control, label") ?? member
     : null;
   const control = disabledContext ?? target;
   if (disabledContext) disabledContext.tabIndex = -1;

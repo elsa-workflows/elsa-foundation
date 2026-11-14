@@ -8,6 +8,7 @@ namespace Kernel.Store.Conformance;
 /// </summary>
 public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly Random _random = new(seed);
     private long _before, _after;
@@ -60,6 +61,7 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
 /// </summary>
 public sealed class RecordingStore(IKernelStore inner) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public sealed record Landed(int Partition, long Epoch, long Position, int Positions, string Turns);
 

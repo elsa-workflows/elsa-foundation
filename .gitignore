@@ -32,6 +32,7 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+!/Essentials/src/Activities/Graph/Releases/
 !/Essentials/src/Workflows/Publishing/Releases/
 !/Essentials/tests/Workflows/Publishing/Releases/
 !/tools/releases/
