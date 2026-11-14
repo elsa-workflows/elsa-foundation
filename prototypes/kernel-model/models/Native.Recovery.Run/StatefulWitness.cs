@@ -17,7 +17,7 @@ internal static class StatefulWitness
     }
     private static void Run(string mode, string parent, bool startFault, string cut)
     {
-        StatefulProbe.Calls.Clear(); StatefulProbe.StartFault = startFault;
+        StatefulProbe.Calls.Clear(); StatefulProbe.StartFault = startFault; StatefulProbe.Faults = 2;
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true }; var target = InstanceRef.In(0, "stateful-proof"); var owner = 0;
         Actor Actor() => world.Of(owner, 0);
         var leaf = Wf.Node<StatefulProbe>("leaf", ("Value", Binding.Var(parent == "foreach" ? "CurrentItem" : "value")), ("Data", Binding.Literal(new JsonObject { ["kept"] = 9 })));
@@ -115,6 +115,7 @@ internal static class StatefulWitness
         var fresh = State().Frames.Values.Single(f => f.Node == "leaf");
         Check(fresh.Id == State().Retries![retry.Id].Successor && fresh.State?["Marker"]?.ToString() == "fresh" && Json.Write(State().Retries![retry.Id].Source) == archive && StatefulProbe.Calls.Last().Phase == "start" && StatefulProbe.Calls.Last().Value == 17,
             "R36: successor replayed private state/payload, changed pins or mutated forensic source");
+        Reload(); // Persist and restore the successor’s newly registered waits before any new delivery.
         var currentWait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:go");
         if (oldWait is not null)
         {
@@ -122,11 +123,24 @@ internal static class StatefulWitness
             Apply(new("add", M: Events.Deliver(new("event:go", "late-old", Values.From("late-old").ToJsonString(), world.Time + 120_000), oldWait))); Drain();
             Check(StatefulProbe.Calls.Count == count && State().Frames.ContainsKey(fresh.Id), "R37: old occurrence-addressed delivery resumed the successor");
         }
+        var beforeReplay = StatefulProbe.Calls.Count;
+        foreach (var replay in new[] { retry, retry with { Reason = "conflict" }, retry with { Id = "stale-source" } })
+        { Apply(new("add", M: new("control-" + replay.Id + replay.Reason, target, NativeRetry.Kind, Json.Write(replay), ReplyTo: ReplyTo.Of("outside", replay.Id, world.Time + 120_000), TargetCreation: 1))); Drain(); }
+        Check(StatefulProbe.Calls.Count == beforeReplay && world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().TakeLast(3).Select(r => r.Result).SequenceEqual(new[] { "Duplicate", "Conflict", "NotEligible" }),
+            "R43: stateful control replay changed its live successor");
         // Name lookup has no occurrence address. A late name-only stimulus intentionally resolves the NEW wait.
         Name("late-name", "go", "newly-accepted-name"); Drain();
+        var repeated = State().Frames.Values.SingleOrDefault(f => f.Node == "leaf");
+        Check(repeated?.Intervention is not null && repeated.Id == fresh.Id && repeated.State?["Marker"]?.ToString() == "fresh",
+            "R43: repeated stateful fault advanced or changed the retained occurrence");
+        var second = new NativeRetry("stateful-retry-2", repeated!.Id, repeated.Intervention!.Id, "second repair");
+        Apply(new("add", M: new("retry-2", target, NativeRetry.Kind, Json.Write(second), TargetCreation: 1))); Drain(second.Id);
+        Check(State().Agenda.Single(w => !w.Resume && w.Node == "leaf").Frame != fresh.Id && State().Retries!.Count == 2,
+            "R43: repeated stateful repair failed to commit its fresh obligation");
+        Reload(); Name("repaired-name", "go", "repaired-name"); Drain();
         if (parent == "foreach") { Name("next-item", "go", "next-item"); Drain(); }
         if (parent == "parallel" && startFault) { Name("sibling", "change", "change"); Drain(); }
-        Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && StatefulProbe.Calls.Last().Payload == (parent == "foreach" ? "next-item" : "newly-accepted-name") &&
+        Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && StatefulProbe.Calls.Last().Payload == (parent == "foreach" ? "next-item" : "repaired-name") &&
             StatefulProbe.Calls.Take(startFault ? 3 : 4).Select(c => c.Operation).Distinct().Count() == 1 && StatefulProbe.Calls.All(c => c.Kept == 9),
             "R38: fresh name-based delivery failed, operation changed or mutable JSON escaped its snapshot");
         Console.WriteLine($"PASS recovery:stateful,{mode},parent={parent},startFault={startFault},cut={cut}");
@@ -138,15 +152,16 @@ internal sealed class StatefulProbe : StatefulActivity<int, JsonObject, string>
     [Input] public int Value { get; set; }
     [Input] public JsonObject Data { get; set; } = new();
     internal static bool StartFault;
+    internal static int Faults;
     internal static readonly List<(string Phase, string Frame, string Operation, int Value, int Kept, string? Payload)> Calls = [];
     protected override ValueTask<Transition> ExecuteAsync(StartContext<string> context)
     {
         Calls.Add(("start", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), null)); Data["kept"] = -1;
-        return ValueTask.FromResult(Calls.Count == 1 && StartFault ? Fault("stateful-dependency", "repair") : Suspend(new JsonObject { ["Marker"] = Calls.Count == 1 ? "first" : "fresh" }, new EventTrigger("go"), new EventTrigger("other")));
+        return ValueTask.FromResult(Calls.Count == 1 && StartFault && Faults-- > 0 ? Fault("stateful-dependency", "repair") : Suspend(new JsonObject { ["Marker"] = Calls.Count == 1 ? "first" : "fresh" }, new EventTrigger("go"), new EventTrigger("other")));
     }
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<JsonObject, string> context)
     {
         Calls.Add(("resume", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), context.Trigger)); Data["kept"] = -2; context.State["Marker"] = "authored-mutation";
-        return ValueTask.FromResult(Calls.Count == 2 && !StartFault ? Fault("stateful-dependency", "repair") : Complete(Value));
+        return ValueTask.FromResult(Faults-- > 0 ? Fault("stateful-dependency", "repair") : Complete(Value));
     }
 }

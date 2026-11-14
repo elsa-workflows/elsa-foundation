@@ -22,7 +22,7 @@ internal static class StatefulPolicy
     }
     private static void Legacy(string mode, int policy)
     {
-        StatefulProbe.Calls.Clear(); StatefulProbe.StartFault = false;
+        StatefulProbe.Calls.Clear(); StatefulProbe.StartFault = false; StatefulProbe.Faults = 1;
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true }; var target = InstanceRef.In(0, "old-stateful"); var owner = 0;
         Actor Actor() => world.Of(owner, 0);
         var leaf = Wf.Node<StatefulProbe>("leaf", ("Value", Binding.Var("value")), ("Data", Binding.Literal(new JsonObject { ["kept"] = 9 })));
