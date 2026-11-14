@@ -2,7 +2,10 @@
 // Imports the real acceptance predicates; these are semantic controls, not copies of their implementation.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findActivityDataAdmission, resolvedFeatureClosure } from "../../Studio/tests/acceptance/activityDataJourneySupport.ts";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { attachActivityDataJson, findActivityDataAdmission, resolvedFeatureClosure } from "../../Studio/tests/acceptance/activityDataJourneySupport.ts";
 
 const clone = value => JSON.parse(JSON.stringify(value));
 const expected = { expressionType: "ActivityResultMember", value: { producerNodeId: "producer", projectionKey: "Customer", isOptional: false, memberPath: ["customerId"] } };
@@ -45,4 +48,17 @@ test("empty, ambiguous and unresolved feature facts fail closed", () => {
   assert.throws(() => resolvedFeatureClosure(catalog.filter(item => item.id !== "WorkflowsPublishing")));
   assert.throws(() => resolvedFeatureClosure(catalog.map(item => item.id === "WorkflowsPublishing" ? { ...item, runtimeAvailable: false } : item)));
   assert.throws(() => resolvedFeatureClosure(catalog.map(item => item.id === "WorkflowDesignValidations" ? { ...item, enabled: false } : item)));
+});
+
+test("JSON proof attachments are actual files and preserve literal names", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "elsa-data-attachment-"));
+  try {
+    let attached;
+    const info = { outputPath: name => join(directory, name), attach: async (name, options) => { attached = { name, ...options }; } };
+    const value = { memberPath: ["a.b", ""], futureField: { preserved: true } };
+    await attachActivityDataJson(info, "proof.json", value);
+    assert.equal(attached.name, "proof.json"); assert.equal(attached.contentType, "application/json");
+    assert.equal(attached.path, join(directory, "proof.json")); assert.ok(!("body" in attached));
+    assert.deepEqual(JSON.parse(readFileSync(attached.path, "utf8")), value);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

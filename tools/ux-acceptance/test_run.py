@@ -47,7 +47,8 @@ class VerdictTests(unittest.TestCase):
             values = ['cust-1042', 'cust-1042'] if title == 'choose nested activity data' else ['inner-id', 'outer-id', 'declared-ui-id'] if bindings else []
             proof = {'composition': 'normal', 'contexts': [{'response': {'state': 'supported', 'analysis': {'memberReadsEnabled': True, 'sources': [{'binding': {'expressionType': 'ActivityResult', 'value': {'projectionKey': 'Customer'}}}]}}}],
                      'selections': [{'binding': binding, 'offered': binding} for binding in bindings],
-                     'runtime': [{'committed': value, 'consumer': {'status': 'Completed'}, 'producers': [{'status': 'Completed'}]} for value in values], 'scripts': []}
+                     'runtime': [{'committed': value, 'consumer': {'status': 'Completed'}, 'producers': [{'status': 'Completed'}]} for value in values], 'scripts': [],
+                     'transportControls': [{'kind': 'cancelled', 'request': {'nodeId': 'consumer', 'inputKey': 'text'}, 'failure': 'net::ERR_ABORTED'}]}
             for selection in proof['selections']:
                 before = {'definitionId': 'owned', 'nodeId': 'consumer', 'inputKey': 'text', 'documentRevision': 'before',
                           'snapshot': {'consumer': {'inputs': []}}}
@@ -148,6 +149,13 @@ class VerdictTests(unittest.TestCase):
                     with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
                 finally: file.write_text(original)
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+
+    def test_missing_actual_browser_cancellation_cannot_pass(self):
+        file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)
+        proof['transportControls'] = []; file.write_text(json.dumps(proof))
+        try:
+            with self.assertRaisesRegex(ValueError, 'cancellation evidence'): acceptance.verdict(self.report, self.root)
+        finally: file.write_text(original)
 
     def test_post_edit_provenance_cannot_replace_committing_admission(self):
         file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)

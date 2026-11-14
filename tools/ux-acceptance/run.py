@@ -293,6 +293,10 @@ def activity_data_verdict(title, attachments, composition):
         validate_activity_admission(selection)
     runs = proof.get('runtime', [])
     if title == 'choose nested activity data':
+        cancelled = [item for item in proof.get('transportControls', []) if item.get('kind') == 'cancelled']
+        if len(cancelled) != 1 or not re.search('ERR_ABORTED|cancelled|canceled|aborted', cancelled[0].get('failure', ''), re.I) or \
+                cancelled[0].get('request', {}).get('nodeId') != 'consumer' or cancelled[0].get('request', {}).get('inputKey') != 'text':
+            raise ValueError('Actual browser cancellation evidence is missing')
         if len(selections) != 2 or any(item['binding'] != {'expressionType': 'ActivityResultMember', 'value': {
                 'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False, 'memberPath': ['customerId']}} for item in selections):
             raise ValueError('Customer canonical binding inventory incomplete')

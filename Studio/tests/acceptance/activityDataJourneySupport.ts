@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 
@@ -53,6 +54,12 @@ export function resolvedFeatureClosure(features: FeatureFact[]): string[] {
   return [...reached].sort();
 }
 
+export async function attachActivityDataJson(info: TestInfo, name: string, value: unknown) {
+  const path = info.outputPath(name);
+  writeFileSync(path, JSON.stringify(value, null, 2));
+  await info.attach(name, { path, contentType: "application/json" });
+}
+
 /** Real composed-host support. Setup uses REST; every authored selection is made through Studio, from an observed offer. */
 export async function activityDataSupport(page: Page, info: TestInfo, registerCleanup: (cleanup: () => Promise<void>) => void) {
   const base = process.env.ELSA_WORKBENCH_URL!;
@@ -62,6 +69,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const selections: { definitionId: string; binding: Binding; offered: Binding; admission: Context; before: Context["request"] }[] = [];
   const runtime: { definitionId: string; workflowExecutionId: string; expected: string; committed: string; consumer: Execution; producers: Execution[] }[] = [];
   const observations: string[] = [];
+  const transportControls: { kind: "cancelled"; request: unknown; failure: string }[] = [];
   let compositionObservation: { features: FeatureFact[]; mandatoryClosure: string[]; expressionTypes: string[]; syntaxChoices: string[] } | undefined;
   let writes = 0;
   page.on("response", response => {
@@ -87,8 +95,8 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       try { await api(`/design/workflows/definitions/${id}`, "DELETE", undefined, 15_000); cleanup.push({ id, status: "deleted" }); }
       catch (error) { failures.push(error); cleanup.push({ id, status: "failed" }); }
     }
-    await info.attach("activity-data-proof.json", { body: JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA,
-      composition, contexts, selections, runtime, observations, scripts, cleanup, compositionObservation }, null, 2), contentType: "application/json" });
+    await attachActivityDataJson(info, "activity-data-proof.json", { sourceSha: process.env.UX_SOURCE_SHA,
+      composition, contexts, selections, runtime, observations, scripts, cleanup, compositionObservation, transportControls });
     if (failures.length) throw new AggregateError(failures, "Owned activity-data cleanup or evidence collection failed");
   });
   await api("/_elsa/identity/login", "POST", { username: "admin", password: "Password123!" });
@@ -218,5 +226,5 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     }
   }
   return { api, version, line, root, seed, saved, stored, binding, canvas, select, open, chooser, trigger, replace, reference, memberName, path,
-    commit, history, codeApply, publishRun, assertComposition, contexts, observations, selections, writes: () => writes };
+    commit, history, codeApply, publishRun, assertComposition, contexts, observations, selections, transportControls, writes: () => writes };
 }

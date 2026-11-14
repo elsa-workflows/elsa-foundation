@@ -1,4 +1,4 @@
-import { activityDataSupport } from "./activityDataJourneySupport";
+import { activityDataSupport, attachActivityDataJson } from "./activityDataJourneySupport";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -239,7 +239,7 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     const payload = await api<{ payload: { preview: string } }>(`${instance}/activity-executions/${consumer}/value-evidence/${evidence!.evidenceId}/payload`);
     // The consumer received the producer's committed output, not a literal or a variable.
     expect(payload.payload.preview).toBe("00:00:01");
-    await info.attach(`whole-output-runtime-${definitionId}.json`, { body: JSON.stringify({ definitionId, workflowExecutionId: run.workflowExecutionId, expected: "00:00:01", committed: payload.payload.preview }), contentType: "application/json" });
+    await attachActivityDataJson(info, `whole-output-runtime-${definitionId}.json`, { definitionId, workflowExecutionId: run.workflowExecutionId, expected: "00:00:01", committed: payload.payload.preview });
   }
 }
 
