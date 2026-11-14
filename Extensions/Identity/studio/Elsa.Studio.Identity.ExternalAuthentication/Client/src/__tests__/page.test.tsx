@@ -162,6 +162,7 @@ describe("connection administration page", () => {
     click(await button(host.container, "Refresh"));
     await vi.waitFor(() => expect(field(host.container, "Display name").matches(":disabled")).toBe(false));
     expect(field(host.container, "Display name").value).toBe("Saved company");
+    expect(host.container.textContent).not.toContain("current configuration could not be read");
     expect((await button(host.container, "Test configuration")).disabled).toBe(false);
   });
 

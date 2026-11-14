@@ -167,7 +167,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
     try {
       const next = await load();
       if (currentClient.current !== client || !next) return;
-      setDirty(false); setCreating(false); setSeed(null); setTest(null); setPreview(null);
+      setDirty(false); setCreating(false); setSeed(null); setTest(null); setPreview(null); setNotice("");
     } finally { if (currentClient.current === client) { busyRef.current = false; setBusy(null); } }
   }
   async function change(command: ConnectionCommand, title: string) {
