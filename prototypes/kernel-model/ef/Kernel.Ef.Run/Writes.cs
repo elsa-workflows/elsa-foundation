@@ -14,6 +14,8 @@ sealed class Leveled(History? level, int pad)
 {
     private const string Marker = "\"pad\":\"";
 
+    public History? Level => level;
+
     public IActorType Over(IActorType inner) => new Shaped(inner, this);
 
     private sealed class Shaped(IActorType inner, Leveled shape) : IActorType
