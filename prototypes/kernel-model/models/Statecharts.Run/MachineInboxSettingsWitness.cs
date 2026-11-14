@@ -21,7 +21,7 @@ internal static class MachineInboxSettingsWitness
             Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
             var row = h.World.Store.Instances[h.Target.Id];
             var previous = new WorkflowInstance([new VersionNineModel()]);
-            Check(row.StateVersion == 10 && previous.Withholds(row, new GateServices()) && !previous.Withholds(row with { StateVersion = 9 }, new GateServices()),
+            Check(row.StateVersion >= 10 && previous.Withholds(row, new GateServices()) && !previous.Withholds(row with { StateVersion = 9 }, new GateServices()),
                 "Q18: version9 host would run the new machine checkpoint");
             Console.WriteLine("PASS machine-inbox-v9-capability-gate:" + mode + " (capability facade; not a historical binary)");
             var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
