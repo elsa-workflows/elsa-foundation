@@ -7,5 +7,5 @@ type ContextResponse = {
 export function createActivityDataResponseCollector<TRequest, TResponse>(
   contextUrl: string,
   contexts: { request: TRequest; response: TResponse }[],
-  transportControls: { kind: "cancelled-context-response"; request: unknown; failure: string }[]
+  transportControls: { kind: "cancelled" | "cancelled-context-response"; request: unknown; failure: string }[]
 ): { observe(response: ContextResponse): void; settle(): Promise<void> };
