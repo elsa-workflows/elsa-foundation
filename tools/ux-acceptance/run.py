@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark', 'narrow-390-light', 'narrow-390-dark'}
 TOUCH_PROJECTS = {f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')}
 CAPTURES = {
+    'saved dashboard period comparison and membership': ['reference', 'comparison-excluded', 'comparison-excluded-empty', 'comparison-included', 'comparison-included-periods', 'comparison-included-values', 'comparison-included-values-end', 'comparison-saved-reopened', 'comparison-reopened-periods', 'comparison-reopened-values', 'comparison-reopened-values-end', 'comparison-current-drill'],
     'phone authoring and settings content priority': ['reference', 'phone-authoring-entry', 'phone-inspector', 'phone-inspector-maximized', 'phone-activities', 'authoring-768', 'authoring-1280', 'phone-theme-entry', 'phone-theme-assets', 'theme-desktop-dirty', 'theme-tablet-dirty', 'phone-theme-dirty', 'phone-theme-short', 'phone-theme-reopened', 'phone-settings-navigation'],
     'settings tabs and preserved edits': ['reference', 'modules-studio', 'modules-server', 'modules-manifest', 'modules-diagnostics', 'feeds-studio', 'feeds-server', 'features-studio', 'features-server', 'features-error', 'theme-overview', 'theme-tokens', 'theme-mode-last', 'theme-assets', 'theme-preview', 'theme-edited', 'modules-unavailable-content', 'modules-overview-content', 'modules-manifest-content', 'modules-diagnostics-content', 'feeds-operations-content', 'feeds-retention-content', 'feeds-ledger-content', 'feeds-unavailable-content', 'features-studio-list-content', 'features-studio-inspector-content', 'features-server-list-content', 'features-server-inspector-content', 'theme-overview-content', 'theme-tokens-content', 'theme-mode-last-content', 'theme-preview-content', 'theme-preview-validation'],
     'structured logs readability and recovery': ['reference', 'readability-1440', 'readability-1280', 'readability-1024', 'readability-390', 'readability-wrap', 'readability-compact', 'readability-empty', 'readability-reset', 'readability-dock'],
@@ -68,6 +69,7 @@ CAPTURES['native dashboard questions and sharing'] += (
        'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
 )
 ADDITIONAL_ARTIFACTS = {
+    'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
     'existing home widgets and layout defaults': {'native-weaver-boundary.json', 'home-populated-appearance-matrix.json', 'home-default-baseline.json', 'home-module-widgets.json', 'home-preferences-restored.json'},
 }
@@ -109,6 +111,8 @@ RESTRICTED_PERMISSIONS = ('api-capabilities:read', 'workflows/execution-evidence
 
 def configure_dashboard_qualification(settings, shells):
     """Only the temporary QA host gets native password principals and predefined CAS grant profiles."""
+    # The QA bootstrap owns explicit catalog preparation and activation/readiness.
+    settings.setdefault('Elsa', {}).setdefault('Readiness', {})['WarmDefaultShell'] = False
     native = ['api-capabilities:read', 'studio/questions:read', 'studio/questions:create', 'studio/questions:edit',
               'studio/dashboards:read', 'studio/dashboards:create', 'studio/dashboards:edit',
               'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect',
@@ -135,11 +139,17 @@ def signal_owned_group(process, signal_number):
         # Only tolerate this when no living process owned by us remains in that group.
         if process.poll() is None:
             raise
-        members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
-        if any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
-               and int(parts[1]) == process.pid and not parts[2].startswith('Z')
-               for line in members.splitlines()):
-            raise
+        # A reaped leader can leave a member visible for a brief exit transition.
+        # Permit only bounded quiescence; a live owned member still fails cleanup.
+        for attempt in range(10):
+            members = subprocess.check_output(['ps', '-axo', 'uid=,pgid=,stat='], text=True)
+            if not any(len(parts := line.split()) >= 3 and int(parts[0]) == os.getuid()
+                       and int(parts[1]) == process.pid and not parts[2].startswith('Z')
+                       for line in members.splitlines()):
+                return
+            if attempt < 9:
+                time.sleep(0.05)
+        raise
 
 
 def stop_group(process, *, graceful_timeout=15):

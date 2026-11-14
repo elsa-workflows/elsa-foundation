@@ -2695,6 +2695,21 @@
           "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.publishing.releases.capture": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Capture.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Persistence.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.capture.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.publishing.releases.core": {
         "type": "Project"
       },
@@ -2728,6 +2743,14 @@
         "dependencies": {
           "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.runtime.source": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Capture.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {

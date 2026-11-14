@@ -21,6 +21,8 @@ EF Core uses nine **tables**. MongoDB uses ten **collections**: the extra `clock
 for outside message insertion without writing the owner's partition document.
 Capitalization below is physical: `Messages` is an EF table; `messages` is a MongoDB collection.
 Column types follow each SQL provider's EF mappings; the lists below name columns, not a portable SQL DDL script.
+Optional logical `InstanceRow.CommitTimes` metadata is not an EF column or MongoDB field; its provider boundary is
+listed under [optional commit-time facts](#optional-commit-time-facts).
 MongoDB `_id` is a scalar or an embedded key document as shown. Other listed fields are top-level fields.
 
 | Purpose | EF Core table and columns | MongoDB collection and document fields |
@@ -38,7 +40,7 @@ MongoDB `_id` is a scalar or an embedded key document as shown. Other listed fie
 
 ### Values and embedded shape
 
-The two providers store the same opaque checkpoint content. MongoDB does **not** turn the execution model's
+The two physical providers store the same opaque `State` content. MongoDB does **not** turn the execution model's
 state into indexed BSON properties: `state` is a JSON **string**, as `State` is a SQL text value.
 Likewise `jobs`, `children`, `start` and `entries` are serialized JSON strings, not nested MongoDB arrays or documents.
 The embedded MongoDB documents in the inventory are the composite `_id` keys.
@@ -69,6 +71,32 @@ collection to `KernelDb` or `MongoStore`; it uses an external directory through 
 MongoDB's [document-size experiment](../../prototypes/kernel-model/MONGO.md#5-findings)
 records a 16 MiB document limit: the instance envelope shares that limit with its state string. This is a provider
 constraint, not a chosen inline-value threshold.
+
+### Optional commit-time facts
+
+The [shared commit-clock probe](../../prototypes/kernel-model/models/Clock.Run/README.md) is the canonical account
+of the optional API and its qualification limits. The logical
+[instance row](../../prototypes/kernel-model/src/Kernel.Durable/Store.cs) now has nullable `CommitTimes`, separate
+from opaque `State`: a serialized map of reference strings to nullable 64-bit epoch milliseconds. New requests
+carry null until stamped; retained committed facts carry their immutable timestamp. The implementation is in
+[CommitClock.cs](../../prototypes/kernel-model/src/Kernel.Durable/CommitClock.cs).
+
+`IKernelStore.CommitClockAvailable` defaults to false. The in-memory prototype advertises support and stamps new
+facts in the same synchronous atomic apply as the checkpoint; it returns that authoritative time in `Committed.Now`,
+which the worker also uses for its cache. A provider advertising support must return that exact stamp time: the
+ordinary allowance to omit store time does not apply. This is not qualification of an EF or MongoDB commit clock.
+Both physical providers explicitly reject clock-bearing writes with `Failure.Definite` before codecs that would
+omit the field. Their table/collection census, serializers and indexes above therefore remain unchanged.
+
+Opt-in and requested facts travel in the ordinary owner commit. In the supporting in-memory path, retained facts
+cannot be restamped or forged, and existing opt-in cannot be removed. Models can release their `turn:` facts in a
+later commit; the workflow owner separately keeps `workflow:end` when an opted-in workflow persists its first
+terminal checkpoint, including control and parking paths. Removing the instance removes its facts. Resolving a
+reference only reads already-loaded metadata; it neither creates a fact nor adds a journal or clock query. Ordinary models retain null metadata.
+
+This optional fact-storage contract is distinct from the Jobs proposal's `SupportsCommitWindow` guard: immutable
+past timestamps do not authorize job effects or enforce an authority window at commit. Neither feature selects a
+product provider profile, retention duration, key-reuse rule or default.
 
 ## Record lifecycles
 
@@ -134,7 +162,10 @@ is which operation is authorized to write which records. An outside insert canno
 | Viewer/API reads | Projection cursor, journal pages and instance view keys | None. No owner commit is forced by these reads. |
 | Sweep / maintenance | Database time and expiry predicates | Deletes handled expired inbox rows and expired events; no checkpoint, subscription, node, view or journal TTL cleanup. |
 
-The commit's fence is either checked before its writes or included in the same batch, followed by commit.
+Clock-bearing writes add the optional metadata validation/stamping described above to the same in-memory commit;
+there is no separate clock writer or transaction. EF/Mongo refuse those writes rather than silently omit the facts.
+
+The separate checked fence runs before the data writes. The batch path includes the partition update among the writes. In the PostgreSQL trace, the subscription insert followed the fence. Both paths check the affected-row count before COMMIT.
 SQL Server defaults to a checked fence; PostgreSQL, SQLite and MySQL default to the batch fence.
 MongoDB supports both; its batch path uses the partition clock remembered from its own take and falls back to
 checked fencing when that local knowledge is absent. A stale fence cannot authorize partial checkpoint writes.
@@ -200,6 +231,7 @@ engine-generated index names. All MongoDB collections have the ordinary unique `
 MySQL also declares `Messages.Seq` as an alternate key so its auto-increment column leads a key.
 PostgreSQL and SQL Server configure sequence/identity generation; SQLite supplies the value in the store.
 No additional due-time, seen-epoch, instance-suspension, job-state, event-expiry or membership-expiry index is declared.
+The current EF/Mongo implementations have no index or lookup query for a stored commit-time reference.
 No EF foreign-key relationships are declared between these tables. Target, parent and instance references are
 application fields; a durable message may target an instance that has not been created or has already ended.
 The poll indexes supply a useful ordering path; they are not covering indexes for the full message payload or every
@@ -228,6 +260,9 @@ The [qualification findings](../../prototypes/kernel-model/FINDINGS.md) retain k
   collision in a caller's derived message or instance IDs.
 - **Order:** `Seq` is an order key, not a gapless commit counter. PostgreSQL sequence allocation can leave gaps;
   MongoDB can have equal order keys from its separate allocation clocks and therefore sorts by ID as well.
+- **Optional clock facts:** an enabled store must commit each requested stamp atomically with its row, preserve
+  retained values and attest the same timestamp to the worker. Unsupported providers must refuse clock-bearing
+  writes; the ordinary checkpoint contract does not implicitly qualify this optional feature.
 - **Projection:** advancing the projector cursor and changing its views is atomic and conditional on the old cursor.
   The cursor does not participate in the owner's checkpoint fence.
 
@@ -255,6 +290,7 @@ Logical row growth and physical write amplification are different quantities.
 | Journal | History level and explicit removal of positive rows on instance delete | Full/State append with history-bearing commits; deletion markers and other non-positive rows remain. No default journal-retention policy is implemented here. |
 | Views and membership | View removal by projector; live membership count uses heartbeat age | Projection can lag; stale node documents/rows are not removed by current sweep. |
 | Partition metadata | Fixed partition count | One ownership/cursor record per partition, plus MongoDB's outside-add clock per partition. |
+| Optional commit facts, in-memory prototype only | Retained in the logical instance row; model-owned references can be released in a later commit | Unreleased captures grow the metadata map. The workflow-owned terminal fact remains until instance removal. No EF/Mongo column, TTL or measured WAL cost follows from this probe. |
 
 The [PostgreSQL write-volume measurement](../../prototypes/kernel-model/WRITES.md) supplies the following observations,
 not provider-independent capacity promises. The measurement used PostgreSQL 17.11, a checked fence, three nodes and
@@ -281,7 +317,9 @@ space after vacuum rather than returning it. Setting fill factor to 70 on both I
 burst workload; the same two-table experiment's roughly 4% improvement in the stress comparison was below the
 measurement's resolution. None is a selected host default.
 The report did not establish MongoDB/oplog volume, SQL Server/MySQL/SQLite write amplification, production capacity,
-or WAL savings from the subsequently built external-values witness.
+WAL savings from the subsequently built external-values witness, or the size/write amplification of immutable
+commit-time facts. The clock probe has no qualified physical-provider mapping, so these older byte counts must not
+be presented as measurements of clock-bearing rows.
 
 Partitioning the PostgreSQL inbox by kernel partition was probed, not adopted: global message-ID uniqueness conflicts
 with a partitioned unique key that omits the partition column. Adding that column would change the deduplication

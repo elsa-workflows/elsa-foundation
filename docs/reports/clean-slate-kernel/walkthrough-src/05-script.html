@@ -66,6 +66,16 @@
       count.textContent = "Step " + (i + 1) + " of " + items.length;
       prev.disabled = i === 0;
       next.disabled = i === items.length - 1;
+      // Keep the current action visible in a narrow diagram without moving the page vertically.
+      if (root.hasAttribute("data-follow-step")) {
+        const frame = svg.closest(".fig");
+        const focus = parts.find(p => p.dataset.k === [...on].at(-1));
+        if (focus && frame.scrollWidth > frame.clientWidth) {
+          const action = focus.getBoundingClientRect();
+          const viewport = frame.getBoundingClientRect();
+          frame.scrollLeft += action.left - viewport.left - (frame.clientWidth - action.width) / 2;
+        }
+      }
     };
     prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
     next.addEventListener("click", () => { if (i < items.length - 1) { i++; render(); } });
@@ -81,14 +91,16 @@
   const stmts = document.getElementById("stmts");
   const note = document.getElementById("commit-note");
   const notes = {
-    tok: "EF Core sends the writes and the fence in one batch, the fence last because EF orders the statements by table; on SQL Server this lets a take deadlock with a stale commit (E9), which the checked fence avoids. It uses epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
+    tok: "In a traced PostgreSQL batch, EF wrote the instance, journal and messages, updated the partition fence, then inserted a subscription. Epoch and position are concurrency tokens. EF checks the affected-row count before COMMIT and rolls back a stale batch. This took 2 round trips, using the node clock for the lease. On SQL Server, locking messages before the partition can deadlock with a take (E9).",
     first: "The fence goes alone and returns the database's time. Only when its count checks out are the writes sent. 3 round trips on PostgreSQL; the lease time comes from the database."
   };
   const setMode = mode => {
-    [...stmts.children].forEach(li => {
-      li.style.order = li.dataset["o" + (mode === "tok" ? "Tok" : "First")];
-      li.querySelector(".rt").textContent = li.dataset["rt" + (mode === "tok" ? "Tok" : "First")];
+    const suffix = mode === "tok" ? "Tok" : "First";
+    const rows = [...stmts.children].sort((a, b) => Number(a.dataset["o" + suffix]) - Number(b.dataset["o" + suffix]));
+    rows.forEach(li => {
+      li.querySelector(".rt").textContent = li.dataset["rt" + suffix];
     });
+    stmts.replaceChildren(...rows); // Native list reading order follows the visible statement order.
     document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"));
     note.textContent = notes[mode];
   };
