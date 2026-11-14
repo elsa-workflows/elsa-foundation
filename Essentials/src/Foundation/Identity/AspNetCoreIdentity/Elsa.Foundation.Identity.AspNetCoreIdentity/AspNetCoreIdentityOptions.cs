@@ -37,6 +37,9 @@ public sealed class AspNetCoreIdentityOptions
     /// </summary>
     public string DefaultTenantId { get; set; } = AspNetCoreIdentityDefaults.DefaultTenantId;
 
+    /// <summary>Absolute lifetime for durable canonical sessions, between one minute and thirty days.</summary>
+    public TimeSpan SessionLifetime { get; set; } = TimeSpan.FromHours(8);
+
     /// <summary>
     /// Absolute origins (scheme + host + port, e.g. <c>https://localhost:7030</c>) that a post-login
     /// <c>returnUrl</c> may redirect to in addition to same-origin local paths. Needed when Studio is hosted

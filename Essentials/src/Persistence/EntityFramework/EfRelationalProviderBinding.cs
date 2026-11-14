@@ -226,6 +226,7 @@ public static class EfRelationalProviderBinding
         var configure = BuildRelationalConfigure(actionType, historyTableName, migrationsAssembly, schema);
         method.Invoke(null, [builder, connectionString, configure]);
         EfMigrationsHistory.EnsureAdded(builder);
+        builder.ReplaceService<IModelSource, EfRelationalModelSource>();
         // Microsoft.Data.Sqlite can lend one pooled connection to two opens that check out at once (#2209).
         if (engine == SqliteEngine)
             ConfigureSqliteConnectionSafety(builder);
