@@ -178,6 +178,7 @@ public sealed class RestorePublicationSlotRequestHandler(
         {
             PublicationId = publicationId,
             SourceReferenceId = sourceReferenceId,
+            RequestFingerprint = null,
             ExpectedSlotRevision = slot.Revision,
             Status = PublicationStatus.Candidate,
             CreatedAt = now,

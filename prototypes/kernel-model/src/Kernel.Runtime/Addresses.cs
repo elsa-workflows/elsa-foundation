@@ -8,7 +8,14 @@ namespace Kernel.Runtime;
 /// </summary>
 public readonly record struct InstanceRef(string Id)
 {
-    public int Partition => int.Parse(Id.AsSpan(0, Id.IndexOf('/')), CultureInfo.InvariantCulture);
+    public bool EventStartAddress => Id.StartsWith("e", StringComparison.Ordinal) && Id.IndexOf('/') > 1;
+    public bool ChildAddress => Id.StartsWith('g');
+    public bool GeneratedAddress => EventStartAddress || ChildAddress;
+    public int Partition => int.Parse(Id.AsSpan(GeneratedAddress ? 1 : 0, Id.IndexOf('/') - (GeneratedAddress ? 1 : 0)), CultureInfo.InvariantCulture);
+    public static InstanceRef ForEvent(int partition, long serial) => new($"e{partition}/{serial}");
+    public static InstanceRef ForChild(int destination, int issuer, long epoch, long ordinal) =>
+        new(FormattableString.Invariant($"g{destination}/child/{issuer}.{epoch}.{ordinal}"));
+
     public static InstanceRef In(int partition, string name) => new($"{partition}/{name}");
 
     /// <summary>A partition for a name, the same on every node: placement, the runtime's business.</summary>

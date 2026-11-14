@@ -528,6 +528,18 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
+    public async Task Cookie_without_canonical_user_identity_is_rejected_even_with_a_current_security_stamp()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var user = await scenario.CreateUserAsync("CookieUnscoped");
+        var context = CreateCookieContext(scenario.Services, user.Id, scenario.TenantId, user.SecurityStamp);
+        var identity = (ClaimsIdentity)context.Principal!.Identity!;
+        identity.RemoveClaim(identity.FindFirst(IdentityClaimTypes.UserId)!);
+        await scenario.Services.GetRequiredService<EfCoreIdentityCookieEvents>().ValidatePrincipal(context);
+        Assert.Null(context.Principal);
+    }
+
+    [Fact]
     public async Task Cookie_of_a_user_disabled_after_sign_in_is_rejected_and_signed_out()
     {
         await using var scenario = await EfCoreIdentityScenario.CreateAsync();
@@ -577,6 +589,8 @@ public sealed class EfCoreIdentityFrameworkContractTests
         var stampClaimType = services.GetRequiredService<IOptions<IdentityOptions>>().Value.ClaimsIdentity.SecurityStampClaimType;
         var identity = new ClaimsIdentity(AspNetCoreIdentityDefaults.CookieScheme);
         identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userId));
+        identity.AddClaim(new Claim(IdentityClaimTypes.UserId, userId));
+        identity.AddClaim(new Claim(IdentityClaimTypes.Normalized, "v1"));
         identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, tenantId));
         if (securityStamp is not null)
             identity.AddClaim(new Claim(stampClaimType, securityStamp));

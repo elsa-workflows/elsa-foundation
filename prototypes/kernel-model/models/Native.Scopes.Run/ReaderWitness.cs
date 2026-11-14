@@ -26,7 +26,7 @@ internal static class ReaderWitness
             var old = new NativeState(); old.Frames.Add("f1", new Frame { Id = "f1", Node = "owner" }); old.Agenda.Add(new Work { Frame = "f2", Node = "work", Parent = "f1" });
             Check(!Json.Write(old).Contains("\"LexicalScope", StringComparison.Ordinal), "unused fields changed legacy native serialization");
         });
-        foreach (var version in new[] { 1, 2, 3 })
+        foreach (var version in new[] { 1, 2, 3, 4 })
         {
             yield return ("legacy-v" + version, () =>
             {
@@ -49,9 +49,10 @@ internal static class ReaderWitness
                 "private resource/owner/parent/reference codec lost data");
         });
         yield return ("mixed-old", () => Refuse(() => model.UpgradeState(Json.Write(Valid()), 3), "Legacy native state contains unsupported lexical scope data."));
+        yield return ("scoped-v4", () => Check(Json.Write(model.UpgradeState(Json.Write(Valid()), 4)) == Json.Write(Valid()), "v4 resource upgrade changed existing scoped data"));
         yield return ("future-version", () =>
         {
-            try { model.UpgradeState("{}", 5); }
+            try { model.UpgradeState("{}", model.StateVersion + 1); }
             catch (NotSupportedException) { return; }
             throw new InvalidOperationException("L10: future native version was accepted");
         });
