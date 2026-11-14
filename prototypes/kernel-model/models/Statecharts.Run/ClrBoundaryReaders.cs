@@ -10,14 +10,15 @@ internal static class ClrBoundaryReaders
 {
     internal static void Run()
     {
-        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var kind in new[] { "cancel", "owner", "diagnostic" })
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var kind in new[] { "cancel", "owner", "diagnostic", "nested-cancel" })
         {
             var registry = new WorkflowRegistry(); var node = Wf.Node<ClrBoundaryLeaf>("boundary", ("Kind", Binding.Literal(kind)));
             var wf = Wf.Workflow("boundary", node); wf.InterventionRequested = true; registry.Add(wf);
             var proxy = DispatchProxy.Create<ITurn, ClrBoundaryTurn>(); var setup = (ClrBoundaryTurn)(object)proxy;
-            setup.Native = new NativeState { Mode = mode }; var token = new CancellationToken(kind == "cancel"); var observed = false;
+            setup.Native = new NativeState { Mode = mode }; var token = new CancellationToken(kind.EndsWith("cancel", StringComparison.Ordinal)); var observed = false;
             try { new NativeModel(registry).TurnAsync(proxy, token).AsTask().GetAwaiter().GetResult(); }
             catch (OperationCanceledException) when (kind == "cancel") { observed = true; }
+            catch (TargetInvocationException e) when (kind == "nested-cancel" && e.InnerException is TargetInvocationException { InnerException: OperationCanceledException }) { observed = true; }
             catch (InvalidOperationException e) when (kind == "owner" && e.Message == "owner boundary sentinel") { observed = true; }
             if (kind == "diagnostic") observed = setup.Native.Frames.Values.SingleOrDefault()?.Intervention is { Fault.Code: "exception", Fault.Message.Length: 2048 };
             Check(observed && (kind == "diagnostic" || setup.Native.Frames.Values.All(f => f.Intervention is null)), "X20: runtime cancellation/owner failure was captured as an authored incident: " + kind);
@@ -37,7 +38,12 @@ internal static class ClrBoundaryReaders
 internal sealed class ClrBoundaryLeaf : Kernel.Native.Activity
 {
     public ClrBoundaryLeaf() { }
-    [Input] public string Kind { get; set; } = "";
+    private string _kind = "";
+    [Input] public string Kind
+    {
+        get => _kind;
+        set { if (value == "nested-cancel") throw new TargetInvocationException(new OperationCanceledException()); _kind = value; }
+    }
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext c) => Kind switch
     {
         "cancel" => throw new OperationCanceledException(c.CancellationToken),
