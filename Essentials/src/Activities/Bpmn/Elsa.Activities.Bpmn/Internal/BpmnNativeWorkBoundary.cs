@@ -24,6 +24,12 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     CoalescingInner<IPostCommitOutboxLookupStore>? physicalLookup = null)
 {
     internal const string StartKind = "Elsa.Bpmn.StartNativeWork.v1";
+    internal const string InputStartKind = "Elsa.Bpmn.StartNativeWork.v2";
+    internal const string IngressStartKind = "Elsa.Bpmn.StartNativeWork.v3";
+    internal static bool IsStartKind(string kind) => kind is StartKind or InputStartKind or IngressStartKind;
+    internal static string StartIntentKind(RuntimeModelNativeWorkOrigin origin) => origin.IngressOrigin is not null ? IngressStartKind : origin.FormatVersion == 2 ? InputStartKind : StartKind;
+    internal static bool MatchesStartKind(string kind, RuntimeModelNativeWorkOrigin origin) =>
+        kind == StartIntentKind(origin);
     internal const string ResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
     internal const string CancelKind = "Elsa.Bpmn.CancelNativeWork.v1";
     internal static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
@@ -54,12 +60,12 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         EnsureQualified();
         access.Current.EnsureScope(origin.Scope);
         var state = await models!.FindAsync(origin.ExecutionId, cancellationToken) ?? throw Unavailable("The authorizing model execution is unavailable.");
-        access.Current.EnsureTenantScope(state.TenantId);
+        BpmnIngressScope.Require(access, state);
         if (!origin.MatchesModel(state) || state.Lifecycle != RuntimeModelLifecycle.Running ||
             !BpmnDirectExecutionDriver.Read(state).Work.Any(work => origin.IsEquivalentTo(work.NativeWork)))
             throw Unavailable("The native worker's exact model invocation is no longer live.");
         var source = await PhysicalLookup.FindDurableAsync(origin.SourceOutboxItemId, cancellationToken) ?? throw Unavailable("The model-work source is unavailable.");
-        if (source.StimulusDeliverySourceScope != origin.Scope || source.Intent.Kind != StartKind ||
+        if (source.StimulusDeliverySourceScope != origin.Scope || !MatchesStartKind(source.Intent.Kind, origin) ||
             source.Status is RuntimePostCommitOutboxStatus.Delivered or RuntimePostCommitOutboxStatus.FailedFinal ||
             source.Intent.WorkflowExecutionId != origin.ExecutionId || source.Intent.IntentId != origin.SourceIntentId ||
             source.Intent.Payload is not { } payload || !origin.IsEquivalentTo(payload.Deserialize<RuntimeModelNativeWorkOrigin>(Web)))
@@ -89,7 +95,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         access.Current.EnsureScope(origin.Scope);
         var state = await PhysicalWorkflows.FindAsync(origin.WorkerExecutionId, cancellationToken);
         if (state is not null && (!origin.IsEquivalentTo(state.ModelWorkOrigin) || state.ParentWorkflowExecutionId is not null ||
-            state.Partition?.Value != origin.Scope.Value || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(state.PinnedExecutable, origin.WorkerExecutable)))
+            state.Partition?.Value != (origin.Partition?.Value ?? origin.Scope.Value) || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(state.PinnedExecutable, origin.WorkerExecutable)))
             throw new BpmnModelValidationException("The native execution differs from its model worker address.");
         return state;
     }
@@ -115,7 +121,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         EnsureQualified();
         var origin = result.Origin;
         access.Current.EnsureScope(state.Scope);
-        access.Current.EnsureTenantScope(state.TenantId);
+        BpmnIngressScope.Require(access, state);
         if (!origin.MatchesModel(state) || !result.Status.IsTerminal())
             throw new BpmnModelValidationException("The retained native result does not address this model execution.");
         var source = await PhysicalLookup.FindDurableAsync(result.SourceOutboxItemId, cancellationToken)
@@ -172,7 +178,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         var origin = cancellation.Origin;
         var model = await models!.FindAsync(origin.ExecutionId, cancellationToken)
             ?? throw Unavailable("The cancelling model execution is unavailable.");
-        access.Current.EnsureTenantScope(model.TenantId);
+        BpmnIngressScope.Require(access, model);
         var document = BpmnDirectExecutionDriver.Read(model);
         var retained = document.Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
         if (!origin.MatchesModel(model) || document.FormatVersion is not (11 or 12 or 13 or 14) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" ||
@@ -197,7 +203,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         EnsureQualified(); access.Current.EnsureScope(origin.Scope);
         var model = await models!.FindAsync(origin.ExecutionId, cancellationToken)
             ?? throw Unavailable("The model execution authorizing this native start is unavailable.");
-        access.Current.EnsureTenantScope(model.TenantId);
+        BpmnIngressScope.Require(access, model);
         if (!origin.MatchesModel(model)) throw new BpmnModelValidationException("The native start's model pin changed.");
         var document = BpmnDirectExecutionDriver.Read(model);
         var cancellation = document.Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
@@ -216,7 +222,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     {
         var source = await PhysicalLookup.FindDurableAsync(origin.SourceOutboxItemId, cancellationToken)
             ?? throw Unavailable("The original native start source is unavailable.");
-        if (source.StimulusDeliverySourceScope != origin.Scope || source.Intent.Kind != StartKind ||
+        if (source.StimulusDeliverySourceScope != origin.Scope || !MatchesStartKind(source.Intent.Kind, origin) ||
             source.Intent.WorkflowExecutionId != origin.ExecutionId || source.Intent.IntentId != origin.SourceIntentId ||
             source.Intent.Payload is not { } payload || !origin.IsEquivalentTo(payload.Deserialize<RuntimeModelNativeWorkOrigin>(Web)))
             throw new BpmnModelValidationException("The original native start source differs from its retired invocation.");
@@ -225,7 +231,8 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
 
     internal static RuntimeModelExecutionCommand RetirementCommand(RuntimeModelExecutionState model, BpmnNativeWorkCancellation cancellation) =>
         new(model.Executable, model.MaterialIncarnationId, RetirementInputId(cancellation), "native-start-retired",
-            JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web), model.Authority, model.TenantId);
+            JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web), model.Authority, model.TenantId)
+        { IngressOrigin = model.IngressOrigin };
 
     internal async ValueTask<bool> HasRetirementReceiptAsync(RuntimeModelExecutionState model, BpmnNativeWorkCancellation cancellation,
         CancellationToken cancellationToken)
