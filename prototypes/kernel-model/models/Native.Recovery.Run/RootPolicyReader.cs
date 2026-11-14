@@ -25,6 +25,18 @@ internal static class RootPolicyReader
         yield return ("unused-policy", () => Check(!Json.Write(new NativeState()).Contains("InterventionPolicy", StringComparison.Ordinal), "unused policy changed legacy shape"));
         yield return ("held-codec", () => { var json = Json.Write(Held()); var state = Json.Read<NativeState>(json); NativeInterventions.Validate(state); Check(Json.Write(state) == json, "root codec changed"); });
         yield return ("staged-codec", () => NativeInterventions.Validate(Json.Read<NativeState>(Json.Write(RootStaged()))));
+        foreach (var change in new[] { "wrong-root", "tag", "scope", "borrowed", "other-frame", "other-work" }) yield return ("staged-" + change, () =>
+        {
+            var state = RootStaged(); var source = state.Retries!["operator"].Source; var work = state.Agenda.Single();
+            if (change == "wrong-root") { source.RecoveryMaterial!["root"] = "other"; work.RecoveryMaterial!["root"] = "other"; }
+            if (change == "tag") source.Tag = work.Tag = "foreign";
+            if (change == "scope") { source.Scope = new(); work.Scope = new(); }
+            if (change == "borrowed") source.LexicalScope = work.LexicalScope = "foreign";
+            if (change == "other-frame") state.Frames.Add("other", new() { Id = "other", Node = "other" });
+            if (change == "other-work") state.Agenda.Add(new() { Frame = "other", Node = "other" });
+            Refuse(() => NativeInterventions.Validate(state), change is "other-frame" or "other-work" ? "Invalid native staged root obligation." : "Invalid native root retry lineage.");
+        });
+        yield return ("completed-root-history", () => { var state = RootStaged(); state.Agenda.Clear(); NativeInterventions.Validate(state); });
         yield return ("v6-staged-policy", () =>
         {
             var json = Json.Write(RecoveryReader.Staged()); var copy = (NativeState)new NativeModel(new()).UpgradeState(json, 6); NativeInterventions.Validate(copy);
