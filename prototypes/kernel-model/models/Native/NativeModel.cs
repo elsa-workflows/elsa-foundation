@@ -142,8 +142,12 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         ? new Burst(this, turn, cancellationToken, status).MetadataAsync() : InvocationLifetime.Missing(turn);
     public void TerminateMetadata(object state)
     {
-        if (state is NativeState native) InvocationLifetime.Terminate(native, WorkflowCommitClock.Terminal, "cancelled", (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0,
-            (Options.AdmissionFlaws & AdmissionFlaw.RestampCompleted) != 0);
+        if (state is NativeState native)
+        {
+            InvocationLifetime.Terminate(native, WorkflowCommitClock.Terminal, "cancelled", (Options.AdmissionFlaws & AdmissionFlaw.KeepPayload) != 0,
+                (Options.AdmissionFlaws & AdmissionFlaw.RestampCompleted) != 0);
+            LexicalScopes.Terminate(native);
+        }
     }
     public bool ProtectsDeletion(object state, long now, ICommitClock clock) => (Options.AdmissionFlaws & AdmissionFlaw.IgnoreRetention) == 0 &&
         ((Options.AdmissionFlaws & AdmissionFlaw.UnsafeNull) != 0

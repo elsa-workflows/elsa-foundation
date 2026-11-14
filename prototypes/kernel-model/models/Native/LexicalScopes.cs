@@ -23,6 +23,13 @@ public sealed partial class Work
 
 internal static class LexicalScopes
 {
+    internal static void Terminate(NativeState state)
+    {
+        // Forced workflow termination retains its other forensic state but retires all lexical handles/resources.
+        state.LexicalScopes = null;
+        foreach (var frame in state.Frames.Values) frame.LexicalScope = null;
+        foreach (var work in state.Agenda) work.LexicalScope = null;
+    }
     internal static bool Present(NativeState state) => state.LexicalScopes is not null || state.Frames.Values.Any(f => f.LexicalScope is not null) || state.Agenda.Any(w => w.LexicalScope is not null);
     internal static bool Within(NativeState state, string frame, string ancestor)
     {
