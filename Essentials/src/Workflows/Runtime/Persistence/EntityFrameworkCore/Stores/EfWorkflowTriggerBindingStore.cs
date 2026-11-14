@@ -109,7 +109,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             ActivationId = Encode(activationId), ActivationIdHash = Hash(activationId), ActivationIdOrderKey = Order(activationId),
             IsActive = false, BindingCount = prepared.Length, ProjectionFingerprint = Fingerprint(prepared),
             ContentJson = Fingerprint(prepared),
-            SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion, Revision = ActivationProjectionStateLifecycle.CreationRevision
+            SchemaVersion = RuntimeSchemaWriteVersion.TriggerBinding(context), Revision = ActivationProjectionStateLifecycle.CreationRevision
         });
         try
         {
@@ -215,6 +215,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             throw new InvalidOperationException($"Activation '{activationId}' cannot replace a projection that is missing or no longer active.");
         foreach (var row in candidateRows) SetActive(row, true);
         candidate.IsActive = true; candidate.Revision = checked(candidate.Revision + 1);
+        candidate.SchemaVersion = RuntimeSchemaWriteVersion.TriggerBinding(context, candidate.SchemaVersion);
         if (replaced is not null && deleteReplaced)
         {
             context.WorkflowTriggerBindings.RemoveRange(replacedRows);
@@ -224,6 +225,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         {
             foreach (var row in replacedRows) SetActive(row, false);
             replaced.IsActive = false; replaced.Revision = checked(replaced.Revision + 1);
+            replaced.SchemaVersion = RuntimeSchemaWriteVersion.TriggerBinding(context, replaced.SchemaVersion);
         }
         return ProjectionStaging.Staged;
     }
@@ -446,9 +448,9 @@ public sealed class EfWorkflowTriggerBindingStore(
     private static string Lookup(string type, string hash) => Hash($"{type.Length}:{type}{hash}");
     private static string Lookup(string type) => Hash(type);
 
-    private static WorkflowTriggerBindingEntity ToEntity(WorkflowTriggerBinding x, string scope, string id, long revision) { var e = new WorkflowTriggerBindingEntity(); Copy(e, x, scope, revision); e.Id = id; return e; }
-    private static void Copy(WorkflowTriggerBindingEntity e, WorkflowTriggerBinding x, string scope, long revision)
-    { Validate(x); e.ScopeKey = Encode(scope); e.ScopeKeyHash = Hash(scope); e.TriggerBindingId = Encode(x.TriggerBindingId); e.TriggerBindingIdHash = Hash(x.TriggerBindingId); e.TriggerBindingIdOrderKey = Order(x.TriggerBindingId); e.ArtifactId = Encode(x.ArtifactId); e.ArtifactIdHash = Hash(x.ArtifactId); e.ArtifactIdOrderKey = Order(x.ArtifactId); e.DefinitionId = Encode(x.DefinitionId); e.ArtifactVersion = Encode(x.ArtifactVersion); e.ArtifactHash = Encode(x.ArtifactHash); e.ExecutableNodeId = Encode(x.ExecutableNodeId); e.StimulusType = Encode(x.StimulusType); e.StimulusHash = Encode(x.StimulusHash); e.StimulusLookupKey = Lookup(x.StimulusType, x.StimulusHash); e.StimulusTypeLookupKey = Lookup(x.StimulusType); e.CorrelationScope = x.CorrelationScope is null ? null : Encode(x.CorrelationScope); e.ActivationId = x.ActivationId is null ? null : Encode(x.ActivationId); e.ActivationIdHash = x.ActivationId is null ? null : Hash(x.ActivationId); e.ActivationIdOrderKey = x.ActivationId is null ? null : Order(x.ActivationId); e.SlotId = x.SlotId is null ? null : Encode(x.SlotId); e.Cardinality = (int)x.Cardinality; e.IsActive = x.IsActive; e.CreatedAtUtcTicks = x.CreatedAt.UtcTicks; e.CreatedAtOffsetMinutes = (int)x.CreatedAt.Offset.TotalMinutes; e.ContentJson = RuntimeArtifactJson.Serialize(x); e.SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion; e.Revision = revision; }
+    private WorkflowTriggerBindingEntity ToEntity(WorkflowTriggerBinding x, string scope, string id, long revision) { var e = new WorkflowTriggerBindingEntity(); Copy(e, x, scope, revision); e.Id = id; return e; }
+    private void Copy(WorkflowTriggerBindingEntity e, WorkflowTriggerBinding x, string scope, long revision)
+    { Validate(x); e.ScopeKey = Encode(scope); e.ScopeKeyHash = Hash(scope); e.TriggerBindingId = Encode(x.TriggerBindingId); e.TriggerBindingIdHash = Hash(x.TriggerBindingId); e.TriggerBindingIdOrderKey = Order(x.TriggerBindingId); e.ArtifactId = Encode(x.ArtifactId); e.ArtifactIdHash = Hash(x.ArtifactId); e.ArtifactIdOrderKey = Order(x.ArtifactId); e.DefinitionId = Encode(x.DefinitionId); e.ArtifactVersion = Encode(x.ArtifactVersion); e.ArtifactHash = Encode(x.ArtifactHash); e.ExecutableNodeId = Encode(x.ExecutableNodeId); e.StimulusType = Encode(x.StimulusType); e.StimulusHash = Encode(x.StimulusHash); e.StimulusLookupKey = Lookup(x.StimulusType, x.StimulusHash); e.StimulusTypeLookupKey = Lookup(x.StimulusType); e.CorrelationScope = x.CorrelationScope is null ? null : Encode(x.CorrelationScope); e.ActivationId = x.ActivationId is null ? null : Encode(x.ActivationId); e.ActivationIdHash = x.ActivationId is null ? null : Hash(x.ActivationId); e.ActivationIdOrderKey = x.ActivationId is null ? null : Order(x.ActivationId); e.SlotId = x.SlotId is null ? null : Encode(x.SlotId); e.Cardinality = (int)x.Cardinality; e.IsActive = x.IsActive; e.CreatedAtUtcTicks = x.CreatedAt.UtcTicks; e.CreatedAtOffsetMinutes = (int)x.CreatedAt.Offset.TotalMinutes; e.ContentJson = RuntimeArtifactJson.Serialize(x); e.SchemaVersion = RuntimeSchemaWriteVersion.TriggerBinding(context, e.SchemaVersion); e.Revision = revision; }
     private static WorkflowTriggerBinding Read(WorkflowTriggerBindingEntity e, string scope, string? expectedId = null)
     {
         if (EfSchemaVersion.NotReadable(RuntimeTriggerBindingEfModule.Chain, e.SchemaVersion) || e.Id != Id(scope, Decode(e.TriggerBindingId)) || e.ScopeKey != Encode(scope) || e.ScopeKeyHash != Hash(scope) || expectedId is not null && e.TriggerBindingId != Encode(expectedId) || e.Revision <= 0)
@@ -473,7 +475,7 @@ public sealed class EfWorkflowTriggerBindingStore(
     // (eagerly, via .ToArray()) on this same row, so the version check has already passed and this
     // Deserialize call cannot observe a skewed row's changed shape as corruption. The content is rewritten at the
     // current version, so the stamp moves with it: a row read at an older version is upgraded here.
-    private static void SetActive(WorkflowTriggerBindingEntity row, bool active) { var binding = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast<WorkflowTriggerBindingEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!); row.IsActive = active; row.ContentJson = RuntimeArtifactJson.Serialize(binding with { IsActive = active }); row.SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion; row.Revision = checked(row.Revision + 1); }
+    private void SetActive(WorkflowTriggerBindingEntity row, bool active) { var binding = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast<WorkflowTriggerBindingEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!); row.IsActive = active; row.ContentJson = RuntimeArtifactJson.Serialize(binding with { IsActive = active }); row.SchemaVersion = RuntimeSchemaWriteVersion.TriggerBinding(context, row.SchemaVersion); row.Revision = checked(row.Revision + 1); }
     private static void ValidateActivation(string id, IReadOnlyCollection<WorkflowTriggerBinding> xs) { ArgumentException.ThrowIfNullOrWhiteSpace(id); ArgumentNullException.ThrowIfNull(xs); var ids = new HashSet<string>(StringComparer.Ordinal); foreach (var x in xs) { Validate(x); if (x.ActivationId != id || string.IsNullOrWhiteSpace(x.SlotId) || !ids.Add(x.TriggerBindingId)) throw new ArgumentException("Activation bindings must have matching activation, slot, and unique binding ids.", nameof(xs)); } }
     private static bool ProjectionsEqual(IEnumerable<WorkflowTriggerBindingEntity> rows, IEnumerable<WorkflowTriggerBinding> xs, string scope) => Fingerprint(rows.Select(x => Read(x, scope))) == Fingerprint(xs);
     private static bool ProjectionMatches(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation)

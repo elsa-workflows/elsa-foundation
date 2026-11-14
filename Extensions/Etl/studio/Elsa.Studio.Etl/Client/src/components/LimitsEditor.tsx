@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import { parseEtlJsonNumber } from "../etlTypes";
 import type { EtlLimits } from "../etlTypes";
@@ -39,8 +40,8 @@ export function LimitsEditor({ limits, sourceSchemaCount, lookupSchemaCount, dis
           const current = limits[field.key];
           const schemaCount = field.key === "maxFields" ? Math.max(sourceSchemaCount, lookupSchemaCount) : undefined;
           return (
-            <div className="etl-editor-field" key={field.key}>
-              <label htmlFor={id}>{field.label}</label>
+            <div className="etl-editor-field" key={field.key}><StudioField controlId={id} label={<>{field.label}</>}>
+
               <input
                 id={id}
                 type="number"
@@ -61,7 +62,7 @@ export function LimitsEditor({ limits, sourceSchemaCount, lookupSchemaCount, dis
                 }}
               />
               <small id={`${id}-help`}>{field.description}{schemaCount ? ` Current schemas need at least ${schemaCount} fields.` : ""}</small>
-            </div>
+            </StudioField></div>
           );
         })}
       </div>

@@ -60,7 +60,16 @@ internal sealed class ActivityDataSelectionAnalyzer(
                     !constraint.AllowedExpressionTypes.Contains(ConstraintRole(input.Value.ExpressionType), StringComparer.OrdinalIgnoreCase))
                     findings.Add(new(Path(node, input.ReferenceKey), constraint.ReasonCode, constraint.Message));
                 foreach (var binding in ActivityDataReadBinding.Read(input.Value))
-                    await Resolve(context, node, binding, Path(node, input.ReferenceKey), findings, cancellationToken);
+                {
+                    var path = Path(node, input.ReferenceKey);
+                    var source = await Resolve(context, node, binding, path, findings, cancellationToken);
+                    // Publication can honour an explicit conversion only from a member whose contract it knows, and only a
+                    // typed result member is known; say so here, before publishing, rather than only when it refuses.
+                    if (source is not null && binding.IsMemberRead && input.Conversion is { Mode: not AuthoredValueConversionMode.Auto } &&
+                        !context.MemberReads.Any(facts => facts.Path == path && facts.IsKnown))
+                        findings.Add(new(path, "ActivityData/SelectedMemberContractUnknown",
+                            "This member read's member is not typed at publication, so only the default conversion can be honoured."));
+                }
             }
             return Result(document, null, [], findings) with { MemberReads = [.. context.MemberReads] };
         }
@@ -98,14 +107,20 @@ internal sealed class ActivityDataSelectionAnalyzer(
             // the same admission that publication applies to a stored one.
             var memberRole = binding switch
             {
-                { Role: "ActivityResult", IsDirect: true, Scope: null, Error: null } => "ActivityResultMember",
-                { Role: "Variable", Error: null } => "VariableMember",
+                { Role: "ActivityResult", IsDirect: true, Scope: null, Error: null } => ActivityDataReadRoles.ActivityResultMember,
+                { Role: "Variable", Error: null } => ActivityDataReadRoles.VariableMember,
+                { Role: "WorkflowRequest", Path: null, Error: null } => ActivityDataReadRoles.WorkflowRequestMember,
+                { Role: "Input", Error: null } => ActivityDataReadRoles.InputMember,
                 _ => null
             };
-            if (options.Value.MemberReads && !query.MemberPath.IsDefaultOrEmpty && memberRole is not null)
-                binding = ActivityDataMemberPath.IsWithinBounds(query.MemberPath)
-                    ? binding with { Role = memberRole, MemberPath = query.MemberPath }
-                    : binding with { Role = memberRole, Error = "InvalidMemberPath" };
+            // A member path always asks for a member read, so it is never answered with the whole read: with member
+            // reads off the member read is refused as a stored one is, and a source with no member read is invalid.
+            if (!query.MemberPath.IsDefaultOrEmpty)
+                binding = memberRole is null
+                    ? binding.Error is null ? binding with { Error = "InvalidSource" } : binding
+                    : ActivityDataMemberPath.IsWithinBounds(query.MemberPath)
+                        ? binding with { Role = memberRole, MemberPath = query.MemberPath }
+                        : binding with { Role = memberRole, Error = "InvalidMemberPath" };
             var source = await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken);
             if (source is not null)
             {
@@ -219,7 +234,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         ActivityDataReadBinding binding, string path, ICollection<ValidationError> findings, CancellationToken ct, bool admitOccurrence = true)
     {
         ct.ThrowIfCancellationRequested();
-        var memberRead = binding.Role == "ActivityResultMember";
+        var memberRead = binding.Role == ActivityDataReadRoles.ActivityResultMember;
         if (binding.IsMemberRead && !options.Value.MemberReads)
         {
             findings.Add(new(path, "ActivityData/UnsupportedMemberBinding", "The source binding is malformed or uses a member-read contract not supported by this server."));
@@ -230,30 +245,35 @@ internal sealed class ActivityDataSelectionAnalyzer(
             findings.Add(new(path, $"ActivityData/{binding.Error}", "The source binding is malformed or uses a member-read contract not supported by this server."));
             return null;
         }
-        if (binding.Role is "Input" or "WorkflowRequest")
+        if (binding.Role is "Input" or "WorkflowRequest" or ActivityDataReadRoles.InputMember or ActivityDataReadRoles.WorkflowRequestMember)
         {
-            var requestRead = binding.Role == "WorkflowRequest";
-            var matches = (requestRead ? context.RequestInputs : context.Inputs).GetValueOrDefault(binding.Key) ?? [];
-            if (requestRead && context.OpenWorkflowRequest)
-                return new($"request:{binding.Key}", binding.Key, null,
-                    new(JsonSerializer.SerializeToElement(new { memberKey = binding.Key, path = binding.Path }), "WorkflowRequest"),
-                    ActivityChildResultAvailability.Definite, null, null, null, null, null, null, "OpenWorkflowRequest");
-            if (matches.Length != 1)
+            // A member read of a request member or a declared input is admitted exactly as the whole read of it, and
+            // never typed: a request can be seeded by any caller, so the runtime checks the member when it reads it.
+            var requestRead = binding.Role is "WorkflowRequest" or ActivityDataReadRoles.WorkflowRequestMember;
+            var memberOfInput = binding.IsMemberRead;
+            var input = requestRead
+                ? context.RequestInputs.GetValueOrDefault(binding.Key) is [var requested] ? requested : null
+                : context.InputIndex.TryFind(binding.Key, out var declared) ? declared : null;
+            if (input is null)
             {
-                findings.Add(new(path, "ActivityData/UnknownInput", "The referenced boundary input is missing or ambiguous."));
+                findings.Add(new(path, "ActivityData/UnknownInput", context.WorkflowBoundary
+                    ? "The referenced workflow input is missing or ambiguous. Declare the input before reading its request value."
+                    : "The referenced boundary input is missing or ambiguous."));
                 return null;
             }
-            var input = matches[0];
-            // A workflow's inputs are its request members, keyed by name, and publication lowers a stored Input read to
-            // that request read; so a workflow offers the request read itself. A reusable body keeps offering Input.
-            var value = binding.Role == "Input" && !context.WorkflowBoundary
-                ? new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
-                : new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = context.WorkflowBoundary ? input.Name : input.ReferenceKey, path = binding.Path }), "WorkflowRequest");
+            // A workflow's inputs are its request members, keyed by name, and publication lowers a stored Input or
+            // InputMember read to that request read; so a workflow offers the request read itself. A reusable body,
+            // whose inputs are its boundary's, keeps offering the Input or InputMember read.
+            var value = binding.Role is "Input" or ActivityDataReadRoles.InputMember && !context.WorkflowBoundary
+                ? memberOfInput
+                    ? new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = input.ReferenceKey, memberPath = binding.MemberPath }), ActivityDataReadRoles.InputMember)
+                    : new ArgumentValue(new VariableReference(input.ReferenceKey), "Input")
+                : RequestRead(context.WorkflowBoundary ? input.Name : input.ReferenceKey, binding, memberOfInput);
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
                 ActivityChildResultAvailability.Definite, input.Type, null, null, input.IsNullable, input.IsSensitive, input.IsCredential,
                 binding.Path is null ? null : "LegacyRequestPath");
         }
-        if (binding.Role is "Variable" or "VariableMember")
+        if (binding.Role is "Variable" or ActivityDataReadRoles.VariableMember)
         {
             // A member read of a variable is admitted exactly as the whole read of it; its member is never typed here,
             // because a variable can hold JSON from any writer, so the runtime checks the member when it reads it.
@@ -266,8 +286,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
             }
             var variable = matches[0].Variable;
             var authoredScope = AuthoredScope(context.Document, scope);
-            ArgumentValue read = binding.Role == "VariableMember"
-                ? new(JsonSerializer.SerializeToElement(new { referenceKey = variable.ReferenceKey, declaringScopeId = authoredScope, memberPath = binding.MemberPath }), "VariableMember")
+            ArgumentValue read = binding.Role == ActivityDataReadRoles.VariableMember
+                ? new(JsonSerializer.SerializeToElement(new { referenceKey = variable.ReferenceKey, declaringScopeId = authoredScope, memberPath = binding.MemberPath }), ActivityDataReadRoles.VariableMember)
                 : new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable");
             return new($"variable:{authoredScope}:{variable.ReferenceKey}", variable.Name, scope,
                 read, ActivityChildResultAvailability.Definite, variable.Type, null, null, null, null, null);
@@ -334,7 +354,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
         ArgumentValue? direct = memberRead
             ? admitted && member!.Refusal is null
                 ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
-                    isOptional = binding.IsOptional, memberPath = binding.MemberPath }), "ActivityResultMember")
+                    isOptional = binding.IsOptional, memberPath = binding.MemberPath }), ActivityDataReadRoles.ActivityResultMember)
                 : null
             : binding.Scope is not null
                 ? new(JsonSerializer.SerializeToElement(new { producerNodeId = producer.Node.NodeId, projectionKey = binding.Projection,
@@ -406,11 +426,18 @@ internal sealed class ActivityDataSelectionAnalyzer(
 
     private sealed record MemberReadAnalysis(ActivityDataMemberReadFacts Facts, string? Refusal);
 
-    // A member read of a result is admitted wherever the whole read of that result is.
+    // The request read of one member, or of the whole member when the read selects none.
+    private static ArgumentValue RequestRead(string memberKey, ActivityDataReadBinding binding, bool member) => member
+        ? new(JsonSerializer.SerializeToElement(new { memberKey, memberPath = binding.MemberPath }), ActivityDataReadRoles.WorkflowRequestMember)
+        : new(JsonSerializer.SerializeToElement(new { memberKey, path = binding.Path }), "WorkflowRequest");
+
+    // A member read is admitted wherever the whole read of its source is.
     private static string? ConstraintRole(string? expressionType) => expressionType switch
     {
-        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, "ActivityResultMember") => "ActivityResult",
-        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, "VariableMember") => "Variable",
+        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, ActivityDataReadRoles.ActivityResultMember) => "ActivityResult",
+        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, ActivityDataReadRoles.VariableMember) => "Variable",
+        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, ActivityDataReadRoles.WorkflowRequestMember) => "WorkflowRequest",
+        _ when StringComparer.OrdinalIgnoreCase.Equals(expressionType, ActivityDataReadRoles.InputMember) => "Input",
         _ => expressionType
     };
 
@@ -496,9 +523,12 @@ internal sealed class ActivityDataSelectionAnalyzer(
         return constraints.Count == 1 ? constraints[0] : new(string.Join("+", constraints.Select(item => item.Owner)),
             [.. allowed], "ActivityData/SourceRestricted", "The selected source does not satisfy all owning input restrictions.");
     }
-    private static ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
+    private ActivityDataSelectionAnalysis Result(ActivityDataSelectionDocument document, ActivityDataSelectionTargetFacts? target,
         ImmutableArray<ActivityDataSelectionSourceFacts> sources, IEnumerable<ValidationError> findings, bool hasMore = false) =>
-        new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore);
+        new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore)
+        {
+            MemberReadsEnabled = options.Value.MemberReads
+        };
     private sealed record Source(string Id, string DisplayName, string? ScopeId, ArgumentValue? Binding,
         ActivityChildResultAvailability Availability, TypeReference? Type, IActivityDefinitionVersion? Version, string? Projection,
         bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null)
@@ -514,12 +544,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
         public Dictionary<string, IReadOnlyList<VisibleVariable>> Variables { get; } = new(StringComparer.Ordinal);
         public ScopedVariableVisibility? WholeVisibility { get; set; }
         public HashSet<ActivityDataSelectionTarget> ConnectionTargets { get; } = [];
-        public Dictionary<string, InputDefinition[]> Inputs { get; } = document.Inputs
-            .Where(input => !string.IsNullOrEmpty(input.ReferenceKey)).GroupBy(input => input.ReferenceKey, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        public DeclaredInputIndex InputIndex { get; } = new(document.Inputs);
         public bool WorkflowBoundary { get; } = document.ResourceKind is "Workflow" or "WorkflowDefinition";
-        // Empty workflow declarations compile to the legacy null/open InputContract. Activity definitions are closed.
-        public bool OpenWorkflowRequest { get; } = (document.ResourceKind is "Workflow" or "WorkflowDefinition") && document.Inputs.IsEmpty;
         public Dictionary<string, InputDefinition[]> RequestInputs { get; } = document.Inputs
             .GroupBy(input => document.ResourceKind is "Workflow" or "WorkflowDefinition" ? input.Name : input.ReferenceKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);

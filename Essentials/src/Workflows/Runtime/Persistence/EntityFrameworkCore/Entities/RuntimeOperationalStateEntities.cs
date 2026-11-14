@@ -180,12 +180,12 @@ public sealed class RecurringTriggerScheduleEntity
     public string ScheduleId { get; set; } = null!;
     public string ScheduleIdHash { get; set; } = null!;
     public string ScheduleIdOrderKey { get; set; } = null!;
-    public string ArtifactId { get; set; } = null!;
-    public string ArtifactIdHash { get; set; } = null!;
-    public string ArtifactIdOrderKey { get; set; } = null!;
-    public string ExecutableNodeId { get; set; } = null!;
-    public string StimulusType { get; set; } = null!;
-    public string StimulusHash { get; set; } = null!;
+    public string? ArtifactId { get; set; }
+    public string? ArtifactIdHash { get; set; }
+    public string? ArtifactIdOrderKey { get; set; }
+    public string? ExecutableNodeId { get; set; }
+    public string? StimulusType { get; set; }
+    public string? StimulusHash { get; set; }
     public int Kind { get; set; }
     public string Expression { get; set; } = null!;
     public long NextOccurrenceUtcTicks { get; set; }

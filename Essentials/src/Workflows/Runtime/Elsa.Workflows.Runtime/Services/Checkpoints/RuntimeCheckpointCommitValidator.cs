@@ -220,6 +220,8 @@ public static class RuntimeCheckpointCommitValidator
         var seen = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
         foreach (var change in outbox)
         {
+            if (change.State.SourceKind != RuntimeDeliverySourceKind.WorkflowCheckpoint || change.State.SubscriptionDelivery is not null)
+                throw new RuntimeCheckpointCommitValidationException("A workflow checkpoint cannot accept standalone sources or captured subscription responsibility.");
             if (change.State.Status != RuntimePostCommitOutboxStatus.Pending)
                 throw new RuntimeCheckpointCommitValidationException("Only pending post-commit outbox items can be saved as pending.");
             if (seen.TryGetValue(change.StateId, out var duplicate) && !duplicate.IsEquivalentPendingItem(change.State))

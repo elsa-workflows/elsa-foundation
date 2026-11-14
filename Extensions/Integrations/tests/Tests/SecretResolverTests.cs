@@ -1,4 +1,4 @@
-using Elsa.Integrations.Sdk.Harness;
+using Elsa.Integrations.Sdk.Testing;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Workflows;
 using Elsa.Workflows.Runtime.Core.Contracts;

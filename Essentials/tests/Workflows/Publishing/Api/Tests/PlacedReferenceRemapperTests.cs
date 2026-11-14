@@ -121,23 +121,20 @@ public sealed class PlacedReferenceRemapperTests
     }
 
     /// <summary>
-    /// A request member read is not remapped yet, so the remapper refuses one rather than return it as it was.
+    /// A request member read names a boundary input by its reference key, which placement does not rename, so it is
+    /// returned as it is, even when a placed node or scope shares the key's text.
     /// </summary>
     [Theory]
-    [InlineData(RuntimeInputBindingSource.WorkflowRequestMember)]
-    public void A_member_read_is_refused_rather_than_passed_through_unremapped(RuntimeInputBindingSource source)
+    [InlineData("customer")]
+    [InlineData("compute")]
+    [InlineData("box")]
+    public void A_request_member_read_is_returned_unchanged(string memberKey)
     {
-        var selection = new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit);
-        var binding = new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline, source, selection,
-            workflowRequest: source == RuntimeInputBindingSource.WorkflowRequestMember ? new RuntimeWorkflowRequestReference("customer") : null,
-            variable: source == RuntimeInputBindingSource.VariableMember ? new RuntimeVariableReference("total", "box") : null,
-            activityResult: source == RuntimeInputBindingSource.ActivityResultMember
-                ? new RuntimeActivityResultReference("compute", "$result", producerScopeId: null)
-                : null);
+        var node = NodeWith(new RuntimeInputBinding("value", new ValueTypeDescriptor("Object"), ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequestMember, new RuntimeReadSelection(1, ["id"], RuntimeReadSelectionMode.DeferredFit),
+            workflowRequest: new RuntimeWorkflowRequestReference(memberKey)));
 
-        var exception = Assert.Throws<NotSupportedException>(() => PlacedReferenceRemapper.Remap(NodeWith(binding), PlacedIds, GraphScope));
-
-        Assert.Contains("publication does not compile member reads yet", exception.Message, StringComparison.Ordinal);
+        Assert.Same(node, PlacedReferenceRemapper.Remap(node, PlacedIds, GraphScope));
     }
 
     [Theory]

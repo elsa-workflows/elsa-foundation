@@ -1,7 +1,7 @@
 using System.Net;
 using Elsa.Integrations.Connectors.Microsoft365;
 using Elsa.Integrations.Connectors.Microsoft365.Activities;
-using Elsa.Integrations.Sdk.Harness;
+using Elsa.Integrations.Sdk.Testing;
 
 namespace Elsa.Integrations.Connectors.Microsoft365.Tests;
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -25,6 +26,8 @@ public sealed class RuntimeModelExecutionCommand
     public JsonElement Payload { get; }
     public WorkflowExecutionAuthoritySnapshot Authority { get; }
     public string? TenantId { get; }
+    /// <summary>Typed transport copy of retained ingress authority; the physical seal or committed model must independently match it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public RuntimeIngressCommandOrigin? IngressOrigin { get; init; }
 
     /// <summary>Stable identity shared by mailbox admission and committed native-result producers.</summary>
     public static string CreateSchedulerWorkItemId(string inputId)

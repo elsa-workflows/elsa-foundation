@@ -34,8 +34,9 @@ internal sealed class CoalescingPostCommitOutboxLookupStore(
         cancellationToken.ThrowIfCancellationRequested();
 
         if (sessionAccessor.Current is { IsActive: true } session && session.TryFindOutboxItem(outboxItemId, out var overlayItem) &&
+            overlayItem!.SourceKind == RuntimeDeliverySourceKind.WorkflowCheckpoint && overlayItem.SubscriptionDeliveryProtocolVersion is null &&
             (!session.IsOutboxDurablyPersisted(outboxItemId) ||
-             overlayItem!.Intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork && overlayItem.StimulusDeliverySourceScope is null))
+             overlayItem.DeliveryKind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork && overlayItem.SourceScope is null))
             return new ValueTask<RuntimePostCommitOutboxItem?>(overlayItem);
 
         return (lookup ?? throw new InvalidOperationException(

@@ -230,3 +230,17 @@ html[data-workspace-style="minimal"] .settings-nav-link[aria-current="page"] { b
     flex-basis: auto;
   }
 }
+
+.settings-section-select {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.settings-section-select select {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}

@@ -7,7 +7,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public static class RuntimePostCommitOutboxEfModule
 {
     public const string TableName = "elsa_runtime_post_commit_outbox";
-    public const string SchemaVersion = "2.0.0";
+    public const string SchemaVersion = "3.0.0";
+    public const string StimulusSchemaVersion = "2.0.0";
     public const string SchemaFamily = "RuntimePostCommitOutbox";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
     /// upcasts through.</summary>

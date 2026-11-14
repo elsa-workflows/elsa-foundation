@@ -135,6 +135,10 @@ public sealed partial class EfExecutableActivityTemplateStore
                 row.Revision = checked(row.Revision + 1); claim.Revision = checked(claim.Revision + 1);
                 context.Entry(row).Property(candidate => candidate.Revision).IsModified = true;
                 context.Entry(claim).Property(candidate => candidate.Revision).IsModified = true;
+                context.Entry(row).Property(candidate => candidate.SchemaVersion).CurrentValue =
+                    RuntimeSchemaWriteVersion.Artifact(context, row.SchemaVersion);
+                context.Entry(claim).Property(candidate => candidate.SchemaVersion).CurrentValue =
+                    RuntimeSchemaWriteVersion.Artifact(context, claim.SchemaVersion);
                 context.Remove(source!.Value.Row);
             }
             await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
