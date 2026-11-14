@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Testing;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
@@ -201,6 +202,43 @@ public sealed class NativeSelectedCompositeTests
         var handler = Assert.Single(harness.Services.GetServices<IWorkflowSchedulerWorkHandler>().OfType<WorkflowScheduleActivitySchedulerWorkHandler>());
         Assert.NotEmpty(owner.ChildSchedules);
         foreach (var work in owner.ChildSchedules) await handler.HandleAsync(work);
+        Assert.Equal(beforeHeader, JsonSerializer.Serialize(await workflows.FindAsync(harness.ExecutionId)));
+        Assert.Equal(beforeActivities, JsonSerializer.Serialize(await activities.ListAllAsync(harness.ExecutionId)));
+        Assert.Equal(beforeQueue, JsonSerializer.Serialize(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId))));
+    }
+
+    [Theory]
+    [InlineData("reason")]
+    [InlineData("scope")]
+    [InlineData("parent")]
+    [InlineData("receipt")]
+    public async Task A_settled_child_cannot_reconcile_changed_schedule_content_or_a_missing_receipt(string defect)
+    {
+        var owner = new Owner();
+        await using var harness = Harness(owner, PersistenceMode.Balanced);
+        await Setup(harness, owner, Sequence("selected", [WorkflowExecutionHarness.NewProbeNode("owned")]));
+        await harness.Services.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(Request(harness, owner), WorkflowExecutableReferenceScope.TestRun);
+        var original = Assert.Single(owner.ChildSchedules);
+        var json = JsonNode.Parse(original.Payload!.Value.GetRawText())!;
+        if (defect == "reason") json["Reason"] = "changed";
+        if (defect == "parent") json["ParentActivityExecutionId"] = "foreign";
+        if (defect == "scope") json["SchedulingProvenance"]!["Metadata"]![RuntimeMetadataKeys.FlowchartExecutionScopeId] = "foreign";
+        var activities = harness.Services.GetRequiredService<IActivityExecutionStateStore>();
+        if (defect == "receipt")
+        {
+            var child = Assert.Single(await activities.ListAllAsync(harness.ExecutionId), x => x.Execution.ExecutableNodeId == "owned");
+            await activities.SaveAsync(child with { Metadata = new Dictionary<string, string>() });
+        }
+        var work = new RuntimeSchedulerWorkItem(original.WorkItemId, original.WorkflowExecutionId, original.CommandId, original.CommandKind,
+            original.EnvelopeId, original.IdempotencyKey, original.EnqueuedAt, original.RecordedAt, original.Sequence, JsonSerializer.SerializeToElement(json),
+            original.CommandMetadata, original.EnvelopeMetadata, original.ExecutionScopeId, original.Attempt);
+        var workflows = harness.Services.GetRequiredService<IWorkflowExecutionStateStore>();
+        var queue = harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        var beforeHeader = JsonSerializer.Serialize(await workflows.FindAsync(harness.ExecutionId));
+        var beforeActivities = JsonSerializer.Serialize(await activities.ListAllAsync(harness.ExecutionId));
+        var beforeQueue = JsonSerializer.Serialize(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await Assert.Single(harness.Services.GetServices<IWorkflowSchedulerWorkHandler>()
+            .OfType<WorkflowScheduleActivitySchedulerWorkHandler>()).HandleAsync(work));
         Assert.Equal(beforeHeader, JsonSerializer.Serialize(await workflows.FindAsync(harness.ExecutionId)));
         Assert.Equal(beforeActivities, JsonSerializer.Serialize(await activities.ListAllAsync(harness.ExecutionId)));
         Assert.Equal(beforeQueue, JsonSerializer.Serialize(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId))));

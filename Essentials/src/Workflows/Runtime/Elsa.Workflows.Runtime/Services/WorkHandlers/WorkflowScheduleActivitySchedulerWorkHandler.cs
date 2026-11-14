@@ -15,6 +15,7 @@ namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowScheduleActivitySchedulerWorkHandler);
+    private const string SelectedChildScheduleReceiptKey = "runtime.selectedChildScheduleHash";
 
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
@@ -82,6 +83,12 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             pipelineContext.Workspace.StageCheckpointCommit(commit);
     }
 
+    private static string ChildScheduleReceipt(RuntimeSchedulerWorkItem work) => Convert.ToHexString(
+        System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            work.WorkflowExecutionId, work.WorkItemId, work.CommandId, work.ExecutionScopeId, work.Attempt, work.Payload
+        })));
+
     private async ValueTask RequireOwnedChildAsync(RuntimeSchedulerWorkItem work, RuntimeScheduleActivityCommandPayload payload,
         WorkflowExecutionState workflow, WorkflowExecutable executable, RuntimeTestContextState context, CancellationToken cancellationToken)
     {
@@ -98,7 +105,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             payload.SchedulingProvenance.SchedulingActivityExecutionId != payload.SchedulingActivityExecutionId ||
             payload.SchedulingProvenance.SchedulingWorkflowExecutionId != work.WorkflowExecutionId ||
             payload.SchedulingProvenance.ExecutionScopeId != work.ExecutionScopeId ||
-            work.ExecutionScopeId != (parent.ExecutionScopeId ?? parent.Provenance.ExecutionScopeId))
+            work.ExecutionScopeId != (parent.ExecutionScopeId ?? parent.Provenance.ExecutionScopeId) ||
+            NormalizeProvenance(work.WorkflowExecutionId, payload).ExecutionScopeId != work.ExecutionScopeId)
             throw new InvalidOperationException("The selected child differs from its actual owned parent relation.");
         var scheduler = payload.SchedulingActivityExecutionId is { } id
             ? await _activityExecutionStateStore.FindAsync(work.WorkflowExecutionId, id, cancellationToken) : null;
@@ -141,11 +149,26 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
 
         var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, schedulePayload.ExecutableNodeId, "ScheduleActivity");
 
+        var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
         if (workflow is not null &&
             RuntimeTestContextOwner.RequireContext(workflow) is { } context)
         {
             if (schedulePayload.ParentActivityExecutionId is not null)
+            {
+                if (existing is { Status: ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or
+                    ActivityExecutionStatus.Recovered or ActivityExecutionStatus.Superseded })
+                {
+                    if (existing.Execution.ExecutableNodeId != schedulePayload.ExecutableNodeId ||
+                        existing.ParentActivityExecutionId != schedulePayload.ParentActivityExecutionId ||
+                        existing.SchedulingActivityExecutionId != schedulePayload.SchedulingActivityExecutionId ||
+                        !existing.Metadata.TryGetValue(SelectedChildScheduleReceiptKey, out var receipt) || receipt != ChildScheduleReceipt(workItem))
+                        throw new InvalidOperationException("A settled selected child cannot reconcile a changed schedule.");
+                    // No work is emitted. Retained exact schedules may be acknowledged after their frames close.
+                    await RuntimeTestContextOwner.RequireConsumerAsync(workflow, existing, _activityExecutionStateStore, cancellationToken, requireActive: false);
+                    return null;
+                }
                 await RequireOwnedChildAsync(workItem, schedulePayload, workflow, executable, context, cancellationToken);
+            }
             else if (schedulePayload.ActivityExecutionId != context.RootActivityExecutionId ||
                 schedulePayload.ExecutableNodeId != workflow.TestEntry!.ExecutableNodeId ||
                 schedulePayload.ParentActivityExecutionId is not null || schedulePayload.SchedulingActivityExecutionId is not null ||
@@ -163,7 +186,6 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 throw new InvalidOperationException("The schedule is outside the exact admitted selected invocation.");
         }
 
-        var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
         if (existing is not null)
         {
             if (!StringComparer.Ordinal.Equals(existing.Execution.ExecutableNodeId, schedulePayload.ExecutableNodeId))
@@ -188,6 +210,12 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         }
 
         var state = NewActivityExecutionState(workItem, schedulePayload, executableNode);
+        if (workflow?.TestContext is not null && schedulePayload.ParentActivityExecutionId is not null)
+        {
+            var metadata = state.Metadata.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+            metadata[SelectedChildScheduleReceiptKey] = ChildScheduleReceipt(workItem);
+            state = state with { Metadata = RuntimeModelMetadata.Snapshot(metadata) };
+        }
         if (_checkpointCommitter is null || _inspectionAccumulator is null)
         {
             await _activityExecutionStateStore.SaveAsync(state, cancellationToken);

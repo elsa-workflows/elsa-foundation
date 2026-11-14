@@ -1503,13 +1503,20 @@ Owned consumers must reach the exact admitted root through actual workflow-owned
 Normal scope reads reuse their loaded ancestor chain; result reads use their captured runtime view;
 capture resolves the actual stored parent chain. Unknown, duplicate, cyclic, reparented and foreign roots
 cannot inherit supplied context. Child scheduling requires an actual active owned parent, a direct pinned
-child relation, an actual owned scheduling invocation and the parent's inherited execution scope. Ordinary
+child relation, an actual owned scheduling invocation and the parent's effective inherited execution scope,
+including normalized metadata fallbacks. Ordinary
 and delayed scheduling reuse one workflow-header read. The selected root's original first-attempt and
 start-reason fences remain; retry/time/asynchronous responsibilities require separate qualification.
+Settled child schedules retain an immutable scheduling receipt. An exact retained replay validates that
+receipt and actual ancestry, then acknowledges without new work even after parent/workflow completion;
+changed content or missing receipts refuse. This acknowledgement grants no access to closed frames,
+fixtures or capture and is distinct from a new child invocation or activity retry.
 
 The former terminal-leaf-only refusal described above is broadened only through this opt-in. Committed
 witnesses exercise pure Sequence/Probe trees with literal inputs, nested and empty Sequences, no containing
-siblings, unchanged full artifacts, forged ancestry/schedules and owned-result fixture shadow refusal.
+siblings, unchanged full artifacts, forged ancestry/schedules, owned-result fixture shadow refusal,
+nested direct/expression outside-fixture consumption and exact settled replays. The fixture witness uses
+an explicitly qualified known producer/consumer contract; it does not admit arbitrary child bindings.
 These witnesses do not qualify arbitrary composites, closed reusable boundaries, data-dependent child
 setup, waits, effects, shared persistence or public Testing activation. Those remain delivery requirements;
 there is no implicit fallback to live effects or a different interpreter.

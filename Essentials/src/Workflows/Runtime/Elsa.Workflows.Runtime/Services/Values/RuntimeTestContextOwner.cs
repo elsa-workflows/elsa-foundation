@@ -46,11 +46,11 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
     }
 
     internal static void RequireConsumer(WorkflowExecutionState workflow, ActivityExecutionState activity,
-        IReadOnlyCollection<ActivityExecutionState>? ancestors = null)
+        IReadOnlyCollection<ActivityExecutionState>? ancestors = null, bool requireActive = true)
     {
         if (RequireContext(workflow) is not { } context) return;
-        if (workflow.Status != WorkflowExecutionStatus.Running || workflow.RootVariableFrame?.Status != VariableFrameStatus.Active ||
-            context.Frames.Any(x => x.Frame.Status != VariableFrameStatus.Active)) throw Outside();
+        if (requireActive && (workflow.Status != WorkflowExecutionStatus.Running || workflow.RootVariableFrame?.Status != VariableFrameStatus.Active ||
+            context.Frames.Any(x => x.Frame.Status != VariableFrameStatus.Active))) throw Outside();
         var current = activity;
         var visited = new HashSet<string>(StringComparer.Ordinal);
         while (true)
@@ -68,7 +68,7 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
     }
 
     internal static async ValueTask RequireConsumerAsync(WorkflowExecutionState workflow, ActivityExecutionState activity,
-        IActivityExecutionStateStore store, CancellationToken cancellationToken)
+        IActivityExecutionStateStore store, CancellationToken cancellationToken, bool requireActive = true)
     {
         var ancestors = new List<ActivityExecutionState>();
         var visited = new HashSet<string>(StringComparer.Ordinal) { activity.InvocationId };
@@ -80,7 +80,7 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
             ancestors.Add(parent);
             parentId = parent.ParentActivityExecutionId;
         }
-        RequireConsumer(workflow, activity, ancestors);
+        RequireConsumer(workflow, activity, ancestors, requireActive);
     }
 
     private static InvalidOperationException Outside() => new("The consumer is outside the exact admitted selected invocation tree.");
