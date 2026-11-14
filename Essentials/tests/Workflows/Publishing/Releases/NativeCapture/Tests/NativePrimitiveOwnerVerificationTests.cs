@@ -76,7 +76,7 @@ public sealed class NativePrimitiveOwnerVerificationTests
             var node = document["content"]!["executable"]!["rootActivity"]!["childSlots"]![0]!["activities"]![0]!;
             if (change == "side-effect")
             {
-                node["activityContract"]!["sideEffectProfile"] = "External";
+                node["activityContract"]!.AsObject().Remove("sideEffectProfile"); // Default External is omitted by the actual wire contract.
                 node["activityContract"]!["schemaFingerprint"] = alteredContract.SchemaFingerprint;
             }
             else
