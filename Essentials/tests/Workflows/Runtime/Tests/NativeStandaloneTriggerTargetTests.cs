@@ -263,11 +263,15 @@ public sealed class NativeStandaloneTriggerTargetTests
     }
 
     [Theory]
-    [InlineData("tenant", false)]
-    [InlineData("logical-tenant", false)]
-    [InlineData("tenant", true)]
-    [InlineData("logical-tenant", true)]
-    public async Task Native_saved_cohort_start_retains_scope_after_the_source_claim_is_complete(string tenant, bool coalescing)
+    [InlineData("tenant", false, null)]
+    [InlineData("logical-tenant", false, null)]
+    [InlineData("tenant", true, null)]
+    [InlineData("logical-tenant", true, null)]
+    [InlineData("tenant", false, false)]
+    [InlineData("tenant", true, false)]
+    [InlineData("tenant", false, true)]
+    [InlineData("tenant", true, true)]
+    public async Task Native_saved_cohort_start_retains_scope_after_the_source_claim_is_complete(string tenant, bool coalescing, bool? historyEnabled)
     {
         using var fixture = await Fixture.CreateAsync(tenant, coalescing);
         var parentSeal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(parentSeal);
@@ -310,7 +314,11 @@ public sealed class NativeStandaloneTriggerTargetTests
             WorkflowRunKind.PublishedRun, null, null, null, tenant, fixture.Recipient.Partition, new("publish", "publish"),
             new WorkflowExecutableStartAuthority(WorkflowExecutableStartAuthorityKind.StimulusDelivery, null,
                 new WorkflowExecutableStimulusDeliveryAuthority(sourceId, fingerprint, scope, "previous-owner", 1, binding.TriggerBindingId)), 0)
-            { StimulusDeliveryOrigin = savedOrigin };
+            {
+                StimulusDeliveryOrigin = savedOrigin,
+                HistoryCapturePolicy = historyEnabled == true ? new("saved-start-history", 1, true, ["WorkflowStarted"]) : null,
+                HistoryCaptureEnabledAtAdmission = historyEnabled
+            };
         var authority = payload.StartAuthority!.StimulusDelivery!;
         var initialMetadata = new Dictionary<string, string> { [SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin) };
         var proposed = new WorkflowExecutionCommandEnvelope(key.EnvelopeId, key.WorkflowExecutionId,
@@ -356,6 +364,24 @@ public sealed class NativeStandaloneTriggerTargetTests
         using var childDrain = fixture.BeginCheckpoint(key.WorkflowExecutionId);
         await fixture.StartHandler.HandleAsync(start);
         var checkpoint = Assert.Single((await fixture.SelectedQueue.ListAsync(new(key.WorkflowExecutionId))).Items);
+        var handed = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        Assert.Equal(historyEnabled, handed.HistoryCaptureEnabledAtAdmission);
+        Assert.Equal(payload.HistoryCapturePolicy is null, handed.HistoryCapturePolicy is null);
+        if (payload.HistoryCapturePolicy is { } required)
+        {
+            Assert.True(required.IsEquivalentTo(handed.HistoryCapturePolicy));
+            var context = new WorkflowRuntimePipelineContext(checkpoint);
+            await fixture.CheckpointHandler.HandleAsync(checkpoint, context);
+            var staged = Assert.Single(context.Workspace.PendingCheckpointCommits);
+            Assert.True(required.IsEquivalentTo(staged.StateChanges.WorkflowExecution!.State.HistoryCapturePolicy));
+            Assert.True(staged.StateChanges.WorkflowExecution.State.HistoryCaptureEnabledAtAdmission);
+            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), fixture.CheckpointStore,
+                new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+            await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => committer.CommitAsync(staged).AsTask());
+            Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
+            Assert.Single((await fixture.SelectedQueue.ListAsync(new(key.WorkflowExecutionId))).Items);
+            return;
+        }
         if (coalescing)
         {
             Assert.Empty((await fixture.Queue.ListAsync(new(key.WorkflowExecutionId))).Items);
@@ -412,6 +438,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.False(rootWork.CommandMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
         Assert.False(rootWork.EnvelopeMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
         var child = (await fixture.Executions.FindAsync(key.WorkflowExecutionId))!;
+        Assert.Equal(historyEnabled, child.HistoryCaptureEnabledAtAdmission); Assert.Null(child.HistoryCapturePolicy);
         Assert.Equal(tenant, child.TenantId); Assert.Null(child.IngressOrigin); Assert.True(savedOrigin.IsEquivalentTo(child.StimulusDeliveryOrigin));
         await fixture.CheckpointStore.CommitAsync(StateCommit(child with { UpdatedAt = Now.AddSeconds(1) }, "saved-continuation", []),
             new(RuntimeCheckpointPersistenceMode.Immediate));
