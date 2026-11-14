@@ -43,6 +43,15 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Signature: `api.navigation.add({ id, label, path, placement, order?, icon?, parentId?, requiresFeature?, requiresRole?, requiresPermission?, requiresBackend? })`; feature-area `nav` forwards `parentId`, `childDisplay` and `viewLabel`. `placement` is `main` (shell destinations such as Home), `build`, `operate` or `integrations`; Settings sections use `settings`, `authoring`, `runtime` or `admin`.
 - Register: during `register(api)`. A top-level entry without a known placement is route-only. Navigation is discoverability, not an authorization boundary; routes keep their own gates.
 - Known implementations: every first-party Studio module; homes are listed in [Navigation](../../../docs/module-ui.md#navigation).
+### Workflow canvas editor contributions (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional `workflow.designer.canvas-editors` slot (`api.workflowDesigner.canvasEditors`), owned by the Workflows module.
+- Signature: `StudioWorkflowDesignerCanvasContribution { id, title, order?, protocol: { id, version }, supportedResourceKinds, supportedStructures: [{ kind, schemaVersions }], requiresBackend?, load() }`; the deferred loader returns a component receiving the agreed module-owned `context`.
+- Register: guard `api.workflowDesigner.canvasEditors` before calling `.add(contribution)`; older hosts omit this registry and retain their existing editor. Discovery uses ordinary SDK registry ordering and backend/host policy without invoking the loader.
+- Compatibility: Workflows' `matchingCanvasEditors` filters a governed registry list by exact protocol ID/version, resource kind, structure kind and authored schema version. The SDK defines no implicit document protocol or compatibility downgrade.
+- Preference bridge: `StudioCanvasEditorPreferenceStore { load(): Promise<string | null>, save(editorId): Promise<void> }`. Workflows' `createCanvasEditorPreferences` uses the governed `workflow-authoring` namespace and scopes device recovery to user, tenant, Studio host and backend; preferences are separate from authored documents.
+- Known implementations: **pending** optional canvas implementation/package slices S10–S11 of [spec 1224](../../../../specs/1224-optional-bpmn-js-editor/delivery-slices.md). No canvas is registered by this prerequisite.
+- Consumers: compatibility/preference helpers are present; actual Workflow and Activity Graph editor consumers are **pending** S13–S14. This seam does not activate either canvas or establish editor/runtime acceptance.
 
 ### Workflow run related links (SDK — Elsa.Studio.Hosting)
 
