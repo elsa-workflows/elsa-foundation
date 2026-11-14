@@ -97,6 +97,12 @@ The EF implementation has two forms:
 
 These are measured checkpoint shapes, not universal counts for every provider or operation. Transaction setup, polling, loading, sent messages, parameter limits and exceptional paths can add work. SQLite counts calls into its engine rather than network round trips. The provider must preserve the atomic fence contract even when its wire protocol groups commands differently.
 
+An explicitly requested [commit window](storage-model.md#optional-commit-window) is an additional conditional
+capability, separate from ownership and immutable commit-time facts. The opt-in PostgreSQL batch path checks its
+interval with a deferred database constraint; other physical providers refuse it. It does not replace epoch/position
+fencing or make external effects exactly once. Its schema and check cost must be qualified separately from the
+ordinary checkpoint shapes above.
+
 ## Alternatives considered
 
 | Alternative | Why the kernel does not use it as the ownership fence |

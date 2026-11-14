@@ -7,6 +7,24 @@ using Kernel.Workflows;
 
 sealed partial class CreationWitness
 {
+    private InstanceRow InstallSyntheticReplacement(InstanceRef child, StartSpec spec)
+    {
+        Send(Kinds.Start, 2, start: spec, target: child); Drain(child);
+        var retired = _world.Store.Instances[child.Id];
+        Require(retired is { Retired: true, Creation: 1 }, "C4", "public ingress recreated a retired generated child");
+
+        // Synthetic defense-in-depth carrier fixture. A normal child cannot occupy this physical ID again.
+        var synthetic = retired with { Creation = 2, Retired = false, Revision = 1, Model = spec.Model,
+            Definition = spec.Definition, State = Json.Write(new NativeState()), Status = InstanceStatus.Running,
+            StartIntent = CreationProtocol.Fingerprint(spec) };
+        var fence = _world.Store.Partitions[child.Partition];
+        var committed = _world.Store.CommitAsync(new(child.Partition, fence.Epoch, fence.Position, TimeSpan.FromSeconds(10),
+            false, [new(child.Id, synthetic, retired.Revision, [], [], [], [], [], null)], [], [])).Result;
+        Require(committed.Landed, "C4", "synthetic replacement was not installed");
+        Takeover();
+        return synthetic;
+    }
+
     internal void ParentRace(string cut)
     {
         NativeWorkflows.Registry.Add(Wf.Workflow("creation-child", Wf.Event("gate", "gate")))
@@ -41,8 +59,7 @@ sealed partial class CreationWitness
         Send(Kinds.Delete, 1, target: child); Drain(child);
         Require(_world.Store.Instances[child.Id].Retired, "C4", "first child was not retired normally");
         var replacement = NativeModel.Spec("creation-child", mode) with { Creation = new(2, 1, "child-replacement") };
-        Send(Kinds.Start, 2, start: replacement, target: child); Drain(child);
-        var newChild = _world.Store.Instances[child.Id];
+        var newChild = InstallSyntheticReplacement(child, replacement);
         Apply(new("add", M: terminate)); Drain(child); // actual original carrier, replayed after its first copy was consumed
         Require(_world.Store.Instances[child.Id] == newChild && newChild.Status == InstanceStatus.Running,
             "C4", "old parent termination retargeted a replacement child");
