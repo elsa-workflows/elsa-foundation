@@ -87,6 +87,48 @@ it("names an opaque contributed control through its explicit contract without cl
   expect(input.value).toBe("draft");
 });
 
+it("combines host and editor actions without leaking host actions into nested fields", () => {
+  const choose = vi.fn(); const reveal = vi.fn();
+  function Editor() {
+    return <fields.StudioFormField label="Credential" trailing={<>
+      <button onClick={reveal}>Reveal</button>
+      <fields.StudioField label="Search options"><input /></fields.StudioField>
+    </>}>
+      {attributes => <input {...attributes} defaultValue="retained draft" />}
+    </fields.StudioFormField>;
+  }
+  const view = (syntax: string) => <fields.StudioFieldAdornmentProvider trailing={<button onClick={choose}>{syntax}</button>}>
+    <Editor />
+  </fields.StudioFieldAdornmentProvider>;
+  const { container, render } = mount(view("Literal"));
+  const input = container.querySelector("input")!; input.focus();
+  const buttons = [...container.querySelectorAll("button")];
+  expect(buttons.map(button => button.textContent)).toEqual(["Reveal", "Literal"]);
+  expect([...container.querySelectorAll("input")].map(control => control.labels?.[0].textContent)).toEqual(["Credential", "Search options"]);
+  flushSync(() => buttons[0].click()); flushSync(() => buttons[1].click());
+  expect(reveal).toHaveBeenCalledOnce(); expect(choose).toHaveBeenCalledOnce();
+  render(view("JavaScript"));
+  expect(container.querySelector("input")).toBe(input); expect(input.value).toBe("retained draft");
+  expect(document.activeElement).toBe(input);
+  expect([...container.querySelectorAll("button")].map(button => button.textContent)).toEqual(["Reveal", "JavaScript"]);
+});
+
+it.each([false, true])("retains host actions for an owned choice or group and preserves controls when actions disappear (%s)", group => {
+  const view = (actions: React.ReactNode) => <fields.StudioFieldAdornmentProvider trailing={actions}>
+    <fields.StudioField label="Options">{group
+      ? <><label><input type="checkbox" />One</label><label><input type="checkbox" />Two</label></>
+      : <input type="checkbox" />}
+    </fields.StudioField>
+  </fields.StudioFieldAdornmentProvider>;
+  const { container, render } = mount(view(<button>Choose syntax</button>));
+  const input = container.querySelector("input")!; input.focus();
+  expect(container.querySelectorAll("button")).toHaveLength(1);
+  expect(input.labels?.[0].textContent).toBe(group ? "One" : "Options");
+  render(view(null));
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+  expect(container.querySelector("input")).toBe(input); expect(document.activeElement).toBe(input);
+});
+
 it("associates legacy sibling help without including it in the accessible name", () => {
   const { container } = mount(<fields.StudioField label="Address"><input /><small>Use an absolute URL</small></fields.StudioField>);
   const input = container.querySelector("input")!;
