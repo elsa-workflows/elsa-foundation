@@ -83,15 +83,23 @@ export async function activityExpressionInsertionJourney(page: Page, info: TestI
   // Expanding really unmounts the compact editor. Its parked session owns the cursor/history continuity.
   await page.getByRole("button", { name: "Open expanded Text editor", exact: true }).click();
   const expanded = page.getByRole("dialog", { name: "Text", exact: true });
-  await expect(expanded.locator(".cm-content")).toBeFocused(); await capture(page, info, "expression-expanded");
+  await expect(expanded.locator(".cm-content")).toBeFocused();
   if (syntax === "JavaScript") { await page.keyboard.insertText('.toUpperCase() + "-" + '); text += '.toUpperCase() + "-" + '; }
   else { await page.keyboard.insertText(" | upcase"); text = '{{ data["customerId"] | upcase }}'; await content().press("ControlOrMeta+End"); await page.keyboard.insertText("-"); text += "-"; }
   await settled(text);
+  const suffixBefore = await s.stored(created);
   text += syntax === "JavaScript" ? "args.data2" : "{{ data2 }}";
   await insert("data2", [], async () => {
     await chooser().getByRole("group", { name: "Workflow inputs", exact: true }).getByRole("option", { name: /Suffix/ }).press("Enter");
   }, text);
   expect((await value()).parameters.data2).toEqual({ kind: "WorkflowRequest", memberKey: "suffix", path: null });
+  const suffixAfter = await s.stored(created);
+  await expect(expanded.locator(".cm-content")).toBeFocused(); await content().press("ControlOrMeta+z");
+  await expect.poll(() => s.stored(created)).toEqual(suffixBefore);
+  await expect(content()).toHaveText((suffixBefore!.value as Definition).source);
+  await content().press(mac ? "Meta+Shift+z" : "Control+y");
+  await expect.poll(() => s.stored(created)).toEqual(suffixAfter); await expect(content()).toHaveText(text);
+  await capture(page, info, "expression-expanded");
   await expanded.getByRole("button", { name: "Close Text editor", exact: true }).click();
   await expect(expanded).toHaveCount(0); await expect(page.getByRole("button", { name: "Open expanded Text editor", exact: true })).toBeFocused();
   const preview = page.locator(".studio-code-editor-preview"); if (await preview.isVisible()) await preview.click();
