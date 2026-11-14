@@ -56,15 +56,27 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
             Assert.Equal(("consumer/inputs/CustomerId", finding), (Assert.Single(result.Findings).Path, result.Findings[0].Type));
     }
 
-    [Fact]
-    public async Task A_request_member_read_of_an_open_request_is_admitted()
+    [Theory]
+    [InlineData("Workflow", "WorkflowRequest", "{\"memberKey\":\"anything\"}")]
+    [InlineData("WorkflowDefinition", "WorkflowRequest", "{\"memberKey\":\"anything\",\"path\":\"a\"}")]
+    [InlineData("Workflow", "WorkflowRequestMember", "{\"memberKey\":\"anything\",\"memberPath\":[\"a.b\",\"\"]}")]
+    [InlineData("WorkflowDefinition", "WorkflowRequestMember", "{\"memberKey\":\"anything\",\"memberPath\":[\"a.b\",\"\"]}")]
+    public async Task Undeclared_workflow_requests_are_refused_for_stored_and_focused_reads(string kind, string role, string payload)
     {
         using var provider = MemberProvider(Known());
-
-        var result = await Analyzer(provider).AnalyzeAsync(Document(Sequence(Node("consumer",
-            Input(Json("WorkflowRequestMember", """{"memberKey":"anything","memberPath":["a"]}"""))))));
-
-        Assert.Empty(result.Findings);
+        var binding = Json(role, payload);
+        var document = Document(Sequence(Node("consumer", Input(binding)))) with { ResourceKind = kind };
+        var stored = await Analyzer(provider).AnalyzeAsync(document);
+        Assert.Equal("ActivityData/UnknownInput", Assert.Single(stored.Findings).Type);
+        Assert.Contains("Declare", stored.Findings[0].Message);
+        Assert.Equal(payload, Assert.IsType<JsonElement>(binding.Value).GetRawText());
+        var discovery = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"));
+        Assert.DoesNotContain(discovery.Sources, source => source.Id.StartsWith("request:", StringComparison.Ordinal));
+        var focused = await Analyzer(provider).AnalyzeAsync(document, new("consumer", "CustomerId"),
+            new() { Source = role == "WorkflowRequest" ? binding : Json("WorkflowRequest", """{"memberKey":"anything"}"""),
+                MemberPath = role == "WorkflowRequestMember" ? ["a.b", ""] : [] });
+        Assert.Empty(focused.Sources);
+        Assert.Equal("ActivityData/UnknownInput", Assert.Single(focused.Findings).Type);
     }
 
     public static TheoryData<string, string, string, string, string> OfferedMemberReads => new()
