@@ -70,7 +70,12 @@ internal sealed class InterventionWitness
             "R4: input pinning, invocation count or logical operation identity changed");
         Check(state.LexicalScopes is { Count: 1 } && state.LexicalScopes.Single().Value.Values["local"]!.ToString() == "17" && !state.Variables.ContainsKey("after") && !state.Variables.ContainsKey("returned"),
             "R5: intervention disposed source values or advanced blocked work");
+        Check(c.Parallel ? state.Variables.ContainsKey("before") && _world.Store.Subscriptions.Any(s => s.Instance == _target.Id && s.Key == "event:release") : state.Variables.ContainsKey("before") == c.Reverse,
+            "R7: intervention cancelled or blocked an independent sibling or changed the parent obligation");
         var retained = Json.Write(source); var resources = Json.Write(state.LexicalScopes);
+        Apply(new("add", M: new("fault-signal", _target, CompositeSignal.Kind, Json.Write(new CompositeSignal(source.Id, "forbidden")), TargetCreation: 1))); Drain();
+        Check(MutableFault.Calls == 1 && Json.Write(State.Frames[source.Id]) == retained,
+            "R11: a faulted source accepted authored signal work");
         if (c.Reload)
         {
             workflow.InterventionRequested = false; // effective policy belongs to the saved invocation, not latest options
@@ -105,7 +110,7 @@ internal sealed class InterventionWitness
     }
 }
 
-internal sealed class MutableFault : Kernel.Native.Activity<int>
+internal sealed class MutableFault : Kernel.Native.Activity<int>, ISignalledComposite
 {
     public MutableFault() { }
     [Input] public int Value { get; set; }
@@ -116,6 +121,8 @@ internal sealed class MutableFault : Kernel.Native.Activity<int>
         Calls++; Data["kept"] = -1;
         return ValueTask.FromResult(Fault("intervene", "ordinary dependency failed"));
     }
+    public bool CanAccept(CompositeContext context) => true;
+    public void Accept(CompositeContext context, string messageId, CompositeSignal signal) => Calls++;
 }
 internal sealed class InterventionScope : CompositeActivity
 {
