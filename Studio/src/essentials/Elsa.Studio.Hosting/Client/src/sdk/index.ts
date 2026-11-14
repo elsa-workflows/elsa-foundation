@@ -1189,6 +1189,8 @@ export interface StudioExpressionSourceRenderer {
 
 export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
   id: string;
+  /** The inline editor presents its descriptor caption in its own shared field. */
+  presentsField?: boolean;
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;

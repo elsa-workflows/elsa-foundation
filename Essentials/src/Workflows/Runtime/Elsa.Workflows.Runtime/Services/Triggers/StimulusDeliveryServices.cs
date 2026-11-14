@@ -68,12 +68,18 @@ internal sealed class StimulusDeliveryServices(
         (subscriptionDelivery ?? throw new NotSupportedException("Independent workflow-source delivery is unavailable."))
             .HandleAsync(new RuntimeDeliverySourceContext(source.Claim, source.Scope), token);
 
-    internal async ValueTask<StimulusDeliverySnapshot> SelectAsync(PostCommitDeliveryContext source, StimulusDispatchRequest request,
-        IGlobalBookmarkStimulusLookup lookup, IWorkflowTriggerBindingStore bindings, CancellationToken cancellationToken)
-    {
-        var publisher = await executions.FindAsync(source.Intent.WorkflowExecutionId, cancellationToken)
+    internal async ValueTask<WorkflowExecutionState> ReadPublisherAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) =>
+        await executions.FindAsync(source.Intent.WorkflowExecutionId, cancellationToken)
             ?? throw new IOException("The authoritative stimulus publisher is unavailable.");
-        if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is null) access!.Current.EnsureTenantScope(publisher.TenantId);
+
+    private static bool UsesPublisherTenant(PostCommitDeliveryContext source, WorkflowExecutionState publisher) =>
+        source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null || NativeIngressCheckpointAuthority.HasBoundScope(publisher, source.Scope.Value);
+
+    internal async ValueTask<StimulusDeliverySnapshot> SelectAsync(PostCommitDeliveryContext source, StimulusDispatchRequest request,
+        IGlobalBookmarkStimulusLookup lookup, IWorkflowTriggerBindingStore bindings, WorkflowExecutionState publisher, CancellationToken cancellationToken)
+    {
+        var publisherTenant = UsesPublisherTenant(source, publisher);
+        if (!publisherTenant) access!.Current.EnsureTenantScope(publisher.TenantId);
         var resumes = new List<StimulusResumeRecipient>();
         if (request.Mode != StimulusRoutingMode.StartOnly)
         {
@@ -89,7 +95,7 @@ internal sealed class StimulusDeliveryServices(
                 var execution = await executions.FindAsync(wait.WorkflowExecutionId, cancellationToken)
                     ?? throw new IOException("A discovered wait's owning execution is unavailable.");
                 // Native material can be shared. An explicitly foreign tenant is never a recipient of this physical scope.
-                if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null
+                if (publisherTenant
                     ? execution.TenantId != publisher.TenantId : execution.TenantId is { } tenant && tenant != source.Scope.Value) continue;
                 if (execution.RunKind == WorkflowRunKind.TestRun || execution.TestScope is not null) continue;
                 var activity = await activities.FindAsync(wait.WorkflowExecutionId, wait.ActivityExecutionId, cancellationToken)
@@ -108,7 +114,7 @@ internal sealed class StimulusDeliveryServices(
             {
                 var executable = await material.FindAsync(binding.ArtifactId, cancellationToken)
                     ?? throw new IOException("A selected stimulus executable is unavailable.");
-                starts.Add(source.Claim.Item.SubscriptionDeliveryProtocolVersion is null
+                starts.Add(!publisherTenant
                     ? await resolver.CaptureInScopeAsync(binding, executable.Identity, source.Scope, cancellationToken)
                     : await resolver.CaptureInTenantAsync(binding, executable.Identity, source.Scope, publisher.TenantId, cancellationToken));
             }
@@ -117,18 +123,19 @@ internal sealed class StimulusDeliveryServices(
             StimulusDeliveryScope.From(publisher, source.Scope), clock.GetUtcNow(), request.StimulusType, request.StimulusHash, starts, resumes);
     }
 
-    internal static void ValidateWinner(PostCommitDeliveryContext source, StimulusDispatchRequest request)
+    internal static void ValidateWinner(PostCommitDeliveryContext source, StimulusDispatchRequest request, WorkflowExecutionState publisher)
     {
         var snapshot = source.Claim.Item.RecipientSnapshot ?? throw new InvalidDataException("The source has no accepted complete cohort.");
         if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null)
             RuntimeIngressAdmissionValidation.CheckSource(source.Claim.Item, new(source.Scope, snapshot.Scope.TenantId));
-        if (snapshot.RetentionAcceptanceVersion != StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ||
+        if (publisher.WorkflowExecutionId != source.Intent.WorkflowExecutionId || !snapshot.Scope.Matches(publisher, source.Scope) ||
+            snapshot.RetentionAcceptanceVersion != StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ||
             snapshot.StimulusType != request.StimulusType || snapshot.StimulusHash != request.StimulusHash ||
             request.Mode == StimulusRoutingMode.ResumeOnly && snapshot.Starts.Count != 0 ||
             request.Mode == StimulusRoutingMode.StartOnly && snapshot.Resumes.Count != 0 ||
             snapshot.Starts.Any(entry => !entry.SourceProvenanceCaptured) ||
             snapshot.Resumes.Any(entry => entry.RegistrationCapture is not { } capture ||
-                capture.Scope.PersistenceScope != source.Scope || (source.Claim.Item.SubscriptionDeliveryProtocolVersion is not null
+                capture.Scope.PersistenceScope != source.Scope || (UsesPublisherTenant(source, publisher)
                     ? capture.Scope.TenantId != snapshot.Scope.TenantId : capture.Scope.TenantId is { } tenant && tenant != source.Scope.Value) ||
                 capture.Scope.RunKind == WorkflowRunKind.TestRun || capture.Scope.TestScope is not null ||
                 request.CorrelationId is { } correlation && (!capture.Metadata.TryGetValue(RuntimeMetadataKeys.CorrelationId, out var retained) || retained != correlation) ||
@@ -140,7 +147,8 @@ internal sealed class StimulusDeliveryServices(
         string bookmarkId, CancellationToken cancellationToken)
     {
         RequireBoundary(supplied);
-        var source = await sources.ReadSourceAsync(supplied, cancellationToken); var request = Request(source); ValidateWinner(source, request);
+        var source = await sources.ReadSourceAsync(supplied, cancellationToken); var request = Request(source);
+        var publisher = await ReadPublisherAsync(source, cancellationToken); ValidateWinner(source, request, publisher);
         var expected = source.Claim.Item.RecipientSnapshot!.Resumes.SingleOrDefault(entry => entry.WorkflowExecutionId == executionId && entry.BookmarkId == bookmarkId)
             ?? throw new InvalidDataException("The exact saved wait is absent from its source cohort.");
         var observed = await bookmarks.ObserveAsync(executionId, bookmarkId, cancellationToken);
@@ -149,7 +157,7 @@ internal sealed class StimulusDeliveryServices(
             ?? throw new IOException("The saved wait's owning execution is unavailable.");
         var activity = await activities.FindAsync(executionId, expected.ActivityExecutionId, cancellationToken)
             ?? throw new IOException("The saved wait's owning activity is unavailable.");
-        if (source.Claim.Item.SubscriptionDeliveryProtocolVersion is null) access!.Current.EnsureTenantScope(execution.TenantId);
+        if (!UsesPublisherTenant(source, publisher)) access!.Current.EnsureTenantScope(execution.TenantId);
         if (!expected.MatchesAdmission(observed, execution, activity, source.Scope, clock.GetUtcNow())) return null;
         var resume = new BookmarkResumeDispatchRequest(executionId, request.StimulusType, request.StimulusHash, request.Input,
             $"{request.IdempotencyKey}:resume:{executionId}", request.RequestedBy, request.BuildDispatchMetadata(), request.PayloadType,

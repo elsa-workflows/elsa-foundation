@@ -19,15 +19,32 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
 
     private async ValueTask ValidateIngressExecutionAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
+        SavedStimulusStartSeal.ValidateCommitOrigin(commit);
         if (commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert } change) return;
         var proposed = change.State;
+        NativeIngressCheckpointAuthority.ValidateOriginShape(proposed);
         var executions = ExactResumeExecutions;
         var prior = executions is null ? null : await executions.FindAsync(proposed.WorkflowExecutionId, cancellationToken);
-        if (prior?.IngressOrigin is not null || prior?.ModelWorkOrigin?.IngressOrigin is not null)
+        if (prior?.StimulusDeliveryOrigin is not null || prior?.IngressOrigin is not null || prior?.ModelWorkOrigin?.IngressOrigin is not null)
         {
             if (!ReferenceEquals(executions!.CheckpointState, _state))
                 throw new NotSupportedException("Ingress workflow continuations require the actual selected native execution writer.");
             NativeIngressCheckpointAuthority.ValidateContinuation(proposed, prior);
+            return;
+        }
+        if (proposed.StimulusDeliveryOrigin is { } saved)
+        {
+            if (executions is null || !ReferenceEquals(executions.CheckpointState, _state))
+                throw new NotSupportedException("Saved stimulus starts require their actual native execution writer.");
+            if (prior is not null || commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
+                _persistenceAccessContextAccessor?.Current.RequireScope() != saved.Scope)
+                throw new InvalidDataException("Saved stimulus scope requires its exact initial physical checkpoint.");
+            RuntimePostCommitOutboxItem retained;
+            lock (_state.SyncRoot)
+                retained = _state.OutboxItems.GetValueOrDefault(saved.SourceOutboxItemId) ?? throw new InvalidDataException("The actual saved cohort is unavailable.");
+            var native = _retentionMaterial is null ? null : await _retentionMaterial.FindAsync(proposed.PinnedExecutable.ArtifactId, cancellationToken);
+            if (native is null) throw new NotSupportedException("The saved start requires its actual retained material.");
+            SavedStimulusCheckpointAuthority.ValidateInitial(commit, retained, saved.Scope, native);
             return;
         }
         if (proposed.ModelWorkOrigin?.IngressOrigin is not null)

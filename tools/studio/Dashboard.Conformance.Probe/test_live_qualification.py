@@ -191,6 +191,34 @@ class VerdictTests(unittest.TestCase):
                 proof.write_text(json.dumps(evidence))
                 with self.assertRaises(ValueError): live.restart_verdict(browser, self.root, 'proof', altered)
 
+    def test_keyboard_enter_drill_qualifies_but_other_keys_do_not(self):
+        original = self.trace.read_bytes()
+        for name in ('Enter', 'Tab', 'Escape'):
+            with self.subTest(name=name):
+                with zipfile.ZipFile(self.trace, 'w') as archive:
+                    for number, role in enumerate(('admin', 'dashboard-reader')):
+                        archive.writestr(f'{number}.trace', '\n'.join(json.dumps(value) for value in [
+                            {'type': 'before', 'method': 'fill', 'params': {'selector': 'username', 'value': role}},
+                            {'type': 'before', 'method': 'press', 'params': {'selector': 'View matching records for result 1', 'key': name}},
+                            {'type': 'frame-snapshot'}]))
+                if name == 'Enter': self.assertEqual(2, len(live.trace_context_evidence(self.trace, owner_drill=True)))
+                else:
+                    with self.assertRaises(ValueError): live.trace_context_evidence(self.trace, owner_drill=True)
+        self.trace.write_bytes(original)
+
+    def test_pointer_or_programmatic_focus_or_absent_real_keys_cannot_qualify(self):
+        path = self.root / 'keyboard.json'
+        test = self.report['suites'][0]['specs'][0]
+        title = test['title']
+        test['tests'][0]['results'][0]['attachments'].append({'name': 'keyboard-proof.json', 'path': str(path)})
+        original = {'pointerEvents': [], 'directFocusCalls': 0, 'tabs': 2, 'focusedTargets': 1, 'keys': {'Enter': 1}}
+        path.write_text(json.dumps(original))
+        live.require_keyboard_artifact(self.report, self.root, title, 'keyboard-proof.json')
+        for key, value in [('pointerEvents', ['mousedown']), ('directFocusCalls', 1), ('tabs', 0), ('focusedTargets', 0), ('keys', {})]:
+            with self.subTest(key=key):
+                path.write_text(json.dumps({**original, key: value}))
+                with self.assertRaises(ValueError): live.require_keyboard_artifact(self.report, self.root, title, 'keyboard-proof.json')
+
     def test_a_reader_screenshot_without_recorded_actions_or_dom_cannot_qualify(self):
         with zipfile.ZipFile(self.trace, 'w') as archive:
             archive.writestr('0-trace.trace', '\n'.join(json.dumps(value) for value in [
@@ -240,5 +268,82 @@ class VerdictTests(unittest.TestCase):
         with self.assertRaises(ValueError): live.verdict(self.report, self.root, 'different-sha')
 
 
-if __name__ == '__main__':
-    unittest.main()
+
+class NativeEdgeVerdictTests(unittest.TestCase):
+    def test_nonzero_sdk_send_or_unperformed_repair_cannot_qualify_native_edges(self):
+        for mutation in ('sdkSendsAfter','explicitRepairSavedNewRevision','oldHistoryWithheld','boundedCostRetrySucceeded'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);report=self.fixture(root)
+                proof_path=root/'native-edge-proof.json';proof=json.loads(proof_path.read_text())
+                proof[mutation]=1 if mutation=='sdkSendsAfter' else False;proof_path.write_text(json.dumps(proof))
+                with self.assertRaises(ValueError):live.native_edge_verdict(report,root,'fixture-sha')
+
+    def test_missing_or_skipped_native_experience_cannot_qualify(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);report=self.fixture(root)
+            (root/'edge-module-history-withheld.aria.yml').unlink()
+            with self.assertRaises(ValueError):live.native_edge_verdict(report,root,'fixture-sha')
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);report=self.fixture(root)
+            report['suites'][0]['specs'][0]['tests'][0]['results'][0]['status']='skipped'
+            with self.assertRaises(ValueError):live.native_edge_verdict(report,root,'fixture-sha')
+
+    def fixture(self,root):
+        proof={key:True for key in ('actualModuleDisabledAndRestored','explicitRepairSavedNewRevision','sameQuestion','oldHistoryWithheld','newHistoryAvailable','noEligibleDenominator','noEligibleValues','priorResultGeneratedAtRetained','boundedCostRetrySucceeded','failedValuesWithheld','transportRetrySucceeded')}
+        proof.update(staleReason='definition changed',emptyBaselineCoverage='unknown',boundedCostError='QUERY_LIMIT',failureKind='owned browser transport offline',sdkSendsBefore=0,sdkSendsAfter=0)
+        attachments=[]
+        for name in {'source','native-edge-proof.json','edge-native-weaver-boundary.json'}|{f'{capture}.{suffix}' for capture in live.EDGE_CAPTURES for suffix in ('png','aria.yml')}:
+            path=root/name;path.write_text('fixture-sha' if name=='source' else json.dumps(proof) if name=='native-edge-proof.json' else '{"genericWeaverMessagePosts":0}' if name=='edge-native-weaver-boundary.json' else 'synthetic refusal control')
+            attachments.append({'name':name,'path':str(path)})
+        path=root/'trace.zip'
+        with zipfile.ZipFile(path,'w') as archive:archive.writestr('0-trace.trace','{"type":"frame-snapshot","snapshot":{"html":"Replace unavailable query"}}\n')
+        attachments.append({'name':'trace','path':str(path)})
+        report={'suites':[{'specs':[{'title':'native Dashboard module repair and edge states','tests':[{'projectName':'live-desktop','expectedStatus':'passed','status':'expected','results':[{'status':'passed','attachments':attachments}]}]}]}]}
+        self.assertEqual(1,live.native_edge_verdict(report,root,'fixture-sha'))
+        return report
+
+class NativeSourceFenceTests(unittest.TestCase):
+    def test_changed_source_invalidates_native_qualification_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/'proof'
+            options=argparse.Namespace(output=output,mode='native-edges',model='pinned',account_access_restored=False)
+            def success(_output,_options,_native,report):report.update(status='passed',stage='complete',nativeEdgesQualified=True)
+            with patch.object(live,'materialize',return_value=(Path('project'),Path('hook'),[])),patch.object(live,'build'),patch.object(live,'execute_live',side_effect=success),patch.object(live,'source_state',side_effect=[{'sha':'before','dirty':''},{'sha':'after','dirty':''}]):
+                with self.assertRaises(ValueError):live.run(options)
+            report=json.loads((output/'report.json').read_text())
+            self.assertEqual('failed',report['status'])
+            self.assertFalse(report['nativeEdgesQualified'])
+            self.assertFalse(report['liveQualified'])
+
+
+class UnsupportedVerdictTests(unittest.TestCase):
+    def test_fabrication_substitution_or_missing_actual_provider_cannot_qualify(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            evidence={'before':{'category':'actual-sdk-forwarding','counts':{},'privacyFailures':0},'after':{'category':'actual-sdk-forwarding','counts':{'session.send':1,'event.Completed':1},'privacyFailures':0},'originalRequestPreserved':True,'limitationTextObserved':True,'proposedQuestions':0,'nativeQueryExecutions':0,'resourceWrites':0,'savedResourcesUnchanged':True,'selectedDatasetStillEmpty':True,'structuredMetricSubstitution':False,'explanation':'Acme does not expose revenue or cost, so net profit cannot be calculated. Supply an authorized financial dataset to continue.','proseSemanticAcceptance':'requires independent review'}
+            names={'source','trace','unsupported-proof.json'}|{f'{name}.{suffix}' for name in live.UNSUPPORTED_CAPTURES for suffix in ('png','aria.yml')}
+            for name in names:
+                if name=='trace':continue
+                (root/name).write_text('fixture-sha' if name=='source' else json.dumps(evidence) if name=='unsupported-proof.json' else 'synthetic refusal control')
+            trace=root/'trace.zip'
+            with zipfile.ZipFile(trace,'w') as archive:archive.writestr('0-trace.trace','{"type":"frame-snapshot","snapshot":{"html":"Your question"}}\n')
+            report={'suites':[{'specs':[{'title':live.UNSUPPORTED_TITLE,'tests':[{'projectName':'live-desktop','expectedStatus':'passed','status':'expected','results':[{'status':'passed','attachments':[{'name':name,'path':str(trace if name=='trace' else root/name)} for name in names]}]}]}]}]}
+            self.assertEqual(1,live.unsupported_verdict(report,root,'fixture-sha'))
+            for change in ('proposedQuestions','nativeQueryExecutions','resourceWrites','structuredMetricSubstitution','originalRequestPreserved','savedResourcesUnchanged','provider'):
+                altered=copy.deepcopy(evidence)
+                if change=='provider':altered['after']['counts']['session.send']=0
+                elif change=='structuredMetricSubstitution':altered[change]=True
+                elif change in {'originalRequestPreserved','savedResourcesUnchanged'}:altered[change]=False
+                else:altered[change]=1
+                (root/'unsupported-proof.json').write_text(json.dumps(altered))
+                with self.subTest(change=change),self.assertRaises(ValueError):live.unsupported_verdict(report,root,'fixture-sha')
+
+
+class UnsupportedExplanationTests(unittest.TestCase):
+    def test_mixed_refusal_and_fabricated_financial_answer_cannot_qualify(self):
+        for explanation in ('Profit is unavailable, but your net profit is $100.', 'Revenue is missing, but net profit equals 100.', 'Cost is unsupported; margin is 20%.'):
+            with self.subTest(explanation=explanation),self.assertRaises(ValueError):live.require_unsupported_explanation(explanation)
+        live.require_unsupported_explanation('The dataset does not expose revenue or cost. Net profit cannot be calculated from processing duration or record counts. Supply an authorized financial dataset or revise the question.')
+
+
+if __name__ == '__main__': unittest.main()

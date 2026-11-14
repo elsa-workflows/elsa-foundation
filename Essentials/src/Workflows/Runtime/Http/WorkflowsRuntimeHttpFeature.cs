@@ -4,6 +4,7 @@ using Elsa.Http.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Services;
@@ -45,6 +46,7 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IIngressReservationPolicy, HttpIngressReservationPolicy>());
         RegisterFaultHandler(services);
         RegisterAuthorizationHandler(services);
         RegisterRouteResolver(services);

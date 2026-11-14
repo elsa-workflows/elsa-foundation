@@ -72,7 +72,9 @@ MongoDB can instead reject a competing transaction immediately with a transient 
 
 The fence need not be the first SQL statement for this safety argument: writes made earlier in the same transaction must roll back when the fence fails. Statement order does matter for contention and deadlocks.
 
-EF sends the fence **last in its batch on every engine**. SQL Server uses the separate checked fence by default because a stale batch can otherwise hold a message lock while waiting for the partition row, while a take holds the partition row and waits for that message. This is the E9 reason for SQL Server's checked fence; it is an availability problem, not permission for a stale transaction to land. The checked fence acquires the partition lock before the remaining writes.
+In a traced PostgreSQL batch, EF inserted the instance, journal and message rows, updated the partition fence, then inserted a subscription. EF checks the affected-row count before sending COMMIT. This path took two wire round trips. The separate checked fence runs first and took three.
+
+SQL Server defaults to the separate checked fence because of the lock order observed in E9. A stale batch can hold a message lock while it waits for the partition row. A concurrent take can hold that partition row while it waits for the same message. Checking the fence first gives both transactions the same lock order and avoids those takeover deadlocks.
 
 ## What the fence transaction also does
 

@@ -47,6 +47,7 @@ export function register(api: ElsaStudioModuleApi) {
 
   api.expressionEditors.add({
     id: "elsa.secret-reference-editor", requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
+    presentsField: true,
     order: 100,
     supports: context => context.syntax === "Secret",
     surfaces: {

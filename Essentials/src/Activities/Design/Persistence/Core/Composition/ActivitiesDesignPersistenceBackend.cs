@@ -31,6 +31,7 @@ public sealed class ActivitiesDesignPersistenceBackend
         typeof(IActivityDefinitionAuthoringStore),
         typeof(IActivityDefinitionDraftStore),
         typeof(IActivityDefinitionVersionPublicationStore),
+        typeof(IActivityPublicationSnapshotReader),
         typeof(IActivityDefinitionLayoutStore),
         typeof(IActivityDraftValidationStore),
         typeof(IActivityForkStore),

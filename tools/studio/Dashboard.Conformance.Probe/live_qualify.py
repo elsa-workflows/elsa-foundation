@@ -2,7 +2,7 @@
 """Prepare, build, or explicitly execute an owned actual-Copilot Dashboard witness.
 
 The default only materializes a dedicated host. It does not inspect credentials,
-start a host, or call a provider. The native provider-disabled runner is separate.
+start a host, or call a provider. The native-edges mode disables the provider; unsupported mode asks one real unsupported question.
 """
 from __future__ import annotations
 
@@ -224,6 +224,7 @@ def profile(settings, shells, studio_url, model, native):
     grants = settings['Qualification']['Principals'][0]['exactDirectPermissions']
     grants.extend(['acme/processing:read', 'acme/processing:create', 'acme/processing/category:read', 'acme/processing-questions:read'])
     settings['Qualification']['GrantProfiles']['dashboard-live-reader'] = list(grants)
+    settings['Qualification']['GrantProfiles']['dashboard-live-editor'] = list(dict.fromkeys([*grants, 'studio/questions:delete']))
     settings['Qualification']['GrantProfiles']['dashboard-live-no-category'] = [grant for grant in grants if grant != 'acme/processing/category:read']
 
 
@@ -290,7 +291,7 @@ def trace_context_evidence(path, minimum_contexts=2, owner_drill=False):
                 parameters = row.get('params') or {}
                 if row.get('method') == 'fill' and 'username' in parameters.get('selector', '').lower() and parameters.get('value') in {'admin', 'dashboard-reader'}:
                     roles.add(parameters['value'])
-                if row.get('method') == 'click' and 'View matching records for result 1' in parameters.get('selector', ''):
+                if (row.get('method') == 'click' or (row.get('method') == 'press' and parameters.get('key') == 'Enter')) and 'View matching records for result 1' in parameters.get('selector', ''):
                     drills += 1
             if snapshots:
                 contexts.append({'name': name, 'roles': sorted(roles), 'snapshots': snapshots, 'drills': drills})
@@ -413,8 +414,157 @@ def restart_verdict(report, output, expected_sha, lifetimes):
     return 1
 
 
+UNSUPPORTED_TITLE = 'live unsupported Dashboard question preserves the request without fabrication'
+UNSUPPORTED_CAPTURES = ('live-reference','live-unsupported-request','live-unsupported-explanation','live-unsupported-preserved-question')
+
+
+def require_unsupported_explanation(text):
+    # This blocks concrete mixed-refusal/numeric-answer failures. It is deliberately not a
+    # substitute for independent semantic inspection of the actual model explanation.
+    if not isinstance(text,str) or not text.strip() or len(text)>12000:
+        raise ValueError('Retain one bounded actual unsupported-question explanation')
+    if not re.search(r'profit|revenue|cost',text,re.I) or not re.search(r"not (?:exposed|available|provided|include|declared)|does(?:n't| not)|cannot|can(?:not|'t|’t)|unavailable|unsupported|missing|lack",text,re.I):
+        raise ValueError('The actual explanation must identify the missing financial meaning')
+    if re.search(r'[$€£]\s*[-+]?\d|\b(?:net\s+profit|profit|revenue|cost|margin)\s*(?:(?:is|was|of|equals|would\s+be|are)\s*)?[:=]?\s*[-+]?\d|\d+(?:\.\d+)?\s*%',text,re.I):
+        raise ValueError('A refusal mixed with a numerical financial answer cannot qualify')
+
+
+def unsupported_verdict(report, output, expected_sha):
+    rows=[]
+    def visit(suites):
+        for suite in suites:
+            for spec in suite.get('specs',[]):rows.extend((spec.get('title'),test) for test in spec.get('tests',[]))
+            visit(suite.get('suites',[]))
+    visit(report.get('suites',[]))
+    if report.get('errors') or len(rows)!=1 or rows[0][0]!=UNSUPPORTED_TITLE:raise ValueError('The actual unsupported-question journey must run exactly once')
+    test=rows[0][1];results=test.get('results',[])
+    if test.get('projectName')!='live-desktop' or test.get('expectedStatus')!='passed' or test.get('status')!='expected' or len(results)!=1 or results[0].get('status')!='passed':raise ValueError('A failed, missing, skipped or retried unsupported question cannot qualify')
+    required={'source','trace','unsupported-proof.json'} | {f'{capture}.{suffix}' for capture in UNSUPPORTED_CAPTURES for suffix in ('png','aria.yml')}
+    paths={item.get('name'):Path(item.get('path','')).resolve() for item in results[0].get('attachments',[]) if item.get('name') in required}
+    if set(paths)!=required or any(not path.is_relative_to(output.resolve()) or not path.is_file() or not path.stat().st_size for path in paths.values()):raise ValueError('Required unsupported-question experience evidence is missing')
+    if paths['source'].read_text().strip()!=expected_sha:raise ValueError('Unsupported question source differs from the committed runner')
+    proof=json.loads(paths['unsupported-proof.json'].read_text())
+    if any(proof.get(key) is not True for key in ('originalRequestPreserved','limitationTextObserved','savedResourcesUnchanged','selectedDatasetStillEmpty')) or proof.get('structuredMetricSubstitution') is not False:raise ValueError('The unsupported request and its meaning must be preserved')
+    if any(proof.get(key)!=0 for key in ('proposedQuestions','nativeQueryExecutions','resourceWrites')):raise ValueError('Unsupported business facts must not produce a substituted proposal, query or saved resource')
+    require_unsupported_explanation(proof.get('explanation'))
+    if proof.get('proseSemanticAcceptance')!='requires independent review':raise ValueError('Machine protocol checks cannot claim full prose acceptance')
+    before=proof.get('before',{});after=proof.get('after',{})
+    if before.get('category')!='actual-sdk-forwarding' or after.get('category')!='actual-sdk-forwarding' or before.get('privacyFailures')!=0 or after.get('privacyFailures')!=0:raise ValueError('Actual SDK privacy-boundary evidence is required')
+    if after.get('counts',{}).get('session.send',0)<=before.get('counts',{}).get('session.send',0) or after.get('counts',{}).get('event.Completed',0)<=before.get('counts',{}).get('event.Completed',0) or after.get('counts',{}).get('event.Error',0):raise ValueError('A completed actual provider turn is required')
+    with zipfile.ZipFile(paths['trace']) as archive:
+        if not any(name.endswith('.trace') and name!='test.trace' and b'frame-snapshot' in archive.read(name) and b'Your question' in archive.read(name) for name in archive.namelist()):raise ValueError('Actual unsupported-question actions and DOM trace are required')
+    return 1
+
+
+EDGE_CAPTURES = ('live-reference', 'edge-module-history-withheld', 'edge-module-unavailable',
+    'edge-no-denominator-and-values', 'edge-repair-saved-reopened', 'edge-repaired-definition-history',
+    'edge-stale-definition-provenance', 'edge-empty-result', 'edge-empty-baseline-unknown-coverage',
+    'edge-bounded-cost-rejection', 'edge-bounded-cost-retry', 'edge-failed-transport-values-withheld', 'edge-transport-retry')
+
+EDGE_CAPTURES += tuple(f'{name}-{part}' for name in ('edge-no-denominator-and-values','edge-repair-saved-reopened','edge-stale-definition-provenance','edge-empty-baseline-unknown-coverage','edge-transport-retry') for part in ('periods','values','values-end'))
+
+def native_edge_verdict(report, output, expected_sha):
+    rows=[]
+    def visit(suites):
+        for suite in suites:
+            for spec in suite.get('specs',[]):
+                rows.extend((spec.get('title'),test) for test in spec.get('tests',[]))
+            visit(suite.get('suites',[]))
+    visit(report.get('suites',[]))
+    if report.get('errors') or len(rows)!=1 or rows[0][0]!='native Dashboard module repair and edge states':
+        raise ValueError('The actual native edge journey must run exactly once')
+    test=rows[0][1];results=test.get('results',[])
+    if test.get('projectName')!='live-desktop' or test.get('expectedStatus')!='passed' or test.get('status')!='expected' or len(results)!=1 or results[0].get('status')!='passed':
+        raise ValueError('Skipped, retried or failed native edges cannot qualify')
+    required={'source','trace','native-edge-proof.json','edge-native-weaver-boundary.json'} | {f'{capture}.{suffix}' for capture in EDGE_CAPTURES for suffix in ('png','aria.yml')}
+    paths={item.get('name'):Path(item.get('path','')).resolve() for item in results[0].get('attachments',[]) if item.get('name') in required}
+    if set(paths)!=required or any(not path.is_relative_to(output.resolve()) or not path.is_file() or not path.stat().st_size for path in paths.values()):
+        raise ValueError('Native edge experience evidence is missing or outside owned output')
+    if paths['source'].read_text().strip()!=expected_sha:raise ValueError('Native edge source differs from the committed runner')
+    proof=json.loads(paths['native-edge-proof.json'].read_text())
+    for key in ('actualModuleDisabledAndRestored','explicitRepairSavedNewRevision','sameQuestion','oldHistoryWithheld','newHistoryAvailable','noEligibleDenominator','noEligibleValues','priorResultGeneratedAtRetained','boundedCostRetrySucceeded','failedValuesWithheld','transportRetrySucceeded'):
+        if proof.get(key) is not True:raise ValueError('A required native edge outcome was not established')
+    if proof.get('staleReason')!='definition changed' or proof.get('emptyBaselineCoverage')!='unknown' or proof.get('boundedCostError')!='QUERY_LIMIT' or proof.get('failureKind')!='owned browser transport offline':
+        raise ValueError('Native edge semantics must retain their actual source meanings')
+    if proof.get('sdkSendsBefore')!=0 or proof.get('sdkSendsAfter')!=0:raise ValueError('Native edge operations must not send a model turn')
+    if json.loads(paths['edge-native-weaver-boundary.json'].read_text()).get('genericWeaverMessagePosts')!=0:raise ValueError('Native edge operations submitted a Weaver message')
+    # There is one normal owner context in this native-only journey. Check recorded actions/DOM.
+    with zipfile.ZipFile(paths['trace']) as archive:
+        traces=[name for name in archive.namelist() if name.endswith('.trace') and name!='test.trace']
+        if not traces or not any(b'frame-snapshot' in archive.read(name) and b'Replace unavailable query' in archive.read(name) for name in traces):
+            raise ValueError('The actual repair actions and DOM trace are required')
+    return 1
+
+
+ACCESS_TITLE = 'native Dashboard editor rights and unavailable Home contribution preservation'
+ACCESS_CAPTURES = ('live-reference', 'editor-authorized-save-reopened', 'editor-private-copy-without-sharing-rights',
+    'home-missing-contribution-known-widgets-retained', 'home-missing-contribution-preserved-after-save-reopen')
+
+
+def report_cases(report):
+    rows = []
+    def visit(suites):
+        for suite in suites:
+            for spec in suite.get('specs', []):
+                rows.extend((spec.get('title'), test) for test in spec.get('tests', []))
+            visit(suite.get('suites', []))
+    visit(report.get('suites', []))
+    return rows
+
+
+def required_case_paths(report, output, title, required):
+    rows = [test for name, test in report_cases(report) if name == title]
+    if report.get('errors') or len(rows) != 1:
+        raise ValueError('Exactly one actual required journey is needed')
+    test = rows[0]; results = test.get('results', [])
+    if test.get('projectName') != 'live-desktop' or test.get('expectedStatus') != 'passed' or test.get('status') != 'expected' or len(results) != 1 or results[0].get('status') != 'passed':
+        raise ValueError('Skipped, retried or failed accessibility journeys cannot qualify')
+    paths = {item.get('name'): Path(item.get('path', '')).resolve() for item in results[0].get('attachments', []) if item.get('name') in required}
+    if set(paths) != required or any(not path.is_relative_to(output.resolve()) or not path.is_file() or not path.stat().st_size for path in paths.values()):
+        raise ValueError('Required accessibility evidence is absent or outside owned output')
+    return paths
+
+
+def require_keyboard_artifact(report, output, title, name):
+    path = required_case_paths(report, output, title, {name})[name]
+    proof = json.loads(path.read_text())
+    if proof.get('pointerEvents') != [] or proof.get('directFocusCalls') != 0 or proof.get('tabs', 0) < 1 or proof.get('focusedTargets', 0) < 1 or proof.get('keys', {}).get('Enter', 0) < 1:
+        raise ValueError('Actual Tab/focus/Enter and zero pointer input are required')
+
+
+def accessibility_verdict(report, output, expected_sha):
+    if len(report_cases(report)) != 3 or {title for title, _ in report_cases(report)} != TITLES | {ACCESS_TITLE}:
+        raise ValueError('Both actual keyboard authoring journeys and native access/Home preservation must execute')
+    ordinary = json.loads(json.dumps(report))
+    def remove(suites):
+        for suite in suites:
+            suite['specs'] = [spec for spec in suite.get('specs', []) if spec.get('title') != ACCESS_TITLE]
+            remove(suite.get('suites', []))
+    remove(ordinary.get('suites', []))
+    executed = verdict(ordinary, output, expected_sha)
+    for title in TITLES:
+        for name in ('keyboard-proof.json', 'reader-keyboard-proof.json'):
+            require_keyboard_artifact(report, output, title, name)
+    for name in ('keyboard-proof.json', 'editor-keyboard-proof.json'):
+        require_keyboard_artifact(report, output, ACCESS_TITLE, name)
+    required = {'source', 'trace', 'access-preservation-proof.json'} | {f'{capture}.{suffix}' for capture in ACCESS_CAPTURES for suffix in ('png', 'aria.yml')}
+    paths = required_case_paths(report, output, ACCESS_TITLE, required)
+    if paths['source'].read_text().strip() != expected_sha:
+        raise ValueError('Access/Home source differs from the actual committed runner')
+    proof = json.loads(paths['access-preservation-proof.json'].read_text())
+    flags = ('authorizedEditorSaved', 'editorCopied', 'shareUiAbsent', 'privateCopyDeletedByOwner', 'missingContributionNotRendered', 'knownHomeWidgetsPreserved', 'missingContributionRetainedAfterUiSaveAndReload')
+    if not all(proof.get(key) is True for key in flags) or proof.get('shareApiStatus') != 403 or proof.get('originalDeleteStatus') != 403 or proof.get('sdkBefore') != proof.get('sdkAfter'):
+        raise ValueError('Actual editor rights and preserved unavailable Home contribution are required')
+    with zipfile.ZipFile(paths['trace']) as archive:
+        if not any(name.endswith('.trace') and name != 'test.trace' and b'frame-snapshot' in archive.read(name) and b'Copy saved version' in archive.read(name) for name in archive.namelist()):
+            raise ValueError('Actual editor actions and DOM recording are required')
+    return executed + 1
+
+
 def execute_live(output, options, native, report):
-    env = credential_environment(options.mode, options.account_access_restored, options.credential_environment_variable, native)
+    edges = options.mode == 'native-edges'
+    unsupported = options.mode == 'unsupported'
+    env = native.clean_environment() if edges else credential_environment('live' if unsupported else options.mode, options.account_access_restored, options.credential_environment_variable, native)
     with tempfile.TemporaryDirectory(prefix='elsa-dashboard-live-state-') as temporary:
         data = Path(temporary)
         backend, studio = data / 'backend', data / 'studio'
@@ -430,6 +580,9 @@ def execute_live(output, options, native, report):
         settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
         shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
         profile(settings, shells, studio_url, options.model, native)
+        if edges:
+            for name in ('WeaverGitHubCopilot', 'DashboardLiveQualification'):
+                shells['CShells']['Shells']['default']['Features'][name]['Enabled'] = False
         (backend / 'appsettings.json').write_text(json.dumps(settings))
         (backend / 'shells.json').write_text(json.dumps(shells))
         home = data / 'home'
@@ -443,25 +596,35 @@ def execute_live(output, options, native, report):
         browser_env = dict(native.clean_environment(), UX_DASHBOARD_LIVE_OWNED='1', UX_ACCEPTANCE_OWNED='1',
                            ELSA_STUDIO_URL=studio_url, UX_BACKEND_URL=backend_url, ELSA_WORKBENCH_URL=backend_url,
                            UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=report['sourceSha'])
+        if getattr(options, 'keyboard', False):
+            browser_env['UX_DASHBOARD_KEYBOARD'] = '1'
         browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.live-dashboards.config.ts']
         with native.host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env) as first_backend:
-            preflight = live_preflight(backend_url)
-            report['preflight'] = preflight
-            if not preflight['available']:
-                report.update(status='unavailable', stage='provider-preflight', error='Actual provider preflight unavailable; no automatic retry or browser/model turn attempted')
-                raise LiveUnavailable('Actual provider unavailable; no automatic retry')
-            if options.model not in preflight['declaredModels']:
-                raise ValueError('Requested pinned model is absent from actual provider diagnostics; no turn attempted')
+            if not edges:
+                preflight = live_preflight(backend_url)
+                report['preflight'] = preflight
+                if not preflight['available']:
+                    report.update(status='unavailable', stage='provider-preflight', error='Actual provider preflight unavailable; no automatic retry or browser/model turn attempted')
+                    raise LiveUnavailable('Actual provider unavailable; no automatic retry')
+                if options.model not in preflight['declaredModels']:
+                    raise ValueError('Requested pinned model is absent from actual provider diagnostics; no turn attempted')
             with native.host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                              studio_env) as first_studio:
                 report['stage'] = 'actual-live-journeys'
-                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
-                report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
+                journey_env = dict(browser_env, UX_DASHBOARD_NATIVE_EDGES='1') if edges else dict(browser_env, UX_DASHBOARD_UNSUPPORTED='1') if unsupported else browser_env
+                command(native, browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=journey_env)
+                report['executed'] = native_edge_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if edges else unsupported_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if unsupported else accessibility_verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha']) if getattr(options, 'keyboard', False) else verdict(json.loads((output / 'playwright.json').read_text()), output, report['sourceSha'])
         lifetimes = [{'phase': 'authoring', 'backendPid': first_backend.pid, 'studioPid': first_studio.pid,
                       'backendExit': first_backend.poll(), 'studioExit': first_studio.poll()}]
         report['hostLifetimes'] = lifetimes
         if lifetimes[0]['backendExit'] != 0 or lifetimes[0]['studioExit'] != 0:
             raise ValueError('Both first-lifetime hosts must stop normally before restart')
+        if unsupported:
+            report.update(status='passed', stage='complete', unsupportedQualified=True, liveQualified=False)
+            return
+        if edges:
+            report.update(status='passed', stage='complete', nativeEdgesQualified=True, liveQualified=False)
+            return
         if not (output / 'workflow-retained.json').is_file():
             raise ValueError('No authored definition manifest survived the first host lifetime')
         # Preserve the original directories and databases. Only disable provider access.
@@ -483,14 +646,18 @@ def execute_live(output, options, native, report):
                           'backendExit': second_backend.poll(), 'studioExit': second_studio.poll(),
                           'sameOwnedStores': identities == (backend.stat().st_ino, studio.stat().st_ino)})
         report['restartExecuted'] = restart_verdict(json.loads((output / 'playwright-restart.json').read_text()), output, report['sourceSha'], lifetimes)
-        report.update(status='passed', stage='complete', liveQualified=True)
+        if getattr(options, 'keyboard', False):
+            require_keyboard_artifact(json.loads((output / 'playwright-restart.json').read_text()), output, RESTART_TITLE, 'keyboard-proof.json')
+        report.update(status='passed', stage='complete', liveQualified=True, keyboardQualified=bool(getattr(options, 'keyboard', False)))
 
 
 def run(options):
     output = options.output.resolve()
     if not options.output.is_absolute() or output.is_relative_to(ROOT) or output.exists():
         raise ValueError('Use a new absolute owned directory outside the checkout')
-    if options.mode == 'live' and not options.account_access_restored:
+    if getattr(options, 'keyboard', False) and options.mode != 'live':
+        raise ValueError('Keyboard lifecycle qualification requires the full live and restart mode')
+    if options.mode in {'live','unsupported'} and not options.account_access_restored:
         raise ValueError('Live execution is disabled until the owner confirms restored account access')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,127}', options.model) or options.model.lower() == 'auto':
         raise ValueError('Pin an explicit provider model; auto cannot qualify a model')
@@ -501,25 +668,25 @@ def run(options):
               'providerCalls': 'not run', 'visualApproval': 'requires independent current-commit review',
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     try:
-        if options.mode == 'live' and start['dirty']:
+        if options.mode in {'live','native-edges','unsupported'} and start['dirty']:
             raise ValueError('Actual live qualification requires a clean committed source revision')
         project, hook, seeded = materialize(output)
-        if options.mode in {'build', 'live'}:
+        if options.mode in {'build', 'live', 'native-edges', 'unsupported'}:
             report['stage'] = 'isolated-build'
             build(output, project, hook, seeded, native_helpers())
         report.update(status='prepared', stage='not-run', liveQualified=False)
-        if options.mode == 'live':
-            report['providerCalls'] = 'actual preflight requested once; see preflight and SDK counter evidence'
+        if options.mode in {'live','native-edges','unsupported'}:
+            report['providerCalls'] = 'disabled; native edge SDK counts required zero' if options.mode == 'native-edges' else 'actual preflight requested once; see preflight and SDK counter evidence'
             execute_live(output, options, native_helpers(), report)
         if source_state() != start:
-            report.update(liveQualified=False)
+            report.update(liveQualified=False, nativeEdgesQualified=False, unsupportedQualified=False, keyboardQualified=False)
             raise ValueError('Source changed during the run; evidence cannot qualify a revision')
     except LiveUnavailable:
         report.update(status='unavailable', liveQualified=False)
         raise
     except BaseException as failure:
         # Tool/provider exceptions may hold request data. Retain only a fixed category and exception type.
-        report.update(status='failed', liveQualified=False, failureType=type(failure).__name__)
+        report.update(status='failed', liveQualified=False, nativeEdgesQualified=False, unsupportedQualified=False, keyboardQualified=False, failureType=type(failure).__name__)
         raise
     finally:
         report['finishedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
@@ -533,10 +700,11 @@ def run(options):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path, help='New absolute private owned directory outside source')
-    parser.add_argument('--mode', choices=['prepare', 'build', 'live'], default='prepare')
+    parser.add_argument('--mode', choices=['prepare', 'build', 'live', 'native-edges', 'unsupported'], default='prepare')
+    parser.add_argument('--keyboard', action='store_true', help='Qualify the entire actual live authoring lifecycle using real Tab/keys, plus editor rights and Home preservation')
     parser.add_argument('--model', required=True, help='Explicit pinned model id; never auto')
-    parser.add_argument('--account-access-restored', action='store_true', help='Live mode only: owner explicitly confirmed restored account access')
-    parser.add_argument('--credential-environment-variable', help='Live mode only: approved environment-variable name; no file or token value')
+    parser.add_argument('--account-access-restored', action='store_true', help='Actual provider modes only: owner explicitly confirmed restored account access')
+    parser.add_argument('--credential-environment-variable', help='Actual provider modes only: approved environment-variable name; no file or token value')
     options = parser.parse_args()
     def terminate(_signum, _frame):
         raise InterruptedError('Owned live qualification interrupted')
