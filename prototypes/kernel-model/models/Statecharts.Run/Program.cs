@@ -7,6 +7,7 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--inbox-signal"]) { SignalReceiverWitness.Run(); return; }
 if (args is ["--inbox-settings"]) { MachineInboxSettingsWitness.Run(); return; }
 if (args is ["--inbox"]) { MachineInboxWitness.Run(); return; }
 if (args is ["--regional-recovery"]) { RegionalRecovery.Run(); return; }
