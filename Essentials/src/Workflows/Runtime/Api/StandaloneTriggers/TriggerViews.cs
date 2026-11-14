@@ -37,8 +37,15 @@ internal sealed record TriggerSubscriptionView(string Id, string TriggerId, long
     TriggerGrantView InvocationGrant, string Compatibility, IReadOnlyList<TriggerFinding> Findings,
     TriggerServing? Serving, IReadOnlyList<TriggerAction> Actions, object? TriggerSummary = null);
 internal sealed record TriggerPage<T>(IReadOnlyList<T> Items, string? Next);
+internal sealed record TriggerConfigurationFieldView(string Key, string Label, string Type, bool Required,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? DefaultValue,
+    IReadOnlyList<TriggerFieldChoice>? Choices, string? Description, bool Sensitive, bool ReadOnly)
+{
+    internal static TriggerConfigurationFieldView From(TriggerConfigurationField field) => new(field.Key, field.Label,
+        field.Type, field.Required, field.DefaultValue, field.Choices, field.Description, field.Sensitive, field.ReadOnly);
+}
 internal sealed record TriggerTypeView(string TypeKey, string SchemaVersion, string DisplayName, string Family,
-    IReadOnlyList<TriggerConfigurationField> ConfigurationFields, bool CanCreate, string? Description)
+    IReadOnlyList<TriggerConfigurationFieldView> ConfigurationFields, bool CanCreate, string? Description)
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ConfigurationEditorId { get; init; }

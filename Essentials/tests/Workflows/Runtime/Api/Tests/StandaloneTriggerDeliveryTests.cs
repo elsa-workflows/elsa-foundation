@@ -33,6 +33,19 @@ public sealed class StandaloneTriggerDeliveryTests
         await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.Operations.ReadAsync(fixture.Port.Item.OutboxItemId, default).AsTask());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Delivery_target_names_follow_the_same_workflow_read_permission_as_target_identity(bool readable)
+    {
+        var fixture = new Fixture(); fixture.Access.WorkflowRead = readable;
+        var view = await fixture.Operations.ReadAsync(TriggerDeliveryOperations.EncodeId(fixture.Port.Item.OutboxItemId, "trigger-a"), default);
+        var recipient = Assert.Single(view.Recipients);
+        Assert.Equal(readable ? "Readable workflow" : null, recipient.TargetDisplayName);
+        Assert.Equal(readable ? "private-definition-a" : null, recipient.Target?.DefinitionId);
+        Assert.Equal(readable ? 1 : 0, fixture.Discovery.Calls);
+    }
+
     [Fact]
     public async Task Filtered_physical_pages_advance_opaque_cursor_and_multi_resource_source_is_not_duplicated()
     {
@@ -121,10 +134,11 @@ public sealed class StandaloneTriggerDeliveryTests
     private sealed class Fixture
     {
         internal readonly Store Store = new(); internal readonly Access Access = new(); internal readonly Clock Clock = new();
+        internal readonly Discovery Discovery = new();
         internal readonly Port Port; internal readonly TriggerDeliveryOperations Operations; internal readonly TriggerManagement Management;
         internal Fixture(bool external = false)
         {
-            var protection = new EphemeralDataProtectionProvider(); var discovery = new Discovery();
+            var protection = new EphemeralDataProtectionProvider(); var discovery = Discovery;
             Port = new(Source(external)); Operations = new(Store, Access, discovery, protection, Clock, Port);
             Management = new(Store, new AuthoringTriggerCommitter(Store), Access, new Catalog(), discovery, new Mapper(), new Publisher(), protection, Clock, Operations);
         }
@@ -157,9 +171,9 @@ public sealed class StandaloneTriggerDeliveryTests
     private sealed class Access : ITriggerRequestAccess
     {
         public string Subject { get; set; } = "operator"; public TriggerScope Scope { get; } = new(new("physical"), "actual-tenant");
-        internal bool ReadDeliveries = true;
+        internal bool ReadDeliveries = true; internal bool WorkflowRead;
         public ValueTask<bool> HasAsync(string permission, object? resource, CancellationToken ct) => ValueTask.FromResult(
-            permission != "workflows/runtime:read" && (resource is not StandaloneTrigger trigger || trigger.Id == "trigger-a") &&
+            (permission != "workflows/runtime:read" || WorkflowRead) && (resource is not StandaloneTrigger trigger || trigger.Id == "trigger-a") &&
             (permission != TriggerPermissions.DeliveriesRead || ReadDeliveries));
         public async ValueTask RequireAsync(string permission, object? resource, CancellationToken ct, bool mask = false)
         { if (!await HasAsync(permission, resource, ct)) throw new TriggerOperationException(mask ? "missing" : "forbidden", "Denied"); }
@@ -205,7 +219,13 @@ public sealed class StandaloneTriggerDeliveryTests
     }
     private sealed class Discovery : IStandaloneTriggerTargetDiscovery
     {
-        public ValueTask<TriggerTargetDescription?> DescribeAsync(TriggerScope scope, string id, string slot, CancellationToken ct = default) => ValueTask.FromResult<TriggerTargetDescription?>(null);
+        internal int Calls;
+        public ValueTask<TriggerTargetDescription?> DescribeAsync(TriggerScope scope, string id, string slot, CancellationToken ct = default)
+        {
+            Calls++;
+            return ValueTask.FromResult<TriggerTargetDescription?>(new(id, slot, "Readable workflow", "native", TriggerTargetState.Available,
+                new(1, []), "contract-1", "version-1", "1", "publication-1", 1, false, []));
+        }
         public ValueTask<TriggerTargetPage> ListAsync(TriggerScope scope, TriggerTargetQuery query, CancellationToken ct = default) => ValueTask.FromResult(new TriggerTargetPage([], null));
     }
     private sealed class Catalog : IStandaloneTriggerTypeCatalog

@@ -606,6 +606,7 @@ export interface WorkflowTestRunInputContract {
     type: ArgumentType;
     isRequired: boolean;
     defaultValue?: unknown | null;
+    hasDefaultValue?: boolean;
   }>;
 }
 
@@ -849,6 +850,8 @@ export interface WorkflowExecutableActivityPresentation {
 // reference's layout, and the full reference list. Assembled without consulting the definition table,
 // so it stays inspectable where its source definition does not exist.
 export interface WorkflowExecutableDetails {
+  producerIdentity?: { artifactId: string; artifactHash: string; definitionId: string; definitionVersionId: string; artifactVersion: string } | null;
+  inputContract?: WorkflowTestRunInputContract | null;
   artifactId: string;
   artifactHash: string;
   createdAt: string;

@@ -1,3 +1,4 @@
+import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
@@ -1019,6 +1020,7 @@ export function WorkflowEditor({
     directHumanClaimsAvailable: directBpmnRoot && directClaimPublisherAvailable,
     directServiceSession: directBpmnRoot && directServicePublisherAvailable ? backendSession : undefined,
     directServiceDocumentId: draft ? `${definitionId}:${draft.id}` : undefined,
+    directServiceModelInputs: readWorkflowInputs(draft?.state.inputs),
     isDecision: isBpmnDecisionType(selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey : undefined),
     conversionBlockedReason: bpmnGatewayConversionBlocker(scopeOwner, selectedBpmnElement),
     onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined

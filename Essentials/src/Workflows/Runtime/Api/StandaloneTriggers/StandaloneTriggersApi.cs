@@ -5,6 +5,7 @@ using System.Text.Json.Serialization.Metadata;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -116,7 +117,15 @@ internal static class StandaloneTriggersApi
             throw new TriggerOperationException("validation", "Page size must be between 1 and 100.");
     private static JsonSerializerOptions CreateJson()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(type =>
+        {
+            // Response metadata omits absent defaults while retaining explicit JSON null values.
+            // This does not change the runtime artifact codec or the Core input contract.
+            if (type.Type == typeof(WorkflowDeclaredInput))
+                type.Properties.Single(property => property.Name == "defaultValue").ShouldSerialize = static (_, value) => value is not null;
+        });
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
         options.Converters.Add(new JsonStringEnumConverter());
         options.MakeReadOnly();
         return options;

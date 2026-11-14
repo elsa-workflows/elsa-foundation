@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.AspNetCore.DataProtection;
@@ -10,6 +11,54 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 
 public sealed partial class StandaloneTriggerManagementTests
 {
+    [Fact]
+    public void Target_metadata_distinguishes_missing_defaults_from_explicit_null_and_exact_values()
+    {
+        var contract = new WorkflowExecutableInputContract(1,
+        [
+            new("missing", new("String"), true),
+            new("null", new("String"), true, Element("null")),
+            new("number", new("UInt64"), true, Element("18446744073709551615")),
+            new("flag", new("Boolean"), false, Element("false")),
+            new("text", new("String"), false, Element("\"hello\""))
+        ]);
+        var target = TriggerTargetView.From(new("target", "default", "Target", "native", TriggerTargetState.Available,
+            contract, "contract-v1", "version", "1", "publication", 1, false, []));
+        var wire = JsonSerializer.SerializeToElement(target, StandaloneTriggersApi.Json);
+        var inputs = wire.GetProperty("inputContract").GetProperty("inputs").EnumerateArray()
+            .ToDictionary(input => input.GetProperty("name").GetString()!);
+        Assert.False(inputs["missing"].TryGetProperty("defaultValue", out _));
+        Assert.True(inputs["missing"].GetProperty("isRequired").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, inputs["null"].GetProperty("defaultValue").ValueKind);
+        Assert.Equal("18446744073709551615", inputs["number"].GetProperty("defaultValue").GetRawText());
+        Assert.False(inputs["flag"].GetProperty("defaultValue").GetBoolean());
+        Assert.Equal("hello", inputs["text"].GetProperty("defaultValue").GetString());
+    }
+
+    [Fact]
+    public async Task Type_metadata_omits_an_absent_default_and_retains_explicit_null_and_exact_values()
+    {
+        var fields = new TriggerConfigurationField[]
+        {
+            new("missing", "Missing", Required: true),
+            new("null", "Null", "json", DefaultValue: Element("null")),
+            new("number", "Precise number", "json", DefaultValue: Element("18446744073709551615")),
+            new("flag", "Flag", "boolean", DefaultValue: Element("false")),
+            new("text", "Text", DefaultValue: Element("\"hello\""))
+        };
+        var fixture = new ConfigurationFixture("event", Element("{}"), fields: fields);
+        var page = await fixture.Management.TypesAsync(default);
+        var wire = JsonSerializer.SerializeToElement(page, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var metadata = wire.GetProperty("items")[0].GetProperty("configurationFields");
+        Assert.False(metadata[0].TryGetProperty("defaultValue", out _));
+        Assert.True(metadata[0].GetProperty("required").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, metadata[1].GetProperty("defaultValue").ValueKind);
+        Assert.Equal("18446744073709551615", metadata[2].GetProperty("defaultValue").GetRawText());
+        Assert.False(metadata[3].GetProperty("defaultValue").GetBoolean());
+        Assert.Equal("hello", metadata[4].GetProperty("defaultValue").GetString());
+        Assert.Equal(0, fixture.Store.Writes);
+    }
+
     [Fact]
     public async Task HTTP_policy_edit_keeps_exact_grants_and_scope_without_grant_or_target_execution_permission()
     {

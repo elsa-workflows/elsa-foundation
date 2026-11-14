@@ -79,6 +79,7 @@ export function createStudioRegistry(
     expressionEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["expressionEditors"]>>>({ slot: studioSlots.expressionEditors,hostPolicy }),
     userTaskForms: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["userTaskForms"]>>>({ slot: studioSlots.userTaskForms, hostPolicy }),
     workflowRunInputEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunInputEditors"]>>>({ slot: studioSlots.workflowRunInputEditors,hostPolicy }),
+    triggerConfigurationEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["triggerConfigurationEditors"]>>>({ slot: studioSlots.triggerConfigurationEditors,hostPolicy }),
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
     workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
     settingEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["settingEditors"]>>>({ slot: studioSlots.settingEditors,hostPolicy }),

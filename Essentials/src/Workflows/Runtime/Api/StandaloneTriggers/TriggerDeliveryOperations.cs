@@ -139,11 +139,11 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
             var readable = slotName is not null && await access.HasAsync("workflows/runtime:read", new TriggerTargetResource(recipient.LogicalDefinitionId, slotName), ct);
             var findings = new List<TriggerFinding>();
             if (progress.LastFailureCode is { } failure) findings.Add(new(SafeCode(failure), "Recipient recovery requires attention."));
-            TriggerExecutionReference? execution = null; string? currentVersion = null;
+            TriggerExecutionReference? execution = null; string? currentVersion = null; string? targetDisplayName = null;
             if (readable)
             {
                 var current = await targets.DescribeAsync(access.Scope, recipient.LogicalDefinitionId, slotName!, ct);
-                currentVersion = current?.Version;
+                currentVersion = current?.Version; targetDisplayName = current?.DisplayName;
                 execution = await ExecutionAsync(source, recipient, progress, ct);
             }
             else findings.Add(new("TargetDetailsRestricted", "Workflow details require ordinary workflow read permission."));
@@ -162,7 +162,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
                 "Accepted", dispatch, readable ? recipient.StartIdentity.WorkflowExecutionId : null, execution, findings,
                 [new("RetryRecipients", retry && owed, owed ? null : "NotEligible"),
                  new("CancelPendingRecipients", cancel && progress.Phase == RuntimeRecipientPhase.Pending,
-                     progress.Phase == RuntimeRecipientPhase.Pending ? null : progress.Seal is not null ? "DispatchCommitted" : "NotEligible")], progress.RetryAt, progress.AttemptCount));
+                     progress.Phase == RuntimeRecipientPhase.Pending ? null : progress.Seal is not null ? "DispatchCommitted" : "NotEligible")], progress.RetryAt, progress.AttemptCount, targetDisplayName));
         }
         recipients.AddRange(refused.Select(item => new TriggerRecipientView("refused:" + item.SubscriptionId, item.SubscriptionRevision,
             item.SubscriptionId, null, null, null, "Refused", "NotDispatched", null, null,
