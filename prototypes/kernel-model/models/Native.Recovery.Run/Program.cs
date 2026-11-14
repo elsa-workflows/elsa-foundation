@@ -4,8 +4,8 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
-if (args is ["--list"]) { Console.WriteLine("recovery:ordinary-child-intervention-minimal"); return; }
-if (args.Length != 0) throw new ArgumentException("Use --list or no argument.");
+if (args is ["--list"]) { Console.WriteLine("recovery:ordinary-child-intervention-minimal"); foreach (var name in InterventionWitness.Names.Concat(RecoveryReader.Names)) Console.WriteLine(name); return; }
+if (args.Length != 0 && args is not ["--minimal"]) throw new ArgumentException("Use --list, --minimal or no argument.");
 
 // A real ordinary native fault, not a seeded incident record. The old runtime ignores the private
 // profile request; the named assertion exposes the missing continuing-parent boundary.
@@ -40,6 +40,7 @@ if (row.Status != InstanceStatus.Running || !state.Frames.Values.Any(f => f.Node
 if (state.Variables["before"]!.ToString() != "1" || state.Variables.ContainsKey("after") || RecoveryLeaf.Observed != 17)
     throw new InvalidOperationException("R2: intervention repeated or advanced ordinary work");
 Console.WriteLine("PASS recovery:ordinary-child-intervention-minimal");
+if (args.Length == 0) { InterventionWitness.Run(); RecoveryReader.Run(); }
 
 internal sealed class RecoveryLeaf : Kernel.Native.Activity<int>
 {
