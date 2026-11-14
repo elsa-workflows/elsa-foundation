@@ -10,13 +10,19 @@ namespace Elsa.Maps.Projects;
 public static class RepoLayout
 {
     /// <summary>Pathspecs covering every backend project the maps describe, source and test alike.</summary>
+    /// <remarks>
+    /// Git's <c>*</c> also matches <c>/</c>, so <c>Extensions/*/src/*.csproj</c> would take in a connector
+    /// scaffold under <c>Extensions/&lt;capability&gt;/templates/…/src/…</c>. The exclude keeps those
+    /// samples out of the backend inventory the same way Studio trees stay out.
+    /// </remarks>
     public static readonly string[] ProjectPathspecs =
     [
         "Essentials/src/*.csproj",
         "Essentials/apps/*.csproj",
         "Essentials/tests/*.csproj",
         "Extensions/*/src/*.csproj",
-        "Extensions/*/tests/*.csproj"
+        "Extensions/*/tests/*.csproj",
+        ":(exclude)Extensions/*/templates/*"
     ];
 
     /// <summary>
@@ -26,8 +32,9 @@ public static class RepoLayout
     /// <remarks>
     /// The one project-discovery rule, for the working tree and for a commit's git tree alike (spec 259). It is the
     /// layout rule, not git's pathspec rule: in <see cref="ProjectPathspecs"/> a <c>*</c> also matches <c>/</c>, so
-    /// <c>Extensions/*/src/*.csproj</c> would take in <c>Extensions/&lt;capability&gt;/studio/src/…</c>, which this
-    /// layout keeps out of the backend maps. The versioning calculator applies the same rule to its own inventory.
+    /// <c>Extensions/*/src/*.csproj</c> would take in <c>Extensions/&lt;capability&gt;/studio/src/…</c> and
+    /// <c>Extensions/&lt;capability&gt;/templates/…/src/…</c>, which this layout keeps out of the backend maps.
+    /// The versioning calculator applies the same rule to its own inventory.
     /// </remarks>
     public static bool IsProjectPath(string relativePath)
     {
