@@ -20,8 +20,9 @@ API for the proposed kernel:
 - [Child intervention](../../../Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildFaultInterventionRequest.cs)
   and the ordinary WaitForIntervention action retain a blocking fault with a deferred structural parent continuation.
 - [RetryFaultedActivity](../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/Handlers/RetryFaultedActivityAlterationHandler.cs)
-  requires an exact Faulted source, running parent, source-owned blocking incidents awaiting intervention, no conflicting
-  descendant incident/claimed work and available pinned executable material. A terminal run or ended parent is refused.
+  requires an exact Faulted source, source-owned blocking incidents awaiting intervention, no conflicting descendant
+  incident/claimed work and available pinned executable material. Where the source has a parent, it must remain running.
+  A root occurrence can pass without a parent; a terminal run or ended parent is refused.
 - [Successor staging](../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/ActivitySuccessorStaging.cs)
   creates a fresh execution/scope, preserves pinned inputs, parent/scheduling/branch/iteration provenance and logical
   operation keys, and clears per-invocation private state and wait/attempt markers. The
@@ -34,7 +35,8 @@ product approval, default incident strategy, public capability, provider or migr
 
 The experiment is explicitly opt-in, with effective policy persisted for the invocation. Legacy/default fault behavior
 stays unchanged. Initially qualify materialized stateless leaf faults under declared supported normal structural parents
-in Balanced/Durable. Hydration/intrinsic/stateful-resume/background/composite-owned faults and custom-parent recovery must
+in Balanced/Durable. This initial structural-child restriction is not a general prohibition of ordinary root-occurrence
+retry, which still needs broader qualification. Hydration/intrinsic/stateful-resume/background/composite-owned faults and custom-parent recovery must
 have explicit support/refusal boundaries; they are mandatory later qualification, not removed first-release scope.
 Rowless/Ephemeral, providers and production authorization/retention remain unavailable until their own proof.
 
@@ -62,7 +64,7 @@ the private registry/JSON profile does not establish product executable pinning,
 
 ## Proposed retry boundary
 
-Before mutation, verify the exact creation/policy/source, blocking intervention outcome, live parent, usable lexical
+Before mutation, verify the exact creation/policy/source, blocking intervention outcome, live parent for the supported structural-child cases, usable lexical
 parent, available pinned node/input material and absence of conflicting descendant work/incidents. A continuing parent
 cannot authorize work under a retired source visit. Unsupported or changed material/routing must produce an honest
 refusal; it cannot silently retry under the newest node or reset the machine.
@@ -82,7 +84,7 @@ starts a fresh invocation under normal rules rather than replaying a consumed re
 External effects are neither undone nor guaranteed exactly once.
 
 For StateMachine integration, preserve its selected set, source/exit/state-visit identities, completed phase steps,
-successful regions and still-owned lexical values. A retry must not repeat Exit, select again or initialize target values
+successful regions and still-owned lexical values. A retry must not repeat completed Exit work, select again or initialize target values
 before required Action success. Rebind its current child atomically; leaving the old physical ID until a later completion
 is invalid when another sibling callback can arrive first. Parent cancellation, absorption, supersession and genuine
 completion retain the existing resource/receipt disposal guards. Guard and loop incidents need their own eligible ordinary
