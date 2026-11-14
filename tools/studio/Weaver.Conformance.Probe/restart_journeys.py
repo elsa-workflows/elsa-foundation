@@ -690,14 +690,32 @@ def _owner_ref(runtime, name, *, http=None):
     return reference
 
 
-def _command_trace(t, o, command_id, name):
+def _command_trace(t, o, command_id, name, *, owned_root=None):
     """This command's rows of the actual factory trace; one phase interleaves several cases in one adapter trace."""
     raw = t.protocol_trace(o["traceOffset"])
     rows = [row for row in raw["records"] if isinstance(row.get("data"), dict) and row["data"].get("commandId") == command_id]
     path = t.output / (name + "-command-trace.json")
     check(not path.exists(), "Never overwrite a retained command trace")
-    private_json(path, {"commandId": command_id, "sourcePath": raw["sourcePath"], "offset": raw["offset"], "nextOffset": raw["nextOffset"],
-                        "incompleteTailBytes": raw["incompleteTailBytes"], "rawTrace": raw["receipt"], "records": rows})
+    record = {"commandId": command_id, "sourcePath": raw["sourcePath"], "offset": raw["offset"], "nextOffset": raw["nextOffset"],
+              "incompleteTailBytes": raw["incompleteTailBytes"], "rawTrace": raw["receipt"], "records": rows}
+    if owned_root is not None:
+        from effects_journeys import _protocol_source_path
+        source = _protocol_source_path(owned_root, raw["sourcePath"])
+        end = raw["nextOffset"] + raw["incompleteTailBytes"]
+        check(0 < end - raw["offset"] <= 67108864, "Actual protocol window exceeds its evidence bound")
+        with source.open("rb") as stream:
+            identity = os.fstat(stream.fileno())
+            check(stat.S_ISREG(identity.st_mode) and identity.st_size >= end, "Actual protocol source lost its observed byte window")
+            stream.seek(raw["offset"])
+            observed = stream.read(end - raw["offset"])
+        check(hashlib.sha256(observed).hexdigest() == raw["observedBytesSha256"], "Actual protocol bytes changed before immutable capture")
+        window = t.output / (name + "-protocol-window.jsonl")
+        with window.open("xb") as stream:
+            stream.write(observed)
+        window.chmod(0o600)
+        record.update(window=retained(window), observedBytesSha256=raw["observedBytesSha256"], capturedAt=time.time(),
+                      sourceSizeAtObservation=end, sourceIdentity={"device": identity.st_dev, "inode": identity.st_ino})
+    private_json(path, record)
     return retained(path), raw["receipt"]
 
 
@@ -1292,7 +1310,7 @@ def _effect_restart_reopen(runtime, turn, branch, restart, name):
 
 
 def _effect_restart_refuse(runtime, turn, branch, t, branch_name, *, removed):
-    from effects_journeys import POLICY_CODE, _restart_failure, _restart_proposal
+    from effects_journeys import POLICY_CODE, _restart_failure, _restart_proposal, require_withheld_owner_continuation, _effect_restart_trace, native_frames, _owned
     # One command file is shared by the fixture. Restore this exact command before its continuation, never another tool.
     t.set_command(turn.command_id, branch["prepared"]["toolName"], branch["prepared"]["arguments"])
     if branch_name == "pending":
@@ -1308,13 +1326,24 @@ def _effect_restart_refuse(runtime, turn, branch, t, branch_name, *, removed):
     _restart_failure(runtime.run.root, branch["refs"]["execute"], runtime.backend_origin, turn.proposal, "execute",
                      "weaver.proposal.executor_unavailable" if removed else POLICY_CODE, 409 if removed else 403)
     branch["refs"]["continuation"] = t.collect_turn(turn.session).receipt
+    branch["times"]["disclosureStopped"] = time.time()
     branch["refs"]["session"] = t.session(turn.session).require_status(200).receipt
     branch["refs"]["terminalProposals"] = t.request("GET", _session_path(turn.session) + "/proposals").require_status(200).receipt
     terminal = _restart_proposal(runtime.run.root, branch["refs"]["terminalProposals"], runtime.backend_origin,
                                  turn.session, turn.proposal["id"], branch["prepared"])
     check(terminal.get("status") == "failed", "No proven terminal refusal; restoration must never trigger an execute retry")
     branch["refs"]["audit"] = t.audit(turn.session).require_status(200).receipt
-    branch["refs"]["trace"] = t.protocol_trace(turn.offset)["receipt"]
+    branch["refs"]["trace"], branch["refs"]["rawTrace"] = _command_trace(
+        t, {"traceOffset": turn.offset}, turn.command_id, "classed-" + branch_name, owned_root=runtime.run.root)
+    if removed:
+        # The missing disclosure owner withholds this continuation before either actual SDK is entered.
+        # The old session is never redelivered after package restoration.
+        trace = _effect_restart_trace(runtime.run.root, branch["refs"]["trace"], turn.command_id)
+        require_withheld_owner_continuation(trace, runtime.provider, turn.command_id, branch["prepared"], turn.proposal["id"],
+            native_frames(_owned(runtime.run.root, branch["refs"]["initialStream"]), runtime.backend_origin, turn.session),
+            native_frames(_owned(runtime.run.root, branch["refs"]["continuation"]), runtime.backend_origin, turn.session),
+            _owned(runtime.run.root, branch["refs"]["session"]), runtime.backend_origin,
+            observed_rows=_owned(runtime.run.root, branch["refs"]["rawTrace"])["records"])
 
 
 def _effect_restart_remove(runtime, value):

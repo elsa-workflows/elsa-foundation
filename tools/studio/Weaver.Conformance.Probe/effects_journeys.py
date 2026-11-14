@@ -733,6 +733,99 @@ def _restart_failure(root, ref, origin, proposal, action, code, status):
     return error
 
 
+def _protocol_source_path(root, path):
+    root, path = Path(root), Path(path)
+    _need(path.is_absolute() and path.is_relative_to(root) and path.resolve().is_relative_to(root.resolve())
+          and ".." not in path.relative_to(root).parts and path.is_file() and not path.is_symlink()
+          and all(not (root / parent).is_symlink() for parent in path.relative_to(root).parents), "missing/foreign/symlinked actual protocol file")
+    return path
+
+
+def _effect_restart_trace(root, ref, command):
+    """Reconstruct one command from the immutable captured window of its actual append-only protocol source."""
+    trace = _owned(root, ref)
+    _protocol_source_path(root, trace["rawTrace"]["path"])
+    raw = _owned(root, trace["rawTrace"])
+    fields = ("sourcePath", "offset", "nextOffset", "incompleteTailBytes", "observedBytesSha256")
+    _need(trace.get("commandId") == command and all(same(trace.get(key), raw.get(key)) for key in fields), "command/raw trace observations differ")
+    offset, end = trace.get("offset"), trace.get("nextOffset")
+    _need(type(offset) is int and type(end) is int and 0 <= offset < end and end - offset <= 67108864
+          and type(trace.get("incompleteTailBytes")) is int and trace["incompleteTailBytes"] == 0
+          and type(trace.get("sourceSizeAtObservation")) is int and trace["sourceSizeAtObservation"] == end
+          and type(trace.get("capturedAt")) in (int, float), "incomplete or malformed protocol byte window")
+    source = _protocol_source_path(root, trace["sourcePath"])
+    identity = trace.get("sourceIdentity")
+    _need(isinstance(identity, dict) and set(identity) == {"device", "inode"}
+          and all(type(value) is int for value in identity.values()), "missing actual protocol file identity")
+    with source.open("rb") as stream:
+        observed = os.fstat(stream.fileno())
+        _need(identity == {"device": observed.st_dev, "inode": observed.st_ino} and observed.st_size >= end,
+              "actual protocol source was replaced or truncated")
+        if offset:
+            stream.seek(offset - 1)
+            _need(stream.read(1) == b"\n", "protocol window starts inside a record")
+        stream.seek(offset)
+        actual = stream.read(end - offset)
+    window_path = _protocol_source_path(root, trace["window"]["path"])
+    _owned_file(root, trace["window"])
+    window = window_path.read_bytes()
+    _need(window == actual and len(window) == end - offset and window.endswith(b"\n")
+          and hashlib.sha256(window).hexdigest() == trace["observedBytesSha256"], "captured protocol window/source/hash differ")
+    records = [strict_json(line.decode("utf-8", "strict")) for line in window.splitlines() if line.strip()]
+    _need(all(isinstance(row, dict) for row in records) and same(raw.get("records"), records), "raw trace records differ from actual protocol bytes")
+    selected = [row for row in records if isinstance(row.get("data"), dict) and row["data"].get("commandId") == command]
+    _need(same(trace.get("records"), selected), "command trace omitted, added or substituted actual matching rows")
+    return selected
+
+
+def require_withheld_owner_continuation(rows, provider, command, prepared, proposal, initial, terminal, session_record, origin, *, observed_rows):
+    """A removed owner withholds retained context before the SDK sees a result; it never fabricates a completed turn."""
+    session, call = prepared["sessionId"], prepared["toolCallId"]
+    _need([frame.get("kind") for frame in terminal] == ["contextAdmitted", "error"], "removed owner did not withhold disclosure before provider entry")
+    context, error = terminal[0].get("payload"), terminal[1].get("error")
+    _need(isinstance(error, dict) and error.get("code") == "weaver.context.incomplete" and type(error.get("statusCode")) is int
+          and error["statusCode"] == 400 and error.get("ownerUnavailable", False) is False
+          and isinstance(error.get("message"), str) and error["message"], "wrong removed-owner disclosure refusal")
+    _need(isinstance(context, dict) and context.get("attachments") == [] and isinstance(context.get("diagnostics"), list)
+          and len(context["diagnostics"]) == 1 and all(item.get("moduleId") == "host" and item.get("code") == error["code"]
+          and item.get("message") == error["message"] and item.get("required") is True for item in context["diagnostics"]),
+          "removed-owner engine refusal lost its withheld-context correlation")
+    starts = [frame.get("payload") for frame in initial if frame.get("kind") == "started"]
+    calls = [frame.get("payload") for frame in initial if frame.get("kind") == "toolCallStarted"]
+    proposals = [frame.get("payload") for frame in initial if frame.get("kind") == "proposalCreated"]
+    _need(len(starts) == len(calls) == len(proposals) == 1 and starts[0].get("turnId") == prepared["turnId"]
+          and calls[0].get("toolCallId") == call and calls[0].get("toolName") == prepared["toolName"]
+          and proposals[0].get("id") == proposal and same(proposals[0].get("preparedInvocation"), prepared)
+          and [frame.get("kind") for frame in initial if frame.get("kind") in ("completed", "error", "turnCancelled", "toolApprovalRequested")] == ["toolApprovalRequested"],
+          "withheld continuation does not belong to the original reviewed native turn/call")
+    lifecycle = [row for row in rows if row.get("kind", "").startswith(provider + ".")]
+    expected = [provider + ".request", provider + ".call"] + (["copilot.return"] if provider == "copilot" else [])
+    _need(provider in PROVIDERS and [row.get("kind") for row in lifecycle] == expected
+          and all(row.get("data", {}).get("commandId") == command for row in lifecycle)
+          and same([row for row in observed_rows if row.get("kind", "").startswith(provider + ".")], lifecycle),
+          "removed-owner result entered an SDK continuation or an unexplained provider request")
+    request, invoked = lifecycle[0]["data"], lifecycle[1]["data"]
+    _need(sum(item.get("name") == prepared["toolName"] for item in request.get("tools", [])) == 1
+          and invoked.get("toolName") == prepared["toolName"] and same(invoked.get("arguments"), prepared["arguments"]), "wrong initial removed-owner adapter call")
+    if provider == "copilot":
+        returned = lifecycle[2]["data"].get("result")
+        _need(request.get("sessionId") == session and isinstance(returned, dict) and returned.get("status") == "awaiting-approval"
+              and lifecycle[2]["data"].get("toolName") == prepared["toolName"]
+              and returned.get("executed") is False and returned.get("proposalId") == proposal, "wrong initial SDK review pause")
+    else:
+        _need(call == command and not _current_function_results(request), "removed-owner request reused a historical/current function result")
+    _need(session_record.get("origin") == origin and session_record.get("method") == "GET" and session_record.get("status") == 200
+          and session_record.get("path") == "/_elsa/weaver/sessions/" + session and not session_record.get("transportErrorType"), "missing exact withheld native session")
+    reopened = strict_json(session_record["rawBody"]).get("data")
+    _need(isinstance(reopened, dict) and reopened.get("sessionId") == session and isinstance(reopened.get("messages"), list), "lost withheld native session")
+    results = [strict_json(row["content"]) for row in reopened["messages"] if row.get("role") == "tool"
+               and row.get("status") == "completed" and strict_json(row["content"]).get("toolCallId") == call]
+    _need(len(results) == 1 and results[0].get("toolName") == prepared["toolName"] and results[0].get("succeeded") is False
+          and results[0].get("receipt") is None and results[0].get("error", {}).get("code") == "weaver.proposal.executor_unavailable"
+          and results[0]["error"].get("statusCode") == 409, "lost original explicit execution refusal while disclosure was withheld")
+    return results[0]
+
+
 def require_effect_restart_case(value, root, *, source, bindings=None):
     """Deep reader for the fourteen classed/removed-owner records; never qualifies the remaining T038 requirements."""
     from restart_journeys import GRACEFUL, _restart, instant
@@ -854,13 +947,17 @@ def require_effect_restart_case(value, root, *, source, bindings=None):
         repeated = _restart_failure(root, brefs["repeatExecute"], origin, proposal, "execute", code, status)
         _need(same(error, repeated), "reenabling policy/restoring owner resurrected the refused proposal")
         terminal = native_frames(_owned(root, brefs["continuation"]), origin, session)
-        _, reopened = _restart_http(root, brefs["session"], origin, "GET", "/_elsa/weaver/sessions/" + session)
-        trace = _owned(root, brefs["trace"])
-        _need(trace.get("incompleteTailBytes") == 0 and type(trace.get("offset")) is int and trace["offset"] >= 0
-              and isinstance(trace.get("sourcePath"), str) and Path(trace["sourcePath"]).is_relative_to(Path(root)), "incomplete/foreign actual provider trace")
-        result = require_called_refusal(trace["records"], provider, command, tool, expected_arguments, session, initial, terminal,
-                                       code, reopened.get("data"), proposal_id=proposal["id"])
-        _need(same(result["error"], error), "provider continuation lost the native refusal")
+        session_record, reopened = _restart_http(root, brefs["session"], origin, "GET", "/_elsa/weaver/sessions/" + session)
+        _need(same(brefs["rawTrace"], _owned(root, brefs["trace"])["rawTrace"]), "branch/raw trace receipts differ")
+        trace = _effect_restart_trace(root, brefs["trace"], command)
+        _need(_owned(root, brefs["trace"])["capturedAt"] >= times["disclosureStopped"] >= times["execute"], "trace predates observed disclosure boundary")
+        if removed:
+            result = require_withheld_owner_continuation(trace, provider, command, prepared, proposal["id"], initial, terminal, session_record, origin,
+                                                       observed_rows=_owned(root, brefs["rawTrace"])["records"])
+        else:
+            result = require_called_refusal(trace, provider, command, tool, expected_arguments, session, initial, terminal,
+                                           code, reopened.get("data"), proposal_id=proposal["id"])
+        _need(same(result["error"], error), "retained/provider outcome differs from the native execution refusal")
         failed = _restart_proposal(root, brefs["terminalProposals"], origin, session, proposal["id"], prepared)
         _need(failed.get("status") == "failed", "refused proposal is not terminal")
         _, audit = _restart_http(root, brefs["audit"], origin, "GET", "/_elsa/weaver/audit?take=100&sessionId=" + session)

@@ -105,6 +105,19 @@ class RecoveryFixture:
         return self.save({"origin": ORIGIN, "method": "GET", "path": "/_elsa/weaver/sessions/" + session + "/stream", "status": 200,
                           "headers": {"content-type": "text/event-stream"}, "rawBody": raw, "frames": [{"value": frame} for frame in frames]})
 
+    def trace(self, records, command):
+        self.sequence += 1
+        source = self.root / (str(self.sequence) + "-protocol.jsonl")
+        window = self.root / (str(self.sequence) + "-window.jsonl")
+        observed = ("".join(json.dumps(row) + "\n" for row in records)).encode()
+        source.write_bytes(observed); window.write_bytes(observed)
+        metadata = {"sourcePath": str(source), "offset": 0, "nextOffset": len(observed), "incompleteTailBytes": 0,
+                    "observedBytesSha256": hashlib.sha256(observed).hexdigest(), "records": copy.deepcopy(records)}
+        identity = source.stat()
+        return self.save(dict(metadata, rawTrace=self.save(metadata), commandId=command, window=retained(window),
+                              sourceIdentity={"device": identity.st_dev, "inode": identity.st_ino},
+                              sourceSizeAtObservation=len(observed), capturedAt=EPOCH + 65))
+
     def snapshot(self, paths, at, available=True):
         fixture = check_fixture()
         widget, layout, checks = fixture[2], fixture[4], fixture[6]
@@ -159,15 +172,22 @@ class RecoveryFixture:
                 "widgetId": effects.WIDGET, "hostId": effects.HOST, "revision": "revision-one", "beforeVisible": True, "visible": False}}
         proposal = {"id": proposal_id, "sessionId": session, "status": "awaitingApproval", "baseRevision": "revision-one", "preparedInvocation": prepared}
         initial[2]["payload"] = copy.deepcopy(proposal)
+        if removed:
+            trace = trace[:3 if provider == "copilot" else 2]
+            disclosure_error = {"code": "weaver.context.incomplete", "message": "The original installed context source is unavailable.", "statusCode": 400}
+            terminal = [{"id": "withheld-context", "kind": "contextAdmitted", "payload": {"attachments": [], "diagnostics": [
+                {"moduleId": "host", "code": disclosure_error["code"], "message": disclosure_error["message"], "required": True}]}},
+                {"id": "withheld-error", "kind": "error", "error": disclosure_error}]
         session_path, proposal_path = "/_elsa/weaver/sessions/" + session, "/_elsa/weaver/proposals/" + proposal_id
         refs = {"initialStream": self.stream(session, initial), "command": self.save({"commandId": command, "toolName": tool, "arguments": arguments}),
                 "recoveredSession": self.http("GET", session_path, {"data": {"sessionId": session, "messages": []}}),
                 "recoveredProposals": self.http("GET", session_path + "/proposals", {"data": [dict(proposal, status="approved" if name == "approved" else "awaitingApproval")]}),
                 "terminalProposals": self.http("GET", session_path + "/proposals", {"data": [dict(proposal, status="failed")]}),
                 "continuation": self.stream(session, terminal), "session": self.http("GET", session_path, {"data": reopened}),
-                "trace": self.save({"records": trace, "incompleteTailBytes": 0, "sourcePath": str(self.root / "protocol.jsonl"), "offset": 0}),
+                "trace": self.trace(trace, command),
                 "audit": self.http("GET", "/_elsa/weaver/audit?take=100&sessionId=" + session,
                     {"data": [{"sessionId": session, "kind": "proposalFailed", "metadata": {"proposalId": proposal_id}}]})}
+        refs["rawTrace"] = json.loads(Path(refs["trace"]["path"]).read_text())["rawTrace"]
         error = json.loads(reopened["messages"][0]["content"])["error"]
         for action in ("execute", "repeatExecute"):
             refs[action] = self.http("POST", proposal_path + "/execute", {"data": None, "error": error}, status, {"revision": "revision-one"})
@@ -175,7 +195,7 @@ class RecoveryFixture:
         refs["approvedBefore" if name == "approved" else "decision"] = self.http("POST", proposal_path + "/approve", decision,
             200 if removed or name == "approved" else status, {"revision": "revision-one", "comment": None})
         return {"sessionId": session, "commandId": command, "proposalId": proposal_id, "prepared": prepared, "refs": refs,
-                "times": {"prepared": EPOCH + 10, "recovered": EPOCH + 40, "execute": EPOCH + 60, "repeated": EPOCH + 80}}
+                "times": {"prepared": EPOCH + 10, "recovered": EPOCH + 40, "execute": EPOCH + 60, "disclosureStopped": EPOCH + 64, "repeated": EPOCH + 80}}
 
     def require(self):
         return effects.require_effect_restart_case(self.value, self.root, source=SOURCE)
@@ -266,6 +286,99 @@ class ClassedRecoveryReaderTests(unittest.TestCase):
             fixture = RecoveryFixture(root)
             with self.assertRaises(RuntimeError):
                 effects.require_effect_restart_case(fixture.value, root, source=SOURCE, bindings={"forged-driver": "b" * 64})
+
+    def test_removed_owner_withholds_disclosure_and_never_accepts_a_forged_completed_turn_or_sdk_continuation(self):
+        for provider in effects.PROVIDERS:
+            for mutation in ("completed-turn", "wrong-engine-error", "owner-unavailable", "disclosed-context", "sdk-continuation", "foreign-command-request"):
+                with tempfile.TemporaryDirectory() as root, self.subTest(provider=provider, mutation=mutation):
+                    fixture = RecoveryFixture(root, provider, removed=True)
+                    branch = fixture.value["branches"]["pending"]
+                    if mutation in ("sdk-continuation", "foreign-command-request"):
+                        trace = json.loads(Path(branch["refs"]["trace"]["path"]).read_text())
+                        rows = copy.deepcopy(trace["records"])
+                        rows.append({"kind": provider + (".continuation" if mutation == "sdk-continuation" else ".request"), "data": {
+                            "commandId": branch["commandId"] if mutation == "sdk-continuation" else "unexpected-command",
+                            "sessionId": branch["sessionId"], "results": []}})
+                        branch["refs"]["trace"] = fixture.trace(rows, branch["commandId"])
+                        captured = json.loads(Path(branch["refs"]["trace"]["path"]).read_text())
+                        if mutation == "foreign-command-request":
+                            captured["records"] = [row for row in rows if row["data"].get("commandId") == branch["commandId"]]
+                            branch["refs"]["trace"] = fixture.save(captured)
+                        branch["refs"]["rawTrace"] = captured["rawTrace"]
+                    else:
+                        wire = json.loads(Path(branch["refs"]["continuation"]["path"]).read_text())
+                        frames = [row["value"] for row in wire["frames"]]
+                        if mutation == "completed-turn":
+                            frames = [{"id": "started", "kind": "started", "payload": {"turnId": "invented-continuation"}},
+                                      {"id": "completed", "kind": "completed"}]
+                        elif mutation == "wrong-engine-error": frames[-1]["error"].update(code="weaver.result.provenance_unavailable", statusCode=409)
+                        elif mutation == "owner-unavailable": frames[-1]["error"]["ownerUnavailable"] = True
+                        else: frames[0]["payload"]["attachments"].append({"moduleId": effects.MODULE, "content": "must be withheld"})
+                        branch["refs"]["continuation"] = fixture.stream(branch["sessionId"], frames)
+                    with self.assertRaises(RuntimeError): fixture.require()
+
+    def test_trace_source_window_and_parsed_rows_are_verified_instead_of_accepting_summaries(self):
+        mutations = ("missing-source", "symlink-source", "missing-window", "missing-raw-receipt", "wrong-source", "wrong-window",
+                     "wrong-hash", "changed-source", "range", "raw-record-substitution", "matching-row-substitution", "omitted-row")
+        for mutation in mutations:
+            with tempfile.TemporaryDirectory() as root, self.subTest(mutation=mutation):
+                fixture = RecoveryFixture(root)
+                branch = fixture.value["branches"]["pending"]
+                reference = branch["refs"]["trace"]
+                trace = json.loads(Path(reference["path"]).read_text())
+                source = Path(trace["sourcePath"])
+                if mutation == "missing-source": source.unlink()
+                elif mutation == "symlink-source":
+                    target = source.with_suffix(".original"); source.rename(target); source.symlink_to(target)
+                elif mutation == "missing-window": Path(trace["window"]["path"]).unlink()
+                elif mutation == "missing-raw-receipt": Path(trace["rawTrace"]["path"]).unlink()
+                elif mutation == "wrong-source": trace["sourcePath"] = str(source.with_suffix(".absent"))
+                elif mutation == "wrong-window":
+                    path = Path(trace["window"]["path"]); path.write_bytes(b'{}\n'); trace["window"] = retained(path)
+                elif mutation == "wrong-hash": trace["observedBytesSha256"] = "b" * 64
+                elif mutation == "changed-source": source.write_bytes(b"x" + source.read_bytes()[1:])
+                elif mutation == "range": trace["nextOffset"] -= 1
+                elif mutation == "raw-record-substitution":
+                    trace["rawTrace"] = fixture.change(trace["rawTrace"], lambda x: x["records"][1]["data"].update(arguments={"expectedVisible": False}))
+                    branch["refs"]["rawTrace"] = trace["rawTrace"]
+                elif mutation == "matching-row-substitution": trace["records"][1]["data"]["arguments"] = {"expectedVisible": False}
+                else: trace["records"].pop()
+                branch["refs"]["trace"] = fixture.save(trace)
+                with self.assertRaises((RuntimeError, ValueError, KeyError, OSError)): fixture.require()
+
+    def test_trace_window_allows_later_appends_but_rejects_forged_raw_and_command_rows(self):
+        with tempfile.TemporaryDirectory() as root:
+            fixture = RecoveryFixture(root)
+            branch = fixture.value["branches"]["pending"]
+            trace = json.loads(Path(branch["refs"]["trace"]["path"]).read_text())
+            with Path(trace["sourcePath"]).open("ab") as stream:
+                stream.write(b'{"kind":"later","data":{"commandId":"later-command"}}\n')
+            fixture.require()  # The immutable old window stays valid as the shared source grows.
+            raw = json.loads(Path(trace["rawTrace"]["path"]).read_text())
+            raw["records"][1]["data"]["arguments"] = {"expectedVisible": False}
+            trace["records"][1]["data"]["arguments"] = {"expectedVisible": False}
+            trace["rawTrace"] = fixture.save(raw)
+            branch["refs"].update(trace=fixture.save(trace), rawTrace=trace["rawTrace"])
+            with self.assertRaises(RuntimeError): fixture.require()
+
+    def test_nonzero_trace_offset_is_a_complete_owned_window_not_a_whole_file_hash(self):
+        with tempfile.TemporaryDirectory() as root:
+            fixture = RecoveryFixture(root)
+            branch = fixture.value["branches"]["pending"]
+            trace = json.loads(Path(branch["refs"]["trace"]["path"]).read_text())
+            raw = json.loads(Path(trace["rawTrace"]["path"]).read_text())
+            prefix = b'{"kind":"old","data":{"commandId":"historical"}}\n'
+            source = Path(trace["sourcePath"])
+            source.write_bytes(prefix + source.read_bytes())
+            raw.update(offset=len(prefix), nextOffset=raw["nextOffset"] + len(prefix))
+            trace.update(offset=raw["offset"], nextOffset=raw["nextOffset"], sourceSizeAtObservation=raw["nextOffset"], rawTrace=fixture.save(raw))
+            branch["refs"].update(trace=fixture.save(trace), rawTrace=trace["rawTrace"])
+            fixture.require()
+            # The observation/raw envelopes agree, but this boundary is inside a JSON line.
+            raw["offset"] -= 1; trace["offset"] -= 1
+            trace["rawTrace"] = fixture.save(raw)
+            branch["refs"].update(trace=fixture.save(trace), rawTrace=trace["rawTrace"])
+            with self.assertRaises(RuntimeError): fixture.require()
 
     def test_unarmed_poisoned_replaced_and_one_entry_despite_unchanged_resource_never_prove_zero(self):
         def one_entry(value):
