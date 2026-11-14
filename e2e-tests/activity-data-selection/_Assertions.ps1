@@ -9,3 +9,8 @@ function Assert-PublicationUnchanged($Before, $After) {
     $afterJson = ConvertTo-Json -InputObject $After -Depth 100 -Compress
     if ($beforeJson -cne $afterJson) { throw 'Refused publication changed owned artifact/reference/publication/activation rows' }
 }
+
+# Called after cleanup/receipt retention, including a final source-integrity refusal.
+function Assert-ProofSucceeded([Parameter(Mandatory)][bool] $Succeeded) {
+    if (-not $Succeeded) { throw 'Activity data proof failed; inspect the retained receipt.' }
+}

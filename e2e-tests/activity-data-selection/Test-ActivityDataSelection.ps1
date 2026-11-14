@@ -227,3 +227,5 @@ try {
     }
     Save-Json 'receipt' $receipt
 }
+
+Assert-ProofSucceeded -Succeeded $success
