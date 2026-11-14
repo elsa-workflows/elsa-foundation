@@ -262,4 +262,7 @@
     <ProjectReference Include="../../../src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
+  </ItemGroup>
 </Project>

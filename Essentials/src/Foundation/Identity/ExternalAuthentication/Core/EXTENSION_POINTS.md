@@ -24,7 +24,8 @@ terms: [authentication architecture](../../../../../../docs/reference/authentica
 
 At the flow-coordination stage, `AddFoundationExternalAuthentication` installs catalog/registry, admission policies,
 writer/delegation, protected observation, readiness/recovery, link authorization and the flow service. Protocol implementations are optional contributions (the managed OIDC adapter is available separately). Artifact and session stores are optional persistence contributions.
-Canonical session enforcement and HTTP entry points follow in their owning later slices. Missing dependencies
+Canonical session enforcement belongs to the selected Identity adapter; HTTP entry points are provided by
+the optional protocol API. Missing dependencies
 never count as a usable path. Register replacements before Foundation and preserve duplicate-contract diagnostics.
 Readiness describes installed configuration; recovery additionally requires current eligible authority and
 protected successful normal-sign-in evidence. A preview cannot supply that evidence.
