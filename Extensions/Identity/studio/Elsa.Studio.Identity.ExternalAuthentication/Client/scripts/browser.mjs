@@ -403,7 +403,7 @@ try {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.getByRole("tab", { name: "External sign-in", exact: true }).click();
     await page.locator(".external-auth-list .external-auth-row").filter({ has: page.getByText("Studio company", { exact: true }) }).click();
-    if (settings.uiRecovery) await recovery.exerciseConnectionConflict({ page, admin, backend, componentUrl, expect, capture, confirm: confirmStudio });
+    if (settings.uiRecovery) await recovery.exerciseConnectionConflict({ page, admin, backend, componentUrl, expect, capture, confirm: confirmStudio, setMode: connectionMode });
     else {
       await page.getByLabel("Display name", { exact: true }).fill("Studio company edited");
       await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirmStudio(page, "Save changes");

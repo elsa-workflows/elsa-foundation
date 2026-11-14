@@ -1,4 +1,10 @@
 // Owned composed-host proof only. All mutations use real public APIs/UI and narrowly armed probe faults.
+async function expectVisibleRecovery(page, expect) {
+  const alert = page.locator(".external-auth-shell:visible").getByRole("alert");
+  await expect(alert).toBeFocused();
+  await expect(alert).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("button", { name: "Refresh connections", exact: true })).toBeInViewport({ ratio: 1 });
+}
 export async function prepareInvalidDraft({ page, expect, capture, setMode }) {
   await page.getByLabel("Display name", { exact: true }).fill("");
   await page.setViewportSize({ width: 360, height: 844 }); await setMode("dark");
@@ -50,7 +56,7 @@ export async function exercisePreviewDenial({ page, admin, backend, expect, capt
   for (const name of ["subject", "roles", "permissions"]) expect(afterSession[name]).toEqual(beforeSession[name]);
 }
 
-export async function exerciseConnectionConflict({ page, admin, backend, componentUrl, expect, capture, confirm }) {
+export async function exerciseConnectionConflict({ page, admin, backend, componentUrl, expect, capture, confirm, setMode }) {
   await page.getByLabel("Display name", { exact: true }).fill("Studio company edited");
   // Assess against the current revision first; the other window commits while this confirmation stays open.
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -78,6 +84,7 @@ export async function exerciseConnectionConflict({ page, admin, backend, compone
   expect((await response).status()).toBe(409);
   await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("changed on the server");
   await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Studio company edited");
+  await expectVisibleRecovery(page, expect);
   await capture(page, "stale-draft-preserved", { action: "real-catalog-cas-conflict" });
   const refresh = page.getByRole("button", { name: "Refresh connections", exact: true });
   await refresh.click();
@@ -98,82 +105,96 @@ export async function exerciseConnectionConflict({ page, admin, backend, compone
   await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("7");
   await capture(page, "conflict-recovered-save-reopen", { action: "save-current-revision-reopen" });
 
-  // These narrowly scoped transport faults retain real committed mutations and subsequent API reads.
-  const catalogRoute = url => url.pathname.endsWith("/_elsa/identity/external-connections");
-  let failRead = true;
-  const failCatalogRead = async route => {
-    if (route.request().method() === "GET" && failRead) {
-      failRead = false;
-      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
-    } else await route.continue();
-  };
-  await page.route(catalogRoute, failCatalogRead);
-  try {
-    await page.getByLabel("Display order", { exact: true }).fill("8");
-    await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirm(page, "Save changes");
-    await expect(page.locator(".external-auth-notice")).toContainText("saved, but the current configuration could not be read");
+  for (const layout of [
+    { name: "desktop-light", width: 1440, height: 1100, mode: "light" },
+    { name: "desktop-dark", width: 1440, height: 1100, mode: "dark" },
+    { name: "narrow-light", width: 360, height: 844, mode: "light" },
+    { name: "narrow-dark", width: 360, height: 844, mode: "dark" }
+  ]) {
+    await page.setViewportSize({ width: layout.width, height: layout.height }); await setMode(layout.mode);
+    // These narrowly scoped transport faults retain real committed mutations and subsequent API reads.
+    const catalogRoute = url => url.pathname.endsWith("/_elsa/identity/external-connections");
+    let failRead = true;
+    const failCatalogRead = async route => {
+      if (route.request().method() === "GET" && failRead) {
+        failRead = false;
+        await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+      } else await route.continue();
+    };
+    await page.route(catalogRoute, failCatalogRead);
+    try {
+      await page.getByLabel("Display order", { exact: true }).fill("8");
+      await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirm(page, "Save changes");
+      await expect(page.locator(".external-auth-notice")).toContainText("saved, but the current configuration could not be read");
+      await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("8");
+      await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Test configuration", exact: true })).toBeDisabled();
+      expect((await (await admin.request.get(catalogUrl)).json()).connections.find(item => item.document.key === "studio-company").document.displayOrder).toBe(8);
+      await expectVisibleRecovery(page, expect);
+      await capture(page, `saved-catalog-read-failed-${layout.name}`, { action: "real-save-followed-by-owned-transport-read503" });
+    } finally { await page.unroute(catalogRoute, failCatalogRead); }
+    await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
+    await expect(page.getByLabel("Display order", { exact: true })).toBeEnabled();
     await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("8");
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Test configuration", exact: true })).toBeDisabled();
-    expect((await (await admin.request.get(catalogUrl)).json()).connections.find(item => item.document.key === "studio-company").document.displayOrder).toBe(8);
-    await capture(page, "saved-catalog-read-failed", { action: "real-save-followed-by-owned-transport-read503" });
-  } finally { await page.unroute(catalogRoute, failCatalogRead); }
-  await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
-  await expect(page.getByLabel("Display order", { exact: true })).toBeEnabled();
-  await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("8");
 
-  const commandRoute = url => url.pathname.endsWith("/_elsa/identity/external-connections/commands");
-  const loseAcknowledgement = async route => {
-    const committed = await route.fetch();
-    expect(committed.status()).toBe(200); expect((await committed.json()).saved).toBe(true);
-    await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
-  };
-  await page.route(commandRoute, loseAcknowledgement);
-  try {
-    await page.getByLabel("Display order", { exact: true }).fill("9");
-    await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirm(page, "Save changes");
-    await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("Refresh connections before another change");
+    const commandRoute = url => url.pathname.endsWith("/_elsa/identity/external-connections/commands");
+    const loseAcknowledgement = async route => {
+      const committed = await route.fetch();
+      expect(committed.status()).toBe(200); expect((await committed.json()).saved).toBe(true);
+      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+    };
+    await page.route(commandRoute, loseAcknowledgement);
+    try {
+      await page.getByLabel("Display order", { exact: true }).fill("9");
+      await page.getByRole("button", { name: "Save changes", exact: true }).click(); await confirm(page, "Save changes");
+      await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("Refresh connections before another change");
+      await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("9");
+      await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+      expect((await (await admin.request.get(catalogUrl)).json()).connections.find(item => item.document.key === "studio-company").document.displayOrder).toBe(9);
+      await expectVisibleRecovery(page, expect);
+      await capture(page, `uncertain-committed-write-locked-${layout.name}`, { action: "owned-transport-lost-acknowledgement-after-real-commit" });
+    } finally { await page.unroute(commandRoute, loseAcknowledgement); }
+    await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
+    await expect(page.getByLabel("Display order", { exact: true })).toBeEnabled();
     await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("9");
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
-    expect((await (await admin.request.get(catalogUrl)).json()).connections.find(item => item.document.key === "studio-company").document.displayOrder).toBe(9);
-    await capture(page, "uncertain-committed-write-locked", { action: "owned-transport-lost-acknowledgement-after-real-commit" });
-  } finally { await page.unroute(commandRoute, loseAcknowledgement); }
-  await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
-  await expect(page.getByLabel("Display order", { exact: true })).toBeEnabled();
-  await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("9");
 
-  const other = await admin.newPage();
-  try {
-    await other.goto(componentUrl("connections"));
-    await other.locator(".external-auth-row").filter({ has: other.getByText("Studio company edited", { exact: true }) }).click();
-    await other.getByLabel("Display order", { exact: true }).fill("10");
-    await other.getByRole("button", { name: "Save changes", exact: true }).click(); await confirm(other, "Save changes");
-    await expect(other.locator(".external-auth-notice")).toContainText("Connection updated.");
-  } finally { await other.close(); }
-  await page.getByLabel("Display name", { exact: true }).fill("Preserved stale draft");
-  let unexpectedCommands = 0;
-  const observeCommands = request => { if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/_elsa/identity/external-connections/commands")) ++unexpectedCommands; };
-  page.on("request", observeCommands);
-  try {
-    const assessed = page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/_elsa/identity/external-connections/assess"));
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
-    expect((await assessed).status()).toBe(409);
-    await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("changed on the server");
-    // Refresh is disabled during the request: this proves the recovery state has settled.
-    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
-    await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Preserved stale draft");
-    await expect(page.getByLabel("Display name", { exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Test configuration", exact: true })).toBeDisabled();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    expect(unexpectedCommands).toBe(0);
-  } finally { page.off("request", observeCommands); }
-  await capture(page, "stale-assessment-refresh-required", { action: "real-catalog-assessment409-before-confirmation" });
-  await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
-  await expect(page.getByLabel("Display name", { exact: true })).toBeEnabled();
-  await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Studio company edited");
-  await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("10");
-  await capture(page, "reconciled-current-configuration", { action: "fresh-read-unlocks-current-saved-values" });
+    const other = await admin.newPage();
+    try {
+      await other.goto(componentUrl("connections"));
+      await other.locator(".external-auth-row").filter({ has: other.getByText("Studio company edited", { exact: true }) }).click();
+      await other.getByLabel("Display order", { exact: true }).fill("10");
+      await other.getByRole("button", { name: "Save changes", exact: true }).click(); await confirm(other, "Save changes");
+      await expect(other.locator(".external-auth-notice")).toContainText("Connection updated.");
+    } finally { await other.close(); }
+    await page.getByLabel("Display name", { exact: true }).fill("Preserved stale draft");
+    let unexpectedCommands = 0;
+    const observeCommands = request => { if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/_elsa/identity/external-connections/commands")) ++unexpectedCommands; };
+    page.on("request", observeCommands);
+    try {
+      const assessed = page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/_elsa/identity/external-connections/assess"));
+      await page.getByRole("button", { name: "Save changes", exact: true }).click();
+      expect((await assessed).status()).toBe(409);
+      await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("changed on the server");
+      // Refresh is disabled during the request: this proves the recovery state has settled.
+      await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+      await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Preserved stale draft");
+      await expect(page.getByLabel("Display name", { exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Test configuration", exact: true })).toBeDisabled();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      expect(unexpectedCommands).toBe(0);
+    } finally { page.off("request", observeCommands); }
+    await expectVisibleRecovery(page, expect);
+    await capture(page, `stale-assessment-refresh-required-${layout.name}`, { action: "real-catalog-assessment409-before-confirmation" });
+    await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
+    await expect(page.getByLabel("Display name", { exact: true })).toBeEnabled();
+    await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Studio company edited");
+    await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("10");
+    await expect(page.getByRole("heading", { name: "Current configuration ready", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Reader", { exact: true })).toBeEnabled();
+    await capture(page, `reconciled-current-configuration-${layout.name}`, { action: "fresh-read-unlocks-current-saved-values" });
+  }
+  await page.setViewportSize({ width: 1440, height: 1100 }); await setMode("light");
 }
 
 export async function exerciseAccessRecovery({ page, admin, browser, backend, componentUrl, target, partnerSession, subject, expect, capture, confirm, control, setMode }) {

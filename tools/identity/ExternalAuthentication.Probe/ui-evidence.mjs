@@ -34,6 +34,24 @@ export function checkedRoute(value, origins, blankLogin = false) {
   return url.pathname;
 }
 
+function visibleCaptureClip({ target, viewport, scroll, clips }) {
+  if (![target.x, target.y, target.width, target.height, viewport.width, viewport.height, scroll.x, scroll.y].every(Number.isFinite) ||
+      target.width <= 0 || target.height <= 0 || viewport.width <= 0 || viewport.height <= 0)
+    throw new Error("UI recording requires a visible owned region.");
+  let left = Math.max(0, target.x), top = Math.max(0, target.y);
+  let right = Math.min(viewport.width, target.x + target.width), bottom = Math.min(viewport.height, target.y + target.height);
+  for (const clip of clips) {
+    if (![clip.x, clip.y, clip.width, clip.height].every(Number.isFinite)) throw new Error("UI recording requires valid clipping bounds.");
+    if (clip.clipX) { left = Math.max(left, clip.x); right = Math.min(right, clip.x + clip.width); }
+    if (clip.clipY) { top = Math.max(top, clip.y); bottom = Math.min(bottom, clip.y + clip.height); }
+  }
+  // Round inward: the screenshot must not include pixels beyond the selected visible region.
+  left = Math.ceil(left); top = Math.ceil(top); right = Math.floor(right); bottom = Math.floor(bottom);
+  if (right <= left || bottom <= top) throw new Error("UI recording requires a visible owned region; it never scrolls one into view.");
+  // Page.screenshot uses viewport coordinates unless fullPage is requested.
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
 export function createUiEvidence({ root, origins, forbidden = [], sourceSha, dirty }) {
   if (!/^[0-9a-f]{40}$/u.test(sourceSha) || typeof dirty !== "boolean") throw new Error("UI evidence requires actual source identity.");
   const privateRoot = mkdtempSync(join(tmpdir(), "elsa-3579-ui-private-"));
@@ -67,10 +85,22 @@ export function createUiEvidence({ root, origins, forbidden = [], sourceSha, dir
           patternMismatch: input.validity.patternMismatch })));
       const noHorizontalOverflow = await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.innerWidth);
       const image = `ux-${id}.png`;
-      const imageBytes = await selected.screenshot({ path: join(root, image), animations: "disabled" });
+      const geometry = await selected.evaluate(element => {
+        const rectangle = element.getBoundingClientRect(); const clips = [];
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          const style = getComputedStyle(parent); const bounds = parent.getBoundingClientRect();
+          const clipX = /^(auto|scroll|hidden|clip)$/.test(style.overflowX), clipY = /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
+          if (clipX || clipY) clips.push({ x: bounds.x + parent.clientLeft, y: bounds.y + parent.clientTop,
+            width: parent.clientWidth, height: parent.clientHeight, clipX, clipY });
+        }
+        return { target: { x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height },
+          viewport: { width: innerWidth, height: innerHeight }, scroll: { x: scrollX, y: scrollY }, clips };
+      });
+      const captureClip = visibleCaptureClip(geometry);
+      const imageBytes = await page.screenshot({ path: join(root, image), clip: captureClip, animations: "disabled" });
       const imageSha256 = createHash("sha256").update(imageBytes).digest("hex");
       const record = { sourceSha, dirty, sequence, name, action, path, focus, invalidFields, viewport: page.viewportSize(), noHorizontalOverflow, aria: snapshot, image, imageSha256,
-        kind: "selected-aria-and-named-action", observation: "ARIA, focus and image are sequential observations", nativeReplay: false };
+        captureClip, viewportScroll: geometry.scroll, kind: "viewport-intersection-and-named-action", observation: "ARIA, focus, visible clipping bounds and pixels are sequential observations; recording does not scroll or focus", nativeReplay: false };
       const body = JSON.stringify(record, null, 2); const file = `${id}.json`;
       writeFileSync(join(output, file), body, { mode: 0o600 });
       files.push({ file: `ui-evidence/${file}`, sha256: createHash("sha256").update(body).digest("hex"), name, action, image, imageSha256 });
