@@ -37,7 +37,10 @@ internal static class JobAcknowledgement
         Require(completion is not null, "actual job driver was not available for observation");
         release.TrySetResult("done");
         await completion!.WaitAsync(TimeSpan.FromSeconds(5));
-        Require(worker.JobResultReady(target.Id, "work"), "completed job result was invisible to its observer");
+        Require(qualified ? worker.JobResultReady(target.Id, "work", 1) : worker.JobResultReady(target.Id, "work"),
+            "completed job result was invisible to its observer");
+        Require(!worker.JobResultReady(target.Id, "work", 2) && (!qualified || !worker.JobResultReady(target.Id, "work")),
+            "observer retargeted a different or missing creation");
         for (var i = 0; i < 100 && store.Instances[target.Id].Status == InstanceStatus.Running; i++)
         {
             await worker.PollAsync(); if (worker.NeedsLoad) await worker.LoadAsync();
@@ -46,7 +49,7 @@ internal static class JobAcknowledgement
         }
         Require(calls == 1 && store.Instances[target.Id].Status == InstanceStatus.Finished, caughtUp
             ? "handed-over job was not started after acknowledgement" : "polled-before-ack job was lost after acknowledgement");
-        Require(!worker.JobResultReady(target.Id, "work"), "consumed job result remained ready");
+        Require(!worker.JobResultReady(target.Id, "work", qualified ? 1 : 0), "consumed job result remained ready");
         Console.WriteLine($"PASS creation:job-ack,qualified={qualified},caughtUp={caughtUp}");
     }
 

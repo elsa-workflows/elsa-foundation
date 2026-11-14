@@ -24,7 +24,8 @@ internal sealed class Turn : ITurn
         _durable = new DurableTurn(input);
         var (row, spec) = (input.Row, input.Spec);
         _status = row?.Status ?? InstanceStatus.Running;
-        Instance = new InstanceInfo(new InstanceRef(input.Actor), row?.Model ?? spec!.Model, row?.Definition ?? spec!.Definition, row is null ? spec!.Parent : row.Parent, input.Creation);
+        Instance = new InstanceInfo(new InstanceRef(input.Actor), row?.Model ?? spec!.Model, row?.Definition ?? spec!.Definition,
+            row is null ? spec!.Parent : row.Parent, input.Creation, row?.ParentCreation ?? spec?.ParentCreation ?? 0);
         _children = ChildRegistry.Read(row?.Children);
         foreach (var message in Inbox)
             if (message.Kind == WorkflowKinds.ChildFinished)

@@ -201,7 +201,8 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
     {
         turn.Record($"signal {signal.Code}");
         if (turn.Instance.Parent is { } parent)
-            turn.Send(new InstanceRef(parent), BpmnKinds.Signal, new ScopeSignal(turn.Instance.Ref.Id, signal.Code, signal.Payload?.GetRawText()));
+            turn.Send(new InstanceRef(parent), BpmnKinds.Signal, new ScopeSignal(turn.Instance.Ref.Id, signal.Code, signal.Payload?.GetRawText()),
+                new SendOptions(TargetCreation: turn.Instance.ParentCreation > 0 ? turn.Instance.ParentCreation : null));
     }
 
     private void Begin(BpmnHostCommand.StartWork start)
@@ -216,7 +217,8 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             CallWork call => (WorkKinds.Call, turn.Start(BpmnModel.Spec(call.Process, Variables(start.IterationScope))).Id),
             var other => throw new InvalidOperationException($"No host work for {other}."),
         };
-        _s.Live[handle] = new LiveWork(start.BindingRef, start.IterationScope?.IterationId, start.TokenId, start.ElementId, kind, key, start.IterationScope?.Values);
+        _s.Live[handle] = new LiveWork(start.BindingRef, start.IterationScope?.IterationId, start.TokenId, start.ElementId, kind, key,
+            start.IterationScope?.Values, kind == WorkKinds.Call ? turn.ChildAddress(new InstanceRef(key)).Creation : 0);
         turn.Record($"w {handle} {start.ElementId} {kind} {key}");
     }
 
@@ -248,7 +250,9 @@ internal sealed class BpmnTurn(BpmnModel model, ITurn turn)
             case WorkKinds.Job: turn.CancelJob(work.Key); break;
             case WorkKinds.Timer: turn.Recall(work.Key); break;
             case WorkKinds.Message: turn.Unsubscribe(work.Key, handle); break;
-            case WorkKinds.Call: turn.Send(new InstanceRef(work.Key), Kinds.Terminate); break;
+            case WorkKinds.Call:
+                turn.Send(new InstanceRef(work.Key), Kinds.Terminate, options: new SendOptions(TargetCreation: work.Creation > 0 ? work.Creation : null));
+                break;
         }
         turn.Record($"x {handle} {work.Element}");
     }

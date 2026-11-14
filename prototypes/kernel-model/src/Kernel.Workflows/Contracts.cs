@@ -5,7 +5,7 @@ namespace Kernel.Workflows;
 
 public enum Placement { WithParent, Spread }
 
-public sealed record InstanceInfo(InstanceRef Ref, string Model, string Definition, string? Parent, long Creation = 0);
+public sealed record InstanceInfo(InstanceRef Ref, string Model, string Definition, string? Parent, long Creation = 0, long ParentCreation = 0);
 
 /// <summary>What a parent is told when a child ends.</summary>
 public sealed record ChildFinished(string Child, InstanceStatus Status, string? Output, long Creation = 0);
