@@ -282,7 +282,7 @@ public sealed class StandaloneHttpTriggerTests
             SourceContext = new HttpTriggerSourceContext(new HttpContextAccessor { HttpContext = Http }, accessor);
             Port.ReadContext = () => SourceContext.GetAsync();
             middleware = new(new FakeRouteTable("orders"), new TestRouteMatcher(), accessor,
-                Options.Create(new HttpEndpointOptions { MaxRequestBodyBytes = maxBytes, SyncRequestTimeout = timeout ?? TimeSpan.FromSeconds(3) }),
+                Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions { MaxRequestBodyBytes = maxBytes, SyncRequestTimeout = timeout ?? TimeSpan.FromSeconds(3) }),
                 SourceContext, NullLogger<StandaloneHttpTriggerMiddleware>.Instance, Reader, Port, Observer,
                 bodyParser: new HttpRequestBodyParser(), scopes: services.GetRequiredService<IPersistenceOperationScopeFactory>(),
                 waitIndex: Bookmarks, bookmarks: Bookmarks, executions: Executions, activities: Activities, deliveryStore: Port);
