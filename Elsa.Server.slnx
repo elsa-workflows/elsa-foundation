@@ -245,6 +245,7 @@
   </Folder>
   <Folder Name="/Essentials/src/Activities/Graph/">
     <Project Path="Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
+    <Project Path="Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj" />
     <Project Path="Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/DispatchWorkflow/">
