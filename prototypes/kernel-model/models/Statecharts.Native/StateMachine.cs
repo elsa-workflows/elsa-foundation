@@ -98,7 +98,7 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
                 {
                     RetireSources(context, state);
                     var visit = state.PlannedVisits!.Single(v => v.State == step.State);
-                    CreateVisitScope(context, graph, state.Scopes!, visit, state.PlannedVisits);
+                    CreateVisitScope(context, graph, state.Scopes!, visit, state.PlannedVisits!);
                 }
                 var source = (step.Phase == "entry" ? state.PlannedVisits! : state.Visits!).Single(v => v.State == step.State);
                 Record(context, reaction.EventId, step.Phase, step.State);
