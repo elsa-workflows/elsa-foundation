@@ -51,6 +51,11 @@ checks off an entire task.
 | 14. Coordination and rollback | T026–T029 | Durable fixed-plan journal, staged dependency roots, authenticated forward recovery and explicit rollback | Real interruption/unknown commit/overlap/supersession/GC, visible mixed interval and pinned old/new runs on both targets |
 | 15. Complete user journeys and closeout | T030–T037 | Full Studio/pipeline operations, history/evidence, operator docs, examples and all agreed acceptance | Real packaged CLI/composed Studio, inspected downloadable evidence, independent UX review, exact-head required gates and resulting-main qualification |
 
+Slice 8 is further divided at owner boundaries: (8a) finite consistent Runtime source reads, (8b) bounded
+retention and Runtime dependency acquisition, (8c) exact native/reusable catalog snapshots and source bridge,
+then (8d) owner import/staging and actual round-trip witnesses. Each remains a partial T010/T013/T015 subset;
+read contracts or controlled framework tests do not establish complete native capture/import acceptance.
+
 Only one implementation slice is active. A stack may carry reviewed prerequisites, but each child is reviewed
 against its named parent and states the prerequisite's merge/qualification status. Recheck main and competing
 PRs before committing. Do not resurrect the closed monolithic PR or reuse its branch for the new stack.

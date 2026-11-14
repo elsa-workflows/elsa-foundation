@@ -30,6 +30,28 @@ public sealed class WorkflowDashboardQueryTests
     private static readonly DateTimeOffset Baseline = Current.AddDays(-7);
 
     [Theory]
+    [InlineData("runKind", "published", "eq", false)]
+    [InlineData("runKind", "PublishedRun", "in", true)]
+    [InlineData("status", "done", "notIn", false)]
+    public async Task Undeclared_discrete_filter_values_are_refused_before_a_misleading_empty_result(string field, string value, string operation, bool parameter)
+    {
+        using var host = new Host();
+        var question = Aggregate();
+        var operand = parameter ? new DashboardValue("string", Parameter: "kind") : new DashboardValue("string", value);
+        question = question with { Query = question.Query with {
+            Parameters = parameter ? [new("kind", "string", Default: new("string", value))] : [],
+            Filters = new() { Any = [new() { Field = field, Operator = operation,
+                Value = operation == "eq" ? operand : null, Values = operation == "eq" ? null : [operand] }] }
+        } };
+        var validation = await host.Queries.ValidateAsync(Caller, question);
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Problems, problem => problem.Code == "INVALID_VALUE" && problem.Path == "query.filters");
+        var failure = await Assert.ThrowsAsync<DashboardQueryException>(() => host.Queries.ExecuteAsync(Caller, question).AsTask());
+        Assert.Equal("INVALID_VALUE", failure.Code);
+        Assert.Empty(host.Store.Requests);
+    }
+
+    [Theory]
     [InlineData("default")]
     [InlineData("override")]
     [InlineData("missing")]

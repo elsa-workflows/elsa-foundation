@@ -24,6 +24,8 @@ public sealed record RuntimeIngressReservation(string ReservationId, TriggerScop
 public interface ITriggerSourceResourceCommitStore
 {
     bool SupportsActivatedResources => false;
+    /// <summary>Readiness of one resource family, including its selected source-owned reservation format.</summary>
+    bool SupportsActivatedType(string typeKey) => SupportsActivatedResources;
     ValueTask<TriggerMutationReceipt> CommitAsync(TriggerScope scope, TriggerStoreWrite write,
         IReadOnlyList<RuntimeIngressReservationDescriptor> reservations, CancellationToken cancellationToken = default);
 }
@@ -32,6 +34,7 @@ public sealed record RuntimeIngressReservationQuery(string StimulusType, int Lim
 public sealed record RuntimeIngressReservationPage(IReadOnlyList<RuntimeIngressReservation> Items, string? Next);
 
 /// <summary>Replacement contract: reads actual scoped reservation authority. Unsupported composition never supplies an empty successful lookup.</summary>
+/// <remarks>Provider infrastructure failures are reported as <see cref="TriggerOperationException"/> with the original cause and scoped identifiers.</remarks>
 public interface IRuntimeIngressReservationReader
 {
     bool SupportsReservations => false;

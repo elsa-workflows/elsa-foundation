@@ -123,8 +123,8 @@ def main() -> None:
         "packages": [{"id": package, "version": version, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
                      for package, (version, path) in sorted(packages.items())],
         "consumerLibraries": sorted(libraries), "outcome": "passed" if unchanged else "incomplete",
-        "scope": "transport and unknown-owner refusal/package boundary only",
-        "semanticValidation": "unknown owner refused; no production model adapter exercised", "promotion": "not attempted",
+        "scope": "transport and verifier/builder unknown-owner refusal/package boundary only",
+        "semanticValidation": "unknown owner refused by verifier and builder; no production model adapter exercised", "promotion": "not attempted",
     }
     (output / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"result": str(output / "result.json"), "outcome": result["outcome"]}))

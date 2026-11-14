@@ -61,6 +61,8 @@ export interface ActivityDataSelectionHost {
   baseRevision: string;
   /** True while the owner's own save is in flight: a stale answer then means "wait", not "changed elsewhere". */
   saving: boolean;
+  /** The ordinary workflow has no declared input contract; request names are proposals checked by the server. */
+  openWorkflowRequest?: boolean;
   /** One page of the sources for the current document, starting at `skip`. */
   requestSources(target: ActivityDataTarget, signal: AbortSignal, skip: number, query?: ActivityDataSourceQuery): Promise<ActivityDataContextResult>;
   /** Null when the activity is not in the current document. */

@@ -5520,6 +5520,38 @@ button.wf-reference-select {
   border-left: 0;
 }
 
+/* Owned scalar fields lay actions out beside their native value, below the legend and above help. */
+.wf-expression-field--outlined .studio-form-adornment > .wf-syntax-picker.inline {
+  position: static;
+  inset: auto;
+  display: flex;
+  align-self: stretch;
+  flex: 0 0 38px;
+  width: 38px;
+}
+
+.wf-expression-field--outlined .studio-form-adornment .wf-syntax-picker-trigger.inline {
+  height: auto;
+  min-height: var(--studio-control-height);
+  flex: 1;
+  border: 0;
+  border-inline-start: 1px solid var(--wf-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.wf-expression-field--outlined .studio-field-group .studio-form-adornment > .wf-syntax-picker.inline {
+  align-self: center;
+}
+
+.wf-expression-field--outlined .studio-form-adornment > .wf-expression-expand-button {
+  position: static;
+  inset: auto;
+  align-self: stretch;
+  height: auto;
+  min-height: var(--studio-control-height);
+}
+
 .wf-expression-field:not(.wf-expression-field--control) .wf-expression-editor > input[type="text"] {
   padding-right: 78px;
 }

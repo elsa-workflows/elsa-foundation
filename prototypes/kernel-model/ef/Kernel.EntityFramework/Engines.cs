@@ -117,7 +117,7 @@ public abstract class Engine
 public sealed class SqlServerEngine : Engine
 {
     /// <summary>
-    /// ENGINES.md E9, decided 13 November: the checked fence. With the fence in the batch EF sends it last, so a stale
+    /// ENGINES.md E9, decided 13 November: the checked fence. When EF writes messages before the batched fence, a stale
     /// commit holds a message lock and waits for the partition row while a take holds the row and waits for the message.
     /// </summary>
     public override bool FenceInBatchByDefault => false;

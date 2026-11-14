@@ -39,7 +39,11 @@ internal static class DashboardWeaverProtocol
         filters={all:[{field,operator,value:{type,literal}}]}, fields, groupBy, metrics=[{alias,metric,revision}
         or {alias,aggregate,field}], time={field,window or from/to,timeZone,weekStart}, comparison={mode},
         having over current./baseline./delta. metric references, sort=[{reference,direction,nulls}], limit.
-        Supported primitive scalar types and operators come from discovery. Decimal literals are strings.
+        Supported primitive scalar types and operators come from discovery. ALL non-null scalar literals
+        are JSON strings, including integer and boolean: {type:"integer",literal:"0"}. Explicit null is
+        {type:"null"}. IN/NOT IN use values:[{type:"string",literal:"id"}], never a literal array.
+        HAVING leaves use {metric:"delta.rate",operator:"gt",value:{type:"decimal",literal:"0"}}.
+        weekStart is the string "monday". Omit optional unset members rather than inventing properties.
         Parameters use declared names/types/defaults and parameterValues. Visualizations have kind
         bar|line|table|list|metric, x and y bindings; combinations must pass native validation.
         The tool returns a validated unsaved proposal. Studio runs the actual protected result preview

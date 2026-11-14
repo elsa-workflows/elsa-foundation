@@ -64,9 +64,19 @@ Inline errors are described by the focused control. Use `errorRole="alert"` when
 The shell does not disable adjacent actions. Set their disabled state explicitly. For opaque
 contributed editors, pass `controlId` to `StudioField` and forward that ID plus
 `data-studio-field-control=""` to the actual native control. The shared component does not clone
-inside arbitrary React components. Setting/property editor contributions may opt into
+inside arbitrary React components. Setting, property and expression editor contributions may opt into
 `presentsField: true` when they own the shared field and descriptor caption; omitted values retain
-legacy host captions. Keep editor metadata, validation reporting and domain behaviour intact.
+legacy host captions. Opt in only when every inline state retains that field and caption. Keep
+editor metadata, validation reporting and domain behaviour intact.
+
+When a host supplies actions around an opaque scalar editor that owns one shared field,
+`StudioFieldAdornmentProvider trailing={actions}` places those actions in the field's existing
+adornment area. This keeps them beside the value when captions wrap or validation appears.
+Editor-owned trailing actions are retained; the supplied actions do not propagate into nested
+fields or popovers. Collection editors and contributors without field ownership retain their
+existing host action placement.
+Registered host editors also import their field from `@elsa-workflows/studio-ui`, externalized
+through the host import map, so host and module editors share the same action context at runtime.
 
 Do not override field borders with module card styles. The Outlined width and gap roles are
 `--studio-outlined-field-width` and `--studio-outlined-field-gap`; colour, radius and typography

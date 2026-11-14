@@ -11,14 +11,15 @@ namespace Elsa.Workflows.Publishing.Releases.Runtime;
 
 internal sealed class ReleaseRuntimeArtifactVerifier(RuntimeCapturedContentCache cache, IWorkflowExecutableHasher hasher) : IReleaseArtifactSemanticVerifier
 {
-    public ReleaseSemanticAdapterIdentity Identity { get; } = new("elsa.runtime-release-profile", "1");
+    public ReleaseSemanticAdapterIdentity Identity { get; } = new("elsa.runtime-release-profile", "2");
     public IReadOnlyCollection<ReleaseCodecKey> SupportedCodecs { get; } = Array.AsReadOnly(new[]
     {
         new ReleaseCodecKey(ReleaseRuntimeCodecs.WorkflowKind, ReleaseRuntimeCodecs.Workflow, 1),
         new ReleaseCodecKey(ReleaseRuntimeCodecs.TemplateKind, ReleaseRuntimeCodecs.Template, 1),
         new ReleaseCodecKey(ReleaseRuntimeCodecs.ModelKind, ReleaseRuntimeCodecs.Model, 1),
         new ReleaseCodecKey(ReleaseRuntimeCodecs.SelectionKind, ReleaseRuntimeCodecs.Selection, 1),
-        new ReleaseCodecKey(ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion, 1)
+        new ReleaseCodecKey(ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion, 1),
+        new ReleaseCodecKey(ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion, 2)
     });
 
     public ValueTask<ReleaseSemanticFacts> VerifyAsync(ReleaseContentMember member, ReadOnlyMemory<byte> payload,

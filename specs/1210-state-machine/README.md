@@ -60,3 +60,7 @@ executable. Its tests are algorithm evidence only; actual runtime integration an
 
 The [Studio authoring and inspection proposal](contracts/studio.md) defines Q3's document, navigation,
 validation and operator journeys before implementation. Its acceptance journeys are planned, not observed UI proof.
+
+The proposed [source-wave work unit](source-wave-plan.md) addresses shared-publication grouping and native
+readiness before chart selection. Source installation, transitive responsibility, catch-up/call boundaries
+and recovery remain planned qualification; it does not clear the separate draft identity review or product gates.

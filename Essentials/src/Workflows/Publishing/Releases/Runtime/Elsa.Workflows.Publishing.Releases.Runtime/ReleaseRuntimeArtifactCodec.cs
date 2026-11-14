@@ -29,14 +29,15 @@ internal sealed class ReleaseRuntimeArtifactCodec : IReleaseRuntimeArtifactCodec
     public ReleaseEncodedRuntimeMember EncodeWorkflowSelection(ReleaseWorkflowSelection value, ReleaseBundleLimits? limits = null) =>
         Encode(value, ReleaseRuntimeCodecs.SelectionKind, value.DefinitionVersionId, ReleaseRuntimeCodecs.Selection, new("semver", value.Version, null), limits);
     public ReleaseEncodedRuntimeMember EncodeActivityVersion(ReleaseActivityVersion value, ReleaseBundleLimits? limits = null) =>
-        Encode(value, ReleaseRuntimeCodecs.ActivityVersionKind, value.VersionId, ReleaseRuntimeCodecs.ActivityVersion, new("semver", value.Version, null), limits);
+        Encode(value, ReleaseRuntimeCodecs.ActivityVersionKind, value.VersionId, ReleaseRuntimeCodecs.ActivityVersion, new("semver", value.Version, null), limits,
+            value.Publication is null ? 1 : 2);
     public ReleaseRuntimeWorkflow DecodeWorkflow(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => Decode<ReleaseRuntimeWorkflow>(payload, limits);
     public ReleaseRuntimeTemplate DecodeTemplate(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => Decode<ReleaseRuntimeTemplate>(payload, limits);
     public ReleaseRuntimeModel DecodeModel(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => Decode<ReleaseRuntimeModel>(payload, limits);
     public ReleaseWorkflowSelection DecodeWorkflowSelection(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => Decode<ReleaseWorkflowSelection>(payload, limits);
     public ReleaseActivityVersion DecodeActivityVersion(ReadOnlyMemory<byte> payload, ReleaseBundleLimits? limits = null) => Decode<ReleaseActivityVersion>(payload, limits);
 
-    private static ReleaseEncodedRuntimeMember Encode<T>(T value, string kind, string identity, string codec, ReleaseOwnerVersion? version, ReleaseBundleLimits? limits)
+    private static ReleaseEncodedRuntimeMember Encode<T>(T value, string kind, string identity, string codec, ReleaseOwnerVersion? version, ReleaseBundleLimits? limits, int codecVersion = 1)
     {
         var bounds = Bounds(limits);
         try
@@ -47,7 +48,7 @@ internal sealed class ReleaseRuntimeArtifactCodec : IReleaseRuntimeArtifactCodec
             { JsonSerializer.Serialize(writer, new { formatVersion = 1, content = value }, Options(bounds.MaxJsonDepth)); writer.Flush(); }
             var bytes = output.Written.ToArray();
             CheckJson(bytes, bounds);
-            return new(new(kind, identity, codec, 1, "sha256:" + Convert.ToHexStringLower(SHA256.HashData(bytes)), bytes.LongLength), version, bytes);
+            return new(new(kind, identity, codec, codecVersion, "sha256:" + Convert.ToHexStringLower(SHA256.HashData(bytes)), bytes.LongLength), version, bytes);
         }
         catch (ReleaseRuntimeArtifactException) { throw; }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or TargetInvocationException)

@@ -202,7 +202,7 @@ internal sealed class ReleaseBundleCodec : IReleaseBundleCodec
         return new CapturedTransport(HashManifest(manifest), manifest, members, manifestBytes, blobs, attachments);
     }
 
-    private static ReleaseBundleLimits Limits(ReleaseBundleLimits? limits)
+    internal static ReleaseBundleLimits Limits(ReleaseBundleLimits? limits)
     {
         var value = limits ?? new();
         if (value.MaxManifestBytes <= 0 || value.MaxBlobBytes <= 0 || value.MaxExpandedBytes <= 0 || value.MaxArchiveBytes <= 0 ||

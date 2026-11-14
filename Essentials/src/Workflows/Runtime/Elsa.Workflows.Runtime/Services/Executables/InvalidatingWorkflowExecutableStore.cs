@@ -7,8 +7,25 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// <summary>
 /// Preserves direct reads while invalidating shared-cache entries after provider-authoritative mutations.
 /// </summary>
-public sealed class InvalidatingWorkflowExecutableStore : WorkflowExecutableStoreDecorator, IWorkflowExecutableStore
+public sealed class InvalidatingWorkflowExecutableStore : WorkflowExecutableStoreDecorator, IWorkflowExecutableStore, IRuntimeBoundedSourceLeaseStore
 {
+    // Bounded source reads always reach the selected physical provider; process-local body caches
+    // cannot establish a current physical incarnation or pre-hydration byte limits.
+    ValueTask<RuntimeMaterialSourceSnapshot?> IWorkflowExecutableStore.FindMaterialBoundedAsync(string artifactId,
+        PersistenceScope expectedScope, RuntimeSourceReadLimits limits, CancellationToken cancellationToken) =>
+        Inner.FindMaterialBoundedAsync(artifactId, expectedScope, limits, cancellationToken);
+    ValueTask<WorkflowExecutableRootWriteLease?> IRuntimeBoundedSourceLeaseStore.TryAcquireAsync(string artifactId, string leaseId,
+        DateTimeOffset expiresAt, DateTimeOffset now, PersistenceScope expectedScope, RuntimeSourceReadLimits limits, CancellationToken cancellationToken) =>
+        SourceLeases().TryAcquireAsync(artifactId, leaseId, expiresAt, now, expectedScope, limits, cancellationToken);
+    ValueTask<bool> IRuntimeBoundedSourceLeaseStore.RenewAsync(WorkflowExecutableRootWriteLease lease, DateTimeOffset expiresAt,
+        DateTimeOffset now, PersistenceScope expectedScope, RuntimeSourceReadLimits limits, CancellationToken cancellationToken) =>
+        SourceLeases().RenewAsync(lease, expiresAt, now, expectedScope, limits, cancellationToken);
+    ValueTask IRuntimeBoundedSourceLeaseStore.ReleaseAsync(WorkflowExecutableRootWriteLease lease, PersistenceScope expectedScope,
+        RuntimeSourceReadLimits limits, CancellationToken cancellationToken) =>
+        SourceLeases().ReleaseAsync(lease, expectedScope, limits, cancellationToken);
+    private IRuntimeBoundedSourceLeaseStore SourceLeases() => Inner as IRuntimeBoundedSourceLeaseStore
+        ?? throw new RuntimeSourceReadException("runtime_source_retention_profile_unsupported", true);
+
     IWorkflowExecutableStore IWorkflowExecutableStore.GetMaterialStore() => Inner.GetMaterialStore();
     bool IWorkflowExecutableStore.SupportsModelMaterial => Inner.SupportsModelMaterial;
     ValueTask<RuntimeExecutionMaterial?> IWorkflowExecutableStore.FindMaterialAsync(string artifactId, CancellationToken cancellationToken) =>

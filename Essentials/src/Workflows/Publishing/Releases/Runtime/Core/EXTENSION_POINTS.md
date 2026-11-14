@@ -24,3 +24,7 @@ while the owner's descriptor, structure and model protocol versions remain exact
 
 Owner strategies use the semantic contracts in `Elsa.Workflows.Publishing.Releases.Core`. This package contributes
 no services, events or tasks and grants no origin confidence, catalog import, readiness or serving authority.
+
+Source-only hosts select `IReleaseRuntimeSourceContextAccessor` and `IReleaseRuntimeSourceAuthorization`
+explicitly. These contracts grant no default permission. The optional separate Runtime.Source package
+consumes them; target-only Runtime codecs do not depend on Capture or Events implementations.

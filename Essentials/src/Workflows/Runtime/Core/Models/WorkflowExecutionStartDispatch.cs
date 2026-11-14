@@ -714,6 +714,9 @@ public sealed class WorkflowExecutionStartCommandPayload
     public string? TenantId { get; }
     public WorkflowExecutionPartition? Partition { get; }
     public WorkflowExecutionAuthoritySnapshot? Authority { get; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeStimulusDeliveryOrigin? StimulusDeliveryOrigin { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowExecutableStartAuthority? StartAuthority { get; }
 

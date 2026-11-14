@@ -70,7 +70,8 @@ internal sealed class RuntimeCapturedContentCache(IReleaseRuntimeArtifactCodec c
         private object Decode(ReleaseMemberKey key)
         {
             var member = Member(key) ?? throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_member_missing");
-            if (member.Codec.CodecVersion != ReleaseRuntimeCodecs.Version) throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_codec_unsupported");
+            if (member.Codec.CodecVersion != ReleaseRuntimeCodecs.Version && !(key.Kind == ReleaseRuntimeCodecs.ActivityVersionKind && member.Codec.CodecVersion == 2))
+                throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_codec_unsupported");
             var payload = reader.GetPayload(key);
             if (!MatchesBytes(member.Descriptor, payload)) throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_payload_conflict");
             return (key.Kind, member.Codec.Codec) switch
@@ -79,9 +80,15 @@ internal sealed class RuntimeCapturedContentCache(IReleaseRuntimeArtifactCodec c
                 (ReleaseRuntimeCodecs.TemplateKind, ReleaseRuntimeCodecs.Template) => codec.DecodeTemplate(payload),
                 (ReleaseRuntimeCodecs.ModelKind, ReleaseRuntimeCodecs.Model) => codec.DecodeModel(payload),
                 (ReleaseRuntimeCodecs.SelectionKind, ReleaseRuntimeCodecs.Selection) => codec.DecodeWorkflowSelection(payload),
-                (ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion) => codec.DecodeActivityVersion(payload),
+                (ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion) => ActivityVersion(),
                 _ => throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_codec_unsupported")
             };
+            ReleaseActivityVersion ActivityVersion()
+            {
+                var result = codec.DecodeActivityVersion(payload);
+                if ((result.Publication is null ? 1 : 2) != member.Codec.CodecVersion) throw ReleaseRuntimeArtifactCodec.Refuse("captured_runtime_codec_profile_conflict");
+                return result;
+            }
         }
     }
 }

@@ -35,6 +35,9 @@ public abstract class ProvidedStore : IAsyncDisposable
     /// <summary>Break one connection of <see cref="Store"/> that is in use, whatever it is doing. Returns how many broke.</summary>
     public virtual Task<int> KillAsync(Random random) => Task.FromResult(0);
 
+    /// <summary>How this provider reports a missing consumed row, when it has a specific expected outcome.</summary>
+    public virtual string? MissingConsumeOutcome => null;
+
     /// <summary>A variant of <paramref name="row"/> that this store refuses every time (a value too long), or null if it cannot make one.</summary>
     public virtual InstanceRow? Refused(InstanceRow row) => null;
 
@@ -87,6 +90,7 @@ public sealed class InMemoryProvider : IStoreProvider
         private const string Refuse = "\u0000refuse";
 
         public override IKernelStore Store => store;
+        public override string MissingConsumeOutcome => "unknown";
         public override IReadOnlyList<string> Ghosts { get { lock (store.Ghost) return store.Ghost.ToList(); } }
 
         public override InstanceRow? Refused(InstanceRow row)

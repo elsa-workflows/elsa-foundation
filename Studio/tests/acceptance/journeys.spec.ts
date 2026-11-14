@@ -1,3 +1,7 @@
+import { cleanupDashboardJourney } from "./dashboardJourneySupport";
+import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
+import { dashboardComparisonJourney } from "./dashboardComparisonJourney";
+import { dashboardHomeJourney } from "./dashboardHomeJourney";
 import { activityDefinitionTitleJourney } from "./activityDefinitionTitleJourney";
 import { tabbedSecretsJourney } from "./tabbedSecretsJourney";
 import { templateToastJourney } from "./templateToastJourney";
@@ -53,6 +57,9 @@ const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
+test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
+test("saved dashboard period comparison and membership", async ({ page }, info) => dashboardComparisonJourney(page, info, capture));
+test("existing home widgets and layout defaults", async ({ page }, info) => dashboardHomeJourney(page, info, capture));
 test("user task authoring and workflow result", async ({ page }, info) => {
   const creations: CreatedWorkflow[] = [];
   createdWorkflows.set(page, creations);
@@ -69,7 +76,8 @@ test("structured logs readability and recovery", async ({ page }, info) => struc
 test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
-  await releaseToastPlacementHolds(page);
+  try { await cleanupDashboardJourney(page); }
+  finally { await releaseToastPlacementHolds(page); }
   const creations = createdWorkflows.get(page) ?? [];
   const failures: Error[] = [];
   const outcomes: Array<{ id: string; url: string; status?: number; error?: string }> = [];
@@ -563,7 +571,8 @@ test("workflow template metadata defaults", async ({ page }, info) => {
     creations.push({ url: saved.url(), authorization: saved.request().headers().authorization, id: body.definition.id });
     expect(saved.request().postDataJSON()).toMatchObject({ name: expectedName });
     expect(saved.request().postDataJSON().description || "").toBe(expectedDescription);
-    await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible();
+    // Creation starts a lazy editor transition after the API response; use the navigation-readiness budget.
+    await expect(page.getByRole("button", { name: "More workflow actions", exact: true })).toBeVisible({ timeout: 30_000 });
     await page.reload();
     const properties = page.getByRole("tab", { name: "Properties", exact: true });
     await expect(properties).toBeVisible();

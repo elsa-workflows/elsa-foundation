@@ -44,7 +44,7 @@ Owner decisions on this proposal. They become binding when the design is approve
 10. **State size:** large values are stored by reference, and a size benchmark goes into the cost runs; segments only if measurements show the need.
 11. **Viewer read path:** the API shows a run from its projected rows plus the journal tail past the projector's cursor, expanded in memory, so the view is always current. Studio may ask for a projector catch-up for the partition; rounds are coalesced. Studio never forces an owner commit or shows uncommitted state. Live watching is a push stream of committed journal entries.
 
-**Built in the prototype so far:** decision 2 (both fence modes, and since round 4 each engine's default: the checked fence on SQL Server, the fence in the batch elsewhere), 5 (the tables) and 9 (a job ticket at the poison threshold parks its instance). Decision 8 (round 4): set-based projector rounds on PostgreSQL and SQLite. Decision 3 in part: round 4 added the wake-signal interface with an in-process implementation. Decision 6 (round 4): the reply address carries the deadline, and past it the owner drops the reply and unpins the instance. The rest is not built.
+The prototype's implementation coverage and limits are recorded in its [README](../../../prototypes/kernel-model/README.md), [DESIGN](../../../prototypes/kernel-model/DESIGN.md) and [FINDINGS](../../../prototypes/kernel-model/FINDINGS.md). Those records own the as-built evidence; this sketch records the proposed design and owner decisions. A demonstrated spike is not product qualification.
 
 ## Three layers
 
@@ -177,7 +177,7 @@ The owner of partition `p` at epoch `e`, which believes the position is `n`, com
 
 Statement 1 is the fence. With the fence as its own statement, the row lock on the partition row orders the commit against a takeover; with the fence in the batch EF chooses the order, see E9 below. The check in step 2 is why a commit is **two round trips, not one**: a commit sent in the same packet as a fence that matched nothing would still land. There are two ways to do it, both measured: `epoch` and `position` as EF concurrency tokens in the one `SaveChanges`, which checks before it sends the commit (2 round trips on PostgreSQL, lease time from the node's clock); or the fence as its own statement first (3 round trips, lease time from the database). The fence also renews the lease, so a busy partition needs no heartbeat. An idle owner sends an empty fenced commit as its heartbeat, which is also how a stale one finds out. **Default (12 November): the fence in the batch; the fence as its own statement stays an option.**
 
-On SQL Server the fence in the batch has a known problem (finding E9 of the prototype): a stale owner's commit holds a message lock and waits for the partition row, because EF sends the fence last, while a take holds the partition row and waits for that message. In one stress run that made 127 deadlocks, every victim a take. Nothing wrong landed; it costs availability during takeovers. The fence as its own statement had no take deadlocks there, so it is SQL Server's default (decided 13 November); the prototype's EF store applies it since round 4, and a stress run with the default had no take deadlocks.
+On SQL Server the fence in the batch has a known problem (finding E9 of the prototype): a stale owner's commit holds a message lock and waits for the partition row, because EF can write messages before checking the partition fence, while a take holds the partition row and waits for that message. In one stress run that made 127 deadlocks, every victim a take. Nothing wrong landed; it costs availability during takeovers. The fence as its own statement had no take deadlocks there, so it is SQL Server's default (decided 13 November); the prototype's EF store applies it since round 4, and a stress run with the default had no take deadlocks.
 
 The ordinal in a derived message id has a fixed width. EF sends the inserts of one commit in key order, so without it the eleventh message of a turn overtook the third (found on PostgreSQL).
 
@@ -472,7 +472,7 @@ The test: give Elsa 3 users a reason to move and nothing that stops them, and gi
 ### Decided 13 November
 
 - **Where the architecture section lives:** `docs/architecture/` now, a published section in `website/docs/` at the switch (see "Architecture documentation").
-- **SQL Server's default fence (E9):** the fence as its own statement. With the fence in the batch EF sends the fence last, so on SQL Server a take can deadlock with a stale commit (127 deadlocks on takes in one stress run, safety held); the fence as its own statement had none. Other engines keep the fence in the batch.
+- **SQL Server's default fence (E9):** the fence as its own statement. With the fence in the batch, a stale commit can lock a message before the partition row, so on SQL Server it can deadlock with a take (127 deadlocks on takes in one stress run, safety held); the fence as its own statement had none. Other engines keep the fence in the batch.
 
 ### Earlier open questions
 

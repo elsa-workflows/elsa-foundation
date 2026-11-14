@@ -9,6 +9,9 @@ namespace Kernel.Durable;
 /// </summary>
 public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
+    public bool CommitClockAvailable { get; set; } = true;
+    public bool CreationIdentityAvailable { get; set; } = true;
+
     public sealed class PartitionRow
     {
         public string? Owner;
@@ -60,6 +63,8 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
+        if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
         {
             var (p, now) = (Partitions[batch.Partition], clock());
@@ -81,7 +86,9 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                         if (Refuses?.Invoke(row) == true) throw new StoreException(Failure.Definite, $"the row of {row.Id} was refused");
                         var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
                         if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
+                        if (!row.Retired) CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
+                    CreationProtocol.Validate(turn, Instances.GetValueOrDefault(turn.Instance));
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
@@ -94,10 +101,10 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
             var (next, seqs) = (batch.Position, new List<long>());
             foreach (var turn in batch.Turns)
             {
-                if (turn.Row is not null) Instances[turn.Row.Id] = turn.Row;
+                if (turn.Row is not null) Instances[turn.Row.Id] = CommitClockFacts.Stamp(turn.Row, now);
                 if (turn.Delete)
                 {
-                    Instances.Remove(turn.Instance);
+                    if (turn.Row is not { Retired: true }) Instances.Remove(turn.Instance);
                     foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
                     {
                         Journal.Remove(key);
@@ -172,6 +179,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
         lock (_gate)
         {
             if (Messages.ContainsKey(message.Id)) return new(false);
@@ -193,6 +201,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(subscription);
         lock (_gate) Subscriptions.Add(subscription);
         return default;
     }

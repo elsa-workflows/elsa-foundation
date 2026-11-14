@@ -41,6 +41,8 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 ### `IPermissionContributor`
 
+- **Cross-domain:** `TriggerPermissionContributor` in `Elsa.Workflows.Runtime.Api` contributes the seven standalone trigger management/delivery permissions. `StandaloneTriggersApiFeature` registers it through `AddPermissionContributor`; see the [contribution note](../../../Workflows/Runtime/Api/StandaloneTriggers/README.md#cross-domain-contributions).
+
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
 - **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; keys that are not one concrete `{resource}:{verb}` permission, canonical duplicates, padded keys, and wildcard definitions fail during catalog construction with both ownership sources in the diagnostic. The catalog carries no implications; see [Elsa 3.9 to Elsa 4 permission mapping](../../../../../docs/reference/elsa3-permission-mapping.md) for the matching rules.

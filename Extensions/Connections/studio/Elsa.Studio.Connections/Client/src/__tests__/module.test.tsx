@@ -23,6 +23,7 @@ describe("connections module", () => {
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({
         id: "elsa.connection-reference-editor",
+        presentsField: true,
         surfaces: expect.objectContaining({ inline: expect.any(Function) }),
         createDefaultValue: expect.any(Function)
       })

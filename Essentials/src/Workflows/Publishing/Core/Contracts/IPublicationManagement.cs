@@ -7,6 +7,14 @@ namespace Elsa.Workflows.Publishing.Core.Contracts;
 
 public interface IPublicationRecordStore
 {
+    /// <summary>Copies exact source publication proof after stored scalar type/byte checks in one physical snapshot.</summary>
+    /// <remarks>Expected scope grants no access. Ordinary adapters/decorators refuse; no fallback to an unbounded read.</remarks>
+    /// <exception cref="PublicationSourceSnapshotPersistenceException">The scoped provider read failed; its original cause is retained.</exception>
+    ValueTask<PublicationOriginSnapshot?> FindOriginBoundedAsync(string publicationId,
+        Elsa.Workflows.Runtime.Core.Models.PersistenceScope expectedScope, Elsa.Workflows.Runtime.Core.Models.RuntimeSourceReadLimits limits,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<PublicationOriginSnapshot?>(new Elsa.Workflows.Runtime.Core.Models.RuntimeSourceReadException("publication_source_profile_unsupported", true));
+
     ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
     ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default);
 

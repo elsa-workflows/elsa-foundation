@@ -10,13 +10,15 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
     {
         ArgumentNullException.ThrowIfNull(bundle);
         var settings = options ?? new();
-        if (settings.MaxSites <= 0 || settings.MaxDiagnostics <= 0) throw new ArgumentOutOfRangeException(nameof(options));
+        if (settings.MaxSites <= 0 || settings.MaxDiagnostics <= 0 || settings.MaxInspectionBytes <= 0) throw new ArgumentOutOfRangeException(nameof(options));
         cancellationToken.ThrowIfCancellationRequested();
         IReleaseBundleTransport captured;
         try
         {
             var limits = settings.TransportLimits ?? new();
             if (bundle.Members.Count > limits.MaxMembers) return Refused("invalid_transport");
+            if (!FitsInspectionBudget(bundle.Members, settings.MaxInspectionBytes, limits.MaxMembers))
+                return Refused("semantic_payload_work_limit_exceeded");
             var blobs = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.Ordinal);
             foreach (var member in bundle.Members)
             {
@@ -28,6 +30,8 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         { return Refused("invalid_transport"); }
+        if (!FitsInspectionBudget(captured.Members, settings.MaxInspectionBytes, (settings.TransportLimits ?? new()).MaxMembers))
+            return Refused("semantic_payload_work_limit_exceeded", captured.Digest);
         if (settings.ExpectedDigest is not null)
         {
             try { ReleaseManifest.CheckDigest(settings.ExpectedDigest); }
@@ -35,7 +39,12 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
             if (settings.ExpectedDigest != captured.Digest) return Refused("expected_digest_mismatch", captured.Digest);
         }
 
-        var content = new CapturedContentReader(captured);
+        return await InspectAsync(new CapturedContentReader(captured), captured.Manifest, captured.Digest, settings, true, cancellationToken);
+    }
+
+    internal async ValueTask<ReleaseSemanticVerificationResult> InspectAsync(IReleaseContentReader content, JsonElement manifest,
+        string? digest, ReleaseSemanticVerificationOptions settings, bool compareDeclarations, CancellationToken cancellationToken)
+    {
         var facts = new ActualFacts(content, settings);
         var capabilities = new List<ReleaseSemanticAdapterCapability>();
         var sites = new List<ReleaseSemanticSite>();
@@ -80,15 +89,27 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
                 facts.Add(site.Member, answer.Edges, answer.Resources, answer.Prerequisites, site.Origin);
             else if (answer is null) facts.Refuse(ReleaseSemanticStatus.Invalid, "invalid_owner_facts", site.Member);
         }
-        facts.Finish(captured.Manifest);
+        facts.Finish(manifest, compareDeclarations);
         cancellationToken.ThrowIfCancellationRequested();
-        return new(facts.Status, captured.Digest, facts.Edges.Values.ToArray(), facts.Resources.Values.ToArray(),
+        return new(facts.Status, digest, facts.Edges.Values.ToArray(), facts.Resources.Values.ToArray(),
             facts.Prerequisites.Values.ToArray(), capabilities.Distinct().OrderBy(x => x.Identity.Name, StringComparer.Ordinal)
                 .ThenBy(x => x.Identity.Version, StringComparer.Ordinal).ToArray(), facts.Diagnostics);
     }
 
     private static ReleaseSemanticVerificationResult Refused(string code, string? digest = null) =>
         new(ReleaseSemanticStatus.Invalid, digest, [], [], [], [], [new(code)]);
+
+    private static bool FitsInspectionBudget(IReadOnlyList<ReleaseBundleMember> members, long maximum, int maximumMembers)
+    {
+        if (members.Count > maximumMembers) return false;
+        long inspected = 0; var count = 0;
+        foreach (var member in members)
+        {
+            if (++count > maximumMembers || member is null || member.ByteLength <= 0 || member.ByteLength > maximum - inspected) return false;
+            inspected += member.ByteLength;
+        }
+        return count == members.Count;
+    }
 
     private sealed class CapturedContentReader : IReleaseContentReader
     {
@@ -107,10 +128,12 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
         public ReadOnlyMemory<byte> GetPayload(ReleaseMemberKey key) => _bundle.GetBlobBytes(GetMember(key).Descriptor.PayloadDigest);
     }
 
-    private sealed class ActualFacts(CapturedContentReader content, ReleaseSemanticVerificationOptions options)
+    private sealed class ActualFacts(IReleaseContentReader content, ReleaseSemanticVerificationOptions options)
     {
         private readonly HashSet<ReleaseMemberKey> _members = content.Members.Select(x => x.Key).ToHashSet();
         private readonly HashSet<string> _sites = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _resourceKeys = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _prerequisiteKeys = new(StringComparer.Ordinal);
         private readonly Dictionary<ReleaseMemberKey, HashSet<ReleaseRootCapability>> _roots = [];
         private int _rootCapabilityCount;
         private readonly int _maxFacts = (options.TransportLimits ?? new()).MaxEdges;
@@ -197,6 +220,8 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
                 if (resource is null || resource.Member != member || !Location(resource.Origin) || scope is not null && !Within(resource.Origin, scope) ||
                     !Text(resource.Reference) || !Text(resource.Kind) || !Text(resource.SchemaVersion))
                 { Refuse(ReleaseSemanticStatus.Invalid, "invalid_owner_facts", member); continue; }
+                if (!_resourceKeys.Add(Token(resource.Member.Kind, resource.Member.Identity, resource.Origin, resource.Reference, resource.Kind)))
+                { Refuse(ReleaseSemanticStatus.Invalid, "duplicate_actual_resource", member); continue; }
                 if (!Resources.TryAdd(ResourceToken(resource), resource)) Refuse(ReleaseSemanticStatus.Invalid, "duplicate_actual_resource", member);
             }
             foreach (var prerequisite in prerequisites)
@@ -204,11 +229,14 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
                 if (prerequisite is null || prerequisite.Member != member || !Text(prerequisite.Key) || !Text(prerequisite.Kind) || !Text(prerequisite.Identity) ||
                     prerequisite.Scheme is not ("exact" or "semver-range" or "integer-range" or "opaque") || !Text(prerequisite.Constraint))
                 { Refuse(ReleaseSemanticStatus.Invalid, "invalid_owner_facts", member); continue; }
+                // release-bundle.md requires prerequisite keys to be unique across the complete bundle.
+                if (!_prerequisiteKeys.Add(prerequisite.Key))
+                { Refuse(ReleaseSemanticStatus.Invalid, "duplicate_actual_prerequisite", member); continue; }
                 if (!Prerequisites.TryAdd(PrerequisiteToken(prerequisite), prerequisite)) Refuse(ReleaseSemanticStatus.Invalid, "duplicate_actual_prerequisite", member);
             }
         }
 
-        public void Finish(JsonElement manifest)
+        public void Finish(JsonElement manifest, bool compareDeclarations)
         {
             var complete = Status == ReleaseSemanticStatus.Verified;
             foreach (var root in manifest.GetProperty("roots").EnumerateArray())
@@ -221,7 +249,7 @@ internal sealed class ReleaseSemanticVerifier(IReleaseBundleCodec codec, Release
                     Refuse(ReleaseSemanticStatus.Invalid, "root_content_or_action_not_allowed", selected);
             }
             Graph(manifest, complete);
-            if (!complete) return;
+            if (!complete || !compareDeclarations) return;
             var edges = manifest.GetProperty("edges").EnumerateArray().Select(x => new ReleaseSemanticEdge(Key(x.GetProperty("from")), Key(x.GetProperty("to")),
                 x.GetProperty("relation").GetString() == "dependency" ? ReleaseEdgeRelation.Dependency : ReleaseEdgeRelation.Association, x.GetProperty("occurrence").GetString()!));
             Compare(edges.ToDictionary(EdgeToken), Edges, "edge");

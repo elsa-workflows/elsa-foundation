@@ -3,6 +3,8 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 
 namespace Elsa.Activities.Primitives.Services;
 
@@ -10,6 +12,8 @@ namespace Elsa.Activities.Primitives.Services;
 internal sealed class PublishStimulusIntentAdapter : IStimulusDeliveryIntentAdapter
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    internal static readonly StandaloneTriggerSourceDescriptor SourceDescriptor = new("event", 1, "Elsa.Event.Broadcast",
+        new ValueTypeDescriptor("Elsa.EventPayload", schemaVersion: 1));
     public PublishStimulusIntentAdapter() { }
     public string IntentKind => PublishStimulusConstants.PublishStimulusIntentKind;
 
@@ -19,6 +23,16 @@ internal sealed class PublishStimulusIntentAdapter : IStimulusDeliveryIntentAdap
         try { return Decode(intent); }
         catch (Exception exception)
         { throw new StimulusDeliveryIntentException(intent.IntentId, intent.Kind, exception); }
+    }
+
+    public RuntimeWorkflowSubscriptionSource? CreateSubscriptionSource(RuntimePostCommitIntent intent)
+    {
+        _ = CreateRequest(intent); // The owning routing decoder validates every persisted field before matching resources.
+        var payload = intent.Payload!.Value.Deserialize<PublishStimulusIntentPayload>(Options)!;
+        if (payload.IsLocalEvent) return null;
+        return new(SourceDescriptor.TypeKey, SourceDescriptor.SchemaVersion, "eventName", payload.EventName, SourceDescriptor.SourceFamily, SourceDescriptor.PayloadSchema,
+            payload.Payload ?? JsonSerializer.SerializeToElement<object?>(null),
+            JsonSerializer.SerializeToElement(new { eventName = payload.EventName, correlationId = payload.CorrelationId }, Options));
     }
 
     private StimulusDispatchRequest Decode(RuntimePostCommitIntent intent)

@@ -100,6 +100,7 @@ public sealed class WorkflowRegistry
     private readonly Dictionary<string, Workflow> _workflows = new(StringComparer.Ordinal);
     public WorkflowRegistry Add(Workflow workflow) { _workflows[workflow.Id] = workflow; return this; }
     public Workflow Get(string id) => _workflows.TryGetValue(id, out var w) ? w : throw new InvalidOperationException($"No workflow '{id}'.");
+    public bool Remove(string id) => _workflows.Remove(id);
     public IEnumerable<Workflow> All => _workflows.Values;
 }
 
@@ -136,10 +137,11 @@ public readonly record struct Unit;
 
 public class ActivityContext
 {
-    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken)
-        => (Instance, FrameId, NodeId, Attempt, CancellationToken) = (instance, frame, node, attempt, cancellationToken);
+    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation = 0)
+        => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation) = (instance, frame, node, attempt, cancellationToken, creation);
 
     public InstanceRef Instance { get; }
+    public long Creation { get; }
     public string FrameId { get; }
     public string NodeId { get; }
     /// <summary>The committed attempt of an External activity in Durable mode; 0 otherwise.</summary>
@@ -150,7 +152,7 @@ public class ActivityContext
 public sealed class StartContext<TTrigger> : ActivityContext
 {
     private readonly JsonNode? _trigger;
-    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken)
+    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation)
         => (IsTriggerDelivery, _trigger) = (delivery, trigger);
 
     /// <summary>This activation is the workflow's start trigger being delivered (an HTTP request, an event).</summary>
@@ -165,7 +167,7 @@ public sealed class StartContext<TTrigger> : ActivityContext
 
 public sealed class ResumeContext<TState, TTrigger> : ActivityContext
 {
-    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken)
+    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation)
         => (State, Trigger) = (state, trigger);
 
     public TState State { get; }

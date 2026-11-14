@@ -139,7 +139,7 @@ public sealed class RuntimeReleaseVerificationTests
         var member = fixture.Add(fixture.Codec.EncodeTemplate(new(RuntimeReleaseFixture.Scope, parent)));
         var facts = await fixture.Verify(member);
         Assert.Equal(ReleaseSemanticStatus.Verified, facts.Status);
-        Assert.Contains(facts.Sites, x => x.Site.SiteKind == ReleaseRuntimeSiteKinds.TemplateOverlay);
+        Assert.Contains(facts.Sites, x => x.Site == new ReleaseSiteKey(ReleaseRuntimeSiteKinds.TemplateOverlay, parent.Root.Descriptor.ConsumerKey, 1));
         Assert.Equal(2, facts.Edges.Count);
     }
 
