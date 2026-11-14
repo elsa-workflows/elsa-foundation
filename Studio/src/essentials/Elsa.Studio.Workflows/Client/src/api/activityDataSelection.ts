@@ -28,7 +28,14 @@ export interface ActivityDataBinding {
 export interface ActivityResultSourceIdentity {
   producerNodeId: string;
   projectionKey: string;
+  isOptional?: boolean;
 }
+
+/** Existing whole portable parameter wire; member paths remain syntax-owned source text. */
+export type ActivityDataParameterSource =
+  | { kind: "WorkflowRequest"; memberKey: string; path?: string | null }
+  | { kind: "Variable"; declaringScopeNodeId: string; variableKey: string }
+  | { kind: "ActivityResult"; producerNodeId: string; projectionKey: string; isOptional?: boolean };
 
 export interface ActivityDataType {
   alias: string;
@@ -57,6 +64,10 @@ export interface ActivityDataShape {
 /** A focused query always names a server-published whole-source binding; the server constructs its member form. */
 export interface ActivityDataSourceQuery {
   source?: ActivityDataBinding;
+  expressionType?: string;
+  parameterSource?: ActivityDataParameterSource;
+  /** Pins a focused query to the current root answer's normalized snapshot. */
+  expectedSnapshotHash?: string;
   memberPath?: readonly string[];
   includeMemberShapes?: boolean;
 }
@@ -71,6 +82,8 @@ export interface ActivityDataSourceFacts {
   reasonCode: string | null;
   availability: string | null;
   activityResultSource: ActivityResultSourceIdentity | null;
+  parameterSource?: ActivityDataParameterSource | null;
+  parameterPath?: readonly string[] | null;
   /** The declared type of the value, when known. */
   type: ActivityDataType | null;
   scopeId?: string | null;
@@ -120,6 +133,8 @@ export interface ActivityDataContextResult {
   findings?: { path: string | null; type: string | null; message: string | null }[];
   /** Only literal true in a supported/empty analysis enables member selection. */
   memberReadsEnabled?: boolean;
+  expressionParametersEnabled?: boolean;
+  expressionType?: string | null;
   resourceKind?: string | null;
   resourceId?: string | null;
   snapshotHash?: string | null;
@@ -189,6 +204,7 @@ export async function requestWorkflowActivityData(
     nodeId: request.target.nodeId,
     inputKey: request.target.inputKey,
     snapshot: request.snapshot,
+    ...(request.query?.expectedSnapshotHash ? { expectedSnapshotHash: request.query.expectedSnapshotHash } : {}),
     query
   }, { signal });
   if (signal?.aborted) throw new DOMException("The request was aborted.", "AbortError");
@@ -213,7 +229,8 @@ export async function requestActivityDefinitionActivityData(
     documentRevision: request.documentRevision,
     target: request.target,
     query,
-    currentSnapshot: request.currentSnapshot
+    currentSnapshot: request.currentSnapshot,
+    ...(request.query?.expectedSnapshotHash ? { snapshotHash: request.query.expectedSnapshotHash } : {})
   }, { signal });
   if (signal?.aborted) throw new DOMException("The request was aborted.", "AbortError");
   return readRequestedResult(response, request, query, "ActivityDefinition");
@@ -250,6 +267,8 @@ export function readActivityDataContextResult(response: unknown, requestedDocume
   // Invalid answers may explain their refusal, but neither their sources nor their capability flag are offers.
   if (state === "invalid") return result;
   result.memberReadsEnabled = analysis?.memberReadsEnabled === true;
+  result.expressionParametersEnabled = analysis?.expressionParametersEnabled === true;
+  result.expressionType = readString(analysis?.expressionType);
   result.target = readTarget(asRecord(analysis?.target));
   const budget = { members: memberShapeLimits.maximumMembers };
   result.sources = Array.isArray(analysis?.sources) ? analysis.sources.slice(0, 100).flatMap(source => readSource(source, budget)) : [];
@@ -259,7 +278,7 @@ export function readActivityDataContextResult(response: unknown, requestedDocume
 
 function emptyResult(state: ActivityDataContextState, code: string | null, documentRevision: string): ActivityDataContextResult {
   return { state, code, documentRevision, baseRevision: null, target: null, sources: [], hasMoreSources: false,
-    memberReadsEnabled: false, findings: [], resourceKind: null, resourceId: null, snapshotHash: null, contextRevision: null, contractRevision: null };
+    memberReadsEnabled: false, expressionParametersEnabled: false, expressionType: null, findings: [], resourceKind: null, resourceId: null, snapshotHash: null, contextRevision: null, contractRevision: null };
 }
 
 function readTarget(target: Record<string, unknown> | null): ActivityDataTargetFacts | null {
@@ -302,7 +321,9 @@ function readSource(value: unknown, budget: { members: number }): ActivityDataSo
       : null,
     reasonCode: readString(source.reasonCode),
     availability: readString(source.availability),
-    activityResultSource: producerNodeId && projectionKey ? { producerNodeId, projectionKey } : null,
+    activityResultSource: producerNodeId && projectionKey ? { producerNodeId, projectionKey,
+      ...(typeof producer?.isOptional === "boolean" ? { isOptional: producer.isOptional } : {}) } : null,
+    ...("parameterSource" in source ? { parameterSource: readActivityDataParameterSource(source.parameterSource), parameterPath: readParameterPath(source.parameterPath) } : {}),
     type: shape?.type ?? null,
     scopeId: readString(source.scopeId),
     shape
@@ -325,7 +346,8 @@ function sourceQuery(request: { skip?: number; query?: ActivityDataSourceQuery }
   const options = request.query;
   const memberPath = [...options?.memberPath ?? []];
   if (memberPath.length > 64 || memberPath.some(segment => typeof segment !== "string") ||
-    memberPath.reduce((length, segment) => length + segment.length, 0) > 4096 || (memberPath.length > 0 && !options?.source)) {
+    memberPath.reduce((length, segment) => length + segment.length, 0) > 4096 || (memberPath.length > 0 && !options?.source && !options?.parameterSource) || options?.source && (options.parameterSource || options.expressionType) ||
+    options?.parameterSource && (!options.expressionType || !readActivityDataParameterSource(options.parameterSource))) {
     throw new TypeError("A bounded literal member path requires a focused source.");
   }
   return {
@@ -333,13 +355,15 @@ function sourceQuery(request: { skip?: number; query?: ActivityDataSourceQuery }
     skip: request.skip ?? 0,
     memberPath,
     ...(options?.source ? { source: options.source } : {}),
-    shapeLimits: options?.includeMemberShapes || options?.source ? memberShapeLimits : wholeValueSourceQuery.shapeLimits
+    ...(options?.expressionType ? { expressionType: options.expressionType } : {}),
+    ...(options?.parameterSource ? { parameterSource: options.parameterSource } : {}),
+    shapeLimits: options?.includeMemberShapes || options?.source || options?.parameterSource ? memberShapeLimits : wholeValueSourceQuery.shapeLimits
   };
 }
 
 function readRequestedResult(
   response: unknown,
-  request: { draftId: string; documentRevision: string; expectedBaseRevision: string | number; target: ActivityDataTarget },
+  request: { draftId: string; documentRevision: string; expectedBaseRevision: string | number; target: ActivityDataTarget; query?: ActivityDataSourceQuery },
   query: ReturnType<typeof sourceQuery>,
   resourceKind: string
 ): ActivityDataContextResult {
@@ -352,11 +376,47 @@ function readRequestedResult(
     return emptyResult("incompatible", "activity-data.response-unreadable", request.documentRevision);
   }
   if (result.state === "invalid") return result;
-  if (query.memberPath.length > 0 && (!result.memberReadsEnabled ||
+  if ("expressionType" in query && query.expressionType) {
+    if (!result.expressionParametersEnabled || result.expressionType !== query.expressionType || !result.snapshotHash || !result.contextRevision ||
+        request.query?.expectedSnapshotHash && result.snapshotHash !== request.query.expectedSnapshotHash ||
+        "parameterSource" in query && query.parameterSource && (result.sources.length !== 1 ||
+          !matchesParameterOffer(query.parameterSource, query.memberPath, result.sources[0]))) {
+      return emptyResult("incompatible", "activity-data.parameter-response-unreadable", request.documentRevision);
+    }
+  } else if (query.memberPath.length > 0 && (!result.memberReadsEnabled ||
     result.sources.some(source => source.binding && !matchesMemberOffer(query.source!, query.memberPath, source.binding)))) {
     return emptyResult("incompatible", "activity-data.member-response-unreadable", request.documentRevision);
   }
   return result;
+}
+
+/** Reject unknown semantic fields rather than normalize a future parameter contract into an old one. */
+export function readActivityDataParameterSource(value: unknown): ActivityDataParameterSource | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const only = (...keys: string[]) => Object.keys(record).every(key => keys.includes(key));
+  switch (record.kind) {
+    case "WorkflowRequest": return only("kind", "memberKey", "path") && readString(record.memberKey) &&
+      (record.path == null || typeof record.path === "string") ? { kind: "WorkflowRequest", memberKey: record.memberKey as string, path: record.path as string | null | undefined ?? null } : null;
+    case "Variable": return only("kind", "declaringScopeNodeId", "variableKey") && readString(record.declaringScopeNodeId) && readString(record.variableKey)
+      ? { kind: "Variable", declaringScopeNodeId: record.declaringScopeNodeId as string, variableKey: record.variableKey as string } : null;
+    case "ActivityResult": return only("kind", "producerNodeId", "projectionKey", "isOptional") && readString(record.producerNodeId) && readString(record.projectionKey) &&
+      (record.isOptional === undefined || typeof record.isOptional === "boolean")
+      ? { kind: "ActivityResult", producerNodeId: record.producerNodeId as string, projectionKey: record.projectionKey as string, isOptional: record.isOptional === true } : null;
+    default: return null;
+  }
+}
+function readParameterPath(value: unknown): readonly string[] | null {
+  return Array.isArray(value) && value.length <= 64 && value.every(segment => typeof segment === "string") &&
+    value.reduce((length, segment) => length + segment.length, 0) <= 4096 ? value : null;
+}
+export function sameParameterSource(left: unknown, right: unknown): boolean {
+  const a = readActivityDataParameterSource(left), b = readActivityDataParameterSource(right);
+  return !!a && !!b && JSON.stringify(a) === JSON.stringify(b);
+}
+export function matchesParameterOffer(parameter: ActivityDataParameterSource, path: readonly string[], offer: ActivityDataSourceFacts): boolean {
+  return sameParameterSource(parameter, offer.parameterSource) && !!offer.parameterPath && offer.parameterPath.length === path.length &&
+    offer.parameterPath.every((segment, index) => segment === path[index]);
 }
 
 export function matchesMemberOffer(source: ActivityDataBinding, path: readonly string[], offer: ActivityDataBinding): boolean {

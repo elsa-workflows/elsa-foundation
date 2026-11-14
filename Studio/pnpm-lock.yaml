@@ -347,6 +347,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@lezer/javascript':
+        specifier: 1.5.4
+        version: 1.5.4
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -366,6 +369,9 @@ importers:
 
   ../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client:
     dependencies:
+      '@codemirror/lang-liquid':
+        specifier: 6.3.2
+        version: 6.3.2
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client

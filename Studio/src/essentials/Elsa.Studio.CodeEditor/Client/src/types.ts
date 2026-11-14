@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export interface StudioCodeDocument {
   /** A stable identity for the persisted expression or file. */
@@ -119,6 +119,8 @@ export interface StudioCodeEditorEdit {
 
 /** Optional: source-only consumers retain their existing history and callbacks. */
 export interface StudioCodeDocumentEditing {
+  /** Keeps the compact surface alive while its owned action interacts with a portal. */
+  interactionActive?: boolean;
   historyValue: unknown;
   onController(controller: StudioCodeEditorController | null): void;
 }
@@ -157,6 +159,7 @@ export interface StudioCodeLanguageAdapter {
 export type StudioCodeEditorAction = "save" | "format" | string;
 
 export interface StudioCodeEditorProps {
+  actions?: ReactNode;
   document: StudioCodeDocument;
   documentEditing?: StudioCodeDocumentEditing;
   /** Expanded is the existing full-editor behavior; compact activates on focus. */

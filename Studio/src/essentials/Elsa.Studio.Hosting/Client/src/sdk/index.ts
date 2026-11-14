@@ -5,7 +5,7 @@ export * from "./moduleHost";
 export * from "./notifications";
 import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
 import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { StudioActivityIconComponent } from "./activityIcons";
 import type { StudioNotificationApi } from "./notifications";
 
@@ -1134,7 +1134,7 @@ export interface StudioExpressionEditorContext {
 /** Optional installed syntax adapter. The workflow host does not parse member-access syntax. */
 export interface StudioExpressionSourceInsertion {
   render(request: { alias: string; memberPath: readonly string[]; source: string; selection: { anchor: number; head: number } }):
-    { supported: true; insert: string } | { supported: false; reason: string };
+    { supported: true; insert: string; /** UTF-16 positions relative to the inserted text. */ selection?: { anchor: number; head: number } } | { supported: false; reason: string };
 }
 /** Ephemeral editor state never enters the authored workflow document. */
 export interface StudioExpressionEditorBookmark { restore(): void }
@@ -1153,12 +1153,14 @@ export interface StudioExpressionEditorEdit {
   after: StudioExpressionEditorBookmark;
 }
 export interface StudioExpressionDocumentEditing {
+  interactionActive?: boolean;
   /** Immutable JSON owner data apart from source text. */
   historyValue: unknown;
   onController(controller: StudioExpressionEditorController | null): void;
 }
 
 export interface StudioExpressionEditorProps {
+  actions?: ReactNode;
   descriptor: StudioActivityInputDescriptor;
   syntax: string;
   value: unknown;

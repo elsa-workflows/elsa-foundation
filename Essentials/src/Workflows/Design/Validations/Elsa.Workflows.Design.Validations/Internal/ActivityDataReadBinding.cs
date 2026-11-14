@@ -34,6 +34,10 @@ internal sealed record ActivityDataReadBinding(
     private static readonly JsonSerializerOptions PortableExpressionOptions = new(JsonSerializerDefaults.Web)
         { AllowOutOfOrderMetadataProperties = true };
 
+    private static readonly string[] NonPortableTypes = ["Literal", "Object", "Default", "Secret", "Connection"];
+    internal static bool IsPortableSyntax(string expressionType) => !IsRole(expressionType) &&
+        !ActivityDataReadRoles.IsMemberRole(expressionType) && !NonPortableTypes.Contains(expressionType, StringComparer.OrdinalIgnoreCase);
+
     public static IEnumerable<ActivityDataReadBinding> Read(ArgumentValue? argument)
     {
         if (argument is null)
@@ -47,7 +51,7 @@ internal sealed record ActivityDataReadBinding(
             yield break;
         }
 
-        if (new[] { "Literal", "Object", "Default", "Secret", "Connection" }.Contains(argument.ExpressionType, StringComparer.OrdinalIgnoreCase))
+        if (NonPortableTypes.Contains(argument.ExpressionType, StringComparer.OrdinalIgnoreCase))
             yield break;
 
         if (argument.Value is ExpressionDefinition definition)
@@ -198,7 +202,7 @@ internal sealed record ActivityDataReadBinding(
             : new(role, Error: "InvalidMemberPath");
     }
 
-    private static ActivityDataReadBinding? Parameter(ExpressionParameterBinding binding) => binding switch
+    internal static ActivityDataReadBinding? Parameter(ExpressionParameterBinding binding) => binding switch
     {
         WorkflowRequestExpressionParameterBinding request => new("WorkflowRequest", request.MemberKey, Path: request.Path),
         VariableExpressionParameterBinding variable => new("Variable", variable.VariableKey, variable.DeclaringScopeNodeId),

@@ -1,3 +1,4 @@
+import { ExpressionEditorWithDataInsertion } from "./ExpressionEditorWithDataInsertion";
 import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -177,7 +178,7 @@ export function ActivityPropertiesPanel({
     if (latestReadOnly.current) return;
     const current = latestActivity.current;
     if (current.nodeId !== nextActivity.nodeId) {
-      onChange(nextActivity, edit);
+      if (edit) onChange(nextActivity, edit); else onChange(nextActivity);
       return;
     }
     const next = { ...current };
@@ -187,7 +188,7 @@ export function ActivityPropertiesPanel({
       else delete next[propertyName];
     }
     latestActivity.current = next;
-    onChange(next, edit);
+    if (edit) onChange(next, edit); else onChange(next);
   }, [onChange]);
   const conversionProfiles = useConversionProfiles(context);
   const [activeToolingProperty, setActiveToolingProperty] = useState<string>();
@@ -892,11 +893,12 @@ function PropertyRow({
       ? readPortableExpressionDefinition(currentWrapped.expression.value, currentWrapped.expression.type)
       : null;
     const next = currentWrapped
-      ? withLiteralValue(currentWrapped, portableDefinition && typeof nextValue === "string"
+      ? withLiteralValue(currentWrapped, portableDefinition && typeof nextValue === "string" && !edit
         ? { ...portableDefinition, source: nextValue }
         : nextValue)
       : nextValue;
-    current.onChange(writeInputValue(current.activity, current.input, next), current.input, edit);
+    const nextActivity = writeInputValue(current.activity, current.input, next);
+    if (edit) current.onChange(nextActivity, current.input, edit); else current.onChange(nextActivity, current.input);
   }, []);
 
   const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
@@ -1073,7 +1075,8 @@ function PropertyRow({
     />
   ) : null;
   const contributedExpressionEditor = InlineExpressionEditorComponent && inlineExpressionContext ? (
-    <ActivityDataBindingChangeProvider onSelect={chooseData}><InlineExpressionEditorComponent
+    <ActivityDataBindingChangeProvider onSelect={chooseData}><ExpressionEditorWithDataInsertion
+      editor={InlineExpressionEditorComponent} contribution={inlineExpressionEditor} ownerValue={value}
       descriptor={effectiveInput}
       syntax={syntax}
       value={editorValue}
@@ -1337,6 +1340,7 @@ function PropertyRow({
             input={input}
             dictionarySessionScope={dictionarySessionScope}
             value={editorValue}
+            ownerValue={value}
             syntax={syntax}
             editingMode={editingMode}
             descriptors={expressionDescriptors}
@@ -1491,6 +1495,7 @@ function ExpandedPropertyEditor({
   input,
   dictionarySessionScope,
   value,
+  ownerValue,
   syntax,
   editingMode,
   descriptors,
@@ -1513,6 +1518,7 @@ function ExpandedPropertyEditor({
   input: StudioActivityInputDescriptor;
   dictionarySessionScope: string;
   value: unknown;
+  ownerValue: unknown;
   syntax: string;
   editingMode: StudioExpressionEditingMode | undefined;
   descriptors: StudioExpressionDescriptor[];
@@ -1614,7 +1620,7 @@ function ExpandedPropertyEditor({
               onChange={onChange}
             />
           ) : ExpressionEditorComponent ? (
-            <ExpressionEditorComponent
+            <ExpressionEditorWithDataInsertion editor={ExpressionEditorComponent} contribution={expressionEditor} ownerValue={ownerValue}
               descriptor={input}
               syntax={syntax}
               value={value}

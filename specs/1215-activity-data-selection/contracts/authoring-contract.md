@@ -64,8 +64,12 @@ explicitly exposed by the owning structure. Identity is independent of the displ
   `ConditionalOccurrence`, `AvailabilityUnknown`, `UnavailableProducer`, then `EarlierProducerRun` (the
   structure holding producer and consumer, or one around it, does not state that no earlier run of the
   producer can lead to this input, as on a Flowchart cycle or in a Sequence on a BPMN gateway loop), then
-  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable, and
-  expression authoring may still bind it as a portable parameter.
+  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable.
+  Expression authoring uses a separate, server-admitted canonical portable-parameter offer: an
+  `EarlierProducerRun` direct refusal can still have a portable offer under the existing parameter
+  rules. `NoTypedResult` proves absence of a declared whole result and remains refused; uncertain or
+  missing shape metadata alone does not prove that absence. The client never infers permission from
+  a null direct binding or a reason code.
 - To read a conditional producer optionally, the client sends a focused query whose source is the
   scope-free binding with `isOptional: true`, for example
   `{"expressionType":"ActivityResult","value":{"producerNodeId":"fetch","projectionKey":"$result","isOptional":true}}`.

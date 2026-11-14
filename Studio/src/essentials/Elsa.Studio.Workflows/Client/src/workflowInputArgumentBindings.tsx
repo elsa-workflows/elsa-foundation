@@ -23,21 +23,22 @@ export function withWorkflowInputExpressionArgument(
   activityInput: StudioActivityInputDescriptor,
   workflowInput: WorkflowInput
 ): PortableExpressionDefinitionValue | null {
-  const portableDefinition = readPortableExpressionDefinition(value, expressionType);
-  if (!portableDefinition && value != null && typeof value === "object") return null;
-  const definition = portableDefinition ?? {
-    language: expressionType,
-    source: typeof value === "string" ? value : value == null ? "" : String(value),
-    resultType: portableResultType(activityInput),
-    parameters: {},
-    options: {},
-    capabilityProfile: "binding-pure-v1"
-  };
+  const definition = createPortableExpressionDefinition(value, expressionType, portableResultType(activityInput));
+  if (!definition) return null;
   const hasExisting = Object.prototype.hasOwnProperty.call(definition.parameters, workflowInput.name);
   const existing = hasExisting ? definition.parameters[workflowInput.name] : null;
   return existing != null && !isWorkflowRequestBinding(existing)
     ? null
     : { ...definition, parameters: { ...definition.parameters, [workflowInput.name]: { kind: "WorkflowRequest", memberKey: workflowInput.name } } };
+}
+
+/** Common carrier preservation; callers decide the authoritative result type and admission. */
+export function createPortableExpressionDefinition(value: unknown, expressionType: string, resultType: Record<string, unknown>): PortableExpressionDefinitionValue | null {
+  const existing = readPortableExpressionDefinition(value, expressionType);
+  if (existing) return existing;
+  if (value != null && typeof value === "object") return null;
+  return { language: expressionType, source: typeof value === "string" ? value : value == null ? "" : String(value),
+    resultType, parameters: {}, options: {}, capabilityProfile: "binding-pure-v1" };
 }
 
 export function withoutPortableExpressionParameter(

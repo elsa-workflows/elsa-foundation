@@ -82,25 +82,41 @@ internal sealed class ActivityDataSelectionAnalyzer(
             return Result(document, null, [], findings);
         }
         query ??= new();
-        if (!Valid(query))
+        var expressionQuery = query.ExpressionType is not null;
+        if (!Valid(query) || query.ParameterSource is not null && !expressionQuery ||
+            query.Source is not null && (expressionQuery || query.ParameterSource is not null))
         {
             findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "Source query bounds or literal member path are invalid."));
             return Result(document, targetFacts, [], findings);
         }
         if (!query.IncludeSources)
         {
-            if (query.Source is not null || !query.MemberPath.IsEmpty)
+            if (query.Source is not null || query.ParameterSource is not null || !query.MemberPath.IsEmpty)
                 findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "Target-only analysis does not select a source."));
             return Result(document, targetFacts, [], findings);
         }
-        if (query.Source is null && !query.MemberPath.IsDefaultOrEmpty)
+        if (expressionQuery && (!ActivityDataReadBinding.IsPortableSyntax(query.ExpressionType!) || targetFacts.IsCredential == true ||
+            targetFacts.Constraint is { } expressionConstraint && !expressionConstraint.AllowedExpressionTypes.Contains(query.ExpressionType!, StringComparer.OrdinalIgnoreCase)))
+        {
+            findings.Add(new(Path(consumer, target.InputKey), "ActivityData/SourceRestricted", "This input does not admit expression source insertion."));
+            return Result(document, targetFacts, [], findings);
+        }
+        if (query.Source is null && query.ParameterSource is null && !query.MemberPath.IsDefaultOrEmpty)
         {
             findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidQuery", "A literal member path requires a focused source."));
             return Result(document, targetFacts, [], findings);
         }
 
         var candidates = new List<Source>();
-        if (query.Source is not null)
+        if (query.ParameterSource is not null)
+        {
+            var binding = ActivityDataReadBinding.Parameter(query.ParameterSource);
+            if (binding is null)
+                findings.Add(new(Path(consumer, target.InputKey), "ActivityData/InvalidSource", "This parameter kind is not a selectable whole data source."));
+            else if (await Resolve(context, consumer, binding, Path(consumer, target.InputKey), findings, cancellationToken) is { } source)
+                candidates.Add(source);
+        }
+        else if (query.Source is not null)
         {
             var binding = ActivityDataReadBinding.Direct(query.Source.ExpressionType, query.Source.Value);
             // A member of a result or variable the whole read names is offered as the member read itself, decided by
@@ -162,7 +178,7 @@ internal sealed class ActivityDataSelectionAnalyzer(
             }
         }
 
-        var allowed = candidates.Where(source => targetFacts.Constraint is not { } constraint ||
+        var allowed = candidates.Where(source => expressionQuery || targetFacts.Constraint is not { } constraint ||
             (source.Binding is { } binding
                 ? constraint.AllowedExpressionTypes.Contains(ConstraintRole(binding.ExpressionType), StringComparer.OrdinalIgnoreCase)
                 : source.ActivityResultSource is not null &&
@@ -177,11 +193,28 @@ internal sealed class ActivityDataSelectionAnalyzer(
         {
             var shape = await Shape(source, document, query.MemberPath, new(query.ShapeLimits.MaximumDepth, budget.Remaining), cancellationToken);
             shape = budget.Bound(shape);
-            factsBuilder.Add(new(source.Id, source.DisplayName, source.ScopeId, source.Binding, source.Availability, shape, source.ReasonCode) { ActivityResultSource = source.ActivityResultSource });
+            ExpressionParameterBinding? parameter = null;
+            if (expressionQuery && source.ParameterSource is { } proposed)
+            {
+                // Browsing direct candidates cannot authorize portable reads: use publication's existing
+                // parameter path, including causal/scope/known-absence rules, before offering one.
+                var parameterFindings = new List<ValidationError>();
+                var parameterRead = ActivityDataReadBinding.Parameter(proposed);
+                if (parameterRead is not null && await Resolve(context, consumer, parameterRead, Path(consumer, target.InputKey), parameterFindings, cancellationToken) is not null && parameterFindings.Count == 0)
+                {
+                    var refusal = await ParameterPathRefusal(source, document, query.MemberPath, shape, cancellationToken);
+                    if (refusal is null) parameter = proposed;
+                    else parameterFindings.Add(new(Path(consumer, target.InputKey), refusal, "This metadata path cannot be used for expression insertion."));
+                }
+                if (query.ParameterSource is not null) findings.AddRange(parameterFindings);
+            }
+            if (query.ParameterSource is not null && parameter is null) continue;
+            factsBuilder.Add(new(source.Id, source.DisplayName, source.ScopeId, source.Binding, source.Availability, shape, source.ReasonCode)
+            { ActivityResultSource = source.ActivityResultSource, ParameterSource = parameter, ParameterPath = parameter is null ? null : query.MemberPath });
         }
         if (query.Source is not null && candidates.Count > 0 && !factsBuilder.Any())
             findings.Add(new(Path(consumer, target.InputKey), "ActivityData/SourceRestricted", "The owning input contract does not accept this source role."));
-        return Result(document, targetFacts, factsBuilder.ToImmutable(), findings, page.Length > query.Take);
+        return Result(document, targetFacts, factsBuilder.ToImmutable(), findings, page.Length > query.Take) with { ExpressionType = query.ExpressionType };
     }
 
     private async ValueTask<ActivityDataSelectionTargetFacts?> Target(Request context, ActivityDataSelectionTarget target, CancellationToken ct)
@@ -271,7 +304,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 : RequestRead(context.WorkflowBoundary ? input.Name : input.ReferenceKey, binding, memberOfInput);
             return new($"input:{input.ReferenceKey}", input.DisplayName, null, value,
                 ActivityChildResultAvailability.Definite, input.Type, null, null, input.IsNullable, input.IsSensitive, input.IsCredential,
-                binding.Path is null ? null : "LegacyRequestPath");
+                binding.Path is null ? null : "LegacyRequestPath")
+            { ParameterSource = context.WorkflowBoundary ? new WorkflowRequestExpressionParameterBinding(input.Name, binding.Path) : null };
         }
         if (binding.Role is "Variable" or ActivityDataReadRoles.VariableMember)
         {
@@ -290,7 +324,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 ? new(JsonSerializer.SerializeToElement(new { referenceKey = variable.ReferenceKey, declaringScopeId = authoredScope, memberPath = binding.MemberPath }), ActivityDataReadRoles.VariableMember)
                 : new(new VariableReference(variable.ReferenceKey, authoredScope), "Variable");
             return new($"variable:{authoredScope}:{variable.ReferenceKey}", variable.Name, scope,
-                read, ActivityChildResultAvailability.Definite, variable.Type, null, null, null, null, null);
+                read, ActivityChildResultAvailability.Definite, variable.Type, null, null, null, null, null)
+            { ParameterSource = new VariableExpressionParameterBinding(authoredScope, variable.ReferenceKey) };
         }
         if (binding.Role != "ActivityResult" && !memberRead)
         {
@@ -376,7 +411,8 @@ internal sealed class ActivityDataSelectionAnalyzer(
                 _ when noTypedResult => "NoTypedResult",
                 _ when member?.Refusal is { } refusal => refusal,
                 _ => null
-            }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional) };
+            }) { ActivityResultSource = new(producer.Node.NodeId, binding.Projection!, binding.IsOptional),
+                ParameterSource = new ActivityResultExpressionParameterBinding(producer.Node.NodeId, binding.Projection!, binding.IsOptional) };
     }
 
     /// <summary>
@@ -464,6 +500,22 @@ internal sealed class ActivityDataSelectionAnalyzer(
             IsCredential = source.IsCredential == true ? true : shape.IsCredential };
     }
 
+    private async ValueTask<string?> ParameterPathRefusal(Source source, ActivityDataSelectionDocument document,
+        ImmutableArray<string> path, ActivitySerializedShape selected, CancellationToken ct)
+    {
+        if (selected.ReasonCode is "activity.shape.member-not-declared" or "activity.shape.member-parent-not-object")
+            return "ActivityData/UnknownMember";
+        if (selected.IsSensitive == true || selected.IsCredential == true) return "ActivityData/ProtectedSource";
+        // A public leaf below a protected parent stays protected. All prefix queries are bounded,
+        // metadata-only and use the same authorized source, not authored language or a runtime value.
+        for (var length = 0; length < path.Length; length++)
+        {
+            var prefix = await Shape(source, document, path.Take(length).ToImmutableArray(), new(0, 0), ct);
+            if (prefix.IsSensitive == true || prefix.IsCredential == true) return "ActivityData/ProtectedSource";
+        }
+        return null;
+    }
+
     private async ValueTask<bool> HasNoTypedResult(Request context, IActivityDefinitionVersion version, CancellationToken ct)
     {
         if (context.NoTypedResults.TryGetValue(version.Id, out var cached)) return cached;
@@ -510,8 +562,9 @@ internal sealed class ActivityDataSelectionAnalyzer(
         };
         return payload is null ? null : state with { Value = state.Value with { Value = payload } };
     }
-    private static bool Valid(ActivityDataSelectionQuery query) => query.Skip is >= 0 and <= 10000 && query.Take is >= 1 and <= 100
-        && (query.Search?.Length ?? 0) <= 256 && !query.MemberPath.IsDefault && query.MemberPath.Length <= 64 && query.MemberPath.All(segment => segment is not null)
+    private static bool Valid(ActivityDataSelectionQuery query) =>
+        (query.ExpressionType is null || !string.IsNullOrWhiteSpace(query.ExpressionType) && query.ExpressionType.Length <= 128) && query.Skip is >= 0 and <= 10000 && query.Take is >= 1 and <= 100
+        && (query.Search?.Length ?? 0) <= 256 && !query.MemberPath.IsDefault && (query.MemberPath.IsEmpty || ActivityDataMemberPath.IsWithinBounds(query.MemberPath))
         && query.ShapeLimits is { MaximumDepth: >= 0 and <= 16, MaximumMembers: >= 0 and <= 512 };
     private static ActivitySerializedShape Unknown(TypeReference? type, string revision, string reason) =>
         new(ActivitySerializedShapeState.Unknown, ActivitySerializedValueKind.Unknown, type, revision, "", "") { ReasonCode = reason };
@@ -527,13 +580,15 @@ internal sealed class ActivityDataSelectionAnalyzer(
         ImmutableArray<ActivityDataSelectionSourceFacts> sources, IEnumerable<ValidationError> findings, bool hasMore = false) =>
         new(document.ContractRevision, target, sources, [.. findings.DistinctBy(finding => (finding.Path, finding.Type))], hasMore)
         {
-            MemberReadsEnabled = options.Value.MemberReads
+            MemberReadsEnabled = options.Value.MemberReads,
+            ExpressionParametersEnabled = true
         };
     private sealed record Source(string Id, string DisplayName, string? ScopeId, ArgumentValue? Binding,
         ActivityChildResultAvailability Availability, TypeReference? Type, IActivityDefinitionVersion? Version, string? Projection,
         bool? IsNullable, bool? IsSensitive, bool? IsCredential, string? ReasonCode = null)
     {
         public ActivityResultExpressionParameterBinding? ActivityResultSource { get; init; }
+        public ExpressionParameterBinding? ParameterSource { get; init; }
     }
     private sealed class Request(ActivityDataSelectionDocument document, ActivityDataSelectionGraph graph, int maxDepth)
     {

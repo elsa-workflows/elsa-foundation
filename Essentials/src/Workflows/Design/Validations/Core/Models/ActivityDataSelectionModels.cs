@@ -63,6 +63,12 @@ public sealed record ActivityDataSelectionQuery
     public int Skip { get; init; }
     public int Take { get; init; } = 100;
     public ArgumentValue? Source { get; init; }
+    /// <summary>The installed syntax being authored; absent retains native direct-source discovery.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExpressionType { get; init; }
+    /// <summary>A whole portable source for metadata traversal, never a native member-read instruction.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExpressionParameterBinding? ParameterSource { get; init; }
     /// <summary>An omitted path selects the whole value; generated readers may supply the default array.</summary>
     public ImmutableArray<string> MemberPath
     {
@@ -96,6 +102,12 @@ public sealed record ActivityDataSelectionSourceFacts(
 {
     /// <summary>Authorized producer identity for the existing portable-expression contract, independent of direct runtime scope binding.</summary>
     public ActivityResultExpressionParameterBinding? ActivityResultSource { get; init; }
+    /// <summary>The canonical whole parameter admitted for the requested expression, independent of direct binding.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExpressionParameterBinding? ParameterSource { get; init; }
+    /// <summary>The exact metadata path answered by this offer; never persisted on the parameter.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ImmutableArray<string>? ParameterPath { get; init; }
 }
 
 /// <summary>One source analysis, used independently by discovery, diagnostics and publication.</summary>
@@ -117,6 +129,11 @@ public sealed record ActivityDataSelectionAnalysis(
     /// selection only when it is true; an answer that does not carry it reads as false.
     /// </summary>
     public bool MemberReadsEnabled { get; init; }
+    /// <summary>Explicit support for canonical portable-parameter metadata queries; absent means unsupported.</summary>
+    public bool ExpressionParametersEnabled { get; init; }
+    /// <summary>The expression syntax whose source offers this analysis answers.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExpressionType { get; init; }
 }
 
 /// <summary>

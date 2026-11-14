@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@elsa-workflows/studio-code-editor": "workspace:*",
-    "@elsa-workflows/studio-sdk": "workspace:*"
+    "@elsa-workflows/studio-sdk": "workspace:*",
+    "@codemirror/lang-liquid": "6.3.2"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0"
