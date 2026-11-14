@@ -361,3 +361,11 @@ Reasoned.
 - Client disconnect mapped to cancel, streaming responses, request bodies by reference.
 - GraphActivity, CreateUserTask, HumanReview, RunEtl, RunRules and EvaluateDecision; Switch, For, Do, CompensationScope.
 - Incident strategies; retries of faulted activities.
+
+## 10. Private durable lexical-resource probe
+
+The [lexical runner](models/Native.Scopes.Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.
+
+Native model state version4 records this private capability. Older1–3 no-resource checkpoints, including genuine JSON-null checkpoints from an initial Park, keep their prior meanings. Unsupported/mixed/dangling/cyclic shapes are refused; reader fixtures do not qualify a historical writer, mixed-binary deployment or provider. Owner completion, cancellation and ordinary fault disposal release resources; an absorbing parent can continue its siblings. Forced kernel termination retires the new handles/resources while retaining other existing forensic state. A technical Park retains its previous checkpoint under the existing policy; this mechanism adds no incident retry or terminal resume.
+
+This is non-packable M0 evidence for #3815/#4229. Attaching scopes to actual StateMachine visits, normal trigger work, Action/Entry initialization, shared source waves, recovery, compensation and product/Studio integration remains required. It does not approve a product scope schema or stronger variable isolation/secret retention. Existing cost figures above are historical; lexical workflow/provider costs have not been measured.

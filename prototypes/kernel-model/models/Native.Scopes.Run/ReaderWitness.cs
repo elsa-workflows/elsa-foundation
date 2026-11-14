@@ -67,7 +67,7 @@ internal static class ReaderWitness
             ("null-owner", s => s.LexicalScopes!["s4"] = s.LexicalScopes["s4"] with { Owner = null! }, "Lexical scope owner or values are missing."),
             ("empty-identity", s => s.LexicalScopes!.Add("", new("f1", null, [])), "Lexical scope owner or values are missing.")
         };
-        foreach (var entry in bad) yield return (entry.Name, () => { var data = Valid(); entry.Change(data); Refuse(() => LexicalScopes.Validate(data), entry.Expected); });
+        foreach (var entry in bad) yield return (entry.Name, () => { var data = Valid(); entry.Change(data); Refuse(() => LexicalScopes.Validate(Json.Read<NativeState>(Json.Write(data))), entry.Expected); });
     }
     private static void Foreign(NativeState state)
     {
