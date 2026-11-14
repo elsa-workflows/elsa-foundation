@@ -513,6 +513,10 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<string>("RequestFingerprint")
+                        .HasMaxLength(1200)
+                        .HasColumnType("varchar(1200)");
+
                     b.Property<int?>("RetiredAtOffsetMinutes")
                         .HasColumnType("int");
 

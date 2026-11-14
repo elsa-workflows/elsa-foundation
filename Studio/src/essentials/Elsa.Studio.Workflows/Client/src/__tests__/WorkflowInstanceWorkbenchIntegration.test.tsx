@@ -1481,7 +1481,9 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
     const row = rows.find(item => item.activityExecutionId === id)!;
     return activityInspection({ ...row, outcomeNames: [], incidents: [], provenance: row.provenance as ActivityExecutionInspection["provenance"] });
   });
+  const initialScopePage = mode === "ambiguous" ? deferred<void>() : null;
   api.browseActivityExecutions.mockImplementation(async (_context, _run, request) => {
+    if (initialScopePage && request.executableNodeId === "compiled-nested-sequence") await initialScopePage.promise;
     const matches = rows.filter(item => (!request.executableNodeId || item.executableNodeId === request.executableNodeId) &&
       (!request.parentActivityExecutionId || item.parentActivityExecutionId === request.parentActivityExecutionId) &&
       (!request.ancestorActivityExecutionId || item.parentActivityExecutionId === request.ancestorActivityExecutionId));
@@ -1492,6 +1494,9 @@ it.each(["chooser", "arrow", "ambiguous", "denied401", "denied403", "missing404"
   renderWorkbench("activity", "write4");
   await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")).toBeTruthy());
   await vi.waitFor(() => expect(container.querySelector(".wf-execution-scope-occurrence .wf-execution-choice")).toBeTruthy());
+  // The chooser mounts before its initial page enables occurrence navigation.
+  initialScopePage?.resolve();
+  await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>(".wf-execution-scope-occurrence [aria-label^='Next occurrence of ']")?.disabled).toBe(false));
   const overview = container.querySelector(".wf-activity-overview")!;
   const details = container.querySelector<HTMLDetailsElement>(".wf-activity-execution-details")!;
   details.open = true;
