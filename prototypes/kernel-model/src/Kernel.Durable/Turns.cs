@@ -161,8 +161,8 @@ public sealed class DurableTurn
         Inbox = input.Taken.Skip(input.From).Select(i => i.Message).ToList();   // messages ahead of the one that creates the target had no target
         _jobs = input.Row?.Jobs is { } jobs ? Json.Read<List<string>>(jobs) : [];
         foreach (var delivery in input.Taken.Skip(input.From))
-            if (delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.JobFinished)
-                _jobs.Remove(delivery.Message.Read<JobFinished>().Key);    // its persisted ticket is being consumed
+            if (CompletedTicket(delivery, out var key))
+                _jobs.Remove(key);    // only this creation's exact persisted job ticket retires its registry entry
         Revision = (input.Row?.Revision ?? 0) + 1;
         Clock = new TurnClock(input.Row, Revision, input.Services);
     }
@@ -271,10 +271,19 @@ public sealed class DurableTurn
     /// <summary>A held job result is still in flight; then the row's <c>Jobs</c>.</summary>
     public string? Jobs()
     {
+        var jobs = new List<string>(_jobs);
         foreach (var delivery in _input.Taken.Skip(_input.From))
-            if (delivery.IsDurableJobTicket && delivery.Message.Kind == Kinds.JobFinished && _held.Contains(delivery.Message.Id))
-                _jobs.Add(delivery.Message.Read<JobFinished>().Key);   // a held result: still in flight
-        return _jobs.Count == 0 ? null : Json.Write(_jobs);
+            if (_held.Contains(delivery.Message.Id) && CompletedTicket(delivery, out var key) && !jobs.Contains(key))
+                jobs.Add(key);   // a held result is still in flight; reading the snapshot must not mutate the turn
+        return jobs.Count == 0 ? null : Json.Write(jobs);
+    }
+
+    private bool CompletedTicket(Delivery delivery, out string key)
+    {
+        key = "";
+        if (!delivery.IsDurableJobTicket || delivery.Message.Kind != Kinds.JobFinished) return false;
+        key = delivery.Message.Read<JobFinished>().Key;
+        return delivery.Message.Target == Actor && delivery.Message.Id == Worker.TicketId(Id, key, _input.Creation);
     }
 
     /// <summary>What the turn consumed, held, cancelled and emitted. The row comes with <see cref="Seal"/>.</summary>
