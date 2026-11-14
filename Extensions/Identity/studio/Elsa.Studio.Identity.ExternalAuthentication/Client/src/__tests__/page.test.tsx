@@ -83,6 +83,63 @@ describe("connection administration page", () => {
     expect(host.postJson.mock.calls.some(([path]) => path.endsWith("/commands"))).toBe(false);
   });
 
+  it("keeps the selected editor locked during refresh and adopts the fresh saved values", async () => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(field(host.container, "Display name")).toBeTruthy());
+    type(field(host.container, "Display name"), "Unsaved draft");
+    const original = host.getJson.getMockImplementation()!;
+    const next = structuredClone(fixtureCatalog);
+    next.revision = "r2";
+    next.connections[0].document.displayName = "Saved elsewhere";
+    next.connections[0].document.displayOrder = 7;
+    let release!: (value: ConnectionCatalog) => void;
+    host.getJson.mockImplementation((path: string) => path.endsWith("/external-connections")
+      ? new Promise<ConnectionCatalog>(resolve => { release = resolve; }) : original(path));
+    click(await button(host.container, "Refresh"));
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    const locked = field(host.container, "Display name").matches(":disabled");
+    host.setCatalog(next); release(next);
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Saved elsewhere"));
+    expect(field(host.container, "Display name").value).toBe("Saved elsewhere");
+    expect(field(host.container, "Display order").value).toBe("7");
+    expect(locked).toBe(true);
+  });
+
+  it("shows saved display values immediately after an update without reselecting the row", async () => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(field(host.container, "Display name")).toBeTruthy());
+    type(field(host.container, "Display name"), "Updated company");
+    const original = host.getJson.getMockImplementation()!;
+    let release!: (value: ConnectionCatalog) => void;
+    host.getJson.mockImplementation((path: string) => path.endsWith("/external-connections")
+      ? new Promise<ConnectionCatalog>(resolve => { release = resolve; }) : original(path));
+    click(await button(host.container, "Save changes"));
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    release(await original("/_elsa/identity/external-connections"));
+    await vi.waitFor(() => expect(host.container.textContent).toContain("Connection updated."));
+    expect(field(host.container, "Display name").value).toBe("Updated company");
+    expect(host.container.textContent).not.toContain("Unsaved changes");
+  });
+
+  it("retains the unsaved draft when a confirmed refresh cannot read the catalog", async () => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(field(host.container, "Display name")).toBeTruthy());
+    type(field(host.container, "Display name"), "Keep this draft");
+    const original = host.getJson.getMockImplementation()!;
+    host.getJson.mockImplementation((path: string) => path.endsWith("/external-connections")
+      ? Promise.reject({ status: 503 }) : original(path));
+    click(await button(host.container, "Refresh"));
+    await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
+    expect(field(host.container, "Display name").value).toBe("Keep this draft");
+    expect(host.container.textContent).toContain("Unsaved changes");
+  });
+
   it.each([false, true])("reconciles repaired readiness after a configuration test, refusing stale observations (%s)", async stale => {
     const host = harness(); const original = host.getJson.getMockImplementation()!;
     host.getJson.mockImplementation(async (path: string) => path.endsWith("/external-connections/record")

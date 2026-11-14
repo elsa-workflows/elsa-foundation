@@ -110,6 +110,23 @@ describe("DialogHost", () => {
     await waitFor(() => document.activeElement === opener, "Focus did not return to the original opener.");
   });
 
+  it("preserves focus explicitly moved by the caller after confirmation", async () => {
+    mount();
+    const nextField = document.createElement("input");
+    document.body.appendChild(nextField);
+    const dispose = cleanup!;
+    cleanup = () => { dispose(); nextField.remove(); };
+    const result = dialogs.confirm({ message: "Continue to the next field?" });
+    await waitFor(() => dialog() !== null, "Dialog did not open.");
+    clickButton("Confirm");
+    expect(await result).toBe(true);
+    nextField.focus();
+    await waitFor(() => dialog() === null, "Dialog did not close.");
+    await flushPromises();
+    await flushPromises();
+    expect(document.activeElement).toBe(nextField);
+  });
+
   it("settles pending dialogs as cancelled when the host unmounts", async () => {
     mount();
     const confirmResult = dialogs.confirm({ message: "Delete it?" });

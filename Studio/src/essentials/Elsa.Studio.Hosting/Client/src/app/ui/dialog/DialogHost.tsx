@@ -42,7 +42,9 @@ export function DialogHost() {
           if (dialogController.getCurrent()) return;
           const target = opener.current;
           opener.current = null;
-          if (target?.isConnected && !target.matches(":disabled, [aria-disabled='true']")) target.focus();
+          const focused = document.activeElement;
+          const needsRestoration = !focused || focused === document.body || focused === document.documentElement || focused.closest(".studio-dialog");
+          if (needsRestoration && target?.isConnected && !target.matches(":disabled, [aria-disabled='true']")) target.focus();
         }}>
           {request ? <DialogBody key={request.id} request={request} /> : null}
         </Dialog.Content>
