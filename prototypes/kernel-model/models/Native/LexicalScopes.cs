@@ -58,7 +58,13 @@ internal static class LexicalScopes
                 if (!seen.Add(parent)) throw new InvalidOperationException("Lexical scope ancestry is cyclic.");
         }
         foreach (var f in state.Frames.Values)
-            if (f.LexicalScope is { } id) _ = Accessible(state, f.Id, id);
+            if (f.LexicalScope is { } id)
+            {
+                // Only a scheduled child receives a reference, accessible from its live scheduling parent.
+                if (f.Parent is null || state.LexicalScopes?.GetValueOrDefault(id)?.Owner == f.Id)
+                    throw new InvalidOperationException("Invalid lexical scope frame reference.");
+                _ = Accessible(state, f.Parent, id);
+            }
         foreach (var w in state.Agenda)
             if (w.LexicalScope is { } id)
             {
