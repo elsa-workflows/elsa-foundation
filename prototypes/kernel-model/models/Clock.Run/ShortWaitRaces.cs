@@ -348,6 +348,8 @@ internal static partial class ShortWaitRaces
             await worker.DisposeAsync();
         });
         await More(Check);
+        await Cuts(Check);
+        await Maturity(Check);
         Console.WriteLine($"short-wait races: {failed} failures"); return failed == 0 ? 0 : 1;
     }
 }
