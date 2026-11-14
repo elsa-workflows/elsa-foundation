@@ -84,24 +84,50 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task A_dynamic_portable_SetOutput_keeps_its_open_contract_for_a_scalar_Object_output(bool serialized)
+    [InlineData("raw", CollectionKind.Single)]
+    [InlineData("typed", CollectionKind.Single)]
+    [InlineData("serialized", CollectionKind.Single)]
+    [InlineData("raw", CollectionKind.Array)]
+    [InlineData("typed", CollectionKind.Array)]
+    [InlineData("serialized", CollectionKind.Array)]
+    [InlineData("raw", CollectionKind.List)]
+    [InlineData("typed", CollectionKind.List)]
+    [InlineData("serialized", CollectionKind.List)]
+    [InlineData("raw", CollectionKind.HashSet)]
+    [InlineData("typed", CollectionKind.HashSet)]
+    [InlineData("serialized", CollectionKind.HashSet)]
+    [InlineData("raw", CollectionKind.Dictionary)]
+    [InlineData("typed", CollectionKind.Dictionary)]
+    [InlineData("serialized", CollectionKind.Dictionary)]
+    public async Task A_dynamic_SetOutput_keeps_its_open_contract_for_an_Object_output(string form, CollectionKind collection)
     {
-        var expression = SetOutputExpression(new TypeReference("Elsa.Any"));
-        var argument = new ArgumentValue(serialized ? JsonSerializer.SerializeToElement(expression) : expression, "JavaScript");
+        var source = collection switch
+        {
+            CollectionKind.Single => "7",
+            CollectionKind.Dictionary => "({ key: 7 })",
+            _ => "[7]"
+        };
+        var expression = SetOutputExpression(new TypeReference("Elsa.Any"), source);
+        var argument = new ArgumentValue(form switch
+        {
+            "raw" => source,
+            "serialized" => JsonSerializer.SerializeToElement(expression),
+            _ => (object)expression
+        }, "JavaScript");
 
         var binding = await PublishSetOutputValueAsync("Count", new TypeReference("Elsa.Any"),
-            argument: argument, declaredOutputType: new TypeReference("Object"));
+            argument: argument, declaredOutputType: new TypeReference("Object", collection));
 
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         Assert.Equal("Elsa.Any", binding.TargetType.Alias);
+        Assert.Equal(CollectionKind.Single, binding.TargetType.CollectionKind);
         Assert.Equal("Elsa.Any", binding.Expression!.ResultType!.Id);
+        Assert.Equal(source, binding.Expression.Expression);
         Assert.Null(binding.ConversionPlan);
     }
 
-    private static ExpressionDefinition SetOutputExpression(TypeReference resultType) =>
-        new("JavaScript", "7", resultType, new Dictionary<string, ExpressionParameterBinding>(),
+    private static ExpressionDefinition SetOutputExpression(TypeReference resultType, string source = "7") =>
+        new("JavaScript", source, resultType, new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
 
     private async Task<RuntimeInputBinding> PublishSetOutputValueAsync(string outputName, TypeReference authoredType,

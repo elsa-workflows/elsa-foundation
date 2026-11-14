@@ -325,7 +325,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   if (projectViewport.width < 600) {
     // On a phone the run header stays compact: title and instance id share a line, and the run's
     // name, back link and status share another (#4069).
-    const title = (await page.getByRole("heading", { name: "Run", exact: true }).boundingBox())!;
+    const title = (await runTitle.boundingBox())!;
     const instanceId = (await page.locator(".wf-page-context code").boundingBox())!;
     expect(Math.abs((title.y + title.height / 2) - (instanceId.y + instanceId.height / 2))).toBeLessThan(title.height / 2);
     const identity = (await page.locator(".wf-run-identity").boundingBox())!;
