@@ -7,6 +7,9 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--recovery-red"]) { RecoveryWitness.Run(baseline: true); return; }
+if (args is ["--recovery-list"]) { foreach (var n in RecoveryWitness.Names) Console.WriteLine(n); return; }
+if (args is ["--recovery"]) { RecoveryWitness.Run(); return; }
 if (args is ["--scopes-context"]) { ScopedContextReaders.Run(); return; }
 if (args is ["--scopes-list"]) { foreach (var name in ScopedWorkflows.Names.Concat(ScopedReaders.Names).Concat(ScopedContextReaders.Names)) Console.WriteLine(name); return; }
 if (args is ["--scopes"]) { ScopedWorkflows.Run(); ScopedReaders.Run(); ScopedContextReaders.Run(); return; }
