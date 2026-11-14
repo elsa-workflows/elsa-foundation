@@ -620,6 +620,8 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
                 using var document = JsonDocument.Parse(content, new JsonDocumentOptions { MaxDepth = sourceLimits.MaxJsonDepth }); var envelope = document.RootElement;
                 if (envelope.EnumerateObject().Any(property => property.Name is not ("collection" or "artifactId" or "reference")))
                     throw new RuntimeSourceReadException("runtime_source_reference_envelope_unsupported", true);
+                if (!envelope.TryGetProperty("collection", out _) || !envelope.TryGetProperty("artifactId", out _) || !envelope.TryGetProperty("reference", out _))
+                    throw new RuntimeSourceReadException("runtime_source_stored_content_invalid");
                 if (envelope.GetProperty("collection").GetString() != "workflowExecutableSourceReference" || Decode(envelope.GetProperty("artifactId").GetString()!) != Decode(row.ArtifactId))
                     throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
                 value = RuntimeArtifactJson.DeserializeBounded<WorkflowExecutableSourceReference>(envelope.GetProperty("reference").GetRawText(), sourceLimits.MaxJsonDepth);

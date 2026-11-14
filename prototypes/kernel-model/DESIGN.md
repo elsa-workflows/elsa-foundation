@@ -162,7 +162,7 @@ run background jobs, read kept events, publish) is a message in that commit. A n
 ## Persistence
 
 The kernel depends on one storage contract, `IKernelStore` (`src/Kernel.Durable/Store.cs`), stated by what each operation
-guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 59 semantic cases (57 before round 4),
+guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 61 semantic cases (57 before round 4),
 a concurrent stress test with injected connection failures and the provider's own connection killer, and the cost runs.
 
 | Operation | Guarantee |
@@ -360,9 +360,13 @@ public interface ITurn
 - **Models compose through messages only.** A parent starts a child of any model and gets `child-finished`.
 - **How the known models sit on it:** native (built: activity frames, agenda, waits and variables as state; slow
   activities are background jobs; a Flowchart's paths, arrivals and dead paths are the graph engine's, in its frame's
-  state, and add no database call; NATIVE.md); BPMN (tokens; tasks are jobs; kept waits for early messages; start subscriptions for
-  message start events; `Recall` for boundary timers that do not fire); ETL (cursors; children spread over partitions);
-  agents (a checkpoint; tool calls are jobs; streamed output is emitted); durable entities (operations with a reply-to).
+  state, and add no database call; NATIVE.md). BPMN stores tokens, runs tasks as jobs, keeps early messages and uses
+  `Recall` to cancel unused boundary timers. Register message start events with `BpmnModel.MessageStart` through
+  `Events.SubscribeAsync`. Use `BpmnModel.Spec` for direct starts. The registration identifies the process,
+  local start element and event key. The start commit records the triggering event so a later catch waits for a new
+  publication. Replace old prototype registrations that contain only a local element and direct start spec.
+  ETL stores cursors and spreads children over partitions. Agents checkpoint, run tool calls as jobs and stream
+  output. Durable entities use operations with a reply-to.
 
 ## Synchronous HTTP requests
 
@@ -496,11 +500,11 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
   graph check (FINDINGS section 26). G4 has no mutation of its own: that it bites is not shown.
 - **Graph engine:** main's Flowchart conformance corpus and join tests pass against the extracted engine (41), with
   main's two determinism byte-locks byte-identical.
-- **Store conformance suite:** 59 cases since round 4, 57 of them required (57 and 53 before); the required cases pass
-  on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB, with either fence, a case skipped where a store
-  cannot refuse a row; the reference cases differ where the contract is silent (F8). Round 4 made the two
-  subscription cases of M6 required (idempotent), and every store passes them (FINDINGS 25.2). The projector chunk
-  case is recorded in FINDINGS 25.7; its original per-engine results predate the subscription change.
+- **Store conformance suite:** 61 cases, 59 required. The suite covers semantic send order across revisions (#4459)
+  and journaled creations and rollback across MySQL batch boundaries ([ENGINES E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358)).
+  The earlier 59-case suite passed the applicable required cases in memory, SQLite, PostgreSQL, SQL Server, MySQL
+  and MongoDB. FINDINGS 25.2 records the required idempotent subscription cases and FINDINGS 25.7 records the
+  original per-engine projector chunk results.
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and
   SQLite. With the fence broken on purpose every engine fails (26 to 611 violations).

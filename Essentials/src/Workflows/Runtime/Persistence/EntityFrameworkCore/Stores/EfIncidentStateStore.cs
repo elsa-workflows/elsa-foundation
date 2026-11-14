@@ -39,7 +39,7 @@ public sealed class EfIncidentStateStore(
             return false;
         }
 
-        context.IncidentStates.Add(ToEntity(state, scope, id, 1));
+        context.IncidentStates.Add(ToEntity(context, state, scope, id, 1));
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -74,12 +74,12 @@ public sealed class EfIncidentStateStore(
 
         var row = await context.IncidentStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (row is null)
-            context.IncidentStates.Add(ToEntity(state, scope, id, 1));
+            context.IncidentStates.Add(ToEntity(context, state, scope, id, 1));
         else
         {
             var existing = ReadChecked(row, scope, state.WorkflowExecutionId, state.IncidentId);
             IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, state);
-            Copy(row, state, scope, checked(row.Revision + 1));
+            Copy(context, row, state, scope, checked(row.Revision + 1));
         }
 
         try
@@ -248,7 +248,7 @@ public sealed class EfIncidentStateStore(
             row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId) &&
             row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId));
 
-    internal static IncidentStateEntity ToEntity(IncidentState state, string scope, string id, long revision) => new()
+    internal static IncidentStateEntity ToEntity(RuntimeDbContext context, IncidentState state, string scope, string id, long revision) => new()
     {
         Id = id,
         ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope),
@@ -264,13 +264,13 @@ public sealed class EfIncidentStateStore(
         CreatedAtUtcTicks = state.CreatedAt.UtcTicks,
         ResolvedAtUtcTicks = state.ResolvedAt?.UtcTicks,
         ContentJson = RuntimeArtifactJson.Serialize(state),
-        SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
+        SchemaVersion = RuntimeSchemaWriteVersion.Operational(context),
         Revision = revision
     };
 
-    internal static void Copy(IncidentStateEntity row, IncidentState state, string scope, long revision)
+    internal static void Copy(RuntimeDbContext context, IncidentStateEntity row, IncidentState state, string scope, long revision)
     {
-        var replacement = ToEntity(state, scope, row.Id, revision);
+        var replacement = ToEntity(context, state, scope, row.Id, revision);
         row.ScopeKey = replacement.ScopeKey;
         row.ScopeKeyHash = replacement.ScopeKeyHash;
         row.WorkflowExecutionId = replacement.WorkflowExecutionId;
@@ -284,7 +284,7 @@ public sealed class EfIncidentStateStore(
         row.CreatedAtUtcTicks = replacement.CreatedAtUtcTicks;
         row.ResolvedAtUtcTicks = replacement.ResolvedAtUtcTicks;
         row.ContentJson = replacement.ContentJson;
-        row.SchemaVersion = replacement.SchemaVersion;
+        row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion);
         row.Revision = revision;
     }
 

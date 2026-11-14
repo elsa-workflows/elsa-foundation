@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -260,6 +262,162 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.Empty((await fixture.Queue.ListAsync(new(id))).Items);
     }
 
+    [Theory]
+    [InlineData("tenant", false)]
+    [InlineData("logical-tenant", false)]
+    [InlineData("tenant", true)]
+    [InlineData("logical-tenant", true)]
+    public async Task Native_saved_cohort_start_retains_scope_after_the_source_claim_is_complete(string tenant, bool coalescing)
+    {
+        using var fixture = await Fixture.CreateAsync(tenant, coalescing);
+        var parentSeal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(parentSeal);
+        var parentStart = StartItem(NativeIngressTargetEvidence.ReadEnvelope(parentSeal));
+        using var parentDrain = fixture.BeginCheckpoint(parentStart.WorkflowExecutionId);
+        await fixture.StartHandler.HandleAsync(parentStart);
+        var parentCheckpoint = Assert.Single((await fixture.SelectedQueue.ListAsync(new(parentStart.WorkflowExecutionId))).Items);
+        await fixture.CheckpointHandler.HandleAsync(parentCheckpoint);
+        await fixture.Queue.DeleteAsync(parentStart.WorkflowExecutionId, parentCheckpoint.WorkItemId);
+        var parent = (await fixture.Executions.FindAsync(parentStart.WorkflowExecutionId))!;
+        var scope = fixture.Recipient.StartIdentity.Scope;
+        var childPin = new WorkflowExecutableIdentity("child-artifact", "child-definition", "child-version", "1", "child-hash");
+        var node = new ExecutableNode("child-root", "child-root", "test", "1", "test", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+        await fixture.Executables.SaveAsync(new(childPin, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now,
+            new Dictionary<string, string>(), new WorkflowExecutableInputContract(1, [new("DefaultCode", new("String"), false, JsonSerializer.SerializeToElement("default"))]), [], IncidentStrategyBuiltIns.FaultReference));
+        var intent = new RuntimePostCommitIntent("send", parent.WorkflowExecutionId, "publish", Now, null, "saved-child-key", JsonSerializer.SerializeToElement(new { }));
+        const string sourceId = "saved-child-source:send";
+        var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(intent);
+        var binding = new WorkflowTriggerBinding("ordinary-binding", childPin.ArtifactId, childPin.DefinitionId, childPin.ArtifactVersion,
+            childPin.ArtifactHash, node.ExecutableNodeId, "event", "named", null, new Dictionary<string, string>(), Now);
+        var snapshot = new StimulusDeliverySnapshot(1, sourceId, fingerprint, StimulusDeliveryScope.From(parent, scope), Now, "event", "named",
+            [new(binding, childPin, (WorkflowExecutableSourceProvenance?)null)], [], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+        // One workflow source owns an independent subscription and an ordinary saved start.
+        var independentJson = JsonSerializer.SerializeToElement(fixture.Recipient).Deserialize<Dictionary<string, JsonElement>>()!;
+        independentJson[nameof(RuntimeSubscriptionRecipient.StartIdentity)] = JsonSerializer.SerializeToElement(new RuntimeSubscriptionStartIdentity(1, scope, sourceId, fixture.Recipient.SubscriptionId));
+        var independent = JsonSerializer.SerializeToElement(independentJson).Deserialize<RuntimeSubscriptionRecipient>()!;
+        var combined = new RuntimeSubscriptionDelivery(1, sourceId, fingerprint, scope, [independent], [],
+            [new(independent.RecipientId, RuntimeRecipientPhase.Pending)], resourceCaptures:
+            [new("trigger", 1, 1, 1, [independent.SubscriptionId], JsonSerializer.SerializeToElement(new { }))]);
+        // Physical accepted-cohort fixture; seal through the real source port before ending its claim.
+        fixture.Executions.CheckpointState.OutboxItems[sourceId] = new(sourceId, intent, RuntimePostCommitOutboxStatus.Delivering,
+            Now, Now, null, 1, "previous-owner", Now, null, null, null, 1, Now.AddMinutes(5), 1, scope, snapshot, null, 1, combined);
+        fixture.CheckpointStore.StimulusAdapters = [new SavedEventAdapter()];
+        fixture.CheckpointStore.StimulusInputValidator = new WorkflowExecutableInputValidator(new StringTypes());
+        var key = KeyedWorkflowStartIdentity.For("saved-child-key", childPin.ArtifactId);
+        var savedOrigin = new RuntimeStimulusDeliveryOrigin(1, scope, sourceId, fingerprint, binding.TriggerBindingId);
+        var payload = new WorkflowExecutionStartCommandPayload(childPin, childPin.ArtifactId,
+            new Dictionary<string, JsonElement>(), new Dictionary<string, JsonElement> { ["DefaultCode"] = JsonSerializer.SerializeToElement("default") }, intent.Payload, node.ExecutableNodeId,
+            WorkflowRunKind.PublishedRun, null, null, null, tenant, fixture.Recipient.Partition, new("publish", "publish"),
+            new WorkflowExecutableStartAuthority(WorkflowExecutableStartAuthorityKind.StimulusDelivery, null,
+                new WorkflowExecutableStimulusDeliveryAuthority(sourceId, fingerprint, scope, "previous-owner", 1, binding.TriggerBindingId)), 0)
+            { StimulusDeliveryOrigin = savedOrigin };
+        var authority = payload.StartAuthority!.StimulusDelivery!;
+        var initialMetadata = new Dictionary<string, string> { [SavedStimulusStartSeal.OriginMetadata] = JsonSerializer.Serialize(savedOrigin) };
+        var proposed = new WorkflowExecutionCommandEnvelope(key.EnvelopeId, key.WorkflowExecutionId,
+            new(key.CommandId, key.WorkflowExecutionId, WorkflowExecutionCommandKind.Start, Now, JsonSerializer.SerializeToElement(payload), initialMetadata),
+            key.StartKey, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now, metadata: initialMetadata, partition: fixture.Recipient.Partition);
+        foreach (var changed in new Dictionary<string, JsonElement>
+        {
+            [nameof(WorkflowExecutionStartCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("other-system", "other-initiator")),
+            [nameof(WorkflowExecutionStartCommandPayload.Variables)] = JsonSerializer.SerializeToElement(new { forged = "variable" }),
+            [nameof(WorkflowExecutionStartCommandPayload.Inputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),
+            [nameof(WorkflowExecutionStartCommandPayload.StimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" })
+        })
+        {
+            var changedPayload = proposed.Command.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
+            changedPayload[changed.Key] = changed.Value;
+            var tampered = new WorkflowExecutionCommandEnvelope(proposed.EnvelopeId, proposed.WorkflowExecutionId,
+                proposed.Command with { Payload = JsonSerializer.SerializeToElement(changedPayload) }, proposed.IdempotencyKey,
+                proposed.DeliveryMode, proposed.EnqueuedAt, metadata: proposed.Metadata, partition: proposed.Partition);
+            var refused = await Assert.ThrowsAsync<StimulusDeliveryBoundaryException>(() => fixture.CheckpointStore.SealSavedStartAsync(authority, tampered).AsTask());
+            Assert.IsType<InvalidDataException>(refused.InnerException);
+            Assert.Null(fixture.Executions.CheckpointState.OutboxItems[sourceId].SavedStimulusStarts);
+        }
+        var sealedStart = await fixture.CheckpointStore.SealSavedStartAsync(authority, proposed);
+        fixture.Clock.Advance(TimeSpan.FromSeconds(1));
+        var later = new WorkflowExecutionCommandEnvelope(proposed.EnvelopeId, proposed.WorkflowExecutionId,
+            proposed.Command with { EnqueuedAt = Now.AddSeconds(1) }, proposed.IdempotencyKey, proposed.DeliveryMode,
+            Now.AddSeconds(1), metadata: proposed.Metadata, partition: proposed.Partition);
+        Assert.Equal(sealedStart.EnqueuedAt, (await fixture.CheckpointStore.SealSavedStartAsync(authority, later)).EnqueuedAt);
+        var physical = fixture.Executions.CheckpointState.OutboxItems[sourceId];
+        var sourceClaim = new RuntimePostCommitOutboxClaim(physical, "previous-owner", 1, Now, Now.AddMinutes(5));
+        await fixture.CheckpointStore.RecordDeliveryResultAsync(sourceClaim, new(sourceId, RuntimePostCommitOutboxStatus.FailedFinal, Now, "Independent recipient needs operator retry."));
+        var beforeRetry = fixture.Executions.CheckpointState.OutboxItems[sourceId];
+        var request = new RuntimeIngressControlRequest(new(scope, tenant), sourceId, fingerprint, combined.SelectionFingerprint,
+            "trigger", "operator", "retry-request", "request-fingerprint", RuntimeIngressControlKind.RetryRecipients,
+            [new(independent.RecipientId, RuntimeIngressInspection.ProgressFingerprint(combined.Progress.Single()))]);
+        var retried = RuntimeIngressControlRules.Apply(beforeRetry, request, fixture.Clock.GetUtcNow());
+        Assert.Equal(RuntimeIngressControlOutcome.RetryScheduled, Assert.Single(retried.Receipt.Recipients).Outcome);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, retried.Item.Status);
+        Assert.NotNull(retried.Item.SavedStimulusStarts);
+        Assert.True(JsonElement.DeepEquals(beforeRetry.SavedStimulusStarts![key.WorkflowExecutionId], retried.Item.SavedStimulusStarts![key.WorkflowExecutionId]));
+        fixture.Executions.CheckpointState.OutboxItems[sourceId] = retried.Item;
+        var start = StartItem(sealedStart);
+        using var childDrain = fixture.BeginCheckpoint(key.WorkflowExecutionId);
+        await fixture.StartHandler.HandleAsync(start);
+        var checkpoint = Assert.Single((await fixture.SelectedQueue.ListAsync(new(key.WorkflowExecutionId))).Items);
+        if (coalescing)
+        {
+            Assert.Empty((await fixture.Queue.ListAsync(new(key.WorkflowExecutionId))).Items);
+            var pending = new RuntimeCheckpointCommit("prior-overlay", new("prior-overlay", "EarlierDeferred", key.WorkflowExecutionId, Now, [], new Dictionary<string, string>()),
+                new(workflowExecution: null, scheduler: null, activityExecutions: [], bookmarks: [], durableValues: [], incidents: [], operational: []),
+                [], new Dictionary<string, string>());
+            fixture.CurrentSession.BufferDeferred(pending);
+            await Assert.ThrowsAsync<NotSupportedException>(() => fixture.CheckpointHandler.HandleAsync(checkpoint).AsTask());
+            Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
+            Assert.True(fixture.CurrentSession.HasBufferedChanges);
+            fixture.CurrentSession.ClearBuffer();
+        }
+        foreach (var changed in new Dictionary<string, JsonElement>
+        {
+            [nameof(RuntimeCheckpointCommandPayload.CheckpointName)] = JsonSerializer.SerializeToElement("OtherCheckpoint"),
+            [nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement<object?>(null),
+            [nameof(RuntimeCheckpointCommandPayload.PostCommitIntents)] = TamperedRoot(checkpoint),
+            [nameof(RuntimeCheckpointCommandPayload.Authority)] = JsonSerializer.SerializeToElement(new WorkflowExecutionAuthoritySnapshot("different-system", "different-initiator")),
+            [nameof(RuntimeCheckpointCommandPayload.SeedInputs)] = JsonSerializer.SerializeToElement(new { forged = "input" }),
+            [nameof(RuntimeCheckpointCommandPayload.SeedStimulusInput)] = JsonSerializer.SerializeToElement(new { forged = "stimulus" }),
+            [nameof(RuntimeCheckpointCommandPayload.SeedTriggerMetadata)] = JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["forged"] = "metadata" })
+        })
+        {
+            var changedPayload = checkpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
+            changedPayload[changed.Key] = changed.Value;
+            var changedWork = new RuntimeSchedulerWorkItem(checkpoint.WorkItemId, checkpoint.WorkflowExecutionId, checkpoint.CommandId,
+                checkpoint.CommandKind, checkpoint.EnvelopeId, checkpoint.IdempotencyKey, checkpoint.EnqueuedAt, checkpoint.RecordedAt,
+                checkpoint.Sequence, JsonSerializer.SerializeToElement(changedPayload), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
+            var refusal = await Record.ExceptionAsync(() => fixture.CheckpointHandler.HandleAsync(changedWork).AsTask());
+            if (changed.Key is nameof(RuntimeCheckpointCommandPayload.CheckpointName) or nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin))
+            {
+                var domain = Assert.IsType<RuntimeCheckpointCommitValidationException>(refusal);
+                Assert.IsType<InvalidDataException>(domain.InnerException);
+                Assert.Contains(changedWork.WorkflowExecutionId, domain.Message);
+            }
+            else Assert.IsType<InvalidDataException>(refusal);
+            Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
+        }
+        var forgedJson = checkpoint.Payload!.Value.Deserialize<Dictionary<string, JsonElement>>()!;
+        forgedJson[nameof(RuntimeCheckpointCommandPayload.StimulusDeliveryOrigin)] = JsonSerializer.SerializeToElement(new RuntimeStimulusDeliveryOrigin(
+            1, scope, sourceId, fingerprint, "not-in-cohort"));
+        var forged = new RuntimeSchedulerWorkItem(checkpoint.WorkItemId, checkpoint.WorkflowExecutionId, checkpoint.CommandId,
+            checkpoint.CommandKind, checkpoint.EnvelopeId, checkpoint.IdempotencyKey, checkpoint.EnqueuedAt, checkpoint.RecordedAt,
+            checkpoint.Sequence, JsonSerializer.SerializeToElement(forgedJson), checkpoint.CommandMetadata, checkpoint.EnvelopeMetadata);
+        var forgedRefusal = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => fixture.CheckpointHandler.HandleAsync(forged).AsTask());
+        Assert.IsType<InvalidDataException>(forgedRefusal.InnerException);
+        Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
+        Assert.Equal(checkpoint.WorkItemId, Assert.Single((await fixture.SelectedQueue.ListAsync(new(key.WorkflowExecutionId))).Items).WorkItemId);
+        await fixture.CheckpointHandler.HandleAsync(checkpoint);
+        await fixture.Queue.DeleteAsync(key.WorkflowExecutionId, checkpoint.WorkItemId);
+        var admittedCommit = Assert.Single(fixture.CheckpointStore.ListCommits(), item => item.Commit.WorkflowExecutionId == key.WorkflowExecutionId).Commit;
+        Assert.Equal(JsonSerializer.Serialize(savedOrigin), admittedCommit.Metadata[SavedStimulusStartSeal.OriginMetadata]);
+        var rootWork = admittedCommit.PostCommitIntents.Single().Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.False(rootWork.CommandMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
+        Assert.False(rootWork.EnvelopeMetadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata));
+        var child = (await fixture.Executions.FindAsync(key.WorkflowExecutionId))!;
+        Assert.Equal(tenant, child.TenantId); Assert.Null(child.IngressOrigin); Assert.True(savedOrigin.IsEquivalentTo(child.StimulusDeliveryOrigin));
+        await fixture.CheckpointStore.CommitAsync(StateCommit(child with { UpdatedAt = Now.AddSeconds(1) }, "saved-continuation", []),
+            new(RuntimeCheckpointPersistenceMode.Immediate));
+        Assert.True(savedOrigin.IsEquivalentTo((await fixture.Executions.FindAsync(key.WorkflowExecutionId))!.StimulusDeliveryOrigin));
+    }
+
     private static RuntimeCheckpointCommit StateCommit(WorkflowExecutionState state, string id,
         IReadOnlyCollection<ConsumedSchedulerWorkItem>? consumed = null) => new(id,
         new("checkpoint:" + id, consumed is null ? RuntimeCheckpointNames.WorkflowStarted : RuntimeCheckpointNames.PostCommitIntentRecorded, state.WorkflowExecutionId, Now, [], new Dictionary<string, string>()),
@@ -276,6 +434,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         internal readonly FakeTimeProvider Clock = new(Now);
         internal readonly InMemoryWorkflowExecutableStore Executables = new();
         internal readonly InMemoryWorkflowSchedulerWorkQueue Queue = new();
+        internal IWorkflowSchedulerWorkQueue SelectedQueue = null!;
         internal readonly InMemoryWorkflowExecutionStateStore Executions = new();
         internal readonly WitnessExecutor Executor = new();
         internal readonly FakeIngress Ingress = new();
@@ -286,8 +445,11 @@ public sealed class NativeStandaloneTriggerTargetTests
         internal WorkflowStartSchedulerWorkHandler StartHandler = null!;
         internal WorkflowCheckpointSchedulerWorkHandler CheckpointHandler = null!;
         internal InMemoryRuntimeCheckpointCommitStore CheckpointStore = null!;
+        private readonly AsyncLocalRuntimeCoalescingSessionAccessor coalescingAccessor = new();
+        internal RuntimeCoalescingSession CurrentSession => coalescingAccessor.Current!;
+        internal IDisposable BeginCheckpoint(string executionId) => coalescingAccessor.Push(new RuntimeCoalescingSession(executionId, Queue, new PersistenceModeOptions()));
         private Fixture() => Actors = new(Executor);
-        internal static async Task<Fixture> CreateAsync()
+        internal static async Task<Fixture> CreateAsync(string tenant = "tenant", bool coalescing = false)
         {
             var fixture = new Fixture();
             var contract = new WorkflowExecutableInputContract(1, [new("AccountId", new("String"), true)]);
@@ -300,21 +462,22 @@ public sealed class NativeStandaloneTriggerTargetTests
             var schema = new ValueTypeDescriptor("Test.Payload", schemaVersion: 1);
             var payload = JsonSerializer.SerializeToElement(new { payload = new { account = "business-value" } });
             var authority = new WorkflowExecutionAuthoritySnapshot("standalone-trigger", "source-actor");
-            var fingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(scope, "tenant", "trigger", "test", "occurrence", schema, payload, authority);
-            var source = new RuntimeStandaloneIngressSource(1, "admission", "dispatch", Now, scope, "tenant", partition,
+            var fingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(scope, tenant, "trigger", "test", "occurrence", schema, payload, authority);
+            var source = new RuntimeStandaloneIngressSource(1, "admission", "dispatch", Now, scope, tenant, partition,
                 "trigger", 1, 1, "test", "occurrence", fingerprint, schema, payload, RuntimeIngressAdmissionPolicy.RequireAll, authority);
             fixture.Recipient = new("recipient", "subscription", 1, 1, "definition", "native", "slot", 1, "activation", identity,
                 new("reference", "Published", "publication", "1", "definition", "version", "1", "activation", "slot"),
                 RuntimeIngressAdmission.ComputeInputContractFingerprint(contract), 1, 1,
                 new Dictionary<string, JsonElement> { ["AccountId"] = JsonSerializer.SerializeToElement("business-value") }, authority,
-                "tenant", partition, new(1, scope, source.OutboxItemId, "subscription"));
+                tenant, partition, new(1, scope, source.OutboxItemId, "subscription"));
             var delivery = new RuntimeSubscriptionDelivery(1, source.OutboxItemId, source.Fingerprint, scope, [fixture.Recipient], [],
                 [new(fixture.Recipient.RecipientId, RuntimeRecipientPhase.Pending)]);
             fixture.Item = RuntimePostCommitOutboxItem.CreateStandaloneIngress(source, delivery, RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)));
             var evidence = new NativeIngressTargetEvidence(fixture.Queue, fixture.Executions, fixture.Clock, executables: fixture.Executables);
             fixture.Target = new(fixture.Executables, fixture.Actors, fixture.Ingress, new WorkflowExecutableInputValidator(new StringTypes()),
                 new AllowWorkflowExecutableStartPolicy(), evidence, new Access(scope));
-            fixture.StartHandler = new(fixture.Executables, fixture.Queue, new RuntimeExecutionIdGenerator(fixture.Clock), fixture.Clock,
+            fixture.SelectedQueue = coalescing ? new CoalescingWorkflowSchedulerWorkQueue(new(fixture.Queue), fixture.coalescingAccessor) : fixture.Queue;
+            fixture.StartHandler = new(fixture.Executables, fixture.SelectedQueue, new RuntimeExecutionIdGenerator(fixture.Clock), fixture.Clock,
                 fixture.Executions, null, null, null, null, fixture.Ingress);
             var activities = new InMemoryActivityExecutionStateStore();
             var checkpointStore = fixture.CheckpointStore = new InMemoryRuntimeCheckpointCommitStore(fixture.Executables,
@@ -324,7 +487,11 @@ public sealed class NativeStandaloneTriggerTargetTests
                 schedulerWorkQueue: fixture.Queue,
                 rootWriteLeaseManager: new WorkflowExecutableRootWriteLeaseManager(fixture.Executables,
                     Options.Create(new WorkflowExecutableGarbageCollectionOptions()), fixture.Clock));
-            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore,
+            IRuntimeCheckpointCommitStore selectedStore = coalescing
+                ? new CoalescingRuntimeCheckpointCommitStore(new(checkpointStore), fixture.coalescingAccessor) : checkpointStore;
+            IRuntimeCheckpointPersistencePolicy policy = coalescing
+                ? new CoalescingRuntimeCheckpointPersistencePolicy() : new ImmediateRuntimeCheckpointPersistencePolicy();
+            var committer = new RuntimeCheckpointCommitter(policy, selectedStore,
                 new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
             fixture.CheckpointHandler = new(activities, committer, null, fixture.Clock, fixture.Executions, fixture.Executables,
                 null, null, fixture.Ingress);
@@ -338,6 +505,20 @@ public sealed class NativeStandaloneTriggerTargetTests
             Executions.CheckpointState.OutboxItems[Item.OutboxItemId] = Item;
         }
         public void Dispose() => Actors.Dispose();
+    }
+    private static JsonElement TamperedRoot(RuntimeSchedulerWorkItem checkpoint)
+    {
+        var intent = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!.PostCommitIntents.Single();
+        var json = JsonSerializer.SerializeToElement(intent).Deserialize<Dictionary<string, JsonElement>>()!;
+        json[nameof(RuntimePostCommitIntent.IntentId)] = JsonSerializer.SerializeToElement(intent.IntentId + ":forged");
+        return JsonSerializer.SerializeToElement(new[] { json });
+    }
+
+    private sealed class SavedEventAdapter : IStimulusDeliveryIntentAdapter
+    {
+        public string IntentKind => "publish";
+        public StimulusDispatchRequest CreateRequest(RuntimePostCommitIntent intent) => new("event", "named", intent.Payload,
+            idempotencyKey: intent.IdempotencyKey, requestedBy: "publish") { ResumeAllMatchingBookmarks = true };
     }
     private sealed class Access(PersistenceScope scope) : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(scope); }

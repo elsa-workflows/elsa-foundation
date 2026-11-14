@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
 
-internal static class RuntimeIngressReservationRules
+internal static partial class RuntimeIngressReservationRules
 {
     internal static IReadOnlyList<RuntimeIngressReservation> Prepare(TriggerScope scope, string ownerKind, string ownerId,
         long revision, long configurationRevision, IReadOnlyList<RuntimeIngressReservationDescriptor> claims)
@@ -36,7 +36,10 @@ internal static class RuntimeIngressReservationRules
         if (existing.ReservationId != candidate.ReservationId || existing.Scope.Persistence != candidate.Scope.Persistence ||
             existing.StimulusType != candidate.StimulusType || existing.StimulusHash != candidate.StimulusHash)
             throw new InvalidDataException("A reservation hash does not match its exact ingress namespace.");
-        if (existing.Scope.TenantId != candidate.Scope.TenantId || existing.OwnerKind != candidate.OwnerKind || existing.OwnerId != candidate.OwnerId)
+        // Publication slots retain physical ownership while a replacement changes captured delivery tenancy.
+        // Resource owners remain tenant-scoped; a different slot or owner kind never inherits the route.
+        if (existing.OwnerKind != candidate.OwnerKind || existing.OwnerId != candidate.OwnerId ||
+            existing.Scope.TenantId != candidate.Scope.TenantId && existing.OwnerKind != RuntimeIngressReservation.PublicationSlotOwner)
             throw new TriggerOperationException("route-conflict", "Another source owns this endpoint reservation.");
     }
 

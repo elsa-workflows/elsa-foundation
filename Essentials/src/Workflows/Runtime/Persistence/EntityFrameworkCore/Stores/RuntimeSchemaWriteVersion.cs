@@ -25,10 +25,47 @@ internal static class RuntimeSchemaWriteVersion
         return family.WriteVersion;
     }
 
+    /// <summary>All writers in the protected EF ingress profile must be ready before any responsibility is accepted.</summary>
+    internal static bool SupportsIngress(RuntimeDbContext context) =>
+        CanWrite(context, StandaloneTriggersEfModule.SchemaFamily, StandaloneTriggersEfModule.SchemaVersion) &&
+        CanWrite(context, RuntimeTriggerBindingEfModule.SchemaFamily, RuntimeTriggerBindingEfModule.SchemaVersion) &&
+        CanWrite(context, RuntimePostCommitOutboxEfModule.SchemaFamily, RuntimePostCommitOutboxEfModule.SchemaVersion) &&
+        CanWrite(context, RuntimeSchedulerWorkEfModule.SchemaFamily, RuntimeSchedulerWorkEfModule.IngressSchemaVersion) &&
+        CanWrite(context, RuntimeWorkflowExecutionEfModule.SchemaFamily, RuntimeWorkflowExecutionEfModule.IngressSchemaVersion) &&
+        CanWrite(context, RuntimeModelStateEfModule.SchemaFamily, RuntimeModelStateEfModule.IngressSchemaVersion) &&
+        CanWrite(context, RuntimeArtifactEfModule.SchemaFamily, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion) &&
+        CanWrite(context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion);
+
+    internal static bool SupportsReservationSemantics(RuntimeDbContext context) => FindGate(context) is { } gate &&
+        gate.StateOf(StandaloneTriggersEfModule.SchemaFamily) is not null && gate.StateOf(RuntimeTriggerBindingEfModule.SchemaFamily) is not null &&
+        CanWrite(context, StandaloneTriggersEfModule.SchemaFamily, StandaloneTriggersEfModule.SemanticReservationsSchemaVersion) &&
+        CanWrite(context, RuntimeTriggerBindingEfModule.SchemaFamily, RuntimeTriggerBindingEfModule.SemanticReservationsSchemaVersion);
+
+    internal static void RequireReservationSemantics(RuntimeDbContext context)
+    {
+        if (!SupportsReservationSemantics(context))
+            throw new NotSupportedException("Semantic endpoint ownership requires admitted and finalized StandaloneTriggers and RuntimeTriggerBinding 1.1 writers.");
+    }
+
+    internal static string Standalone(RuntimeDbContext context, string? storedVersion = null) =>
+        For(context, StandaloneTriggersEfModule.SchemaFamily, StandaloneTriggersEfModule.SchemaVersion, storedVersion);
+    internal static string TriggerBinding(RuntimeDbContext context, string? storedVersion = null) =>
+        For(context, RuntimeTriggerBindingEfModule.SchemaFamily, RuntimeTriggerBindingEfModule.SchemaVersion, storedVersion);
+
+    private static bool CanWrite(RuntimeDbContext context, string familyName, string minimum)
+    {
+        var gate = FindGate(context);
+        if (gate is not null && gate.StateOf(familyName) is null) return false;
+        try { _ = For(context, familyName, minimum); return true; }
+        catch (EfSchemaWriteRefusedException) { return false; }
+    }
+
     private static EfSchemaModuleGate? FindGate(RuntimeDbContext context) =>
         context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
             .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
 
     internal static string Artifact(RuntimeDbContext context, string? storedVersion = null) =>
         For(context, RuntimeArtifactEfModule.SchemaFamily, RuntimeArtifactEfModule.SchemaVersion, storedVersion);
+    internal static string Operational(RuntimeDbContext context, string? storedVersion = null) =>
+        For(context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.SchemaVersion, storedVersion);
 }

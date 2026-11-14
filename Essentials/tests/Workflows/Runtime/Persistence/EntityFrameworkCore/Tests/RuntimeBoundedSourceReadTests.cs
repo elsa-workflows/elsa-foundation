@@ -159,6 +159,41 @@ public sealed class RuntimeBoundedSourceReadTests
             owner.Store.FindMaterialBoundedAsync(workflow.Identity.ArtifactId, Owner.Partition, new()).AsTask())).Code);
     }
 
+    [Theory]
+    [InlineData(true, "collection")]
+    [InlineData(true, "templateHash")]
+    [InlineData(true, "template")]
+    [InlineData(false, "collection")]
+    [InlineData(false, "artifactId")]
+    [InlineData(false, "reference")]
+    public async Task Missing_required_envelope_fields_return_coded_refusals_for_actual_owner_rows(bool template, string field)
+    {
+        await using var owner = await Owner.Create();
+        if (template)
+        {
+            var root = Workflow().RootActivity; var resume = new Dictionary<string, WorkflowExecutableResumeTarget>();
+            var requirements = new[] { new RuntimeRequirement(root.Descriptor.ConsumerKey, root.Descriptor.SchemaVersion) };
+            var hash = ActivityTemplateHasher.Compute(root, resume, [], [], requirements, [], "fixture-provider", new Dictionary<string, string>());
+            var value = new ExecutableActivityTemplate("activity-template-" + hash[7..], hash, root, resume, [], [], requirements,
+                "fixture-provider", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
+            await owner.Templates.SaveAsync(value);
+            var row = await owner.Context.ExecutableActivityTemplates.SingleAsync(); var json = System.Text.Json.Nodes.JsonNode.Parse(row.ContentJson)!.AsObject();
+            Assert.True(json.Remove(field)); row.ContentJson = json.ToJsonString(); await owner.Context.SaveChangesAsync(); owner.Context.ChangeTracker.Clear();
+            Assert.Equal("runtime_source_stored_content_invalid", (await Assert.ThrowsAsync<RuntimeSourceReadException>(() =>
+                owner.Templates.FindBoundedAsync(value.TemplateId, Owner.Partition, new()).AsTask())).Code);
+        }
+        else
+        {
+            var native = Workflow(); await owner.Store.SaveAsync(native); await owner.References.SaveAsync(Reference("published", native.Identity.ArtifactId, WorkflowExecutableReferenceScope.Published));
+            var row = await owner.Context.WorkflowExecutableSourceReferences.SingleAsync(); var json = System.Text.Json.Nodes.JsonNode.Parse(row.ContentJson)!.AsObject();
+            Assert.True(json.Remove(field)); row.ContentJson = json.ToJsonString(); await owner.Context.SaveChangesAsync(); owner.Context.ChangeTracker.Clear();
+            Assert.Equal("runtime_source_stored_content_invalid", (await Assert.ThrowsAsync<RuntimeSourceReadException>(() =>
+                owner.References.FindBoundedAsync("published", Owner.Partition, new()).AsTask())).Code);
+            Assert.Equal("runtime_source_stored_content_invalid", (await Assert.ThrowsAsync<RuntimeSourceReadException>(() =>
+                owner.References.ListByDefinitionVersionBoundedAsync("selected-version", Owner.Partition, new()).AsTask())).Code);
+        }
+    }
+
     private static WorkflowExecutable Workflow(string id = "root", IReadOnlyCollection<WorkflowExecutableDependency>? dependencies = null)
     {
         var node = new ExecutableNode("node", "node", "fixture.Module", "1.0.0", "fixture.consumer", JsonSerializer.SerializeToElement(new { z = "a" }),
