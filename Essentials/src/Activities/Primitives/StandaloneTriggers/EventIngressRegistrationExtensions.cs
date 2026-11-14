@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Primitives.StandaloneTriggers;
 
 /// <summary>Normal module composition for an external Event producer; no endpoint, queue or caller authority is created.</summary>
-public static class StandaloneEventIngressServiceCollectionExtensions
+public static class EventIngressRegistrationExtensions
 {
     /// <summary>The application supplies its ordinary trusted scoped IStandaloneTriggerSourceContext for this producer.</summary>
     public static IServiceCollection AddStandaloneEventIngress<TSource>(this IServiceCollection services, ValueTypeDescriptor payloadSchema,

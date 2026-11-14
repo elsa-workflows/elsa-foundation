@@ -1290,14 +1290,14 @@ User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 by
 - **Signature:** `IEnumerable<TriggerTypeDescriptor> GetTypes()` returns type keys, supported format, fields and source metadata; it grants no invocation authority.
 - **Registration:** register implementations as `IStandaloneTriggerTypeSource` with normal DI, add the matching scoped validator, then call `TriggerAuthoringRegistration.AddServices(services)`.
 - **Aggregation/override:** `CollectTriggerTypes` consumes every source and detaches JSON defaults and nested collections before advancing its iterator. `TriggerTypeCatalog` freezes a second owned snapshot by exact ordinal type key. Duplicate owners refuse initialization; replace/remove a source explicitly rather than relying on registration order.
-- **Default implementation:** no source type is installed by this authoring slice.
+- **Default/contributors:** Runtime installs no source type by itself. Cross-domain `EventTriggerTypeSource` (`Elsa.Activities.Primitives`) contributes `event` metadata through `StandaloneEventTriggerAuthoringFeature`; the optional feature uses `TryAddEnumerable` singleton registration and installs no listener.
 
 ### `ITriggerConfigurationValidator` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Scoped contribution, one exact owner per installed type key.
 - **Signature:** `TypeKey`; `ValidateAsync(schemaVersion, configuration, cancellationToken)` returns safe `TriggerFinding` records without source execution.
 - **Registration:** `services.AddScoped<ITriggerConfigurationValidator, MyValidator>()` alongside the source descriptor. Initialization refuses missing/duplicate owners and validators without a descriptor.
 - **Aggregation/override:** `ValidateTriggerConfiguration` invokes the selected type's one owner. Replace that owner explicitly; it must reject unknown formats and report findings without echoing secret values.
-- **Default implementation:** none. A metadata source alone cannot pass initialization without its validator.
+- **Default/contributors:** no validator in bare Runtime. Cross-domain `EventTriggerConfigurationValidator` (`Elsa.Activities.Primitives`) is the scoped `event` owner registered with `TryAddEnumerable` by `StandaloneEventTriggerAuthoringFeature`; it rejects unknown schema versions and invalid names. A metadata source alone cannot pass initialization without its validator.
 
 ### `IStandaloneTriggerTypeCatalog` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement authoring-read contract, independently composed from runtime sources.

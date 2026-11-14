@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives;
+using Elsa.Events;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -28,6 +29,7 @@ public sealed class StandaloneEventActivationTests
         bool runtimeSource, bool unsupported, string pipeline)
     {
         var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now)); services.AddWorkflowRuntime();
+        new EventsFeature().ConfigureServices(services); services.AddWorkflowStimulusRouter();
         new StandaloneEventTriggerAuthoringFeature().ConfigureServices(services);
         if (runtimeSource) new ActivitiesPrimitivesFeature().ConfigureServices(services);
         if (unsupported) { services.RemoveAll<IRuntimeIngressDeliveryStore>(); services.AddScoped<IRuntimeIngressDeliveryStore, Unsupported>(); }
