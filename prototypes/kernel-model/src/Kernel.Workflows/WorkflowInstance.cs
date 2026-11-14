@@ -87,12 +87,14 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     /// <summary>Park: retain the committed checkpoint, fault the instance, consume its deliveries and remove its active waits.</summary>
     public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error)
     {
-        var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error, Jobs = RemainingJobs(r, taken) }
+        var ended = row is { Status: not InstanceStatus.Running };
+        var next = row is { } r ? r with { Status = ended ? r.Status : InstanceStatus.Faulted, Revision = r.Revision + 1,
+                Fault = ended ? r.Fault : error, Jobs = RemainingJobs(r, taken) }
             : spec is null ? null
             : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History,
                 Creation: spec.Creation?.Generation ?? 0, ParentCreation: spec.ParentCreation); // owner binds its staged start envelope, even when the model held all input
         if (next is not null && row is not { Status: not InstanceStatus.Running }) next = WorkflowCommitClock.End(next);
-        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Spec = spec, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
+        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Spec = spec, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, [(ended ? "late input failed: " : "parked: ") + error]), Status = next?.Status, Unsubscribe = next is not null };
         if (next?.Parent is not null && row is not { Status: not InstanceStatus.Running }) unit.Sent.Add(Finished(next, null));
         return unit;
     }

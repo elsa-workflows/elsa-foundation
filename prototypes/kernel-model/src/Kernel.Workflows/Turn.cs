@@ -91,7 +91,7 @@ internal sealed class Turn : ITurn
         if (_input.Row is { Status: not InstanceStatus.Running } ended)
             row = ended with { State = Json.Write(State), Revision = _durable.Revision, StateVersion = version, Jobs = _durable.Jobs() };
         if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running } && row.Parent is not null) _durable.Add(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));
-        var unit = _durable.Outcome(_status);
+        var unit = _durable.Outcome(row.Status);
         // An ephemeral instance that ends in the turn that created it, and leaves nothing for anyone else, is never written.
         if (created && Instance.Creation == 0 && _input.Spec!.Ephemeral && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0) return unit;
         unit = _durable.Seal(unit, row, State, WorkflowInstance.Journal(history, _entries));
