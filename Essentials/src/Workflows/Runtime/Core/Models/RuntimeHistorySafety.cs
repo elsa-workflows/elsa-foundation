@@ -13,13 +13,16 @@ public static class RuntimeHistorySafety
         ArgumentNullException.ThrowIfNull(observation.Event);
         var e = observation.Event;
         ValidateMetadata(e);
-        if (e.Authority != RuntimeHistoryAuthority.DeliveryObservation || e.Category != RuntimeHistoryEventCategory.DeliveryObservation ||
+        var timer = DurableTimerHistoryFacts.IsTimerObservation(e.Name);
+        if (e.Authority != RuntimeHistoryAuthority.DeliveryObservation ||
+            e.Category != (timer ? RuntimeHistoryEventCategory.SchedulerLifecycle : RuntimeHistoryEventCategory.DeliveryObservation) ||
             e.SchemaVersion != 1 || e.Sequence != 0 || e.PhysicalCommitId is not null || e.RecordedAt is not null ||
             e.CheckpointId is not null || e.CheckpointOrdinal is not null ||
-            !(DeliveryObservationKinds.Contains(e.Name) || RuntimeHistorySourceFacts.IsPublicationObservation(e.Name)) ||
+            !(DeliveryObservationKinds.Contains(e.Name) || RuntimeHistorySourceFacts.IsPublicationObservation(e.Name) || timer) ||
             !observation.Policy.SupportedKinds.Contains(e.Name, StringComparer.Ordinal))
             throw new InvalidOperationException("A delivery observation must be safe, unpositioned and admitted by its retained policy.");
         if (RuntimeHistorySourceFacts.IsPublicationObservation(e.Name)) RuntimeHistorySourceFacts.ValidatePublicationObservation(observation);
+        if (timer) DurableTimerHistoryFacts.ValidateObservation(e);
     }
 
     public static void Validate(RuntimeHistoryBatch batch, string workflowExecutionId)
