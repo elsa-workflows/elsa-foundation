@@ -104,7 +104,9 @@ function createFocusObserver(document: Document) {
     const previousScrollTop = previousPadding?.element.scrollTop;
     restoreStyle(padding); padding = null;
     focused.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "instant" });
-    const field = focused.closest<HTMLElement>(".studio-form-control, .studio-choice-field, label") ?? focused;
+    // Supporting help and validation belong to the reveal target as well as its border.
+    const field = focused.closest<HTMLElement>(".studio-field")
+      ?? focused.closest<HTMLElement>(".studio-form-control, label") ?? focused;
     let { port, visible, innerHeight } = geometry(field);
     if (previousPadding && previousPadding.element !== port) clearance = 0;
     if (!port || visible.bottom <= visible.top) { release(); return; }
