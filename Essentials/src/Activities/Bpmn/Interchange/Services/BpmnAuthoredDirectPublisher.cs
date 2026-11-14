@@ -31,6 +31,11 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
 
     public async Task<BpmnPublishedModel> PublishAsync(string versionId, string requestId, ClaimsPrincipal user, CancellationToken cancellationToken,
         PublicationRequestIntent? intent = null, long? expectedSlotRevision = null, string? expectedPublicationId = null)
+        => await PublishCoreAsync(versionId, requestId, user, cancellationToken, intent, expectedSlotRevision, expectedPublicationId, 2);
+
+    private async Task<BpmnPublishedModel> PublishCoreAsync(string versionId, string requestId, ClaimsPrincipal user,
+        CancellationToken cancellationToken, PublicationRequestIntent? intent, long? expectedSlotRevision,
+        string? expectedPublicationId, int createReconciliations)
     {
         if (!validator.TryGetNormalizedPrincipal(user, out var principal)) throw new BpmnModelResourceMissingException();
         var subjects = principal.Claims.Where(claim => claim.Type is ClaimTypes.NameIdentifier or "sub")
@@ -114,7 +119,7 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
                 return Published(serving, slot.Revision);
             throw new BpmnModelValidationException(prior.Failure?.Message ?? "This publication request previously failed; use a new request id.");
         }
-        if (expectedPublicationId is not null && slot?.ActiveActivationId != expectedPublicationId)
+        if (prior is null && expectedPublicationId is not null && slot?.ActiveActivationId != expectedPublicationId)
             throw new PublicationPolicyResolutionException(PublicationFailureCodes.ExpectedPublicationMismatch, "The serving publication changed.");
         var candidate = prior ?? new PublicationRecord(publicationId, slotId, definition.Id, version.Id, material.Identity.ArtifactId,
             sourceId, expectedSlotRevision ?? slot?.Revision ?? 0, PublicationStatus.Candidate, now, null, null, null, resolved.SlotName)
@@ -123,7 +128,17 @@ internal sealed class BpmnAuthoredDirectPublisher(IWorkflowDefinitionVersionStor
             definition.Id, version.Id, version.Version, candidate.CreatedAt, candidate.CreatedAt, WorkflowExecutableReferenceScope.Published,
             Layout: projected.Source.Layout, TenantId: caller.TenantId, ActivityPresentation: projected.Source.ActivityPresentation,
             ActivationId: publicationId, SlotId: slotId);
-        var activation = await activator.ActivateMaterialAsync(new(candidate, material, reference), cancellationToken);
+        PublicationActivationResult activation;
+        try { activation = await activator.ActivateMaterialAsync(new(candidate, material, reference), cancellationToken); }
+        catch (PublicationRecordAlreadyExistsException exception) when (exception.PublicationId == publicationId && createReconciliations > 0)
+        {
+            // Only a proved create-only collision permits reconciliation. The next read verifies the full
+            // intent and reuses the winner's timestamps/revision, or returns its terminal result. One more
+            // reconciliation covers a candidate becoming terminal between that read and the repeated save.
+            if (await publications.FindAsync(publicationId, cancellationToken) is null) throw;
+            return await PublishCoreAsync(versionId, requestId, user, cancellationToken, intent,
+                expectedSlotRevision, expectedPublicationId, createReconciliations - 1);
+        }
         if (!activation.Succeeded) throw new BpmnModelValidationException(activation.Failure?.Message ?? "The model publication could not activate.");
         return Published(activation.Publication, activation.Slot.Revision);
 

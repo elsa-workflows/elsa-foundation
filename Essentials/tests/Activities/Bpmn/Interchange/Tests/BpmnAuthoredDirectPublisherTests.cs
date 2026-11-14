@@ -19,6 +19,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Services;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Process = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -392,6 +393,48 @@ public sealed class BpmnAuthoredDirectPublisherTests
         Assert.Equal(1, fixture.Publications);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Concurrent_create_losers_reconcile_the_actual_create_only_journal(bool changedIntent)
+    {
+        var fixture = new Fixture { Journal = new InMemoryPublicationRecordStore() };
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var entered = 0;
+        fixture.BeforeSave = _ =>
+        {
+            if (Interlocked.Increment(ref entered) == 1) firstEntered.SetResult();
+            else release.SetResult();
+            return release.Task;
+        };
+        var first = fixture.Publish();
+        await firstEntered.Task;
+        var second = fixture.Publish(expectedSlotRevision: changedIntent ? 0 : null);
+        if (changedIntent)
+        {
+            await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => Task.WhenAll(first, second));
+            Assert.Single(new[] { first, second }, task => task.IsCompletedSuccessfully);
+            Assert.Single(new[] { first, second }, task => task.Exception?.InnerException is RuntimeCheckpointReplayConflictException);
+        }
+        else
+        {
+            var results = await Task.WhenAll(first, second);
+            Assert.Equal(results[0].Publication!.PublicationId, results[1].Publication!.PublicationId);
+        }
+        Assert.Equal(1, fixture.Publications);
+    }
+
+    [Fact]
+    public async Task An_unrelated_failure_after_journaling_is_preserved_without_repeated_activation()
+    {
+        var failure = new InvalidOperationException("actual storage/lifecycle failure");
+        var fixture = new Fixture { Journal = new InMemoryPublicationRecordStore(), AfterSave = () => throw failure };
+        Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Publish()));
+        Assert.Equal(1, fixture.Calls.Count(call => call == "activate"));
+        Assert.Equal(0, fixture.Publications);
+    }
+
     private sealed class Fixture : IWorkflowDefinitionVersionStore, IWorkflowDefinitionStore,
         IWorkflowDefinitionVersionLayoutStore, IActivityDefinitionLookup, IPermissionAuthorizationService, IBpmnModelRuntime,
         IWorkflowExecutableSourceReferenceReader
@@ -414,6 +457,9 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public bool Visible { get; set; } = true;
         public int Publications { get; private set; }
         public PublicationRecord? RetainedPublication { get; set; }
+        public IPublicationRecordStore? Journal { get; set; }
+        public Func<PublicationMaterialActivationRequest, Task>? BeforeSave { get; set; }
+        public Action? AfterSave { get; set; }
         public WorkflowActivationSlot? Slot { get; set; }
         public string ResolvedSlotName { get; set; } = "default";
         public int PolicyResolutions { get; private set; }
@@ -444,21 +490,30 @@ public sealed class BpmnAuthoredDirectPublisherTests
             var validator = new NormalizedPrincipalValidator(Options.Create(new FoundationIdentityOptions
                 { NormalizedAuthenticationTypes = new HashSet<string>(["test"]) }));
             var principal = new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.NameIdentifier, "author"), new(IdentityClaimTypes.Normalized, "v1")], "test"));
+            async ValueTask<PublicationActivationResult> Activate(PublicationMaterialActivationRequest request)
+            {
+                Calls.Add("activate");
+                Activation = request;
+                var candidate = request.Candidate;
+                if (BeforeSave is not null) await BeforeSave(request);
+                if (Journal is not null) await Journal.SaveAsync(candidate);
+                AfterSave?.Invoke();
+                Publications++;
+                Source = new(request.Reference.SourceId, request.Reference.SourceVersion!, request.Reference.Layout,
+                    request.Reference.ActivityPresentation);
+                RetainedPublication = candidate with { Status = PublicationStatus.Active };
+                if (Journal is not null) Assert.True(await Journal.TryTransitionAsync(RetainedPublication, PublicationStatus.Candidate));
+                Slot = new(candidate.SlotId, candidate.WorkflowDefinitionId, candidate.SlotName, candidate.PublicationId,
+                    WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow);
+                return new(true, RetainedPublication, Slot);
+            }
             var activator = Stub<IPublicationActivator>((method, args) =>
             {
                 Assert.Equal("ActivateMaterialAsync", method.Name);
-                Calls.Add("activate"); Publications++;
-                Activation = (PublicationMaterialActivationRequest)args![0]!;
-                var candidate = Activation.Candidate;
-                Source = new(Activation.Reference.SourceId, Activation.Reference.SourceVersion!, Activation.Reference.Layout,
-                    Activation.Reference.ActivityPresentation);
-                RetainedPublication = candidate with { Status = PublicationStatus.Active };
-                Slot = new(candidate.SlotId, candidate.WorkflowDefinitionId, candidate.SlotName, candidate.PublicationId,
-                    WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow);
-                return ValueTask.FromResult(new PublicationActivationResult(true, RetainedPublication, Slot));
+                return Activate((PublicationMaterialActivationRequest)args![0]!);
             });
             return new BpmnAuthoredDirectPublisher(this, this, this, this, validator, this, this, this, TimeProvider.System,
-                activator, Stub<IPublicationRecordStore>((_, _) => ValueTask.FromResult(RetainedPublication)),
+                activator, Journal ?? Stub<IPublicationRecordStore>((_, _) => ValueTask.FromResult(RetainedPublication)),
                 Stub<IWorkflowActivationAuthority>((_, _) => ValueTask.FromResult(Slot)),
                 Stub<IPublicationPolicyStore>((_, _) => ValueTask.FromResult<PublicationPolicy?>(null)),
                 Stub<IPublicationPolicyResolver>((_, args) =>

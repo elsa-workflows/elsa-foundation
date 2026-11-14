@@ -8,6 +8,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 using Xunit;
@@ -67,6 +69,49 @@ public sealed class PublishingLedgerReplaySchemaTests
         // Raw retained corruption, outside the store, must not become valid replay authority.
         await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_publication_records SET RequestFingerprint={EfRelationalIdentity.Encode(new string('a', 64))}");
         await Assert.ThrowsAsync<InvalidOperationException>(() => new EfPublicationRecordStore(context, Access).FindAsync("forged").AsTask());
+    }
+
+    [Fact]
+    public async Task The_existing_baseline_upgrades_additively_without_losing_a_publication()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new PublishingSnapshotReviewSqliteDbContext(
+            new DbContextOptionsBuilder<PublishingSnapshotReviewSqliteDbContext>().UseSqlite(connection).Options);
+        var migrator = context.GetService<IMigrator>();
+        const string baseline = "20260928040708_Initial";
+        await migrator.MigrateAsync(baseline);
+        Assert.Equal(new[] { baseline }, await context.Database.GetAppliedMigrationsAsync());
+        var record = EfPublicationRecordStoreTests.Record("retained-before-upgrade", "slot");
+        var values = new Dictionary<string, object?>
+        {
+            ["Id"] = EfPublishingStoreSupport.PhysicalId("tenant-a", record.PublicationId),
+            ["PublicationId"] = EfRelationalIdentity.Encode(record.PublicationId),
+            ["PublicationIdHash"] = EfPublishingStoreSupport.Hash(record.PublicationId),
+            ["SlotId"] = EfRelationalIdentity.Encode(record.SlotId), ["SlotIdHash"] = EfPublishingStoreSupport.Hash(record.SlotId),
+            ["SlotName"] = EfRelationalIdentity.Encode(record.SlotName),
+            ["WorkflowDefinitionId"] = EfRelationalIdentity.Encode(record.WorkflowDefinitionId),
+            ["WorkflowDefinitionVersionId"] = EfRelationalIdentity.Encode(record.WorkflowDefinitionVersionId),
+            ["ArtifactId"] = EfRelationalIdentity.Encode(record.ArtifactId),
+            ["SourceReferenceId"] = EfRelationalIdentity.Encode(record.SourceReferenceId!),
+            ["ExpectedSlotRevision"] = record.ExpectedSlotRevision, ["Status"] = record.Status.ToString(),
+            ["CreatedAtUtcTicks"] = record.CreatedAt.UtcTicks, ["CreatedAtOffsetMinutes"] = (int)record.CreatedAt.Offset.TotalMinutes,
+            ["TenantId"] = EfRelationalIdentity.Encode("tenant-a"), ["TenantIdHash"] = EfPublishingStoreSupport.TenantHash("tenant-a"),
+            ["SchemaVersion"] = "1", ["Revision"] = 1L
+        };
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "INSERT INTO elsa_publication_records (" + string.Join(",", values.Keys) + ") VALUES (" +
+                string.Join(",", values.Keys.Select(key => "@" + key)) + ")";
+            foreach (var value in values) command.Parameters.AddWithValue("@" + value.Key, value.Value ?? DBNull.Value);
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+        await migrator.MigrateAsync();
+        Assert.Equal(2, (await context.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(record, await new EfPublicationRecordStore(context, Access).FindAsync(record.PublicationId));
+        var next = record with { PublicationId = "new-request", RequestFingerprint = new string('d', 64) };
+        await new EfPublicationRecordStore(context, Access).SaveAsync(next);
+        Assert.Equal(next, await new EfPublicationRecordStore(context, Access).FindAsync(next.PublicationId));
     }
 
     [Fact]

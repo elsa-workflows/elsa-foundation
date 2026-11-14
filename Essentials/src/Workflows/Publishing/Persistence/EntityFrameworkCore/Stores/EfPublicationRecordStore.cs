@@ -34,7 +34,7 @@ public sealed partial class EfPublicationRecordStore(
         if (row is not null)
         {
             if (ToModel(row) != publication)
-                throw new InvalidOperationException($"Publication '{publication.PublicationId}' already exists.");
+                throw new PublicationRecordAlreadyExistsException(publication.PublicationId);
             return;
         }
 
@@ -53,7 +53,7 @@ public sealed partial class EfPublicationRecordStore(
             if (winner is null)
                 throw;
             if (winner != publication)
-                throw new InvalidOperationException($"Publication '{publication.PublicationId}' already exists.");
+                throw new PublicationRecordAlreadyExistsException(publication.PublicationId);
         }
         finally
         {

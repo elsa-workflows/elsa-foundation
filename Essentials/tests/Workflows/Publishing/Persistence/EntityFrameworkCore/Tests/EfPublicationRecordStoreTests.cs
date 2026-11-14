@@ -31,7 +31,7 @@ public sealed class EfPublicationRecordStoreTests : IAsyncLifetime
             var store = Store(context, "tenant-a");
             await store.SaveAsync(record);
             await store.SaveAsync(record);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(record with { ArtifactId = "other-artifact" }).AsTask());
+            await Assert.ThrowsAsync<PublicationRecordAlreadyExistsException>(() => store.SaveAsync(record with { ArtifactId = "other-artifact" }).AsTask());
         }
 
         await using var restarted = Open();
@@ -154,7 +154,7 @@ public sealed class EfPublicationRecordStoreTests : IAsyncLifetime
             await using var other = Open();
             await Store(other, "tenant-a").SaveAsync(different with { ArtifactId = "winner-artifact" });
         }));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Store(conflicting, "tenant-a").SaveAsync(different).AsTask());
+        await Assert.ThrowsAsync<PublicationRecordAlreadyExistsException>(() => Store(conflicting, "tenant-a").SaveAsync(different).AsTask());
         Assert.Empty(conflicting.ChangeTracker.Entries());
     }
 

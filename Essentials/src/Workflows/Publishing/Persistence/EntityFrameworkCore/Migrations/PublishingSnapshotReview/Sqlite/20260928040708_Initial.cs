@@ -151,7 +151,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                     ArtifactId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
                     SourceReferenceId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: true),
                     ExpectedSlotRevision = table.Column<long>(type: "INTEGER", nullable: false),
-                    RequestFingerprint = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: true),
                     Status = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     CreatedAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: false),
                     CreatedAtOffsetMinutes = table.Column<int>(type: "INTEGER", nullable: false),

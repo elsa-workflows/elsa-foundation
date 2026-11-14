@@ -98,7 +98,7 @@ public sealed partial class BpmnDirectExecutionTests
     [InlineData(false)] [InlineData(true)]
     public async Task Ingress_model_workers_keep_the_physical_scope_and_exact_tenant_in_both_closed_and_input_profiles(bool mappedInput)
     {
-        await using var host = await OpenAsync(activityIds: ["input-worker"]);
+        await using var host = await OpenAsync(configure: ConfigureEventPipeline, activityIds: ["input-worker"]);
         await using var scope = await host.Services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new("physical-shell"));
         var services = scope.ServiceProvider;
         var store = services.GetRequiredService<IWorkflowExecutableStore>();
@@ -204,7 +204,8 @@ public sealed partial class BpmnDirectExecutionTests
         var fixture = await PrepareModelIngressAsync(services);
         var target = services.GetServices<IStandaloneTriggerRuntimeTarget>().Single(item => item.ModelKey == "bpmn");
         var seal = await target.PrepareDispatchAsync(fixture.Source, fixture.Recipient);
-        await Assert.ThrowsAsync<InvalidDataException>(() => target.DispatchAsync(fixture.Source, fixture.Recipient, seal).AsTask());
+        var uncommitted = await Assert.ThrowsAsync<TriggerOperationException>(() => target.DispatchAsync(fixture.Source, fixture.Recipient, seal).AsTask());
+        Assert.IsType<InvalidDataException>(uncommitted.InnerException);
         var claim = Assert.Single(await services.GetRequiredService<IRuntimePostCommitOutboxClaimStore>()
             .ClaimAsync(new("model-delivery", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1), 10)));
         var source = await fixture.Port.CommitDispatchAsync(new(claim, fixture.Scope.Persistence), seal);
@@ -240,12 +241,22 @@ public sealed partial class BpmnDirectExecutionTests
         var seal = await target.PrepareDispatchAsync(fixture.Source, fixture.Recipient);
         var malformed = invalidObject ? JsonSerializer.SerializeToElement(new { }) :
             JsonSerializer.SerializeToElement(new { executable = "malformed-pin" });
-        if (!queued)
-            seal = new(seal.Version, seal.SourceOutboxItemId, seal.SourceFingerprint, seal.SelectionFingerprint,
-                seal.RecipientId, seal.StartIdentity, seal.CommittedAt, seal.CommandProtocol, seal.CommandProtocolVersion, malformed);
         var claim = Assert.Single(await services.GetRequiredService<IRuntimePostCommitOutboxClaimStore>()
             .ClaimAsync(new("malformed-model-delivery", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1), 10)));
         var source = await fixture.Port.CommitDispatchAsync(new(claim, fixture.Scope.Persistence), seal);
+        if (!queued)
+        {
+            // The actual first-party store rejects corrupt seals before this boundary. Exercise the
+            // target adapter against malformed bytes returned by a replacement provider instead.
+            seal = new(seal.Version, seal.SourceOutboxItemId, seal.SourceFingerprint, seal.SelectionFingerprint,
+                seal.RecipientId, seal.StartIdentity, seal.CommittedAt, seal.CommandProtocol, seal.CommandProtocolVersion, malformed);
+            var replacement = DeliveryFake<IRuntimeIngressDeliveryStore>((method, _) =>
+            {
+                Assert.Equal(nameof(IRuntimeIngressDeliveryStore.ReadCommittedRecipientAsync), method.Name);
+                return ValueTask.FromResult(new RuntimeCommittedRecipient(source, fixture.Recipient, seal));
+            });
+            target = ActivatorUtilities.CreateInstance<BpmnTriggerTarget>(services, replacement);
+        }
         if (queued)
         {
             var identity = fixture.Recipient.StartIdentity;

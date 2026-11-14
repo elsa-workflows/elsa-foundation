@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.PublishingSnapshotReview.SqlServer
 {
     [DbContext(typeof(PublishingSnapshotReviewSqlServerDbContext))]
-    [Migration("20261114121253_Initial")]
+    [Migration("20260928040706_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -472,10 +472,6 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
-
-                    b.Property<string>("RequestFingerprint")
-                        .HasMaxLength(1200)
-                        .HasColumnType("nvarchar(1200)");
 
                     b.Property<int?>("RetiredAtOffsetMinutes")
                         .HasColumnType("int");

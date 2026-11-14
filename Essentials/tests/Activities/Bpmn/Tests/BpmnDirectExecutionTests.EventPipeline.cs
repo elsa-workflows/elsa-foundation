@@ -15,6 +15,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
+using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Primitives;
@@ -32,7 +33,7 @@ public sealed partial class BpmnDirectExecutionTests
         await using var host = await OpenAsync(configure: ConfigureEventPipeline,
             activityIds: Enumerable.Range(0, 32).Select(index => "event-pipeline-" + index).ToArray());
         var sender = PipelinePublisher("sender", "orders", LiteralPipelineInput(nameof(PublishEvent.Payload), "JsonElement", new { text = "from-actual-workflow" }));
-        var worker = PipelinePublisher("worker", "worker-consumed", new(nameof(PublishEvent.Payload), new("JsonElement"),
+        var worker = PipelinePublisher("worker", "worker-consumed", new(nameof(PublishEvent.Payload), PipelinePayloadType,
             ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new("message")),
             new(1, [new("message", new("String"), true)]));
         var waiting = PipelineEvent("waiting", "orders", false);
@@ -88,7 +89,10 @@ public sealed partial class BpmnDirectExecutionTests
 
         // All progress uses the existing source processor and ordinary model/native continuation.
         for (var pass = 0; pass < 6; pass++)
+        {
             await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100));
+            await DrainModelAsync(host, modelState.ExecutionId);
+        }
         var actualWorker = (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(nativeWork.WorkerExecutionId))!;
         Assert.Equal(WorkflowExecutionStatus.Completed, actualWorker.Status);
         Assert.True(nativeWork.IsEquivalentTo(actualWorker.ModelWorkOrigin));
@@ -188,6 +192,7 @@ public sealed partial class BpmnDirectExecutionTests
     private static void ConfigureEventPipeline(IServiceCollection services)
     {
         new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
+        new WorkflowsRuntimeRecurringTriggersFeature().ConfigureServices(services);
         services.AddSingleton<IEfSchemaFleet, PipelineFleet>();
         services.AddEfSchemaDormancy();
     }
@@ -224,9 +229,15 @@ public sealed partial class BpmnDirectExecutionTests
             DateTimeOffset.UtcNow, new Dictionary<string, string>(), inputs ?? new(1, []), null, IncidentStrategyBuiltIns.FaultReference);
     }
 
-    private static RuntimeInputBinding LiteralPipelineInput(string name, string type, object value) => new(name, new(type),
-        ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
-        literal: ValueEnvelope.Inline(new(type), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+    private static ValueTypeDescriptor PipelinePayloadType =>
+        ClrActivityContractTestBuilder.BuildContract(typeof(PublishEvent)).Inputs[nameof(PublishEvent.Payload)].Type;
+
+    private static RuntimeInputBinding LiteralPipelineInput(string name, string type, object value)
+    {
+        var descriptor = name == nameof(PublishEvent.Payload) ? PipelinePayloadType : new ValueTypeDescriptor(type);
+        return new(name, descriptor, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(descriptor, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+    }
 
     private static async Task<WorkflowActivationResult> PublishPipelineTargetAsync(IServiceProvider services, string definition,
         RuntimeExecutionMaterial material, string publication, long expectedRevision)
@@ -236,7 +247,7 @@ public sealed partial class BpmnDirectExecutionTests
             "WorkflowDefinition", publication, publication, definition, publication, publication, now, now, WorkflowExecutableReferenceScope.Published);
         var result = await services.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new(definition, material, reference,
             "default", publication, WorkflowActivationSource.Publishing, expectedRevision));
-        Assert.True(result.Succeeded);
+        Assert.True(result.Succeeded, result.Outcome + ": " + result.Diagnostic);
         return result;
     }
 
