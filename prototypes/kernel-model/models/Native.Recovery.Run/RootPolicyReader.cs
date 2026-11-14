@@ -45,6 +45,19 @@ internal static class RootPolicyReader
         });
         yield return ("completed-root-history", () => { var state = RootStaged(); state.Agenda.Clear(); NativeInterventions.Validate(state); });
         yield return ("materialized-root-codec", () => NativeInterventions.Validate(Materialized()));
+        foreach (var live in new[] { false, true }) foreach (var kind in new[] { "future", "outcome", "code", "fault" })
+            yield return ($"archived-incident,live={live},case={kind}", () =>
+            {
+                var state = live ? Materialized() : RootStaged(); var source = state.Retries!["operator"].Source;
+                source.Intervention = kind switch
+                {
+                    "future" => source.Intervention! with { Version = 2 }, "outcome" => source.Intervention! with { Outcome = "Open" },
+                    "code" => source.Intervention! with { Fault = new("", "invalid") }, _ => source.Intervention! with { Fault = null! }
+                };
+                if (kind != "future") { Refuse(() => NativeInterventions.Validate(state), "Invalid native intervention ownership."); return; }
+                try { NativeInterventions.Validate(state); } catch (NotSupportedException e) when (e.Message == "Unsupported native intervention version.") { return; }
+                throw new InvalidOperationException("R30: future archived intervention version accepted");
+            });
         foreach (var change in new[] { "wrong-root", "other-frame", "other-work" }) yield return ("materialized-" + change, () =>
         {
             var state = Materialized();
