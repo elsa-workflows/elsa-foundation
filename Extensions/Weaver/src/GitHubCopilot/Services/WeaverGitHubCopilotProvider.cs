@@ -536,19 +536,20 @@ public sealed class WeaverGitHubCopilotProvider(
         if (int.TryParse(runtimeUrl, out var port))
             return IsValidPort(port);
 
-        if (Uri.TryCreate(runtimeUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
-            return (uri.Scheme is "http" or "https") && !string.IsNullOrWhiteSpace(uri.Host) && IsValidPort(uri.Port);
+        var candidate = runtimeUrl;
+        if (!runtimeUrl.Contains("://", StringComparison.Ordinal))
+        {
+            var separator = runtimeUrl.LastIndexOf(':');
+            if (separator <= 0 || separator == runtimeUrl.Length - 1
+                || !int.TryParse(runtimeUrl[(separator + 1)..], out port) || !IsValidPort(port))
+                return false;
+            candidate = "http://" + runtimeUrl;
+        }
 
-        if (runtimeUrl.Contains("://", StringComparison.Ordinal))
-            return false;
-
-        var separator = runtimeUrl.LastIndexOf(':');
-        if (separator <= 0 || separator == runtimeUrl.Length - 1)
-            return false;
-
-        var host = runtimeUrl[..separator];
-        var portText = runtimeUrl[(separator + 1)..];
-        return !string.IsNullOrWhiteSpace(host) && int.TryParse(portText, out port) && IsValidPort(port);
+        return Uri.TryCreate(candidate, UriKind.Absolute, out var uri) && (uri.Scheme is "http" or "https")
+            && !string.IsNullOrWhiteSpace(uri.Host) && IsValidPort(uri.Port)
+            && string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment)
+            && uri.AbsolutePath == "/";
     }
 
     private static bool IsValidPort(int port) => port is > 0 and <= 65535;
@@ -759,9 +760,8 @@ public sealed class WeaverGitHubCopilotProvider(
     private string NormalizeMessage(Exception ex)
         => NormalizeMessage(string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message);
 
-    // Redacts every secret this provider holds — the configured token, the runtime-connection token, and
-    // the environment-variable token — falling back to a fixed, secret-free diagnostic when the message is
-    // blank. The secret set and order are preserved from the previous inline implementation.
+    // Include the configured runtime URL alongside provider and connection tokens. Longest literals go first
+    // so overlapping URL/token values cannot prevent a complete match and leave endpoint or secret text behind.
     private string NormalizeMessage(string? message)
     {
         var value = options.Value;
@@ -770,7 +770,8 @@ public sealed class WeaverGitHubCopilotProvider(
             : Environment.GetEnvironmentVariable(value.GitHubTokenEnvironmentVariable);
         return WeaverLogRedaction.Redact(
             message,
-            [value.GitHubToken, value.RuntimeConnectionToken, environmentToken],
+            new[] { value.GitHubToken, value.RuntimeConnectionToken, environmentToken, value.RuntimeUrl }
+                .OrderByDescending(secret => secret?.Length ?? 0),
             "GitHub Copilot SDK call failed.");
     }
 

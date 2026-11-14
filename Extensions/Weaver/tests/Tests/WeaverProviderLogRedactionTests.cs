@@ -145,6 +145,125 @@ public sealed class WeaverProviderLogRedactionTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Copilot_diagnostics_redacts_the_runtime_endpoint_and_an_overlapping_connection_token_from_status_and_logs()
+    {
+        var endpointCanary = "endpoint-" + Guid.NewGuid().ToString("N");
+        var connectionToken = "runtime-" + Guid.NewGuid().ToString("N");
+        var runtimeUrl = $"https://{endpointCanary}.{connectionToken}.invalid:49152";
+        var logger = new RecordingLogger<WeaverGitHubCopilotProvider>();
+        var provider = BuildCopilotProvider(new WeaverGitHubCopilotOptions
+        {
+            Enabled = true, RuntimeUrl = runtimeUrl, RuntimeConnectionToken = connectionToken, GitHubTokenEnvironmentVariable = null
+        }, logger, new ScriptableCopilotClient
+        {
+            PingException = new Exception($"SDK could not reach {runtimeUrl} using {connectionToken}.", new Exception($"Endpoint {runtimeUrl}."))
+        });
+
+        var diagnostics = await provider.GetDiagnosticsAsync();
+
+        Assert.False(diagnostics.IsAvailable);
+        Assert.Equal("sdk-unavailable", diagnostics.Metadata["statusCode"]);
+        var rendered = System.Text.Json.JsonSerializer.Serialize(diagnostics);
+        Assert.DoesNotContain(runtimeUrl, rendered);
+        Assert.DoesNotContain(endpointCanary, rendered);
+        Assert.DoesNotContain(connectionToken, rendered);
+        Assert.Contains(RedactionMarker, diagnostics.Status);
+        AssertSinkRedacted(logger, runtimeUrl);
+        AssertSinkRedacted(logger, endpointCanary);
+        AssertSinkRedacted(logger, connectionToken);
+    }
+
+    [Fact]
+    public async Task Copilot_session_error_redacts_the_runtime_endpoint_and_a_connection_token_containing_it()
+    {
+        var endpointCanary = "endpoint-" + Guid.NewGuid().ToString("N");
+        var runtimeUrl = $"https://{endpointCanary}.invalid:49152";
+        var connectionCanary = "runtime-" + Guid.NewGuid().ToString("N");
+        var connectionToken = connectionCanary + "-" + runtimeUrl;
+        var logger = new RecordingLogger<WeaverGitHubCopilotProvider>();
+        var provider = BuildCopilotProvider(new WeaverGitHubCopilotOptions
+        {
+            Enabled = true, RuntimeUrl = runtimeUrl, RuntimeConnectionToken = connectionToken, GitHubTokenEnvironmentVariable = null
+        }, logger, new ScriptableCopilotClient
+        {
+            CreateException = new Exception($"SDK session failed at {runtimeUrl} using {connectionToken}.")
+        });
+
+        var session = await _ownedSession;
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CreateSessionAsync(session));
+
+        Assert.DoesNotContain(runtimeUrl, failure.ToString());
+        Assert.DoesNotContain(endpointCanary, failure.ToString());
+        Assert.DoesNotContain(connectionToken, failure.ToString());
+        Assert.DoesNotContain(connectionCanary, failure.ToString());
+        Assert.Contains(RedactionMarker, failure.Message);
+        Assert.Null(failure.InnerException);
+        Assert.Empty(logger.Entries);
+    }
+
+    [Theory]
+    [InlineData("userinfo", true)]
+    [InlineData("query", true)]
+    [InlineData("fragment", true)]
+    [InlineData("path", true)]
+    [InlineData("userinfo", false)]
+    [InlineData("query", false)]
+    [InlineData("fragment", false)]
+    [InlineData("path", false)]
+    public async Task Copilot_refuses_runtime_url_components_before_sdk_factory_or_logging(string component, bool absolute)
+    {
+        var endpointCanary = "endpoint-" + Guid.NewGuid().ToString("N");
+        var secret = "component-" + Guid.NewGuid().ToString("N");
+        var authority = endpointCanary + ".invalid:49152";
+        var address = component switch
+        {
+            "userinfo" => $"user:{secret}@{authority}",
+            "query" => $"{authority}?token={secret}",
+            "fragment" => $"{authority}#{secret}",
+            // The old bare-host fallback accepted paths when the last component looked like a port.
+            "path" => $"{endpointCanary}.invalid/{secret}:49152",
+            _ => throw new ArgumentOutOfRangeException(nameof(component))
+        };
+        var runtimeUrl = absolute ? "https://" + address : address;
+        var logger = new RecordingLogger<WeaverGitHubCopilotProvider>();
+        var factory = new ScriptableCopilotClientFactory(new ScriptableCopilotClient());
+        var provider = new WeaverGitHubCopilotProvider(factory, Options.Create(new WeaverGitHubCopilotOptions
+        {
+            Enabled = true, RuntimeUrl = runtimeUrl, GitHubTokenEnvironmentVariable = null
+        }), new WeaverTestToolInvoker(), logger, _services.GetRequiredService<IWeaverSessionService>());
+
+        var diagnostics = await provider.GetDiagnosticsAsync();
+
+        Assert.False(diagnostics.IsAvailable);
+        Assert.Equal("misconfigured", diagnostics.Metadata["statusCode"]);
+        Assert.Equal(0, factory.CreateCalls);
+        Assert.Empty(logger.Entries);
+        var rendered = System.Text.Json.JsonSerializer.Serialize(diagnostics);
+        Assert.DoesNotContain(endpointCanary, rendered);
+        Assert.DoesNotContain(secret, rendered);
+    }
+
+    [Theory]
+    [InlineData("[::1]:8080")]
+    [InlineData("http://[::1]:8080")]
+    [InlineData("http://localhost:80/")]
+    [InlineData("https://localhost:443/")]
+    public async Task Copilot_accepts_runtime_root_endpoints_and_bracketed_ipv6(string runtimeUrl)
+    {
+        var logger = new RecordingLogger<WeaverGitHubCopilotProvider>();
+        var provider = BuildCopilotProvider(new WeaverGitHubCopilotOptions
+        {
+            Enabled = true, RuntimeUrl = runtimeUrl, GitHubTokenEnvironmentVariable = null
+        }, logger, new ScriptableCopilotClient());
+
+        var diagnostics = await provider.GetDiagnosticsAsync();
+
+        Assert.True(diagnostics.IsAvailable);
+        Assert.Equal("external-runtime", diagnostics.Metadata["authMode"]);
+        Assert.Empty(logger.Entries);
+    }
+
     // --- Anthropic: the redacted secret is the RESOLVED key, which may come from an env var ---
     // (issue #414 item 3: the shared parameterized helper must redact the env-var-resolved key too.)
 
@@ -262,7 +381,13 @@ public sealed class WeaverProviderLogRedactionTests : IDisposable
 
     private sealed class ScriptableCopilotClientFactory(ScriptableCopilotClient client) : IGitHubCopilotClientFactory
     {
-        public IGitHubCopilotClient Create(GitHubCopilotClientRequest request) => client;
+        public int CreateCalls { get; private set; }
+
+        public IGitHubCopilotClient Create(GitHubCopilotClientRequest request)
+        {
+            CreateCalls++;
+            return client;
+        }
     }
 
     private sealed class ScriptableCopilotClient : IGitHubCopilotClient
@@ -270,6 +395,8 @@ public sealed class WeaverProviderLogRedactionTests : IDisposable
         public Exception? ResumeException { get; init; }
 
         public Exception? PingException { get; init; }
+
+        public Exception? CreateException { get; init; }
 
         public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -280,7 +407,9 @@ public sealed class WeaverProviderLogRedactionTests : IDisposable
             => Task.FromResult<IReadOnlyCollection<string>>([]);
 
         public Task<IGitHubCopilotSession> CreateSessionAsync(GitHubCopilotSessionRequest request, CancellationToken cancellationToken)
-            => Task.FromResult<IGitHubCopilotSession>(new EmptyCopilotSession(request.SessionId));
+            => CreateException is null
+                ? Task.FromResult<IGitHubCopilotSession>(new EmptyCopilotSession(request.SessionId))
+                : Task.FromException<IGitHubCopilotSession>(CreateException);
 
         public Task<IGitHubCopilotSession> ResumeSessionAsync(GitHubCopilotSessionRequest request, CancellationToken cancellationToken)
             => ResumeException is null
