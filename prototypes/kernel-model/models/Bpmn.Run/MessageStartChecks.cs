@@ -42,9 +42,11 @@ internal static class MessageStartChecks
         // Identical event ID and local BPMN start name for all. Two registrations also share the same event key.
         var paid = new EventRow(pay.Key, "42", null, 1000);
         var shipped = new EventRow(ship.Key, "42", null, 1000);
-        var firstTarget = Events.Deliver(paid, pay).Target.Id;
-        await Events.PublishAsync(store, paid);
-        await Events.PublishAsync(store, shipped);
+        var accepted = new Dictionary<SubscriptionRow, string>();
+        void Matched(EventRoute registration, EventAcceptance receipt) => accepted[registration.Wait] = receipt.Target.Id;
+        await Events.PublishAsync(store, paid, matched: Matched);
+        await Events.PublishAsync(store, shipped, matched: Matched);
+        var firstTarget = accepted[pay];
         await owner.Worker.DisposeAsync();
         owner = new Owner("new", 0, store, registry);
         await owner.StartAsync();
@@ -81,7 +83,7 @@ internal static class MessageStartChecks
         check(original.Status == InstanceStatus.Finished && Json.Read<BpmnState>(original.State).Variables.GetValueOrDefault("accepted")?.ToString() == "fresh",
             "a fresh publication completes the original instance's waiting catch");
 
-        var shipment = store.Instances[Events.Deliver(shipped, ship).Target.Id];
+        var shipment = store.Instances[accepted[ship]];
         check(shipment.Status == InstanceStatus.Finished && Json.Read<BpmnState>(shipment.State).TakenEvents.Contains(new ConsumedEvent(ship.Key, shipped.Id)),
             "a process with message and signal start events accepts its registered message start");
         foreach (var element in new[] { "signal-only", "signal-end" })
@@ -89,9 +91,9 @@ internal static class MessageStartChecks
             var wrong = BpmnModel.MessageStart("shipment", element, "misconfigured", element);
             await Events.SubscribeAsync(store, wrong, 1);
             var publication = new EventRow(wrong.Key, element, null, 1000);
-            await Events.PublishAsync(store, publication);
+            await Events.PublishAsync(store, publication, matched: Matched);
             await Drain();
-            var rejected = store.Instances[Events.Deliver(publication, wrong).Target.Id];
+            var rejected = store.Instances[accepted[wrong]];
             check(rejected.Status == InstanceStatus.Faulted && rejected.Fault?.Contains($"'{element}' is not a message start event", StringComparison.Ordinal) == true,
                 $"message registration targeting '{element}' faults with the invalid start element");
         }
@@ -99,9 +101,9 @@ internal static class MessageStartChecks
         var incomplete = new SubscriptionRow("raw", "", "start", BpmnModel.Spec("shipment"));
         await Events.SubscribeAsync(store, incomplete, 1);
         var invalid = new EventRow("raw", "bad", null, 1000);
-        await Events.PublishAsync(store, invalid);
+        await Events.PublishAsync(store, invalid, matched: Matched);
         await Drain();
-        var faulted = store.Instances[Events.Deliver(invalid, incomplete).Target.Id];
+        var faulted = store.Instances[accepted[incomplete]];
         check(faulted.Status == InstanceStatus.Faulted && faulted.Fault?.Contains("BpmnModel.MessageStart", StringComparison.Ordinal) == true,
             "an event start registered with a plain start spec faults with the missing registration contract");
     }

@@ -51,6 +51,7 @@ public sealed class Oracle
 public sealed partial class World
 {
     public readonly Oracle Oracle = new();
+    private readonly Dictionary<string, EventMatch> _startedBy = [];
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (long Generation, bool Retired)> _creations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _late = new(StringComparer.Ordinal);
@@ -226,7 +227,7 @@ public sealed partial class World
                     return $"I9 actor {actor.Id} holds {id} at revision {row?.Revision.ToString() ?? "none"}; its row is at {Store.Instances.GetValueOrDefault(id)?.Revision.ToString() ?? "none"}";
                 if (state is not null && state != row?.State) return $"I9 actor {actor.Id}: the live state of {id} is {state} and its row says {row?.State}";
             }
-            var held = new HashSet<string>(StringComparer.Ordinal);
+            var held = new HashSet<InboxKey>();
             foreach (var (id, durable, taken) in worker.Messages)
             {
                 held.Add(id);
@@ -234,7 +235,7 @@ public sealed partial class World
             }
             if (worker.Flushing) continue;
             foreach (var row in Store.Messages.Values)
-                if (row.Seen == partition.Epoch && !row.Done && row.Message.Target.Partition == actor.Partition && !held.Contains(row.Message.Id))
+                if (row.Seen == partition.Epoch && !row.Done && row.Message.Target.Partition == actor.Partition && !held.Contains(row.Message.InboxKey))
                     return $"I3 message {row.Message.Id} is marked seen at epoch {partition.Epoch} and its owner, actor {actor.Id}, does not hold it";
         }
         return null;
@@ -319,8 +320,13 @@ public sealed partial class World
         var rows = Store.Subscriptions.Where(s => s.Start is null).ToLookup(s => s.Instance, s => s.Key);
         // I20: an event starts at most one instance per start subscription, and that instance takes exactly that event.
         foreach (var row in Store.Instances.Values.Where(i => i.Model == "onevent"))
-            if (State<OnEventState>(row.Id) is { } got && (got.Got.Count > 1 || got.Got.Exists(id => !row.Id.EndsWith(id.Replace("ev:", "on:").Replace("::", ":")))))
+        {
+            if (State<OnEventState>(row.Id) is not { } got || got.Got.Count == 0) continue;
+            if (got.Got.Count != 1 || got.Match is not { } match || match.Instance != "" || got.Got[0] != $"ev:{match.Event}::{match.Wait}" ||
+                !row.Id.StartsWith("e", StringComparison.Ordinal) || row.Definition != match.Wait)
                 return $"I20 {row.Id} was started by [{string.Join(", ", got.Got)}]";
+            _startedBy[row.Id] = match;
+        }
         // Owner decision, 13 November: Park retains the checkpoint, but removes active routing in the same commit.
         if (rows.FirstOrDefault(g => Store.Instances.GetValueOrDefault(g.Key) is { Status: InstanceStatus.Faulted }) is { } faulted)
             return $"I8 faulted instance {faulted.Key} still has active subscriptions";
@@ -550,13 +556,12 @@ public sealed partial class World
     {
         if (Store.Messages.Values.FirstOrDefault(m => !m.Done && m.Message.Kind != "expire") is { } message) return $"END message {message.Message.Id} was never consumed";
         // I20 at the end: every event and every start subscription of its key, both committed, made exactly one instance.
-        var started = Store.Instances.Values.Where(i => i.Model == "onevent").Select(i => i.Id).Concat(_gone.Where(id => id.Contains("/on:"))).Select(id => id[(id.IndexOf('/') + 1)..]).ToHashSet();
+        var started = _startedBy.Values.ToList();
         Count("instances deleted", _gone.Count);
         foreach (var start in Oracle.Starts)
             foreach (var e in Oracle.Events.GetValueOrDefault(start.Key) ?? [])
-                if (!started.Remove($"on:{e}:{start.Wait}")) return $"I20 event {e} for key {start.Key} and start subscription {start.Wait} are both committed and no instance was started";
-        if (started.Count > 0) return $"I20 instances [{string.Join(", ", started)}] were started by no event and subscription";
-        if (Store.Instances.Values.FirstOrDefault(i => i.Model == "onevent" && i.Status != InstanceStatus.Finished) is { } open) return $"I20 {open.Id} ended as {open.Status}";
+                if (!started.Remove(new(start.Key, e, "", start.Wait))) return $"I20 event {e} for key {start.Key} and subscription {start.Wait} did not start exactly once";
+        if (started.Count > 0) return $"I20 unexpected start for {started[0]}";
         if (Store.Subscriptions.FirstOrDefault(s => s.Start is null && !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
         foreach (var (id, (_, delay, spread)) in Oracle.Parents)
         {

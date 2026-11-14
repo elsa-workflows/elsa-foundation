@@ -89,11 +89,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly IActorType _type;
     private readonly WorkerOptions _options;
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Delivery> _items = new(StringComparer.Ordinal);    // every message held, by id
+    private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
+    private readonly Dictionary<InboxKey, Delivery> _items = [];    // every message held, by id
     private readonly List<Delivery> _meets = [];
-    private readonly HashSet<string> _cancelling = new(StringComparer.Ordinal);        // tickets of jobs cancelled by a commit in flight
-    private readonly HashSet<string> _consumed = new(StringComparer.Ordinal);          // while a poll is in flight
-    private readonly HashSet<string> _behind = new(StringComparer.Ordinal);            // own rows written while catching up, not yet polled
+    private readonly HashSet<InboxKey> _cancelling = [];        // tickets of jobs cancelled by a commit in flight
+    private readonly HashSet<InboxKey> _consumed = [];          // while a poll is in flight
+    private readonly HashSet<InboxKey> _behind = [];            // own rows written while catching up, not yet polled
     private readonly List<TurnOutcome> _queue = [];
     private long _generation, _anchor = long.MinValue, _local, _observed;
     private long _renewed;      // database time of the take, or of the sending of the last commit that landed: when the lease was renewed at the latest
@@ -125,6 +126,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public string Node { get; }
     public int Partition { get; }
     public long Epoch { get; private set; }
+    internal ChildIssuer ChildIds { get; private set; } = null!;
     public long Position { get; private set; }
     public bool Owns => Epoch != 0;
     public long Evicted { get; private set; }
@@ -161,7 +163,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // What is in memory, for tests of invariant 9.
     public IEnumerable<(string Id, InstanceRow? Row, string? State, bool Busy)> Instances =>
         _slots.Where(s => s.Value.Loaded).Select(s => (s.Key, s.Value.Row, s.Value.State is null ? null : Json.Write(s.Value.State), s.Value.Busy));
-    public IEnumerable<(string Id, bool Durable, bool Taken)> Messages => _items.Values.Select(i => (i.Message.Id, i.Durable, i.Taken));
+    public IEnumerable<(InboxKey Id, bool Durable, bool Taken)> Messages => _items.Values.Select(i => (i.Message.InboxKey, i.Durable, i.Taken));
 
     /// <summary>Test observation of a completed job result, after it has been placed in the instance inbox.</summary>
     public bool JobResultReady(string instance, string key, long creation = 0) => _slots.TryGetValue(instance, out var slot)
@@ -345,6 +347,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Observe(lease.Now);
         _renewed = lease.Now;
         Epoch = lease.Epoch;
+        ChildIds = new(Partition, Epoch);
         Volatile.Write(ref _safeUntil, started + (long)_options.Lease.TotalMilliseconds);
         Position = lease.Position;
         _mine.Add(lease.Epoch);
@@ -441,7 +444,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!LeaseUsable()) return;
         foreach (var row in polled.Messages)
         {
-            if (!_items.ContainsKey(row.Message.Id) && !_consumed.Contains(row.Message.Id)) _options.OnObservedDelivery?.Invoke(row);
+            if (!_items.ContainsKey(row.Message.InboxKey) && !_consumed.Contains(row.Message.InboxKey)) _options.OnObservedDelivery?.Invoke(row);
             Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts, suspect: Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0);
             if (!LeaseUsable()) return;
         }
@@ -473,9 +476,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false)
     {
-        if (durable && _items.TryGetValue(message.Id, out var promoted) && promoted.AwaitPoll)
+        if (durable && _items.TryGetValue(message.InboxKey, out var promoted) && promoted.AwaitPoll)
         {
-            _behind.Remove(message.Id);
+            _behind.Remove(message.InboxKey);
             promoted.AwaitPoll = false;
             promoted.Marked = marked;
             promoted.Suspect = suspect;
@@ -487,18 +490,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
             return;
         }
         // The owner skips ids it holds, and (finding F5) ids it consumed while the poll that returned them was in flight.
-        if (!Has(Flaw.PollWithoutSkip) && (_items.ContainsKey(message.Id) || _consumed.Contains(message.Id))) return;
-        _behind.Remove(message.Id);
+        if (!Has(Flaw.PollWithoutSkip) && (_items.ContainsKey(message.InboxKey) || _consumed.Contains(message.InboxKey))) return;
+        _behind.Remove(message.InboxKey);
         // A recalled message (Recall) whose row a poll brings in before the commit that deletes it lands: taken, never given.
         // A previously marked row is durable evidence of recovery, even when it was marked by this
         // process. The process can rule out a death for trial accounting, not reconstruct its lost inbox.
         var item = new Delivery(message, seq)
         {
             Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
-            Again = again, RecoveryOrdering = again, Taken = _cancelling.Contains(message.Id),
+            Again = again, RecoveryOrdering = again, Taken = _cancelling.Contains(message.InboxKey),
             ObservedOrder = Interlocked.Increment(ref _observed), ObservedAt = Now
         };
-        _items[message.Id] = item;
+        _items[message.InboxKey] = item;
         if (message.Kind is Kinds.Meet or Kinds.Publish)     // NATIVE N1: a publish ticket is handled like a meet ticket
         {
             item.Ticket = true;
@@ -516,7 +519,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             item.Ticket = true;
             item.Key = message.Read<JobTicket>().Key;
-            item.Taken = _cancelling.Contains(message.Id);
+            item.Taken = _cancelling.Contains(message.InboxKey);
         }
         if (!_slots.TryGetValue(message.Target.Id, out var slot)) _slots[message.Target.Id] = slot = new Slot { Loaded = fresh };
         Insert(slot, item);
@@ -722,6 +725,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Evict();
     }
 
+    private string Canonical(string target) => _aliases.GetValueOrDefault(target, target);
+
+    private void RemoveSlot(string key)
+    {
+        if (_slots.Remove(key, out var slot) && slot.Aliases is { } aliases)
+            foreach (var alias in aliases) _aliases.Remove(alias);
+    }
+
     // ---- turns ---------------------------------------------------------------------------------------------------
 
     /// <summary>
@@ -831,6 +842,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     // ---- background jobs -------------------------------------------------------------------------------------------
 
+    private void PublishJobEligibility(Slot slot)
+    {
+        var current = slot.CurrentRow;
+        Volatile.Write(ref slot.ActiveCreation, current?.Creation ?? -1);
+        Volatile.Write(ref slot.RunnableCreation, current is { Status: InstanceStatus.Running } && !Withheld(slot) ? current.Creation : -1);
+    }
+
     private void StartJob(Delivery ticket)
     {
         if (!_slots.TryGetValue(ticket.Message.Target.Id, out var loadedSlot) || !loadedSlot.Loaded || loadedSlot.Busy) return;
@@ -900,10 +918,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var ticket in tickets.Where(t => t.Message.Kind == Kinds.Publish))
                 await Events.PublishAsync(_store, ticket.Message.Read<EventRow>(), Partitions, cancellationToken);
             var waits = tickets.Where(t => t.Message.Kind == Kinds.Meet).SelectMany(t => t.Message.Read<SubscriptionRow[]>()).ToList();
-            IReadOnlyList<EventRow> events = waits.Count == 0 ? [] : await _store.FindEventsAsync(waits.Select(w => w.Key).Distinct().ToArray(), cancellationToken);
-            foreach (var e in events)
-                foreach (var wait in waits.Where(w => w.Key == e.Key))
-                    await _store.AddAsync(Events.Deliver(e, wait), cancellationToken);
+            if (waits.Count > 0)
+                foreach (var match in await _store.KeptMatchesAsync(waits, cancellationToken))
+                    await _store.AddEventAsync(match.Delivery(Partitions), cancellationToken);
         }
         catch (Exception)
         {
@@ -999,11 +1016,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var handOver = _caughtUp || Has(Flaw.HandOverWhileBehind);
         var batch = new CommitBatch(Partition, Epoch, Position, _options.Lease, handOver,
             units.Select(u => new TurnCommit(u.Instance, u.Row, u.Expected,
-                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.Id), .. Has(Flaw.VolatileJobTicket) ? [] : u.Cancelled.Where(id => !InMemoryOnly(id))],
-                Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.Id).ToList(),
+                Has(Flaw.KeepConsumedMessages) ? [] : [.. u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.InboxKey), .. Has(Flaw.VolatileJobTicket) ? [] : u.Cancelled.Where(id => !InMemoryOnly(id))],
+                Has(Flaw.KeepConsumedMessages) ? [] : u.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.InboxKey).ToList(),
                 u.Sent.Where(m => !u.Volatile.Contains(m.Id)).ToList(), u.Subscribed, u.Unsubscribed, u.Journal, u.Unsubscribe,
-                u.Held.Where(i => i.Durable).Select(i => i.Message.Id).ToList(), u.Delete)).ToList(),
-            marks.Select(i => i.Message.Id).ToList(), trial.Select(i => i.Message.Id).ToList());
+                u.Held.Where(i => i.Durable).Select(i => i.Message.InboxKey).ToList(), u.Delete)).ToList(),
+            marks.Select(i => i.Message.InboxKey).ToList(), trial.Select(i => i.Message.InboxKey).ToList());
         while (true)
         {
             // When the lease is renewed at the latest, as far as this worker can tell: its estimate of database time
@@ -1055,7 +1072,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (!LeaseUsable()) return Outcome.Lost;
             }
             foreach (var item in marks.Concat(trial))
-                if (item.Key is not null && _items.ContainsKey(item.Message.Id)) StartJob(item);
+                if (item.Key is not null && _items.ContainsKey(item.Message.InboxKey)) StartJob(item);
             if (!LeaseUsable()) return Outcome.Lost;
             return Outcome.Landed;
         }
@@ -1141,7 +1158,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (unit.Slot is { } pending && (OnTrial(unit.Instance) || unit.Consumed.Exists(i => i.RecoveryOrdering)
             || unit.Held.Exists(i => i.RecoveryOrdering)))
             RecoveryBoundary(pending, Now, recovering: true);
-        foreach (var item in unit.Consumed) { _behind.Remove(item.Message.Id); Forget(item); }
+        foreach (var item in unit.Consumed) { _behind.Remove(item.Message.InboxKey); Forget(item); }
         foreach (var item in unit.Held)     // back in its place; its turn ran, so it is no suspect and no longer on trial
         {
             (item.Taken, item.Held, item.Suspect, item.Marked) = (false, true, false, true);
@@ -1157,7 +1174,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (!handOver)
             foreach (var message in unit.Sent)
-                if (message.Target.Partition == Partition && message.Due is null && !unit.Volatile.Contains(message.Id) && !unit.Promoted.Contains(message.Id)) _behind.Add(message.Id);
+                if (message.Target.Partition == Partition && message.Due is null && !unit.Volatile.Contains(message.Id) && !unit.Promoted.Contains(message.Id)) _behind.Add(message.InboxKey);
         if (unit.Slot is { } committed)
         {
             if (unit.Row is not null) committed.Row = unit.Row;
@@ -1262,13 +1279,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
             var seq = durable && seqs is not null ? seqs.Dequeue() : long.MaxValue / 2 + ++_local;
             if (unit.Promoted.Contains(message.Id))     // held in memory already; from now on a row, seen at this epoch if handed over
             {
-                if (_items.TryGetValue(message.Id, out var held))
+                if (_items.TryGetValue(message.InboxKey, out var held))
                 {
                     held.Seq = seq;
                     if (!hold)
                     {
                         // Keep the existing job/result, but do not mark or deliver it until poll reaches its row.
-                        if (message.Due is null || message.Due <= Now + (long)_options.Horizon.TotalMilliseconds) _behind.Add(message.Id);
+                        if (message.Due is null || message.Due <= Now + (long)_options.Horizon.TotalMilliseconds) _behind.Add(message.InboxKey);
                         (held.Durable, held.Marked, held.AwaitPoll, held.Taken) = (true, false, true, false);
                         if (_slots.TryGetValue(message.Target.Id, out var waiting))
                         {
@@ -1302,9 +1319,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Forget(Delivery item)
     {
-        _items.Remove(item.Message.Id);
+        _items.Remove(item.Message.InboxKey);
         if (_trial.Remove(item) && _trial.Count == 0) _gate.Release(this);     // the trial is over: what waited for it may start
-        if (item.Durable && _polling && !Has(Flaw.PollRace)) _consumed.Add(item.Message.Id);
+        if (item.Durable && _polling && !Has(Flaw.PollRace)) _consumed.Add(item.Message.InboxKey);
         if (item.Key is not null) item.Cancel?.Cancel();
         if (_slots.TryGetValue(item.Message.Target.Id, out var slot)) slot.Inbox.Remove(item);
         _meets.Remove(item);
@@ -1327,6 +1344,10 @@ public sealed class TrialGate
 
 internal sealed class Slot
 {
+    public int PendingReferences;
+    public Dictionary<string, bool>? SelfReferences; // exact provider equality only, held for the slot lifetime
+    public HashSet<string>? Aliases; // resolved database spellings, retained only while this slot is cached
+    public long RunnableCreation = -1; // checked at physical entry, including after waiting on a scheduler
     public long ActiveCreation;    // volatile latch captured by background drivers; retired/missing is -1
     public InstanceRow? Row;        // committed actor row or retired lifecycle predecessor
     public InstanceRow? CurrentRow => Row is { Retired: false } row ? row : null;
@@ -1345,6 +1366,6 @@ internal sealed class Slot
     public object? Pending;                         // the history its turns in memory left, the actor type's
 }
 
-internal sealed record JobTicket(string Model, string Key, string? Arguments);
+internal sealed record JobTicket(string Model, [property: System.Text.Json.Serialization.JsonConverter(typeof(DurableKeyJson))] string Key, string? Arguments);
 
 internal sealed record JobContext(InstanceRef Instance, string Key, string? Arguments, long Creation = 0) : IJob;
