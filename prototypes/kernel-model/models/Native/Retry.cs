@@ -8,7 +8,7 @@ internal sealed record NativeRetry(string Id, string Source, string Incident, st
 {
     internal const string Kind = "native.retry-intervention";
 }
-internal sealed record RetryChild(string Source, string Successor, string Node, string? Tag);
+internal sealed record RetryChild(string Source, string Successor, string Node, string? Tag, IReadOnlyDictionary<string, JsonNode?>? Scope = null, string? Parent = null, string? LexicalScope = null);
 internal sealed record NativeRetryReceipt(NativeRetry Request, Frame Source, string Successor, string Resolution = "Retried");
 internal sealed record NativeRetryResult(string Id, string Result, string? Successor = null);
 
@@ -46,10 +46,22 @@ internal static class NativeRetries
         bool Borrowed(string? current, string? original) => current == original || cancelled && s.LexicalScopes is null && current is null;
         var successors = new HashSet<string>(StringComparer.Ordinal); var sources = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (id, r) in s.Retries ?? [])
+        {
             if (r is null || r.Request is null || string.IsNullOrEmpty(id) || id != r.Request.Id || r.Source is null || r.Source.Id != r.Request.Source ||
                 r.Source.Intervention?.Id != r.Request.Incident || r.Source.RecoveryInputs is null || r.Source.RecoveryMaterial is null || string.IsNullOrEmpty(r.Source.OperationKey) ||
                 r.Resolution != "Retried" || string.IsNullOrEmpty(r.Successor) || r.Successor == r.Source.Id || !successors.Add(r.Successor) || !sources.Add(r.Source.Id) || s.Frames.ContainsKey(r.Source.Id))
                 throw new InvalidOperationException("Invalid native retry lineage.");
+            NativeInterventions.ValidateIncident(r.Source.Intervention);
+            NativeStatefulRecovery.Validate(s, r.Source);
+            if (r.Source.Parent is not null) continue;
+            if (NativeInterventions.Policy(s) < 2 || !NativeInterventions.RootDescriptor(r.Source))
+                throw new InvalidOperationException("Invalid native root retry lineage.");
+            var queued = s.Agenda.Where(w => w.Frame == r.Successor && !w.Resume).ToArray(); s.Frames.TryGetValue(r.Successor, out var current);
+            if (queued.Length == 0 && current is null) continue; // completed/superseded forensic receipts need no live root
+            var staged = queued.Length == 1 && current is null && s.Frames.Count == 0 && s.Agenda.Count == 1 && !queued[0].Resume && queued[0].RetrySource == r.Source.Id;
+            var retained = queued.Length == 0 && current is not null && s.Frames.Count == 1 && (current.RecoveryStateful && current.Intervention is null ? NativeStatefulRecovery.SuspendedRoot(s, current) : s.Agenda.Count == 0 && (!current.RecoveryStateful || s.Waits.Count == 0)) && current.RetrySource == r.Source.Id;
+            if (!staged && !retained) throw new InvalidOperationException("Invalid native staged root obligation.");
+        }
         NativeRetryReceipt Lineage(string source, string successor) => (s.Retries?.Values.SingleOrDefault(r => r.Source.Id == source && r.Successor == successor))
             ?? throw new InvalidOperationException("Missing native retry lineage.");
         foreach (var f in s.Frames.Values)
@@ -58,7 +70,7 @@ internal static class NativeRetries
             if (f.RetrySource is { } source)
             {
                 var old = Lineage(source, f.Id).Source;
-                if (f.Node != old.Node || f.Parent != old.Parent || f.Tag != old.Tag || f.OperationKey != old.OperationKey || !Borrowed(f.LexicalScope, old.LexicalScope) ||
+                if (f.RecoveryStateful != old.RecoveryStateful || f.Node != old.Node || f.Parent != old.Parent || f.Tag != old.Tag || f.OperationKey != old.OperationKey || !Borrowed(f.LexicalScope, old.LexicalScope) ||
                     !JsonNode.DeepEquals(Values.From(f.Scope), Values.From(old.Scope)) ||
                     !JsonNode.DeepEquals(f.RecoveryInputs, old.RecoveryInputs) || !JsonNode.DeepEquals(f.RecoveryMaterial, old.RecoveryMaterial))
                     throw new InvalidOperationException("Invalid native successor frame provenance.");
@@ -97,21 +109,29 @@ internal sealed partial class Burst
         if (!_s.InterventionEnabled || !_s.Frames.TryGetValue(request.Source, out var source) || source.Intervention is not { Outcome: "WaitForIntervention" } incident || incident.Id != request.Incident)
             return Result("NotEligible");
         if (source.RecoveryMaterial is null) return Result("MaterialIdentityUnavailable"); // v5 incidents are not blessed by the newest registry
-        if (source.Parent is null || !_s.Frames.TryGetValue(source.Parent, out var parent) || Blocked(parent.Id)) return Result("ParentUnavailable");
+        Frame? parent = null;
+        if (source.Parent is { } parentId)
+        { if (!_s.Frames.TryGetValue(parentId, out parent) || Blocked(parent.Id)) return Result("ParentUnavailable"); }
+        else if (!NativeInterventions.Root(_s, source)) return Result("RootUnavailable");
         if (!JsonNode.DeepEquals(source.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf))) return Result("MaterialUnavailable");
-        if (!_wf.Nodes.TryGetValue(source.Node, out var node) || !typeof(ILeaf).IsAssignableFrom(node.Type) || node.Background || source.RecoveryInputs is null ||
-            Hydrator.Of(node.Type).Any(p => !source.RecoveryInputs.ContainsKey(p.Name)) || !InterventionParent(source)) return Result("UnsupportedBoundary");
+        if (!_wf.Nodes.TryGetValue(source.Node, out var node) || !RecoverableKind(node) || node.Background || source.RecoveryInputs is null ||
+            Hydrator.Of(node.Type).Any(p => !source.RecoveryInputs.ContainsKey(p.Name)) || !InterventionBoundary(source)) return Result("UnsupportedBoundary");
         if (_s.Waits.Values.Any(w => w.Frame == source.Id) || _s.Frames.Values.Any(f => f.Parent == source.Id) ||
             _s.Agenda.Any(w => w.Frame == source.Id || w.Parent == source.Id) || (_s.LexicalScopes?.Values.Any(s => s.Owner == source.Id) ?? false)) return Result("SourceBusy");
-        if (source.LexicalScope is { } scope) _ = LexicalScopes.Accessible(_s, parent.Id, scope);
+        if (source.LexicalScope is { } scope) _ = LexicalScopes.Accessible(_s, parent!.Id, scope);
         if (_s.Next == long.MaxValue) return Result("IdentityExhausted");
         var successor = "f" + (_s.Next + 1);
         if (_s.Frames.ContainsKey(successor) || _s.Agenda.Any(w => w.Frame == successor)) return Result("IdentityConflict");
-        var parentNode = _wf.Nodes[parent.Node]; JsonNode? prepared;
+        JsonNode? prepared = null;
         try
         {
             // Known structural parents have pure, value-only preparation; no source or parent input binding is evaluated.
-            prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag));
+            if (parent is not null)
+            {
+                var parentNode = _wf.Nodes[parent.Node];
+                var scheduling = source.Scope?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal);
+                prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag, scheduling, parent.Id, source.LexicalScope));
+            }
         }
         catch (Exception error) when (error is InvalidOperationException or System.Text.Json.JsonException) { return Result("ParentObligationUnavailable"); }
         var archived = Json.Read<Frame>(Json.Write(source));
@@ -120,7 +140,7 @@ internal sealed partial class Burst
             RecoveryInputs = (JsonObject)source.RecoveryInputs.DeepClone(), RecoveryMaterial = (JsonObject)source.RecoveryMaterial.DeepClone(), OperationKey = source.OperationKey };
         // All preparation completed. One normal checkpoint owns resolution, parent rebind and the owed successor.
         (_s.Retries ??= new(StringComparer.Ordinal)).Add(request.Id, new(request, archived, successor));
-        _s.Frames.Remove(source.Id); parent.State = prepared; _s.Next++; _s.Agenda.Add(work); _retryAccepted = true;
+        _s.Frames.Remove(source.Id); if (parent is not null) parent.State = prepared; _s.Next++; _s.Agenda.Add(work); _retryAccepted = true;
         turn.Record($"retry:{request.Id}:{source.Id}:{successor}");
         return Result("Accepted", successor);
     }

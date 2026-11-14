@@ -18,17 +18,19 @@ public static class CreationProtocol
     public static void RejectUnsupported(CommitBatch batch)
     {
         if (batch.Turns.Any(t => t.Row is { } row && (row.Creation != 0 || row.Retired || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null) ||
-            t.Sent.Any(Qualified) || t.Subscribed.Concat(t.Unsubscribed).Any(s => s.Creation != 0 || s.Start?.Creation is not null)))
+            t.Sent.Any(Qualified) || t.Subscribed.Concat(t.Unsubscribed).Any(Qualified)))
             throw new StoreException(Failure.Definite, "store has no qualified creation identity");
     }
 
-    public static bool Qualified(Message message) => message.TargetCreation is not null || message.Start?.Creation is not null || (message.Start?.ParentCreation ?? 0) != 0;
+    private static bool Qualified(StartSpec? spec) => spec?.Creation is not null || (spec?.ParentCreation ?? 0) != 0;
+    public static bool Qualified(Message message) => message.SenderCreation != 0 || message.TargetCreation is not null || Qualified(message.Start);
+    public static bool Qualified(SubscriptionRow subscription) => subscription.Creation != 0 || Qualified(subscription.Start);
     public static void RejectUnsupported(Message message)
     { if (Qualified(message)) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
     public static void RejectUnsupported(SubscriptionRow subscription)
-    { if (subscription.Creation != 0 || subscription.Start?.Creation is not null) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
+    { if (Qualified(subscription)) throw new StoreException(Failure.Definite, "store has no qualified creation identity"); }
 
-    internal static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload, string message)
+    internal static string? StartError(InstanceRow? previous, StartSpec start, string kind, string? payload, InboxKey message)
     {
         if (start.Creation is not { } creation) return previous?.Creation > 0 ? "IdentityRequired" : null;
         if (creation.Intent is not { Length: > 0 and <= 128 } || creation.Generation < 1 || creation.Previous < 0)
@@ -54,9 +56,7 @@ public static class CreationProtocol
     {
         var outcome = new TurnOutcome(actor) { Consumed = [.. taken], Status = row?.Status };
         foreach (var item in taken)
-            if (item.Message.ReplyTo is { } to)
-                outcome.Replied.Add(new(item.Message.Id, to, Request.Response,
-                    new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation)));
+            outcome.ReplyTo(item, new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation));
         return outcome;
     }
 
@@ -71,7 +71,7 @@ public static class CreationProtocol
         if (row.Creation < 0 || row.ParentCreation < 0) RefuseWrite("negative creation identity");
         if (row.Creation == 0 && (row.Retired || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.Creation > 0 && (row.Parent is null ? row.ParentCreation != 0 : row.ParentCreation <= 0)) RefuseWrite("incomplete exact parent address");
-        if (row.PendingStart is { } pending && (pending.Length == 0 || row.Status != InstanceStatus.Running ||
+        if (row.PendingStart is { } pending && (string.IsNullOrEmpty(pending.Id) || row.Status != InstanceStatus.Running ||
             previous is { Retired: false } && previous.PendingStart != pending ||
             previous?.PendingStart != pending && turn.Held?.Contains(pending) != true)) RefuseWrite("invalid held start continuation");
         if (previous?.PendingStart is { } retained && row.PendingStart is null && row.Status == InstanceStatus.Running &&
