@@ -226,7 +226,7 @@ public sealed partial class World
                     return $"I9 actor {actor.Id} holds {id} at revision {row?.Revision.ToString() ?? "none"}; its row is at {Store.Instances.GetValueOrDefault(id)?.Revision.ToString() ?? "none"}";
                 if (state is not null && state != row?.State) return $"I9 actor {actor.Id}: the live state of {id} is {state} and its row says {row?.State}";
             }
-            var held = new HashSet<string>(StringComparer.Ordinal);
+            var held = new HashSet<InboxKey>();
             foreach (var (id, durable, taken) in worker.Messages)
             {
                 held.Add(id);
