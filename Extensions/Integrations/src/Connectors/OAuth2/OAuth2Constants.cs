@@ -1,3 +1,4 @@
+using Elsa.Connections.Core.Models;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Integrations.Connectors.OAuth2;
@@ -19,14 +20,14 @@ public static class OAuth2HttpClientNames
 
 public static class OAuth2GrantTypes
 {
-    public const string AuthorizationCode = "authorization_code";
-    public const string ClientCredentials = "client_credentials";
+    public const string AuthorizationCode = HttpOAuth2GrantTypes.AuthorizationCode;
+    public const string ClientCredentials = HttpOAuth2GrantTypes.ClientCredentials;
     public const string RefreshToken = "refresh_token";
 }
 
 public static class OAuth2SettingKeys
 {
-    public const string GrantType = "grantType";
+    public const string GrantType = HttpOAuth2SettingKeys.GrantType;
     public const string AuthorizationUrl = "authorizationUrl";
     public const string TokenUrl = "tokenUrl";
     public const string ScopesUrl = "scopesUrl";

@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -19,6 +21,7 @@ internal sealed class OAuth2TokenService(
     ISecretManager secretManager,
     ISecretStoreRegistry stores,
     IConnectionGrantWriter grants,
+    IConnectionRepository connections,
     IHttpClientFactory httpClientFactory,
     IOptions<ConnectionsOptions> connectionsOptions,
     IOptions<WritableSecretStoreOptions> writableSecretStore,
@@ -178,8 +181,10 @@ internal sealed class OAuth2TokenService(
         var grantType = connection.Settings.GetValueOrDefault(OAuth2SettingKeys.GrantType) ?? OAuth2GrantTypes.ClientCredentials;
         if (!string.Equals(grantType, OAuth2GrantTypes.ClientCredentials, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
-                $"Connection '{connection.Name}' needs authorization; its grant is missing or expired and has no refresh token.");
+            await FailNeedsAuthorizationAsync(
+                connection,
+                $"Connection '{connection.Name}' needs authorization; its grant is missing or expired and has no refresh token.",
+                cancellationToken);
         }
 
         return await AcquireClientCredentialsAsync(connection, latest?.Version, latest, cancellationToken);
@@ -309,13 +314,17 @@ internal sealed class OAuth2TokenService(
         using var response = await client.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Token endpoint returned {(int)response.StatusCode}.");
+        {
+            await ThrowForTokenEndpointFailureAsync(connection, response.StatusCode, body, cancellationToken);
+        }
 
         using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
         var root = document.RootElement;
         var accessToken = root.TryGetProperty("access_token", out var access) ? access.GetString() : null;
         if (string.IsNullOrWhiteSpace(accessToken))
-            throw new InvalidOperationException(OAuth2TokenError.MissingAccessTokenMessage(root));
+        {
+            await ThrowForMissingAccessTokenAsync(connection, root, cancellationToken);
+        }
 
         DateTimeOffset? expiresAt = null;
         if (root.TryGetProperty("expires_in", out var expires) && TryReadExpiresIn(expires, out var seconds))
@@ -335,14 +344,16 @@ internal sealed class OAuth2TokenService(
 
         var grant = new OAuth2Grant
         {
-            AccessToken = accessToken,
+            AccessToken = accessToken!,
             RefreshToken = refreshToken,
             ExpiresAt = expiresAt,
             TokenType = tokenType,
             Scope = scope
         };
 
-        return await WriteGrantAsync(connection, grant, expectedVersion, cancellationToken);
+        var written = await WriteGrantAsync(connection, grant, expectedVersion, cancellationToken);
+        await MarkReadyAsync(connection, OAuth2SecretKeys.Grant(connection.Name), written.Version, cancellationToken);
+        return written;
     }
 
     private async ValueTask<OAuth2Grant> WriteGrantAsync(
@@ -441,6 +452,127 @@ internal sealed class OAuth2TokenService(
 
         seconds = 0;
         return false;
+    }
+
+    [DoesNotReturn]
+    private async ValueTask ThrowForTokenEndpointFailureAsync(
+        IResolvedConnection connection,
+        HttpStatusCode statusCode,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        var error = OAuth2TokenError.TryReadError(body);
+        if (IsInteractive(connection) && OAuth2TokenError.IsPermanentGrantLoss(error))
+        {
+            await FailNeedsAuthorizationAsync(
+                connection,
+                $"Connection '{connection.Name}' needs authorization; the authorization server rejected its grant.",
+                cancellationToken);
+        }
+
+        throw new InvalidOperationException($"Token endpoint returned {(int)statusCode}.");
+    }
+
+    [DoesNotReturn]
+    private async ValueTask ThrowForMissingAccessTokenAsync(
+        IResolvedConnection connection,
+        JsonElement root,
+        CancellationToken cancellationToken)
+    {
+        var error = OAuth2TokenError.ReadError(root);
+        if (IsInteractive(connection) && OAuth2TokenError.IsPermanentGrantLoss(error))
+        {
+            await FailNeedsAuthorizationAsync(
+                connection,
+                $"Connection '{connection.Name}' needs authorization; the authorization server rejected its grant.",
+                cancellationToken);
+        }
+
+        throw new InvalidOperationException(OAuth2TokenError.MissingAccessTokenMessage(root));
+    }
+
+    private static bool IsInteractive(IResolvedConnection connection)
+    {
+        var grantType = connection.Settings.GetValueOrDefault(OAuth2SettingKeys.GrantType) ?? OAuth2GrantTypes.ClientCredentials;
+        return !string.Equals(grantType, OAuth2GrantTypes.ClientCredentials, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [DoesNotReturn]
+    private async ValueTask FailNeedsAuthorizationAsync(
+        IResolvedConnection connection,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        await TrySetStatusAsync(
+            connection,
+            ConnectionStatuses.NeedsAuthorization,
+            grantSecretName: null,
+            grantSecretVersion: null,
+            writeGrant: false,
+            cancellationToken);
+        throw new ConnectionUnavailableException(connection.Name, ConnectionFaultCodes.Unavailable, message);
+    }
+
+    private ValueTask MarkReadyAsync(
+        IResolvedConnection connection,
+        string grantSecretName,
+        int grantSecretVersion,
+        CancellationToken cancellationToken) =>
+        TrySetStatusAsync(
+            connection,
+            ConnectionStatuses.Ready,
+            grantSecretName,
+            grantSecretVersion,
+            writeGrant: true,
+            cancellationToken);
+
+    private async ValueTask TrySetStatusAsync(
+        IResolvedConnection connection,
+        string status,
+        string? grantSecretName,
+        int? grantSecretVersion,
+        bool writeGrant,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            var document = await connections.FindAsync(connection.TenantId, connection.Name, cancellationToken);
+            if (document is null)
+            {
+                throw new ConnectionUnavailableException(
+                    connection.Name,
+                    ConnectionFaultCodes.Unavailable,
+                    $"Connection '{connection.Name}' was not found in this tenant.");
+            }
+
+            if (string.Equals(document.State.Status, ConnectionStatuses.Revoked, StringComparison.Ordinal))
+                return;
+
+            var sameStatus = string.Equals(document.State.Status, status, StringComparison.Ordinal);
+            var sameGrant = !writeGrant ||
+                (string.Equals(document.State.GrantSecretName, grantSecretName, StringComparison.Ordinal) &&
+                 document.State.GrantSecretVersion == grantSecretVersion);
+            if (sameStatus && sameGrant)
+                return;
+
+            document.State.Status = status;
+            if (writeGrant)
+            {
+                document.State.GrantSecretName = grantSecretName;
+                document.State.GrantSecretVersion = grantSecretVersion;
+            }
+
+            document.State.UpdatedAt = timeProvider.GetUtcNow();
+            try
+            {
+                await connections.SaveAsync(document, cancellationToken);
+                return;
+            }
+            catch (ConnectionConflictException) when (attempt < 7)
+            {
+                // Another writer won the compare-and-swap; re-read and try again.
+            }
+        }
     }
 
     private static string RequiredSetting(IResolvedConnection connection, string key) =>

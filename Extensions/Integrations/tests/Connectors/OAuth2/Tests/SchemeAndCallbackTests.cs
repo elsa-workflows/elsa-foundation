@@ -40,7 +40,8 @@ public sealed class SchemeAndCallbackTests
             TenantId = OAuth2TestSupport.TenantId,
             Name = OAuth2TestSupport.ConnectionName,
             RequiredType = ConnectionTypeNames.Http,
-            Owner = ConnectionOwners.Tenant
+            Owner = ConnectionOwners.Tenant,
+            AllowNeedsAuthorization = true
         });
         var started = await tokens.BeginAuthorizationCodeAsync(connection);
         var code = harness.Server.ApproveAuthorization(new Uri(started.AuthorizationUrl));
