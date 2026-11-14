@@ -3,6 +3,9 @@ using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+#if ELSA_DASHBOARD_QUALIFICATION
+using CShells.Hosting;
+#endif
 using CShells.Lifecycle;
 using CShells.Management.Api;
 using CShells.Nuplane;
@@ -210,6 +213,7 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Defaul
 #if ELSA_DASHBOARD_QUALIFICATION
 builder.Services.AddSingleton<DashboardQualificationBootstrap>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());
+builder.Services.AddSingleton<IShellServiceExclusionProvider>(new DashboardQualificationServiceExclusions());
 #endif
 
 // Extension Builder is an optional extension (#2294) and a root-hosted subsystem: root singletons, a background build

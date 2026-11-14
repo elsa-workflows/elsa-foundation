@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using CShells.Features;
 using CShells.AspNetCore.Resolution;
+using CShells.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
@@ -26,4 +27,10 @@ internal sealed class DashboardQualificationBootstrap(IShellRegistry registry, I
         await QualificationPrincipals.InitializeAsync(registry, "default", configuration, stoppingToken);
         ready = true;
     }
+}
+
+/// <summary>The disposable qualification bootstrap and its readiness state belong only to the root host.</summary>
+internal sealed class DashboardQualificationServiceExclusions : IShellServiceExclusionProvider
+{
+    public IEnumerable<Type> GetExcludedServiceTypes() => [typeof(DashboardQualificationBootstrap)];
 }
