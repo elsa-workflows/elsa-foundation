@@ -35,7 +35,7 @@ Owner decisions on this proposal. They become binding when the design is approve
 1. **Orleans:** hosts each partition as a grain. One grain per instance, the per-actor fence and the sweep are dropped (see "The seam").
 2. **Commit fence:** in the batch by default, using EF concurrency tokens: 2 round trips on PostgreSQL, the lease time from the node clock. The fence as its own statement stays an option. **SQL Server (13 November):** the fence as its own statement is SQL Server's default, because the fence in the batch deadlocks takes there (E9, below).
 3. **Wake-ups between nodes:** a pluggable wake signal over the runtime's transport; polling remains the guarantee.
-4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls. Not built yet.
+4. **Short waits of an Ephemeral instance:** short timers and jobs stay in memory up to a threshold (the route timeout or a few seconds), so request-response workflows stay at zero database calls. Built in round 4 (the prototype's FINDINGS 25.6).
 5. **Events:** the subscription and event tables stay the kernel's one mechanism; a correlation instance per key remains a sample model.
 6. **Reply addresses:** expire at the route's timeout, carried as an absolute deadline; after it the owner drops the reply and unpins the instance.
 7. **Recreate after delete:** a rule per kind of id. A generated id never comes back (the start is dropped and journalled). A caller key refuses a repeat within `keep_until` and may start a fresh run after it.

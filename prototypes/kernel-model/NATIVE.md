@@ -180,7 +180,8 @@ PostgreSQL, round trips. Native: the fence as its own statement / the fence as c
 | http-reference | Balanced | **80** | **3 / 2** | 1 |
 | http-reference | Durable | 153 | 12 / 8 | 4 |
 | respond, then continue (case 2) | Balanced | | 6 / 4 | 2 |
-| a background job or a 20 ms Delay before the response (case 3) | Ephemeral or Balanced | | 6 / 4 | 2 |
+| a background job or a 20 ms Delay before the response (case 3) | Ephemeral | | **0** (6 / 4 before round 4) | 0 |
+| a background job or a 20 ms Delay before the response (case 3) | Balanced | | 6 / 4 | 2 |
 | resume at an HttpEndpoint, both requests, one node or two (case 4) | Balanced | | 16 / 12 | 4 |
 
 SQLite, engine calls (commands):
@@ -324,6 +325,7 @@ Frictions, without a change:
 - **F-N7. Ephemeral is lost at the first wait.** Scenario: HTTP case 3. A 20 ms Delay or a background job before the
   response is a message, so the instance commits twice (4 to 6 round trips) where it would otherwise cost zero. Short
   timers kept in memory for an instance that is not written would keep request-response workflows at zero. Run.
+  Since round 4 no longer a friction (decision 4, FINDINGS 25.6): case 3 in Ephemeral mode costs 0 database calls.
 - **F-N8. The meet ticket costs a commit.** Scenario: fork-join-resume. Every turn that subscribes pays a read of the
   event table and a commit that only consumes the ticket, even when the resume will come directly. Run (traced).
 - **F-N9. Kept events change Event's meaning.** Scenario: the cost measurement, first version. An event published
