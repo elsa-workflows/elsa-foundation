@@ -1,0 +1,212 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Acme.Home.Weaver;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Core.Models;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetPreparationProbeTests
+{
+    [Fact]
+    public async Task Actual_invoker_refusal_is_retained_without_constructing_a_review_or_effect()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var sessions = new PreparationSessions(env.Native.Sessions);
+        var invoker = new PreparationInvoker((_, _) => WeaverToolDispatch.Denied(new("schema-version-not-finalized", "Held", 409)));
+        var before = await env.Native.DocumentAsync();
+        var response = await WidgetPreparationProbe.PrepareAsync(new("session-a", false), env.Owner, sessions, invoker, default);
+        Assert.Equal(409, response.StatusCode);
+        Assert.Equal(WidgetPreparationProbe.EvidenceKind, response.Body.EvidenceKind);
+        Assert.Equal("Denied", response.Body.Outcome);
+        Assert.Equal("schema-version-not-finalized", response.Body.Error!.Code);
+        Assert.Null(response.Body.Proposal);
+        Assert.Null(response.Body.Result);
+        Assert.Single(invoker.Invocations);
+        Assert.Equal(1, sessions.PlainLookups);
+        Assert.Equal(1, sessions.Hydrations);
+        var call = invoker.Invocations[0];
+        Assert.Equal(WidgetEffects.Check, call.ToolName);
+        Assert.Equal("actor-a", call.ActorId);
+        Assert.Equal("tenant-a", call.TenantId);
+        Assert.Equal("session-a", call.SessionId);
+        Assert.True(Guid.TryParseExact(call.TurnId, "N", out _));
+        Assert.True(Guid.TryParseExact(call.ToolCallId, "N", out _));
+        Assert.NotEqual(call.TurnId, call.ToolCallId);
+        Assert.False((bool)Assert.Single(call.Arguments).Value!);
+        Assert.Equal("expectedVisible", Assert.Single(call.Arguments).Key);
+        Assert.Equal(WidgetEffects.Context, Assert.Single(call.Context).ContentType);
+        Assert.Same(env.Native.Sessions.Session!.Policy, Assert.Single(invoker.Policies));
+        Assert.Equal(before.Revision, (await env.Native.DocumentAsync()).Revision);
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Fact]
+    public async Task A_native_pending_proposal_is_projected_without_prepared_arguments_or_preview()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var preparation = (await env.PrepareAsync(env.Tool(WidgetEffects.Check))).Value!;
+        var invoker = new PreparationInvoker((call, _) => WeaverToolDispatch.Proposed(Proposal(env, preparation, call)));
+        var response = await WidgetPreparationProbe.PrepareAsync(new("session-a", true), env.Owner, new PreparationSessions(env.Native.Sessions), invoker, default);
+        Assert.Equal(200, response.StatusCode);
+        Assert.Equal("ProposalCreated", response.Body.Outcome);
+        Assert.Equal("proposal-native", response.Body.Proposal!.Id);
+        Assert.Equal("AwaitingApproval", response.Body.Proposal.Status);
+        Assert.True(response.Body.Proposal.RequiresApproval);
+        Assert.Null(response.Body.Error);
+        Assert.Null(response.Body.Result);
+        var projected = JsonSerializer.SerializeToElement(response.Body);
+        Assert.Equal(new[] { "Id", "Status", "RequiresApproval" }, projected.GetProperty("Proposal").EnumerateObject().Select(item => item.Name));
+        Assert.Equal(0, env.Native.Preferences.WriteAttempts);
+        Assert.Empty(env.Journal.Read(env.Native.Key));
+    }
+
+    [Theory]
+    [InlineData("missing-expected")]
+    [InlineData("blank-session")]
+    public async Task Missing_explicit_inputs_are_refused_before_session_hydration(string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var sessions = new PreparationSessions(env.Native.Sessions);
+        var invoker = new PreparationInvoker((_, _) => throw new InvalidOperationException("Forbidden dispatch"));
+        var refusal = await Assert.ThrowsAsync<WidgetRefusal>(() => WidgetPreparationProbe.PrepareAsync(
+            new(fault == "blank-session" ? "" : "session-a", fault == "missing-expected" ? null : true),
+            env.Owner, sessions, invoker, default));
+        Assert.Equal(400, refusal.Error.StatusCode);
+        Assert.Equal(0, sessions.PlainLookups);
+        Assert.Equal(0, sessions.Hydrations);
+        Assert.Empty(invoker.Invocations);
+    }
+
+    [Theory]
+    [InlineData("foreign-actor")]
+    [InlineData("foreign-tenant")]
+    [InlineData("missing-session")]
+    public async Task Plain_owner_refusal_prevents_hydration_and_dispatch(string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        env.Native.Sessions.Session = fault == "missing-session" ? null : env.Native.Sessions.Session! with
+        { ActorId = fault == "foreign-actor" ? "other" : "actor-a", TenantId = fault == "foreign-tenant" ? "other" : "tenant-a" };
+        var sessions = new PreparationSessions(env.Native.Sessions);
+        var invoker = new PreparationInvoker((_, _) => throw new InvalidOperationException("Forbidden dispatch"));
+        var error = await Assert.ThrowsAsync<WidgetRefusal>(() => WidgetPreparationProbe.PrepareAsync(new("session-a", true), env.Owner, sessions, invoker, default));
+        Assert.Equal(403, error.Error.StatusCode);
+        Assert.Equal(0, sessions.Hydrations);
+        Assert.Empty(invoker.Invocations);
+    }
+
+    [Theory]
+    [InlineData("principal")]
+    [InlineData("permission")]
+    [InlineData("cancellation")]
+    public async Task Authority_changes_while_plain_lookup_awaits_are_rejected_before_hydration(string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        using var cancellation = new CancellationTokenSource();
+        var sessions = new EffectLookupSessions(env.Native.Sessions);
+        var invoker = new PreparationInvoker((_, _) => throw new InvalidOperationException("Forbidden dispatch"));
+        var pending = WidgetPreparationProbe.PrepareAsync(new("session-a", true), env.Owner, sessions, invoker, cancellation.Token);
+        await sessions.LookupEntered.Task;
+        if (fault == "principal") env.Native.Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity([], "replacement"));
+        else if (fault == "permission") env.Native.Permissions.DeniedPermission = WidgetContract.WritePermission;
+        else cancellation.Cancel();
+        sessions.ReleaseLookup.SetResult();
+        if (fault == "cancellation") await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        else await Assert.ThrowsAsync<WidgetRefusal>(() => pending);
+        Assert.Equal(0, sessions.Hydrations);
+        Assert.Empty(invoker.Invocations);
+    }
+
+    [Theory]
+    [InlineData("full-auto")]
+    [InlineData("closed")]
+    [InlineData("expired")]
+    public async Task Preparation_does_not_rewrite_an_unreviewed_or_closed_session_policy(string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var session = env.Native.Sessions.Session!;
+        env.Native.Sessions.Session = session with
+        {
+            Policy = fault == "full-auto" ? session.Policy with { AutonomyMode = WeaverAutonomyMode.FullAuto } : session.Policy,
+            Status = fault == "closed" ? WeaverSessionStatus.Completed : session.Status,
+            ExpiresAt = fault == "expired" ? DateTimeOffset.UtcNow.AddSeconds(-1) : session.ExpiresAt
+        };
+        var invoker = new PreparationInvoker((_, _) => throw new InvalidOperationException("Forbidden dispatch"));
+        await Assert.ThrowsAsync<WidgetRefusal>(() => WidgetPreparationProbe.PrepareAsync(new("session-a", true), env.Owner,
+            new PreparationSessions(env.Native.Sessions), invoker, default));
+        Assert.Empty(invoker.Invocations);
+        Assert.Equal(fault == "full-auto" ? WeaverAutonomyMode.FullAuto : session.Policy.AutonomyMode, env.Native.Sessions.Session.Policy.AutonomyMode);
+    }
+
+    [Theory]
+    [InlineData("principal")]
+    [InlineData("permission")]
+    public async Task Lost_authority_after_dispatch_is_an_unknown_observation_and_never_a_success_projection(string fault)
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var invoker = new PreparationInvoker((_, _) =>
+        {
+            if (fault == "principal") env.Native.Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity([], "replacement"));
+            else env.Native.Permissions.DeniedPermission = WidgetContract.WritePermission;
+            return WeaverToolDispatch.Denied(new("schema-version-not-finalized", "Held", 409));
+        });
+        await Assert.ThrowsAsync<WidgetRefusal>(() => WidgetPreparationProbe.PrepareAsync(new("session-a", true), env.Owner,
+            new PreparationSessions(env.Native.Sessions), invoker, default));
+        Assert.Single(invoker.Invocations);
+    }
+
+    [Fact]
+    public async Task An_executed_dispatch_cannot_be_misreported_as_a_pending_preparation()
+    {
+        using var env = await EffectsEnvironment.CreateAsync();
+        var invoker = new PreparationInvoker((call, _) => WeaverToolDispatch.Executed(new(call.ToolCallId, call.ToolName, true, "Unexpected")));
+        var refusal = await Assert.ThrowsAsync<WidgetRefusal>(() => WidgetPreparationProbe.PrepareAsync(new("session-a", true), env.Owner,
+            new PreparationSessions(env.Native.Sessions), invoker, default));
+        Assert.Equal(503, refusal.Error.StatusCode);
+    }
+
+    private static WeaverActionProposal Proposal(EffectsEnvironment env, WeaverToolPreparation preparation, WeaverToolInvocation call)
+    {
+        var prepared = env.Freeze(preparation, env.Tool(WidgetEffects.Check)) with
+        { SessionId = call.SessionId, ToolCallId = call.ToolCallId, TurnId = call.TurnId };
+        var now = DateTimeOffset.UtcNow;
+        return new("proposal-native", call.SessionId, null, call.ToolName, "tool-invocation", "Check", "Native preparation",
+            WeaverRisk.Admin, prepared.Target?.Revision, [], [], [], null, [], prepared.Target?.ResourceType, prepared.Target?.ResourceId,
+            true, WeaverActionProposalStatus.AwaitingApproval, null, null, now, now) { PreparedInvocation = prepared };
+    }
+}
+
+internal sealed class PreparationInvoker(Func<WeaverToolInvocation, WeaverPolicy, WeaverToolDispatch> respond) : IWeaverToolInvoker
+{
+    internal readonly List<WeaverToolInvocation> Invocations = [];
+    internal readonly List<WeaverPolicy> Policies = [];
+    public async Task<WeaverToolDispatch> DispatchAsync(WeaverToolInvocation invocation, WeaverPolicy policy, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Invocations.Add(invocation);
+        Policies.Add(policy);
+        await Task.Yield();
+        return respond(invocation, policy);
+    }
+}
+
+internal sealed class PreparationSessions(FakeSessions native) : IWeaverSessionService
+{
+    internal int PlainLookups, Hydrations;
+    public Task<WeaverSessionOwner?> FindOwnerAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        PlainLookups++;
+        return Task.FromResult(native.Session is { } session && session.Id == sessionId ? new WeaverSessionOwner(session.ActorId, session.TenantId) : null);
+    }
+    public Task<WeaverSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
+    { Hydrations++; return native.FindAsync(sessionId, cancellationToken); }
+    public Task<WeaverSession> CreateAsync(WeaverSessionCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<WeaverMessage> AddMessageAsync(string sessionId, WeaverMessageCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<WeaverMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<WeaverMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<WeaverMessage?> FindLatestMessageAsync(string sessionId, WeaverRole? role = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task SetMessageStatusAsync(string sessionId, string messageId, WeaverMessageStatus status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task AddContextAsync(string sessionId, IReadOnlyCollection<WeaverContextAttachment> attachments, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<WeaverContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+}
