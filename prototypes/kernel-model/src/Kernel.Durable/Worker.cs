@@ -635,11 +635,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // still be fenced so an earlier due timer cannot strand the pending Park.
     private bool PoisonPending(Slot slot) => Volatile.Read(ref slot.PoisonAt) <= Now;
 
+    private bool PoisonInput(Delivery item, Slot slot) => !item.Taken && !item.DiscardedAt(slot) &&
+        item.UncheckedReference is null && item.Attempts >= _options.MaxAttempts &&
+        item.Message.Kind != Kinds.JobFinished && !Kinds.IsControl(item.Message.Kind) && CreationError(slot, item.Message) is null;
+
     private void RefreshPoisonBoundary(Slot slot) => Volatile.Write(ref slot.PoisonAt,
-        slot.Inbox.Where(i => !i.Taken && !i.DiscardedAt(slot) && i.UncheckedReference is null &&
-            i.Attempts >= _options.MaxAttempts && i.Message.Kind != Kinds.JobFinished &&
-            !Kinds.IsControl(i.Message.Kind) && CreationError(slot, i.Message) is null)
-            .Select(i => i.Message.Due ?? long.MinValue).DefaultIfEmpty(long.MaxValue).Min());
+        slot.Inbox.Where(i => PoisonInput(i, slot)).Select(i => i.Message.Due ?? long.MinValue)
+            .DefaultIfEmpty(long.MaxValue).Min());
+
+    // Called only by the owner: unlike physical admission this may inspect the ordered inbox.
+    private bool PrecedesPoison(Delivery suspect, Slot slot) => slot.Inbox
+        .Where(i => PoisonInput(i, slot) && !(i.Message.Due > Now)).All(i => suspect.InboxOrder < i.InboxOrder);
 
     /// <summary>
     /// An instance that cannot be given its messages now, as its actor type says (<see cref="IActorType.Withholds"/>).
@@ -672,7 +678,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // Excluded suspects do not precede any candidate on this side of the boundary, even when
             // their store sequence sorts first. Within the eligible side, take only a prefix per target.
             if (suspect.Message.Due > now || control is not null && !BeforeCut(suspect, control)) continue;
-            if (skipped.Contains(target) || PoisonPending(slot) && suspect.Message.Kind == Kinds.Job) continue;
+            if (skipped.Contains(target) || PoisonPending(slot) &&
+                (suspect.Message.Kind == Kinds.Job || !PrecedesPoison(suspect, slot))) continue;
             if (suspect.UncheckedReference is null && (slot.Loaded || Has(Flaw.TrialBeforeLoad)) && (!slot.Busy || Has(Flaw.SuspendDuringTrial) || Has(Flaw.TrialBeforeLoad))
                 && (suspect.DiscardedAt(slot) || !Withheld(slot) || CreationError(slot, suspect.Message) is not null)
                 && (attempts ??= suspect.Attempts) == suspect.Attempts)
