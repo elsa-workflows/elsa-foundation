@@ -840,6 +840,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             (slot.SelfReferences ??= [])[reference] = byName![target].Canonical == byName[reference].Canonical;
             item.UncheckedReference = null;
             slot.PendingReferences--;
+            RefreshPoisonBoundary(slot);
         }
         foreach (var ticket in _items.Values.Where(i => i.Key is not null).ToArray()) StartJob(ticket, cancellationToken);
         Evict();
@@ -1007,9 +1008,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!_slots.TryGetValue(Canonical(ticket.Message.Target.Id), out var loadedSlot) || !loadedSlot.Loaded || loadedSlot.Busy) return;
         if (loadedSlot.Row is not { Status: InstanceStatus.Running } || CreationProtocol.TargetError(loadedSlot.Row, ticket.Message) is not null)
         {
-            // An already submitted driver belongs to its own ticket until completion or explicit cancellation.
-            // Its queued entry still checks RunnableCreation; no new body enters an ended instance.
-            if (ticket.JobEntered) return;
+            // An entered driver of this occurrence retains its completion path until explicit cancellation.
+            // Queued callbacks and earlier occurrences still cannot enter or borrow the current row.
+            if (Volatile.Read(ref ticket.JobEntered) && loadedSlot.Row is { Retired: false, Status: not InstanceStatus.Running } current &&
+                current.Creation == (ticket.Message.TargetCreation ?? 0)) return;
             ticket.Cancel?.Cancel();
             ticket.Ticket = false; ticket.Key = null;
             return; // the normal fenced dispatch consumes/refuses this stale target
@@ -1060,7 +1062,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     return ValueTask.FromResult<object?>(null);
                 // Admission happens on the executing thread. Once admitted, ordinary cancellation signals the body.
                 entered = true;
-                ticket.JobEntered = true;
+                Volatile.Write(ref ticket.JobEntered, true);
             }
             return _type.ExecuteJobAsync(job.Model, context, token);
         }
