@@ -81,6 +81,11 @@ describe("SequenceDesigner", () => {
     expect(container.textContent).not.toContain("0+e26c11bd");
   });
 
+  it.each(["3fa85f64-5717-4562-b3fc-2c963f66afa6", "deadbeefdeadbeef", "2026111400000001"])("keeps the explicitly authored card title %s", label => {
+    mount([workflowNode("named", label, { activityTypeKey: "Elsa.Sequence", hasAuthoredLabel: true })]);
+    expect(container.querySelector(".wf-sequence-title")?.textContent).toBe(label);
+  });
+
   it("keeps insertion boundaries and connectors in place when a card is selected", () => {
     const nodes = [workflowNode("first", "Start"), workflowNode("second", "Work"), workflowNode("third", "Finish")];
     const { render } = mount(nodes);
