@@ -97,6 +97,7 @@ public sealed class NativeSelectedCompositeTests
     [InlineData("duplicate-root")]
     [InlineData("scheduler")]
     [InlineData("scope")]
+    [InlineData("metadata-scope")]
     [InlineData("root-id")]
     [InlineData("terminal-parent")]
     public async Task Invalid_owned_child_schedules_cannot_change_header_invocations_or_queued_work(string defect)
@@ -119,7 +120,8 @@ public sealed class NativeSelectedCompositeTests
             defect == "root-id" ? owner.RunningHeader!.TestContext!.RootActivityExecutionId! : "new-child",
             RuntimeScheduleActivityCommandPayload.ActivityCompletionReason, schedulerId, parentId,
             ActivitySchedulingProvenance.From(harness.ExecutionId, parentId, schedulerId, null, null, null, scope,
-                RuntimeScheduleActivityCommandPayload.ActivityCompletionReason));
+                RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
+                defect == "metadata-scope" ? new Dictionary<string, string> { [RuntimeMetadataKeys.FlowchartExecutionScopeId] = "foreign-scope" } : null));
         var work = new RuntimeSchedulerWorkItem("forged-child", harness.ExecutionId, "forged-command", WorkflowExecutionCommandKind.ScheduleActivity,
             "forged-envelope", "forged-key", owner.Clock.Now, owner.Clock.Now, payload: JsonSerializer.SerializeToElement(payload), executionScopeId: scope);
         var queue = harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
@@ -153,12 +155,12 @@ public sealed class NativeSelectedCompositeTests
     {
         var probe = WorkflowExecutionHarness.NewProbeNode("owned");
         var declaration = probe.InputBindings[nameof(ProbeActivity.Outcomes)];
-        var result = ValueEnvelope.Inline(declaration.Type, JsonSerializer.SerializeToElement(new[] { ActivityOutcomes.Done }), ValueProtectionPolicy.InstanceInline);
+        var result = ValueEnvelope.Inline(declaration.TargetType, JsonSerializer.SerializeToElement(new[] { ActivityOutcomes.Done }), ValueProtectionPolicy.InstanceInline);
         var owner = new Owner { Fixtures = [new("before", "outside", result)] };
         owner.Before = new("before", "before", "fixture.producer", "1", "fixture.producer", JsonSerializer.SerializeToElement(new { }),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), activityContract: new("fixture.producer", "1", "fixture.producer",
-                JsonSerializer.SerializeToElement(new { }), [], new(declaration.Type, true, ActivityValuePolicy.Default, []), [ActivityOutcomes.Done], new("fixture.producer", "probe")));
-        var binding = new RuntimeInputBinding(declaration.InputKey, declaration.Type, declaration.Policy,
+                JsonSerializer.SerializeToElement(new { }), [], new(declaration.TargetType, true, ActivityValuePolicy.Default, []), [ActivityOutcomes.Done], new("fixture.producer", "probe")));
+        var binding = new RuntimeInputBinding(declaration.InputKey, declaration.TargetType, declaration.EffectivePolicy,
             expression ? RuntimeInputBindingSource.Expression : RuntimeInputBindingSource.ActivityResult,
             activityResult: expression ? null : new("before", "$result", "outside"),
             expression: expression ? new("fixture-expression", "p", parameters: new Dictionary<string, ExpressionParameterBinding>
@@ -177,6 +179,31 @@ public sealed class NativeSelectedCompositeTests
         Assert.Equal(Assert.Single(rows, x => x.Execution.ExecutableNodeId == "inner").InvocationId, actual.ParentActivityExecutionId);
         Assert.Equal(ActivityOutcomes.Done, actual.InputSnapshot!.Values[nameof(ProbeActivity.Outcomes)].InlineValue!.Value[0].GetString());
         Assert.Equal("before", Assert.Single(state.TestContext!.Results).ProducerNodeId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Exact_settled_child_schedule_replay_reconciles_after_parent_or_workflow_completion(bool terminalWorkflow)
+    {
+        var owner = new Owner();
+        await using var harness = Harness(owner, PersistenceMode.Balanced);
+        await Setup(harness, owner, Sequence("selected", [Sequence("inner", [WorkflowExecutionHarness.NewProbeNode("owned")])]));
+        await harness.Services.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(Request(harness, owner), WorkflowExecutableReferenceScope.TestRun);
+        var workflows = harness.Services.GetRequiredService<IWorkflowExecutionStateStore>();
+        var activities = harness.Services.GetRequiredService<IActivityExecutionStateStore>();
+        var queue = harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await workflows.FindAsync(harness.ExecutionId))!.Status);
+        if (!terminalWorkflow) await workflows.SaveAsync(owner.RunningHeader!);
+        var beforeHeader = JsonSerializer.Serialize(await workflows.FindAsync(harness.ExecutionId));
+        var beforeActivities = JsonSerializer.Serialize(await activities.ListAllAsync(harness.ExecutionId));
+        var beforeQueue = JsonSerializer.Serialize(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
+        var handler = Assert.Single(harness.Services.GetServices<IWorkflowSchedulerWorkHandler>().OfType<WorkflowScheduleActivitySchedulerWorkHandler>());
+        Assert.NotEmpty(owner.ChildSchedules);
+        foreach (var work in owner.ChildSchedules) await handler.HandleAsync(work);
+        Assert.Equal(beforeHeader, JsonSerializer.Serialize(await workflows.FindAsync(harness.ExecutionId)));
+        Assert.Equal(beforeActivities, JsonSerializer.Serialize(await activities.ListAllAsync(harness.ExecutionId)));
+        Assert.Equal(beforeQueue, JsonSerializer.Serialize(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId))));
     }
 
     private static WorkflowExecutionHarness Harness(Owner owner, PersistenceMode mode) => WorkflowExecutionHarness.Create()
@@ -241,6 +268,7 @@ public sealed class NativeSelectedCompositeTests
         internal bool QualifyTree = true;
         internal RuntimeTestResultFixture[] Fixtures = [];
         internal List<string> QualifiedNodes { get; } = [];
+        internal List<RuntimeSchedulerWorkItem> ChildSchedules { get; } = [];
         public ValueTask<WorkflowTestEntry?> FindAsync(string contextId, CancellationToken cancellationToken = default) => ValueTask.FromResult(Entry);
         public ValueTask<RuntimeTestContextSeed?> ResolveAsync(WorkflowTestEntry entry, WorkflowExecutable executable, string workflowExecutionId,
             CancellationToken cancellationToken = default) => ValueTask.FromResult<RuntimeTestContextSeed?>(new(entry.ContextId, entry.ContextFingerprint, [], Fixtures));
@@ -254,9 +282,9 @@ public sealed class NativeSelectedCompositeTests
             QualifiedNodes.Add(ownedNode.ExecutableNodeId);
             return ValueTask.FromResult(QualifyTree && ownedNode.InputBindings.Values.All(x => x.Source == RuntimeInputBindingSource.Literal && x.Literal is { Presence: ValuePresence.Present } ||
                     Fixtures.Count(f => f.ProducerNodeId == "before") == 1 &&
-                    Fixtures.Any(f => f.ProducerNodeId == "before" && f.ProducerScopeId == "outside" && f.Result.Type == x.Type) &&
+                    Fixtures.Any(f => f.ProducerNodeId == "before" && f.ProducerScopeId == "outside" && f.Result.Type == x.TargetType) &&
                     (x.ActivityResult is { ProducerExecutableNodeId: "before", ProjectionKey: "$result", ProducerScopeId: "outside" } ||
-                        x.Expression is { Language: "fixture-expression", Source: "p" } expression && expression.Parameters.Count == 1 &&
+                        x.Expression is { Language: "fixture-expression", Expression: "p" } expression && expression.Parameters.Count == 1 &&
                         expression.Parameters.TryGetValue("p", out var parameter) && parameter is ActivityResultExpressionParameterBinding { ProducerNodeId: "before", ProjectionKey: "$result" })) &&
                 ownedNode.Metadata.Count == 0 && ownedNode.OutputCaptures.Count == 0 &&
                 (ownedNode.ActivityType == typeof(SequenceActivity).FullName || ownedNode.ActivityType == ProbeActivity.ProbeActivityType || ownedNode.ActivityType == typeof(ProbeActivity).FullName));
@@ -264,6 +292,13 @@ public sealed class NativeSelectedCompositeTests
         public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
         {
             if (commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted) RunningHeader = commit.StateChanges.WorkflowExecution!.State;
+            foreach (var intent in commit.PostCommitIntents.Where(x => x.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+            {
+                var work = intent.MaterializedSchedulerWorkItem ?? intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>();
+                if (work?.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity &&
+                    work.Payload?.Deserialize<RuntimeScheduleActivityCommandPayload>()?.ParentActivityExecutionId is not null)
+                    ChildSchedules.Add(work);
+            }
             foreach (var change in commit.StateChanges.ActivityExecutions)
                 if (change.State.Execution.ExecutableNodeId == "selected" && change.State.Status is ActivityExecutionStatus.Running or ActivityExecutionStatus.Waiting)
                     ActiveRoot = change.State;
