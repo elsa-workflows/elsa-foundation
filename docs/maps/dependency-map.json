@@ -256,7 +256,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -2348,6 +2348,65 @@
       ]
     },
     {
+      "path": "Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj",
+      "name": "Elsa.Activities.Graph.Releases",
+      "kind": "source",
+      "domain": "Elsa.Activities",
+      "sub_domain": "Graph.Releases",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Activities.Graph.Releases",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Releases.Runtime.Core",
+          "path": "Essentials/src/Workflows/Publishing/Releases/Runtime/Core/Elsa.Workflows.Publishing.Releases.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
       "path": "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
       "name": "Elsa.Activities.Graph.Runtime",
       "kind": "source",
@@ -2501,7 +2560,7 @@
       ]
     },
     {
-      "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj",
+      "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj",
       "name": "Elsa.Activities.Primitives",
       "kind": "source",
       "domain": "Elsa.Activities",
@@ -2576,6 +2635,80 @@
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
           "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj",
+      "name": "Elsa.Activities.Primitives.Releases",
+      "kind": "source",
+      "domain": "Elsa.Activities",
+      "sub_domain": "Primitives.Releases",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Activities.Primitives.Releases",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Primitives",
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Releases.Runtime.Core",
+          "path": "Essentials/src/Workflows/Publishing/Releases/Runtime/Core/Elsa.Workflows.Publishing.Releases.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
         },
         {
           "type": "pinned-transitive",
@@ -9400,6 +9533,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Releases.Runtime.Core",
+          "path": "Essentials/src/Workflows/Publishing/Releases/Runtime/Core/Elsa.Workflows.Publishing.Releases.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -9481,6 +9619,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Publishing.Core",
           "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Releases.Capture.Core",
+          "path": "Essentials/src/Workflows/Publishing/Releases/Capture/Core/Elsa.Workflows.Publishing.Releases.Capture.Core.csproj"
         },
         {
           "type": "internal",
@@ -11379,7 +11522,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -11676,7 +11819,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -11815,7 +11958,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -11974,7 +12117,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -12098,7 +12241,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -12517,7 +12660,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -12681,7 +12824,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -12978,7 +13121,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -13137,7 +13280,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -13356,7 +13499,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -13485,7 +13628,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -13619,7 +13762,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -14045,7 +14188,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -14468,6 +14611,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Graph.Releases",
+          "path": "Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Graph.Runtime",
           "path": "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj"
         },
@@ -14479,7 +14627,12 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Primitives.Releases",
+          "path": "Essentials/src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj"
         },
         {
           "type": "internal",
@@ -15583,6 +15736,11 @@
           "type": "internal",
           "id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
           "path": "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -20192,7 +20350,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -22249,7 +22407,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -22623,6 +22781,115 @@
           "type": "internal",
           "id": "Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore",
           "path": "Essentials/src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/tests/Workflows/Publishing/Releases/NativeCapture/Tests/Elsa.Workflows.Publishing.Releases.NativeCapture.Tests.csproj",
+      "name": "Elsa.Workflows.Publishing.Releases.NativeCapture.Tests",
+      "kind": "test",
+      "domain": "Elsa.Workflows",
+      "sub_domain": "Publishing.Releases.NativeCapture.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Graph.Design",
+          "path": "Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Graph.Releases",
+          "path": "Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Primitives",
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Primitives.Releases",
+          "path": "Essentials/src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.SystemText",
+          "path": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Api",
+          "path": "Essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing",
+          "path": "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Releases",
+          "path": "Essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Releases.Runtime",
+          "path": "Essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/Elsa.Workflows.Publishing.Releases.Runtime.csproj"
         },
         {
           "type": "external",
@@ -23069,6 +23336,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Http",
+          "path": "Essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Api.Compatibility.Testing",
           "path": "Essentials/tests/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj"
         },
@@ -23469,7 +23741,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -23741,8 +24013,13 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -23828,6 +24105,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime",
           "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Http",
+          "path": "Essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj"
         },
         {
           "type": "internal",
@@ -25392,7 +25674,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -27048,7 +27330,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -27450,7 +27732,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
@@ -30473,7 +30755,7 @@
         {
           "type": "internal",
           "id": "Elsa.Activities.Primitives",
-          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj"
         },
         {
           "type": "internal",
