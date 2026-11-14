@@ -39,6 +39,10 @@ credentials; exchanges by another subject, failed exchanges and direct preview w
 Browser response checks separately require the existing administrator subject. This avoids counting a normal
 exchange in both a database baseline and a later independently sampled browser delta.
 
+The Studio producer has a bounded45-minute operational ceiling, including queue time. Hosted run43627566756
+was stopped at its former30-minute ceiling after reaching journey71of104; it did not establish acceptance.
+The longer ceiling changes no assertions, producer recipes, source/tool identity checks or child-process cleanup.
+
 ## Browser and owning dependencies
 
 The module's `Client/scripts/browser.mjs` now imports these actual helpers and its `test:browser` package entry
