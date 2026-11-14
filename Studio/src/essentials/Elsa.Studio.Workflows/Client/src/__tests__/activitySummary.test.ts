@@ -117,6 +117,35 @@ describe("HTTP endpoint summaries", () => {
   });
 });
 
+describe("Event activity summaries", () => {
+  const eventNameInput = { name: "EventName", referenceKey: "EventName", typeName: "System.String", order: 1 };
+  const canStartInput = { name: "CanStartWorkflow", referenceKey: "CanStartWorkflow", typeName: "System.Boolean", order: 0 };
+  const eventCatalog = (inputs: unknown[] = [canStartInput, eventNameInput]) => ({
+    ...catalog(inputs), activityTypeKey: "Elsa.Event", displayName: "Event"
+  });
+
+  it.each(["expanded", "wire"])("shows EventName instead of CanStartWorkflow on a %s node", shape => {
+    const activity = shape === "expanded"
+      ? node({ CanStartWorkflow: wrapped("Literal", true), EventName: wrapped("Literal", "ux-qa-wait-2") })
+      : node({ inputs: [
+        { referenceKey: "CanStartWorkflow", value: { value: true, expressionType: "Literal" } },
+        { referenceKey: "EventName", value: { value: "ux-qa-wait-2", expressionType: "Literal" } }
+      ] });
+    expect(formatActivitySummary(activity, eventCatalog())).toBe('"ux-qa-wait-2"');
+  });
+
+  it("does not surface a GUID or version-hash EventName on the card", () => {
+    expect(formatActivitySummary(
+      node({ EventName: wrapped("Literal", "3fa85f64-5717-4562-b3fc-2c963f66afa6") }),
+      eventCatalog()
+    )).toBeUndefined();
+    expect(formatActivitySummary(
+      node({ EventName: wrapped("Literal", "0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5") }),
+      eventCatalog()
+    )).toBeUndefined();
+  });
+});
+
 describe("formatActivitySummary for masked and secret-only inputs", () => {
   const storedValue = "stored-value-words";
   const sensitiveInput = { ...textInput, isSensitive: true };
