@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Bpmn.Core;
@@ -14,7 +15,11 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Services;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Process = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -24,7 +29,41 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 /// <summary>Projection and authorization controls; actual host execution is a separate integration gate.</summary>
 public sealed class BpmnAuthoredDirectPublisherTests
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    // Match the normal JsonPayloadSerializer writer: missing nullable defaults are omitted.
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Authored_explicit_null_defaults_are_refused_before_lossy_projection_or_publication(bool immutableSource)
+    {
+        var fixture = new Fixture();
+        fixture.Version.State = fixture.Version.State with
+        {
+            Inputs = [new("value", "value", new("String"), null, "Value", null, false,
+                DefaultValue: JsonSerializer.SerializeToElement<string?>(null), IsRequired: true)]
+        };
+        if (immutableSource) fixture.Version.StateSource = JsonSerializer.Serialize(fixture.Version.State, Web);
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+        Assert.Contains("explicit-null defaults", error.Message);
+        Assert.Equal(0, fixture.Publications);
+    }
+
+    [Fact]
+    public async Task Authored_null_default_case_aliases_are_refused_before_nullable_deserialization()
+    {
+        var fixture = new Fixture();
+        var source = JsonSerializer.SerializeToNode(fixture.Version.State, Web)!.AsObject();
+        source.Remove("inputs");
+        source["Inputs"] = JsonSerializer.SerializeToNode(new[] { new
+        {
+            referenceKey = "value", name = "value", displayName = "Value", type = new { alias = "String" },
+            isNullable = false, isRequired = true, DefaultValue = (string?)null
+        } }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        fixture.Version.StateSource = source.ToJsonString();
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+        Assert.Contains("explicit-null defaults", error.Message); Assert.Equal(0, fixture.Publications);
+    }
 
     [Fact]
     public async Task Publication_uses_the_immutable_version_and_presentation_without_mutating_authoring()
@@ -32,10 +71,12 @@ public sealed class BpmnAuthoredDirectPublisherTests
         var fixture = new Fixture();
         var before = JsonSerializer.Serialize(fixture.Version.State, Web);
         var outcome = await fixture.Publish();
-        Assert.Equal("source", outcome.SourceReferenceId);
+        Assert.StartsWith("activation-ref:bpmn-publication:", outcome.SourceReferenceId);
         Assert.Equal(1, fixture.Publications);
-        Assert.Equal(["version", "definition", "authorize:bpmn:publish", "authorize:workflows/publishing:manage", "catalog", "visible", "layout", "publish"], fixture.Calls);
-        Assert.Equal("operation", fixture.RequestId);
+        Assert.Equal(["version", "definition", "authorize:bpmn:publish", "authorize:workflows/publishing:manage", "catalog", "visible", "layout", "prepare", "activate"], fixture.Calls);
+        Assert.Equal("process-definition", outcome.Publication!.DefinitionId);
+        Assert.Equal("version-1", outcome.Publication.VersionId);
+        Assert.Equal("default", outcome.Publication.SlotName);
         Assert.Equal(new BpmnModelCaller("author", null), fixture.Caller);
         Assert.Equal("version-1", fixture.Source!.VersionId);
         Assert.Equal("1.0.0", fixture.Source.Version);
@@ -109,6 +150,58 @@ public sealed class BpmnAuthoredDirectPublisherTests
         if (foreign == "layout") fixture.Layout.TenantId = "other-tenant";
         await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => fixture.Publish());
         Assert.Equal(0, fixture.Publications);
+    }
+
+    [Theory]
+    [InlineData(false, "current")]
+    [InlineData(true, "current")]
+    [InlineData(false, "scope")]
+    [InlineData(true, "scope")]
+    [InlineData(false, "replacement")]
+    [InlineData(true, "replacement")]
+    [InlineData(false, "slot-address")]
+    [InlineData(true, "slot-address")]
+    [InlineData(false, "missing-authority")]
+    [InlineData(true, "missing-authority")]
+    public async Task Authored_worker_selection_proves_the_actual_logical_slot_for_closed_and_input_models(bool inputs, string change)
+    {
+        var fixture = new Fixture();
+        fixture.UseService(ServiceMetadata().ToJsonString());
+        if (inputs) fixture.Version.State = fixture.Version.State with
+        {
+            Inputs = [new("text", "text", new("String"), null, "Text", null, false, IsRequired: true)]
+        };
+        const string definition = "logical-worker", publication = "worker-publication";
+        fixture.WorkerSlot = new(WorkflowActivationSlotIdentity.Create(definition, "blue"), definition, "blue", publication,
+            WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow);
+        fixture.WorkerSource = fixture.WorkerSource! with
+        {
+            SourceReferenceId = WorkflowActivationReferenceIdentity.Create(publication), DefinitionId = definition,
+            DefinitionVersionId = "logical-version", ActivationId = publication, SlotId = fixture.WorkerSlot.SlotId,
+            PublicationScope = new("scope")
+        };
+        var metadata = ServiceMetadata(); metadata["sourceReferenceId"] = fixture.WorkerSource.SourceReferenceId;
+        fixture.UseService(metadata.ToJsonString());
+        if (change == "scope") fixture.WorkerSource = fixture.WorkerSource with { PublicationScope = new("other") };
+        if (change == "replacement") fixture.WorkerSlot = fixture.WorkerSlot with { ActiveActivationId = "later" };
+        if (change == "slot-address")
+        {
+            fixture.WorkerSource = fixture.WorkerSource with { SlotId = "forged" };
+            fixture.WorkerSlot = fixture.WorkerSlot with { SlotId = "forged" };
+        }
+        if (change == "missing-authority") fixture.WorkerSlot = null;
+        if (change == "current")
+        {
+            await fixture.Publish();
+            Assert.Equal("worker-definition", Assert.Single(fixture.Model!.ServiceBindings!).Executable.DefinitionId);
+            Assert.Equal(1, fixture.Publications);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => fixture.Publish());
+            Assert.Equal(0, fixture.Publications);
+            Assert.DoesNotContain("prepare", fixture.Calls);
+        }
     }
 
     [Theory]
@@ -286,6 +379,151 @@ public sealed class BpmnAuthoredDirectPublisherTests
         businessErrorCode = "etl-business-failure", faultPolicy = new { formatVersion = 1, disposition = "HoldForRetry", maxAttempts = 3 }
     }, Web)!.AsObject();
 
+    [Fact]
+    public async Task Declared_model_inputs_and_version_two_worker_mapping_are_projected_without_native_bindings()
+    {
+        var fixture = new Fixture();
+        fixture.Version.State = fixture.Version.State with
+        {
+            Inputs = [new("text", "text", new("String"), null, "Text", null, false, IsRequired: true)]
+        };
+        var metadata = ServiceMetadata();
+        metadata["formatVersion"] = 2;
+        metadata["inputs"] = new JsonObject
+        {
+            ["message"] = new JsonObject { ["kind"] = "Input", ["name"] = "text" },
+            ["count"] = new JsonObject { ["kind"] = "Literal", ["value"] = 7 }
+        };
+        fixture.UseService(metadata.ToJsonString());
+        await fixture.Publish();
+        var declared = Assert.Single(fixture.InputContract!.Inputs);
+        Assert.Equal("text", declared.Name);
+        Assert.True(declared.IsRequired);
+        var mapping = Assert.Single(fixture.Mappings!);
+        Assert.Equal("service:human", mapping.BindingId);
+        Assert.Equal("text", mapping.Inputs["message"].Name);
+        Assert.Equal(7, mapping.Inputs["count"].Value!.Value.GetInt32());
+        Assert.Equal("process-definition", fixture.Activation!.Reference.DefinitionId);
+        Assert.Equal("producer-definition", fixture.Activation.Material.Identity.DefinitionId);
+        Assert.Equal(fixture.Activation.Candidate.PublicationId, fixture.Activation.Reference.ActivationId);
+        Assert.Equal(fixture.Activation.Candidate.SlotId, fixture.Activation.Reference.SlotId);
+    }
+
+    [Theory]
+    [InlineData("{\"kind\":\"Expression\",\"name\":\"text\"}")]
+    [InlineData("{\"kind\":\"Input\",\"name\":\"text\",\"value\":7}")]
+    [InlineData("{\"kind\":\"Input\",\"name\":\"text\",\"name\":\"other\"}")]
+    [InlineData("{\"kind\":\"Literal\"}")]
+    public async Task Worker_input_sources_refuse_unversioned_or_ambiguous_meaning(string input)
+    {
+        var fixture = new Fixture();
+        var metadata = ServiceMetadata().ToJsonString().Replace("\"formatVersion\":1,\"kind\":\"nativeService\"",
+            "\"formatVersion\":2,\"kind\":\"nativeService\",\"inputs\":{\"message\":" + input + "}", StringComparison.Ordinal);
+        fixture.UseService(metadata);
+        await Assert.ThrowsAsync<BpmnModelValidationException>(() => fixture.Publish());
+        Assert.Equal(0, fixture.Publications);
+    }
+
+    [Theory]
+    [InlineData("publication")]
+    [InlineData("revision")]
+    [InlineData("omitted-revision")]
+    [InlineData("intent")]
+    [InlineData("action")]
+    [InlineData("slot")]
+    public async Task A_reused_operation_id_binds_the_exact_supplied_publication_intent(string change)
+    {
+        var fixture = new Fixture();
+        var originalIntent = change is "action" or "slot" ? new PublicationRequestIntent(PublicationAction.Replace) : null;
+        long? originalRevision = change == "omitted-revision" ? 0 : null;
+        await fixture.Publish(originalIntent, originalRevision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => fixture.Publish(
+            change switch
+            {
+                "intent" => new(PublicationAction.Replace),
+                "action" => new(PublicationAction.PublishSideBySide),
+                "slot" => new(PublicationAction.Replace, "default"),
+                _ => originalIntent
+            }, change == "revision" ? 0 : change == "omitted-revision" ? null : originalRevision,
+            change == "publication" ? "different-serving-publication" : null));
+        Assert.Equal(1, fixture.Publications);
+    }
+
+    [Fact]
+    public async Task Exact_replay_keeps_its_accepted_slot_after_policy_and_authority_advance()
+    {
+        var fixture = new Fixture();
+        var original = await fixture.Publish(expectedSlotRevision: 0);
+        fixture.ResolvedSlotName = "new-default";
+        fixture.Slot = fixture.Slot! with { Revision = 9, ActiveActivationId = "later-publication" };
+        var replay = await fixture.Publish(expectedSlotRevision: 0);
+        Assert.Equal(original.Publication!.PublicationId, replay.Publication!.PublicationId);
+        Assert.Equal("default", replay.Publication.SlotName);
+        Assert.Equal(1, fixture.Publications);
+        Assert.Equal(1, fixture.PolicyResolutions);
+    }
+
+    [Theory]
+    [InlineData(PublicationStatus.Candidate)]
+    [InlineData(PublicationStatus.Failed)]
+    [InlineData(PublicationStatus.Active)]
+    [InlineData(PublicationStatus.Retired)]
+    public async Task Every_retained_status_refuses_changed_or_unverifiable_intent(PublicationStatus status)
+    {
+        var fixture = new Fixture();
+        await fixture.Publish();
+        fixture.RetainedPublication = fixture.RetainedPublication! with { Status = status };
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => fixture.Publish(expectedSlotRevision: 0));
+        fixture.RetainedPublication = fixture.RetainedPublication with { RequestFingerprint = null };
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => fixture.Publish());
+        Assert.Equal(1, fixture.Publications);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Concurrent_create_losers_reconcile_the_actual_create_only_journal(bool changedIntent)
+    {
+        var fixture = new Fixture { Journal = new InMemoryPublicationRecordStore() };
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var entered = 0;
+        fixture.BeforeSave = _ =>
+        {
+            if (Interlocked.Increment(ref entered) == 1) firstEntered.SetResult();
+            else release.SetResult();
+            return release.Task;
+        };
+        var first = fixture.Publish();
+        await firstEntered.Task;
+        var second = fixture.Publish(expectedSlotRevision: changedIntent ? 0 : null);
+        if (changedIntent)
+        {
+            await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => Task.WhenAll(first, second));
+            Assert.Single(new[] { first, second }, task => task.IsCompletedSuccessfully);
+            Assert.Single(new[] { first, second }, task => task.Exception?.InnerException is RuntimeCheckpointReplayConflictException);
+        }
+        else
+        {
+            var results = await Task.WhenAll(first, second);
+            Assert.Equal(results[0].Publication!.PublicationId, results[1].Publication!.PublicationId);
+        }
+        Assert.Equal(1, fixture.Publications);
+    }
+
+    [Fact]
+    public async Task An_unrelated_failure_after_journaling_is_preserved_without_repeated_activation()
+    {
+        var failure = new InvalidOperationException("actual storage/lifecycle failure");
+        var fixture = new Fixture { Journal = new InMemoryPublicationRecordStore(), AfterSave = () => throw failure };
+        Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Publish()));
+        Assert.Equal(1, fixture.Calls.Count(call => call == "activate"));
+        Assert.Equal(0, fixture.Publications);
+    }
+
+    private sealed class Scope : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new("scope")); }
+
     private sealed class Fixture : IWorkflowDefinitionVersionStore, IWorkflowDefinitionStore,
         IWorkflowDefinitionVersionLayoutStore, IActivityDefinitionLookup, IPermissionAuthorizationService, IBpmnModelRuntime,
         IWorkflowExecutableSourceReferenceReader
@@ -307,10 +545,21 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public bool MissingActivity { get; set; }
         public bool Visible { get; set; } = true;
         public int Publications { get; private set; }
+        public PublicationRecord? RetainedPublication { get; set; }
+        public IPublicationRecordStore? Journal { get; set; }
+        public Func<PublicationMaterialActivationRequest, Task>? BeforeSave { get; set; }
+        public Action? AfterSave { get; set; }
+        public WorkflowActivationSlot? Slot { get; set; }
+        public WorkflowActivationSlot? WorkerSlot { get; set; }
+        public string ResolvedSlotName { get; set; } = "default";
+        public int PolicyResolutions { get; private set; }
         public BpmnModelDefinition? Model { get; private set; }
         public BpmnModelPublicationProvenance? Source { get; private set; }
         public BpmnModelCaller? Caller { get; private set; }
         public string? RequestId { get; private set; }
+        public WorkflowExecutableInputContract? InputContract { get; private set; }
+        public IReadOnlyList<BpmnWorkerInputMapping>? Mappings { get; private set; }
+        public PublicationMaterialActivationRequest? Activation { get; private set; }
         public WorkflowExecutableSourceReference? WorkerSource { get; set; } = new("worker-source", "worker-artifact", "workflow-definition", "worker-definition",
             "1.0.0", "worker-definition", "worker-version", "1.0.0", DateTimeOffset.MinValue, DateTimeOffset.MinValue, WorkflowExecutableReferenceScope.Published);
 
@@ -325,12 +574,47 @@ public sealed class BpmnAuthoredDirectPublisherTests
                 new(Process.StructureKind, Process.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web))), [], [], null) };
         }
 
-        public Task<BpmnPublishedModel> Publish()
+        public Task<BpmnPublishedModel> Publish(PublicationRequestIntent? intent = null, long? expectedSlotRevision = null,
+            string? expectedPublicationId = null)
         {
             var validator = new NormalizedPrincipalValidator(Options.Create(new FoundationIdentityOptions
                 { NormalizedAuthenticationTypes = new HashSet<string>(["test"]) }));
             var principal = new ClaimsPrincipal(new ClaimsIdentity([new(ClaimTypes.NameIdentifier, "author"), new(IdentityClaimTypes.Normalized, "v1")], "test"));
-            return new BpmnAuthoredDirectPublisher(this, this, this, this, validator, this, this, this, TimeProvider.System).PublishAsync("version-1", "operation", principal, default);
+            async ValueTask<PublicationActivationResult> Activate(PublicationMaterialActivationRequest request)
+            {
+                Calls.Add("activate");
+                Activation = request;
+                var candidate = request.Candidate;
+                if (BeforeSave is not null) await BeforeSave(request);
+                if (Journal is not null) await Journal.SaveAsync(candidate);
+                AfterSave?.Invoke();
+                Publications++;
+                Source = new(request.Reference.SourceId, request.Reference.SourceVersion!, request.Reference.Layout,
+                    request.Reference.ActivityPresentation);
+                RetainedPublication = candidate with { Status = PublicationStatus.Active };
+                if (Journal is not null) Assert.True(await Journal.TryTransitionAsync(RetainedPublication, PublicationStatus.Candidate));
+                Slot = new(candidate.SlotId, candidate.WorkflowDefinitionId, candidate.SlotName, candidate.PublicationId,
+                    WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow);
+                return new(true, RetainedPublication, Slot);
+            }
+            var activator = Stub<IPublicationActivator>((method, args) =>
+            {
+                Assert.Equal("ActivateMaterialAsync", method.Name);
+                return Activate((PublicationMaterialActivationRequest)args![0]!);
+            });
+            return new BpmnAuthoredDirectPublisher(this, this, this, this, validator, this, this, this, TimeProvider.System,
+                activator, Journal ?? Stub<IPublicationRecordStore>((_, _) => ValueTask.FromResult(RetainedPublication)),
+                Stub<IWorkflowActivationAuthority>((method, _) => method.Name == "ListByDefinitionAsync"
+                    ? ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationSlot>>(WorkerSlot is null ? [] : [WorkerSlot])
+                    : (object)ValueTask.FromResult(Slot)),
+                Stub<IPublicationPolicyStore>((_, _) => ValueTask.FromResult<PublicationPolicy?>(null)),
+                Stub<IPublicationPolicyResolver>((_, args) =>
+                {
+                    PolicyResolutions++;
+                    return new ResolvedPublicationAction((string)args![0]!, (string)args[1]!,
+                        PublicationAction.Replace, ResolvedSlotName, PublicationPolicySource.Host, 0);
+                }), new Scope())
+                .PublishAsync("version-1", "operation", principal, default, intent, expectedSlotRevision, expectedPublicationId);
         }
 
         public void UseService(string metadata)
@@ -361,7 +645,15 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<BpmnPublishedModel> PublishFromSourceAsync(BpmnModelDefinition definition, BpmnModelPublicationProvenance source, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken)
-        { Calls.Add("publish"); Publications++; Model = definition; Source = source; Caller = caller; RequestId = requestId; return ValueTask.FromResult(new BpmnPublishedModel(new("artifact", "definition", "version", "1.0.0", "hash"), "incarnation", "source", "profile")); }
+            => throw new InvalidOperationException("Authored publication cannot mint a raw source reference.");
+        public ValueTask<RuntimeExecutionMaterial> PreparePublicationAsync(BpmnModelDefinition definition, WorkflowExecutableInputContract inputContract,
+            IReadOnlyList<BpmnWorkerInputMapping> mappings, BpmnModelCaller caller, CancellationToken cancellationToken)
+        {
+            Calls.Add("prepare"); Model = definition; Caller = caller; InputContract = inputContract; Mappings = mappings;
+            var model = new RuntimeModelMaterial(1, new("artifact", "producer-definition", "producer-version", "1.0.0", "hash"),
+                new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), "profile", JsonSerializer.SerializeToElement(definition, Web), inputContract, [], [], []);
+            return ValueTask.FromResult(new RuntimeExecutionMaterial(model, "incarnation"));
+        }
         Task<WorkflowDefinitionVersion> IWorkflowDefinitionVersionStore.GetAsync(string id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string id, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string id, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -378,5 +670,17 @@ public sealed class BpmnAuthoredDirectPublisherTests
         public ValueTask<RuntimeStorePage<BpmnHumanWork>> ListWorkAsync(string id, RuntimeStorePageRequest request, BpmnModelCaller caller, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<BpmnModelCommandOutcome> CompleteHumanAsync(string id, string request, string invocation, string attempt, string[]? outcomes, BpmnModelCaller caller, CancellationToken cancellationToken) => throw new NotSupportedException();
         public ValueTask<BpmnModelCommandOutcome?> FindCommandAsync(string id, string request, BpmnModelCaller caller, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private static T Stub<T>(Func<MethodInfo, object?[]?, object?> invoke) where T : class
+    {
+        var result = DispatchProxy.Create<T, PublicationStub>();
+        ((PublicationStub)(object)result).Handler = invoke;
+        return result;
+    }
+    public class PublicationStub : DispatchProxy
+    {
+        public Func<MethodInfo, object?[]?, object?> Handler { get; set; } = null!;
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => Handler(targetMethod!, args);
     }
 }
