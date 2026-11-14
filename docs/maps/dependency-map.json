@@ -5636,6 +5636,316 @@
       ]
     },
     {
+      "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj",
+      "name": "Elsa.Foundation.Identity.ExternalAuthentication.Api",
+      "kind": "source",
+      "domain": "Elsa.Foundation",
+      "sub_domain": "Identity.ExternalAuthentication.Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Foundation.Identity.ExternalAuthentication.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities.Core",
+          "path": "Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Core",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj",
+      "name": "Elsa.Foundation.Identity.ExternalAuthentication.Core",
+      "kind": "source",
+      "domain": "Elsa.Foundation",
+      "sub_domain": "Identity.ExternalAuthentication.Core",
+      "role": "contract",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Foundation.Identity.ExternalAuthentication.Core",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj",
+      "name": "Elsa.Foundation.Identity.ExternalAuthentication",
+      "kind": "source",
+      "domain": "Elsa.Foundation",
+      "sub_domain": "Identity.ExternalAuthentication",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Foundation.Identity.ExternalAuthentication",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Core",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj",
+      "name": "Elsa.Foundation.Identity.ExternalAuthentication.Oidc",
+      "kind": "source",
+      "domain": "Elsa.Foundation",
+      "sub_domain": "Identity.ExternalAuthentication.Oidc",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Foundation.Identity.ExternalAuthentication.Oidc",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Core",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.Authentication.OpenIdConnect",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj",
+      "name": "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+      "kind": "source",
+      "domain": "Elsa.Foundation",
+      "sub_domain": "Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Core",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Json",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Hosting.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "ValenceWorks.MinimalEndpoints",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    {
       "path": "Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj",
       "name": "Elsa.Foundation.Identity.Oidc",
       "kind": "source",
@@ -14821,6 +15131,26 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Api",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Oidc",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Oidc",
           "path": "Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj"
         },
@@ -18335,6 +18665,26 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Api",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Oidc",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Oidc",
           "path": "Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj"
         },
@@ -19243,6 +19593,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
           "path": "Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj"
         },
@@ -19409,6 +19764,11 @@
           "type": "internal",
           "id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
           "path": "Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -23777,6 +24137,11 @@
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
         },
         {
           "type": "internal",
