@@ -1358,8 +1358,8 @@ IRuntimeActivityExecutionPipeline, CancellationToken)`. Register with
 Startup diagnoses duplicate owners; missing, duplicate or false qualification refuses selected starts.
 The owner qualifies the exact pinned leaf, construction/inputs, the actual selected pipeline and its
 complete effect/terminal responsibility profile. Trusted context and routing alone are insufficient.
-This interpreter additionally rejects every child slot, enclosing frame and outside-result fixture;
-composite, reusable, script, unknown/custom effects, controlled-time and asynchronous owner profiles
+This interpreter rejects every child slot and outside-result fixture;
+composite execution, reusable invocation, script, unknown/custom effects, controlled-time and asynchronous owner profiles
 remain unqualified unless a later interpreter explicitly implements and proves them. Only Durable and
 Balanced modes are qualified here; unsupported expression/member/conversion setup keeps its preflight refusal.
 
@@ -1381,3 +1381,39 @@ re-authorizing or scheduling work; changed wire conflicts, and a different first
 a root. Concurrent identical receipts reconcile under that gate even when preparation clocks differ;
 competing first-checkpoint IDs admit one winner. Rejected selected starts cannot manufacture ordinary
 full-root fault executions.
+
+
+### Native selected lexical execution and capture
+
+The process-private terminal-leaf profile stores the canonical prepared `RuntimeTestContextState` with
+`WorkflowExecutionState.TestContext` in the same physical first checkpoint as admission. Ordinary headers
+omit that null property. Native reads and normal rematerialization use the admitted enclosing frame chain;
+a supplied closed boundary replaces outer variables and request inputs. No ancestor invocation or
+predecessor result is manufactured. Stored values survive JSON roundtrip and new DI/actor activations;
+this is not shared-provider or host-restart qualification.
+
+Intrinsic Set/merge/reduce operations write the declared run-owned frame, including a closed-root alias,
+with type/protection/revision checks. Supplied iteration frames stay read-only. Normal configured graph
+output capture targets the exact supplied closed frame and is committed with activity completion, without
+creating a synthetic boundary row. Canonical workflow-root capture is unavailable across a supplied closed
+boundary; competing captures into the same supplied variable refuse before execution. Completion, fault
+and cancellation close the context through the normal terminal boundary. Outside result fixtures and
+composite/async responsibility profiles remain unavailable.
+
+`IRuntimeTestContextFrameAccess` is the scoped single-owner capture participant in Runtime Core. Runtime
+registers its internal canonical owner and aliases the contract. It is public for cross-assembly Activities
+Runtime completion integration, not a qualified replacement seam; no public authoring request supplies it.
+`FindCaptureTargetAsync(workflowExecutionId, activityExecutionId, scopeId, token)` reads the actual admitted
+leaf and returns its exact workflow/context/fingerprint/frame/scope/revision identity.
+`ApplyWrites(workflow, writes)` checks that identity and writable ownership, prepares an immutable header
+change and performs no storage I/O; the completion adapter commits it atomically. Invalid/stale identities,
+read-only/closed frames, competing writes and type/protection downgrades throw; missing actual boundaries
+return no capture target. The current private interpreter refuses missing/duplicate/replaced owners and
+canonical-looking owners that captured different execution or activity stores. Legacy hand-constructed
+handlers retain ordinary execution compatibility and refuse selected execution; qualified selected starts
+use the canonical DI composition. There is no public runner activation.
+
+The checkpoint envelope backstop scans supplied frame values, closed inputs and any retained fixture
+shape for plaintext requiring encryption. EF typed header writers/readers and physical SaveChanges paths
+refuse non-null TestContext, including raw header content. Existing dormant TestEntry formats do not
+qualify this executing lexical protocol; shared readable versions and predecessor-worker proof remain open.

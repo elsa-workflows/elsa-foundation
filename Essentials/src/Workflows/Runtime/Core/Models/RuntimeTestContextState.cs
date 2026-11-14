@@ -72,6 +72,38 @@ public sealed record RuntimeTestContextState
     public IReadOnlyList<string> OwnedNodeIds { get; }
     public long Revision { get; }
 
+    public RuntimeTestContextState Set(string frameId, string variableKey, ValueEnvelope value, long expectedFrameRevision)
+    {
+        var owner = Frames.SingleOrDefault(x => x.Frame.FrameId == frameId)
+            ?? throw new InvalidOperationException("The test frame is unavailable.");
+        if (!owner.Writable || owner.Frame.Kind == VariableFrameKind.Iteration)
+            throw new InvalidOperationException("The supplied test frame is read-only.");
+        if (!owner.Frame.Values.TryGetValue(variableKey, out var declared) ||
+            declared.Type.Alias != "Elsa.Any" && (declared.Type.Alias != value.Type.Alias || declared.Type.CollectionKind != value.Type.CollectionKind ||
+            declared.Type.SchemaVersion != value.Type.SchemaVersion ||
+            declared.Type.Schema?.GetRawText() != value.Type.Schema?.GetRawText()))
+            throw new InvalidOperationException("The test frame write differs from its declared variable type.");
+        if (value.Presence is ValuePresence.Absent or ValuePresence.Withheld || value.TransientResource is not null || value.ExternalReference is not null ||
+            value.Policy.Lifecycle == DurableValueLifecycle.None ||
+            !value.Policy.Satisfies(declared.Policy) || value.HoldsValueRequiringEncryption(declared.Policy))
+            throw new InvalidOperationException("The test frame write cannot weaken its declared protection policy.");
+        var updated = owner with { Frame = owner.Frame.Set(variableKey, value, expectedFrameRevision) };
+        return new(ContextId, ContextFingerprint, Frames.Select(x => x.Frame.FrameId == frameId ? updated : x).ToArray(),
+            Results, OwnedNodeIds, checked(Revision + 1));
+    }
+
+    public RuntimeTestContextState Close() => Frames.All(x => x.Frame.Status == VariableFrameStatus.Closed) ? this :
+        new(ContextId, ContextFingerprint,
+            Frames.Select(x => x with { Frame = x.Frame.Status == VariableFrameStatus.Active ? x.Frame.Close(x.Frame.Revision) : x.Frame }).ToArray(),
+            Results, OwnedNodeIds, checked(Revision + 1));
+
     private static IReadOnlyDictionary<string, ValueEnvelope> Snapshot(IReadOnlyDictionary<string, ValueEnvelope> values) =>
         new ReadOnlyDictionary<string, ValueEnvelope>(values.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal));
 }
+
+/// <summary>Exact frame selected for a graph capture when its lexical parent was supplied as test context.</summary>
+public sealed record RuntimeTestCaptureTarget(string WorkflowExecutionId, string ContextId, string ContextFingerprint,
+    string FrameId, string ScopeId, long FrameRevision);
+
+/// <summary>One typed write folded into the same checkpoint as the producing completion.</summary>
+public sealed record RuntimeTestFrameWrite(RuntimeTestCaptureTarget Target, string VariableKey, ValueEnvelope Value);

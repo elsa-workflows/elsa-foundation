@@ -16,7 +16,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class QueuedSelectedStartTests
+public sealed partial class QueuedSelectedStartTests
 {
     [Theory]
     [InlineData(PersistenceMode.Durable)]
@@ -314,7 +314,7 @@ public sealed class QueuedSelectedStartTests
         var root = new ExecutableNode("container", "container", typeof(ProbeActivity).FullName!, "1", "test.container", JsonSerializer.SerializeToElement(new { }),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), childSlots:
             [new("children", [WorkflowExecutionHarness.NewProbeNode("before"), selected, WorkflowExecutionHarness.NewProbeNode("after")])]);
-        var original = WorkflowExecutionHarness.NewExecutable(root);
+        var original = WorkflowExecutionHarness.NewExecutable(owner.WrapSelected?.Invoke(selected) ?? root, owner.WorkflowVariables);
         var publication = await harness.PublishAsync(original, "ordinary-publication");
         owner.Executable = (await harness.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(original.Identity.ArtifactId))!;
         owner.Source = publication with { SourceReferenceId = "test-source", Scope = WorkflowExecutableReferenceScope.TestRun,
@@ -345,6 +345,10 @@ public sealed class QueuedSelectedStartTests
         internal WorkflowExecutableSourceReference? Source;
         internal WorkflowTestEntry? Entry;
         internal int SeedReads, EntryReads;
+        internal Func<ExecutableNode, ExecutableNode>? WrapSelected;
+        internal RuntimeVariableDeclaration[] WorkflowVariables = [];
+        internal Func<WorkflowTestEntry, RuntimeTestContextSeed>? Seed;
+        internal Func<ExecutableNode, bool>? QualifyTarget;
         internal bool RevokeOnQueuedRead;
         internal bool AtomicHookRan;
         internal bool LeaseHookRan;
@@ -353,10 +357,10 @@ public sealed class QueuedSelectedStartTests
         internal Func<ValueTask>? BeforeSeed;
         public async ValueTask<RuntimeTestContextSeed?> ResolveAsync(WorkflowTestEntry entry, WorkflowExecutable executable,
             string workflowExecutionId, CancellationToken cancellationToken = default)
-        { SeedReads++; if (BeforeSeed is not null) await BeforeSeed(); return new(entry.ContextId, entry.ContextFingerprint, [], []); }
+        { SeedReads++; if (BeforeSeed is not null) await BeforeSeed(); return Seed?.Invoke(entry) ?? new(entry.ContextId, entry.ContextFingerprint, [], []); }
         public ValueTask<bool> CanExecuteAsync(WorkflowTestEntry entry, WorkflowExecutable executable, ExecutableNode target,
             IRuntimeActivityExecutionPipeline pipeline, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(target.ActivityType == ProbeActivity.ProbeActivityType || target.ActivityType == typeof(ProbeActivity).FullName);
+            ValueTask.FromResult(QualifyTarget?.Invoke(target) ?? (target.ActivityType == ProbeActivity.ProbeActivityType || target.ActivityType == typeof(ProbeActivity).FullName));
         public bool CanPersistTestEntry(RuntimeTestPersistenceBoundaryContext context) => true;
         public ValueTask<bool> CanRouteTestEntryAsync(WorkflowTestEntry entry, IWorkflowExecutionActorProvider actors,
             CancellationToken cancellationToken = default) => ValueTask.FromResult(true);

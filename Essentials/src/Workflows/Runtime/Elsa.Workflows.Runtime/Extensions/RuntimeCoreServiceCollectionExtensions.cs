@@ -526,6 +526,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddScoped<IRuntimeTestContextInspector, RuntimeTestContextInspector>();
+        services.TryAddScoped<RuntimeTestContextOwner>();
+        services.TryAddScoped<IRuntimeTestContextFrameAccess>(sp => sp.GetRequiredService<RuntimeTestContextOwner>());
         services.TryAddScoped<RuntimeTestContextPreparer>();
         services.TryAddScoped<IRuntimeTestContextPreparer>(sp => sp.GetRequiredService<RuntimeTestContextPreparer>());
         services.TryAddScoped<QueuedSelectedStart>();

@@ -11,6 +11,23 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 internal static class ClosedScopeCaptureBoundary
 {
+    public static async ValueTask<IReadOnlyDictionary<string, RuntimeTestCaptureTarget>> FindTestTargetsAsync(
+        IServiceProvider services, string workflowExecutionId, string activityExecutionId,
+        ExecutableNode node, ActivityExecutionState? closedScopeBoundary, CancellationToken cancellationToken)
+    {
+        var targets = new Dictionary<string, RuntimeTestCaptureTarget>(StringComparer.Ordinal);
+        if (closedScopeBoundary is not null)
+            return targets;
+        var access = services.GetService<IRuntimeTestContextFrameAccess>();
+        if (access is null) return targets;
+        foreach (var scopeId in node.OutputCaptures.Values.Select(x => x.Metadata.GetValueOrDefault(
+                     Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CaptureTargetScopeId))
+                     .Where(x => x is not null).Distinct(StringComparer.Ordinal))
+            if (await access.FindCaptureTargetAsync(workflowExecutionId, activityExecutionId, scopeId!, cancellationToken) is { } target)
+                targets.Add(scopeId!, target);
+        return targets;
+    }
+
     public static ValueTask<ActivityExecutionState?> FindAsync(
         IServiceProvider serviceProvider,
         string workflowExecutionId,

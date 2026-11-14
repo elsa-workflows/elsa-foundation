@@ -220,7 +220,7 @@ internal static class RuntimeTestContextMaterializer
                 {
                     var key = capture.Metadata.GetValueOrDefault(RuntimeMetadataKeys.TargetVariableReferenceKey)
                         ?? throw Refused("A workflow-variable capture is missing its captured declaration key.");
-                    ValidateCapture(capture, node, RequireWriteTarget(node, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, key),
+                    ValidateCapture(capture, node, RequireWriteTarget(node, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, key, canonicalRootOnly: true),
                         writesCanonicalRoot: true);
                 }
             }
@@ -389,13 +389,13 @@ internal static class RuntimeTestContextMaterializer
             return visible;
         }
 
-        ValueEnvelope RequireWriteTarget(ExecutableNode node, string scope, string key)
+        ValueEnvelope RequireWriteTarget(ExecutableNode node, string scope, string key, bool canonicalRootOnly = false)
         {
             var visible = VisibleFrames();
             var owner = scope == Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId ? visible[0] :
                 visible.LastOrDefault(x => x.Frame.ScopeId == scope);
             if (HasOwnedClosedAncestor(node) || owner is null || !owner.Writable || owner.Frame.Kind == VariableFrameKind.Iteration ||
-                scope == Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId && owner.Frame.FrameId != root.FrameId ||
+                canonicalRootOnly && owner.Frame.FrameId != root.FrameId ||
                 !owner.Frame.Values.TryGetValue(key, out var value))
                 throw Refused("Selected work requires a declared writable enclosing variable owner before execution.");
             return value;

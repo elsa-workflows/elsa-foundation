@@ -567,6 +567,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             };
         }
         completedState = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(completedState);
+        var closedScopeBoundary = typedCompletion is null ? null : await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken);
         var captureProjection = typedCompletion is null
             ? RuntimeOutputCaptureProjection.Empty
             : await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
@@ -578,7 +579,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 _timeProvider.GetUtcNow(),
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, cancellationToken));
+                closedScopeBoundary: closedScopeBoundary,
+                testCaptureTargets: await ClosedScopeCaptureBoundary.FindTestTargetsAsync(serviceProvider, workItem.WorkflowExecutionId, executionState.InvocationId, executableNode, closedScopeBoundary, cancellationToken));
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
         // completion (#972), mirroring how the Set intrinsic commits its changed frame.
         var workflowVariableWriteBack = await RuntimeWorkflowVariableCaptureWriteBack.BuildStateChangeAsync(
@@ -591,7 +593,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason
             },
-            cancellationToken);
+            cancellationToken, serviceProvider.GetService<IRuntimeTestContextFrameAccess>(), captureProjection.TestFrameWrites);
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(
                 workItem,

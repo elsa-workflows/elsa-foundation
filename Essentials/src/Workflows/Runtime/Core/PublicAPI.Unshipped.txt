@@ -10609,3 +10609,48 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.Selected
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.SelectedStartProtocol.get -> int?
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSelectedStartTargetProfile
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSelectedStartTargetProfile.CanExecuteAsync(Elsa.Workflows.Runtime.Core.Models.WorkflowTestEntry! entry, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! executable, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! target, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionPipeline! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestContextFrameAccess
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestContextFrameAccess.ApplyWrites(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState! workflow, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite!>! writes) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeTestContextFrameAccess.FindCaptureTargetAsync(string! workflowExecutionId, string! activityExecutionId, string! scopeId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget?>
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ContextId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ContextId.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.Deconstruct(out string! WorkflowExecutionId, out string! ContextId, out string! ContextFingerprint, out string! FrameId, out string! ScopeId, out long FrameRevision) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.FrameId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.FrameId.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.FrameRevision.get -> long
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.FrameRevision.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.RuntimeTestCaptureTarget(string! WorkflowExecutionId, string! ContextId, string! ContextFingerprint, string! FrameId, string! ScopeId, long FrameRevision) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ScopeId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ScopeId.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestContextState.Close() -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestContextState!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestContextState.Set(string! frameId, string! variableKey, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! value, long expectedFrameRevision) -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestContextState!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget! Target, out string! VariableKey, out Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! Value) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.RuntimeTestFrameWrite(Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget! Target, string! VariableKey, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope! Value) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.Target.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.Target.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.Value.get -> Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.Value.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.VariableKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.VariableKey.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.TestContext.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeTestContextState?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.TestContext.init -> void
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ToString() -> string!
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget? left, Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget? left, Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite? left, Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite? left, Elsa.Workflows.Runtime.Core.Models.RuntimeTestFrameWrite? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.WorkflowExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.WorkflowExecutionId.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ContextFingerprint.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ContextFingerprint.init -> void

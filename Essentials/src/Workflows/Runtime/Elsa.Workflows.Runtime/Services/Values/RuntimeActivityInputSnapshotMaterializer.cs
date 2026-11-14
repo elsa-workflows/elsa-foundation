@@ -59,7 +59,7 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
         // Below a closed activity execution scope the request inputs are the boundary's own.
         var workflowInputEnvelopes = visibleFrames.ClosedScopeBoundary is { } boundary
             ? RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable)
-            : projections.WorkflowInputEnvelopes;
+            : visibleFrames.TestClosedScopeBoundary?.Inputs ?? projections.WorkflowInputEnvelopes;
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: state.Execution.WorkflowExecutionId,
             activityExecutionId: state.InvocationId,

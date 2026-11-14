@@ -903,6 +903,8 @@ public sealed class EfWorkflowExecutionStateStore(
 
     private static void ValidateTestEntry(WorkflowExecutionState state)
     {
+        if (state.TestContext is not null)
+            throw new NotSupportedException("Shared persistence has no qualified selected lexical-frame interpreter.");
         if (state.TestEntry is { } entry && (state.RunKind != WorkflowRunKind.TestRun ||
             !WorkflowTestScope.ContextEquals(state.TestScope, entry.Scope) || state.Partition != entry.Scope.Partition ||
             state.TenantId != entry.Scope.TenantId || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(entry.Executable, state.PinnedExecutable) ||

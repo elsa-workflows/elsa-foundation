@@ -66,6 +66,10 @@ public sealed record WorkflowExecutionState(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowTestEntry? TestEntry { get; init; }
 
+    /// <summary>Run-owned lexical setup and mutations, separate from activity invocation history.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeTestContextState? TestContext { get; init; }
+
     /// <summary>
     /// The workflow activation's lexical variable frame. Null only for legacy states that predate
     /// role-owned variable frames.

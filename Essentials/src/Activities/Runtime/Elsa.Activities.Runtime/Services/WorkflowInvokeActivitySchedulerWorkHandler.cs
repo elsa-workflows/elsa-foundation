@@ -161,6 +161,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyDictionary<string, object?> activityOutputValues;
         IReadOnlyCollection<DurableValueState> persistedDurableValues = [];
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
+        IReadOnlyCollection<RuntimeTestFrameWrite> testFrameWrites = [];
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> workflowVariableWrites =
             RuntimeOutputCaptureProjection.Empty.WorkflowVariableWrites;
 
@@ -594,6 +595,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 returnedTransition,
                 TimeProvider.GetUtcNow(),
                 cancellationToken);
+            var closedScopeBoundary = await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken);
             var captureProjection = await serviceProvider.GetRequiredService<RuntimeOutputCaptureProjector>().ProjectAsync(
                 workItem.WorkflowExecutionId,
                 invokePayload.ActivityExecutionId,
@@ -603,9 +605,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider.GetUtcNow(),
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, cancellationToken));
+                closedScopeBoundary: closedScopeBoundary,
+                testCaptureTargets: await ClosedScopeCaptureBoundary.FindTestTargetsAsync(serviceProvider, workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, executableNode, closedScopeBoundary, cancellationToken));
             durableValueChanges = MergeDurableValueChanges(durableValueChanges, captureProjection.DurableValues);
             workflowVariableWrites = captureProjection.WorkflowVariableWrites;
+            testFrameWrites = captureProjection.TestFrameWrites;
             return valueFlowCompletion.Projections
                 .Where(item => item.Value.Presence != ValuePresence.Absent && item.Value.Policy.Storage != DurableValueStorage.External)
                 .Select(item => new RecordedActivityOutput(
@@ -706,7 +710,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CheckpointReason] = invokePayload.Reason
             },
-            cancellationToken);
+            cancellationToken, serviceProvider.GetService<IRuntimeTestContextFrameAccess>(), testFrameWrites);
 
         await CommitCompletedActivityAsync(
             checkpointCommitter,
