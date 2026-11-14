@@ -191,7 +191,8 @@ export async function exerciseConnectionConflict({ page, admin, backend, compone
     await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Studio company edited");
     await expect(page.getByLabel("Display order", { exact: true })).toHaveValue("10");
     await expect(page.getByRole("heading", { name: "Current configuration ready", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Reader", { exact: true })).toBeEnabled();
+    await expect(page.getByLabel("Reader", { exact: true })).toBeChecked();
+    await expect(page.getByText("Loading roles…", { exact: true })).toHaveCount(0);
     await capture(page, `reconciled-current-configuration-${layout.name}`, { action: "fresh-read-unlocks-current-saved-values" });
   }
   await page.setViewportSize({ width: 1440, height: 1100 }); await setMode("light");
