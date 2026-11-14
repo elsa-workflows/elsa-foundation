@@ -10,10 +10,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class RuntimeModelMigrationTests
 {
-    [Fact]
+    [SkippableFact]
     public async Task Additive_model_tables_upgrade_an_actual_legacy_store_without_changing_any_legacy_rows()
     {
         var fixture = Path.Combine(AppContext.BaseDirectory, "HostingBaseline", "runtime.sqlite.gz");
+        Skip.IfNot(File.Exists(fixture), "The captured hosting-baseline store is not in this checkout.");
         Assert.Equal("3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
             Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(fixture))));
         var directory = Directory.CreateTempSubdirectory("elsa-model-schema-upgrade-");

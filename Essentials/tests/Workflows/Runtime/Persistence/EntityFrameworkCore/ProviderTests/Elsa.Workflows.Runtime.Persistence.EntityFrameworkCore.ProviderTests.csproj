@@ -27,7 +27,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz"
-          Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+          Link="HostingBaseline/runtime.sqlite.gz" CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('../../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz')" />
     <Compile Include="..\Tests\PumpConcurrencyContextContract.cs" Link="PumpConcurrencyContextContract.cs" />
     <Compile Include="..\Tests\BeforeExecutableCoordinationRead.cs" Link="BeforeExecutableCoordinationRead.cs" />
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
