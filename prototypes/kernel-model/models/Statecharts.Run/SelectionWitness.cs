@@ -150,6 +150,10 @@ internal static class SelectionWitness
         });
         var invalid = new List<(string, GraphNode[], GraphRule[])>
         {
+            ("root-entry", Simple().Select(n => n.Id == "root" ? n with { Entry = "lost-root-entry" } : n).ToArray(), []),
+            ("root-exit", Simple().Select(n => n.Id == "root" ? n with { Exit = "lost-root-exit" } : n).ToArray(), []),
+            ("region-entry", Parallel().Select(n => n.Id == "E" ? n with { Entry = "lost-region-entry" } : n).ToArray(), []),
+            ("region-exit", Parallel().Select(n => n.Id == "E" ? n with { Exit = "lost-region-exit" } : n).ToArray(), []),
             ("missing-root", Simple().Where(n => n.Id != "root").ToArray(), []),
             ("duplicate-node", [.. Simple(), Simple()[1]], []),
             ("unknown-parent", Simple().Select(n => n.Id == "Checking" ? n with { Parent = "missing" } : n).ToArray(), []),
@@ -175,7 +179,7 @@ internal static class SelectionWitness
             ("unknown-mode", Simple(), [R("bad", 0, "Checking", "Changes", (VisitMode)99)])
         };
         foreach (var (name, nodes, rules) in invalid)
-            yield return ("invalid-" + name, () => Reject(() => _ = new SelectionChart(nodes, rules)));
+            yield return ("invalid-" + name, () => Reject(() => _ = new SelectionChart(nodes, rules), name));
         foreach (var (name, visits) in new (string, StateVisit[])[]
         {
             ("missing-ancestor", [new("Checking", "c")]), ("extra-branch", [new("Review", "r"), new("Checking", "c"), new("Changes", "x")]),
@@ -183,7 +187,7 @@ internal static class SelectionWitness
             ("duplicate-visit", [new("Review", "same"), new("Checking", "same")]), ("missing-region", [new("P", "p"), new("E0", "e")])
         }) yield return ("invalid-active-" + name, () => Reject(() => new SelectionChart(name == "missing-region" ? Parallel() : Simple(), []).Select(visits, (_, _) => true)));
     }
-    private static void Reject(Action run) { try { run(); } catch (ArgumentException) { return; } throw new InvalidOperationException("Q8: invalid graph/configuration accepted"); }
+    private static void Reject(Action run, string name = "active configuration") { try { run(); } catch (ArgumentException) { return; } throw new InvalidOperationException("Q8: invalid graph/configuration accepted: " + name); }
     internal static IEnumerable<string> Names => Samples().Select(s => "selection:" + s.Name).Concat(Extra().Select(c => "selection:" + c.Name));
     internal static void Run()
     {
