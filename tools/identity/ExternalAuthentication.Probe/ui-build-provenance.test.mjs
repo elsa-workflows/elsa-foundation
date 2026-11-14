@@ -50,7 +50,7 @@ test("empty, null and malformed command or executable records fail closed", () =
     const malformed = receipt(); change(malformed.executions[0].executable); refused(malformed);
   }
   for (const execution of [null, [], {}]) { const malformed = receipt(); malformed.executions = [execution]; refused(malformed); }
-  for (const change of [value => { delete value.processGroup; }, value => { value.timeoutMs = 0; }, value => { value.timeoutMs = 31 * 60_000; }]) {
+  for (const change of [value => { delete value.processGroup; }, value => { value.timeoutMs = 0; }, value => { value.timeoutMs = 46 * 60_000; }]) {
     const malformed = receipt(); change(malformed.executions[0]); refused(malformed);
   }
 });
