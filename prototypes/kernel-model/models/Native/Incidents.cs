@@ -60,7 +60,7 @@ internal static class NativeInterventions
         }
         if (!state.Started || state.Mode is not (Modes.Balanced or Modes.Durable))
             throw new InvalidOperationException("Invalid native intervention profile state.");
-        if (state.InterventionPolicy is < 0 or > 4) throw new NotSupportedException("Unsupported native intervention policy.");
+        if (state.InterventionPolicy is < 0 or > 5) throw new NotSupportedException("Unsupported native intervention policy.");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var f in state.Frames.Values)
         {
@@ -86,7 +86,7 @@ internal sealed partial class Burst
         if (turn.Instance.Creation <= 0 || _s.Mode is not (Modes.Balanced or Modes.Durable))
             throw new NotSupportedException("Native intervention requires a qualified Balanced/Durable invocation.");
         _s.InterventionEnabled = true;
-        _s.InterventionPolicy = 4;
+        _s.InterventionPolicy = 5;
     }
 
     private bool InterventionParent(Frame frame) => frame.Parent is { } id && _s.Frames.TryGetValue(id, out var parent) &&
@@ -98,7 +98,7 @@ internal sealed partial class Burst
     private JsonObject? PinRecoveryInputs(Frame frame, Node node, IScope scope)
     {
         // Existing Snapshot/Create owns binding materialization. The bounded profile requires every input bound;
-        // CLR constructor defaults and activation failures are not silently promoted to pinned recovery material.
+        // Unbound CLR defaults do not supply recovery material; policy5 handles activation only after this snapshot.
         if (!_s.InterventionEnabled || !RecoverableKind(node) || node.Background || !InterventionBoundary(frame) ||
             Hydrator.Of(node.Type).Any(p => !node.Inputs.ContainsKey(p.Name))) return null;
         var snapshot = Hydrator.Snapshot(node, b => Evaluate(b, scope));
