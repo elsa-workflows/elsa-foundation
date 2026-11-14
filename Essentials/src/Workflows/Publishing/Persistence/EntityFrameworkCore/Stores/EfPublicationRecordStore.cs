@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 /// Publishing's journal of the candidates that competed for it. A record's identity never changes after it is
 /// created, and a lifecycle transition succeeds only from the status the caller observed.
 /// </remarks>
-public sealed class EfPublicationRecordStore(
+public sealed partial class EfPublicationRecordStore(
     PublishingSnapshotReviewDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IPublicationRecordStore
 {

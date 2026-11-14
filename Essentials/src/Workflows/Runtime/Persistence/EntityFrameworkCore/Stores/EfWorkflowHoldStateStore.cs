@@ -27,11 +27,11 @@ public sealed class EfWorkflowHoldStateStore(
         context.ChangeTracker.Clear();
         var row = await LoadAsync(scope, state.ControlPlaneStateId, tracking: true, cancellationToken);
         if (row is null)
-            context.WorkflowHoldStates.Add(ToEntity(state, scope, 1));
+            context.WorkflowHoldStates.Add(ToEntity(context, state, scope, 1));
         else
         {
             _ = Read(row, scope, state.ControlPlaneStateId);
-            Copy(row, state, scope, checked(row.Revision + 1));
+            Copy(context, row, state, scope, checked(row.Revision + 1));
         }
 
         try
@@ -154,7 +154,7 @@ public sealed class EfWorkflowHoldStateStore(
                     continue;
 
                 var replacement = new WorkflowHoldState(state.ControlPlaneStateId, activeHolds: active, releasedHolds: released, metadata: state.Metadata);
-                Copy(row, replacement, scope, checked(row.Revision + 1));
+                Copy(context, row, replacement, scope, checked(row.Revision + 1));
             }
 
             if (rows.Any(row => context.Entry(row).State == EntityState.Modified))
@@ -176,7 +176,7 @@ public sealed class EfWorkflowHoldStateStore(
         return tracking ? await query.SingleOrDefaultAsync(cancellationToken) : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
     }
 
-    private static WorkflowHoldStateEntity ToEntity(WorkflowHoldState state, string scope, long revision)
+    private static WorkflowHoldStateEntity ToEntity(RuntimeDbContext context, WorkflowHoldState state, string scope, long revision)
     {
         var workflow = state.WorkflowExecutionId;
         return new WorkflowHoldStateEntity
@@ -185,17 +185,17 @@ public sealed class EfWorkflowHoldStateStore(
             ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope), ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
             ControlPlaneStateId = EfRuntimeOperationalStoreSupport.Encode(state.ControlPlaneStateId), ControlPlaneStateIdHash = EfRuntimeOperationalStoreSupport.Hash(state.ControlPlaneStateId), ControlPlaneStateIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.ControlPlaneStateId),
             WorkflowExecutionId = workflow is null ? null : EfRuntimeOperationalStoreSupport.Encode(workflow), WorkflowExecutionIdHash = workflow is null ? null : EfRuntimeOperationalStoreSupport.Hash(workflow), WorkflowExecutionIdOrderKey = workflow is null ? null : EfRuntimeOperationalStoreSupport.Order(workflow),
-            ContentJson = RuntimeArtifactJson.Serialize(state), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = revision
+            ContentJson = RuntimeArtifactJson.Serialize(state), SchemaVersion = RuntimeSchemaWriteVersion.Operational(context), Revision = revision
         };
     }
 
-    private static void Copy(WorkflowHoldStateEntity row, WorkflowHoldState state, string scope, long revision)
+    private static void Copy(RuntimeDbContext context, WorkflowHoldStateEntity row, WorkflowHoldState state, string scope, long revision)
     {
-        var replacement = ToEntity(state, scope, revision);
+        var replacement = ToEntity(context, state, scope, revision);
         row.Id = replacement.Id; row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash;
         row.ControlPlaneStateId = replacement.ControlPlaneStateId; row.ControlPlaneStateIdHash = replacement.ControlPlaneStateIdHash; row.ControlPlaneStateIdOrderKey = replacement.ControlPlaneStateIdOrderKey;
         row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey;
-        row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion); row.Revision = revision;
     }
 
     private static WorkflowHoldState Read(WorkflowHoldStateEntity row, string scope, string? expectedControlPlaneStateId = null)

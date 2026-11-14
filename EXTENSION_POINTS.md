@@ -167,6 +167,7 @@ not automatic constitution violations.
 | Activities design API — catalog, availability and static public provider diagnostics | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
+| Activities graph release inspection — compiler-free captured provider, plan and overlay verification | [`Essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md) |
 | Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
 | Activities BPMN hosting contracts (scoped publication/execution/inspection replacement) | [`Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md) |
 | Activities BPMN design (authored structure lowering and publication pinning) | [`Essentials/src/Activities/Bpmn/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Design/EXTENSION_POINTS.md) |
@@ -184,6 +185,14 @@ not automatic constitution violations.
 | Workflows publishing engine — compiler, slot authority/policy/preflight, publication activation, compilation fan-in, and activity-template registries | [`Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md) |
 | Workflows publishing API — HTTP endpoints, transport authorization, and activity-draft publish/test-run | [`Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows publishing core — authority and projection contracts | [`Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
+| Workflow release transport and verification — compiler-free codec and exact owner strategies | [`Essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/EXTENSION_POINTS.md) |
+| Workflow release core — lightweight transport and owner verification contracts | [`Essentials/src/Workflows/Publishing/Releases/Core/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Releases/Core/EXTENSION_POINTS.md) |
+| Workflow release Runtime contracts — retained owner codecs and captured occurrence views | [`Essentials/src/Workflows/Publishing/Releases/Runtime/Core/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Releases/Runtime/Core/EXTENSION_POINTS.md) |
+| Workflow release Runtime profile — exact native/template/model pins and mandatory owner inspection | [`Essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Releases/Runtime/Elsa.Workflows.Publishing.Releases.Runtime/EXTENSION_POINTS.md) |
+| Workflow release Runtime source closure — explicit source policy and bounded dependency acquisition | [`Essentials/src/Workflows/Publishing/Releases/Runtime/Source/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Releases/Runtime/Source/EXTENSION_POINTS.md) |
+| Workflow release source capture — retained acquisition and verified durable capture | [`Essentials/src/Workflows/Publishing/Releases/Capture/Elsa.Workflows.Publishing.Releases.Capture/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Releases/Capture/Elsa.Workflows.Publishing.Releases.Capture/EXTENSION_POINTS.md) |
+| Workflow release archive contracts — scoped frozen transport captures | [`Archive Core`](Essentials/src/Workflows/Publishing/Releases/Persistence/Core/EXTENSION_POINTS.md) |
+| Workflow release archive persistence — consumer-context SQLite storage | [`Archive EF Core`](Essentials/src/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | User Tasks (durable human work, journal/retention/eligibility/form integration and recovery cadence) | [`Runtime domain User Tasks`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#user-tasks) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
@@ -250,5 +259,25 @@ not automatic constitution violations.
 
 ## Studio
 
+- [Dashboard native API](Essentials/src/Studio/Dashboard/Api/EXTENSION_POINTS.md)
+
+- [Dashboard definition persistence](Essentials/src/Studio/Dashboard/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
+
+- [Dashboard native management](Essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
+
+- [Dashboard query, resource and authoring contracts](Essentials/src/Studio/Dashboard/Core/EXTENSION_POINTS.md)
+
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)
+
+- [Workflow inspection authorization](Essentials/src/Workflows/Runtime/Inspection/Core/EXTENSION_POINTS.md)
+
+- [Workflow Dashboard source](Essentials/src/Workflows/Dashboard/Queries/EXTENSION_POINTS.md)
+
+- [Studio Dashboard routes and Weaver contributions](Studio/src/essentials/Elsa.Studio.Dashboard/EXTENSION_POINTS.md)
+
+- [Weaver Dashboard authoring](Extensions/Weaver/src/Dashboard/EXTENSION_POINTS.md)
+
+- [Copilot SDK adapter boundary](Extensions/Weaver/src/GitHubCopilot/EXTENSION_POINTS.md)
+
+- [Independent Acme Processing dataset module](Extensions/Examples/src/Acme.Processing/Module/EXTENSION_POINTS.md)

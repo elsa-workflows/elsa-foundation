@@ -207,6 +207,10 @@ builder.Services
 builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
 builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
+#if ELSA_DASHBOARD_QUALIFICATION
+builder.Services.AddSingleton<DashboardQualificationBootstrap>();
+builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());
+#endif
 
 // Extension Builder is an optional extension (#2294) and a root-hosted subsystem: root singletons, a background build
 // worker and management endpoints mapped on the root route builder below, none of which can live in a shell container.
@@ -385,6 +389,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,
+            typeof(Elsa.Studio.Dashboard.Api.DashboardResourcesApiFeature).Assembly,
+            typeof(Elsa.Studio.Dashboard.Management.DashboardManagementFeature).Assembly,
+            typeof(Elsa.Studio.Dashboard.Persistence.EntityFrameworkCore.DashboardResourcesEntityFrameworkCoreFeature).Assembly,
+            typeof(Elsa.Workflows.Dashboard.Queries.WorkflowDashboardQueriesFeature).Assembly,
+            typeof(Elsa.Weaver.Dashboard.DashboardWeaverFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
             typeof(WorkflowsDashboardFeature).Assembly,
@@ -521,6 +530,16 @@ app.MapShells();
 // automatic insertion of these middleware earlier in the pipeline.
 app.UseAuthentication();
 app.UseAuthorization();
+#if ELSA_DASHBOARD_QUALIFICATION
+QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), "default", configuration);
+// Shell middleware replaces request services; the bootstrap is owned by the root host.
+var dashboardQualification = app.Services.GetRequiredService<DashboardQualificationBootstrap>();
+app.MapGet("/__qualification/ready", () => dashboardQualification.Ready
+        ? Results.Ok(new { ready = true }) : Results.StatusCode(503))
+    .WithHostOwner("Elsa.Workbench")
+    .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+    .AllowPublic("qualification readiness", "Reports only whether this opt-in owned QA host initialized its private native principals.");
+#endif
 
 // CShells host-control remains server-to-server management-key traffic. It is not a Foundation
 // user permission and the key is never exposed to browser clients.

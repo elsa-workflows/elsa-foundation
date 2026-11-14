@@ -8,7 +8,7 @@ for (const mode of ["light", "dark"] as const) {
         localStorage.setItem("elsa-studio-theme-mode", mode);
       }, mode);
       await page.goto("/workspace-appearance.html?composition=sequence&bottom-panel");
-      if (width < 600) await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+      if (width < 600) await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Expand bottom panel", exact: true }).click();
       await page.getByRole("tab", { name: "Properties", exact: true }).click();
 
@@ -45,10 +45,9 @@ for (const mode of ["light", "dark"] as const) {
     await page.setViewportSize({ width: 360, height: 900 });
     await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), mode);
     await page.goto("/workspace-appearance.html?composition=sequence");
-    await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Expand activities panel", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Properties", exact: true }).click();
-    const collapseActivities = page.getByRole("button", { name: "Collapse activities panel", exact: true });
-    if (await collapseActivities.isVisible()) await collapseActivities.click();
     for (const label of ["Workflow name", "Workflow description"]) {
       const field = page.getByRole("textbox", { name: label, exact: true });
       await expect(field).toBeInViewport();

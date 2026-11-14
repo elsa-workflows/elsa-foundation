@@ -1,0 +1,72 @@
+using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Publishing.Releases.Core;
+using Elsa.Workflows.Publishing.Releases.Runtime;
+using Elsa.Workflows.Publishing.Releases.Runtime.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+// This narrow package witness never verifies native executables. An accidental native-hasher call must fail.
+services.AddScoped<IWorkflowExecutableHasher, RefuseNativeHasher>();
+var feature = new WorkflowReleaseRuntimeFeature();
+feature.ConfigureServices(services);
+feature.PostConfigureServices(services);
+// OPTIONAL_OWNER_REGISTRATION
+using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+using var scope = provider.CreateScope();
+var codec = scope.ServiceProvider.GetRequiredService<IReleaseRuntimeArtifactCodec>();
+var root = new ExecutableNode("root", "authored-root", "sample.Activity", "1.0.0", "sample.consumer",
+    JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+var resume = new Dictionary<string, WorkflowExecutableResumeTarget>();
+var compatibility = new Dictionary<string, string>();
+var hash = ActivityTemplateHasher.Compute(root, resume, [], [], [], [], "provider/1", compatibility);
+if (hash != "sha256:82189d4ffd4a775a87743a10a428873bdcc6a27735d9b9d38b5c48457f20b4d0")
+    throw new InvalidOperationException("The installed Runtime hasher changed the original publication vector.");
+var requirements = new[] { new RuntimeRequirement("sample.consumer", "1") };
+hash = ActivityTemplateHasher.Compute(root, resume, [], [], requirements, [], "provider/1", compatibility);
+var template = new ExecutableActivityTemplate("activity-template-" + hash[7..], hash, root, resume, [], [], requirements,
+    "provider/1", compatibility, DateTimeOffset.UnixEpoch);
+var encoded = codec.EncodeTemplate(new(new("source", null, null), template));
+var bytes = encoded.GetPayloadBytes();
+var decoded = codec.DecodeTemplate(bytes);
+if (decoded.Template.TemplateHash != hash || decoded.Template.TemplateId != template.TemplateId)
+    throw new InvalidOperationException("The installed codec changed the retained template pin.");
+Array.Fill(bytes, (byte)' ');
+if (codec.DecodeTemplate(encoded.GetPayloadBytes()).Template.TemplateHash != hash)
+    throw new InvalidOperationException("Caller mutation changed the retained payload.");
+var content = new OneMember(encoded);
+// OPTIONAL_OWNER_ASSERTIONS
+var owner = scope.ServiceProvider.GetServices<IReleaseArtifactSemanticVerifier>().Single();
+var facts = await owner.VerifyAsync(content.Members[0], encoded.GetPayloadBytes(), content);
+if (facts.Status != ReleaseSemanticStatus.Verified || !facts.OwnerHashVerified || facts.RootCapabilities.Count != 0 || facts.Sites.Count == 0)
+    throw new InvalidOperationException("The installed template owner did not preserve hash, dependency-only role and mandatory owner sites.");
+try
+{
+    codec.DecodeTemplate(encoded.GetPayloadBytes(), new ReleaseBundleLimits { MaxBlobBytes = 8 });
+    throw new InvalidOperationException("The installed codec accepted an oversized payload.");
+}
+catch (ReleaseRuntimeArtifactException exception) when (exception.Code == "runtime_payload_byte_limit") { }
+var forbidden = AppDomain.CurrentDomain.GetAssemblies().Select(x => x.GetName().Name ?? "")
+    .Where(name => name.Contains("Design", StringComparison.Ordinal) || name == "Elsa.Workflows.Publishing.Core").ToArray();
+if (forbidden.Length != 0) throw new InvalidOperationException("Runtime consumer loaded Design assemblies.");
+Console.WriteLine(JsonSerializer.Serialize(new { outcome = "passed", ownerHashVerified = facts.OwnerHashVerified,
+    semanticValidation = "template owner only; mandatory module sites remain unverified", promotion = "not attempted", forbiddenAssemblies = forbidden }));
+
+sealed class OneMember(ReleaseEncodedRuntimeMember encoded) : IReleaseContentReader
+{
+    public IReadOnlyList<ReleaseContentMember> Members { get; } = new[] { new ReleaseContentMember(encoded.Descriptor, encoded.OwnerVersion) };
+    public ReleaseContentMember GetMember(ReleaseMemberKey key) => key == Members[0].Key ? Members[0] : throw new KeyNotFoundException();
+    public ReadOnlyMemory<byte> GetPayload(ReleaseMemberKey key) { _ = GetMember(key); return encoded.GetPayloadBytes(); }
+}
+sealed class RefuseNativeHasher : IWorkflowExecutableHasher
+{
+    public string ComputeHash(ExecutableNode rootActivity) => throw new InvalidOperationException("Native hashing is outside this witness.");
+    public string ComputeHash(ExecutableNode rootActivity, WorkflowExecutableInputContract inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies, PersistenceMode? persistenceMode = null,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null, IncidentStrategyReference? incidentStrategy = null)
+        => throw new InvalidOperationException("Native hashing is outside this witness.");
+    public string CreateArtifactId(string artifactIdPrefix, string artifactHash) => throw new InvalidOperationException("Native hashing is outside this witness.");
+}

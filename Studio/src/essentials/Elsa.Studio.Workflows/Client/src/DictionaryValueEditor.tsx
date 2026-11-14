@@ -29,6 +29,7 @@ import {
   writeDictionaryEditorSession,
   type DictionaryEditorTab
 } from "./dictionaryEditorSession";
+import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import { copyTextToClipboard } from "./workflow-editor/editorHelpers";
 
 const jsonAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
@@ -103,11 +104,14 @@ export function DictionaryValueEditor({
   const [filter, setFilter] = useState("");
   const [pinnedRowIds, setPinnedRowIds] = useState<Set<string>>(() => new Set());
   const [removed, setRemoved] = useState<RemovedEntry | null>(null);
-  const [notice, setNotice] = useState<{ key: string; message: string } | null>(null);
+  const [copyError, setCopyError] = useState("");
   const [pendingTab, setPendingTab] = useState<DictionaryEditorTab | null>(null);
   const effectiveTab: DictionaryEditorTab = variant === "inline" ? "table" : activeTab;
   const emittedSignature = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const copyScope = useMemo(() => ({ sessionKey, externalSignature, jsonDraft }), [sessionKey, externalSignature, jsonDraft]);
+  const captureNotificationGuard = useNotificationGuard(copyScope);
+  useEffect(() => setCopyError(""), [copyScope]);
   const mountedRef = useRef(false);
   const keyRefs = useRef(new Map<string, HTMLInputElement>());
   const tableValidation = useMemo(
@@ -268,8 +272,14 @@ export function DictionaryValueEditor({
   };
 
   const copyJson = async () => {
-    await copyTextToClipboard(jsonDraft);
-    setNotice({ key: `copied-${Date.now()}`, message: "JSON copied" });
+    const canNotify = captureNotificationGuard();
+    setCopyError("");
+    try {
+      await copyTextToClipboard(jsonDraft);
+      if (canNotify()) getNotifications().notify({ level: "success", title: "JSON copied" });
+    } catch {
+      if (canNotify()) setCopyError("Could not copy JSON.");
+    }
   };
 
   const visibleRows = filterRows(rows, filter, variant, tableValidation.valid ? [] : tableValidation.errors, pinnedRowIds);
@@ -429,14 +439,8 @@ export function DictionaryValueEditor({
           onAction={undoRemove}
           onDismiss={() => setRemoved(null)}
         />
-      ) : notice ? (
-        <StudioActionNotice
-          key={notice.key}
-          className="wf-dictionary-notice"
-          message={notice.message}
-          onDismiss={() => setNotice(null)}
-        />
       ) : null}
+      {copyError ? <p role="alert">{copyError}</p> : null}
     </div>
   );
 }

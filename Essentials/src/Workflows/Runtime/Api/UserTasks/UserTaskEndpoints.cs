@@ -14,82 +14,79 @@ internal sealed record FormVersionRequest(string Id, string Version);
 internal sealed record TaskMutationRequest(long Revision, string RequestId);
 internal sealed record TaskCompletionRequest(long Revision, string RequestId, string Action, JsonElement Data);
 internal sealed record TaskAssignmentRequest(long Revision, string RequestId, string? AssigneeId, string? GroupId);
+/// <summary>A task as its readers see it: each stored user or group ID travels with its directory display name, or null when the directory has none.</summary>
 internal sealed record UserTaskView(string Id, string WorkflowExecutionId, string Title, string? Description,
-    string? AssigneeId, string? GroupId, string? ClaimantId, IReadOnlyList<string> Actions, IReadOnlyList<string> OptionalFormActions,
-    UserTaskForm? Form, JsonElement Prefill, string Status, long Revision, IReadOnlyList<UserTaskHistory> History, UserTaskDecision? Decision)
-{
-    internal static UserTaskView From(UserTaskRecord task) => new(task.Id, task.WorkflowExecutionId, task.Title, task.Description,
-        task.AssigneeId, task.GroupId, task.ClaimantId, task.Actions, task.OptionalFormActions, task.Form, task.Prefill,
-        task.Status.ToString(), task.Revision, task.History, task.Decision);
-    internal static async Task<UserTaskView> Map(ValueTask<UserTaskRecord> task) => From(await task);
-}
+    string? AssigneeId, string? AssigneeName, string? GroupId, string? GroupName, string? ClaimantId, string? ClaimantName,
+    IReadOnlyList<string> Actions, IReadOnlyList<string> OptionalFormActions,
+    UserTaskForm? Form, JsonElement Prefill, string Status, long Revision, IReadOnlyList<UserTaskHistoryView> History, UserTaskDecision? Decision);
+internal sealed record UserTaskHistoryView(string Operation, string ActorId, string? ActorName, DateTimeOffset At, string? Action, string? AssigneeId, string? GroupId);
 internal sealed record UserTaskPageView(IReadOnlyList<UserTaskView> Items, string? Next);
 internal sealed record UserTaskProblem(string Code, string Message, JsonElement? Errors);
 
 [Get("runtime/user-tasks")]
 [RequireAnyPermission(UserTaskPermissions.Read, UserTaskPermissions.Manage)]
 [RuntimeProblems("processing user tasks")]
-internal sealed class ListTasks(IUserTaskOperations tasks) : ApiEndpoint<TaskListRequest, UserTaskPageView>
+internal sealed class ListTasks(IUserTaskOperations tasks, UserTaskPeople people) : ApiEndpoint<TaskListRequest, UserTaskPageView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListUserTasks";
     public override async Task<UserTaskPageView> HandleAsync(TaskListRequest request, CancellationToken cancellationToken)
     {
         var page = await tasks.ListAsync(request.View, request.Limit, request.After, request.Search, cancellationToken);
-        return new(page.Items.Select(UserTaskView.From).ToArray(), page.Next);
+        return new(await people.ViewAsync(page.Items, cancellationToken), page.Next);
     }
 }
 
 [Get("runtime/user-tasks/{id}")]
 [RequireAnyPermission(UserTaskPermissions.Read, UserTaskPermissions.Manage)]
 [RuntimeProblems("processing user tasks")]
-internal sealed class ReadTask(IUserTaskOperations tasks) : ApiEndpoint<TaskIdRequest, UserTaskView>
+internal sealed class ReadTask(IUserTaskOperations tasks, UserTaskPeople people) : ApiEndpoint<TaskIdRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "GetUserTask";
     public override Task<UserTaskView> HandleAsync(TaskIdRequest request, CancellationToken cancellationToken) =>
-        UserTaskView.Map(tasks.GetAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, cancellationToken));
+        people.ViewAsync(tasks.GetAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, cancellationToken), cancellationToken);
 }
 
 [Post("runtime/user-tasks/{id}/claim")]
 [RequirePermission(UserTaskPermissions.Act)]
 [RuntimeProblems("processing user tasks")]
-internal sealed class ClaimTask(IUserTaskOperations tasks) : ApiEndpoint<TaskMutationRequest, UserTaskView>
+internal sealed class ClaimTask(IUserTaskOperations tasks, UserTaskPeople people) : ApiEndpoint<TaskMutationRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "ClaimUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
     public override Task<UserTaskView> HandleAsync(TaskMutationRequest request, CancellationToken cancellationToken) =>
-        UserTaskView.Map(tasks.ClaimAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, new(request.Revision, request.RequestId), cancellationToken));
+        people.ViewAsync(tasks.ClaimAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, new(request.Revision, request.RequestId), cancellationToken), cancellationToken);
 }
 
 [Post("runtime/user-tasks/{id}/release")]
 [RequirePermission(UserTaskPermissions.Act)]
 [RuntimeProblems("processing user tasks")]
-internal sealed class ReleaseTask(IUserTaskOperations tasks) : ApiEndpoint<TaskMutationRequest, UserTaskView>
+internal sealed class ReleaseTask(IUserTaskOperations tasks, UserTaskPeople people) : ApiEndpoint<TaskMutationRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "ReleaseUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
     public override Task<UserTaskView> HandleAsync(TaskMutationRequest request, CancellationToken cancellationToken) =>
-        UserTaskView.Map(tasks.ReleaseAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, new(request.Revision, request.RequestId), cancellationToken));
+        people.ViewAsync(tasks.ReleaseAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, new(request.Revision, request.RequestId), cancellationToken), cancellationToken);
 }
 
 [Post("runtime/user-tasks/{id}/complete")]
 [RequirePermission(UserTaskPermissions.Act)]
 [RuntimeProblems("processing user tasks")]
-internal sealed class CompleteTask(IUserTaskOperations tasks) : ApiEndpointWithResult<TaskCompletionRequest, UserTaskView>
+internal sealed class CompleteTask(IUserTaskOperations tasks, UserTaskPeople people) : ApiEndpointWithResult<TaskCompletionRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "CompleteUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
     public override async Task<EndpointResult<UserTaskView>> HandleAsync(TaskCompletionRequest request, CancellationToken cancellationToken)
     {
         var result = await tasks.CompleteAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, new(request.Revision, request.RequestId, request.Action, request.Data), cancellationToken);
-        return EndpointResult.Status(result.Status == UserTaskStatus.CompletionPending ? 202 : 200, UserTaskView.From(result));
+        return EndpointResult.Status(result.Status == UserTaskStatus.CompletionPending ? 202 : 200, await people.ViewAsync(result, cancellationToken));
     }
 }
 
 [Post("runtime/user-tasks/{id}/reassign")]
 [RequirePermission(UserTaskPermissions.Manage)]
 [RuntimeProblems("processing user tasks")]
-internal sealed class ReassignTask(IUserTaskOperations tasks) : ApiEndpoint<TaskAssignmentRequest, UserTaskView>
+internal sealed class ReassignTask(IUserTaskOperations tasks, UserTaskPeople people) : ApiEndpoint<TaskAssignmentRequest, UserTaskView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "ReassignUserTask"; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; options.StrictTypedParsing = true; }
     public override Task<UserTaskView> HandleAsync(TaskAssignmentRequest request, CancellationToken cancellationToken) =>
-        UserTaskView.Map(tasks.ReassignAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, new(request.Revision, request.RequestId, request.AssigneeId, request.GroupId), cancellationToken));
+        people.ViewAsync(tasks.ReassignAsync(Convert.ToString(HttpContext.Request.RouteValues["id"])!, new(request.Revision, request.RequestId, request.AssigneeId, request.GroupId), cancellationToken), cancellationToken);
 }
 
 [Get("runtime/user-task-forms")]

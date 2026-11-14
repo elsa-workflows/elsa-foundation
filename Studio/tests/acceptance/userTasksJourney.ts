@@ -14,6 +14,10 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
   async function post(path: string, data: unknown) {
     const response = await request.post(`${base}${path}`, { data }); expect(response.ok(), await response.text()).toBe(true); return response.json();
   }
+  // #4198: names arrive with the tasks, so showing who holds the work never reads the manager-only assignment-target directory.
+  const directoryReads: string[] = [];
+  const watchDirectory = (sent: { url(): string }) => { if (new URL(sent.url()).pathname.endsWith("/runtime/user-task-targets")) directoryReads.push(sent.url()); };
+  page.on("request", watchDirectory);
   await page.goto("/user-tasks?backend=legacy");
   await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "User Tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
@@ -42,6 +46,8 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
       id = tasks.items.find((item: { workflowExecutionId: string; id: string }) => item.workflowExecutionId === run.workflowExecutionId)?.id ?? "";
       return id;
     }, { timeout: 30_000 }).not.toBe("");
+    const named = await get(`/runtime/user-tasks/${id}`);
+    expect(named.assigneeId).toBe(who.userId); expect(typeof named.assigneeName).toBe("string"); expect(named.assigneeName).not.toBe("");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
     const row = page.getByRole("link", { name: title, exact: true });
     await expect(row).toBeVisible();
@@ -85,6 +91,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     expect(completed.history.filter((entry: { operation: string }) => entry.operation === "accepted")).toHaveLength(1);
     expect(completed.history.filter((entry: { operation: string }) => entry.operation === "completed")).toHaveLength(1);
     expect(completed.decision.response.data).toEqual({ Note: "Reviewed purchase request" });
+    expect(completed.history.find((entry: { operation: string }) => entry.operation === "completed").actorName).toBe(named.assigneeName);
     await detail.getByRole("button", { name: "Refresh task", exact: true }).click();
     await expect(detail.getByText("Completed", { exact: true })).toBeVisible();
     await detail.getByText("History", { exact: true }).click();
@@ -92,9 +99,12 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await expect(detail.locator("details li").last()).toContainText("completed · Approve · You");
     await expect(detail.locator("details")).not.toContainText(who.userId);
     await detail.locator("details li").last().scrollIntoViewIfNeeded(); await capture(page, info, "task-history");
+    page.off("request", watchDirectory);
+    expect(directoryReads).toEqual([]);
     // #4068: a completed response reads as a record, with no required marker, resize handle or empty action row.
     const record = detail.getByRole("textbox", { name: "Note", exact: true });
     await expect(record).toBeDisabled(); await expect(record).toHaveCSS("resize", "none");
+    expect(await record.evaluate(element => { const frame = element.closest(".studio-form-control"); const style = frame ? getComputedStyle(frame) : null; return { border: style?.borderTopWidth, opacity: style?.opacity }; })).toEqual({ border: "0px", opacity: "1" });
     await expect(detail.locator(".user-task-actions")).toHaveCount(0);
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "completed");
     await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();

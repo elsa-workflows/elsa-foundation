@@ -1,0 +1,182 @@
+#nullable enable
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.DecodeActivityVersion(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.DecodeModel(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.DecodeTemplate(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.DecodeWorkflow(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.DecodeWorkflowSelection(System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.EncodeActivityVersion(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion! value, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.EncodeModel(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel! value, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.EncodeTemplate(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate! value, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.EncodeWorkflow(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow! value, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeArtifactCodec.EncodeWorkflowSelection(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection! value, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSiteReader
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSiteReader.ReadModel(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite! site, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSiteReader.ReadNode(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite! site, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.ActivityTypeKey.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.CompilerFingerprint.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.Contract.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.DefinitionId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.ProviderKey.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.ProviderPayload.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.ProviderSchemaVersion.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.ReleaseActivityVersion(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! scope, string! definitionId, string! versionId, string! version, string! activityTypeKey, string! resolutionKind, System.Text.Json.JsonElement contract, string! providerKey, string! providerSchemaVersion, System.Text.Json.JsonElement providerPayload, string! compilerFingerprint, string! templateId, string! templateHash, string! sourceReferenceId, string! sourceKind, string! sourceId) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.ResolutionKind.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.Scope.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.SourceId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.SourceKind.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.SourceReferenceId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.TemplateHash.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.TemplateId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.Version.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.VersionId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember.Descriptor.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember.GetPayloadBytes() -> byte[]!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember.OwnerVersion.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseEncodedRuntimeMember.ReleaseEncodedRuntimeMember(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember! descriptor, Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? ownerVersion, System.ReadOnlyMemory<byte> payload) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeArtifactException
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeArtifactException.Code.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeArtifactException.ReleaseRuntimeArtifactException(string! code) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.Authority.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.Authority.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.Deconstruct(out string! Authority, out string? TenantId, out string? Partition) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.Equals(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope? other) -> bool
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.Partition.get -> string?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.Partition.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.ReleaseRuntimeContentScope(string! Authority, string? TenantId, string? Partition) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.TenantId.get -> string?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.TenantId.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.Deconstruct(out Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, out Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! Model) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.Equals(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel? other) -> bool
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.Model.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.Model.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.ReleaseRuntimeModel(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! Model) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.Scope.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.Scope.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext.Node.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableNode!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext.ReleaseRuntimeNodeContext(Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember! member, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! scope, Elsa.Workflows.Runtime.Core.Models.ExecutableNode! node, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable? workflow, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate? template) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext.Scope.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext.Template.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeNodeContext.Workflow.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.Deconstruct(out Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, out Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate! Template) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.Equals(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate? other) -> bool
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.ReleaseRuntimeTemplate(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate! Template) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.Scope.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.Scope.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.Template.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplate!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.Template.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.Deconstruct(out Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! Executable) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.Equals(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow? other) -> bool
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.Executable.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.ReleaseRuntimeWorkflow(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! Executable) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.Scope.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.Scope.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Artifact.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Artifact.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Deconstruct(out Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, out string! DefinitionId, out string! DefinitionVersionId, out string! Version, out string! StateSource, out string! SourceKind, out string! SourceId, out string? SourceVersion, out string! SourceReferenceId, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope ReferenceScope, out Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Artifact) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.DefinitionId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.DefinitionId.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.DefinitionVersionId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.DefinitionVersionId.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Equals(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection? other) -> bool
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.ReferenceScope.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.ReferenceScope.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.ReleaseWorkflowSelection(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! Scope, string! DefinitionId, string! DefinitionVersionId, string! Version, string! StateSource, string! SourceKind, string! SourceId, string? SourceVersion, string! SourceReferenceId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableReferenceScope ReferenceScope, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! Artifact) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Scope.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Scope.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceId.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceKind.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceKind.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceReferenceId.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceReferenceId.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceVersion.get -> string?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.SourceVersion.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.StateSource.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.StateSource.init -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Version.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Version.init -> void
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.ActivityVersion = "elsa.activity-version" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.ActivityVersionKind = "activity-version" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Model = "elsa.runtime-model-material" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.ModelKind = "runtime-model" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Selection = "elsa.workflow-selection" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.SelectionKind = "workflow-selection" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Template = "elsa.activity-template" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.TemplateKind = "activity-template" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Version = 1 -> int
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.Workflow = "elsa.workflow-executable" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeCodecs.WorkflowKind = "workflow-executable" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.ChildControlConsumer = "runtime.child-control-consumer" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.ClrActivity = "runtime.clr-activity" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Compatibility = "runtime.compatibility" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Conversion = "runtime.conversion" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Descriptor = "runtime.descriptor" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Expression = "runtime.expression" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.InputMetadata = "runtime.input-metadata" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Metadata = "runtime.node-metadata" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.ModelProtocol = "runtime.model-protocol" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Operator = "runtime.operator-policy" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Placement = "runtime.placement" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Provider = "runtime.activity-provider" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.PublicContract = "runtime.activity-contract" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.Structure = "runtime.structure" -> string!
+const Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeSiteKinds.TemplateOverlay = "runtime.template-overlay" -> string!
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.ToString() -> string!
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.operator !=(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope.operator ==(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.operator !=(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel.operator ==(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeModel? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.operator !=(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate.operator ==(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.operator !=(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow.operator ==(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeWorkflow? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.operator !=(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection.operator ==(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection? left, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseWorkflowSelection? right) -> bool
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSourceContextAccessor
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSourceContextAccessor.Current.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSourceAuthorization
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSourceAuthorization.AuthorizeMaterialAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! artifactId, string! artifactHash, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity? fullPin, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSourceAuthorization.AuthorizeTemplateAsync(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! context, string! templateId, string! templateHash, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.Publication.get -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion.ReleaseActivityVersion(Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeContentScope! scope, string! definitionId, string! versionId, string! version, string! activityTypeKey, string! resolutionKind, System.Text.Json.JsonElement contract, string! providerKey, string! providerSchemaVersion, System.Text.Json.JsonElement providerPayload, string! compilerFingerprint, string! templateId, string! templateHash, string! sourceReferenceId, string! sourceKind, string! sourceId, Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence? publication) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.ReleaseActivityPublicationEvidence(bool ownerTenantKnown, string? ownerTenantId, string! contractJson, string! providerJson, System.Text.Json.JsonElement metadata) -> void
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.OwnerTenantKnown.get -> bool
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.OwnerTenantId.get -> string?
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.ContractJson.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.ProviderJson.get -> string!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.Metadata.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSiteReader.ReadActivityVersion(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSiteReader.ReadTemplate(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate!

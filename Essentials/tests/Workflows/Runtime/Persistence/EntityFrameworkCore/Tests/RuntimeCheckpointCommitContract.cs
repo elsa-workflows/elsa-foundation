@@ -209,7 +209,7 @@ internal sealed class CommitParts
     public List<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions { get; } =
         [Change("activity-a", Activity("activity-a"))];
     public List<RuntimeStateChange<ActivityExecutionInspectionProjection>> Inspections { get; } =
-        [Change("activity-a", Inspection("activity-a"))];
+        [Change("activity-a", RuntimeCheckpointCommitContract.Inspection("activity-a"))];
     public List<RuntimeStateChange<IncidentState>> Incidents { get; } =
         [Change("incident-a", Incident("incident-a"), RuntimeStateChangeOperation.Append)];
     public List<RuntimeStateChange<DurableValueState>> DurableValues { get; } =
