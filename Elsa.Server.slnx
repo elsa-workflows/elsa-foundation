@@ -231,10 +231,13 @@
     <Project Path="Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="Essentials/src/Activities/Http/Elsa.Activities.Http.csproj" />
-    <Project Path="Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
     <Project Path="Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
     <Project Path="Essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj" />
     <Project Path="Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Activities/Primitives/">
+    <Project Path="Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
+    <Project Path="Essentials/src/Activities/Primitives/Releases/Elsa.Activities.Primitives.Releases.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/Bpmn/">
     <Project Path="Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj" />
@@ -245,6 +248,7 @@
   </Folder>
   <Folder Name="/Essentials/src/Activities/Graph/">
     <Project Path="Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
+    <Project Path="Essentials/src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj" />
     <Project Path="Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/DispatchWorkflow/">

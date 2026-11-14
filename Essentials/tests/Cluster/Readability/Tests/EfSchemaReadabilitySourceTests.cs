@@ -36,21 +36,22 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         new(BookmarkStateEfModule.SchemaFamily, Runtime, [BookmarkStateEfModule.SchemaVersion]),
         new(RuntimeActivationSlotEfModule.SchemaFamily, Runtime, [RuntimeActivationSlotEfModule.SchemaVersion]),
         new(RuntimeActivityExecutionEfModule.SchemaFamily, Runtime, [RuntimeActivityExecutionEfModule.SchemaVersion]),
-        new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion]),
+        new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion]),
         new(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, Runtime, [RuntimeBackgroundActivityWorkEfModule.SchemaVersion]),
         // Model state/input is a separately versioned family; keep this expectation independent of discovery.
-        new("RuntimeModelState", Runtime, ["1.0.0"]),
-        new(RuntimeOperationalStateEfModule.SchemaFamily, Runtime, [RuntimeOperationalStateEfModule.SchemaVersion]),
+        new("RuntimeModelState", Runtime, ["1.0.0", "1.1.0"]),
+        new(RuntimeOperationalStateEfModule.SchemaFamily, Runtime, [RuntimeOperationalStateEfModule.SchemaVersion, RuntimeOperationalStateEfModule.StandaloneScheduleSchemaVersion]),
         // The adoption's checked chain retains the legacy reader while adding the durable-cohort format.
         // Keep the predecessor literal independent of the discovered declaration so losing that reader fails here.
-        new(RuntimePostCommitOutboxEfModule.SchemaFamily, Runtime, ["1.0.0", RuntimePostCommitOutboxEfModule.SchemaVersion]),
-        new("RuntimeSchedulerWork", Runtime, ["1.0.0", "2.0.0", "3.0.0"]),
+        new(RuntimePostCommitOutboxEfModule.SchemaFamily, Runtime, ["1.0.0", RuntimePostCommitOutboxEfModule.StimulusSchemaVersion, RuntimePostCommitOutboxEfModule.SchemaVersion]),
+        new("RuntimeSchedulerWork", Runtime, ["1.0.0", "2.0.0", "3.0.0", "4.0.0"]),
         new(RuntimeSchedulerPoisonEfModule.SchemaFamily, Runtime, [RuntimeSchedulerPoisonEfModule.SchemaVersion]),
-        new(RuntimeTriggerBindingEfModule.SchemaFamily, Runtime, [RuntimeTriggerBindingEfModule.SchemaVersion]),
+        new(RuntimeTriggerBindingEfModule.SchemaFamily, Runtime, [RuntimeTriggerBindingEfModule.SchemaVersion, RuntimeTriggerBindingEfModule.SemanticReservationsSchemaVersion]),
         new(RuntimeWorkflowAlterationEfModule.SchemaFamily, Runtime, [RuntimeWorkflowAlterationEfModule.SchemaVersion]),
         new(RuntimeWorkflowDispatchEfModule.SchemaFamily, Runtime, [RuntimeWorkflowDispatchEfModule.SchemaVersion]),
-        new(RuntimeWorkflowExecutionEfModule.SchemaFamily, Runtime, ["1.0.0", "2.0.0"]),
+        new(RuntimeWorkflowExecutionEfModule.SchemaFamily, Runtime, ["1.0.0", "2.0.0", "2.1.0"]),
         new(RuntimeWorkflowTestScopeEfModule.SchemaFamily, Runtime, [RuntimeWorkflowTestScopeEfModule.SchemaVersion]),
+        new("StandaloneTriggers", Runtime, ["1.0.0", "1.1.0"]),
         new("UserTasks", Runtime, ["1.0.0"])
     ];
 
@@ -110,7 +111,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Null(Entry().DatabaseIdentity);
         observations.EndActivation([family]);
         Assert.Equal(("database-a", "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
-        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], Entry().ReadableVersions);
+        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion], Entry().ReadableVersions);
 
         observations.Observe(family, "database-b", "1.0.0");
         Assert.Equal((null, "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
@@ -140,7 +141,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
 
         observations.Deactivate(gate, [family]);
         Assert.False(Entry().ModuleActive);
-        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], Entry().ReadableVersions);
+        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion, RuntimeArtifactEfModule.ScopedPublicationSchemaVersion], Entry().ReadableVersions);
     }
 
     /// <summary>

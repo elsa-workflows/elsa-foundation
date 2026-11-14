@@ -70,7 +70,8 @@ internal static class SecretBindingCompilerFixture
         IReadOnlyCollection<ActivityDefinitionVersion>? otherVersions = null,
         IReadOnlyCollection<VariableDefinition>? variables = null,
         bool includeDeclaredInputDefaults = false,
-        IActivityStructureService? structures = null)
+        IActivityStructureService? structures = null,
+        IReadOnlyCollection<InputDefinition>? workflowInputs = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         foreach (var activityType in activityTypes)
@@ -81,7 +82,7 @@ internal static class SecretBindingCompilerFixture
             {
                 Id = "version-1",
                 Definition = new WorkflowDefinition { Id = "definition-1", Name = "Secret bindings" },
-                State = new WorkflowDefinitionState(variables ?? [], root, [], [], null)
+                State = new WorkflowDefinitionState(variables ?? [], root, workflowInputs ?? [], [], null)
             }),
             new FakeActivityVersionStore([.. activityTypes.Select(type => ClrActivityVersion(type, includeDeclaredInputDefaults)), .. otherVersions ?? []]),
             structures ?? StructureService,
