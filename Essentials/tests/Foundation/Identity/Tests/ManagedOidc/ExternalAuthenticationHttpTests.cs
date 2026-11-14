@@ -196,6 +196,60 @@ public sealed partial class ExternalAuthenticationHttpTests
     }
 
     [Theory]
+    [InlineData("start")]
+    [InlineData("callback")]
+    [InlineData("result")]
+    public async Task Preview_rechecks_saved_management_permission_under_an_unchanged_administrator_cookie(string phase)
+    {
+        await using var host = await HttpHost.Start();
+        using var browser = host.Browser();
+        await host.LoginAdministrator(browser);
+        var original = await Session(browser);
+        var originalCookie = browser.Cookies.GetCookies(host.BaseUri)[AspNetCoreIdentityDefaults.CookieScheme]!.Value;
+        Uri? callback = phase == "start" ? null : await host.StartAndAuthorize(browser, purpose: "preview");
+        string? resultPath = null;
+        if (phase == "result")
+        {
+            using var returned = await browser.GetAsync(callback!);
+            Assert.Equal(HttpStatusCode.Found, returned.StatusCode);
+            var location = new Uri(host.BaseUri, returned.Headers.Location!);
+            resultPath = "identity/external/preview/company/results/" + QueryHelpers.ParseQuery(location.Query)["externalPreviewHandle"];
+        }
+        var roles = new List<RoleRecord>();
+        await using (var scope = host.Scope())
+        {
+            var user = (await scope.ServiceProvider.GetRequiredService<IUserStore>().FindAsync("default", original.Subject!))!;
+            var store = scope.ServiceProvider.GetRequiredService<IRoleStore>();
+            foreach (var id in user.RoleIds)
+            {
+                var role = (await store.FindAsync("default", id))!;
+                roles.Add(role);
+                await store.SaveAsync(role with { Permissions = new HashSet<string>() });
+            }
+        }
+        var tokenRequests = host.Company.TokenRequests;
+        using (var denied = phase == "start" ? await host.Begin(browser, "company", "preview")
+            : await browser.GetAsync(phase == "callback" ? callback!.AbsoluteUri : resultPath!))
+            Assert.Equal(HttpStatusCode.BadRequest, denied.StatusCode);
+        Assert.Equal(tokenRequests, host.Company.TokenRequests);
+        Assert.Equal("authenticated", (await Session(browser)).Status);
+        Assert.Equal(originalCookie, browser.Cookies.GetCookies(host.BaseUri)[AspNetCoreIdentityDefaults.CookieScheme]!.Value);
+        await using (var scope = host.Scope())
+            foreach (var role in roles) await scope.ServiceProvider.GetRequiredService<IRoleStore>().SaveAsync(role);
+        // Denied callback/result reads must not consume an otherwise valid one-time artifact.
+        if (phase == "callback")
+        {
+            using var permitted = await browser.GetAsync(callback!);
+            Assert.Equal(HttpStatusCode.Found, permitted.StatusCode);
+        }
+        if (phase == "result")
+        {
+            using var permitted = await browser.GetAsync(resultPath!);
+            Assert.Equal(HttpStatusCode.OK, permitted.StatusCode);
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Actual_preview_preserves_admin_cookie_tokens_and_IAM_rows_for_disabled_draft_or_enabled_linked_user(bool existingIdentity)
