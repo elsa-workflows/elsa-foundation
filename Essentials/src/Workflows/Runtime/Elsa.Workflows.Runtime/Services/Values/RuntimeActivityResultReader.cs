@@ -46,7 +46,7 @@ internal static class RuntimeActivityResultReader
             result.Presence is ValuePresence.Absent or ValuePresence.Withheld ||
             contract.IsRequired && result.Presence == ValuePresence.ExplicitNull ||
             result.Policy.Lifecycle == DurableValueLifecycle.None || result.ExternalReference is not null || result.TransientResource is not null ||
-            !result.Policy.Satisfies(ValuePolicyCombiner.RequireMinimum(ValueProtectionPolicy.InstanceInline, contract.Policy, "Prior-result fixture")) ||
+            !result.Policy.Satisfies(ValuePolicyCombiner.ToProtectionPolicy(contract.Policy)) ||
             result.HoldsValueRequiringEncryption())
             throw Refused();
         return result;

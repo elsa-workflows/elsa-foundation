@@ -32,6 +32,10 @@ public sealed partial class QueuedSelectedStartTests
     [InlineData(PersistenceMode.Balanced, false, "sensitive")]
     [InlineData(PersistenceMode.Durable, true, "sensitive")]
     [InlineData(PersistenceMode.Balanced, true, "sensitive")]
+    [InlineData(PersistenceMode.Durable, false, "contract-sensitive")]
+    [InlineData(PersistenceMode.Balanced, false, "contract-sensitive")]
+    [InlineData(PersistenceMode.Durable, true, "contract-sensitive")]
+    [InlineData(PersistenceMode.Balanced, true, "contract-sensitive")]
     public async Task Native_leaf_consumes_whole_fixtures_through_bindings_and_expression_parameters(PersistenceMode mode, bool expression, string shape)
     {
         var owner = ResultOwner(shape);
@@ -44,8 +48,8 @@ public sealed partial class QueuedSelectedStartTests
         var value = activity.InputSnapshot!.Values["value"];
         Assert.Equal(shape == "null" ? ValuePresence.ExplicitNull : ValuePresence.Present, value.Presence);
         if (shape != "null") Assert.Equal("fixture-value", value.InlineValue!.Value.GetString());
-        Assert.Equal(shape == "sensitive", value.Policy.IsSensitive);
-        if (shape == "sensitive")
+        Assert.Equal(shape.Contains("sensitive", StringComparison.Ordinal), value.Policy.IsSensitive);
+        if (shape.Contains("sensitive", StringComparison.Ordinal))
         {
             Assert.Equal("full", value.Policy.RedactionMode);
             Assert.Equal("test-only", value.Policy.RetentionPolicy);
@@ -146,6 +150,8 @@ public sealed partial class QueuedSelectedStartTests
     [InlineData("closed")]
     [InlineData("pin")]
     [InlineData("missing")]
+    [InlineData("invocation")]
+    [InlineData("consumer-workflow")]
     [InlineData("root-closed")]
     [InlineData("type")]
     [InlineData("policy")]
@@ -184,9 +190,11 @@ public sealed partial class QueuedSelectedStartTests
         if (defect == "workflow") state = state with { WorkflowExecutionId = "foreign" };
         if (defect == "closed") state = state with { Status = WorkflowExecutionStatus.Completed };
         if (defect == "parent") consumer = consumer with { ParentActivityExecutionId = "foreign" };
+        if (defect == "consumer-workflow") consumer = consumer with { Execution = consumer.Execution with { WorkflowExecutionId = "foreign" } };
         if (defect == "consumer") consumer = consumer with { Execution = consumer.Execution with { ExecutableNodeId = "after" } };
-        var executable = defect == "pin" ? WorkflowExecutionHarness.NewExecutable(WorkflowExecutionHarness.NewProbeNode("foreign")) : owner.Executable!;
-        var context = new RuntimeInputBindingResolutionContext(harness.ExecutionId, consumer.InvocationId, consumer, executable: executable) { WorkflowState = state };
+        var executable = defect == "pin" ? WorkflowExecutionHarness.NewExecutable(owner.Executable!.RootActivity,
+            owner.Executable.Identity with { ArtifactId = "foreign", ArtifactHash = "foreign" }) : owner.Executable!;
+        var context = new RuntimeInputBindingResolutionContext(harness.ExecutionId, defect == "invocation" ? "foreign" : consumer.InvocationId, consumer, executable: executable) { WorkflowState = state };
         var node = owner.Executable!.NodesById["selected"];
         await Assert.ThrowsAnyAsync<InvalidOperationException>(async () =>
             await harness.Services.GetRequiredService<IRuntimeActivityInputMaterializer>().MaterializeSnapshotAsync(node, consumer.InvocationId, context, owner.Clock.Now));
@@ -196,10 +204,10 @@ public sealed partial class QueuedSelectedStartTests
     {
         QualifyTarget = target => target.ActivityType == typeof(LexicalStringActivity).FullName,
         WrapSelected = selected => new("container", "container", typeof(ProbeActivity).FullName!, "1", "test.container", JsonSerializer.SerializeToElement(new { }),
-            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), childSlots: [new("children", [FixtureProducer(), selected, WorkflowExecutionHarness.NewProbeNode("after")])]),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), childSlots: [new("children", [FixtureProducer(shape), selected, WorkflowExecutionHarness.NewProbeNode("after")])]),
         Seed = entry =>
         {
-            var policy = shape == "sensitive" ? FixtureSensitive : shape == "encrypted-plaintext" ?
+            var policy = shape.Contains("sensitive", StringComparison.Ordinal) ? FixtureSensitive : shape == "encrypted-plaintext" ?
                 new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, requiresEncryption: true) : ValueProtectionPolicy.InstanceInline;
             var value = shape == "null" ? ValueEnvelope.Null(FixtureString, policy) : shape == "absent" ? ValueEnvelope.Absent(FixtureString, policy) :
                 shape == "wrong-type" ? Number(3) : ValueEnvelope.Inline(FixtureString, JsonSerializer.SerializeToElement("fixture-value"), policy);
@@ -210,9 +218,10 @@ public sealed partial class QueuedSelectedStartTests
         }
     };
 
-    private static ExecutableNode FixtureProducer() => new("before", "before", "fixture.producer", "1", "fixture.producer", JsonSerializer.SerializeToElement(new { }),
+    private static ExecutableNode FixtureProducer(string shape) => new("before", "before", "fixture.producer", "1", "fixture.producer", JsonSerializer.SerializeToElement(new { }),
         new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), activityContract: new("fixture.producer", "1", "fixture.producer",
-            JsonSerializer.SerializeToElement(new { }), [], new(FixtureString, false, ActivityValuePolicy.Default, []), ["Done"], new("fixture.producer", "probe")));
+            JsonSerializer.SerializeToElement(new { }), [], new(FixtureString, false, shape == "contract-sensitive" ?
+                new(true, true, false, RedactionMode: "full", RetentionPolicy: "test-only") : ActivityValuePolicy.Default, []), ["Done"], new("fixture.producer", "probe")));
 
     private static ExecutableNode ResultConsumer(bool expression, string projection = "$result") => new("selected", "selected", typeof(LexicalStringActivity).FullName!,
         "1", "test.consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding> { ["value"] = FixtureBinding("value", expression, projection) },

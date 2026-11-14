@@ -90,7 +90,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
     /// <summary>
     /// Guards the backstop's hand-maintained scan: every member of a workflow or activity execution state that can carry
     /// a <see cref="ValueEnvelope"/>, found by walking the two state types and the types they compose, must be the member
-    /// of a <see cref="Locations"/> row of a scanned location. The refusal theories prove every classification. A new
+    /// of a <see cref="Locations"/> row for a scanned location. The refusal theories prove every classification. A new
     /// envelope-bearing member turns this red until a row, and the scan it proves, are added.
     /// </summary>
     [Fact]
