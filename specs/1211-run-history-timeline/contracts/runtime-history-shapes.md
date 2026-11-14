@@ -4,7 +4,7 @@ Implementation baseline for the capture/provider/API workers. Existing public co
 
 ## Envelope and logical batch
 
-Reuse RuntimeHistoryEvent with existing constructor and Sequence/Name/OccurredAt meaning. Add null/default-omitted init-only SchemaVersion (default 1), Authority (Unspecified, CommittedTransition, DeliveryObservation), BookmarkId, AttemptId, ExecutionScopeId, IterationId, Causation, PhysicalCommitId and RecordedAt. Old envelopes remain Unspecified authority, never silently promoted. Payload remains compatible but this metadata path emits no arbitrary payload.
+Reuse RuntimeHistoryEvent with its existing constructor and Sequence/Name/OccurredAt meaning. Add init-only SchemaVersion (default 1), default-omitted Authority (Unspecified, CommittedTransition, DeliveryObservation), and null-omitted CheckpointOrdinal, BookmarkId, AttemptId, ParentActivityExecutionId, ActivityAncestryKnown, ExecutionScopeId, IterationId, Causation, PhysicalCommitId and RecordedAt. SchemaVersion is an additive serialized field; the optional occurrence/position fields remain absent on old envelopes. Old envelopes remain Unspecified authority, never silently promoted. Payload remains compatible but this metadata path emits no arbitrary payload. Existing no-history checkpoint fingerprint/wire preservation is a separate obligation in S03.
 
 New Core models:
 
@@ -21,6 +21,8 @@ Stable IDs depend only on original logical identity/kind/subject/ordinal. Alread
 RuntimeHistoryBookmarkStatus: Active, Consumed, Removed, Superseded, Unknown. Retirement reasons distinguish cancellation, sibling winner, stale cleanup and other actual causes. Expired is eligibility at observation time, not a persisted lifecycle status.
 
 RuntimeHistoryBookmarkMutation carries the existing safe ActivityExecutionBookmarkSummary, status, reason and selected-winner handle where known. No raw BookmarkState/payload is copied.
+
+The creation-availability enum is `RuntimeHistoryCreationEvidence` (Unknown, CreationMetadata, CreationEvent); the bookmark model keeps its `PriorState` member key.
 
 RuntimeHistoryBookmark retains that safe summary, optional node, status, nullable creation/end event references, last event/sequence, stable first-recorded sequence for inventory paging, optional end instant/reason/winner and an explicit creation/prior-state availability. Known creation metadata from the real handle may remain available without a captured creation event; neither is fabricated.
 

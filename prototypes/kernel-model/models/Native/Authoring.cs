@@ -141,9 +141,13 @@ public readonly record struct Unit;
 public class ActivityContext
 {
     internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation = 0, string? operationKey = null)
-        => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation, OperationKey) = (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame);
+        : this(instance, frame, node, attempt, cancellationToken, creation, operationKey, null) { }
+
+    internal ActivityContext(InstanceRef instance, string frame, string node, int attempt, CancellationToken cancellationToken, long creation, string? operationKey, string? recoverySource)
+        => (Instance, FrameId, NodeId, Attempt, CancellationToken, Creation, OperationKey, RecoverySource) = (instance, frame, node, attempt, cancellationToken, creation, operationKey ?? frame, recoverySource);
 
     internal string OperationKey { get; }
+    internal string? RecoverySource { get; }
     public InstanceRef Instance { get; }
     public long Creation { get; }
     public string FrameId { get; }
@@ -156,7 +160,7 @@ public class ActivityContext
 public sealed class StartContext<TTrigger> : ActivityContext
 {
     private readonly JsonNode? _trigger;
-    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey)
+    internal StartContext(ActivityContext c, bool delivery, JsonNode? trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource)
         => (IsTriggerDelivery, _trigger) = (delivery, trigger);
 
     /// <summary>This activation is the workflow's start trigger being delivered (an HTTP request, an event).</summary>
@@ -171,7 +175,7 @@ public sealed class StartContext<TTrigger> : ActivityContext
 
 public sealed class ResumeContext<TState, TTrigger> : ActivityContext
 {
-    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey)
+    internal ResumeContext(ActivityContext c, TState state, TTrigger trigger) : base(c.Instance, c.FrameId, c.NodeId, c.Attempt, c.CancellationToken, c.Creation, c.OperationKey, c.RecoverySource)
         => (State, Trigger) = (state, trigger);
 
     public TState State { get; }

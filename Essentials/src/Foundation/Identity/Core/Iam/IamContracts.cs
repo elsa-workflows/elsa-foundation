@@ -14,8 +14,9 @@ public interface IUserStore
     ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sets the user's <see cref="UserRecord.Status"/> and nothing else; returns <c>false</c> only when the user
-    /// does not exist. Setting the status the user already has is a no-op that leaves the record and its revision
+    /// Sets the user's <see cref="UserRecord.Status"/> without rewriting saved roles or profile fields. An authentication
+    /// authority may also advance its private credential epoch with a status transition. Returns <c>false</c> only when
+    /// the user does not exist. Setting the status the user already has is a no-op that leaves the record and its revision
     /// unchanged. If another write to the same user commits while the status is being set, the store never
     /// overwrites it: it either applies the status on top of that write or throws without changing anything, and
     /// the caller may retry. That case is never reported as <c>false</c>.
