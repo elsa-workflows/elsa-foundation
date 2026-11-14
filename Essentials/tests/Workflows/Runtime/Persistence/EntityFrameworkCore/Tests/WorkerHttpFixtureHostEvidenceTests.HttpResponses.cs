@@ -88,7 +88,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         var fixture = await PrepareStandaloneHttpAsync(shellA.ServiceProvider, mode: "WorkflowResponse");
         using var request = StandaloneRequest("removed", new { text = "timeout-input" }); request.Headers.Remove("Idempotency-Key");
         using var response = await routing.Client.SendAsync(request); Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(); var id = problem.GetProperty("deliveryId").GetString()!;
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(); var id = Assert.IsType<string>(problem.GetProperty("deliveryId").GetString());
         await AssertRoutingHostDeferredAsync(shellA.ServiceProvider, id);
         await using var worker = await StartHostAsync(standaloneHttp: true, automaticResumption: false);
         var shellB = await worker.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
