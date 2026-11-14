@@ -27,6 +27,18 @@ public sealed class PublishStimulusIntentAdapterTests
         Assert.Equal(local ? StimulusRoutingMode.ResumeOnly : StimulusRoutingMode.StartAndResume, request.Mode);
         Assert.Equal(local ? "publisher" : null, request.TargetWorkflowExecutionId); Assert.True(request.ResumeAllMatchingBookmarks);
         Assert.Null(request.MatchedTriggerBindings); Assert.Null(request.DispatchOptions); Assert.Null(request.PayloadType); Assert.Null(request.ProviderId);
+        var independent = adapter.CreateSubscriptionSource(intent);
+        if (local) Assert.Null(independent);
+        else
+        {
+            Assert.Equal("event", independent!.TriggerTypeKey);
+            Assert.Equal(1, independent.TriggerSchemaVersion);
+            Assert.Equal("eventName", independent.ConfigurationField);
+            Assert.Equal("hello", independent.ConfigurationValue);
+            Assert.Equal("retained-value", independent.Payload.GetProperty("value").GetString());
+            Assert.Equal("hello", independent.Metadata.GetProperty("eventName").GetString());
+            Assert.Equal("correlation", independent.Metadata.GetProperty("correlationId").GetString());
+        }
     }
 
     [Fact]
@@ -46,6 +58,8 @@ public sealed class PublishStimulusIntentAdapterTests
         var failure = Assert.Throws<StimulusDeliveryIntentException>(() => adapter.CreateRequest(Intent(payload: JsonSerializer.SerializeToElement(payload))));
         Assert.Equal("send", failure.IntentId); Assert.Equal(PublishStimulusConstants.PublishStimulusIntentKind, failure.IntentKind);
         Assert.IsType<JsonException>(failure.InnerException);
+        var subscriptionFailure = Assert.Throws<StimulusDeliveryIntentException>(() => adapter.CreateSubscriptionSource(Intent(payload: JsonSerializer.SerializeToElement(payload))));
+        Assert.Equal("send", subscriptionFailure.IntentId); Assert.IsType<JsonException>(subscriptionFailure.InnerException);
     }
 
     [Theory]
@@ -64,6 +78,8 @@ public sealed class PublishStimulusIntentAdapterTests
         var payload = JsonSerializer.Deserialize<JsonElement>(defect == "not-object" ? "[]" : json);
         var failure = Assert.Throws<StimulusDeliveryIntentException>(() => adapter.CreateRequest(Intent(payload: payload, kind: defect == "kind" ? "other-kind" : null)));
         Assert.Equal("send", failure.IntentId); Assert.NotNull(failure.InnerException);
+        var subscriptionFailure = Assert.Throws<StimulusDeliveryIntentException>(() => adapter.CreateSubscriptionSource(Intent(payload: payload, kind: defect == "kind" ? "other-kind" : null)));
+        Assert.Equal("send", subscriptionFailure.IntentId); Assert.NotNull(subscriptionFailure.InnerException);
     }
 
     private static ServiceProvider Provider()

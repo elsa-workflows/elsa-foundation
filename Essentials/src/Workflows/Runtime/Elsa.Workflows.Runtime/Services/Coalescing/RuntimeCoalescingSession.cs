@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Triggers;
 using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -226,7 +227,8 @@ public sealed class RuntimeCoalescingSession
     public void BufferDeferred(RuntimeCheckpointCommit commit)
     {
         ArgumentNullException.ThrowIfNull(commit);
-        if (commit.StateChanges.PostCommitOutbox.Any(change => change.State.SubscriptionDeliveryProtocolVersion is not null))
+        if (NativeIngressCheckpointAuthority.RequiresInitialPhysicalAdmission(commit) ||
+            commit.StateChanges.PostCommitOutbox.Any(change => change.State.SubscriptionDeliveryProtocolVersion is not null))
             throw new NotSupportedException("Subscription protocol declarations require a physical checkpoint before delivery.");
 
         ApplyToOverlay(commit.StateChanges, includeOutbox: true);
@@ -890,7 +892,7 @@ public sealed class RuntimeCoalescingSession
                 recipientSnapshot: existing.RecipientSnapshot,
                 standaloneIngress: existing.StandaloneIngress,
                 subscriptionDeliveryProtocolVersion: existing.SubscriptionDeliveryProtocolVersion,
-                subscriptionDelivery: existing.SubscriptionDelivery);
+                subscriptionDelivery: existing.SubscriptionDelivery, savedStimulusStarts: existing.SavedStimulusStarts);
     }
 
     public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)

@@ -162,7 +162,7 @@ run background jobs, read kept events, publish) is a message in that commit. A n
 ## Persistence
 
 The kernel depends on one storage contract, `IKernelStore` (`src/Kernel.Durable/Store.cs`), stated by what each operation
-guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 59 semantic cases (57 before round 4),
+guarantees. A provider is correct when it passes the **store conformance suite** (`conformance/`): 61 semantic cases (57 before round 4),
 a concurrent stress test with injected connection failures and the provider's own connection killer, and the cost runs.
 
 | Operation | Guarantee |
@@ -496,11 +496,11 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
   graph check (FINDINGS section 26). G4 has no mutation of its own: that it bites is not shown.
 - **Graph engine:** main's Flowchart conformance corpus and join tests pass against the extracted engine (41), with
   main's two determinism byte-locks byte-identical.
-- **Store conformance suite:** 59 cases since round 4, 57 of them required (57 and 53 before); the required cases pass
-  on in-memory, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB, with either fence, a case skipped where a store
-  cannot refuse a row; the reference cases differ where the contract is silent (F8). Round 4 made the two
-  subscription cases of M6 required (idempotent), and every store passes them (FINDINGS 25.2). The projector chunk
-  case is recorded in FINDINGS 25.7; its original per-engine results predate the subscription change.
+- **Store conformance suite:** 61 cases, 59 required. The suite covers semantic send order across revisions (#4459)
+  and journaled creations and rollback across MySQL batch boundaries ([ENGINES E11](ENGINES.md#e11-oracles-mysql-ef-provider-can-acknowledge-a-partial-batch-4358)).
+  The earlier 59-case suite passed the applicable required cases in memory, SQLite, PostgreSQL, SQL Server, MySQL
+  and MongoDB. FINDINGS 25.2 records the required idempotent subscription cases and FINDINGS 25.7 records the
+  original per-engine projector chunk results.
 - **Stress:** 40 s and 5,000 outside messages with killed sessions, stalls and takeovers, including round 3's commands
   and starts on events: every property holds on PostgreSQL, SQL Server (RCSI, checked fence), MySQL, MongoDB and
   SQLite. With the fence broken on purpose every engine fails (26 to 611 violations).

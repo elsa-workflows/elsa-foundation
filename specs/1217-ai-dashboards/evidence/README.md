@@ -1,3 +1,7 @@
+# Dashboard evidence index
+
+Current delivered source, original downloadable screenshots/ARIA, privacy-reviewed trace archives, exact model identities and allowlisted acceptance reports are in the [13 November delivery ledger](2026-11-13/README.md). The [resulting-main receipt](2026-11-13/resulting-main-receipt.json) qualifies clean main3a90b64b96 with actual provider/native keyboard journeys and real host restart. The history below retains its original failed, unavailable, preliminary and source-specific meanings.
+
 # Dashboard delivery evidence
 
 **12 November — historical receipts below:** #3913 closed without merging. The owner resumed delivery and extended the review limit within reason. [Delivery slices](../delivery-slices.md) owns current integration status. The local passes below belong to the preserved November 6 source; former `/tmp` artifacts are unavailable. They are not current-head, independent, downloadable or resulting-main qualification. References below to the exhausted review cap describe the old checkpoint, not a pending permission request.
@@ -57,3 +61,13 @@ python3 tools/ux-acceptance/run.py --output /tmp/dashboard-home-unique --journey
 An optional `--studio-root /absolute/reviewed/studio-checkout` builds that exact clean frontend against the runner checkout's backend. Reports record `sourceSha` (backend) and `studioSourceSha` (frontend), both dirty flags, and refuse changes to either source during qualification. This lets each stacked UI PR be inspected at its actual reviewed frontend commit while using the independently versioned current backend. Set `UX_PR_HEAD_SHA` to the reviewed PR head when they differ; it must be an observed source SHA or the verified second parent of a two-parent tested CI merge; never describe the pair as one source revision. Default runs still build both from the same checkout and require every journey unless a complete single journey is explicitly selected.
 
 The isolated pointer/long-name/drill fixtures use `Studio/tests/browser/playwright.dashboard-native.config.ts`, which owns its Vite server and never reuses another checkout. They are supporting browser regressions, not composed product acceptance. Current machine reports/screenshots still require independent inspection and downloadable CI evidence before UI acceptance. Native browser message-submit counters do not measure physical SDK/HTTP calls.
+
+The opt-in actual provider runner is `tools/studio/Dashboard.Conformance.Probe/live_qualify.py`.
+Preparation/build do not inspect credentials or call a model. Live mode requires a pinned model,
+explicit restored-access acknowledgement and the approved credential environment-variable name.
+Its dedicated host declares the current normal Workbench dependencies plus Acme unconditionally;
+it forwards the real SDK factory and observes turns/tools without recording source results.
+Browser traces are owned by Playwright, including the independent reader context.
+A successful SDK discovery alone does not qualify authoring. Both actual lifecycle journeys,
+native zero-send phases, current IAM denials, numerical oracles and independent screen inspection
+remain required. Reports/traces are private; publish only an inspected allowlisted receipt.

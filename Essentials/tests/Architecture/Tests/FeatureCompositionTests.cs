@@ -1,3 +1,6 @@
+using Elsa.Workflows.Publishing.Releases.Runtime.Core;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -326,6 +329,12 @@ public sealed class FeatureCompositionTests
                     $"Data Source={Path.Join(directory, recording.Shell + "-release-archive.db")};Pooling=False"));
                 services.AddReleaseArchiveStore<ReleaseArchiveCompositionContext>(_ =>
                     new SourceScope(recording.Shell, null, "workflow-release-archive", "architecture-host"));
+                // This host explicitly denies source exports. Runtime source acquisition has no production policy default.
+                services.AddSingleton<IReleaseRuntimeSourceContextAccessor>(new ReleaseSourceCompositionPolicy());
+                services.AddSingleton<IReleaseRuntimeSourceAuthorization>(new ReleaseSourceCompositionPolicy());
+                services.AddSingleton<INativeReleaseCaptureContextAccessor>(new ReleaseSourceCompositionPolicy());
+                services.AddSingleton<INativeReleaseCaptureAuthorization>(new ReleaseSourceCompositionPolicy());
+                services.AddSingleton<INativeReleaseCatalogCaptureAuthorization>(new ReleaseSourceCompositionPolicy());
                 recording.Attach(services);
             }
 
@@ -352,6 +361,19 @@ public sealed class FeatureCompositionTests
         var type = module.DefineType("CompositionRecorderFeature", TypeAttributes.Public | TypeAttributes.Sealed, typeof(RecorderCatalogEntry));
         type.DefineDefaultConstructor(MethodAttributes.Public);
         return type.CreateType();
+    }
+
+    private sealed class ReleaseSourceCompositionPolicy : IReleaseRuntimeSourceContextAccessor, IReleaseRuntimeSourceAuthorization, INativeReleaseCaptureContextAccessor, INativeReleaseCaptureAuthorization, INativeReleaseCatalogCaptureAuthorization
+    {
+        public ReleaseRuntimeContentScope Current { get; } = new("architecture-host", null, "architecture-source");
+        public ValueTask<bool> AuthorizeMaterialAsync(ReleaseRuntimeContentScope context, string artifactId, string artifactHash,
+            WorkflowExecutableIdentity? fullPin, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> AuthorizeTemplateAsync(ReleaseRuntimeContentScope context, string templateId, string templateHash,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> AuthorizeWorkflowVersionAsync(ReleaseRuntimeContentScope context, string definitionVersionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> AuthorizeSelectedMaterialAsync(ReleaseRuntimeContentScope context, string definitionVersionId, string sourceReferenceId,
+            string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> AuthorizeActivityVersionAsync(ReleaseRuntimeContentScope context, string activityVersionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 
     private sealed class ReleaseArchiveCompositionContext(DbContextOptions<ReleaseArchiveCompositionContext> options) : DbContext(options)
