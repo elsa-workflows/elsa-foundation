@@ -19,6 +19,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   const [creating, setCreating] = useState(false);
   const [editorVersion, setEditorVersion] = useState(0);
   const [dirty, setDirty] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const restoreCancelledFocus = useCancelledActionFocus(Boolean(busy), client);
   const [error, setError] = useState("");
@@ -49,7 +50,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   const clearProtectedState = useCallback(() => {
     ++readinessRequest.current;
     catalogRef.current = null; setCatalog(null); setSelectedId(null); setSeed(null); setCreating(false);
-    setDirty(false); setTest(null); setPreview(null); setReadiness(null); setNotice("");
+    setDirty(false); setNeedsRefresh(false); setTest(null); setPreview(null); setReadiness(null); setNotice("");
   }, []);
 
   const load = useCallback(async (preferred?: string | null) => {
@@ -58,7 +59,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
     try {
       const next = await client.list();
       if (currentClient.current !== client || request !== requestNumber.current) return null;
-      setCatalog(next); setLoadedClient(client);
+      setCatalog(next); setLoadedClient(client); setNeedsRefresh(false);
       setEditorVersion(version => version + 1);
       setSelectedId(current => preferred !== undefined ? preferred : next.connections.some(view => view.document.id === current) ? current : null);
       return next;
@@ -97,7 +98,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   useEffect(() => {
     if (lastClient.current !== client) {
       lastClient.current = client; catalogRef.current = null;
-      setCatalog(null); setSelectedId(null); setSeed(null); setCreating(false); setDirty(false); setTest(null); setPreview(null); setBusy(null); setNotice(""); setSearch("");
+      setCatalog(null); setSelectedId(null); setSeed(null); setCreating(false); setDirty(false); setNeedsRefresh(false); setTest(null); setPreview(null); setBusy(null); setNotice(""); setSearch("");
       busyRef.current = false; returned.current = false;
     }
     // Retained workspace tabs keep their editor and observations; resuming an effect must not reset a draft.
@@ -150,11 +151,11 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
 
   async function canDiscard() { return !dirty || await dialogs.confirm({ title: "Discard unsaved changes?", message: "Your saved connection will be kept.", confirmLabel: "Discard changes" }); }
   async function choose(view: ConnectionView) {
-    if (busyRef.current || loading || !await canDiscard() || currentClient.current !== client) return;
+    if (busyRef.current || loading || needsRefresh || !await canDiscard() || currentClient.current !== client) return;
     setSelectedId(view.document.id); setCreating(false); setSeed(null); setDirty(false); setError(""); setEditorVersion(version => version + 1);
   }
   async function create(source?: ConnectionView) {
-    if (busyRef.current || loading || !writable || !await canDiscard() || currentClient.current !== client) return;
+    if (busyRef.current || loading || needsRefresh || !writable || !await canDiscard() || currentClient.current !== client) return;
     setSeed(source ? { ...structuredClone(source.document), id: "", enabled: false, overridesDeployment: false, archivedAt: null } : emptyDocument());
     setSelectedId(null); setCreating(true); setDirty(false); setTest(null); setPreview(null); setError(""); setEditorVersion(version => version + 1);
   }
@@ -168,13 +169,13 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
     } finally { if (currentClient.current === client) { busyRef.current = false; setBusy(null); } }
   }
   async function change(command: ConnectionCommand, title: string) {
-    if (busyRef.current || loading || !writable) return;
+    if (busyRef.current || loading || needsRefresh || !writable) return;
     const opener = document.activeElement;
     busyRef.current = true; setBusy(title); setError(""); setNotice("");
     try {
       const assessed = await client.assess(command);
       if (currentClient.current !== client) return;
-      if (!assessed.canApply || !assessed.proposed) throw { status: 409, payload: { failure: assessed.failure } };
+      if (!assessed.canApply || !assessed.proposed) { setNeedsRefresh(true); throw { status: 409, payload: { failure: assessed.failure } }; }
       const effect = sourceEffect(assessed.proposed, command.record.key) || "The Studio record will be removed. Deployment configuration is retained.";
       if (!await dialogs.confirm({ title, message: `${effect}\n\nApply this change?`, confirmLabel: title,
         tone: [connectionChanges.disable, connectionChanges.archive, connectionChanges.remove, connectionChanges.promoteOverride].includes(command.change as 3 | 5 | 6 | 8) ? "danger" : "default" })) {
@@ -182,12 +183,17 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
         return;
       }
       if (currentClient.current !== client) return;
+      setNeedsRefresh(true);
       const result = await client.apply(command);
       if (currentClient.current !== client) return;
       if (!result.saved) throw { status: 409, payload: result };
-      setCreating(false); setSeed(null); setDirty(false); setTest(null); setPreview(null);
-      await load(command.change === connectionChanges.remove ? null : result.recordId ?? command.record.id);
-      if (currentClient.current === client) setNotice("Connection updated. The sign-in chooser uses the current effective configuration.");
+      setTest(null); setPreview(null);
+      const next = await load(command.change === connectionChanges.remove ? null : result.recordId ?? command.record.id);
+      if (currentClient.current !== client) return;
+      if (next) {
+        setCreating(false); setSeed(null); setDirty(false);
+        setNotice("Connection updated. The sign-in chooser uses the current effective configuration.");
+      } else setNotice("The change was saved, but the current configuration could not be read. Refresh connections before continuing.");
     } catch (cause) { if (currentClient.current === client) setError(externalAuthenticationError(cause)); }
     finally { if (currentClient.current === client) { busyRef.current = false; setBusy(null); } }
   }
@@ -196,7 +202,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
     await change({ change: creating ? connectionChanges.create : connectionChanges.update, expectedRevision: visible.revision, record: document }, creating ? "Save draft" : "Save changes");
   }
   async function testConnection() {
-    if (!selected || !visible || dirty || loading || busyRef.current) return;
+    if (!selected || !visible || dirty || needsRefresh || loading || busyRef.current) return;
     const request = ++readinessRequest.current;
     busyRef.current = true; setBusy("Testing provider"); setError(""); setPreview(null);
     try {
@@ -211,7 +217,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
     finally { if (currentClient.current === client) { busyRef.current = false; setBusy(null); } }
   }
   async function previewConnection() {
-    if (!selected || !liveTest || dirty || loading || busyRef.current) return;
+    if (!selected || !liveTest || dirty || needsRefresh || loading || busyRef.current) return;
     const opener = document.activeElement;
     busyRef.current = true; setBusy("Preparing preview"); setError("");
     try {
@@ -233,16 +239,17 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
     finally { if (currentClient.current === client) { busyRef.current = false; setBusy(null); } }
   }
   const action = (changeKind: ConnectionCommand["change"], label: string, record = selected?.document) => {
-    if (record && visible && !dirty && !loading) void change({ change: changeKind, expectedRevision: visible.revision, record }, label);
+    if (record && visible && !dirty && !loading && !needsRefresh) void change({ change: changeKind, expectedRevision: visible.revision, record }, label);
   };
   const collision = Boolean(selected && visible?.connections.some(view => view.source === 0 && view.document.key === selected.document.key));
   const pending = Boolean(busy) || loading;
+  const locked = pending || needsRefresh;
   const matches = visible?.connections.filter(view => `${view.document.key} ${view.document.displayName}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())) ?? [];
 
   return <StudioPage className="external-auth-shell">
     <StudioPageHeader title="External sign-in" headingLevel={2} description="Connect identity providers while Elsa keeps control of its users, roles and permissions."
-      actions={<><StudioButton onClick={() => { void refresh(); }} disabled={pending}>Refresh</StudioButton><StudioButton variant="primary" disabled={!writable || pending} onClick={() => { void create(); }}>Add connection</StudioButton></>} />
-    {error ? <div role="alert" className="external-auth-error">{error}<StudioButton disabled={pending} onClick={() => { void refresh(); }}>Refresh connections</StudioButton></div> : null}
+      actions={<><StudioButton onClick={() => { void refresh(); }} disabled={pending}>Refresh</StudioButton><StudioButton variant="primary" disabled={!writable || locked} onClick={() => { void create(); }}>Add connection</StudioButton></>} />
+    {error ? <div role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh connections before another change." : ""}<StudioButton disabled={pending} onClick={() => { void refresh(); }}>Refresh connections</StudioButton></div> : null}
     {notice ? <p role="status" className="external-auth-notice">{notice}</p> : null}
     {busy ? <p role="status">{busy}…</p> : null}
     {loading && !visible ? <p role="status">Loading external sign-in connections…</p> : null}
@@ -251,7 +258,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
       <div className="external-auth-workspace"><section className="external-auth-list" aria-label="Sign-in connections">
         <label htmlFor="external-auth-search">Find a connection</label><input id="external-auth-search" type="search" value={search} onChange={event => setSearch(event.target.value)} />
         {!matches.length ? <p>{visible.connections.length ? "No connections match this search." : "No external sign-in connections yet. Add one to prepare a disabled draft."}</p> : <ul>{matches.map(view => <li key={view.document.id}>
-          <button type="button" className="external-auth-row" aria-pressed={selectedId === view.document.id && !creating} disabled={pending} onClick={() => { void choose(view); }}>
+          <button type="button" className="external-auth-row" aria-pressed={selectedId === view.document.id && !creating} disabled={locked} onClick={() => { void choose(view); }}>
             <strong>{view.document.displayName || view.document.key}</strong><span>{view.document.key}</span>
             <span className="external-auth-row-status"><StatusChip>{connectionState(view)}</StatusChip><span>{view.source === 0 ? "Deployment" : "Studio"}</span></span>
             {view.document.preferred && view.effective && view.document.enabled ? <small>Preferred choice</small> : null}
@@ -259,13 +266,13 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
       </section><section className="external-auth-detail" aria-label="Connection configuration">
         {selected || creating ? <>
           {selected ? <div className="external-auth-actions">
-            {selected.source === 0 && selected.configurationSupported && selected.overridePermitted && writable && !visible.connections.some(view => view.source === 1 && view.document.key === selected.document.key) ? <StudioButton disabled={pending} onClick={() => { void create(selected); }}>Prepare full override</StudioButton> : null}
+            {selected.source === 0 && selected.configurationSupported && selected.overridePermitted && writable && !visible.connections.some(view => view.source === 1 && view.document.key === selected.document.key) ? <StudioButton disabled={locked} onClick={() => { void create(selected); }}>Prepare full override</StudioButton> : null}
             {selected.source === 1 && writable ? <>
-              {selected.document.archivedAt ? <StudioButton disabled={pending || dirty} onClick={() => action(connectionChanges.restore, "Restore connection")}>Restore</StudioButton> : <>
-                {selected.document.enabled ? <StudioButton disabled={pending || dirty} onClick={() => action(connectionChanges.disable, "Disable sign-in")}>Disable sign-in</StudioButton> : null}
-                <StudioButton disabled={pending || dirty} onClick={() => action(connectionChanges.archive, "Archive connection")}>Archive</StudioButton>
+              {selected.document.archivedAt ? <StudioButton disabled={locked || dirty} onClick={() => action(connectionChanges.restore, "Restore connection")}>Restore</StudioButton> : <>
+                {selected.document.enabled ? <StudioButton disabled={locked || dirty} onClick={() => action(connectionChanges.disable, "Disable sign-in")}>Disable sign-in</StudioButton> : null}
+                <StudioButton disabled={locked || dirty} onClick={() => action(connectionChanges.archive, "Archive connection")}>Archive</StudioButton>
               </>}
-              <StudioButton disabled={pending || dirty} onClick={() => action(connectionChanges.remove, "Remove Studio connection")}>Remove</StudioButton>
+              <StudioButton disabled={locked || dirty} onClick={() => action(connectionChanges.remove, "Remove Studio connection")}>Remove</StudioButton>
             </> : null}
           </div> : null}
           {selected ? <section className="external-auth-callout" aria-label="Current configuration readiness">
@@ -273,18 +280,18 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
             <p>{!readiness ? "Checking current configuration…" : readiness.error || (readiness.value ? readinessDescription(readiness.value) : "Readiness is unavailable on this backend.")}</p>
             <small>This assessment is separate from configured enablement and the last observed provider test.</small>
           </section> : null}
-          <ConnectionEditor key={`${context.baseUrl}:${creating ? "create" : selected?.document.id}:${editorVersion}`} client={client} catalog={visible} view={selected} seed={seed} busy={pending} onSave={save} onDirty={setDirty}
+          <ConnectionEditor key={`${context.baseUrl}:${creating ? "create" : selected?.document.id}:${editorVersion}`} client={client} catalog={visible} view={selected} seed={seed} busy={locked} onSave={save} onDirty={setDirty}
             onDiscard={() => { void (async () => { if (await canDiscard() && currentClient.current === client) { setDirty(false); setCreating(false); setSeed(null); setSelectedId(null); } })(); }} />
           {selected && !selected.document.archivedAt && visible.canManageConnections ? <section className="external-auth-observations" aria-label="Test and preview">
             <h3>Test, preview, then enable</h3><p>Save configuration changes first. Tests verify provider metadata; preview verifies a real sign-in and shows its prospective Elsa access.</p>
-            <div className="external-auth-actions"><StudioButton disabled={pending || dirty} onClick={() => { void testConnection(); }}>Test configuration</StudioButton><StudioButton disabled={pending || dirty || !liveTest || !configurationReady} onClick={() => { void previewConnection(); }}>Preview sign-in</StudioButton></div>
+            <div className="external-auth-actions"><StudioButton disabled={locked || dirty} onClick={() => { void testConnection(); }}>Test configuration</StudioButton><StudioButton disabled={locked || dirty || !liveTest || !configurationReady} onClick={() => { void previewConnection(); }}>Preview sign-in</StudioButton></div>
             {test?.connectionRecordId === selected.document.id ? <div role="status" className="external-auth-callout"><strong>{testSucceeded(test, selected) ? "Configuration test passed" : "Configuration test needs attention"}</strong><p>{testDescription(test)}</p><small>Observed {new Date(test.observedAt).toLocaleString()}. Results describe that observation, not future availability.</small></div> : null}
             {preview?.connectionRecordId === selected.document.id ? <div className="external-auth-preview"><h4>Preview result</h4><p>{previewDescription(preview)}</p>
               <CopyableIdentifier label="Validated issuer" value={preview.issuer} /><CopyableIdentifier label="External subject" value={preview.subject} />
               <dl><dt>Elsa user</dt><dd>{preview.existingUserId || (preview.admission === 2 ? "Would be created" : "No user admitted")}</dd><dt>Roles</dt><dd>{preview.roleIds.join(", ") || "None"}</dd><dt>Permissions</dt><dd>{preview.permissions.map(value => value === "*" ? "All permissions" : value).join(", ") || "None"}</dd></dl>
               <p className="external-auth-muted">No user, link, role assignment or normal session was changed by this preview.</p>
             </div> : null}
-            {selected.source === 1 && writable && !selected.document.enabled ? <div className="external-auth-actions"><StudioButton variant="primary" disabled={pending || dirty || !liveTest || !livePreview || !configurationReady || (collision && !selected.document.overridesDeployment && !selected.overridePermitted)}
+            {selected.source === 1 && writable && !selected.document.enabled ? <div className="external-auth-actions"><StudioButton variant="primary" disabled={locked || dirty || !liveTest || !livePreview || !configurationReady || (collision && !selected.document.overridesDeployment && !selected.overridePermitted)}
               onClick={() => action(collision && !selected.document.overridesDeployment ? connectionChanges.promoteOverride : connectionChanges.enable,
                 collision && !selected.document.overridesDeployment ? "Use as override" : "Enable sign-in", { ...selected.document, enabled: true })}>{collision && !selected.document.overridesDeployment ? "Use as override" : "Enable sign-in"}</StudioButton>
               {!liveTest || !livePreview ? <span className="external-auth-muted">Test and preview this saved draft before enabling it.</span> : null}</div> : null}

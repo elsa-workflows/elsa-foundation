@@ -140,6 +140,53 @@ describe("connection administration page", () => {
     expect(host.container.textContent).toContain("Unsaved changes");
   });
 
+  it("requires a fresh catalog after a confirmed save whose follow-up read fails", async () => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(field(host.container, "Display name")).toBeTruthy());
+    type(field(host.container, "Display name"), "Saved company");
+    const original = host.getJson.getMockImplementation()!;
+    host.getJson.mockImplementation((path: string) => path.endsWith("/external-connections")
+      ? Promise.reject({ status: 503 }) : original(path));
+    click(await button(host.container, "Save changes"));
+    await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
+    expect(host.container.textContent).toContain("saved, but the current configuration could not be read");
+    expect(host.container.textContent).not.toContain("sign-in chooser uses the current effective configuration");
+    expect(field(host.container, "Display name").value).toBe("Saved company");
+    expect(field(host.container, "Display name").matches(":disabled")).toBe(true);
+    expect((await button(host.container, "Test configuration")).disabled).toBe(true);
+    expect((await button(host.container, "Add connection")).disabled).toBe(true);
+    host.getJson.mockImplementation(original);
+    click(await button(host.container, "Refresh"));
+    await vi.waitFor(() => expect(field(host.container, "Display name").matches(":disabled")).toBe(false));
+    expect(field(host.container, "Display name").value).toBe("Saved company");
+    expect((await button(host.container, "Test configuration")).disabled).toBe(false);
+  });
+
+  it.each([409, 503])("requires refresh before retrying a rejected or uncertain write (%s)", async status => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(field(host.container, "Display name")).toBeTruthy());
+    type(field(host.container, "Display name"), "Preserved draft");
+    const original = host.postJson.getMockImplementation()!;
+    host.postJson.mockImplementation((path: string, body: ConnectionCommand) => path.endsWith("/commands")
+      ? Promise.reject({ status }) : original(path, body));
+    click(await button(host.container, "Save changes"));
+    await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
+    expect(field(host.container, "Display name").value).toBe("Preserved draft");
+    expect((await button(host.container, "Save changes")).disabled).toBe(true);
+    expect((await button(host.container, "Refresh")).disabled).toBe(false);
+    const attempts = host.postJson.mock.calls.filter(([path]) => path.endsWith("/commands")).length;
+    click(await button(host.container, "Save changes"));
+    expect(host.postJson.mock.calls.filter(([path]) => path.endsWith("/commands")).length).toBe(attempts);
+    click(await button(host.container, "Refresh"));
+    await vi.waitFor(() => expect(field(host.container, "Display name").matches(":disabled")).toBe(false));
+    expect(field(host.container, "Display name").value).toBe(connectionDocument.displayName);
+    expect((await button(host.container, "Test configuration")).disabled).toBe(false);
+  });
+
   it.each([false, true])("reconciles repaired readiness after a configuration test, refusing stale observations (%s)", async stale => {
     const host = harness(); const original = host.getJson.getMockImplementation()!;
     host.getJson.mockImplementation(async (path: string) => path.endsWith("/external-connections/record")
