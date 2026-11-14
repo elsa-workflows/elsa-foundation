@@ -30,7 +30,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.EntityFrameworkCore;
@@ -70,7 +69,7 @@ internal sealed class PublishedNativeFixture : IAsyncDisposable
         var structures = new DefaultActivityStructureService([]); services.AddSingleton<IActivityStructureService>(structures);
         services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "sqlite", ConnectionString = f.Connection("workflows") });
         services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = "sqlite", ConnectionString = f.Connection("activities") });
-        services.AddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
+        services.AddScoped<IWorkflowExecutableHasher, Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher>();
         var profile = new WorkflowReleaseRuntimeFeature(); profile.ConfigureServices(services); profile.PostConfigureServices(services);
         f._services = services.BuildServiceProvider(); f._scope = f._services.CreateScope(); var sp = f._scope.ServiceProvider; f.Codec = sp.GetRequiredService<IReleaseRuntimeArtifactCodec>();
         await sp.GetRequiredService<WorkflowsDesignDbContext>().Database.EnsureCreatedAsync();
