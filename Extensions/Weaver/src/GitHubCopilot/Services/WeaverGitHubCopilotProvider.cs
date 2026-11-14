@@ -494,6 +494,12 @@ public sealed class WeaverGitHubCopilotProvider(
 
     private static string? ResolveToken(WeaverGitHubCopilotOptions value, out string authMode)
     {
+        if (!string.IsNullOrWhiteSpace(value.RuntimeUrl))
+        {
+            authMode = "external-runtime";
+            return null;
+        }
+
         if (!string.IsNullOrWhiteSpace(value.GitHubToken))
         {
             authMode = "configured-token";
@@ -513,12 +519,6 @@ public sealed class WeaverGitHubCopilotProvider(
         if (value.UseLoggedInUser)
         {
             authMode = "logged-in-user";
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(value.RuntimeUrl))
-        {
-            authMode = "external-runtime";
             return null;
         }
 
