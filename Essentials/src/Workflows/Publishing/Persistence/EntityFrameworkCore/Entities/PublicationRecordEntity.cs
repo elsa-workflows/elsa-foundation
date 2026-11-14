@@ -14,6 +14,7 @@ public sealed class PublicationRecordEntity
     public string ArtifactId { get; set; } = null!;
     public string? SourceReferenceId { get; set; }
     public long ExpectedSlotRevision { get; set; }
+    public string? RequestFingerprint { get; set; }
     public string Status { get; set; } = null!;
     public long CreatedAtUtcTicks { get; set; }
     public int CreatedAtOffsetMinutes { get; set; }

@@ -82,7 +82,8 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
                 TenantId = "tenant-a",
                 TenantIdHash = "tenant-hash-a",
                 Revision = 2,
-                SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion
+                // Raw predecessor fixture: version 2 is not yet finalized by this shell.
+                SchemaVersion = PublishingLedgerEfModule.LegacyContentSchemaVersion
             });
             await database.SaveChangesAsync();
         }
@@ -99,6 +100,7 @@ public sealed class SharedPersistenceCompositionTests : IDisposable
             Assert.Equal(PublicationStatus, publication.Status);
             Assert.Equal(4, publication.ExpectedSlotRevision);
             Assert.Equal(2, publication.Revision);
+            Assert.Equal(PublishingLedgerEfModule.LegacyContentSchemaVersion, publication.SchemaVersion);
         }
     }
 

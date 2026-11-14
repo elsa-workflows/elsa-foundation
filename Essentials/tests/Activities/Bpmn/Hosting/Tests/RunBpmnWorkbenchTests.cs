@@ -18,15 +18,23 @@ public sealed class RunBpmnWorkbenchTests
     [InlineData("Sequence", true)]
     [InlineData("Flowchart", true)]
     [InlineData("CompensationScope", true)]
-    public async Task A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(string parent, bool cancel)
+    public Task A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(string parent, bool cancel) =>
+        ExerciseAsync(parent, cancel, authored: false);
+
+    [Fact]
+    public Task A_logically_published_model_keeps_its_compiled_native_dependency_after_unpublication_and_restart() =>
+        ExerciseAsync("Root", cancel: false, authored: true);
+
+    private static async Task ExerciseAsync(string parent, bool cancel, bool authored)
     {
-        await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, recoverySweepSeconds: 0.2);
+        await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, recoverySweepSeconds: 0.2, authoredDirectPublication: authored);
         await host.LoginAsync();
         var process = new BpmnProcessDefinition("embedded-human", Elements:
             [new("start", BpmnElementTypes.StartEvent), new("human", BpmnElementTypes.UserTask, bindingRef: "work"), new("end", BpmnElementTypes.EndEvent)],
             SequenceFlows: [new("to-work", "start", "human"), new("to-end", "human", "end")]);
         var definition = new BpmnModelDefinition(1, JsonSerializer.SerializeToElement(process, new JsonSerializerOptions(JsonSerializerDefaults.Web)), ["work"]);
-        var published = await host.PostAsync("/bpmn/artifacts", new { requestId = "publish-embedded", definition });
+        var published = authored ? await PublishAuthoredAsync(host) :
+            await host.PostAsync("/bpmn/artifacts", new { requestId = "publish-embedded", definition });
         var catalog = await host.GetAsync("/design/activities/definitions?search=Elsa.Activities.Bpmn.Activities.RunBpmn");
         var activity = Assert.Single(catalog["items"]!.AsArray(), item => item!["definition"]!["activityTypeKey"]!.GetValue<string>() == "Elsa.Activities.Bpmn.Activities.RunBpmn");
         object rootNode = new { nodeId = "run-bpmn", activityVersionId = activity!["definition"]!["headVersionId"]!.GetValue<string>(), outputs = Array.Empty<object>(),
@@ -53,6 +61,15 @@ public sealed class RunBpmnWorkbenchTests
                 rootActivity = rootNode }
         });
         var publication = await host.PostAsync($"/publishing/workflows/{native["version"]!["id"]!.GetValue<string>()}/publish", new { });
+        if (authored)
+        {
+            var logical = published["publication"]!;
+            var retired = await host.DeleteAsync("/publishing/workflows/" + Uri.EscapeDataString(logical["definitionId"]!.GetValue<string>()) +
+                "/slots/" + Uri.EscapeDataString(logical["slotName"]!.GetValue<string>()));
+            Assert.Null(retired["activePublicationId"]);
+            Assert.Empty((await host.GetAsync("/bpmn/publications?artifactId=" + Uri.EscapeDataString(published["executable"]!["artifactId"]!.GetValue<string>())))
+                ["items"]!.AsArray());
+        }
         var started = await host.PostAsync($"/runtime/workflows/executables/{publication["artifactId"]!.GetValue<string>()}/execute",
             new { sourceReferenceId = publication["sourceReferenceId"]!.GetValue<string>() });
         var execution = started["workflowExecutionId"]!.GetValue<string>();
@@ -81,13 +98,13 @@ public sealed class RunBpmnWorkbenchTests
         var before = await host.GetAsync(modelPath);
         Assert.Equal("Running", before["status"]!.GetValue<string>());
         string? directId = null; JsonNode? directWork = null;
-        if (!cancel)
+        if (!cancel && !authored)
         {
             directId = (await host.PostAsync("/bpmn/executions", new { sourceReferenceId = published["sourceReferenceId"]!.GetValue<string>(), requestId = "direct-counterpart" }))["executionId"]!.GetValue<string>();
             directWork = Assert.Single((await host.GetAsync("/bpmn/executions/" + directId + "/work"))["items"]!.AsArray())!;
         }
         var evidenceDirectory = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY");
-        var caseName = parent.ToLowerInvariant() + (cancel ? "-cancel" : "-complete");
+        var caseName = parent.ToLowerInvariant() + (cancel ? "-cancel" : "-complete") + (authored ? "-logical-publication" : "");
         if (evidenceDirectory is not null) Directory.CreateDirectory(Path.Combine(evidenceDirectory, caseName));
         var firstProcess = host.ProcessId;
         var nativeBefore = await host.GetAsync("/runtime/workflows/instances/" + execution);
@@ -179,4 +196,39 @@ public sealed class RunBpmnWorkbenchTests
             return Assert.Single(catalog["items"]!.AsArray(), item => item!["definition"]!["activityTypeKey"]!.GetValue<string>() == type)!["definition"]!["headVersionId"]!.GetValue<string>();
         }
     }
+    private static async Task<JsonNode> PublishAuthoredAsync(OwnedWorkbench host)
+    {
+        var catalog = await host.GetAsync("/design/activities/definitions?search=Elsa.Activities.Bpmn.Activities.BpmnProcess");
+        var activity = Assert.Single(catalog["items"]!.AsArray(), item =>
+            item!["definition"]!["activityTypeKey"]!.GetValue<string>() == "Elsa.Activities.Bpmn.Activities.BpmnProcess");
+        var metadata = "{\"formatVersion\":1,\"kind\":\"human\"}";
+        var submitted = await host.PostAsync("/design/workflows/definitions/submit", new
+        {
+            name = "Logically published embedded human process",
+            state = new
+            {
+                variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(),
+                rootActivity = new
+                {
+                    nodeId = "model-root", activityVersionId = activity!["definition"]!["headVersionId"]!.GetValue<string>(),
+                    inputs = Array.Empty<object>(), outputs = Array.Empty<object>(),
+                    structure = new
+                    {
+                        kind = "elsa.bpmn.structure", schemaVersion = "1.0.0",
+                        payload = new
+                        {
+                            activities = Array.Empty<object>(),
+                            elements = new object[] { new { elementId = "start", elementType = "startEvent" },
+                                new { elementId = "human", elementType = "userTask", properties = new Dictionary<string, string> { ["elsa.direct.binding"] = metadata } },
+                                new { elementId = "end", elementType = "endEvent" } },
+                            sequenceFlows = new[] { new { flowId = "to-human", sourceRef = "start", targetRef = "human" }, new { flowId = "to-end", sourceRef = "human", targetRef = "end" } }
+                        }
+                    }
+                }
+            }
+        });
+        var promoted = await host.PostAsync("/design/workflows/drafts/" + submitted["draftId"]!.GetValue<string>() + "/promote", new { operationKey = "promote-embedded" });
+        return await host.PostAsync("/interchange/bpmn/versions/" + promoted["id"]!.GetValue<string>() + "/publish-direct", new { requestId = "publish-embedded" });
+    }
+
 }

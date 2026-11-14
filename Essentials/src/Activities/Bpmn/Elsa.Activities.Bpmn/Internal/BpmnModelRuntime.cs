@@ -12,11 +12,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Activities.Bpmn.Internal;
 
-internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWorkflowExecutableSourceReferenceStore sources,
+internal sealed partial class BpmnModelRuntime(IWorkflowExecutableStore materials, IWorkflowExecutableSourceReferenceStore sources,
     IWorkflowExecutableRootWriteLeaseManager leases, BpmnDirectExecutionDriver driver,
     IWorkflowExecutionActorProvider actors, IPersistenceAccessContextAccessor access, IRuntimeRecoveryContinuationCodec continuations,
     TimeProvider clock, IWorkflowSchedulerWorkQueue queue, ILogger<BpmnModelRuntime>? logger = null,
-    IRuntimeModelExecutionReader? states = null) : IBpmnModelRuntime
+    IRuntimeModelExecutionReader? states = null, IWorkflowExecutableInputValidator? inputValidator = null,
+    IWorkflowActivationAuthority? activationSlots = null, IAuthoredModelAdmission? authoredAdmission = null,
+    IWorkflowExecutableStartPolicy? startPolicy = null) : IBpmnModelRuntime
 {
     private const string SourceKind = "BpmnModel";
     private const string WorkPagePurpose = "bpmn-human-work-v1";
@@ -130,35 +132,57 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         // Check the queue before the receipt so consumption between these reads still finds
         // its committed outcome. Retirement prevents fresh admission, not accepted-work replay.
         if (await PendingAsync(execution, requestId, caller, cancellationToken) is { } pending)
+        {
+            if (pending.InputKind == BpmnDirectExecutionDriver.AuthoredKind)
+            {
+                ValidateAuthoredReplay(pending, sourceReferenceId, inputs);
+                return await DispatchAsync(execution, pending, caller, cancellationToken);
+            }
             return await DispatchAsync(execution, Command(pending.Executable, pending.MaterialIncarnationId, pending.Authority), caller, cancellationToken);
+        }
         if (await States.FindInputAsync(execution, requestId, cancellationToken) is not null)
         {
             var retained = await FindExecutionAsync(execution, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+            if (BpmnDirectExecutionDriver.Read(retained).Entry is { Kind: BpmnDirectExecutionDriver.AuthoredKind } entry)
+            {
+                var accepted = new RuntimeModelExecutionCommand(retained.Executable, retained.MaterialIncarnationId, requestId,
+                    entry.Kind, entry.Payload, retained.Authority, retained.TenantId);
+                ValidateAuthoredReplay(accepted, sourceReferenceId, inputs);
+                return await DispatchAsync(execution, accepted, caller, cancellationToken);
+            }
             return await DispatchAsync(execution, Command(retained.Executable, retained.MaterialIncarnationId, retained.Authority), caller, cancellationToken);
         }
         var source = await sources.FindAsync(sourceReferenceId, cancellationToken);
         if (source is null || source.SourceKind != SourceKind || source.TenantId != caller.TenantId || !source.IsLive(clock.GetUtcNow()))
             throw new BpmnModelResourceMissingException();
         var material = await materials.FindMaterialAsync(source.ArtifactId, cancellationToken);
-        if (material?.Model is null || material.Identity.DefinitionId != source.DefinitionId ||
-            material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion)
+        if (material?.Model is null)
+            throw new BpmnModelValidationException("The selected source does not name available pinned model material.");
+        if (source.ActivationId is not null || source.SlotId is not null)
+            return await StartAuthoredAsync(execution, requestId, source, material, inputs, caller, cancellationToken);
+        if (material.Identity.DefinitionId != source.DefinitionId || material.Identity.DefinitionVersionId != source.DefinitionVersionId ||
+            material.Identity.ArtifactVersion != source.ArtifactVersion)
             throw new BpmnModelValidationException("The selected source does not name available pinned model material.");
         // Capture only a new start. Pending/consumed replay above retains its original authority,
         // including legacy starts without a subject; current HTTP context never rewrites accepted work.
-        var authority = new WorkflowExecutionAuthoritySnapshot("bpmn-runtime", caller.ActorId,
+        return await DispatchAsync(execution, Command(material.Identity, material.IncarnationId, CaptureNewStartAuthority(caller)), caller, cancellationToken);
+    }
+
+    private static WorkflowExecutionAuthoritySnapshot CaptureNewStartAuthority(BpmnModelCaller caller) =>
+        new("bpmn-runtime", caller.ActorId,
             string.IsNullOrWhiteSpace(caller.ExecutionSubjectId) ? null : new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["elsa.identity.subject-kind"] = "persisted-user",
                 ["elsa.identity.subject-id"] = caller.ExecutionSubjectId
             });
-        return await DispatchAsync(execution, Command(material.Identity, material.IncarnationId, authority), caller, cancellationToken);
-    }
 
     public async ValueTask<RuntimeModelExecutionState?> FindExecutionAsync(string executionId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
     {
-        Scope(caller);
+        ValidateCaller(caller);
         var state = await States.FindAsync(executionId, cancellationToken);
+        if (state?.IngressOrigin is not null) BpmnIngressScope.Require(access, state);
+        else Scope(caller);
         return state is not null && state.TenantId == caller.TenantId && state.Protocol == new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version)
             ? state : null;
     }
@@ -166,9 +190,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     public async ValueTask<BpmnModelInspection> InspectAsync(string executionId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
     {
-        var scope = Scope(caller);
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
-        if (state.Scope != scope) throw new BpmnModelResourceMissingException();
         var material = await materials.FindMaterialAsync(state.Executable.ArtifactId, cancellationToken);
         if (material?.Model is not { } model || material.IncarnationId != state.MaterialIncarnationId || model.Protocol != state.Protocol ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, state.Executable))
@@ -178,7 +200,16 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             var definition = BpmnDirectExecutionDriver.Definition(model);
             var document = BpmnDirectExecutionDriver.Read(state);
             BpmnInspectionProvenance? source = null;
-            if (document.SourceReferenceId is { } referenceId && await sources.FindAsync(referenceId, cancellationToken) is { } reference &&
+            if (document.Entry is { Kind: BpmnDirectExecutionDriver.AuthoredKind } entry &&
+                entry.Payload.GetProperty("authored").Deserialize<AuthoredModelEntry>(Web) is { } captured)
+                source = new(captured.Source);
+            else if (document.Entry is { Kind: BpmnDirectExecutionDriver.TriggerKind } triggerEntry &&
+                triggerEntry.Payload.GetProperty("trigger").Deserialize<RuntimeSubscriptionRecipient>(Web) is { } trigger &&
+                await sources.FindAsync(trigger.SourceProvenance.SourceReferenceId, cancellationToken) is { } triggerSource &&
+                triggerSource.ArtifactId == state.Executable.ArtifactId && triggerSource.TenantId == state.TenantId &&
+                WorkflowExecutableSourceProvenance.From(triggerSource) == trigger.SourceProvenance)
+                source = new(triggerSource);
+            else if (document.SourceReferenceId is { } referenceId && await sources.FindAsync(referenceId, cancellationToken) is { } reference &&
                 reference.TenantId == caller.TenantId && reference.SourceKind == SourceKind && reference.ArtifactId == state.Executable.ArtifactId &&
                 reference.DefinitionId == state.Executable.DefinitionId && reference.DefinitionVersionId == state.Executable.DefinitionVersionId &&
                 reference.ArtifactVersion == state.Executable.ArtifactVersion)
@@ -233,8 +264,8 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     public async ValueTask<RuntimeStorePage<BpmnHumanWork>> ListWorkAsync(string executionId, RuntimeStorePageRequest request,
         BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
-        var scope = Scope(caller);
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        var scope = state.Scope;
         var scopeKey = BpmnModelIdentity.Create(scope.Value, caller.TenantId ?? "");
         string? after = null;
         if (request.ContinuationToken is not null)
@@ -273,8 +304,8 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     public async ValueTask<RuntimeStorePage<BpmnServiceIncident>> ListIncidentsAsync(string executionId, RuntimeStorePageRequest request,
         BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
-        var scope = Scope(caller);
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        var scope = state.Scope;
         var scopeKey = BpmnModelIdentity.Create(scope.Value, caller.TenantId ?? "");
         string? after = null;
         if (request.ContinuationToken is not null)
@@ -305,62 +336,62 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     public async ValueTask<BpmnModelCommandOutcome> RetryServiceAsync(string executionId, string requestId, string incidentId,
         string invocationId, string failedAttemptId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
-        Scope(caller); InputId(requestId);
+        InputId(requestId);
         if (new[] { incidentId, invocationId, failedAttemptId }.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 512))
             throw new ArgumentException("Service retry requires its exact incident, invocation and failed attempt.");
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
         var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "retry-service",
-            JsonSerializer.SerializeToElement(new { incidentId, invocationId, failedAttemptId }, Web), state.Authority, state.TenantId);
+            JsonSerializer.SerializeToElement(new { incidentId, invocationId, failedAttemptId }, Web), state.Authority, state.TenantId) { IngressOrigin = state.IngressOrigin };
         return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 
     public async ValueTask<BpmnModelCommandOutcome> CompleteHumanAsync(string executionId, string requestId, string invocationId,
         string attemptId, string[]? outcomes, BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
-        Scope(caller); InputId(requestId);
+        InputId(requestId);
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
         var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "complete-human",
-            JsonSerializer.SerializeToElement(new { invocationId, attemptId, outcomes = outcomes is { Length: > 0 } ? outcomes : ["Done"] }, Web), state.Authority, state.TenantId);
+            JsonSerializer.SerializeToElement(new { invocationId, attemptId, outcomes = outcomes is { Length: > 0 } ? outcomes : ["Done"] }, Web), state.Authority, state.TenantId) { IngressOrigin = state.IngressOrigin };
         return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 
     public async ValueTask<BpmnModelCommandOutcome> ClaimHumanAsync(string executionId, string requestId, string invocationId,
         string attemptId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
-        Scope(caller); InputId(requestId);
+        InputId(requestId);
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
         // The claimant is the authenticated caller; Authority remains the execution's immutable start authority.
         var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "claim-human",
-            JsonSerializer.SerializeToElement(new { invocationId, attemptId, claimantId = caller.ActorId }, Web), state.Authority, state.TenantId);
+            JsonSerializer.SerializeToElement(new { invocationId, attemptId, claimantId = caller.ActorId }, Web), state.Authority, state.TenantId) { IngressOrigin = state.IngressOrigin };
         return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 
     public async ValueTask<BpmnModelCommandOutcome> CompleteClaimedHumanAsync(string executionId, string requestId, string invocationId,
         string attemptId, string claimId, string[]? outcomes, BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
-        Scope(caller); InputId(requestId);
+        InputId(requestId);
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
         var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "complete-claimed-human",
             JsonSerializer.SerializeToElement(new { invocationId, attemptId, claimId, claimantId = caller.ActorId,
-                outcomes = outcomes is { Length: > 0 } ? outcomes : ["Done"] }, Web), state.Authority, state.TenantId);
+                outcomes = outcomes is { Length: > 0 } ? outcomes : ["Done"] }, Web), state.Authority, state.TenantId) { IngressOrigin = state.IngressOrigin };
         return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 
     public async ValueTask<BpmnModelCommandOutcome> CancelAsync(string executionId, string requestId, string? reason,
         BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
-        Scope(caller); InputId(requestId);
+        InputId(requestId);
         if (reason?.Length > 2048) throw new ArgumentException("A BPMN cancellation reason cannot exceed 2048 UTF-16 code units.", nameof(reason));
         var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
         var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "cancel",
-            JsonSerializer.SerializeToElement(new { reason }, Web), state.Authority, state.TenantId);
+            JsonSerializer.SerializeToElement(new { reason }, Web), state.Authority, state.TenantId) { IngressOrigin = state.IngressOrigin };
         return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 
     public async ValueTask<BpmnModelCommandOutcome?> FindCommandAsync(string executionId, string requestId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
     {
-        Scope(caller); InputId(requestId);
+        InputId(requestId);
         if (await FindExecutionAsync(executionId, caller, cancellationToken) is null)
         {
             return await PendingAsync(executionId, requestId, caller, cancellationToken) is not null
@@ -374,7 +405,14 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     private async ValueTask<BpmnModelCommandOutcome> DispatchAsync(string executionId, RuntimeModelExecutionCommand command,
         BpmnModelCaller caller, CancellationToken cancellationToken)
     {
-        var scope = Scope(caller);
+        var existing = await States.FindAsync(executionId, cancellationToken);
+        var scope = existing?.IngressOrigin is not null ? ValidateCaller(caller) : Scope(caller);
+        if (existing?.IngressOrigin is not null)
+        {
+            BpmnIngressScope.Require(access, existing);
+            if (existing.TenantId != caller.TenantId || !existing.IngressOrigin.IsEquivalentTo(command.IngressOrigin))
+                throw new BpmnModelResourceMissingException();
+        }
         if (actors is not InProcessWorkflowExecutionActorProvider)
             throw new NotSupportedException("This BPMN hosting profile requires the qualified built-in actor provider.");
         var prior = await States.FindInputAsync(executionId, command.InputId, cancellationToken);
@@ -446,28 +484,45 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
 
     private PersistenceScope Scope(BpmnModelCaller caller)
     {
+        var scope = ValidateCaller(caller);
+        access.Current.EnsureTenantScope(caller.TenantId);
+        return scope;
+    }
+
+    private PersistenceScope ValidateCaller(BpmnModelCaller caller)
+    {
         ArgumentNullException.ThrowIfNull(caller);
         ArgumentException.ThrowIfNullOrWhiteSpace(caller.ActorId);
         if (caller.TenantId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(caller.TenantId);
-        access.Current.EnsureTenantScope(caller.TenantId);
         return access.Current.Scope ?? throw new BpmnModelValidationException("A model operation requires an explicit persistence scope.");
     }
 
     private async ValueTask<WorkflowExecutable> ValidatePublishedWorkerAsync(string bindingId, WorkflowExecutableIdentity executable, BpmnModelCaller caller,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool allowInputs = false)
     {
         var native = await materials.FindMaterialAsync(executable.ArtifactId, cancellationToken);
         if (native?.NativeWorkflow is not { } worker || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(native.Identity, executable) ||
-            worker.InputContract is not { Inputs.Count: 0 })
+            worker.InputContract is null || !allowInputs && worker.InputContract.Inputs.Count != 0)
             throw new BpmnModelValidationException($"Native work binding '{bindingId}' for worker '{executable.ArtifactId}' requires its complete native pin and an explicit closed worker input contract.");
         var query = new WorkflowExecutableSourceReferenceArtifactPageQuery(executable.ArtifactId);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         while (true)
         {
             var page = await sources.ListByArtifactPageAsync(query, cancellationToken);
-            if (page.Items.Any(source => source.Scope == WorkflowExecutableReferenceScope.Published && source.TenantId == caller.TenantId &&
-                source.IsLive(clock.GetUtcNow()) && source.DefinitionId == executable.DefinitionId &&
-                source.DefinitionVersionId == executable.DefinitionVersionId && source.ArtifactVersion == executable.ArtifactVersion)) return worker;
+            foreach (var source in page.Items)
+            {
+                if (source.ArtifactId != executable.ArtifactId || source.Scope != WorkflowExecutableReferenceScope.Published ||
+                    source.TenantId != caller.TenantId || !source.IsLive(clock.GetUtcNow())) continue;
+                if (source.PublicationScope is not null)
+                {
+                    var slot = activationSlots is null ? null : (await activationSlots.ListByDefinitionAsync(source.DefinitionId, cancellationToken))
+                        .SingleOrDefault(item => item.SlotId == source.SlotId);
+                    if (slot is not null && WorkflowExecutableSourceReferenceComparer.MatchesPublication(source, slot,
+                        access.Current.RequireScope(admitPrivileged: true), caller.TenantId, clock.GetUtcNow())) return worker;
+                }
+                else if (allowInputs || source.DefinitionId == executable.DefinitionId &&
+                    source.DefinitionVersionId == executable.DefinitionVersionId && source.ArtifactVersion == executable.ArtifactVersion) return worker;
+            }
             if (page.NextContinuationToken is null) break;
             if (!seen.Add(page.NextContinuationToken)) throw new BpmnModelValidationException("The worker publication source page did not advance.");
             query = new(executable.ArtifactId, continuationToken: page.NextContinuationToken);

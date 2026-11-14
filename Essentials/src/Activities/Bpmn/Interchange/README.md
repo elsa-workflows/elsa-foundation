@@ -50,3 +50,6 @@ Permanent frozen authoring descriptors and the original runtime/interchange disc
 
 `ActivitiesBpmnInterchange` and the optional `ActivitiesBpmnDirectPublishing` register keyed `IEndpointFaultRenderer` contributions (`BpmnInterchangeFaultRenderer`, `BpmnDirectPublishingFaultRenderer`) for their own endpoint groups; see the [API catalog](../../../Api/EXTENSION_POINTS.md). Direct publication calls the BPMN Core `IBpmnModelRuntime` replacement port and declares the `elsa.api.bpmn-publishing` capability; it adds no runtime writer of its own.
 
+## Shared logical-slot publication
+
+Authored direct publication projects the actual workflow version and declared inputs, asks the BPMN runtime to prepare stored material, and calls Publishing Core's material-neutral lifecycle. The logical workflow/slot remains distinct from the deduplicated material producer. The result reports the actual serving publication, source version and slot revision; a same-artifact no-op reports the original serving source. Ordinary Publishing unpublish/restore applies to these model publications. Raw `IBpmnModelRuntime.PublishAsync` remains a separate legacy boundary. [Spec 1217's target contract](../../../../../specs/1217-standalone-triggers/contracts/targets.md#material-neutral-publication-slot-bridge) owns the exact intent, provenance, race and replay requirements.

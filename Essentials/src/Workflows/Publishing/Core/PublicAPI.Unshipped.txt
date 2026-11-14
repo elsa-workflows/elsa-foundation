@@ -1398,3 +1398,8 @@ override Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequ
 Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Material.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!
 Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.Candidate.init -> void
 Elsa.Workflows.Publishing.Core.Models.PublicationMaterialActivationRequest.PublicationMaterialActivationRequest(Elsa.Workflows.Publishing.Core.Models.PublicationRecord! Candidate, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! Reference) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RequestFingerprint.get -> string?
+Elsa.Workflows.Publishing.Core.Models.PublicationRecord.RequestFingerprint.init -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException
+Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationRecordAlreadyExistsException(string! publicationId) -> void
+Elsa.Workflows.Publishing.Core.Models.PublicationRecordAlreadyExistsException.PublicationId.get -> string!

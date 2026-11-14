@@ -44,7 +44,7 @@ internal sealed class BpmnLegacyFaultWorkRecovery(IPersistenceScopeRunner scopes
                 var inputId = "bpmn-fault-recovery:" + BpmnModelIdentity.Create(scope.Value, model.ExecutionId,
                     model.Revision.ToString(CultureInfo.InvariantCulture));
                 var command = new RuntimeModelExecutionCommand(model.Executable, model.MaterialIncarnationId,
-                    inputId, "cancel", JsonSerializer.SerializeToElement(new { }), model.Authority, model.TenantId);
+                    inputId, "cancel", JsonSerializer.SerializeToElement(new { }), model.Authority, model.TenantId) { IngressOrigin = model.IngressOrigin };
                 var now = clock.GetUtcNow();
                 await queue.EnqueueAsync(new(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(inputId), model.ExecutionId,
                     inputId, WorkflowExecutionCommandKind.ExecuteModel, inputId, inputId, now, now,

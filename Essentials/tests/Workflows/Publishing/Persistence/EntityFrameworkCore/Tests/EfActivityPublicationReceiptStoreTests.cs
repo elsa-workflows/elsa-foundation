@@ -129,7 +129,7 @@ public sealed class EfActivityPublicationReceiptStoreTests : IAsyncLifetime
         await context.ActivityPublicationReceipts.Where(row => row.IdempotencyKey == EfRelationalIdentity.Encode("drift-content"))
             .ExecuteUpdateAsync(row => row.SetProperty(x => x.Content, foreignContent));
         await context.ActivityPublicationReceipts.Where(row => row.IdempotencyKey == EfRelationalIdentity.Encode("drift-schema"))
-            .ExecuteUpdateAsync(row => row.SetProperty(x => x.SchemaVersion, "2"));
+            .ExecuteUpdateAsync(row => row.SetProperty(x => x.SchemaVersion, "future"));
 
         // Damaged material: the row claims a version this build writes, so its contents should have been
         // internally consistent and are not. That is corruption, and still reports as corruption.
@@ -141,7 +141,7 @@ public sealed class EfActivityPublicationReceiptStoreTests : IAsyncLifetime
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
             () => store.FindAsync("tenant-a", "drift-schema").AsTask());
         Assert.Equal("PublishingLedger", skew.Family);
-        Assert.Equal("2", skew.Found);
+        Assert.Equal("future", skew.Found);
         Assert.Equal(PublishingLedgerEfModule.ContentSchemaVersion, skew.Expected);
     }
 

@@ -206,6 +206,12 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return response.StatusCode == HttpStatusCode.NotFound ? null : await ReadAsync(response, path, null);
     }
 
+    public async Task<JsonNode> DeleteAsync(string path)
+    {
+        using var response = await client.DeleteAsync(path);
+        return await ReadAsync(response, path, null);
+    }
+
     public async Task<JsonNode> PostAsync(string path, object value, HttpStatusCode? expected = null, string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(value) };

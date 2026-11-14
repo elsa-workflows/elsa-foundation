@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Publishing.Core.Models;
 
@@ -16,7 +17,12 @@ public sealed record PublicationRecord(
     DateTimeOffset? ActivatedAt,
     DateTimeOffset? RetiredAt,
     PublicationFailure? Failure,
-    string SlotName = "default");
+    string SlotName = "default")
+{
+    /// <summary>Optional immutable producer request identity; null retains legacy publication semantics.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RequestFingerprint { get; init; }
+}
 
 /// <summary>One publishing request for the shared activation lifecycle.</summary>
 /// <remarks>

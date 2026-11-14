@@ -12,7 +12,7 @@ internal static class RuntimeArtifactJson
     private static readonly JsonSerializerOptions Options = CreateOptions();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, JsonSerializerOptions> BoundedOptions = new();
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
-    public static T Deserialize<T>(string value) => JsonSerializer.Deserialize<T>(value, Options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
+    public static T Deserialize<T>(string value) => DeserializeCore<T>(value, Options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
     public static T DeserializeBounded<T>(string value, int maximumDepth)
     {
         var options = BoundedOptions.GetOrAdd(maximumDepth, depth =>
@@ -21,7 +21,7 @@ internal static class RuntimeArtifactJson
             bounded.PropertyNameCaseInsensitive = false; // Current owner producer spelling; case aliases cannot overwrite a known field.
             return bounded;
         });
-        var result = JsonSerializer.Deserialize<T>(value, options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
+        var result = DeserializeCore<T>(value, options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
         // Current source profile must preserve every stored field. Constructor defaults, computed aliases and
         // normalized collections cannot silently replace a persisted source body with a different export.
         using var output = new BoundedSnapshotStream(Encoding.UTF8.GetByteCount(value));
@@ -33,6 +33,33 @@ internal static class RuntimeArtifactJson
             throw new InvalidDataException("The persisted Runtime JSON payload is not lossless in the bounded current-schema profile.");
         return result;
     }
+    // Inline storage makes a present JSON null unambiguous. Other storage forms retain their historical
+    // nullable semantics; missing Inline payloads still reach the original constructor validation.
+    private static T? DeserializeCore<T>(string value, JsonSerializerOptions options)
+    {
+        if (typeof(T) != typeof(DurableValueState)) return JsonSerializer.Deserialize<T>(value, options);
+        using var document = JsonDocument.Parse(value, new JsonDocumentOptions { MaxDepth = options.MaxDepth });
+        var data = document.RootElement.Deserialize<DurableValueStateData>(options)
+            ?? throw new InvalidDataException("The persisted durable-value body was empty.");
+        var inline = data.InlineValue;
+        if (data.Storage == DurableValueStorage.Inline && !inline.HasValue)
+        {
+            // Match the selected serializer's spelling and last-member semantics, including legacy case aliases.
+            JsonElement? member = null;
+            foreach (var property in document.RootElement.EnumerateObject())
+                if (string.Equals(property.Name, "inlineValue", options.PropertyNameCaseInsensitive
+                    ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) member = property.Value;
+            if (member is { ValueKind: JsonValueKind.Null }) inline = member.Value.Clone();
+        }
+        return (T)(object)new DurableValueState(data.DurableValueId, data.WorkflowExecutionId, data.ValueId, data.Type,
+            data.Lifecycle, data.Storage, inline, data.ExternalReference, data.SourceActivityExecutionId, data.CapturedAt, data.Metadata);
+    }
+
+    private sealed record DurableValueStateData(string DurableValueId, string WorkflowExecutionId, string ValueId,
+        RuntimeValueTypeDescriptor Type, DurableValueLifecycle Lifecycle, DurableValueStorage Storage, JsonElement? InlineValue,
+        DurableValueExternalReference? ExternalReference, string? SourceActivityExecutionId, DateTimeOffset CapturedAt,
+        IReadOnlyDictionary<string, string> Metadata);
+
     private static JsonSerializerOptions CreateOptions(bool bounded = false)
     {
         var resolver = new DefaultJsonTypeInfoResolver();
