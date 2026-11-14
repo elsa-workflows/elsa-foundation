@@ -62,7 +62,8 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
         Require(scope.Persistence, ct);
         if (context.Database.CurrentTransaction is null) throw new InvalidOperationException("Reservation mutation requires its owning source transaction.");
         policies ??= RuntimeIngressReservationRules.Policies(null);
-        if (claims.Any(claim => policies.ContainsKey(claim.StimulusType))) RuntimeSchemaWriteVersion.RequireReservationSemantics(context);
+        if (ownerKind == RuntimeIngressReservation.StandaloneTriggerOwner && claims.Any(claim => policies.ContainsKey(claim.StimulusType)))
+            RuntimeSchemaWriteVersion.RequireReservationSemantics(context);
         RuntimeIngressReservationRules.CheckSemanticCandidates(claims, policies);
         // The owning SERIALIZABLE transaction keeps the entire same-type predicate until commit, including absence.
         foreach (var type in claims.Select(claim => claim.StimulusType).Distinct(StringComparer.Ordinal).Where(policies.ContainsKey))
