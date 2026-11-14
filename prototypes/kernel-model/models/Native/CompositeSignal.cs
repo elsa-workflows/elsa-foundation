@@ -22,7 +22,7 @@ internal sealed partial class Burst
         if (!_s.Frames.TryGetValue(frameId, out var frame) || frame.Intervention is not null) return null;
         var node = _wf.Nodes[frame.Node];
         if (!typeof(ISignalledComposite).IsAssignableFrom(node.Type)) return null;
-        var receiver = (ISignalledComposite)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
+        var receiver = (ISignalledComposite)RestoreComposite(frame, node);
         return (receiver, new CompositeContext(this, frame, node));
     }
 

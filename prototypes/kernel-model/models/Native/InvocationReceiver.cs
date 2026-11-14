@@ -1,6 +1,7 @@
 namespace Kernel.Native;
 
 // Private composition seam: the existing native inbox remains the sole receipt/selection owner.
+// Post-entry callbacks use context/checkpoint material, without re-binding entry-only inputs.
 internal interface IInvocationInputReceiver
 {
     bool CanAcceptInput(CompositeContext context);
@@ -9,6 +10,10 @@ internal interface IInvocationInputReceiver
 
 internal sealed partial class Burst
 {
+    private CompositeActivity RestoreComposite(Frame frame, Node node) => typeof(IInvocationInputReceiver).IsAssignableFrom(node.Type)
+        ? (CompositeActivity)Activator.CreateInstance(node.Type)!
+        : (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
+
     private void DrainInputs()
     {
         foreach (var id in _s.Inboxes?.Keys.ToArray() ?? [])
@@ -17,7 +22,7 @@ internal sealed partial class Burst
                 !_s.Inboxes![id].Pending.Any(i => _s.Inboxes[id].Receipts[i.Id].Status == "Queued")) continue;
             var node = _wf.Nodes[frame.Node];
             if (!typeof(IInvocationInputReceiver).IsAssignableFrom(node.Type)) continue;
-            var receiver = (IInvocationInputReceiver)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
+            var receiver = (IInvocationInputReceiver)RestoreComposite(frame, node);
             var context = new CompositeContext(this, frame, node);
             if (!receiver.CanAcceptInput(context)) continue;
             receiver.AcceptInput(context, SelectInput(frame)!);

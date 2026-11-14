@@ -18,7 +18,16 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
     [Input] public Definition? ChartDefinition { get; set; }
     [Input] public StructuralDefinition? StructuralDefinition { get; set; }
 
-    private SelectionChart Compile(CompositeContext context) => Compile(context.Node, ChartDefinition, StructuralDefinition);
+    private SelectionChart Compile(CompositeContext context)
+    {
+        T? Literal<T>(string name) where T : class => context.Node.Inputs.GetValueOrDefault(name) switch
+        {
+            null => null,
+            LiteralBinding binding => Values.To<T>(binding.Value),
+            _ => throw new ArgumentException("Statechart definition must be literal for this prototype.")
+        };
+        return Compile(context.Node, Literal<Definition>(nameof(ChartDefinition)), Literal<StructuralDefinition>(nameof(StructuralDefinition)));
+    }
 
     private static SelectionChart Compile(Node node, Definition? chart, StructuralDefinition? structure)
     {

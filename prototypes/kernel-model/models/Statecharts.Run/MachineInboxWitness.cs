@@ -138,7 +138,9 @@ internal static class MachineInboxWitness
         var machine = Wf.Node<StateMachine>("machine", ("StructuralDefinition", Binding.Literal(def)));
         Kernel.Sim.Native.NativeWorkflows.Registry.Add(Wf.Workflow("machine-inbox", machine)); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
-        machine.Inputs["InputInbox"] = Binding.Literal(new { Capacity = 4, ReceiptCapacity = 12, RetentionMilliseconds = 120000L });
+        machine.Inputs["InputInbox"] = Binding.Var("missing-incompatible-latest-settings");
+        var old = h.State;
+        Check(new NativeModel(new()).UpgradeState(Json.Write(old), 9) is NativeState upgraded && upgraded.InterventionPolicy == old.InterventionPolicy, "Q15: v9 upgrade changed existing recovery policy");
         h.Reload(); h.Send(InvocationInput.Kind, new InvocationInput(frame, "new", "go")); h.Drain();
         Check(h.Replies[^1].Result == "UnknownInvocation" && h.State.Inboxes is null && Json.Read<MachineState>(Json.Write(h.State.Frames[frame].State)).Version == 4,
             "Q15: old v4 invocation adopted latest inbox configuration");
