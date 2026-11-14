@@ -279,6 +279,7 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
         let blankId: string | undefined;
         await expect.poll(async () => { blankId = (await saved()).activityPresentation.find(value => value.displayName === displayName)?.nodeId; return !!blankId; }).toBe(true);
         await expect(row(blankId!)).toBeVisible();
+        await expect(row(blankId!)).toHaveAttribute("aria-pressed", "true");
         expect((await saved()).layout.filter(value => retainedIds.has((value as { nodeId: string }).nodeId))).toEqual(retainedLayout);
         if (kind === "flowchart") {
           await page.getByRole("button", { name: "Fit View", exact: true }).click();
@@ -303,7 +304,12 @@ export async function namedBlocksJourney(page: Page, info: TestInfo, capture: Ca
       }
       const ungroup = page.getByRole("dialog", { name: "Ungroup block", exact: true });
       for (const blankId of [...blankIds].reverse()) {
-        await row(blankId).click();
+        // Create already selects its result. For a remaining block, use the ordinary keyboard
+        // selection path so a fitted diagram's corner controls do not become a forced click.
+        if (await row(blankId).getAttribute("aria-pressed") !== "true") {
+          await row(blankId).focus(); await row(blankId).press("Enter");
+        }
+        await expect(row(blankId)).toHaveAttribute("aria-pressed", "true");
         await page.getByRole("button", { name: "Ungroup…", exact: true }).click();
         await ungroup.getByRole("button", { name: "Preview change", exact: true }).click();
         await expect(ungroup.getByRole("button", { name: "Apply change", exact: true })).toBeEnabled();
