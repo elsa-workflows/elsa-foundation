@@ -29,7 +29,11 @@ internal static class RetryWitness
                 Apply(new("poll", actor.Id)); if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
                 if (actor.Worker.Ready.Contains(target.Id)) Apply(new("turn", actor.Id, S: target.Id));
                 else if (!actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
-                if (actor.Worker.NeedsFlush) { Apply(new("flush", actor.Id)); if (cut) return; }
+                if (actor.Worker.NeedsFlush)
+                {
+                    Apply(new("flush", actor.Id));
+                    if (cut && world.Store.Journal.Values.Any(j => j.Entries.Contains("recovery:operator-1:", StringComparison.Ordinal))) return;
+                }
                 if (actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
             }
             throw new InvalidOperationException("R0: successor witness exceeded bounded drain");
