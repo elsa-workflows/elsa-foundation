@@ -49,11 +49,15 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         where phase == "transition" || p.Name is not ("internal" or "internal-preempts-container")
         from reverse in new[] { false, true } select (m, n, phase, reverse, p);
     private static string Name(string m, bool n, string p, bool r, Profile profile) => $"native-graph:{profile.Name},{m},nested={n},{p},reverse={r}";
-    internal static IEnumerable<string> Names => Cases().Select(c => Name(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile));
+    private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action"];
+    internal static IEnumerable<string> Names => Cases().Select(c => Name(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile))
+        .Concat(Refusals.Select(n => "native-refusal:" + n)).Concat(NativeGraphReaders.Names);
     internal static void Run()
     {
         foreach (var c in Cases()) new NativeGraphWitness(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile).Execute();
-        Console.WriteLine($"{Names.Count()}/{Names.Count()} actual native graph schedules passed; no physical lexical-scope/recovery/source-wave guarantee.");
+        foreach (var name in Refusals) new NativeGraphWitness(Modes.Durable, false, "transition", false, Profiles().First()).Refuse(name);
+        NativeGraphReaders.Run();
+        Console.WriteLine($"{Cases().Count()} actual native graph schedules, {Refusals.Length} native refusals and {NativeGraphReaders.Names.Length} literal identity readers passed; no physical lexical-scope/recovery/source-wave guarantee.");
     }
 
     private readonly World _world = new(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
@@ -64,6 +68,9 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
     private StateVisit[]? _before, _next;
     private string _event = "";
     private long _visitSerial;
+    private Dictionary<string, int>? _beforeCounts;
+    private string? _expectedRefusal;
+    private bool _refusalSeen;
     private Actor Actor => _world.Of(_owner, 0);
     private NativeState Native => Json.Read<NativeState>(_world.Store.Instances[_target.Id].State);
     private MachineState? Machine => Native.Frames.TryGetValue(_frame, out var f) ? f.State!.Deserialize<MachineState>() : null;
@@ -101,7 +108,7 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
     private void React()
     {
         _before = Machine!.Visits!.ToArray();
-        var beforeCounts = Completed(); var beforeSerial = Machine.VisitSerial;
+        var beforeCounts = Completed(); _beforeCounts = beforeCounts; var beforeSerial = Machine.VisitSerial;
         _pendingJson = null; _next = null; _event = "selected-" + ++_serial;
         Signal(_event, "go"); Drain();
         var pending = Machine;
@@ -150,7 +157,13 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         var state = Machine;
         if (state is null)
         {
-            if (_pendingJson is not null) Check(!Waiting().Any(), "N6: machine completed while required entry work still waited");
+            if (_pendingJson is not null)
+            {
+                var completed = Completed();
+                foreach (var step in Json.Read<GraphPlan>(_pendingJson).Steps.Where(s => s.Phase == "entry"))
+                    Check(completed.GetValueOrDefault(step.Activity + "-mark") > _beforeCounts!.GetValueOrDefault(step.Activity + "-mark"),
+                        "N6: machine completed before required entry work succeeded");
+            }
             return;
         }
         Check(state.VisitSerial >= _visitSerial, "N3: persisted native visit serial moved backwards"); _visitSerial = state.VisitSerial;
@@ -181,13 +194,33 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
         }
         throw new InvalidOperationException("N0: native graph phase exceeded its bounded work");
     }
+    private void Refuse(string name)
+    {
+        _expectedRefusal = name is "missing-profile" or "both-profiles" ? "Exactly one statechart definition profile" : "Unknown statechart activity reference: absent";
+        var nodes = Simple().Select(n => n.Id == "Review" ? n with { Entry = "proof" } : n).ToArray();
+        var rules = new[] { R("rule", 0, "Checking", "Changes") };
+        if (name == "unknown-entry") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Entry = "absent" } : n).ToArray();
+        if (name == "unknown-exit") nodes = nodes.Select(n => n.Id == "Changes" ? n with { Exit = "absent" } : n).ToArray();
+        if (name == "unknown-action") rules[0] = rules[0] with { Action = "absent" };
+        var machine = Wf.Node<StateMachine>("machine").With(Wf.Set("proof", "ran", "yes"));
+        if (name != "missing-profile") machine.Inputs.Add("StructuralDefinition", Binding.Literal(new StructuralDefinition(nodes, rules)));
+        if (name == "both-profiles") machine.Inputs.Add("ChartDefinition", Binding.Literal(new Definition(new("A", [new("A")]), [])));
+        NativeWorkflows.Registry.Add(Wf.Workflow("native-refusal", machine));
+        Apply(new("take", Actor.Id)); Add(new("start", _target, Kinds.Start, Start: NativeModel.Spec("native-refusal", mode))); Drain();
+        Check(_refusalSeen && !Native.Variables.ContainsKey("ran"), "N7: invalid graph/profile ran authored work or missed precise refusal: " + name);
+        Console.WriteLine("PASS native-refusal:" + name);
+    }
     private void Signal(string id, string name) => Add(new(id, _target, CompositeSignal.Kind, Json.Write(new CompositeSignal(_frame, name, "deny")), TargetCreation: 1));
     private void Add(Message message) => Apply(new("add", M: message));
     private void Apply(Act act)
     {
         _world.Apply(act); var error = _world.Check();
         if (_world.Store.Instances.TryGetValue(_target.Id, out var row) && row.Status == InstanceStatus.Faulted)
+        {
+            if (_expectedRefusal is not null && error is not null && error.StartsWith("I14 ", StringComparison.Ordinal) && error.Contains(_expectedRefusal, StringComparison.Ordinal))
+            { _refusalSeen = true; return; }
             throw new InvalidOperationException("N1: full graph was not hydrated through the native StateMachine: " + error);
+        }
         if (error is not null) throw new InvalidOperationException("Kernel: " + error);
         if (_world.Store.Instances.ContainsKey(_target.Id)) Inspect();
     }
