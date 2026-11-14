@@ -285,7 +285,7 @@ def host(directory, dll, url, ready_path, log, env, *, on_readiness=None):
             stop_group(process, graceful_timeout=45)
 
 
-def prepare_host(project, destination, configuration='Debug'):
+def prepare_host(project, destination, configuration='Debug', *, include_development=False):
     output = project.parent / f'bin/{configuration}/net10.0'
     shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages", "appsettings*.json", "shells*.json"))
     # Older local outputs may contain stores. Never seed acceptance from them.
@@ -294,6 +294,16 @@ def prepare_host(project, destination, configuration='Debug'):
             file.unlink()
     for name in ['appsettings.json', 'shells.json']:
         shutil.copy2(project.parent / name, destination / name)
+    if include_development:
+        # The normal Development profile includes committed overlays, never stale
+        # build outputs or an ignored developer-local configuration file.
+        for name in ('appsettings.Development.json', 'shells.Development.json'):
+            source = project.parent / name
+            relative = source.resolve().relative_to(ROOT.resolve())
+            tracked = subprocess.run(['git', '-c', 'core.fsmonitor=false', 'ls-files', '--error-unmatch', '--', str(relative)],
+                                     cwd=ROOT, capture_output=True, check=False)
+            if tracked.returncode == 0:
+                shutil.copy2(source, destination / name)
 
 
 def source_state(root):
@@ -326,8 +336,8 @@ def run_weaver_inventory(output, data, backend_project, studio_project, env, sha
         owned = data / project
         owned.mkdir()
         backend, studio = owned / 'workbench', owned / 'studio'
-        prepare_host(backend_project, backend)
-        prepare_host(studio_project, studio)
+        prepare_host(backend_project, backend, include_development=True)
+        prepare_host(studio_project, studio, include_development=True)
         backend_url, studio_url = f'http://localhost:{free_port()}', f'http://localhost:{free_port()}'
         settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
         shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))

@@ -173,6 +173,30 @@ class VerdictTests(unittest.TestCase):
         acceptance.prepare_host(project, destination)
         self.assertEqual({'appsettings.json', 'shells.json'}, {file.name for file in destination.iterdir()})
 
+    def test_normal_development_profile_uses_only_committed_source_overlays(self):
+        project = self.root / 'source/Host.csproj'
+        project.parent.mkdir()
+        output = project.parent / 'bin/Debug/net10.0'
+        output.mkdir(parents=True)
+        for name in ('appsettings.json', 'shells.json'):
+            (project.parent / name).write_text('{}')
+        source_overlay = project.parent / 'appsettings.Development.json'
+        source_overlay.write_text('{"Elsa":{"Diagnostics":{"ConsoleLogStreaming":{"Enabled":true}}}}')
+        (output / source_overlay.name).write_text('{"staleBuildOutput":true}')
+        (project.parent / 'shells.Development.json').write_text('{"ignoredLocalSettings":true}')
+        (output / 'shells.Development.json').write_text('{"staleBuildOutput":true}')
+        destination = self.root / 'normal-private'
+        def tracked(args, **kwargs):
+            self.assertEqual(['git', '-c', 'core.fsmonitor=false', 'ls-files', '--error-unmatch', '--'], args[:-1])
+            self.assertEqual(self.root, kwargs['cwd'])
+            return subprocess.CompletedProcess(args, 0 if Path(args[-1]).name == source_overlay.name else 1)
+        with patch.object(acceptance, 'ROOT', self.root), patch.object(acceptance.subprocess, 'run', side_effect=tracked) as metadata:
+            acceptance.prepare_host(project, destination, include_development=True)
+        self.assertEqual(2, metadata.call_count)
+        self.assertEqual(source_overlay.read_bytes(), (destination / source_overlay.name).read_bytes())
+        self.assertFalse((destination / 'shells.Development.json').exists())
+        self.assertEqual({'appsettings.json', 'shells.json', source_overlay.name}, {file.name for file in destination.iterdir()})
+
     def test_native_qualification_has_exact_private_grants_and_no_inference(self):
         settings = {}
         shells = {'CShells': {'Shells': {'default': {'Features': {'WeaverGitHubCopilot': {'Enabled': True}}}}}}
