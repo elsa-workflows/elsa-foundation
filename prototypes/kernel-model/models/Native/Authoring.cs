@@ -88,6 +88,9 @@ public sealed class Workflow
         Index(root, null);
     }
 
+    // Private M0 experiment; this request is not a product incident-strategy setting.
+    internal bool InterventionRequested { get; set; }
+
     public string Id { get; }
     public Node Root { get; }
     public IReadOnlyDictionary<string, JsonNode?> Variables { get; }
