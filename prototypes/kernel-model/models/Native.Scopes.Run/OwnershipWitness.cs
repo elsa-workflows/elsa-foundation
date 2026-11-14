@@ -177,8 +177,9 @@ internal sealed class ScopeBorrower : CompositeActivity
     [Input] public string Ancestor { get; set; } = "";
     protected internal override void Execute(CompositeContext context)
     {
-        var own = context.CreateLexicalScope(new Dictionary<string, JsonNode?>(), Ancestor);
+        // Test ownership before allocating a child resource: the child-presence guard cannot mask a missing owner guard.
         OwnershipWitness.Refuse(context, () => context.ReleaseLexicalScope(Ancestor), "Only the lexical scope owner can release it.", "ancestor-release");
+        var own = context.CreateLexicalScope(new Dictionary<string, JsonNode?>(), Ancestor);
         context.ScheduleInScope(context.Children[0], own);
     }
     protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();

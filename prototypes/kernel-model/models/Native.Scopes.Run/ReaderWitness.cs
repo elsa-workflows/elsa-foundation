@@ -34,7 +34,13 @@ internal static class ReaderWitness
                 var json = Json.Write(legacy); var upgraded = (NativeState)model.UpgradeState(json, version);
                 Check(!LexicalScopes.Present(upgraded) && Json.Write(upgraded) == json, "old native reader invented resources or changed data");
             });
-            yield return ("null-v" + version, () => Check(model.UpgradeState("null", version) is null, "JSON-null checkpoint behavior changed"));
+            yield return ("null-v" + version, () =>
+            {
+                object value;
+                try { value = model.UpgradeState("null", version); }
+                catch (Exception e) { throw new InvalidOperationException("L10: JSON-null checkpoint behavior changed", e); }
+                Check(value is null, "JSON-null checkpoint behavior changed");
+            });
         }
         yield return ("current-roundtrip", () =>
         {
