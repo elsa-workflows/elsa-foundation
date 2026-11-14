@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Update;
 using Npgsql;
 
 namespace Kernel.EntityFramework;
@@ -54,6 +55,8 @@ public sealed class ViewEntity
 
 public sealed class MessageEntity
 {
+    // Only used while preparing this commit. EF maps public properties by convention.
+    internal int SendOrdinal { get; set; }
     public string Id { get; set; } = "";
     public long Seq { get; set; }
     public int Partition { get; set; }
@@ -108,6 +111,12 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     public DbSet<JournalEntity> Journal => Set<JournalEntity>();
     public DbSet<ProjectionEntity> Projections => Set<ProjectionEntity>();
     public DbSet<ViewEntity> Views => Set<ViewEntity>();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
+        MySqlCommandBatchPreparer.Configure(optionsBuilder);
+    }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -275,6 +284,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        CommitClockFacts.RejectUnsupported(batch);
         // FINDINGS 25.2 (M6): subscriptions are idempotent. The change tracker writes them as rows, so subscribing what is
         // there is a key violation and unsubscribing what is not is a count that does not match. A commit whose first
         // count that does not match is on a wait, or that subscribes anything and fails with a definite error while the
@@ -396,8 +406,10 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                 db.Attach(new MessageEntity { Id = id, Trial = 0 }).Property(m => m.Trial).IsModified = true;
             foreach (var message in turn.Sent)
             {
-                sent.Add(ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq));
-                db.Add(sent[^1]);
+                var entity = ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq);
+                entity.SendOrdinal = sent.Count;
+                sent.Add(entity);
+                db.Add(entity);
             }
             if (turn.Journal is not null)
                 db.Add(new JournalEntity { Partition = batch.Partition, Position = ++position, Instance = turn.Instance, Revision = turn.Delete ? -1 : turn.Row?.Revision ?? 0, Entries = turn.Journal });

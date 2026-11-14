@@ -63,10 +63,11 @@ nav.rail .brand { font: 600 15px/1.25 var(--display); letter-spacing: .02em; tex
 nav.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: ch; }
 nav.rail li { counter-increment: ch; }
 nav.rail a { display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 14px; line-height: 1.35; }
-nav.rail a::before { content: counter(ch, decimal-leading-zero); font: 500 12px/1.6 var(--mono); color: var(--muted); }
+nav.rail ol a::before { content: counter(ch, decimal-leading-zero); font: 500 12px/1.6 var(--mono); color: var(--muted); }
+nav.rail p a { display: inline; padding: 0; color: var(--accent); }
 nav.rail a:hover { background: var(--surface); }
 nav.rail a.on { background: var(--accent-soft); color: var(--accent); }
-nav.rail a.on::before { color: var(--accent); }
+nav.rail ol a.on::before { color: var(--accent); }
 
 main { padding: 40px 48px 120px; min-width: 0; }
 header.top { max-width: 900px; padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
@@ -213,9 +214,9 @@ ol.stmts code { font-size: 12.5px; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
-  nav.rail { position: sticky; top: 0; height: auto; z-index: 5; background: var(--bg); border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; overflow-x: auto; }
+  nav.rail { position: sticky; top: 0; height: auto; z-index: 5; background: var(--bg); border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; overflow-x: visible; }
   nav.rail .brand { display: none; }
-  nav.rail ol { display: flex; gap: 4px; width: max-content; }
+  nav.rail ol { display: flex; gap: 4px; width: auto; overflow-x: auto; }
   nav.rail a { grid-template-columns: auto auto; white-space: nowrap; font-size: 13px; }
   main { padding: 24px 16px 80px; }
   h1 { font-size: 34px; }
@@ -478,6 +479,7 @@ ol.stmts code { font-size: 12.5px; }
   <div class="num">04</div>
   <h2>What is stored</h2>
   <p>Eight record kinds, shown as tables; a document store keeps the same records as documents. The instance row is the truth about the present, the journal the truth about the past. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker or timer table. Click a table.</p>
+  <p class="note">These eight cards use the sketch's proposed record names. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md">Storage model reference</a> maps the physical EF tables and MongoDB collections, with lifecycles, writers, indexes and retention costs.</p>
   <div class="picker" id="data-picker" data-default="message">
   <figure>
     <div class="fig">
@@ -508,14 +510,14 @@ ol.stmts code { font-size: 12.5px; }
     <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; its DESIGN.md gives the prototype's schema in "Data".</figcaption>
   </figure>
   <div class="grid">
-    <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p></div>
-    <div class="card" data-pick-card="node"><h4>node</h4><div class="mono">id, seen_at</div><p>A heartbeat, so nodes can count each other and take a fair share of partitions. Liveness only, never correctness.</p></div>
-    <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. Lists and counts read this row directly.</p></div>
-    <div class="card l2" data-pick-card="message"><h4>message</h4><div class="mono">seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done</div><p>The inbox. <code>seq</code> from the database gives the order; the unique <code>id</code> makes adding idempotent; a future <code>due</code> makes it a timer or a retry; <code>start</code> creates the target if missing.</p></div>
-    <div class="card" data-pick-card="subscription"><h4>subscription</h4><div class="mono">key, instance, wait, partition, kind</div><p>Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start).</p></div>
-    <div class="card" data-pick-card="event"><h4>event</h4><div class="mono">key, id, payload, keep_until</div><p>A published event. By default it reaches only waits committed before it; a wait that asks for kept events also gets events published within their window before it.</p></div>
-    <div class="card" data-pick-card="journal"><h4>journal</h4><div class="mono">partition, position, instance, entries</div><p>One row per instance commit, written in that commit, according to the history level (Full by default). At Minimal no row is written.</p></div>
-    <div class="card" data-pick-card="projection"><h4>projection</h4><div class="mono">partition, position</div><p>How far the projector has got. Its own row, so the projector never touches the fence row and never slows a commit.</p></div>
+    <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: partition lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="node"><h4>node</h4><div class="mono">id, seen_at</div><p>A heartbeat, so nodes can count each other and take a fair share of partitions. Liveness only, never correctness.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: node lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. Lists and counts read this row directly.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: instance lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card l2" data-pick-card="message"><h4>message</h4><div class="mono">seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done</div><p>The inbox. <code>seq</code> from the database gives the order; the unique <code>id</code> makes adding idempotent; a future <code>due</code> makes it a timer or a retry; <code>start</code> creates the target if missing.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: message lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="subscription"><h4>subscription</h4><div class="mono">key, instance, wait, partition, kind</div><p>Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start).</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: subscription lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="event"><h4>event</h4><div class="mono">key, id, payload, keep_until</div><p>A published event. By default it reaches only waits committed before it; a wait that asks for kept events also gets events published within their window before it.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: event lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="journal"><h4>journal</h4><div class="mono">partition, position, instance, entries</div><p>One row per instance commit, written in that commit, according to the history level (Full by default). At Minimal no row is written.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: journal lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="projection"><h4>projection</h4><div class="mono">partition, position</div><p>How far the projector has got. Its own row, so the projector never touches the fence row and never slows a commit.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: projection lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
   </div>
   </div>
 </section>
@@ -574,20 +576,20 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="commit">
   <div class="num">06</div>
   <h2>The commit</h2>
-  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Two ways to send it were built and measured; switch between them.</p>
+  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Switch between the two PostgreSQL paths. The list groups possible writes by table. Their order can vary with the operations in the batch.</p>
   <div class="seg" role="group" aria-label="How the fence is sent">
     <button type="button" data-mode="tok" aria-pressed="true">Fence in the batch (2 round trips)</button>
     <button type="button" data-mode="first" aria-pressed="false">Fence first (3 round trips)</button>
   </div>
   <ol class="stmts" id="stmts">
-    <li class="fence" data-o-tok="7" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
+    <li class="fence" data-o-tok="6" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
     <li class="check" data-o-tok="8" data-o-first="2" data-rt-tok="check" data-rt-first="check"><span class="rt"></span><span><b>Exactly one row changed?</b> If not, roll back and reset. This check must come before COMMIT is sent.</span></li>
     <li data-o-tok="1" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the instance rows the batch changed, each update <code>WHERE revision = r</code>.</span></li>
-    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
-    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
-    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. Each id is derived from the sender and its revision, with a fixed-width ordinal, so a repeat is refused and order holds.</span></li>
-    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
-    <li data-o-tok="6" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
+    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
+    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
+    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. <code>Send</code> derives IDs from the sender, revision and ordinal; repeats are refused. Its fixed-width ordinal orders sends within one revision. The provider must preserve send order across revisions too.</span></li>
+    <li data-o-tok="7" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
+    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
     <li class="commitrow" data-o-tok="9" data-o-first="9" data-rt-tok="RT 2" data-rt-first="RT 3"><span class="rt"></span><span><b>COMMIT.</b></span></li>
   </ol>
   <p id="commit-note" class="note"></p>
@@ -609,7 +611,8 @@ ol.stmts code { font-size: 12.5px; }
   <div class="num">07</div>
   <h2>Ownership and takeover</h2>
   <p>Leases decide who <i>should</i> write. The fence decides who <i>can</i>. Play through a takeover where the old owner was only paused, the case that breaks most designs.</p>
-  <div class="stepper" id="own-stepper">
+  <div class="principle" id="fence-rationale"><strong>Why the lease needs a fence.</strong> A paused owner or a slow packet can outlive a lease. The commit atomically checks the partition's epoch and journal position, so a superseded owner's durable writes roll back. After a lost answer, reset and a new take change the epoch; the position chiefly orders the journal. <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/ownership-and-fencing.md">Ownership and fencing</a> explains the row lock, conflict retries, round-trip cost and alternatives.</div>
+  <div class="stepper" id="own-stepper" data-follow-step>
   <figure>
     <div class="fig">
     <svg class="dg" viewBox="0 0 960 310" role="img" aria-label="Node A takes partition 17 at epoch 7 and commits, then pauses; its lease runs out and node B takes it at epoch 8; when A wakes, its commit at epoch 7 matches no row and is rejected.">
@@ -646,8 +649,8 @@ ol.stmts code { font-size: 12.5px; }
   </div>
   <ul>
     <li><b>Fair share.</b> A node counts the others from the <code>node</code> heartbeats, holds its share of partitions and releases the surplus.</li>
-    <li><b>Reset is start-up.</b> After any doubt the owner drops its memory and takes again. The take waits behind a commit still in flight, so it reads the true position.</li>
-    <li><b>Failover takes about one lease</b> (10 s by default): the price of never having two writers.</li>
+    <li><b>Reset is start-up.</b> After any doubt the owner drops its memory and takes again. A successful take obtains the true position: relational stores wait behind the transaction; MongoDB may return a transient conflict and require a retry. A take that changes no row returns nothing.</li>
+    <li><b>Failover becomes eligible after one lease</b> (10 s by default); contention and recovery reads can add time. The epoch fence prevents a superseded owner from committing.</li>
   </ul>
 </section>
 
@@ -940,7 +943,7 @@ ol.stmts code { font-size: 12.5px; }
     <div class="card"><h4>13 · Events meet</h4><p>An event and a wait for its key, both committed in the window, meet exactly once.</p></div>
     <div class="card"><h4>14 · One bad instance</h4><p>A failing instance is parked and its partition goes on; a message is parked for killing processes only after the threshold.</p></div>
   </div>
-  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite (57 cases) runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB; a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
+  <p>The simulation passes at 200,000 runs of 300 actions and 20,000 of 1,000, also with native instances in the mix; mutation checks break the kernel one rule at a time and each is caught, except two rules that another rule covers, which are caught when that rule is broken too; the store conformance suite runs on the in-memory store, SQLite, PostgreSQL, SQL Server, MySQL and MongoDB (run commands are in the <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">prototype README</a>); a stress test with killed connections holds on all five engines and fails on every one with the fence broken on purpose. The figures and seeds are in the prototype's FINDINGS.md (sections 22 to 24); the engine findings, among them E9 (SQL Server deadlocks with the fence in the batch), in ENGINES.md.</p>
 </section>
 
 <!-- 15 ─────────────────────────────────────────── -->
@@ -996,7 +999,7 @@ ol.stmts code { font-size: 12.5px; }
         <li>SQL Server's checked fence as its default</li>
       </ul></div>
     <div class="card"><h4>Decided 12 November</h4>
-      <p class="note">Built in the prototype: the fence in the batch, the event tables and job poison counting. Partly: the wake signal (an in-process implementation, round 4). Not built yet: the Orleans adapter, short waits in memory, reply deadlines, the recreate rule, set-based projector rounds, parking a poisoned job, values by reference and the viewer's tail read.</p>
+      <p class="note">The prototype's <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/README.md">README</a> and <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/prototypes/kernel-model/FINDINGS.md">findings</a> track current implementation coverage and its limits. The decisions below record the proposed design.</p>
       <ul>
         <li>Commit fence in the batch by default (2 round trips on PostgreSQL); fence first stays an option</li>
         <li>A pluggable wake signal between nodes; polling remains the guarantee</li>
@@ -1053,7 +1056,7 @@ ol.stmts code { font-size: 12.5px; }
       </ul></div>
   </div>
   <p class="note">Standalone jobs (Elsa.Jobs on the kernel) are in neither column: their release is decided in the design proposal.</p>
-  <p>Done in round 4 stage A: the three layers and the renames. Next, before the design proposal: build the card decisions with SQL Server's checked fence and the Orleans adapter with a runtime conformance suite; extract the graph engine; run the BPMN, StateMachine, agent, standalone-jobs (with the worker protocol) and ETL fan-out spikes; measure write volume. Then the design proposal (a new ADR, a program plan and a list of ADRs to retire), then the Fable review. No product code until the design is approved.</p>
+  <p>Program <a href="https://github.com/elsa-workflows/elsa-foundation/issues/4229">#4229</a> tracks the remaining prototype work and its evidence. The design proposal includes a new ADR, a program plan, the architecture references and a list of ADRs to retire, followed by the Fable review and owner approval. No product code until the design is approved.</p>
 </section>
 </main>
 </div>
@@ -1125,6 +1128,16 @@ ol.stmts code { font-size: 12.5px; }
       count.textContent = "Step " + (i + 1) + " of " + items.length;
       prev.disabled = i === 0;
       next.disabled = i === items.length - 1;
+      // Keep the current action visible in a narrow diagram without moving the page vertically.
+      if (root.hasAttribute("data-follow-step")) {
+        const frame = svg.closest(".fig");
+        const focus = parts.find(p => p.dataset.k === [...on].at(-1));
+        if (focus && frame.scrollWidth > frame.clientWidth) {
+          const action = focus.getBoundingClientRect();
+          const viewport = frame.getBoundingClientRect();
+          frame.scrollLeft += action.left - viewport.left - (frame.clientWidth - action.width) / 2;
+        }
+      }
     };
     prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
     next.addEventListener("click", () => { if (i < items.length - 1) { i++; render(); } });
@@ -1140,14 +1153,16 @@ ol.stmts code { font-size: 12.5px; }
   const stmts = document.getElementById("stmts");
   const note = document.getElementById("commit-note");
   const notes = {
-    tok: "EF Core sends the writes and the fence in one batch, the fence last because EF orders the statements by table; on SQL Server this lets a take deadlock with a stale commit (E9), which the checked fence avoids. It uses epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
+    tok: "In a traced PostgreSQL batch, EF wrote the instance, journal and messages, updated the partition fence, then inserted a subscription. Epoch and position are concurrency tokens. EF checks the affected-row count before COMMIT and rolls back a stale batch. This took 2 round trips, using the node clock for the lease. On SQL Server, locking messages before the partition can deadlock with a take (E9).",
     first: "The fence goes alone and returns the database's time. Only when its count checks out are the writes sent. 3 round trips on PostgreSQL; the lease time comes from the database."
   };
   const setMode = mode => {
-    [...stmts.children].forEach(li => {
-      li.style.order = li.dataset["o" + (mode === "tok" ? "Tok" : "First")];
-      li.querySelector(".rt").textContent = li.dataset["rt" + (mode === "tok" ? "Tok" : "First")];
+    const suffix = mode === "tok" ? "Tok" : "First";
+    const rows = [...stmts.children].sort((a, b) => Number(a.dataset["o" + suffix]) - Number(b.dataset["o" + suffix]));
+    rows.forEach(li => {
+      li.querySelector(".rt").textContent = li.dataset["rt" + suffix];
     });
+    stmts.replaceChildren(...rows); // Native list reading order follows the visible statement order.
     document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"));
     note.textContent = notes[mode];
   };

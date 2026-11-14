@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Elsa.Workflows.Runtime.Services.Triggers;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -24,6 +26,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly ILogger<WorkflowStartSchedulerWorkHandler> _logger;
+    private readonly IRuntimeIngressDeliveryStore? _ingressDeliveryStore;
 
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
@@ -35,6 +38,14 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
         RuntimeCheckpointCommitter? checkpointCommitter = null,
         ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
+        : this(workflowExecutableStore, schedulerWorkQueue, idGenerator, timeProvider, workflowExecutionStateStore,
+            executableReader, incidentStrategyCatalog, checkpointCommitter, logger, null) { }
+
+    public WorkflowStartSchedulerWorkHandler(IWorkflowExecutableStore workflowExecutableStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue, IRuntimeExecutionIdGenerator idGenerator, TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore, IWorkflowExecutableReader? executableReader,
+        IIncidentStrategyCatalog? incidentStrategyCatalog, RuntimeCheckpointCommitter? checkpointCommitter,
+        ILogger<WorkflowStartSchedulerWorkHandler>? logger, IRuntimeIngressDeliveryStore? ingressDeliveryStore)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
@@ -51,6 +62,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         _checkpointCommitter = checkpointCommitter;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _logger = logger ?? NullLogger<WorkflowStartSchedulerWorkHandler>.Instance;
+        _ingressDeliveryStore = ingressDeliveryStore;
     }
 
     public string Name => HandlerName;
@@ -68,7 +80,14 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
-        if (await HasStartedAsync(workItem, startPayload, cancellationToken))
+        RuntimeCommittedRecipient? ingress = null;
+        if (startPayload.StartAuthority?.StandaloneTrigger is { } origin)
+        {
+            if (_ingressDeliveryStore is null) throw new TriggerOperationException("unavailable", "Physical ingress authority is not composed.");
+            ingress = await _ingressDeliveryStore.ReadCommittedRecipientAsync(origin, cancellationToken);
+            NativeIngressTargetEvidence.ValidateStartWorkItem(ingress, workItem);
+        }
+        if (await HasStartedAsync(workItem, startPayload, ingress, cancellationToken))
             return;
 
         var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, startPayload.RequestedArtifactId, cancellationToken);
@@ -76,9 +95,10 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             throw new WorkflowExecutableNotFoundException(startPayload.RequestedArtifactId);
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
+        if (ingress is not null) NativeIngressTargetEvidence.ValidateExecutable(ingress, executable);
 
         var dispatchId = workItem.CommandMetadata.GetValueOrDefault(RuntimeMetadataKeys.WorkflowDispatchId);
-        var now = dispatchId is null ? _timeProvider.GetUtcNow() : workItem.EnqueuedAt;
+        var now = dispatchId is null && ingress is null ? _timeProvider.GetUtcNow() : workItem.EnqueuedAt;
         if (_incidentStrategyCatalog is not null &&
             !_incidentStrategyCatalog.TryGet(executable.IncidentStrategy, out _))
         {
@@ -90,8 +110,14 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         }
 
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
+        if (ingress is not null)
+        {
+            await _schedulerWorkQueue.EnqueueAsync(NativeIngressStartLineage.Build(workItem, startPayload, rootActivityId), cancellationToken);
+            return;
+        }
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
-        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata);
+        var rootLineage = dispatchId ?? (ingress is null ? null : ingress.Recipient.StartIdentity.WorkflowExecutionId);
+        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, rootLineage, now, commandMetadata);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
@@ -120,10 +146,17 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     private async ValueTask<bool> HasStartedAsync(
         RuntimeSchedulerWorkItem workItem,
         WorkflowExecutionStartCommandPayload startPayload,
+        RuntimeCommittedRecipient? ingress,
         CancellationToken cancellationToken)
     {
         if (await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is not { } existing)
             return false;
+
+        if (ingress is not null)
+        {
+            NativeIngressTargetEvidence.ValidateState(ingress, existing);
+            return true;
+        }
 
         if (StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, startPayload.PinnedExecutable.ArtifactId))
         {
@@ -338,7 +371,17 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             authority: startPayload.Authority,
             dispatchNestingDepth: startPayload.DispatchNestingDepth,
             testScope: startPayload.TestScope)
-        { ModelWorkOrigin = startPayload.StartAuthority?.ModelWork };
+        {
+            ModelWorkOrigin = startPayload.StartAuthority?.ModelWork,
+            IngressOrigin = startPayload.StartAuthority?.StandaloneTrigger
+        };
+
+        if (payload.IngressOrigin is not null)
+        {
+            var mandatory = commandMetadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            mandatory[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
+            commandMetadata = mandatory;
+        }
 
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"checkpoint:{RuntimeCheckpointNames.WorkflowStarted}"),

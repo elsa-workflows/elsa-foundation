@@ -32,6 +32,7 @@ public interface ITurnServices
 {
     /// <summary>Database time as far as this owner knows.</summary>
     long Now { get; }
+    bool CommitClockAvailable { get; }
 
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }
@@ -58,6 +59,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Taken;              // a turn or a commit in flight has it
     internal string? Key;             // of a job
     internal CancellationTokenSource? Cancel;
+    internal Task? JobDriver;
 }
 
 /// <summary>What a turn is given: the actor, its committed row and live state, and the messages that are due, in order.</summary>
@@ -153,9 +155,11 @@ public sealed class DurableTurn
         foreach (var message in Inbox)
             if (message.Kind == Kinds.JobFinished) _jobs.Remove(message.Read<JobFinished>().Key);    // its result is being handled: no longer in flight
         Revision = (input.Row?.Revision ?? 0) + 1;
+        Clock = new TurnClock(input.Row, Revision, input.Services);
     }
 
     public InstanceRef Actor { get; }
+    public ICommitClock Clock { get; }
     public IReadOnlyList<Message> Inbox { get; }
 
     /// <summary>The revision this turn's commit writes.</summary>
@@ -281,7 +285,7 @@ public sealed class DurableTurn
             Send(Actor, Kinds.Meet, _subscribed.Where(_kept.Contains).ToArray());
             if (Services.Has(Flaw.MeetWithoutTicket)) _volatile.Add(_sent[^1].Id);
         }
-        unit.Row = row;
+        unit.Row = row with { CommitTimes = ((TurnClock)Clock).Snapshot() };
         unit.Expected = _input.Row is null ? null : Revision - 1;
         unit.State = state;
         unit.Journal = journal;

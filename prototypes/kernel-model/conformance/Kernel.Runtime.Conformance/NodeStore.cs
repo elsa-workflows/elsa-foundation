@@ -9,6 +9,7 @@ namespace Kernel.Runtime.Conformance;
 /// </summary>
 public sealed class NodeStore(IKernelStore inner) : IKernelStore
 {
+    public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly object _lock = new();
     private TaskCompletionSource? _stall;
     private long _until;                    // when the stall ends, on Environment.TickCount64

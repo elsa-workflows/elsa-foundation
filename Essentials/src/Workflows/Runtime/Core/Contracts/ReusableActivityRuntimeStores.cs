@@ -4,6 +4,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 public interface IExecutableActivityTemplateReader
 {
+    /// <summary>Exact scope-qualified, bounded consistent source read. Ordinary reads are not a fallback.</summary>
+    ValueTask<RuntimeTemplateSourceSnapshot?> FindBoundedAsync(string templateId, PersistenceScope expectedScope,
+        RuntimeSourceReadLimits limits, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeTemplateSourceSnapshot?>(new RuntimeSourceReadException("runtime_source_template_profile_unsupported", true));
     ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default);
     ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default);
     ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(
@@ -91,6 +95,15 @@ public interface IActivityExecutionHierarchyCursorCodec
 
 public interface IWorkflowExecutableSourceReferenceReader
 {
+    /// <summary>Exact scope-qualified, bounded consistent source read. Ordinary reads are not a fallback.</summary>
+    ValueTask<RuntimeReferenceSourceSnapshot?> FindBoundedAsync(string sourceReferenceId, PersistenceScope expectedScope,
+        RuntimeSourceReadLimits limits, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeReferenceSourceSnapshot?>(new RuntimeSourceReadException("runtime_source_reference_profile_unsupported", true));
+    /// <summary>Complete finite exact-version reference set copied from one consistent owner snapshot.</summary>
+    ValueTask<IReadOnlyList<RuntimeReferenceSourceSnapshot>> ListByDefinitionVersionBoundedAsync(
+        string definitionVersionId, PersistenceScope expectedScope,
+        RuntimeSourceReadLimits limits, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyList<RuntimeReferenceSourceSnapshot>>(new RuntimeSourceReadException("runtime_source_reference_profile_unsupported", true));
     ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default);
     ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
         WorkflowExecutableSourceReferenceArtifactPageQuery query,
