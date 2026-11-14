@@ -45,7 +45,7 @@ for (const width of [320, 1440]) {
     const picker = page.locator(".secret-picker-editor");
     const status = picker.locator(".secret-picker-status");
     const metadata = picker.locator(".secret-picker-metadata");
-    const select = page.getByLabel("Secret", { exact: true });
+    const select = page.getByRole("combobox", { name: "API token", exact: true });
 
     await firstRequestStarted;
     await expect(status).toHaveText("Loading Secret metadata...");
