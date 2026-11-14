@@ -299,10 +299,12 @@ def prepare_host(project, destination, configuration='Debug', *, include_develop
         # build outputs or an ignored developer-local configuration file.
         for name in ('appsettings.Development.json', 'shells.Development.json'):
             source = project.parent / name
-            relative = source.resolve().relative_to(ROOT.resolve())
+            relative = source.relative_to(ROOT)
             tracked = subprocess.run(['git', '-c', 'core.fsmonitor=false', 'ls-files', '--error-unmatch', '--', str(relative)],
                                      cwd=ROOT, capture_output=True, check=False)
             if tracked.returncode == 0:
+                if source.is_symlink() or not source.is_file():
+                    raise ValueError('Committed Development overlays must be regular source files')
                 shutil.copy2(source, destination / name)
 
 

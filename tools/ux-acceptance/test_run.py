@@ -197,6 +197,39 @@ class VerdictTests(unittest.TestCase):
         self.assertFalse((destination / 'shells.Development.json').exists())
         self.assertEqual({'appsettings.json', 'shells.json', source_overlay.name}, {file.name for file in destination.iterdir()})
 
+    def test_development_overlay_symlinks_cannot_borrow_target_tracking(self):
+        for tracked_symlink in (False, True):
+            with self.subTest(tracked_symlink=tracked_symlink):
+                project = self.root / f'symlink-source-{tracked_symlink}/Host.csproj'
+                project.parent.mkdir()
+                (project.parent / 'bin/Debug/net10.0').mkdir(parents=True)
+                for name in ('appsettings.json', 'shells.json'):
+                    (project.parent / name).write_text('{}')
+                development = project.parent / 'appsettings.Development.json'
+                development.write_text('{"committedSource":true}')
+                ignored = project.parent / 'shells.Development.json'
+                if tracked_symlink:
+                    development.unlink()
+                    development.symlink_to(project.parent / 'appsettings.json')
+                else:
+                    ignored.symlink_to(development)
+                destination = self.root / f'symlink-private-{tracked_symlink}'
+                checked = []
+                def tracked(args, **_kwargs):
+                    name = Path(args[-1]).name
+                    checked.append(name)
+                    return subprocess.CompletedProcess(args, 0 if name in {'appsettings.json', 'appsettings.Development.json'} else 1)
+                with patch.object(acceptance, 'ROOT', self.root), patch.object(acceptance.subprocess, 'run', side_effect=tracked):
+                    if tracked_symlink:
+                        with self.assertRaisesRegex(ValueError, 'regular source files'):
+                            acceptance.prepare_host(project, destination, include_development=True)
+                        self.assertFalse((destination / development.name).exists())
+                    else:
+                        acceptance.prepare_host(project, destination, include_development=True)
+                        self.assertEqual(['appsettings.Development.json', 'shells.Development.json'], checked)
+                        self.assertEqual(development.read_bytes(), (destination / development.name).read_bytes())
+                        self.assertFalse((destination / ignored.name).exists())
+
     def test_native_qualification_has_exact_private_grants_and_no_inference(self):
         settings = {}
         shells = {'CShells': {'Shells': {'default': {'Features': {'WeaverGitHubCopilot': {'Enabled': True}}}}}}
