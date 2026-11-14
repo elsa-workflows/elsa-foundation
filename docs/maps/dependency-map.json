@@ -1299,6 +1299,11 @@
           "path": "Essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Core",
+          "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
+        },
+        {
           "type": "external",
           "id": "Bpmn.Interchange",
           "version": "0.5.0"
@@ -11756,6 +11761,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Bpmn.Interchange",
           "path": "Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing",
+          "path": "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj"
         },
         {
           "type": "external",
