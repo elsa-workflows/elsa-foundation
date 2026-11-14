@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Elsa.Workbench.Tests;
@@ -22,20 +24,23 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
     private readonly string _packagePath;
     private readonly bool _observeNativeHosting;
     private readonly bool _observeStaleWrite;
+    private readonly Action<string>? _diagnosticOutput;
     private readonly List<WorkbenchProcess> _hosts = [];
     private readonly HashSet<WorkbenchProcess> _currentHosts = [];
     private readonly HashSet<string> _roles = new(StringComparer.Ordinal);
     private bool _disposed;
     private bool _preserveScenarioRootForDiagnostics;
+    private bool _preservePrimaryFailure;
 
     private NativeHostingFixture(NativeHostingProfile profile, string root, string packagePath, string packageSha256,
-        bool observeNativeHosting, bool observeStaleWrite)
+        bool observeNativeHosting, bool observeStaleWrite, Action<string>? diagnosticOutput)
     {
         Profile = profile;
         _root = root;
         _packagePath = packagePath;
         _observeNativeHosting = observeNativeHosting;
         _observeStaleWrite = observeStaleWrite;
+        _diagnosticOutput = diagnosticOutput;
         PackageSha256 = packageSha256;
         ScenarioId = $"native-hosting-{Guid.NewGuid():N}"[..29];
         JournalDirectory = Path.Combine(root, "journal");
@@ -51,9 +56,10 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
     internal string SharedRoot => _root;
 
     internal void PreserveScenarioRootForDiagnostics() => _preserveScenarioRootForDiagnostics = true;
+    internal void PreservePrimaryFailure() => _preservePrimaryFailure = true;
 
     internal static NativeHostingFixture Create(NativeHostingProfile profile, bool observeNativeHosting = false,
-        bool observeStaleWrite = false)
+        bool observeStaleWrite = false, Action<string>? diagnosticOutput = null)
     {
         if (!Enum.IsDefined(profile))
             throw new ArgumentOutOfRangeException(nameof(profile), profile, "Select an explicit native hosting profile.");
@@ -67,7 +73,8 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
             Directory.CreateDirectory(Path.Combine(root, "packages"));
             var packagePath = NativeHostingScenario.CreatePackage(root);
             var packageSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(packagePath)));
-            return new NativeHostingFixture(profile, root, packagePath, packageSha256, observeNativeHosting, observeStaleWrite);
+            return new NativeHostingFixture(profile, root, packagePath, packageSha256, observeNativeHosting, observeStaleWrite,
+                diagnosticOutput);
         }
         catch
         {
@@ -226,11 +233,105 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
                 failures.Add(new IOException($"Fixture-owned Workbench content root '{contentRoot}' remains after host cleanup."));
         }
 
-        if (failures.Count > 0)
-            throw new AggregateException("One or more fixture-owned Workbench hosts failed to stop; the shared scenario root was preserved.", failures);
+        var diagnosticsComplete = WriteJournalDiagnostics(hostsStopped: failures.Count == 0);
+        if (!diagnosticsComplete)
+            _preserveScenarioRootForDiagnostics = true;
 
-        if (!_preserveScenarioRootForDiagnostics)
-            Directory.Delete(_root, recursive: true);
+        if (failures.Count > 0)
+        {
+            TryWriteDiagnostic(new { Stage = "native-hosting-cleanup", ScenarioId, Status = "failed", Reason = "owned host cleanup failed" });
+            if (!_preservePrimaryFailure)
+                throw new AggregateException("One or more fixture-owned Workbench hosts failed to stop; the shared scenario root was preserved.", failures);
+            return;
+        }
+
+        try
+        {
+            if (!_preserveScenarioRootForDiagnostics)
+                Directory.Delete(_root, recursive: true);
+            TryWriteDiagnostic(new
+            {
+                Stage = "native-hosting-cleanup", ScenarioId,
+                Status = diagnosticsComplete ? "complete" : "failed",
+                RootPreserved = _preserveScenarioRootForDiagnostics
+            });
+        }
+        catch (Exception exception)
+        {
+            TryWriteDiagnostic(new { Stage = "native-hosting-cleanup", ScenarioId, Status = "failed", ErrorType = exception.GetType().FullName });
+            if (!_preservePrimaryFailure)
+                throw;
+        }
+    }
+
+    private bool WriteJournalDiagnostics(bool hostsStopped)
+    {
+        if (_diagnosticOutput is null)
+            return true;
+        var expected = 0;
+        var emitted = 0;
+        try
+        {
+            if (!hostsStopped)
+                throw new InvalidOperationException("Owned journal writers have not all stopped.");
+            var paths = Directory.EnumerateFiles(JournalDirectory, "*", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.Ordinal).ToArray();
+            expected = paths.Length;
+            if (!TryWriteDiagnostic(new { Stage = "native-hosting-journal-start", ScenarioId, ExpectedFileCount = expected }))
+                throw new IOException("The diagnostic callback did not accept the journal inventory.");
+            var files = paths.Select(path =>
+            {
+                var bytes = File.ReadAllBytes(path);
+                return new
+                {
+                    Name = Path.GetRelativePath(JournalDirectory, path),
+                    ByteCount = bytes.Length,
+                    Sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                    ContentBase64 = Convert.ToBase64String(bytes)
+                };
+            }).ToArray();
+            foreach (var file in files)
+            {
+                if (!TryWriteDiagnostic(new { Stage = "native-hosting-journal-file", ScenarioId, File = file }))
+                    throw new IOException("The diagnostic callback did not accept a complete journal file.");
+                emitted++;
+            }
+
+            var inventoryJson = JsonSerializer.Serialize(files.Select(file => new { file.Name, file.ByteCount, file.Sha256 }));
+            return TryWriteDiagnostic(new
+            {
+                Stage = "native-hosting-journal-final", ScenarioId, Status = "complete",
+                ExpectedFileCount = expected, EmittedFileCount = emitted,
+                InventoryJson = inventoryJson,
+                InventorySha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(inventoryJson))).ToLowerInvariant()
+            });
+        }
+        catch (Exception exception)
+        {
+            TryWriteDiagnostic(new
+            {
+                Stage = "native-hosting-journal-final", ScenarioId, Status = "failed",
+                ExpectedFileCount = expected, EmittedFileCount = emitted, ErrorType = exception.GetType().FullName
+            });
+            return false;
+        }
+    }
+
+    private bool TryWriteDiagnostic(object record)
+    {
+        if (_diagnosticOutput is null)
+            return true;
+        try
+        {
+            _diagnosticOutput(JsonSerializer.Serialize(record));
+            return true;
+        }
+        catch (Exception)
+        {
+            // Diagnostics never replace a primary assertion failure. A missing final/count/cleanup marker keeps the
+            // qualification incomplete; failed exports also retain the owned root for explicit artifact collection.
+            return false;
+        }
     }
 
     private void ThrowIfDisposed()
