@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -126,17 +127,30 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         // The normal host's recurring pump may win. Read actual monotonic evidence rather than assuming this test's
         // manual sweep owns dispatch or that an accepted source remains Pending until the assertion runs.
         var elapsed = Stopwatch.StartNew();
-        while (elapsed.Elapsed < TimeSpan.FromSeconds(60))
+        var recoveryLimit = RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout * 2 + TimeSpan.FromSeconds(5);
+        Exception? lastCompletionConflict = null;
+        while (elapsed.Elapsed < recoveryLimit)
         {
             await using var operation = shell.CreateAsyncScope();
             var services = operation.ServiceProvider;
-            await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100));
+            try { await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100)); }
+            catch (InvalidOperationException exception) when (exception.GetType() == typeof(InvalidOperationException) &&
+                exception.InnerException is DbUpdateConcurrencyException &&
+                exception.Message == $"The claimed post-commit outbox item '{sourceId}' changed concurrently and its " +
+                    "claim still appears valid; nothing was written, and claim expiry redelivers the item.")
+            {
+                // The real pump backs off this exact completion conflict. Retry in a fresh scope after physical
+                // claim expiry; never turn a stale claim, unrelated failure, or planned root into acceptance.
+                lastCompletionConflict = exception;
+                await Task.Delay(50);
+                continue;
+            }
             var source = (await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(sourceId))!;
             if (Assert.Single(source.SubscriptionDelivery!.Progress).Phase == RuntimeRecipientPhase.TargetAccepted &&
                 source.Status == RuntimePostCommitOutboxStatus.Delivered) return;
             await Task.Delay(50);
         }
-        Assert.Fail("The retained HTTP recipient did not obtain its actual target acceptance receipt.");
+        throw new TimeoutException("The retained HTTP recipient did not obtain its actual target acceptance and source settlement receipts.", lastCompletionConflict);
     }
 
     private sealed record StandaloneHttpFixture(TriggerScope Scope, StandaloneTrigger Trigger, WorkflowExecutableIdentity Material);
