@@ -51,6 +51,7 @@ internal static class NativeRetries
                 r.Source.Intervention?.Id != r.Request.Incident || r.Source.RecoveryInputs is null || r.Source.RecoveryMaterial is null || string.IsNullOrEmpty(r.Source.OperationKey) ||
                 r.Resolution != "Retried" || string.IsNullOrEmpty(r.Successor) || r.Successor == r.Source.Id || !successors.Add(r.Successor) || !sources.Add(r.Source.Id) || s.Frames.ContainsKey(r.Source.Id))
                 throw new InvalidOperationException("Invalid native retry lineage.");
+            NativeInterventions.ValidateIncident(r.Source.Intervention);
             if (r.Source.Parent is not null) continue;
             if (NativeInterventions.Policy(s) < 2 || !NativeInterventions.RootDescriptor(r.Source))
                 throw new InvalidOperationException("Invalid native root retry lineage.");

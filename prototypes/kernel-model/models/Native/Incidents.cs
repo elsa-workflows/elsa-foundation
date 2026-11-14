@@ -43,6 +43,13 @@ internal static class NativeInterventions
     internal static bool RootDescriptor(Frame frame) => frame.Parent is null && frame.Tag is null && frame.Scope is null && frame.LexicalScope is null && frame.RecoveryMaterial?["root"] is JsonValue value &&
         value.TryGetValue<string>(out var node) && node == frame.Node;
     internal static bool Root(NativeState state, Frame frame) => RootShape(state, frame) && RootDescriptor(frame);
+    internal static void ValidateIncident(NativeIntervention? incident)
+    {
+        if (incident is null) throw new InvalidOperationException("Invalid native intervention ownership.");
+        if (incident.Version != 1) throw new NotSupportedException("Unsupported native intervention version.");
+        if (string.IsNullOrEmpty(incident.Id) || incident.Outcome != "WaitForIntervention" || incident.Fault is null || string.IsNullOrEmpty(incident.Fault.Code) || incident.Fault.Message is null)
+            throw new InvalidOperationException("Invalid native intervention ownership.");
+    }
 
     internal static void Validate(NativeState state, bool cancelled = false)
     {
@@ -60,9 +67,8 @@ internal static class NativeInterventions
             if ((f.RecoveryInputs is null) != (f.OperationKey is null) || f.OperationKey is { Length: 0 })
                 throw new InvalidOperationException("Invalid native pinned-input ownership.");
             if (f.Intervention is not { } incident) continue;
-            if (incident.Version != 1) throw new NotSupportedException("Unsupported native intervention version.");
-            if (string.IsNullOrEmpty(incident.Id) || !ids.Add(incident.Id) || incident.Outcome != "WaitForIntervention" ||
-                incident.Fault is null || string.IsNullOrEmpty(incident.Fault.Code) || incident.Fault.Message is null ||
+            ValidateIncident(incident);
+            if (!ids.Add(incident.Id) ||
                 f.RecoveryInputs is null || (f.Parent is null ? !Root(state, f) : !state.Frames.TryGetValue(f.Parent, out var parent) || parent.Intervention is not null) ||
                 state.Waits.Values.Any(w => w.Frame == f.Id) || state.Frames.Values.Any(child => child.Parent == f.Id))
                 throw new InvalidOperationException("Invalid native intervention ownership.");

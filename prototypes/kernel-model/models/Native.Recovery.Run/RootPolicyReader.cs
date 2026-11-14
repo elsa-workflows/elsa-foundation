@@ -45,10 +45,10 @@ internal static class RootPolicyReader
         });
         yield return ("completed-root-history", () => { var state = RootStaged(); state.Agenda.Clear(); NativeInterventions.Validate(state); });
         yield return ("materialized-root-codec", () => NativeInterventions.Validate(Materialized()));
-        foreach (var live in new[] { false, true }) foreach (var kind in new[] { "future", "outcome", "code", "fault" })
-            yield return ($"archived-incident,live={live},case={kind}", () =>
+        foreach (var context in new[] { "staged", "materialized", "child" }) foreach (var kind in new[] { "future", "outcome", "code", "fault" })
+            yield return ($"archived-incident,context={context},case={kind}", () =>
             {
-                var state = live ? Materialized() : RootStaged(); var source = state.Retries!["operator"].Source;
+                var state = context == "child" ? RecoveryReader.Staged() : context == "materialized" ? Materialized() : RootStaged(); var source = state.Retries!["operator"].Source;
                 source.Intervention = kind switch
                 {
                     "future" => source.Intervention! with { Version = 2 }, "outcome" => source.Intervention! with { Outcome = "Open" },
