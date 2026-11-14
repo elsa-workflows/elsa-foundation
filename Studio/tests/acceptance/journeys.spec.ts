@@ -138,7 +138,10 @@ test.beforeEach(async ({ page }, info) => {
     if (reportedAppearance) localStorage.setItem("elsa-studio-theme", "classic");
     else if (authoredNamesTheme) localStorage.setItem("elsa-studio-theme", authoredNamesTheme);
     else localStorage.removeItem("elsa-studio-theme");
-    localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
+    if (authoredNamesTheme) {
+      localStorage.removeItem("elsa-studio-workspace-style");
+      localStorage.removeItem("elsa-studio-color-scheme");
+    } else localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
     localStorage.setItem("elsa-studio-theme-mode", mode);
   }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance, authoredNamesTheme });
   const errors: string[] = [];
@@ -155,9 +158,13 @@ test.beforeEach(async ({ page }, info) => {
   }
   if (authoredNamesTheme) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", authoredNamesTheme);
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", authoredNamesTheme);
+    await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
     await expect(page.locator("html")).toHaveAttribute("data-theme-mode", info.project.use.colorScheme ?? "light");
     await info.attach("authored-name-appearance", { body: JSON.stringify({
       theme: await page.locator("html").getAttribute("data-theme"),
+      colorScheme: await page.locator("html").getAttribute("data-color-scheme"),
+      workspaceStyle: await page.locator("html").getAttribute("data-workspace-style"),
       mode: await page.locator("html").getAttribute("data-theme-mode"),
       viewport: page.viewportSize()
     }), contentType: "application/json" });
