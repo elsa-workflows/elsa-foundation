@@ -139,9 +139,9 @@ public sealed partial class StimulusDeliverySchemaGateTests
 
     private sealed partial class Fixture
     {
-        internal static async Task<Fixture> CreateIngressReadiness(string laggingFamily, string previousVersion)
+        internal static async Task<Fixture> CreateIngressReadiness(string laggingFamily, string previousVersion, string? connectionString = null)
         {
-            var fixture = new Fixture(laggingFamily); await fixture.connection.OpenAsync();
+            var fixture = new Fixture(laggingFamily, connectionString); await fixture.connection.OpenAsync();
             await using (var context = fixture.Open())
             {
                 await context.Database.EnsureCreatedAsync();
