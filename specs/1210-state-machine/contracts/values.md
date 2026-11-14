@@ -2,9 +2,9 @@
 
 **Status:** proposed M0 engineering profile, 14 November 2026. This records a candidate for execution proof,
 not owner agreement, product placement, a public definition schema or completed StateMachine support.
-[FR-032](../spec.md) and [OD22](../acceptance-matrix.md) require machine-wide and state-visit values; normal
+[FR-032](../spec.md) and [OD21](../acceptance-matrix.md) require machine-wide and state-visit values; normal
 Elsa value, binding, durability, secret and parallel-write contracts remain authoritative.
-The [selection contract](selection.md) owns transition selection and phase order.
+The [selection contract](selection.md) owns transition selection and the OD22 phase order.
 
 ## Identity and lookup
 
