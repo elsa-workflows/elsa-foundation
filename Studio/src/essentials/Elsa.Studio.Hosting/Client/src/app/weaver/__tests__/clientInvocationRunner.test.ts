@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
 import { createEndpointContext, type StudioWeaverPreparedInvocation } from "../../../sdk";
 import { createClientInvocationRunner } from "../clientInvocationRunner";
+import { beginWeaverModuleRegistration, retireWeaverModuleRegistration, retireWeaverRegistryGeneration } from "../weaverRegistrationOrigins";
 
 function fixture() {
   const api = createStudioRegistry({ ...createEndpointContext("https://example.test/"), hostVersion: "1", sdkVersion: "1" });
@@ -12,6 +13,18 @@ function fixture() {
 }
 
 describe("reviewed client delivery", () => {
+  it("coalesces a synchronous repeat delivery from the module callback before another effect", async () => {
+    const { runner, invocation, execute } = fixture();
+    let repeated: ReturnType<typeof runner.run> | undefined;
+    execute.mockImplementationOnce(async () => {
+      repeated = runner.run(structuredClone(invocation));
+      return { outcome: "applied", summary: "Observed module effect.", result: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } };
+    });
+    const first = await runner.run(invocation);
+    expect(repeated).toBeDefined();
+    expect(await repeated).toEqual(first); expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it("coalesces identical delivery and preserves typed observation", async () => {
     const { runner, invocation, execute } = fixture();
     const [first, second] = await Promise.all([runner.run(invocation), runner.run(structuredClone(invocation))]);
@@ -44,11 +57,32 @@ describe("module-owned client target availability", () => {
     const api = createStudioRegistry({ ...createEndpointContext("https://example.test/"), hostVersion: "1", sdkVersion: "1" });
     const execute = vi.fn(async () => ({ outcome: "applied" as const, summary: "Observed module effect." }));
     const check = vi.fn(availability);
-    api.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState", executeClient: execute, clientTargetAvailability: check });
+    const registration = beginWeaverModuleRegistration(api, "Sample.Satellite");
+    registration.api.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState", executeClient: execute, clientTargetAvailability: check });
+    registration.complete();
     const { invocation } = fixture();
     invocation.client = { clientId: api.weaver.clientId, generationId: "generation" };
-    return { runner: createClientInvocationRunner(api), execute, check, invocation };
+    return { api, runner: createClientInvocationRunner(api), execute, check, invocation };
   }
+
+  it.each(["removed", "generation", "replacement"] as const)("refuses a %s registration after its target check awaited, without replay", async kind => {
+    let release!: (value: { status: "available" }) => void;
+    const { api, runner, execute, check, invocation } = withAvailability(() => new Promise(resolve => { release = resolve; }));
+    const original = api.weaver.toolContracts.list()[0]; const replacement = vi.fn();
+    const operation = runner.run(invocation); await Promise.resolve();
+    expect(check).toHaveBeenCalledTimes(1);
+    if (kind === "generation") retireWeaverRegistryGeneration(api);
+    else if (kind === "removed") retireWeaverModuleRegistration(api, "Sample.Satellite");
+    else {
+      const next = beginWeaverModuleRegistration(api, "Sample.Satellite");
+      next.api.weaver.toolContracts.add({ ...original, executeClient: replacement }); next.complete();
+    }
+    release({ status: "available" });
+    const observation = await operation;
+    expect(observation).toMatchObject({ outcome: "refused", summary: "The owning module's client adapter changed before dispatch. Nothing was applied." });
+    expect(await runner.run(structuredClone(invocation))).toEqual(observation);
+    expect(execute).not.toHaveBeenCalled(); expect(replacement).not.toHaveBeenCalled(); expect(check).toHaveBeenCalledTimes(1);
+  });
 
   it("refuses an undispatched operation whose unsaved target is gone with the module's reason and zero effect", async () => {
     const { runner, execute, check, invocation } = withAvailability(() => ({ status: "unavailable", reason: "The workflow editor that held this draft was closed." }));

@@ -8,18 +8,75 @@ using Elsa.Weaver.Persistence.EntityFrameworkCore;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Weaver.Services;
+using Elsa.Cluster.Core.Models;
 using Elsa.Events;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Weaver.Persistence.Tests;
 
 /// <summary>#3441 T028: the feature's provider selection, its replacement of the store and audit trio, and its explicit selection.</summary>
 public sealed class WeaverEntityFrameworkCoreFeatureTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Every_ef_store_path_declares_the_ef_effects_variation_and_refuses_unobserved_schema(bool consumerContext)
+    {
+        var services = Composition();
+        if (consumerContext) services.AddWeaverStores<DbContext>();
+        else services.AddWeaverEntityFrameworkCore(new() { ConnectionString = "Data Source=:memory:" });
+        new WeaverEfEffectsFeature().ConfigureServices(services);
+        using var root = services.BuildServiceProvider();
+        using var scope = root.CreateScope();
+        var selection = scope.ServiceProvider.GetRequiredService<WeaverRegistrationValidator>().GetEffectsSelection()!;
+        Assert.Equal(typeof(WeaverEfEffectsFeature), selection.FeatureType);
+        Assert.Equal([new SchemaVersionRequirement("Weaver", "1.1.0")], selection.Requirements);
+        Assert.Equal("schema-version-not-finalized", (await scope.ServiceProvider.GetRequiredService<WeaverEffectsAdmission>().CheckAsync())?.Code);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_common_effects_selection_cannot_stand_in_for_an_ef_store_or_coexist_with_its_variation(bool both)
+    {
+        var services = Composition();
+        services.AddWeaverStores<DbContext>();
+        new WeaverEffectsFeature().ConfigureServices(services);
+        if (both) new WeaverEfEffectsFeature().ConfigureServices(services);
+        using var root = services.BuildServiceProvider();
+        var error = Assert.Throws<InvalidOperationException>(() => root.GetRequiredService<WeaverRegistrationValidator>().Validate());
+        Assert.Contains(both ? "one selected feature variation" : nameof(WeaverEfEffectsFeature), error.Message);
+    }
+
+    [Fact]
+    public void Ef_effects_specializations_must_repeat_their_direct_minimum_and_keep_the_actual_type()
+    {
+        var missing = Composition();
+        missing.AddWeaverStores<DbContext>();
+        new MissingEfEffectsDeclaration().ConfigureServices(missing);
+        using (var root = missing.BuildServiceProvider())
+            Assert.Contains("must directly repeat", Assert.Throws<InvalidOperationException>(() =>
+                root.GetRequiredService<WeaverRegistrationValidator>().Validate()).Message);
+
+        var declared = Composition();
+        declared.AddWeaverStores<DbContext>();
+        new DeclaredEfEffectsFeature().ConfigureServices(declared);
+        using var valid = declared.BuildServiceProvider();
+        var selection = valid.GetRequiredService<WeaverRegistrationValidator>().GetEffectsSelection()!;
+        Assert.Equal(typeof(DeclaredEfEffectsFeature), selection.FeatureType);
+        Assert.Equal(SchemaVersionRequirement.DeclaredBy(typeof(DeclaredEfEffectsFeature)), selection.Requirements);
+    }
+
+    public class MissingEfEffectsDeclaration : WeaverEfEffectsFeature;
+
+    [RequiresSchemaVersion("Weaver", "1.1.0")]
+    public class DeclaredEfEffectsFeature : WeaverEfEffectsFeature;
+
     [Fact]
     public void The_feature_is_an_opt_in_shell_feature_over_the_weaver_and_secrets_features()
     {

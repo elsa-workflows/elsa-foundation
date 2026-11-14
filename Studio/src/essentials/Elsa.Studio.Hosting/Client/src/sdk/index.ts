@@ -1236,7 +1236,9 @@ export interface StudioWeaverContextRequest {
 /** Backend payload enums retain camelCase wire spelling; presentation may normalize labels. */
 export type StudioWeaverContextOrigin = "clientSnapshot" | "resourceData" | "authoritativeRead" | "installedGuidance";
 export type StudioWeaverExecutionLocation = "server" | "clientWorkingState";
-export type StudioWeaverEffectScope = "clientWorkingState" | "serverPersisted";
+export type StudioWeaverEffectScope = "clientWorkingState" | "serverPersisted" | "noPersistedEffect";
+/** Host privilege requirements, separate from resource permission and session autonomy. */
+export type StudioWeaverPrivilegeClass = "administrative" | "irrecoverable" | "activation";
 export type StudioWeaverPreparedRisk = "readOnly" | "reviewRequired" | "destructive" | "admin";
 export type StudioWeaverClientOutcome = "applied" | "refused" | "uncertain";
 
@@ -1278,6 +1280,8 @@ export interface StudioWeaverContributionDiagnostic {
   code: string;
   message: string;
   required: boolean;
+  /** Reported transport metadata only; this flag cannot establish trusted owner origin. */
+  ownerUnavailable?: boolean;
 }
 
 export interface StudioWeaverContextCollection {
@@ -1293,6 +1297,8 @@ export interface StudioWeaverContextProviderContribution extends StudioBackendAw
   surfaces: string[];
   sensitivity: StudioWeaverSensitivity;
   required?: boolean;
+  /** Optional typed outcome declaration: absent/null is legacy; empty declares no codes. Server admission remains authoritative. */
+  moduleCodes?: readonly string[] | null;
   collect(context: StudioWeaverContextRequest): Promise<StudioWeaverContextCollection | StudioWeaverContextAttachment[]>;
 }
 
@@ -1360,6 +1366,10 @@ export interface StudioWeaverToolContractContribution extends StudioBackendAware
   resultRendererIds?: string[];
   contractVersion?: string;
   executionLocation?: StudioWeaverExecutionLocation;
+  /** Server-tool metadata; never admits performed through the client working-state ACK protocol. */
+  canPerformWithoutPersistence?: boolean;
+  /** Optional typed outcome declaration: absent/null is legacy; empty declares no codes. */
+  moduleCodes?: readonly string[] | null;
   /** Invoked only for a matching backend-prepared, explicitly reviewed client request. */
   executeClient?(invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal): Promise<StudioWeaverClientExecutionResult>;
   /**
@@ -1401,6 +1411,8 @@ export interface StudioWeaverPreparedInvocation {
   requiresApproval: boolean;
   client: StudioWeaverClientBinding | null;
   expiresAt: string;
+  /** Frozen server requirements; omitted/null/empty preserves an unclassed legacy preparation. */
+  requiredPrivilegeClasses?: readonly StudioWeaverPrivilegeClass[] | null;
 }
 
 /** Observed module outcome. Returning from a dispatch call alone does not prove application. */
@@ -1422,6 +1434,8 @@ export interface StudioWeaverEffectReceipt {
   after: StudioWeaverResourceTarget;
   scope: StudioWeaverEffectScope;
   evidence: StudioWeaverPayload;
+  /** Owning module's normalized typed outcome code; never a resource permission. */
+  moduleCode?: string | null;
 }
 
 export interface StudioWeaverToolResult {
@@ -1429,6 +1443,8 @@ export interface StudioWeaverToolResult {
   toolName: string;
   succeeded: boolean;
   content: string;
+  /** Normalized typed refusal; never an application receipt or an authority grant. */
+  error?: { code: string; message: string; statusCode: number; ownerUnavailable?: boolean; limit?: string | null } | null;
   payload?: StudioWeaverPayload | null;
   receipt?: StudioWeaverEffectReceipt | null;
 }
@@ -2241,7 +2257,6 @@ function resolveContributionAvailability<T>(
     return { state: "hidden", reason: `Feature ${featureId} is disabled.`, source: "feature" };
   }
 
-  const runtimeAvailability = normalizeContributionDecision(readContributionAvailability(contribution, listOptions.context), "runtime");
   const registryPolicyDecision = normalizeContributionDecision(registryOptions.hostPolicy?.(policyContext), "host-policy");
   if (registryPolicyDecision.state !== "available") {
     return registryPolicyDecision;
@@ -2252,7 +2267,8 @@ function resolveContributionAvailability<T>(
     return listPolicyDecision;
   }
 
-  return runtimeAvailability;
+  // A host veto is an admission boundary: unavailable modules must not run an availability callback.
+  return normalizeContributionDecision(readContributionAvailability(contribution, listOptions.context), "runtime");
 }
 
 function normalizeContributionDecision(

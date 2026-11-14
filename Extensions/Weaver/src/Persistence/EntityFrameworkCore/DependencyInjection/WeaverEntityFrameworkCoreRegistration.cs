@@ -45,7 +45,7 @@ public static class WeaverEntityFrameworkCoreRegistration
         var lease = WeaverEntityFrameworkCoreOptions.ValidateLease(leaseDuration ?? WeaverEntityFrameworkCoreOptions.DefaultLeaseDuration);
         services.TryAddSingleton(provider => new WeaverRecordCodec(provider.GetRequiredService<ISecretValueProtector>()));
         services.SelectWeaverSessionRecordStore(provider => new EfWeaverSessionRecordStore(provider.GetRequiredService<IServiceScopeFactory>(),
-            static scoped => scoped.GetRequiredService<TContext>(), provider.GetRequiredService<WeaverRecordCodec>(), lease));
+            static scoped => scoped.GetRequiredService<TContext>(), provider.GetRequiredService<WeaverRecordCodec>(), lease), typeof(WeaverEfEffectsFeature));
         services.SelectWeaverAuditStore(provider => new EfWeaverAuditStore(provider.GetRequiredService<IServiceScopeFactory>(),
             static scoped => scoped.GetRequiredService<TContext>(), provider.GetRequiredService<WeaverRecordCodec>()));
         return services;

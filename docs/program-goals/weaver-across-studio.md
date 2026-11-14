@@ -57,6 +57,14 @@ with cumulative numbering and no reset. Full M0–M5 delivery remains authorized
 claim/WIP/readiness rule and resulting-main check remains required. The narrowly authorized one-file
 owner-account workflow update is complete; ordinary writes and merges use the worker's own App.
 
+The [14 November bounded T042 and merge authorization](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6871081882)
+authorizes one fresh disposable T042 worker, capped at one CPU and 3 GiB for at most 90 minutes,
+with cleanup afterward. It does not renew a previous allocation. The owner also authorizes an admin
+override to self-merge after a clean self-review loop. This exception covers the merge mechanism;
+exact-head independent review, required passing checks, unresolved human holds and resulting-main
+verification remain binding. The cumulative review history and all Program acceptance and charter
+boundaries remain intact. This authorization does not mark T042 or the implementation complete.
+
 The [1 November native-baseline exception](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6563215730)
 authorizes resuming #3440's native baseline after its three failed runs (`1495b57a6`, `d82a0b7fa`,
 `81965ed8a`), which stay recorded as Failed. Its scope is a stable locator for the reviewed size card
@@ -187,3 +195,16 @@ provider-protocol and opt-in live evidence distinctly; source probes and histori
 not current end-to-end acceptance. Meaningful risk-based regressions, required exact-head CI/review,
 resulting-main verification, updated existing catalogs and module-author guidance support closure.
 Keep unsupported/deferred boundaries explicit on #3428 until they are resolved or owner-amended.
+
+
+The [12 November resume](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6837492732)
+reactivates this Program only. The current native M4 and M5 children are #3443 and #3444;
+the 9 November triage folded duplicate wrappers #3433/#3434 without completing either milestone.
+Project65 archives those closed wrappers and retains the open feature/leaf states.
+The owner-authorized Weaver rename is the current source boundary: user-defined agents keep
+`Elsa.Agent.*`, the Studio assistant uses `Elsa.Weaver.*` / `api.weaver`, and the additive
+store upgrade must be demonstrated with actual post-rename Weaver1.0/1.1 writers.
+Historical Agent-store captures remain unchanged evidence of their original sources. The source
+inventory adds Decisions to spec1203 FR-001/later leaf22; actual composed support remains unverified.
+The [single bounded Azure verification grant](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6837783960)
+is at most1CPU/3GiB/90minutes with stop/deallocation; it grants no fleet or other paused-stream restart.

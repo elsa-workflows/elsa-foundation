@@ -6,6 +6,7 @@ import { WeaverContextChips } from "./WeaverContextChips";
 import { WeaverPromptStarters } from "./WeaverPromptStarters";
 import { WeaverToolResults } from "./WeaverToolResults";
 import { WeaverProposalReview } from "./WeaverProposalReview";
+import { WeaverPrivilegePolicy } from "./WeaverPrivilegePolicy";
 import type { subscribeWeaverSessionStream } from "./weaverStream";
 import type { WeaverSessionIndicatorSession } from "./WeaverSessionIndicator";
 import type { WeaverRecoveryMode, WeaverSessionSummary } from "./weaverTypes";
@@ -45,8 +46,8 @@ export function WeaverSurface({
   onPromptConsumed?(id: string): void;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
-  const resultRenderers = useMemo(() => api.weaver.resultRenderers.list(), [api]);
-  const resultControls = useMemo(() => api.weaver.resultControls?.list() ?? [], [api]);
+  const resultRenderers = api.weaver.resultRenderers.list();
+  const resultControls = api.weaver.resultControls?.list() ?? [];
   const providerStatus = useMemo(() => describeProviderStatus(session), [session]);
   const sendRef = useRef(session.send);
   sendRef.current = session.send;
@@ -109,6 +110,8 @@ export function WeaverSurface({
         <span>{providerStatus.label}</span>
         {session.activeProvider ? <small>{session.activeProvider.providerId} · {session.activeProvider.riskProfile}</small> : null}
       </div>
+
+      {session.bootstrap ? <WeaverPrivilegePolicy privileges={session.bootstrap.privileges} /> : null}
 
       {autoApplyStatus ? (
         <div className="weaver-mode-status" id={autoApplyStatusId} role="status" aria-label="Auto-apply mode status" data-autonomy-state={session.autoApplyState}>

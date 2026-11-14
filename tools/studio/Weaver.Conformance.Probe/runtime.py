@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import http.cookiejar
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,50 @@ STARTUP_OBSERVATION_SECONDS = 120
 SHUTDOWN_OBSERVATION_SECONDS = 15
 RUNTIME_ENVIRONMENT = {"PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "TZ", "DOTNET_ROOT",
                        "SSL_CERT_FILE", "SSL_CERT_DIR", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT", "WEAVER_FRONTEND_AUDIT"}
+
+
+def owned_content_root(run, profile):
+    """Resolve an existing owned runtime directory; absent selection preserves the published-directory default.
+
+    A separate root contains fresh, caller-generated runtime configuration/state. This helper never copies inputs or
+    creates it, and refuses overlap with a binary publish so configuration writers cannot edit immutable upgrade inputs.
+    """
+    selected = profile.get("contentRoot", profile["published"])
+    check(isinstance(selected, (str, os.PathLike)), "Consumer content root must be an owned directory path")
+    selected = Path(selected)
+    root = run.root.resolve()
+    check(selected.is_absolute() and selected.is_dir() and selected.resolve().is_relative_to(root),
+          "Consumer content root must be an existing directory under the owned run root")
+    check(all(not parent.is_symlink() for parent in (selected, *selected.parents)
+              if parent == root or parent.is_relative_to(root)),
+          "Consumer content root must not contain a symlink under the owned run root")
+    selected = selected.resolve()
+    published = profile["published"].resolve()
+    if selected != published:
+        for other in run.profiles.values():
+            binary_root = other["published"].resolve()
+            check(not selected.is_relative_to(binary_root) and not binary_root.is_relative_to(selected),
+                  "Separate consumer content root must not overlap a published binary directory")
+    return selected
+
+
+def published_files(directory):
+    """Inventory an immutable binary publish, including dependencies rather than only its entry assembly."""
+    directory = Path(directory)
+    check(directory.is_dir() and not directory.is_symlink(), "Published files need an ordinary binary directory")
+    files = {}
+    for path in sorted(directory.rglob("*")):
+        check(not path.is_symlink(), "Published files cannot contain symlinks")
+        if path.is_dir():
+            continue
+        check(path.is_file(), "Published files cannot contain special entries")
+        files[path.relative_to(directory).as_posix()] = {"bytes": path.stat().st_size, "sha256": sha(path)}
+    check(bool(files), "Published file inventory cannot be empty")
+    return files
+
+
+def published_files_digest(files):
+    return hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def private_json(path, value):
@@ -151,21 +196,41 @@ class _OwnedProcess:
         self.run, self.name, self.origin, self.generation = run, name, origin, generation
         self.root = profile["published"].resolve()
         check(self.root.is_relative_to(run.root), "Published consumer escaped owned output")
+        self.profile = dict(profile)
+        self.content_root = owned_content_root(run, self.profile)
         Http(origin)  # Validate origin before process creation.
+        self.process_namespace = profile.get("processNamespace", name)
+        check(isinstance(self.process_namespace, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", self.process_namespace),
+              "Process evidence namespace must be a bounded owned name")
         suffix = "" if generation == 1 else "-g" + str(generation)
-        self.log = run.root / (name + "-runtime" + suffix + ".log")
-        self.receipt = run.root / (name + "-process" + suffix + ".json")
-        check(generation == 1 or not (self.log.exists() or self.receipt.exists()), "Never overwrite a retained host generation")
+        self.log = run.root / (self.process_namespace + "-runtime" + suffix + ".log")
+        self.receipt = run.root / (self.process_namespace + "-process" + suffix + ".json")
+        check((generation == 1 and "processNamespace" not in profile)
+              or not (self.log.exists() or self.log.is_symlink() or self.receipt.exists() or self.receipt.is_symlink()),
+              "Never overwrite a retained host generation")
         self.marker = "WEAVER_" + name.upper() + "_CONSUMER_READY"
         self.assembly = self.root / profile["assembly"]
+        check(self.assembly.is_file() and not self.assembly.is_symlink() and self.assembly.resolve().parent == self.root,
+              "Consumer executable must be an ordinary file in its published binary directory")
+        self.published_files = None
+        if "publishedFiles" in profile:
+            check(self.content_root != self.root, "An immutable publish requires a separate runtime content root")
+            actual = published_files(self.root)
+            check(profile["publishedFiles"] == actual, "Published file inventory differs from the retained producer inputs")
+            self.published_files = actual
         self.env = profile["env"]
         self.process, self.started, self.caches, self.cache_files = None, None, {}, None
 
     def spawn(self):
-        command = [self.run.dotnet, str(self.assembly), "--contentRoot", str(self.root), "--urls", self.origin]
+        check(owned_content_root(self.run, self.profile) == self.content_root, "Consumer content root changed before launch")
+        if self.published_files is not None:
+            check(published_files(self.root) == self.published_files, "Published files changed before process creation")
+        identity = self.content_root.stat()
+        assembly_hash = sha(self.assembly)
+        command = [self.run.dotnet, str(self.assembly), "--contentRoot", str(self.content_root), "--urls", self.origin]
         # Restore caches are producer inputs, not undeclared native runtime feeds. Each launch
         # receives new empty caches; the explicit retained archive closure must suffice.
-        runtime_inputs = self.run.root / (self.name + "-runtime-inputs-" + str(time.time_ns()))
+        runtime_inputs = self.run.root / (self.process_namespace + "-runtime-inputs-" + str(time.time_ns()))
         runtime_inputs.mkdir(mode=0o700)
         # Runtime inputs are explicit private files/feed archives. Ambient provider credentials,
         # interposers, startup hooks and restore/build-cache overrides are not consumer inputs.
@@ -178,9 +243,16 @@ class _OwnedProcess:
         with self.log.open("w") as stream:
             self.process = subprocess.Popen(command, cwd=self.root, env=runtime_env, stdin=subprocess.DEVNULL,
                                             stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
-        self.started = {"pid": self.process.pid, "command": command, "assemblySha256": sha(self.assembly), "origin": self.origin,
-                        "contentRoot": str(self.root), "log": str(self.log), "startedAt": time.time(),
+        self.started = {"pid": self.process.pid, "command": command, "assemblySha256": assembly_hash, "origin": self.origin,
+                        "publishedDirectory": str(self.root), "contentRoot": str(self.content_root),
+                        "contentRootIdentity": {"device": identity.st_dev, "inode": identity.st_ino},
+                        "log": str(self.log), "startedAt": time.time(),
                         "runtimePackageCaches": dict(self.caches)}
+        if self.published_files is not None:
+            self.started.update(publishedFilesSha256=published_files_digest(self.published_files),
+                                publishedFileCount=len(self.published_files))
+        if self.process_namespace != self.name:
+            self.started["processNamespace"] = self.process_namespace
         if self.generation != 1:
             self.started["generation"] = self.generation
         self.save()
@@ -212,8 +284,20 @@ class _OwnedProcess:
 
     def require_running(self):
         check(self.process.poll() is None, "Owned consumer exited before qualification completed: " + str(self.log))
+        self.require_unchanged_inputs()
         check(not any(path.is_file() for folder in self.caches.values() for path in Path(folder).rglob("*")),
               "Native runtime populated an undeclared NuGet cache instead of using its retained feed closure")
+
+    def require_unchanged_inputs(self):
+        check(owned_content_root(self.run, self.profile) == self.content_root, "Consumer content root changed during its generation")
+        identity = self.content_root.stat()
+        check({"device": identity.st_dev, "inode": identity.st_ino} == self.started["contentRootIdentity"],
+              "Consumer content root directory was replaced during its generation")
+        check(self.assembly.is_file() and not self.assembly.is_symlink()
+              and self.assembly.resolve().parent == self.root and sha(self.assembly) == self.started["assemblySha256"],
+              "Published consumer assembly changed during its generation")
+        if self.published_files is not None:
+            check(published_files(self.root) == self.published_files, "Published dependency files changed during their generation")
 
     def shutdown(self, *, abrupt=False):
         process = self.process
@@ -252,6 +336,9 @@ class _OwnedProcess:
                "Owned consumer exited unsuccessfully during shutdown: ") + str(self.log))
         check(not any(self.cache_files.values()),
               "Native runtime populated an undeclared NuGet cache instead of using its retained feed closure")
+        self.require_unchanged_inputs()
+        self.started["inputsUnchangedAtCloseout"] = True
+        self.save()
 
 
 @contextmanager
@@ -315,14 +402,16 @@ class RestartableServer:
             owned.shutdown(abrupt=abrupt)
         owned.require_stopped(abrupt=abrupt)
         stopped_at = time.time()
-        stopped = {key: owned.started.get(key) for key in ("pid", "origin", "log", "startedAt", "readyAt", "stoppedAt", "exitCode", "runtimeCacheFiles")}
+        provenance = ("publishedDirectory", "contentRoot", "contentRootIdentity", "assemblySha256", "command",
+                      "publishedFilesSha256", "publishedFileCount")
+        stopped = {key: owned.started.get(key) for key in ("pid", "origin", "log", "startedAt", "readyAt", "stoppedAt", "exitCode", "runtimeCacheFiles", "inputsUnchangedAtCloseout", *provenance)}
         waited = while_stopped() if while_stopped is not None else None
         started_at = time.time()
         started = self._start()
         record = {"name": self.name, "reason": reason, "kind": "abrupt" if abrupt else "graceful", "origin": self.origin,
                   "fromGeneration": owned.generation, "toGeneration": self.current.generation,
                   "stoppedAt": stopped_at, "startedAt": started_at, "readyAt": started.get("readyAt"),
-                  "stoppedProcess": stopped, "startedProcess": {key: started.get(key) for key in ("pid", "origin", "log", "startedAt", "readyAt")},
+                  "stoppedProcess": stopped, "startedProcess": {key: started.get(key) for key in ("pid", "origin", "log", "startedAt", "readyAt", *provenance)},
                   "whileStopped": waited}
         self.restarts.append(record)
         return record

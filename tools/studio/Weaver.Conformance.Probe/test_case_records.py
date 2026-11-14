@@ -273,17 +273,17 @@ class ProtocolCorrelationTests(unittest.TestCase):
         # API emits camelCase; Anthropic's real JSON string emits the number.
         for provider in ("copilot", "anthropic"):
             for numeric, camel, pascal in ((0, "clientWorkingState", "ClientWorkingState"),
-                                           (1, "serverPersisted", "ServerPersisted")):
+                                           (1, "serverPersisted", "ServerPersisted"), (2, "noPersistedEffect", "NoPersistedEffect")):
                 for native, adapter in ((camel, numeric), (numeric, camel), (camel, pascal), (numeric, numeric)):
                     with self.subTest(provider=provider, native=native, adapter=adapter):
                         self.assertIn("receipt", self.correlate(self.scoped_fixture(provider, native, adapter), provider))
 
     def test_receipt_scope_rejects_boolean_float_unknown_and_wrong_actual_scope(self):
         for provider in ("copilot", "anthropic"):
-            for scope in (False, True, 0.0, 1.0, -1, 2, "unknown", "0", "serverpersisted", None, {}, []):
+            for scope in (False, True, 0.0, 1.0, 2.0, -1, 3, "unknown", "0", "serverpersisted", "nopersistedeffect", None, {}, []):
                 with self.subTest(provider=provider, unsupported=scope):
                     with self.assertRaises(RuntimeError): self.correlate(self.scoped_fixture(provider, scope, scope), provider)
-            for native, adapter in ((0, 1), (1, 0)):
+            for native, adapter in ((0, 1), (1, 0), (1, 2), (2, 1), (0, 2), (2, 0)):
                 with self.subTest(provider=provider, wrongScope=(native, adapter)):
                     with self.assertRaises(RuntimeError): self.correlate(self.scoped_fixture(provider, native, adapter), provider)
 

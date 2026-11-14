@@ -2,6 +2,7 @@ using System.Text;
 using Elsa.Weaver.Core.Models;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.Services;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Weaver.Persistence.EntityFrameworkCore.Stores;
 
@@ -16,7 +17,7 @@ internal sealed partial class EfWeaverSessionRecordStore
     /// store applies them: messages and proposals upsert (first position, last value), snapshots, context and keys keep the
     /// first value of an identity.
     /// </summary>
-    private Encoded Encode(string sessionId, WeaverSessionRecordWrite write, bool refuseDuplicateContext)
+    private Encoded Encode(string sessionId, WeaverSessionRecordWrite write, bool refuseDuplicateContext, string writeVersion)
     {
         Bounded(sessionId, WeaverModelBuilderExtensions.IdentityLength, "session identity");
         WeaverSessionRow? session = null;
@@ -31,7 +32,7 @@ internal sealed partial class EfWeaverSessionRecordStore
             {
                 SessionId = sessionId, TenantId = value.TenantId, ActorId = value.ActorId, Workspace = value.Workspace, Title = value.Title,
                 Status = (int)value.Status, UpdatedAtUtcTicks = value.UpdatedAt.UtcTicks, ExpiresAtUtcTicks = value.ExpiresAt?.UtcTicks,
-                PolicyRevision = value.PolicyRevision, ContinuedFrom = value.ContinuedFrom, LimitReached = value.LimitReached, SchemaVersion = WeaverEfModule.SchemaVersion,
+                PolicyRevision = value.PolicyRevision, ContinuedFrom = value.ContinuedFrom, LimitReached = value.LimitReached, SchemaVersion = writeVersion,
                 Payload = codec.Protect(WeaverRecordCodec.SessionPurpose, sessionId, SessionRowId, value)
             };
         }
@@ -41,11 +42,11 @@ internal sealed partial class EfWeaverSessionRecordStore
             .GroupBy(x => x.Id, StringComparer.Ordinal)
             .Select(group => group.Last().Record)
             .Select(record => new EncodedMessage(record.Message.Id, (int)record.Message.Role, (int)record.Message.Status, record.Message.StatusReason,
-                codec.Protect(WeaverRecordCodec.MessagePurpose, sessionId, record.Message.Id, record)))
+                codec.Protect(WeaverRecordCodec.MessagePurpose, sessionId, record.Message.Id, record), writeVersion))
             .ToArray();
         var snapshots = write.Snapshots.DistinctBy(x => x.Digest, StringComparer.Ordinal)
             .Select(snapshot => new EncodedSnapshot(Bounded(snapshot.Digest, WeaverModelBuilderExtensions.HashLength, "snapshot digest"), snapshot.Size,
-                codec.ProtectText(WeaverRecordCodec.SnapshotPurpose, sessionId, snapshot.Digest, snapshot.Canonical)))
+                codec.ProtectText(WeaverRecordCodec.SnapshotPurpose, sessionId, snapshot.Digest, snapshot.Canonical), writeVersion))
             .ToArray();
         if (refuseDuplicateContext && write.Context.GroupBy(x => x.Id, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1) is { } duplicate)
             throw new ArgumentException($"The identity '{duplicate.Key}' is recorded twice.", nameof(write));
@@ -53,17 +54,17 @@ internal sealed partial class EfWeaverSessionRecordStore
             .Select(attachment =>
             {
                 var key = WeaverRecordCodec.Hash(attachment.Id);
-                return new EncodedContext(key, codec.Protect(WeaverRecordCodec.ContextPurpose, sessionId, key, attachment));
+                return new EncodedContext(key, codec.Protect(WeaverRecordCodec.ContextPurpose, sessionId, key, attachment), writeVersion);
             })
             .ToArray();
         var proposals = write.Proposals
             .GroupBy(x => Bounded(x.Proposal.Id, WeaverModelBuilderExtensions.IdentityLength, "proposal identity"), StringComparer.Ordinal)
             .Select(group => new EncodedProposal(group.Key, (int)group.Last().Proposal.Status, group.Last().Proposal.PreparedInvocation?.ExpiresAt.UtcTicks,
                 group.Select(x => x.Version).ToArray(),
-                codec.Protect(WeaverRecordCodec.ProposalPurpose, sessionId, group.Key, group.Last())))
+                codec.Protect(WeaverRecordCodec.ProposalPurpose, sessionId, group.Key, group.Last()), writeVersion))
             .ToArray();
         var keys = write.Keys.DistinctBy(x => (x.Kind, x.Key))
-            .Select(key => new EncodedKey(Bounded(key.Kind, WeaverModelBuilderExtensions.KindLength, "key kind"), key.Key, WeaverRecordCodec.Hash(key.Key), key.Value))
+            .Select(key => new EncodedKey(Bounded(key.Kind, WeaverModelBuilderExtensions.KindLength, "key kind"), key.Key, WeaverRecordCodec.Hash(key.Key), key.Value, writeVersion))
             .ToArray();
         var paused = write.PausedTurn is null ? null : codec.Protect(WeaverRecordCodec.PausedTurnPurpose, sessionId, PausedTurnRowId, write.PausedTurn);
         var pendingAudits = write.PendingAudits is not { Count: > 0 } owed ? null
@@ -75,8 +76,10 @@ internal sealed partial class EfWeaverSessionRecordStore
     private WeaverSessionRecord Decode(string sessionId, LoadedRows rows)
     {
         var row = rows.Session;
-        Current(row.SchemaVersion);
-        var session = codec.Unprotect<WeaverSession>(WeaverRecordCodec.SessionPurpose, sessionId, SessionRowId, row.Payload);
+        var content = WeaverEfModule.Chain.Upcast<WeaverSessionRow>(row.SchemaVersion,
+            (nameof(row.Payload), row.Payload), (nameof(row.PausedTurnPayload), row.PausedTurnPayload),
+            (nameof(row.PendingAuditsPayload), row.PendingAuditsPayload));
+        var session = codec.Unprotect<WeaverSession>(WeaverRecordCodec.SessionPurpose, sessionId, SessionRowId, content[nameof(row.Payload)]!);
         if (session.Id != sessionId || session.TenantId != row.TenantId || session.ActorId != row.ActorId || session.Workspace != row.Workspace
             || session.Title != row.Title || (int)session.Status != row.Status || session.UpdatedAt.UtcTicks != row.UpdatedAtUtcTicks
             || session.ExpiresAt?.UtcTicks != row.ExpiresAtUtcTicks || session.PolicyRevision != row.PolicyRevision || session.ContinuedFrom != row.ContinuedFrom
@@ -85,8 +88,8 @@ internal sealed partial class EfWeaverSessionRecordStore
 
         var messages = rows.Messages.Select(message =>
         {
-            Current(message.SchemaVersion);
-            var record = codec.Unprotect<WeaverMessageRecord>(WeaverRecordCodec.MessagePurpose, sessionId, message.MessageId, message.Payload);
+            var value = WeaverEfModule.Chain.Upcast<WeaverMessageRow>(message.SchemaVersion, (nameof(message.Payload), message.Payload));
+            var record = codec.Unprotect<WeaverMessageRecord>(WeaverRecordCodec.MessagePurpose, sessionId, message.MessageId, value[nameof(message.Payload)]!);
             if (record.Message.Id != message.MessageId || (int)record.Message.Role != message.Role || (int)record.Message.Status != message.Status
                 || record.Message.StatusReason != message.StatusReason)
                 throw new InvalidDataException("A Weaver message's columns do not match its protected record.");
@@ -94,7 +97,7 @@ internal sealed partial class EfWeaverSessionRecordStore
         }).ToArray();
         var snapshots = rows.Snapshots.Select(snapshot =>
         {
-            Current(snapshot.SchemaVersion);
+            EfSchemaVersion.EnsureReadable(WeaverEfModule.Chain, snapshot.SchemaVersion);
             var record = new WeaverDisclosureSnapshotRecord(snapshot.Digest,
                 codec.UnprotectText(WeaverRecordCodec.SnapshotPurpose, sessionId, snapshot.Digest, snapshot.Canonical));
             if (record.Size != snapshot.Size)
@@ -103,16 +106,16 @@ internal sealed partial class EfWeaverSessionRecordStore
         }).ToArray();
         var context = rows.Context.Select(attachment =>
         {
-            Current(attachment.SchemaVersion);
-            var value = codec.Unprotect<WeaverContextAttachment>(WeaverRecordCodec.ContextPurpose, sessionId, attachment.AttachmentKey, attachment.Payload);
+            var upcast = WeaverEfModule.Chain.Upcast<WeaverContextRow>(attachment.SchemaVersion, (nameof(attachment.Payload), attachment.Payload));
+            var value = codec.Unprotect<WeaverContextAttachment>(WeaverRecordCodec.ContextPurpose, sessionId, attachment.AttachmentKey, upcast[nameof(attachment.Payload)]!);
             if (WeaverRecordCodec.Hash(value.Id) != attachment.AttachmentKey)
                 throw new InvalidDataException("A context attachment's key does not match its protected record.");
             return value;
         }).ToArray();
         var proposals = rows.Proposals.Select(proposal =>
         {
-            Current(proposal.SchemaVersion);
-            var record = codec.Unprotect<WeaverProposalRecord>(WeaverRecordCodec.ProposalPurpose, sessionId, proposal.ProposalId, proposal.Payload);
+            var value = WeaverEfModule.Chain.Upcast<WeaverProposalRow>(proposal.SchemaVersion, (nameof(proposal.Payload), proposal.Payload));
+            var record = codec.Unprotect<WeaverProposalRecord>(WeaverRecordCodec.ProposalPurpose, sessionId, proposal.ProposalId, value[nameof(proposal.Payload)]!);
             if (record.Proposal.Id != proposal.ProposalId || (int)record.Proposal.Status != proposal.Status || proposal.Version < 1
                 || record.Proposal.PreparedInvocation?.ExpiresAt.UtcTicks != proposal.ExpiresAtUtcTicks)
                 throw new InvalidDataException("A proposal's columns do not match its protected record.");
@@ -120,15 +123,15 @@ internal sealed partial class EfWeaverSessionRecordStore
         }).ToArray();
         var keys = rows.Keys.Select(key =>
         {
-            Current(key.SchemaVersion);
+            EfSchemaVersion.EnsureReadable(WeaverEfModule.Chain, key.SchemaVersion);
             if (WeaverRecordCodec.Hash(key.Key) != key.KeyHash)
                 throw new InvalidDataException("A duplicate-detection key does not match its recorded hash.");
             return new WeaverSessionUniqueKey(key.Kind, key.Key, key.Value);
         }).ToArray();
-        var paused = row.PausedTurnPayload is null ? null
-            : codec.Unprotect<WeaverPausedTurnRecord>(WeaverRecordCodec.PausedTurnPurpose, sessionId, PausedTurnRowId, row.PausedTurnPayload);
-        IReadOnlyList<WeaverAuditEvent> pendingAudits = row.PendingAuditsPayload is null ? []
-            : codec.Unprotect<WeaverAuditEvent[]>(WeaverRecordCodec.PendingAuditsPurpose, sessionId, PendingAuditsRowId, row.PendingAuditsPayload);
+        var paused = content[nameof(row.PausedTurnPayload)] is not { } pausedPayload ? null
+            : codec.Unprotect<WeaverPausedTurnRecord>(WeaverRecordCodec.PausedTurnPurpose, sessionId, PausedTurnRowId, pausedPayload);
+        IReadOnlyList<WeaverAuditEvent> pendingAudits = content[nameof(row.PendingAuditsPayload)] is not { } auditsPayload ? []
+            : codec.Unprotect<WeaverAuditEvent[]>(WeaverRecordCodec.PendingAuditsPurpose, sessionId, PendingAuditsRowId, auditsPayload);
 
         return new WeaverSessionRecord(session)
         {
@@ -137,12 +140,6 @@ internal sealed partial class EfWeaverSessionRecordStore
             LeaseExpiresAt = Time(row.LeaseExpiresAtUtcTicks),
             Version = row.Version
         };
-    }
-
-    private static void Current(string schemaVersion)
-    {
-        if (schemaVersion != WeaverEfModule.SchemaVersion)
-            throw new InvalidDataException($"The Weaver record schema '{schemaVersion}' is not supported by this build.");
     }
 
     private static string Bounded(string value, int length, string name)
@@ -175,12 +172,12 @@ internal sealed partial class EfWeaverSessionRecordStore
         public string? PendingAudits { get; init; }
     }
 
-    private sealed record EncodedMessage(string Id, int Role, int Status, string? StatusReason, string Payload)
+    private sealed record EncodedMessage(string Id, int Role, int Status, string? StatusReason, string Payload, string WriteVersion)
     {
         public WeaverMessageRow Row(string sessionId, long sequence) => new()
         {
             SessionId = sessionId, MessageId = Id, Sequence = sequence, Role = Role, Status = Status, StatusReason = StatusReason,
-            SchemaVersion = WeaverEfModule.SchemaVersion, Payload = Payload
+            SchemaVersion = WriteVersion, Payload = Payload
         };
 
         public void Apply(WeaverMessageRow row)
@@ -188,36 +185,36 @@ internal sealed partial class EfWeaverSessionRecordStore
             row.Role = Role;
             row.Status = Status;
             row.StatusReason = StatusReason;
-            row.SchemaVersion = WeaverEfModule.SchemaVersion;
+            row.SchemaVersion = WriteVersion;
             row.Payload = Payload;
         }
     }
 
-    private sealed record EncodedSnapshot(string Digest, long Size, string Canonical)
+    private sealed record EncodedSnapshot(string Digest, long Size, string Canonical, string WriteVersion)
     {
         public WeaverDisclosureSnapshotRow Row(string sessionId, long sequence) => new()
         {
-            SessionId = sessionId, Digest = Digest, Sequence = sequence, Size = Size, SchemaVersion = WeaverEfModule.SchemaVersion, Canonical = Canonical
+            SessionId = sessionId, Digest = Digest, Sequence = sequence, Size = Size, SchemaVersion = WriteVersion, Canonical = Canonical
         };
     }
 
-    private sealed record EncodedContext(string Key, string Payload)
+    private sealed record EncodedContext(string Key, string Payload, string WriteVersion)
     {
         public WeaverContextRow Row(string sessionId, long sequence) => new()
         {
-            SessionId = sessionId, AttachmentKey = Key, Sequence = sequence, SchemaVersion = WeaverEfModule.SchemaVersion, Payload = Payload
+            SessionId = sessionId, AttachmentKey = Key, Sequence = sequence, SchemaVersion = WriteVersion, Payload = Payload
         };
     }
 
     /// <param name="ReadVersions">The version each occurrence in the write was decided on; every one must be current.</param>
-    private sealed record EncodedProposal(string Id, int Status, long? ExpiresAtUtcTicks, IReadOnlyList<long> ReadVersions, string Payload)
+    private sealed record EncodedProposal(string Id, int Status, long? ExpiresAtUtcTicks, IReadOnlyList<long> ReadVersions, string Payload, string WriteVersion)
     {
         public int Occurrences => ReadVersions.Count;
 
         public WeaverProposalRow Row(string sessionId, long sequence, int version) => new()
         {
             ProposalId = Id, SessionId = sessionId, Sequence = sequence, Status = Status, ExpiresAtUtcTicks = ExpiresAtUtcTicks, Version = version,
-            SchemaVersion = WeaverEfModule.SchemaVersion, Payload = Payload
+            SchemaVersion = WriteVersion, Payload = Payload
         };
 
         public void Apply(WeaverProposalRow row)
@@ -225,16 +222,16 @@ internal sealed partial class EfWeaverSessionRecordStore
             row.Status = Status;
             row.ExpiresAtUtcTicks = ExpiresAtUtcTicks;
             row.Version += Occurrences;
-            row.SchemaVersion = WeaverEfModule.SchemaVersion;
+            row.SchemaVersion = WriteVersion;
             row.Payload = Payload;
         }
     }
 
-    private sealed record EncodedKey(string Kind, string Key, string Hash, string Value)
+    private sealed record EncodedKey(string Kind, string Key, string Hash, string Value, string WriteVersion)
     {
         public WeaverCallKeyRow Row(string sessionId, long sequence) => new()
         {
-            SessionId = sessionId, Kind = Kind, KeyHash = Hash, Key = Key, Value = Value, Sequence = sequence, SchemaVersion = WeaverEfModule.SchemaVersion
+            SessionId = sessionId, Kind = Kind, KeyHash = Hash, Key = Key, Value = Value, Sequence = sequence, SchemaVersion = WriteVersion
         };
     }
 }

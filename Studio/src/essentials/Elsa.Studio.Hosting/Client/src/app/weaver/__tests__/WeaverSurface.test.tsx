@@ -5,12 +5,165 @@ import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
 import { createEndpointContext, StudioHttpError, type StudioWeaverContextCollection, type StudioWeaverPreparedInvocation, type StudioWeaverPromptRequest, type StudioWeaverPromptResult } from "../../../sdk";
 import { WeaverApiError, WeaverExecutionError, createWeaverClient, POLICY_CHANGED, type WeaverClient } from "../weaverClient";
-import type { WeaverAutonomyMode, WeaverSessionPolicy, WeaverStreamEvent } from "../weaverTypes";
+import type { WeaverAutonomyMode, WeaverProposalStatus, WeaverSessionPolicy, WeaverStreamEvent } from "../weaverTypes";
 import { WeaverSurface } from "../WeaverSurface";
 import { useWeaverSession } from "../useWeaverSession";
 import { WeaverContextChips } from "../WeaverContextChips";
+import { beginWeaverModuleRegistration, retireWeaverModuleRegistration } from "../weaverRegistrationOrigins";
 
 describe("WeaverSurface", () => {
+  it("refuses a queued module prompt whose fresh discovery removes its origin before explicit context disclosure", async () => {
+    const api = readyApi(); const client = readyClient();
+    vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [] });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Weaver", contextKinds: ["weaver.host-support"], schemaVersions: ["1"], admission: "availableHint" }] } } });
+    const module = beginWeaverModuleRegistration(api, "Removed"); module.complete();
+    const request = { id: "queued-removed", requestId: "queued-removed", message: "Inspect", attachments: [{ id: "old", source: "Removed", label: "Old", contentType: "removed", sensitivity: "internal" as const, scope: "screen", content: { private: Math.random() } }] };
+    module.api.weaver.dispatchPrompt(request);
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/unknown" }} variant="dock" client={client} incomingPrompt={request} />);
+    try {
+      await flushPromises(); expect(client.createSession).not.toHaveBeenCalled(); expect(client.sendMessage).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("Module context changed");
+    } finally { unmount(); }
+  });
+
+  it("refreshes the actual hosts before a prompt, removes a nested origin and sends only an admitted inventory candidate", async () => {
+    const api = readyApi(); const client = readyClient(); const removed = vi.fn(async () => []);
+    const canary = `private-${Math.random()}`;
+    vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [{ id: "Healthy", displayName: "Healthy", status: "available", manifest: { entry: canary }, diagnostics: [{ reason: canary }] }] });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [{ moduleId: "Elsa.Weaver", contextKinds: ["weaver.host-support"], schemaVersions: ["1"], admission: "availableHint" }] } } });
+    const missing = beginWeaverModuleRegistration(api, "Removed.Satellite");
+    missing.api.weaver.contextProviders.add({ id: "removed", moduleId: "Resource", displayName: "Removed", surfaces: ["*"], sensitivity: "internal", collect: removed }); missing.complete();
+    const healthy = beginWeaverModuleRegistration(api, "Healthy");
+    healthy.api.weaver.contextProviders.add({ id: "healthy", moduleId: "Resource", displayName: "Healthy", surfaces: ["*"], sensitivity: "internal", collect: async () => [{ id: "healthy", source: "Resource", label: "Healthy", contentType: "sample", sensitivity: "internal", scope: "screen" }] }); healthy.complete();
+    const { unmount } = render(<WeaverSurface api={api} surface={{ route: "/unresolved-route" }} variant="dock" client={client} subscribeStream={() => ({ close() {} })} incomingPrompt={{ id: "support", message: "Inspect current support" }} />);
+    try {
+      await flushPromises(); expect(client.sendMessage).toHaveBeenCalledTimes(1); expect(removed).not.toHaveBeenCalled();
+      const sent = vi.mocked(client.sendMessage).mock.calls[0][1];
+      expect(sent.activeSurface?.route).toBe("/unresolved-route");
+      expect(sent.contextAttachments).toContainEqual(expect.objectContaining({ id: "healthy" }));
+      expect(sent.contextAttachments).toContainEqual(expect.objectContaining({ moduleId: "Elsa.Weaver", contentType: "weaver.host-support", origin: "clientSnapshot", weaverScopes: [] }));
+      expect(JSON.stringify(sent.contextAttachments)).not.toContain(canary);
+    } finally { unmount(); }
+  });
+
+  it("refuses a stale discovery after the selected backend changes while its read is awaiting", async () => {
+    const api = readyApi(); const client = readyClient(); const collect = vi.fn(async () => []);
+    api.weaver.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect });
+    let finish!: (value: unknown) => void;
+    vi.mocked(api.backend.http.getJson).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} incomingPrompt={{ id: "stale-support", requestId: "stale-support", message: "Inspect" }} />);
+    try {
+      await flushPromises(); Object.assign(api, { backend: createEndpointContext("https://replacement.example/") });
+      finish({ data: { support: { completeness: "complete", contexts: [] } } }); await flushPromises();
+      expect(client.createSession).not.toHaveBeenCalled(); expect(client.sendMessage).not.toHaveBeenCalled(); expect(collect).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("Module context changed");
+    } finally { unmount(); }
+  });
+
+  it.each(["initial", "late"] as const)("refreshes an %s module's result presentation and excludes it after withdrawal", async timing => {
+    const api = readyApi(); const client = readyClient();
+    const supports = vi.fn(() => true);
+    const presentation = vi.fn(() => <p>Module-owned presentation</p>);
+    const control = vi.fn(() => <button type="button">Module-owned undo</button>);
+    const register = () => {
+      const registration = beginWeaverModuleRegistration(api, "Sample.Satellite");
+      registration.api.weaver.resultRenderers.add({ id: "sample-result", moduleId: "Sample.Satellite", resourceModuleIds: ["Sample"], displayName: "Sample result", supports, component: presentation });
+      registration.api.weaver.resultControls!.add({ id: "sample-undo", moduleId: "Sample.Satellite", resourceModuleIds: ["Sample"], displayName: "Sample undo", resultTypes: ["sample.result"], component: control });
+      registration.complete();
+    };
+    if (timing === "initial") register();
+    let emit!: (event: WeaverStreamEvent) => void;
+    const subscribeStream = ((_context, _url, receive) => { emit = receive; return { close() {} }; }) as typeof import("../weaverStream").subscribeWeaverSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "presentation", message: "Inspect" }} />);
+    const target = preparedInvocation(api).target!;
+    const payload = { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } };
+    const result = { toolCallId: "sample-call", toolName: "sample_read", succeeded: true, content: "Observed sample", payload, receipt: { invocationId: "sample-invocation", before: target, after: target, scope: "clientWorkingState" as const, evidence: payload } };
+    try {
+      await flushPromises();
+      if (timing === "late") register();
+      flushSync(() => emit({ type: "module-result", messageId: "msg_1", result }));
+      expect(container.textContent).toContain("Module-owned presentation");
+      expect(container.textContent).toContain("Module-owned undo");
+      expect(supports).toHaveBeenCalled();
+      const calls = [supports.mock.calls.length, presentation.mock.calls.length, control.mock.calls.length];
+      retireWeaverModuleRegistration(api, "Sample.Satellite");
+      flushSync(() => emit({ type: "module-result", messageId: "msg_1", result: { ...result, content: "Fresh observed sample" } }));
+      expect([supports.mock.calls.length, presentation.mock.calls.length, control.mock.calls.length]).toEqual(calls);
+      expect(container.textContent).not.toContain("Module-owned presentation");
+      expect(container.textContent).not.toContain("Module-owned undo");
+      expect(container.textContent).toContain("Fresh observed sample");
+      expect(container.querySelector('[aria-label="Module results"] pre')?.textContent).toContain('"value": 2');
+    } finally { unmount(); }
+  });
+
+  it("refuses disclosure when a contributing module retires during session creation", async () => {
+    const api = readyApi(); const client = readyClient(); const results: StudioWeaverPromptResult[] = [];
+    api.weaver.onPromptResult(result => results.push(result));
+    const registration = beginWeaverModuleRegistration(api, "Sample.Satellite");
+    registration.api.weaver.contextProviders.add({ id: "sample-context", displayName: "Sample context", surfaces: ["*"], sensitivity: "internal", collect: async () => [{ id: "sample", source: "Sample", label: "Sample", contentType: "sample", sensitivity: "internal", scope: "screen" }] });
+    registration.complete();
+    let finish!: (value: Awaited<ReturnType<WeaverClient["createSession"]>>) => void;
+    client.createSession = vi.fn<WeaverClient["createSession"]>(() => new Promise(resolve => { finish = resolve; }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} incomingPrompt={{ id: "retired-context", requestId: "retired-context", message: "Inspect" }} />);
+    try {
+      await flushPromises(); expect(client.createSession).toHaveBeenCalledTimes(1);
+      retireWeaverModuleRegistration(api, "Sample.Satellite");
+      finish({ sessionId: "agt_1", status: "active", contextAttachments: [] }); await flushPromises();
+      expect(client.sendMessage).not.toHaveBeenCalled();
+      expect(results).toEqual([expect.objectContaining({ requestId: "retired-context", status: "failed" })]);
+      expect(container.textContent).toContain("Module context changed; try the request again.");
+    } finally { unmount(); }
+  });
+
+  it.each((["dock", "full"] as const).flatMap(variant => Array.from({ length: 9 }, (_, index) => ({ variant, index }))))(
+    "shows the reported host privileges read-only in $variant (combination $index)", async ({ variant, index }) => {
+      const api = readyApi(); const client = readyClient();
+      const privileges = index === 8 ? undefined : Object.freeze({ administrative: Boolean(index & 1), irrecoverable: Boolean(index & 2), activation: Boolean(index & 4) });
+      const baseline = await client.bootstrap();
+      client.bootstrap = vi.fn<WeaverClient["bootstrap"]>(async () => ({ ...baseline, privileges }));
+      const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant={variant} client={client} />);
+      try {
+        await flushPromises();
+        const policy = container.querySelector(".weaver-privilege-policy")!;
+        expect(policy.querySelector("summary")?.textContent).toBe("Host privilege policy");
+        expect(policy.querySelector("input,select,button,textarea")).toBeNull();
+        if (privileges) {
+          expect([...policy.querySelectorAll("dt")].map(item => item.textContent)).toEqual(["Administrative", "Irrecoverable", "Activation"]);
+          expect([...policy.querySelectorAll("dd")].map(item => item.textContent)).toEqual([privileges.administrative, privileges.irrecoverable, privileges.activation].map(value => value ? "Enabled" : "Disabled"));
+          expect(policy.textContent).toContain("Current host settings still apply");
+        } else {
+          expect(policy.textContent).toContain("Not reported by this backend.");
+          expect(policy.querySelector("dl")).toBeNull();
+        }
+        expect(client.updateAutonomy).not.toHaveBeenCalled(); expect(client.approveProposal).not.toHaveBeenCalled(); expect(client.executeProposal).not.toHaveBeenCalled();
+        expect(baseline.policy.defaultAutonomyMode).toBe("auto-read-only");
+      } finally { unmount(); }
+    }
+  );
+
+  it("waits for bootstrap before showing the host policy observation", async () => {
+    const api = readyApi(); const client = readyClient(); const baseline = await client.bootstrap();
+    let finish!: (value: Awaited<ReturnType<WeaverClient["bootstrap"]>>) => void;
+    client.bootstrap = vi.fn<WeaverClient["bootstrap"]>(() => new Promise(resolve => { finish = resolve; }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} />);
+    try {
+      await flushPromises(); expect(container.querySelector(".weaver-privilege-policy")).toBeNull();
+      finish({ ...baseline, privileges: { administrative: false, irrecoverable: false, activation: false } }); await flushPromises();
+      expect([...container.querySelectorAll(".weaver-privilege-policy dd")].map(item => item.textContent)).toEqual(["Disabled", "Disabled", "Disabled"]);
+    } finally { unmount(); }
+  });
+
+  it.each(["dock", "full"] as const)("keeps a reported policy observable when the provider is unavailable (%s)", async variant => {
+    const api = readyApi(); const client = readyClient(); const baseline = await client.bootstrap();
+    client.bootstrap = vi.fn<WeaverClient["bootstrap"]>(async () => ({ ...baseline, providerStatus: "unavailable", privileges: { administrative: true, irrecoverable: false, activation: false } }));
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant={variant} client={client} />);
+    try {
+      await flushPromises(); expect(container.querySelector(".weaver-privilege-policy")?.textContent).toContain("AdministrativeEnabled");
+      expect(container.querySelector(".weaver-composer textarea")?.hasAttribute("disabled")).toBe(true);
+      expect(client.createSession).not.toHaveBeenCalled();
+    } finally { unmount(); }
+  });
+
   it("replaces displayed evidence on current disclosure and clears it on a terminal refusal", async () => {
     const api = readyApi(); const client = readyClient(); const results: StudioWeaverPromptResult[] = [];
     api.weaver.onPromptResult(result => results.push(result));
@@ -74,6 +227,12 @@ describe("WeaverSurface", () => {
 
   it.each(["weaver.context.contributor_failed", "weaver.context.deadline", "weaver.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
     const api = readyApi(); const client = readyClient(); let collections = 0; let deliveries = 0;
+    // This reset control needs a supported inventory contract, so the next request has no
+    // independent discovery limitation. Other fixtures retain the older-backend fallback.
+    vi.mocked(api.host.http.getJson).mockResolvedValue({ complete: true, modules: [] });
+    vi.mocked(api.backend.http.getJson).mockResolvedValue({ data: { support: { completeness: "complete", contexts: [
+      { moduleId: "Elsa.Weaver", contextKinds: ["weaver.host-support"], schemaVersions: ["1"], admission: "availableHint" }
+    ] } } });
     api.weaver.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: ++collections === 1 ? [{ contributorId: "client-source", code, message: `Local ${code}`, required: false }] : [] }) });
     client.sendMessage = vi.fn<WeaverClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: ++deliveries === 1 ? [{ code: "acceptance.limited", message: "Acceptance limitation", target: "admission-source" }] : [] }));
     const streams: ((event: WeaverStreamEvent) => void)[] = [];
@@ -692,6 +851,63 @@ describe("WeaverSurface", () => {
     expect(subscribeStream).not.toHaveBeenCalled(); expect(container.textContent).toContain("already accepted"); unmount();
   });
 
+  it.each(["unknown-proposal", "unknown-approval", "approved"] as const)(
+    "requires recognized proposal and approval states before FullAuto executes: %s", async state => {
+      const api = readyApi(); const client = readyClient();
+      client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" as const } }));
+      client.approveProposal = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: state === "unknown-approval" ? "uncertain" as const : "approved" as const }));
+      const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null; invocation.requiresApproval = false;
+      const subscribeStream = ((_context, _url, emit) => {
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: {
+          title: "Server operation", summary: "Review the current operation.", revision: "r1", preparedInvocation: invocation,
+          status: (state === "unknown-proposal" ? "future-status" : "awaiting-approval") as WeaverProposalStatus
+        } });
+        emit({ type: "review-requested", messageId: "msg_1" });
+        return { close() {} };
+      }) as typeof import("../weaverStream").subscribeWeaverSessionStream;
+      const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "status-auto", message: "Run server operation" }} />);
+      try {
+        await flushPromises();
+        expect(client.approveProposal).toHaveBeenCalledTimes(state === "unknown-proposal" ? 0 : 1);
+        expect(client.executeProposal).toHaveBeenCalledTimes(state === "approved" ? 1 : 0);
+        expect(container.querySelector(`[data-status="${state === "approved" ? "executed" : "uncertain"}"]`)).toBeTruthy();
+      } finally { unmount(); }
+    });
+
+  it.each([
+    { status: "uncertain", executed: false, admitted: false },
+    { status: "performed", executed: false, admitted: false },
+    { status: "awaiting-client", executed: true, admitted: false },
+    { status: "awaiting-client", executed: undefined, admitted: false },
+    { status: "awaiting-client", executed: false, admitted: true }
+  ] as const)("gates the owning client runner and acknowledgement on pending-client admission: %j", async ({ status, executed, admitted }) => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    let workingValue = 1;
+    const mutate = vi.fn(async () => { workingValue = 2; return { outcome: "applied" as const, summary: "Observed working state.", after: { ...invocation.target!, revision: "r2" }, result: { typeId: "sample.result", schemaVersion: "1", data: { value: workingValue } } }; });
+    api.weaver.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+    client.executeProposal = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: status, executed, clientInvocation: invocation }));
+    client.acknowledgeClient = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: "executed" as const, executed: true }));
+    let streams = 0;
+    const subscribeStream = ((_context, _url, emit) => {
+      if (++streams === 1) {
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Client operation", summary: "Review the current operation.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+        emit({ type: "review-requested", messageId: "msg_1" });
+      } else emit({ type: "message-completed", messageId: "msg_1" });
+      return { close() {} };
+    }) as typeof import("../weaverStream").subscribeWeaverSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "status-client", message: "Change working state" }} />);
+    try {
+      await flushPromises(); flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises();
+      flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
+      expect(client.executeProposal).toHaveBeenCalledTimes(1);
+      expect(mutate).toHaveBeenCalledTimes(admitted ? 1 : 0);
+      expect(client.acknowledgeClient).toHaveBeenCalledTimes(admitted ? 1 : 0);
+      if (admitted) expect(client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ outcome: "applied", after: expect.objectContaining({ revision: "r2" }) }));
+      expect(workingValue).toBe(admitted ? 2 : 1);
+      expect(container.querySelector(`[data-status="${admitted ? "executed" : "uncertain"}"]`)).toBeTruthy();
+    } finally { unmount(); }
+  });
+
   it("honors server review in FullAuto and continues a denial without executing or settling twice", async () => {
     const api = readyApi(); const client = readyClient();
     const results: unknown[] = []; api.weaver.onPromptResult(result => results.push(result));
@@ -1111,6 +1327,10 @@ function readyApi() {
     sdkVersion: "1.0.0",
     ...createEndpointContext("https://studio.example/")
   }, "https://foundation.example/");
+  // These resource/lifecycle tests use an older backend with no inventory-context contract.
+  // Keep both new discovery reads on the fixture's transport instead of issuing real HTTP.
+  vi.spyOn(api.host.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
+  vi.spyOn(api.backend.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
   api.weaver.capabilities.add({
     id: "weaver.test",
     displayName: "Weaver test",

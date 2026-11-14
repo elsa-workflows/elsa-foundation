@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.Complete.get -> bool?
+Elsa.Studio.Api.Models.StudioModuleRegistryResponse.Complete.init -> void
 const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementManagePermission = "module-management:manage" -> string!
 const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementManagePolicyName = "StudioManagementBridge:ModuleManagement.Manage" -> string!
 const Elsa.Studio.Api.Authorization.StudioBridgeAuthorization.ModuleManagementReadPermission = "module-management:read" -> string!

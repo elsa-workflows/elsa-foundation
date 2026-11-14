@@ -1,0 +1,847 @@
+#nullable enable
+Elsa.Weaver.Api.Authorization.WeaverPermissionContributor
+Elsa.Weaver.Api.Authorization.WeaverPermissionContributor.Contribute() -> System.Collections.Generic.IEnumerable<Elsa.Foundation.Identity.Core.Authorization.Permission!>!
+Elsa.Weaver.Api.Authorization.WeaverPermissionContributor.ContributorType.get -> string!
+Elsa.Weaver.Api.Authorization.WeaverPermissionContributor.OwnerId.get -> string!
+Elsa.Weaver.Api.Authorization.WeaverPermissionContributor.WeaverPermissionContributor() -> void
+Elsa.Weaver.Api.Constants.WeaverPermissionKeys
+Elsa.Weaver.Api.Endpoints.WeaverEndpointActor
+Elsa.Weaver.Api.Extensions.WeaverApiServiceCollectionExtensions
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.AcceptedPolicy.get -> Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.AcceptedPolicy.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.CapabilityId.get -> string?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.CapabilityId.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Client.get -> Elsa.Weaver.Core.Models.WeaverClientBinding?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Client.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.CompletedAt.get -> System.DateTimeOffset?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.CompletedAt.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Content.get -> string!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Content.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Context.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverContextAttachment!>!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Context.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.ContextAttachmentIds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.ContextAttachmentIds.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.CreatedAt.get -> System.DateTimeOffset
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.CreatedAt.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Deconstruct(out string! Id, out string! SessionId, out Elsa.Weaver.Core.Models.WeaverRole Role, out string! Content, out Elsa.Weaver.Core.Models.WeaverMessageStatus Status, out string? CapabilityId, out System.DateTimeOffset CreatedAt, out System.DateTimeOffset? CompletedAt, out Elsa.Weaver.Core.Models.WeaverError? Error, out System.Collections.Generic.IReadOnlyCollection<string!>! ContextAttachmentIds, out System.Collections.Generic.IReadOnlyCollection<string!>! ProposalIds, out System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverContextAttachment!>! Context) -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.DeliveryFingerprint.get -> string?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.DeliveryFingerprint.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.DisclosureHistory.get -> System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverDisclosureSnapshot!>?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.DisclosureHistory.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Equals(Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Error.get -> Elsa.Weaver.Core.Models.WeaverError?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Error.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.HasDisclosureProvenance.get -> bool
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.HasDisclosureProvenance.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Id.get -> string!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Id.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.PromptMode.get -> string?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.PromptMode.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.ProposalIds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.ProposalIds.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.RequestId.get -> string?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.RequestId.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Role.get -> Elsa.Weaver.Core.Models.WeaverRole
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Role.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.SessionId.get -> string!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Source.get -> Elsa.Weaver.Core.Models.WeaverPromptSource?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Source.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Status.get -> Elsa.Weaver.Core.Models.WeaverMessageStatus
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Status.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.StatusReason.get -> string?
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.StatusReason.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.ToolResults.get -> System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverToolResult!>!
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.ToolResults.init -> void
+Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.WeaverAcceptedMessageResponse(string! Id, string! SessionId, Elsa.Weaver.Core.Models.WeaverRole Role, string! Content, Elsa.Weaver.Core.Models.WeaverMessageStatus Status, string? CapabilityId, System.DateTimeOffset CreatedAt, System.DateTimeOffset? CompletedAt, Elsa.Weaver.Core.Models.WeaverError? Error, System.Collections.Generic.IReadOnlyCollection<string!>! ContextAttachmentIds, System.Collections.Generic.IReadOnlyCollection<string!>! ProposalIds, System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverContextAttachment!>! Context) -> void
+Elsa.Weaver.Api.Models.WeaverApiMapping
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverApiResponse<T>!
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Data.get -> T?
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Data.init -> void
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Deconstruct(out T? Data, out Elsa.Weaver.Core.Models.WeaverError? Error) -> void
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Equals(Elsa.Weaver.Api.Models.WeaverApiResponse<T>? other) -> bool
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Error.get -> Elsa.Weaver.Core.Models.WeaverError?
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Error.init -> void
+Elsa.Weaver.Api.Models.WeaverApiResponse<T>.WeaverApiResponse(T? Data, Elsa.Weaver.Core.Models.WeaverError? Error) -> void
+Elsa.Weaver.Api.Models.WeaverAuditQueryRequest
+Elsa.Weaver.Api.Models.WeaverAuditQueryRequest.SessionId.get -> string?
+Elsa.Weaver.Api.Models.WeaverAuditQueryRequest.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverAuditQueryRequest.Take.get -> int?
+Elsa.Weaver.Api.Models.WeaverAuditQueryRequest.Take.init -> void
+Elsa.Weaver.Api.Models.WeaverAuditQueryRequest.WeaverAuditQueryRequest() -> void
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverBindingErrorResponse!
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.Deconstruct(out int StatusCode, out string! Message, out System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>! Errors) -> void
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.Equals(Elsa.Weaver.Api.Models.WeaverBindingErrorResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.Errors.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>!
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.Errors.init -> void
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.Message.get -> string!
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.Message.init -> void
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.StatusCode.get -> int
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.StatusCode.init -> void
+Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.WeaverBindingErrorResponse(int StatusCode, string! Message, System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>! Errors) -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverBootstrapResponse!
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Capabilities.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverCapabilityResponse!>!
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Capabilities.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Deconstruct(out bool Enabled, out string! ProviderStatus, out System.Collections.Generic.IReadOnlyCollection<string!>! Modes, out System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverCapabilityResponse!>! Capabilities, out Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse? Provider, out Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse! Policy) -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Enabled.get -> bool
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Enabled.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Equals(Elsa.Weaver.Api.Models.WeaverBootstrapResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Modes.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Modes.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Policy.get -> Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse!
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Policy.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Privileges.get -> Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView!
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Privileges.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Provider.get -> Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse?
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Provider.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.ProviderStatus.get -> string!
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.ProviderStatus.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Recovery.get -> string!
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Recovery.init -> void
+Elsa.Weaver.Api.Models.WeaverBootstrapResponse.WeaverBootstrapResponse(bool Enabled, string! ProviderStatus, System.Collections.Generic.IReadOnlyCollection<string!>! Modes, System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverCapabilityResponse!>! Capabilities, Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse? Provider, Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse! Policy) -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverCapabilityResponse!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Deconstruct(out string! Id, out string? ModuleId, out string! DisplayName, out string! Description, out string! Kind, out string! Risk, out System.Collections.Generic.IReadOnlyCollection<string!>! Surfaces, out System.Collections.Generic.IReadOnlyCollection<string!>! RequiredPermissions, out bool RequiresApproval) -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Description.get -> string!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Description.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.DisplayName.get -> string!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.DisplayName.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Equals(Elsa.Weaver.Api.Models.WeaverCapabilityResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Id.get -> string!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Id.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Kind.get -> string!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Kind.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.ModuleId.get -> string?
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.ModuleId.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.RequiredPermissions.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.RequiredPermissions.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.RequiresApproval.get -> bool
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.RequiresApproval.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Risk.get -> string!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Risk.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Surfaces.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Surfaces.init -> void
+Elsa.Weaver.Api.Models.WeaverCapabilityResponse.WeaverCapabilityResponse(string! Id, string? ModuleId, string! DisplayName, string! Description, string! Kind, string! Risk, System.Collections.Generic.IReadOnlyCollection<string!>! Surfaces, System.Collections.Generic.IReadOnlyCollection<string!>! RequiredPermissions, bool RequiresApproval) -> void
+Elsa.Weaver.Api.Models.WeaverClientContextRequest
+Elsa.Weaver.Api.Models.WeaverClientContextRequest.ModuleIds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverClientContextRequest.ModuleIds.init -> void
+Elsa.Weaver.Api.Models.WeaverClientContextRequest.SdkVersion.get -> string!
+Elsa.Weaver.Api.Models.WeaverClientContextRequest.SdkVersion.init -> void
+Elsa.Weaver.Api.Models.WeaverClientContextRequest.StudioVersion.get -> string!
+Elsa.Weaver.Api.Models.WeaverClientContextRequest.StudioVersion.init -> void
+Elsa.Weaver.Api.Models.WeaverClientContextRequest.WeaverClientContextRequest() -> void
+Elsa.Weaver.Api.Models.WeaverClientInvocationResolutionRequest
+Elsa.Weaver.Api.Models.WeaverClientInvocationResolutionRequest.Claim.get -> string?
+Elsa.Weaver.Api.Models.WeaverClientInvocationResolutionRequest.Claim.init -> void
+Elsa.Weaver.Api.Models.WeaverClientInvocationResolutionRequest.WeaverClientInvocationResolutionRequest() -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Client.get -> Elsa.Weaver.Core.Models.WeaverClientBinding?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Client.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Content.get -> object?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Content.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.ContentType.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.ContentType.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.DisplayName.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.DisplayName.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Id.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Id.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Kind.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Kind.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Label.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Label.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.ModuleId.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.ModuleId.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.References.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.References.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.SchemaVersion.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.SchemaVersion.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Scope.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Scope.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Sensitivity.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Sensitivity.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Source.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Source.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.SourceId.get -> string?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.SourceId.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Summary.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Summary.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Target.get -> Elsa.Weaver.Core.Models.WeaverResourceTarget?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.Target.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest.WeaverContextAttachmentRequest() -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Client.get -> Elsa.Weaver.Core.Models.WeaverClientBinding?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Client.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Content.get -> object?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Content.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.ContentType.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.ContentType.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Deconstruct(out string! Id, out string! Source, out string? SourceId, out string! Label, out string! ContentType, out string! Sensitivity, out string! Scope, out object? Content) -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Equals(Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Id.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Id.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Label.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Label.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.ModuleId.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.ModuleId.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Origin.get -> Elsa.Weaver.Core.Models.WeaverContextOrigin
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Origin.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.References.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.References.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.SchemaVersion.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.SchemaVersion.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Scope.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Scope.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Sensitivity.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Sensitivity.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Source.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Source.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.SourceId.get -> string?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.SourceId.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Summary.get -> string!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Summary.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Target.get -> Elsa.Weaver.Core.Models.WeaverResourceTarget?
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Target.init -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.WeaverContextAttachmentResponse(string! Id, string! Source, string? SourceId, string! Label, string! ContentType, string! Sensitivity, string! Scope, object? Content) -> void
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.WeaverScopes.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.WeaverScopes.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ActiveSurface.get -> Elsa.Weaver.Api.Models.WeaverSurfaceRequest!
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ActiveSurface.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.AutonomyMode.get -> string?
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.AutonomyMode.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ClientContext.get -> Elsa.Weaver.Api.Models.WeaverClientContextRequest!
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ClientContext.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ContinuedFrom.get -> string?
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ContinuedFrom.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ConversationId.get -> string!
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.ConversationId.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.Metadata.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.Mode.get -> string!
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.Mode.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.TenantId.get -> string!
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.TenantId.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.WeaverCreateSessionRequest() -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.Workspace.get -> string?
+Elsa.Weaver.Api.Models.WeaverCreateSessionRequest.Workspace.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverCreateSessionResponse!
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.ContextAttachments.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!>!
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.ContextAttachments.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Deconstruct(out string! SessionId, out string! Status, out string? Title, out System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!>! ContextAttachments) -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Equals(Elsa.Weaver.Api.Models.WeaverCreateSessionResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Policy.get -> Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse?
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Policy.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.SessionId.get -> string!
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Status.get -> string!
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Status.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Title.get -> string?
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Title.init -> void
+Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.WeaverCreateSessionResponse(string! SessionId, string! Status, string? Title, System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!>! ContextAttachments) -> void
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.ActorId.get -> string?
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.ActorId.init -> void
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.Comment.get -> string?
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.Comment.init -> void
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.MessageId.get -> string?
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.MessageId.init -> void
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.Rating.get -> int
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.Rating.init -> void
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.SessionId.get -> string!
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest.WeaverFeedbackApiRequest() -> void
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse!
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.Deconstruct(out Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse! Message, out System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverViolation!>! Warnings) -> void
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.Equals(Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.Message.get -> Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse!
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.Message.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.Warnings.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverViolation!>!
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.Warnings.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.WeaverMessageAcceptedResponse(Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse! Message, System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverViolation!>! Warnings) -> void
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest.Comment.get -> string?
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest.Comment.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest.MessageId.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest.MessageId.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest.Rating.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest.Rating.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageFeedbackRequest.WeaverMessageFeedbackRequest() -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest
+Elsa.Weaver.Api.Models.WeaverMessageRequest.ActiveSurface.get -> Elsa.Weaver.Api.Models.WeaverSurfaceRequest?
+Elsa.Weaver.Api.Models.WeaverMessageRequest.ActiveSurface.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.CapabilityId.get -> string?
+Elsa.Weaver.Api.Models.WeaverMessageRequest.CapabilityId.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Content.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Content.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.ContextAttachmentIds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.ContextAttachmentIds.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.ContextAttachments.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest!>!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.ContextAttachments.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Message.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Message.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Mode.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Mode.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.PromptMode.get -> string?
+Elsa.Weaver.Api.Models.WeaverMessageRequest.PromptMode.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.RequestId.get -> string?
+Elsa.Weaver.Api.Models.WeaverMessageRequest.RequestId.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.RequestedCapabilities.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.RequestedCapabilities.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Role.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Role.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.SessionId.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageRequest.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Source.get -> Elsa.Weaver.Core.Models.WeaverPromptSource?
+Elsa.Weaver.Api.Models.WeaverMessageRequest.Source.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageRequest.WeaverMessageRequest() -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse!
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.AcceptedPolicy.get -> Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse?
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.AcceptedPolicy.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.AcceptedPolicyRevision.get -> long?
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.AcceptedPolicyRevision.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Content.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Content.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Deconstruct(out string! Id, out string! Role, out string! Content, out string! Status) -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Equals(Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Id.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Id.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Role.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Role.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Status.get -> string!
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Status.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.StatusReason.get -> string?
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.StatusReason.init -> void
+Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.WeaverMessageViewModelResponse(string! Id, string! Role, string! Content, string! Status) -> void
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse!
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.AllowedAutonomyModes.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.AllowedAutonomyModes.init -> void
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.ContextVisibility.get -> bool
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.ContextVisibility.init -> void
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.Deconstruct(out bool ContextVisibility, out string! DefaultAutonomyMode, out string! MaxAutonomyMode, out System.Collections.Generic.IReadOnlyCollection<string!>! AllowedAutonomyModes, out string? RetentionLabel) -> void
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.DefaultAutonomyMode.get -> string!
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.DefaultAutonomyMode.init -> void
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.Equals(Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.MaxAutonomyMode.get -> string!
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.MaxAutonomyMode.init -> void
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.RetentionLabel.get -> string?
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.RetentionLabel.init -> void
+Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.WeaverPolicySummaryResponse(bool ContextVisibility, string! DefaultAutonomyMode, string! MaxAutonomyMode, System.Collections.Generic.IReadOnlyCollection<string!>! AllowedAutonomyModes, string? RetentionLabel) -> void
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView!
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Activation.get -> bool
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Activation.init -> void
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Administrative.get -> bool
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Administrative.init -> void
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Deconstruct(out bool Administrative, out bool Irrecoverable, out bool Activation) -> void
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Equals(Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? other) -> bool
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Irrecoverable.get -> bool
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Irrecoverable.init -> void
+Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.WeaverPrivilegePolicyView(bool Administrative, bool Irrecoverable, bool Activation) -> void
+Elsa.Weaver.Api.Models.WeaverProblemDetails
+Elsa.Weaver.Api.Models.WeaverProblemDetails.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverProblemDetails!
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Code.get -> string!
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Code.init -> void
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Deconstruct(out string! Title, out string! Detail, out int Status, out string! Code) -> void
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Detail.get -> string!
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Detail.init -> void
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Equals(Elsa.Weaver.Api.Models.WeaverProblemDetails? other) -> bool
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Status.get -> int
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Status.init -> void
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Title.get -> string!
+Elsa.Weaver.Api.Models.WeaverProblemDetails.Title.init -> void
+Elsa.Weaver.Api.Models.WeaverProblemDetails.WeaverProblemDetails(string! Title, string! Detail, int Status, string! Code) -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.ActorId.get -> string!
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.ActorId.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.Comment.get -> string?
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.Comment.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.ProposalId.get -> string!
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.ProposalId.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.Reason.get -> string?
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.Reason.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.Revision.get -> string?
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.Revision.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest.WeaverProposalDecisionRequest() -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse!
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.ApprovalStatus.get -> string!
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.ApprovalStatus.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.ApprovedAt.get -> System.DateTimeOffset?
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.ApprovedAt.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.Deconstruct(out string! ProposalId, out string! ApprovalStatus, out System.DateTimeOffset? ApprovedAt, out Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse? Result) -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.Equals(Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.ProposalId.get -> string!
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.ProposalId.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.Result.get -> Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse?
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.Result.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.WeaverProposalDecisionResponse(string! ProposalId, string! ApprovalStatus, System.DateTimeOffset? ApprovedAt, Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse? Result) -> void
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse!
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.Deconstruct(out string! ResourceType, out string! ResourceId, out string! Summary) -> void
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.Equals(Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.ResourceId.get -> string!
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.ResourceId.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.ResourceType.get -> string!
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.ResourceType.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.Summary.get -> string!
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.Summary.init -> void
+Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.WeaverProposalExecutionResultResponse(string! ResourceType, string! ResourceId, string! Summary) -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse!
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.Deconstruct(out string! ProviderId, out bool IsAvailable, out string! Status, out string! ProviderKind, out System.Collections.Generic.IReadOnlyCollection<string!>! SupportedOperations, out string! RiskProfile, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata) -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.Equals(Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.IsAvailable.get -> bool
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.IsAvailable.init -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.Metadata.init -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.ProviderId.get -> string!
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.ProviderId.init -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.ProviderKind.get -> string!
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.ProviderKind.init -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.RiskProfile.get -> string!
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.RiskProfile.init -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.Status.get -> string!
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.Status.init -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.SupportedOperations.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.SupportedOperations.init -> void
+Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.WeaverProviderDiagnosticsResponse(string! ProviderId, bool IsAvailable, string! Status, string! ProviderKind, System.Collections.Generic.IReadOnlyCollection<string!>! SupportedOperations, string! RiskProfile, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata) -> void
+Elsa.Weaver.Api.Models.WeaverSessionAutonomyRequest
+Elsa.Weaver.Api.Models.WeaverSessionAutonomyRequest.AutonomyMode.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionAutonomyRequest.AutonomyMode.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionAutonomyRequest.ExpectedRevision.get -> long?
+Elsa.Weaver.Api.Models.WeaverSessionAutonomyRequest.ExpectedRevision.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionAutonomyRequest.WeaverSessionAutonomyRequest() -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse!
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.ContextAttachments.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!>!
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.ContextAttachments.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Deconstruct(out string! SessionId, out string! Status, out string? Title, out System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!>! ContextAttachments, out System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse!>! Messages) -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Equals(Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.LimitReached.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.LimitReached.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Messages.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse!>!
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Messages.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Policy.get -> Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse?
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Policy.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.SessionId.get -> string!
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Status.get -> string!
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Status.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Title.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Title.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.WeaverSessionDetailsResponse(string! SessionId, string! Status, string? Title, System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!>! ContextAttachments, System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse!>! Messages) -> void
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest.Before.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest.Before.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest.Take.get -> int?
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest.Take.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest.WeaverSessionListQueryRequest() -> void
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest.Workspace.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest.Workspace.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionListResponse
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverSessionListResponse!
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.Deconstruct(out System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse!>! Items, out string? Next) -> void
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.Equals(Elsa.Weaver.Api.Models.WeaverSessionListResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.Items.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse!>!
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.Items.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.Next.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.Next.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionListResponse.WeaverSessionListResponse(System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse!>! Items, string? Next) -> void
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse!
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.AllowedAutonomyModes.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.AllowedAutonomyModes.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.AutonomyMode.get -> string!
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.AutonomyMode.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.Deconstruct(out string! AutonomyMode, out string! MaxAutonomyMode, out System.Collections.Generic.IReadOnlyCollection<string!>! AllowedAutonomyModes, out long Revision) -> void
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.Equals(Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.MaxAutonomyMode.get -> string!
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.MaxAutonomyMode.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.Revision.get -> long
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.Revision.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.WeaverSessionPolicyResponse(string! AutonomyMode, string! MaxAutonomyMode, System.Collections.Generic.IReadOnlyCollection<string!>! AllowedAutonomyModes, long Revision) -> void
+Elsa.Weaver.Api.Models.WeaverSessionRouteRequest
+Elsa.Weaver.Api.Models.WeaverSessionRouteRequest.SessionId.get -> string!
+Elsa.Weaver.Api.Models.WeaverSessionRouteRequest.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionRouteRequest.WeaverSessionRouteRequest() -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse!
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Deconstruct(out string! Id, out string? Title, out string! Status, out System.DateTimeOffset UpdatedAt, out System.DateTimeOffset? ExpiresAt, out int PendingReviewCount, out string? RecoveryState) -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Equals(Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.ExpiresAt.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Id.get -> string!
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Id.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.PendingReviewCount.get -> int
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.PendingReviewCount.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.RecoveryState.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.RecoveryState.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Status.get -> string!
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Status.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Title.get -> string?
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Title.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.UpdatedAt.init -> void
+Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.WeaverSessionSummaryResponse(string! Id, string? Title, string! Status, System.DateTimeOffset UpdatedAt, System.DateTimeOffset? ExpiresAt, int PendingReviewCount, string? RecoveryState) -> void
+Elsa.Weaver.Api.Models.WeaverSupportResponse
+Elsa.Weaver.Api.Models.WeaverSupportResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverSupportResponse!
+Elsa.Weaver.Api.Models.WeaverSupportResponse.Deconstruct(out string! PolicyScope, out Elsa.Weaver.Core.Models.WeaverSupportView! Support) -> void
+Elsa.Weaver.Api.Models.WeaverSupportResponse.Equals(Elsa.Weaver.Api.Models.WeaverSupportResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverSupportResponse.PolicyScope.get -> string!
+Elsa.Weaver.Api.Models.WeaverSupportResponse.PolicyScope.init -> void
+Elsa.Weaver.Api.Models.WeaverSupportResponse.Support.get -> Elsa.Weaver.Core.Models.WeaverSupportView!
+Elsa.Weaver.Api.Models.WeaverSupportResponse.Support.init -> void
+Elsa.Weaver.Api.Models.WeaverSupportResponse.WeaverSupportResponse(string! PolicyScope, Elsa.Weaver.Core.Models.WeaverSupportView! Support) -> void
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.ResourceId.get -> string?
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.ResourceId.init -> void
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.ResourceType.get -> string?
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.ResourceType.init -> void
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.Route.get -> string!
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.Route.init -> void
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.Selection.get -> object?
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.Selection.init -> void
+Elsa.Weaver.Api.Models.WeaverSurfaceRequest.WeaverSurfaceRequest() -> void
+Elsa.Weaver.Api.Models.WeaverTurnCancelRequest
+Elsa.Weaver.Api.Models.WeaverTurnCancelRequest.SessionId.get -> string!
+Elsa.Weaver.Api.Models.WeaverTurnCancelRequest.SessionId.init -> void
+Elsa.Weaver.Api.Models.WeaverTurnCancelRequest.TurnId.get -> string!
+Elsa.Weaver.Api.Models.WeaverTurnCancelRequest.TurnId.init -> void
+Elsa.Weaver.Api.Models.WeaverTurnCancelRequest.WeaverTurnCancelRequest() -> void
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverTurnCancelResponse!
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.Cancelled.get -> bool
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.Cancelled.init -> void
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.Deconstruct(out string! TurnId, out bool Cancelled) -> void
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.Equals(Elsa.Weaver.Api.Models.WeaverTurnCancelResponse? other) -> bool
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.TurnId.get -> string!
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.TurnId.init -> void
+Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.WeaverTurnCancelResponse(string! TurnId, bool Cancelled) -> void
+Elsa.Weaver.Api.WeaverApi
+Elsa.Weaver.Api.WeaverApiFeature
+Elsa.Weaver.Api.WeaverApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Weaver.Api.WeaverApiFeature.WeaverApiFeature() -> void
+Elsa.Weaver.Api.WeaverJsonContext
+Elsa.Weaver.Api.WeaverJsonContext.WeaverJsonContext() -> void
+Elsa.Weaver.Api.WeaverJsonContext.WeaverJsonContext(System.Text.Json.JsonSerializerOptions! options) -> void
+Elsa.Weaver.Api.WeaverSseJsonContext
+Elsa.Weaver.Api.WeaverSseJsonContext.WeaverSseJsonContext() -> void
+Elsa.Weaver.Api.WeaverSseJsonContext.WeaverSseJsonContext(System.Text.Json.JsonSerializerOptions! options) -> void
+const Elsa.Weaver.Api.Authorization.WeaverPermissionContributor.Owner = "Elsa.Weaver.Api" -> string!
+const Elsa.Weaver.Api.Constants.WeaverPermissionKeys.Audit = "weaver/audit:read" -> string!
+const Elsa.Weaver.Api.Constants.WeaverPermissionKeys.Proposals = "weaver/proposals:manage" -> string!
+const Elsa.Weaver.Api.Constants.WeaverPermissionKeys.Use = "weaver:use" -> string!
+override Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverApiResponse<T>.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverApiResponse<T>.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverBootstrapResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverBootstrapResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverCapabilityResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverCapabilityResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverCapabilityResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverProblemDetails.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverProblemDetails.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverProblemDetails.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverSessionListResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverSessionListResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverSessionListResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverSupportResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverSupportResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverSupportResponse.ToString() -> string!
+override Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.Equals(object? obj) -> bool
+override Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.GetHashCode() -> int
+override Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.ToString() -> string!
+override Elsa.Weaver.Api.WeaverApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+override Elsa.Weaver.Api.WeaverJsonContext.GeneratedSerializerOptions.get -> System.Text.Json.JsonSerializerOptions?
+override Elsa.Weaver.Api.WeaverJsonContext.GetTypeInfo(System.Type! type) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
+override Elsa.Weaver.Api.WeaverSseJsonContext.GeneratedSerializerOptions.get -> System.Text.Json.JsonSerializerOptions?
+override Elsa.Weaver.Api.WeaverSseJsonContext.GetTypeInfo(System.Type! type) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
+static Elsa.Weaver.Api.Endpoints.WeaverEndpointActor.CanAccess(string! actorId, string! tenantId, System.Security.Claims.ClaimsPrincipal! principal) -> bool
+static Elsa.Weaver.Api.Endpoints.WeaverEndpointActor.Resolve(System.Security.Claims.ClaimsPrincipal! principal) -> string?
+static Elsa.Weaver.Api.Endpoints.WeaverEndpointActor.ResolveTenant(System.Security.Claims.ClaimsPrincipal! principal) -> string?
+static Elsa.Weaver.Api.Extensions.WeaverApiServiceCollectionExtensions.AddWeaverApi(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.operator !=(Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse? left, Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse.operator ==(Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse? left, Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ParseAutonomyMode(string? mode) -> Elsa.Weaver.Core.Models.WeaverAutonomyMode?
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ParseResolutionClaim(string? claim) -> Elsa.Weaver.Core.Models.WeaverOwnerResolutionClaim?
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToAcceptedResponse(this Elsa.Weaver.Core.Models.WeaverMessage! message, System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverViolation!>! warnings) -> Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverActionProposalStatus status) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverAutonomyMode mode) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverCapabilityKind kind) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverContextSensitivity sensitivity) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverMessageStatus status) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverProviderKind kind) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverProviderOperation operation) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverProviderRiskProfile riskProfile) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverRisk risk) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverRole role) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToContractString(this Elsa.Weaver.Core.Models.WeaverSessionStatus status) -> string!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToDecisionResponse(this Elsa.Weaver.Core.Models.WeaverActionProposal! proposal, Elsa.Weaver.Core.Models.WeaverProposalExecutionResult? result = null) -> Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToDomain(this Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest! attachment) -> Elsa.Weaver.Core.Models.WeaverContextAttachment!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToProblem(this Elsa.Weaver.Core.Models.WeaverError! error, string? title = null) -> Elsa.Weaver.Api.Models.WeaverProblemDetails!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToResponse(this Elsa.Weaver.Core.Models.WeaverCapability! capability) -> Elsa.Weaver.Api.Models.WeaverCapabilityResponse!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToResponse(this Elsa.Weaver.Core.Models.WeaverContextAttachment! attachment) -> Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToResponse(this Elsa.Weaver.Core.Models.WeaverProviderDiagnostics! diagnostics) -> Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToResponse(this Elsa.Weaver.Core.Models.WeaverSessionPolicyState! state) -> Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToResponse(this Elsa.Weaver.Core.Models.WeaverSessionSummary! summary) -> Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse!
+static Elsa.Weaver.Api.Models.WeaverApiMapping.ToViewModel(this Elsa.Weaver.Core.Models.WeaverMessage! message) -> Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse!
+static Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Failure(Elsa.Weaver.Core.Models.WeaverError! error) -> Elsa.Weaver.Api.Models.WeaverApiResponse<T>!
+static Elsa.Weaver.Api.Models.WeaverApiResponse<T>.Success(T data) -> Elsa.Weaver.Api.Models.WeaverApiResponse<T>!
+static Elsa.Weaver.Api.Models.WeaverApiResponse<T>.operator !=(Elsa.Weaver.Api.Models.WeaverApiResponse<T>? left, Elsa.Weaver.Api.Models.WeaverApiResponse<T>? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverApiResponse<T>.operator ==(Elsa.Weaver.Api.Models.WeaverApiResponse<T>? left, Elsa.Weaver.Api.Models.WeaverApiResponse<T>? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.operator !=(Elsa.Weaver.Api.Models.WeaverBindingErrorResponse? left, Elsa.Weaver.Api.Models.WeaverBindingErrorResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverBindingErrorResponse.operator ==(Elsa.Weaver.Api.Models.WeaverBindingErrorResponse? left, Elsa.Weaver.Api.Models.WeaverBindingErrorResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverBootstrapResponse.operator !=(Elsa.Weaver.Api.Models.WeaverBootstrapResponse? left, Elsa.Weaver.Api.Models.WeaverBootstrapResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverBootstrapResponse.operator ==(Elsa.Weaver.Api.Models.WeaverBootstrapResponse? left, Elsa.Weaver.Api.Models.WeaverBootstrapResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverCapabilityResponse.operator !=(Elsa.Weaver.Api.Models.WeaverCapabilityResponse? left, Elsa.Weaver.Api.Models.WeaverCapabilityResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverCapabilityResponse.operator ==(Elsa.Weaver.Api.Models.WeaverCapabilityResponse? left, Elsa.Weaver.Api.Models.WeaverCapabilityResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.operator !=(Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse? left, Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse.operator ==(Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse? left, Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.operator !=(Elsa.Weaver.Api.Models.WeaverCreateSessionResponse? left, Elsa.Weaver.Api.Models.WeaverCreateSessionResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverCreateSessionResponse.operator ==(Elsa.Weaver.Api.Models.WeaverCreateSessionResponse? left, Elsa.Weaver.Api.Models.WeaverCreateSessionResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.operator !=(Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse? left, Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse.operator ==(Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse? left, Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.operator !=(Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse? left, Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse.operator ==(Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse? left, Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.operator !=(Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse? left, Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse.operator ==(Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse? left, Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.operator !=(Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? left, Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.operator ==(Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? left, Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProblemDetails.operator !=(Elsa.Weaver.Api.Models.WeaverProblemDetails? left, Elsa.Weaver.Api.Models.WeaverProblemDetails? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProblemDetails.operator ==(Elsa.Weaver.Api.Models.WeaverProblemDetails? left, Elsa.Weaver.Api.Models.WeaverProblemDetails? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.operator !=(Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse? left, Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse.operator ==(Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse? left, Elsa.Weaver.Api.Models.WeaverProposalDecisionResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.operator !=(Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse? left, Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse.operator ==(Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse? left, Elsa.Weaver.Api.Models.WeaverProposalExecutionResultResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.operator !=(Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse? left, Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse.operator ==(Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse? left, Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.operator !=(Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse? left, Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse.operator ==(Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse? left, Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionListResponse.operator !=(Elsa.Weaver.Api.Models.WeaverSessionListResponse? left, Elsa.Weaver.Api.Models.WeaverSessionListResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionListResponse.operator ==(Elsa.Weaver.Api.Models.WeaverSessionListResponse? left, Elsa.Weaver.Api.Models.WeaverSessionListResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.operator !=(Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse? left, Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse.operator ==(Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse? left, Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.operator !=(Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse? left, Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse.operator ==(Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse? left, Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSupportResponse.operator !=(Elsa.Weaver.Api.Models.WeaverSupportResponse? left, Elsa.Weaver.Api.Models.WeaverSupportResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverSupportResponse.operator ==(Elsa.Weaver.Api.Models.WeaverSupportResponse? left, Elsa.Weaver.Api.Models.WeaverSupportResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.operator !=(Elsa.Weaver.Api.Models.WeaverTurnCancelResponse? left, Elsa.Weaver.Api.Models.WeaverTurnCancelResponse? right) -> bool
+static Elsa.Weaver.Api.Models.WeaverTurnCancelResponse.operator ==(Elsa.Weaver.Api.Models.WeaverTurnCancelResponse? left, Elsa.Weaver.Api.Models.WeaverTurnCancelResponse? right) -> bool
+static Elsa.Weaver.Api.WeaverApi.MapWeaverApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+static Elsa.Weaver.Api.WeaverJsonContext.Default.get -> Elsa.Weaver.Api.WeaverJsonContext!
+static Elsa.Weaver.Api.WeaverSseJsonContext.Default.get -> Elsa.Weaver.Api.WeaverSseJsonContext!
+~Elsa.Weaver.Api.WeaverJsonContext.Boolean.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<bool>
+~Elsa.Weaver.Api.WeaverJsonContext.DateTimeOffset.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.DateTimeOffset>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionIReadOnlyDictionaryStringObject.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<System.Collections.Generic.IReadOnlyDictionary<string, object>>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<string>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverActionChange.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverActionChange>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverActionProposal.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverActionProposal>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverAuditEvent.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverAuditEvent>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverCapabilityResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverCapabilityResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverContextAttachment.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverContextAttachment>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverContextAttachmentRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverContextAttachmentResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverMessageViewModelResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverSessionSummaryResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyCollectionWeaverViolation.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverViolation>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyDictionaryStringObject.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyDictionary<string, object>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyDictionaryStringString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyDictionary<string, string>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyDictionaryStringStringArray.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyDictionary<string, string[]>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<string>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverContextSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverContextSupportView>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverDisclosureSnapshot.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverDisclosureSnapshot>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverToolResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverToolResult>>
+~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverToolSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverToolSupportView>>
+~Elsa.Weaver.Api.WeaverJsonContext.Int32.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<int>
+~Elsa.Weaver.Api.WeaverJsonContext.Int64.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<long>
+~Elsa.Weaver.Api.WeaverJsonContext.JsonElement.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Text.Json.JsonElement>
+~Elsa.Weaver.Api.WeaverJsonContext.NullableDateTimeOffset.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.DateTimeOffset?>
+~Elsa.Weaver.Api.WeaverJsonContext.NullableInt32.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<int?>
+~Elsa.Weaver.Api.WeaverJsonContext.NullableInt64.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<long?>
+~Elsa.Weaver.Api.WeaverJsonContext.Object.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<object>
+~Elsa.Weaver.Api.WeaverJsonContext.String.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>
+~Elsa.Weaver.Api.WeaverJsonContext.StringArray.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<string[]>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverAcceptedMessageResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverAcceptedMessageResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverActionChange.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverActionChange>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverActionProposal.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverActionProposal>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverActionProposalStatus.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverActionProposalStatus>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseIReadOnlyCollectionWeaverActionProposal.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverActionProposal>>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverAuditEvent>>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverActionProposal.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Core.Models.WeaverActionProposal>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverBootstrapResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverBootstrapResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverCreateSessionResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverCreateSessionResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverFeedback.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Core.Models.WeaverFeedback>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverMessageAcceptedResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverMessageViewModelResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverProposalExecutionResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Core.Models.WeaverProposalExecutionResult>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverSessionDetailsResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverSessionListResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverSessionListResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverSessionPolicyResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverSupportResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverSupportResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverTurnCancelResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverTurnCancelResponse>>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverAuditEvent.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverAuditEvent>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverAuditEventKind.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverAuditEventKind>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverAuditQueryRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverAuditQueryRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverBindingErrorResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverBindingErrorResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverBootstrapResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverBootstrapResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverCapabilityResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverCapabilityResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverClientAcknowledgement.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverClientAcknowledgement>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverClientBinding.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverClientBinding>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverClientContextRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverClientContextRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverClientInvocationResolutionRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverClientInvocationResolutionRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverClientOutcome.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverClientOutcome>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverContextAttachment.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextAttachment>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverContextAttachmentRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverContextAttachmentRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverContextAttachmentResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverContextAttachmentResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverContextOrigin.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextOrigin>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverContextSensitivity.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextSensitivity>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverContextSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextSupportView>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverCreateSessionRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverCreateSessionRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverCreateSessionResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverCreateSessionResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverDisclosureSnapshot.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverDisclosureSnapshot>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverEffectReceipt.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverEffectReceipt>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverEffectScope.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverEffectScope>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverError.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverError>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverExecutionLocation.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverExecutionLocation>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverFeedback.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverFeedback>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverFeedbackApiRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverFeedbackApiRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverMessageAcceptedResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverMessageAcceptedResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverMessageRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverMessageRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverMessageStatus.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverMessageStatus>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverMessageViewModelResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverMessageViewModelResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverOwnerResolution.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverOwnerResolution>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverOwnerResolutionClaim.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverOwnerResolutionClaim>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverPayload.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPayload>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverPolicySummaryResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverPolicySummaryResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverPreparedToolInvocation.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPreparedToolInvocation>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverPrivilegePolicyView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverPromptSource.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPromptSource>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverProposalDecisionRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverProposalDecisionRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverProposalExecutionResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverProposalExecutionResult>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverProviderDiagnosticsResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverProviderDiagnosticsResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverResourceTarget.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverResourceTarget>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverRisk.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverRisk>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverRole.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverRole>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSessionAutonomyRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSessionAutonomyRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSessionDetailsResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSessionDetailsResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSessionListQueryRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSessionListQueryRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSessionListResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSessionListResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSessionPolicyResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSessionPolicyResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSessionSummaryResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSessionSummaryResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportCompleteness.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverSupportCompleteness>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSupportResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportStatus.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverSupportStatus>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverSupportView>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverSurfaceRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSurfaceRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverToolResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolResult>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverToolResultAccess.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolResultAccess>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverToolSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolSupportView>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverTurnCancelRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverTurnCancelRequest>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverTurnCancelResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverTurnCancelResponse>
+~Elsa.Weaver.Api.WeaverJsonContext.WeaverViolation.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverViolation>
+~Elsa.Weaver.Api.WeaverSseJsonContext.Boolean.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<bool>
+~Elsa.Weaver.Api.WeaverSseJsonContext.DateTimeOffset.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.DateTimeOffset>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyCollectionIReadOnlyDictionaryStringObject.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<System.Collections.Generic.IReadOnlyDictionary<string, object>>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyCollectionString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<string>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyCollectionWeaverActionChange.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverActionChange>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyCollectionWeaverContextAttachment.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverContextAttachment>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyCollectionWeaverContributionDiagnostic.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverContributionDiagnostic>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyCollectionWeaverPlanStep.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyCollection<Elsa.Weaver.Core.Models.WeaverPlanStep>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyDictionaryStringObject.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyDictionary<string, object>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyDictionaryStringString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyDictionary<string, string>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyListWeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>>
+~Elsa.Weaver.Api.WeaverSseJsonContext.Int32.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<int>
+~Elsa.Weaver.Api.WeaverSseJsonContext.Int64.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<long>
+~Elsa.Weaver.Api.WeaverSseJsonContext.JsonElement.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Text.Json.JsonElement>
+~Elsa.Weaver.Api.WeaverSseJsonContext.NullableDateTimeOffset.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.DateTimeOffset?>
+~Elsa.Weaver.Api.WeaverSseJsonContext.NullableInt64.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<long?>
+~Elsa.Weaver.Api.WeaverSseJsonContext.NullableWeaverResultKind.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverResultKind?>
+~Elsa.Weaver.Api.WeaverSseJsonContext.Object.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<object>
+~Elsa.Weaver.Api.WeaverSseJsonContext.String.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverActionChange.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverActionChange>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverActionProposal.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverActionProposal>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverActionProposalStatus.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverActionProposalStatus>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverClientBinding.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverClientBinding>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverContextAttachment.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextAttachment>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverContextContribution.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextContribution>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverContextOrigin.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextOrigin>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverContextSensitivity.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextSensitivity>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverContributionDiagnostic.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContributionDiagnostic>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverEffectReceipt.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverEffectReceipt>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverEffectScope.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverEffectScope>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverError.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverError>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverExecutionLocation.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverExecutionLocation>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverOwnerResolution.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverOwnerResolution>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverOwnerResolutionClaim.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverOwnerResolutionClaim>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverPayload.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPayload>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverPlanStep.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPlanStep>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverPlanUpdate.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPlanUpdate>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverPreparedToolInvocation.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPreparedToolInvocation>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverProviderNotice.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverProviderNotice>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverResourceTarget.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverResourceTarget>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverResultKind.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverResultKind>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverRisk.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverRisk>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverStepDescriptor.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverStepDescriptor>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverStreamEvent.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverStreamEvent>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverStreamEventKind.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverStreamEventKind>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverToolCallOutcome.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolCallOutcome>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverToolCallRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolCallRequest>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverToolResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolResult>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverToolResultAccess.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolResultAccess>
+~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverTurnStarted.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverTurnStarted>

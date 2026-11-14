@@ -12,7 +12,8 @@ public static class WeaverEfModule
 
     internal const string Name = "Weaver";
     internal const string SchemaFamily = "Weaver";
-    internal const string SchemaVersion = "1.0.0";
+    internal const string LegacySchemaVersion = "1.0.0";
+    internal const string SchemaVersion = "1.1.0";
 
     internal const string SessionTableName = "elsa_weaver_sessions";
     internal const string MessageTableName = "elsa_weaver_messages";
@@ -26,4 +27,13 @@ public static class WeaverEfModule
 
     /// <summary>The canonical chain used by metadata readers and host schema-readability tooling.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(WeaverEfModule).Assembly, SchemaFamily);
+}
+
+/// <summary>Protected content stays byte-identical; absent optional members default only after authenticated decoding.</summary>
+[EfSchemaUpcaster(WeaverEfModule.LegacySchemaVersion, WeaverEfModule.SchemaVersion)]
+internal sealed class WeaverEffectsV1Upcaster : IEfSchemaUpcaster
+{
+    public WeaverEffectsV1Upcaster() { }
+
+    public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
 }

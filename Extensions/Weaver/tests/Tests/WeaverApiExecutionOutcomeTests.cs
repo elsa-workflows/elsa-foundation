@@ -179,7 +179,7 @@ public sealed class WeaverApiExecutionOutcomeTests
         Assert.Equal("initial", fixture.Mutation.Value);
     }
 
-    private static Task<(int Status, JsonElement Body)> ExecuteAsync(ProposalFixture fixture, WeaverActionProposal proposal, string? revision)
+    internal static Task<(int Status, JsonElement Body)> ExecuteAsync(ProposalFixture fixture, WeaverActionProposal proposal, string? revision)
         => DecisionAsync(fixture, proposal, "Execute", revision);
 
     private static async Task<(int Status, JsonElement Body)> DecisionAsync(ProposalFixture fixture, WeaverActionProposal proposal,

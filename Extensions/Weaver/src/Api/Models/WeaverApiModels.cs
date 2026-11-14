@@ -31,7 +31,15 @@ public sealed record WeaverBootstrapResponse(
     /// (this composition cannot recover them).
     /// </summary>
     public string Recovery { get; init; } = "unsupported";
+    /// <summary>Current host limits for display; this snapshot grants no owning-resource permission or execution authority.</summary>
+    public WeaverPrivilegePolicyView Privileges { get; init; } = new(false, false, false);
 }
+
+/// <summary>Read-only host privilege configuration; session autonomy cannot change these limits.</summary>
+public sealed record WeaverPrivilegePolicyView(bool Administrative, bool Irrecoverable, bool Activation);
+
+/// <summary>Sessionless support observation under the host default policy; it grants no resource or disclosure authority.</summary>
+public sealed record WeaverSupportResponse(string PolicyScope, WeaverSupportView Support);
 
 public sealed record WeaverPolicySummaryResponse(
     bool ContextVisibility,

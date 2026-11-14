@@ -21,7 +21,7 @@ export type WeaverProviderRiskProfile = "read-only" | "review-required" | "sandb
 export type WeaverSessionStatus = "active" | "completed" | "cancelled" | "failed" | "expired";
 export type WeaverMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type WeaverMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
-export type WeaverProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing";
+export type WeaverProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing" | "performed";
 export type WeaverStreamEventType = "provider-notice" | "turn-started" | "message-started" | "message-delta" | "context-used" | "context-admitted" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
 
 export interface WeaverPlanStep {
@@ -37,10 +37,19 @@ export interface WeaverPlanStep {
  */
 export type WeaverRecoveryMode = "durable" | "processLifetime" | "unsupported";
 
+/** Current read-only host limits. Missing projection means not reported, not an authority grant. */
+export interface WeaverPrivilegePolicyView {
+  readonly administrative: boolean;
+  readonly irrecoverable: boolean;
+  readonly activation: boolean;
+}
+
 export interface WeaverBootstrapResponse {
   enabled: boolean;
   /** Preview (#3441): absent from a server that does not report it. */
   recovery?: WeaverRecoveryMode;
+  /** Absent for an older backend or an incomplete/malformed projection. Never a policy-update surface. */
+  privileges?: WeaverPrivilegePolicyView;
   providerStatus: WeaverProviderStatus;
   modes: StudioWeaverMode[];
   capabilities: StudioWeaverCapabilityContribution[];
@@ -316,7 +325,7 @@ export type WeaverStreamEvent =
   | { type: "message-completed"; messageId: string }
   | { type: "turn-cancelled"; turnId: string }
   | { type: "provider-notice"; code: string; message: string }
-  | { type: "error"; message: string; code?: string; limit?: WeaverSessionLimit };
+  | { type: "error"; message: string; code?: string; limit?: WeaverSessionLimit; ownerUnavailable?: boolean };
 
 export interface WeaverFeedbackRequest {
   rating: "positive" | "negative";

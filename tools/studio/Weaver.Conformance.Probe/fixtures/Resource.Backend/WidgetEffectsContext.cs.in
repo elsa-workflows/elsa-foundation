@@ -1,0 +1,125 @@
+using System.Text.Json;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Core.Models;
+
+namespace Acme.Home.Weaver;
+
+internal sealed class WidgetEffectsContext(WidgetEffectOwner owner, IWeaverSessionService sessions, WidgetFaultControl faults)
+    : IWeaverContextProvider
+{
+    // Distinct scope/kind and no resource-type wildcard keep legacy prompts outside this new declaring source.
+    public WeaverContextProviderDescriptor Descriptor { get; } = new(WidgetEffects.Source, WidgetContract.Module, WidgetEffects.Scope,
+        [WidgetEffects.Context, WidgetEffects.Guidance], ["1"], []) { ModuleCodes = WidgetEffects.Codes, Required = false };
+
+    internal static WeaverContextAttachment Snapshot(WidgetObservation state) => new("acme.home:effects:" + state.Document.Revision,
+        WidgetEffects.Context, WidgetContract.WidgetId, "Acme widget effects", WidgetEffects.Context, WeaverContextSensitivity.Internal,
+        WidgetContract.Route, "Current owner widget state for classed effects and a non-persisting check.",
+        JsonSerializer.SerializeToElement(WidgetContract.State(state)), new Dictionary<string, string>())
+    {
+        ModuleId = WidgetContract.Module, SchemaVersion = "1", Target = WidgetContract.Target(state),
+        Origin = WeaverContextOrigin.AuthoritativeRead, WeaverScopes = WidgetContract.Scopes
+    };
+
+    public async ValueTask<WeaverContextContribution> CollectAsync(WeaverContextRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var session = await SessionAsync(request.SessionId, cancellationToken);
+            var state = await owner.ObserveAsync(session.ActorId, session.TenantId, false, cancellationToken);
+            if (request.Target is not null && !WidgetContract.SameTarget(request.Target, state)
+                || request.CallerAttachments.Any(item => item.ModuleId != WidgetContract.Module || item.ContentType != WidgetEffects.Context
+                    || item.SchemaVersion != "1" || !WidgetContract.SameTarget(item.Target, state)) || request.CallerAttachments.Count > 1)
+                throw WidgetEffects.Refusal(WidgetEffects.Stale, "The effects context must name the current personal widget.");
+            if (faults.Read("context") is { } fault)
+                return new([], [new(Descriptor.Id, fault.Code, fault.Message, true) { OwnerUnavailable = fault.OwnerUnavailable }]);
+            var attachment = Snapshot(state);
+            var sensitivity = request.CallerAttachments.Select(item => item.Sensitivity == WeaverContextSensitivity.SecretRedacted
+                ? WeaverContextSensitivity.Secret : item.Sensitivity).Append(WeaverContextSensitivity.Internal).Max();
+            return new([attachment with { Sensitivity = sensitivity }, Guidance()], []);
+        }
+        catch (WidgetRefusal error) { return Refused(error); }
+    }
+
+    public async ValueTask<WeaverContextContribution> AdmitDisclosureAsync(WeaverContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var session = await SessionAsync(request.SessionId, cancellationToken);
+            var current = await owner.ObserveAsync(session.ActorId, session.TenantId, false, cancellationToken);
+            foreach (var item in request.Context)
+            {
+                if (item.ModuleId != WidgetContract.Module || item.SchemaVersion != "1"
+                    || item.ContentType is not (WidgetEffects.Context or WidgetEffects.Guidance)
+                    || item.ContentType == WidgetEffects.Guidance && item.Origin != WeaverContextOrigin.InstalledGuidance)
+                    throw WidgetEffects.Refusal(WidgetEffects.Invalid, "The retained effects context belongs to another contract.");
+                if (item.ContentType == WidgetEffects.Context && item.Sensitivity != WeaverContextSensitivity.SecretRedacted
+                    && (!Own(item.Target) || !request.IsHistorical && !request.IsReceiptContinuation && !WidgetContract.SameTarget(item.Target, current)))
+                    throw WidgetEffects.Refusal(WidgetEffects.Stale, "The retained effects reference is foreign or stale.");
+            }
+            foreach (var result in request.Results)
+                if (result.Access is not { } access || access.ModuleId != WidgetContract.Module || access.ContractVersion != "1"
+                    || access.DisclosureSourceId != Descriptor.Id || !WidgetEffects.Tools.Contains(result.ToolName, StringComparer.Ordinal)
+                    || !Own(access.Target)
+                    || result.Receipt is { } receipt && (!Own(receipt.Before) || !Own(receipt.After)))
+                    throw WidgetEffects.Refusal(WidgetEffects.Invalid, "The retained effect does not belong to this personal widget.");
+            if (faults.Read("context") is { } fault)
+                return new([], [new(Descriptor.Id, fault.Code, fault.Message, true) { OwnerUnavailable = fault.OwnerUnavailable }]);
+            return request.IsReceiptContinuation ? new([Guidance()], [])
+                : new(request.Context.Where(item => item.ContentType == WidgetEffects.Context).Append(Guidance()).ToArray(), []);
+        }
+        catch (WidgetRefusal error) { return Refused(error); }
+    }
+
+    private async Task<WeaverSession> SessionAsync(string id, CancellationToken ct)
+    {
+        var requireCurrentRequest = owner.CaptureCurrentRequest();
+        requireCurrentRequest();
+        var key = await owner.AuthorizeCurrentAsync(ct);
+        requireCurrentRequest();
+        var identity = await sessions.FindOwnerAsync(id, ct);
+        ct.ThrowIfCancellationRequested();
+        requireCurrentRequest();
+        if (identity?.ActorId != key.SubjectId || identity?.TenantId != key.TenantId)
+            throw WidgetEffects.Refusal(WidgetEffects.Foreign, "A current owned effects session is required.", 403);
+        // Plain owner lookup may await storage. Recheck native permission before any hydration/ownership/settlement.
+        await owner.AuthorizeAsync(key.SubjectId, key.TenantId, false, ct);
+        requireCurrentRequest();
+        var session = await sessions.FindAsync(id, ct);
+        ct.ThrowIfCancellationRequested();
+        requireCurrentRequest();
+        if (session is not { Status: WeaverSessionStatus.Active } || session.ActorId != key.SubjectId || session.TenantId != key.TenantId
+            || session.ExpiresAt <= DateTimeOffset.UtcNow)
+            throw WidgetEffects.Refusal(WidgetEffects.Foreign, "A current owned effects session is required.", 403);
+        await owner.AuthorizeAsync(session.ActorId, session.TenantId, false, ct);
+        requireCurrentRequest();
+        return session;
+    }
+
+    private WeaverContextContribution Refused(WidgetRefusal error) => new([], [new(Descriptor.Id, error.Error.Code,
+        error.Error.Message, true) { OwnerUnavailable = error.Error.OwnerUnavailable }]);
+
+    private static bool Own(WeaverResourceTarget? target) => target is
+        { ModuleId: WidgetContract.Module, ResourceType: WidgetContract.ResourceType, ResourceId: WidgetContract.WidgetId };
+
+    private static WeaverContextAttachment Guidance() => new("acme.home:effects-guidance", "acme.home.module", null,
+        "Acme effects guidance", WidgetEffects.Guidance, WeaverContextSensitivity.Public, "module",
+        "The installed Acme fixture supplies separate classed personal visibility operations. The host must enable every required class; " +
+        "only Weaver performs approval. The check tool evaluates the real widget, records that it ran, and returns a business pass or fail " +
+        "without writing the Home layout. A performed outcome is not a persisted layout change. Read the owning checks endpoint to confirm " +
+        "the invocation count and unchanged widget revision. Missing authority, stale references and invalid inputs are refused. " +
+        "An uncertain result must be inspected and never replayed automatically.", null, new Dictionary<string, string>())
+    { ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = WeaverContextOrigin.InstalledGuidance, WeaverScopes = [] };
+}
+
+internal sealed class WidgetEffectsCapabilities : IWeaverCapabilityProvider
+{
+    public ValueTask<IReadOnlyCollection<WeaverCapability>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<IReadOnlyCollection<WeaverCapability>>([
+            new("acme.home.effects", WidgetContract.Module, "Review Acme widget effects",
+                "Review classed personal widget operations and an owner-observed check.", WeaverCapabilityKind.Proposal,
+                WeaverRisk.Admin, WidgetContract.Scopes, [WidgetContract.ReadPermission, WidgetContract.WritePermission], [WidgetEffects.Context]) { Modes = ["build"] }
+        ]);
+    }
+}

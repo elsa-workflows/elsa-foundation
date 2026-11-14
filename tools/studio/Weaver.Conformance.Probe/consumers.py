@@ -6,11 +6,13 @@ import json
 from pathlib import Path
 import secrets
 import shutil
+import tempfile
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 import zipfile
 
-from artifacts import BACKEND_PACKAGES, STUDIO_PACKAGES, check
+from artifacts import BACKEND_PACKAGES, STUDIO_PACKAGES, check, package_identity
+from runtime import owned_content_root
 
 
 BACKEND_EXTERNAL = (
@@ -32,6 +34,8 @@ PROTOCOL_FEATURES = {
     "copilot": ("WeaverGitHubCopilot", "AcmeCopilotProtocolFixture"),
     "anthropic": ("WeaverAnthropic", "AcmeAnthropicProtocolFixture"),
 }
+COMMON_EFFECTS_FEATURE = "WeaverEffects"
+DURABLE_EFFECTS_FEATURE = "WeaverEfEffects"
 
 
 def sha(path):
@@ -166,18 +170,20 @@ def references(run, products, externals):
                      for package, version in values.items())
 
 
-def backend_features(published):
+def backend_features(published, *, effects=True):
     published = Path(published)
     features = {name: {} for name in (
         "Primitives", "FileSystemDistributedLocking", "Events", "Mediator", "Tasks", "Serialization",
-        "Expressions", "ExpressionsApi", "ApiCapabilities", "FoundationIdentityAbstractions", "FoundationIdentityApi",
+        "Expressions", "ExpressionsApi", "ApiCapabilities", "AttentionApi", "ModularityAttention", "FoundationIdentityAbstractions", "FoundationIdentityApi",
         "StudioPreferences", "StudioPreferencesApi", "WorkflowsDesignApi", "WorkflowDesignValidations",
         "ActivitiesDesignApi", "ActivitiesDesignReconciliation", "ClrActivityReconciliation",
         "ActivitiesFlowchart", "ActivitiesPrimitives", "ActivitiesRuntime",
         "WorkflowsPublishing", "WorkflowsPublishingApi", "WorkflowsRuntimeApi", "WorkflowsRuntimeTriggers",
-        "WorkflowsRuntimeResumption", "Weaver", "WeaverApi",
+        "WorkflowsRuntimeResumption", "Weaver", "WeaverApi", COMMON_EFFECTS_FEATURE,
         "WeaverWorkflows", "WeaverWorkflowsRuntime", "ModularityApi",
     )}
+    if not effects:
+        features.pop(COMMON_EFFECTS_FEATURE)
     for feature, database in (
         ("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "iam.db"),
         ("StudioPreferencesEntityFrameworkCore", "preferences.db"),
@@ -195,6 +201,13 @@ def backend_features(published):
     return features
 
 
+def _runtime_configuration(run, profile, name):
+    path = owned_content_root(run, profile) / name
+    check(path.is_file() and not path.is_symlink() and path.resolve().parent == path.parent,
+          "Runtime configuration must be an ordinary file in the owned backend or Studio content root")
+    return path
+
+
 def select_protocol_profile(run, name):
     """Select one actual adapter/fixture pair in runtime JSON, without rebuilding either consumer.
 
@@ -202,7 +215,7 @@ def select_protocol_profile(run, name):
     """
     check(name in PROTOCOL_FEATURES, "Unknown protocol profile: " + name)
     profile = run.profiles["backend"]
-    path = profile["published"] / "shells.json"
+    path = _runtime_configuration(run, profile, "shells.json")
     document = json.loads(path.read_text())
     features = document["CShells"]["Shells"]["Authoring"]["Features"]
     for provider, fixture in PROTOCOL_FEATURES.values():
@@ -222,7 +235,7 @@ DURABLE_STORE_FEATURE = "WeaverEntityFrameworkCore"
 DURABLE_STORE_DEPENDENCY = "Secrets"
 
 
-def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=15):
+def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=15, effects=True):
     """Configure the packaged EF session store on SQLite in the backend's runtime JSON, without rebuilding it.
 
     The caller must stop its own backend first and start a new generation afterwards; this helper never starts or stops
@@ -236,22 +249,54 @@ def enable_durable_weaver_store(run, database, encryption_key, *, lease_seconds=
     check(isinstance(encryption_key, str) and len(encryption_key) >= 32, "The durable store needs a private Secrets key")
     check(type(lease_seconds) is int and 15 <= lease_seconds <= 86400, "The store's lease is 15 to 86400 seconds")
     profile = run.profiles["backend"]
-    path = profile["published"] / "shells.json"
+    path = _runtime_configuration(run, profile, "shells.json")
     document = json.loads(path.read_text())
     features = document["CShells"]["Shells"]["Authoring"]["Features"]
-    check(DURABLE_STORE_FEATURE not in features and DURABLE_STORE_DEPENDENCY not in features,
+    check(DURABLE_STORE_FEATURE not in features and DURABLE_STORE_DEPENDENCY not in features
+          and DURABLE_EFFECTS_FEATURE not in features,
           "The durable store is configured once per run, over a baseline that did not select it")
+    if effects:
+        check(COMMON_EFFECTS_FEATURE in features, "The durable overlay replaces the ordinary in-memory effects selection")
+        features.pop(COMMON_EFFECTS_FEATURE)
+        features[DURABLE_EFFECTS_FEATURE] = {}
+    else:
+        check(COMMON_EFFECTS_FEATURE not in features, "A legacy durable overlay cannot select new effects behavior")
     features[DURABLE_STORE_DEPENDENCY] = {"EncryptionKey": encryption_key}
     features[DURABLE_STORE_FEATURE] = {"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(database), "LeaseSeconds": lease_seconds}
     write_json(path, document)
     path.chmod(0o600)
-    selected = {"feature": DURABLE_STORE_FEATURE, "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
+    selected = {"feature": DURABLE_STORE_FEATURE, "effectsFeature": DURABLE_EFFECTS_FEATURE if effects else None,
+                "dependsOn": DURABLE_STORE_DEPENDENCY, "provider": "Sqlite",
                 "database": str(database), "leaseSeconds": lease_seconds}
     profile["durableWeaverStore"] = dict(selected)
     return selected
 
 
-def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_password, provider="copilot", enroll=False):
+def configure_weaver_privileges(run, *, administrative, irrecoverable, activation):
+    """Write only trusted host options; the driver must observe bootstrap to prove a live reload.
+
+    This is fixture operator configuration, never a session or model-supplied command. The atomic private replacement
+    also supports later boundary controls without rewriting origins, native credentials or the selected store.
+    """
+    privileges = {"Administrative": administrative, "Irrecoverable": irrecoverable, "Activation": activation}
+    check(all(type(value) is bool for value in privileges.values()), "Fixture privilege classes need explicit boolean values")
+    path = _runtime_configuration(run, run.profiles["backend"], "appsettings.json")
+    settings = json.loads(path.read_text())
+    settings.setdefault("Elsa", {}).setdefault("Weaver", {})["Privileges"] = privileges
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix=".weaver-privileges-", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(settings, stream, indent=2)
+            stream.write("\n")
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return dict(privileges)
+
+
+def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_password, provider="copilot", enroll=False, backend_only=False):
     """Write private owned origins/seed settings before launch; never emit credentials to receipts."""
     from urllib.parse import urlparse
     for address in (backend_url, studio_url):
@@ -262,8 +307,12 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
               "Runtime URL must be an explicit owned loopback origin")
     check(backend_url.rstrip("/") != studio_url.rstrip("/"), "Backend and Studio require separate owned origins")
     check(bool(admin_username.strip()) and bool(admin_password), "Explicit private native administrator seed inputs are required")
-    backend = run.profiles["backend"]["published"]
-    studio = run.profiles["studio"]["published"]
+    check(type(backend_only) is bool, "Select backend-only runtime configuration explicitly")
+    backend = owned_content_root(run, run.profiles["backend"])
+    studio = None if backend_only else owned_content_root(run, run.profiles["studio"])
+    for profile in ([run.profiles["backend"]] if backend_only else [run.profiles["backend"], run.profiles["studio"]]):
+        for name in ("appsettings.json", "shells.json"):
+            _runtime_configuration(run, profile, name)
     settings = json.loads((backend / "appsettings.json").read_text())
     settings["Qualification"].pop("EnrollOwnedStore", None)
     settings["Qualification"].update(StudioOrigin=studio_url.rstrip("/"), DiagnosticGateDirectory="")
@@ -280,14 +329,18 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
     check(len(artifacts["RecoveryContinuationSigningKey"].encode()) >= 32,
           "Owned runtime artifact paging needs its private persistent signing key")
     write_json(backend / "shells.json", document)
-    settings = json.loads((studio / "appsettings.json").read_text())
-    settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
-    settings["Qualification"]["EnrollOwnedStore"] = bool(enroll)
-    settings["Qualification"]["DiagnosticGateDirectory"] = ""
-    write_json(studio / "appsettings.json", settings)
+    configure_weaver_privileges(run, administrative=True, irrecoverable=True, activation=True)
+    if studio is not None:
+        settings = json.loads((studio / "appsettings.json").read_text())
+        settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
+        settings["Qualification"]["EnrollOwnedStore"] = bool(enroll)
+        settings["Qualification"]["DiagnosticGateDirectory"] = ""
+        write_json(studio / "appsettings.json", settings)
     select_protocol_profile(run, provider)
     # These runtime files include the fixture's private native administrator seed.
-    for path in (backend / "appsettings.json", backend / "shells.json", studio / "appsettings.json", studio / "shells.json"):
+    private_paths = [backend / "appsettings.json", backend / "shells.json"]
+    if studio is not None: private_paths += [studio / "appsettings.json", studio / "shells.json"]
+    for path in private_paths:
         path.chmod(0o600)
 
 
@@ -298,6 +351,66 @@ def consumer_files(profile):
     files += [p for p in (published / "wwwroot").rglob("*") if p.is_file()]
     check(bool(files), "Published common payload is empty")
     return {p.relative_to(published).as_posix(): {"path": str(p), "sha256": sha(p)} for p in sorted(files)}
+
+
+def consumer_binary_provenance(profile, closure):
+    """Join the actual published deps target to explicitly retained restored assets.
+
+    Used by the immutable upgrade generations in addition to the existing product
+    archive checks. Neither assembly names nor a cache directory alone establish
+    which package's managed/native bytes were published.
+    """
+    published = profile["published"].resolve()
+    deps_path = published / (Path(profile["assembly"]).stem + ".deps.json")
+    graph = json.loads(Path(closure["assets"]["path"]).read_text())
+    deps = json.loads(deps_path.read_text())
+    target = deps["targets"][deps["runtimeTarget"]["name"]]
+    cache = Path(closure["packageFolders"][0]).resolve()
+    archives = {entry["identity"].casefold(): entry["archive"] for entry in closure["cachedArchives"]}
+    check(len(archives) == len(closure["cachedArchives"]), "Ambiguous retained dependency archive identities")
+    libraries = {identity.casefold(): value for identity, value in graph["libraries"].items()}
+    records = []
+    for identity, library in target.items():
+        key = identity.casefold()
+        if key not in libraries:
+            check(identity.split("/", 1)[0] == Path(profile["assembly"]).stem,
+                  "Published dependency is absent from the package-only restore graph")
+            continue  # The independently built application entry point is not a package.
+        check(key in archives, "Published dependency has no explicitly retained archive")
+        archive_ref = archives[key]
+        archive_path = Path(archive_ref["path"])
+        check(archive_path.is_file() and not archive_path.is_symlink() and archive_path.resolve().is_relative_to(cache)
+              and sha(archive_path) == archive_ref["sha256"], "Retained dependency archive is missing, changed or outside its cache")
+        archive_identity = package_identity(archive_path)
+        check((archive_identity["id"] + "/" + archive_identity["version"]).casefold() == key,
+              "Retained dependency archive identity differs from the selected dependency")
+        for category in ("runtime", "native", "runtimeTargets"):
+            for asset in library.get(category, {}):
+                if Path(asset).name == "_._":
+                    continue
+                relative = Path(asset)
+                check(not relative.is_absolute() and ".." not in relative.parts and "\\" not in asset, "Unsafe published dependency asset")
+                restored = cache / libraries[key]["path"] / relative
+                check(restored.resolve().is_relative_to(cache) and restored.is_file(), "Published dependency has no cached asset")
+                choices = {candidate for candidate in (published / relative, published / relative.name) if candidate.is_file()}
+                check(len(choices) == 1, "Published dependency asset is missing or ambiguous: " + asset)
+                actual = choices.pop()
+                with zipfile.ZipFile(archive_path) as archive:
+                    check(archive.namelist().count(asset) == 1, "Retained dependency archive has no unique exact asset entry: " + asset)
+                    member = archive.getinfo(asset)
+                    check(not member.is_dir() and ((member.external_attr >> 16) & 0o170000) in (0, 0o100000),
+                          "Retained dependency archive asset is not a regular file")
+                    asset_hash = hashlib.sha256(archive.read(member)).hexdigest()
+                check(sha(restored) == asset_hash,
+                      "Restored dependency bytes differ from the retained archive ZIP entry: " + asset)
+                check(actual.resolve().is_relative_to(published) and sha(actual) == asset_hash,
+                      "Published dependency bytes differ from the retained restored archive: " + asset)
+                records.append({"identity": identity, "category": category, "asset": asset,
+                                "archive": archive_ref, "archiveEntry": asset, "archiveEntrySha256": asset_hash,
+                                "restored": {"path": str(restored), "sha256": sha(restored)},
+                                "published": {"path": str(actual), "sha256": sha(actual)}})
+    check(records, "Published dependency provenance is empty")
+    return {"deps": {"path": str(deps_path), "sha256": sha(deps_path)}, "assets": closure["assets"], "files": records}
 
 
 def freeze_consumer_baseline(run):
@@ -319,13 +432,15 @@ def capture_consumer_after(run):
     run.save()
 
 
-def prepare_consumers(run):
+def prepare_consumers(run, *, names=("backend", "studio"), legacy=False):
     """Restore, locked-restore, build and publish two external application-owned compositions.
 
     Requires genuine product feed/SDK and the passed protocol author receipt including
     its actual selected assets graph and explicitly retained cached archives.
     No application process is started and no resource package is referenced or staged at baseline.
     """
+    check(names and len(set(names)) == len(names) and set(names).issubset({"backend", "studio"}), "Unknown or duplicate consumer profile")
+    check(not legacy or names == ("backend",), "Legacy preparation is a backend-only package consumer")
     protocol_author = run.report.get("authors", {}).get("protocol", {})
     check(protocol_author.get("status") == "passed", "Supply a passed independently packed protocol author receipt before preparing consumers")
     protocol = protocol_author["packed"]["package"]
@@ -341,6 +456,8 @@ def prepare_consumers(run):
         ("backend", "BackendConsumer", BACKEND_PACKAGES, BACKEND_EXTERNAL, BACKEND_SHARED, "__BACKEND_REFERENCES__"),
         ("studio", "StudioConsumer", STUDIO_PACKAGES, STUDIO_EXTERNAL, STUDIO_SHARED, "__STUDIO_REFERENCES__"),
     ):
+        if name not in names:
+            continue
         owned_name = name + suffix
         source = run.materialize(owned_name + "-consumer", relative, {token: references(run, products, externals)})
         attempt_record["profiles"][name] = {"source": str(source), "status": "preparing"}
@@ -357,7 +474,7 @@ def prepare_consumers(run):
         settings["Nuplane"]["HostProvidedPackages"] = list(shared)
         if name == "backend":
             settings["ConnectionStrings"]["Tokens"] = "Data Source=" + str(published / "state" / "tokens.db")
-            features = backend_features(published)
+            features = backend_features(published, effects=not legacy)
         else:
             features = {feature: {} for feature in ("StudioApi", "DashboardStudio", "FeatureManagement", "WorkflowsStudio", "WeaverWorkflowsStudio")}
         write_json(source / "appsettings.json", settings)
@@ -424,6 +541,7 @@ def prepare_consumers(run):
             "consumerDirectory": str(source), "publishedDirectory": str(published)}
         attempt_record["profiles"][name].update(status="published", published=str(published))
         run.save()
-    select_protocol_profile(run, "copilot")
+    if "backend" in names:
+        select_protocol_profile(run, "copilot")
     attempt_record["status"] = "published"
     run.save()

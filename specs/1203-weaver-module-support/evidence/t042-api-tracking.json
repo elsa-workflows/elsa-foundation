@@ -1,0 +1,422 @@
+{
+  "purpose": "T042 compiler-only provenance; not completed task, frozen contract or Program acceptance",
+  "recordedAtUtcDate": "2026-11-14",
+  "owningIssue": "https://github.com/elsa-workflows/elsa-foundation/issues/3831",
+  "pullRequest": "https://github.com/elsa-workflows/elsa-foundation/pull/3845",
+  "workerAuthorization": "https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6871081882",
+  "workerCloseout": "https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6872294564",
+  "sources": {
+    "baseline": {
+      "commit": "dff7c490d0e5501b22d4ba89beb389c956d4f423",
+      "tree": "9664f7ff693ce2f244f6e27fdd63b2aeb1e70330"
+    },
+    "target": {
+      "commit": "75a1387b6c2b9221b0674e4892483a505f199a0d",
+      "tree": "67fe0ce284ac3e5bdf35ff7d715dec2e8df698b0"
+    },
+    "qualificationBoundary": "Both sources had generated API-tracking overlays. Target files listed below are the exact tested overlay bytes. Later commit hashes are not asserted as natively tested.",
+    "nativePhase": "d7fa1c5a72e977b62969d58cfd5dbc9e",
+    "nativeInvocationId": "1eaaef27191c4629a29ab7cd9d23d43e",
+    "jobInputSha256": "534d63b9d508a5f2b03655ae28c40e7bfd1ef80f7db3231b3bf8d0f2be0dc04a"
+  },
+  "toolchain": {
+    "sdk": "10.0.402",
+    "runtime": "10.0.13",
+    "rid": "linux-x64",
+    "publicApiAnalyzersVersion": "5.6.0",
+    "analyzerBlobs": {
+      "microsoft.codeanalysis.publicapianalyzers.5.6.0.nupkg": {
+        "bytes": 951120,
+        "sha256": "d3ea70f5682d7538e628e8bfff90632649e7702d9e4ebf365c643ed82ee1e510"
+      },
+      "analyzers/dotnet/Microsoft.CodeAnalysis.PublicApiAnalyzers.dll": {
+        "bytes": 1869608,
+        "sha256": "a3cfed47b16024409eb6ad05624e93fc6d1cdac945e03e91d0f3f664c5f8ed8e"
+      },
+      "analyzers/dotnet/Microsoft.CodeAnalysis.PublicApiAnalyzers.CodeFixes.dll": {
+        "bytes": 59688,
+        "sha256": "2a4314947a559d3ceeb04e83c55d8e3b445ede3d12224cac93969da8bd6e6228"
+      }
+    },
+    "actualSdkFiles": {
+      "Microsoft.Managed.Core.targets": {
+        "sha256": "c25bf275c966978f5a468eecbe2a09b7192f530389e52d1ea167c4f31469e09e",
+        "bytes": 19323
+      },
+      "Microsoft.CSharp.Core.targets": {
+        "sha256": "33a63870665f8eb019f43da5effa450f6c8000089a879bc5373061e870bd3780",
+        "bytes": 12655
+      },
+      "sdk.version": {
+        "sha256": "0a1bf35cd260db20a953a43cd34961114728d24ae232b5a4097b85bbb84a5fc8",
+        "bytes": 98
+      }
+    },
+    "generation": "The private qualification build used -p:EmitCompilerGeneratedFiles=true before SDK imports. Real obj-generated sources were retained and validated; no generated API entry was excluded. This build argument and the private capture hooks are not product changes.",
+    "physicalGeneratedSourcesVerified": 321
+  },
+  "compilerStages": [
+    {
+      "role": "baseline",
+      "project": "Core",
+      "mode": "inventory",
+      "commandExitCode": 1,
+      "sarifSha256": "c29ab95012415c89fb02ec977692cf72b97bd2aaeac9902e6a7c5871261a277e",
+      "assessmentSha256": "2b820392531257f40b9f4c6be8be4e050e2c7e4cf56fa574729a1452faec881c",
+      "uniqueApiEntries": 2016,
+      "reusedEarlierPhase": true
+    },
+    {
+      "role": "baseline",
+      "project": "Core",
+      "mode": "verified",
+      "commandExitCode": 0,
+      "sarifSha256": "b2b86ff25c2a1f2d65b4f7eae7e4471922b1e77a1a7c6be9af2921f806d55792",
+      "assessmentSha256": "fd39b5652a085c75e4866abba85051e53a68e24bbd29071dbbc119cfbf6350d6",
+      "uniqueApiEntries": 0,
+      "reusedEarlierPhase": true
+    },
+    {
+      "role": "baseline",
+      "project": "Api",
+      "mode": "inventory",
+      "commandExitCode": 1,
+      "sarifSha256": "dd5710e5493eba74b27c8c6f09f1986500db2658849c6fbeec9c1895224314ec",
+      "assessmentSha256": "caa22bd06a45491aeac53293f70a07ea826860dcc9048fa2b6e4b13dbd969be4",
+      "uniqueApiEntries": 799,
+      "reusedEarlierPhase": false
+    },
+    {
+      "role": "baseline",
+      "project": "Api",
+      "mode": "verified",
+      "commandExitCode": 0,
+      "sarifSha256": "632e2d2f87d27a2fb02d661cb5a66714914a983447d2a3a81ce7e5012e7a08c5",
+      "assessmentSha256": "8718e4cca3561f4a88be66c2f3ac3abfdab189a4590e7c0c9e0963b284e9f037",
+      "uniqueApiEntries": 0,
+      "reusedEarlierPhase": false
+    },
+    {
+      "role": "target",
+      "project": "Core",
+      "mode": "inventory",
+      "commandExitCode": 1,
+      "sarifSha256": "ad0a0ca163831a9b49851a716add9a91abf00e1d7ccc02f264fe46763c566a3c",
+      "assessmentSha256": "6197ef13b244135e1ab2e18e869924296cc8950828425ef0fc112db20e7a6e00",
+      "uniqueApiEntries": 2115,
+      "reusedEarlierPhase": false
+    },
+    {
+      "role": "target",
+      "project": "Core",
+      "mode": "verified",
+      "commandExitCode": 0,
+      "sarifSha256": "1d919302093dbc5f508a719deb0545efa0ca91f348185982a3000bc69b9fa702",
+      "assessmentSha256": "938c88cd3875e4e997ed177d8f0d88cfd93fe7b93bfa711e1c2c36c8d4cb4e3a",
+      "uniqueApiEntries": 0,
+      "reusedEarlierPhase": false
+    },
+    {
+      "role": "target",
+      "project": "Api",
+      "mode": "inventory",
+      "commandExitCode": 1,
+      "sarifSha256": "ca5a49136c854ba48f3b3f0e392b5d27c2b6dc4f681b55635923f80237fc9ed7",
+      "assessmentSha256": "b44fd5b83f40c8067bffbe5aa65ad6692ec64dc7fea3b34f8a833576df254d3a",
+      "uniqueApiEntries": 846,
+      "reusedEarlierPhase": false
+    },
+    {
+      "role": "target",
+      "project": "Api",
+      "mode": "verified",
+      "commandExitCode": 0,
+      "sarifSha256": "a5d3eb3c1621e7a3f977add1d04bd03a7af42997bb0b4a916260ece62caeedcc",
+      "assessmentSha256": "65d9b82dec90f688973ebd6696739e805e0eb3062ca529f3596cc12981a09a96",
+      "uniqueApiEntries": 0,
+      "reusedEarlierPhase": false
+    }
+  ],
+  "inventoryInterpretation": "Inventory builds intentionally fail only RS0016; subsequent builds with the complete generated files succeed. Counts below are unique API entries, not repeated partial-declaration diagnostics. Shipped files contain only #nullable enable; all pre-GA surface is Unshipped, without a fictional released baseline.",
+  "inventories": {
+    "Core": {
+      "baselineEntries": 2016,
+      "targetEntries": 2115,
+      "baselineFileSha256": "8489cb67e9ca8275acd23f201f23734bfd3ce935df8305ed2a30c2a0f09e800b",
+      "targetFileSha256": "e2376c413e453504e699b6528b66fae1600b92581e13eda4211fa36d8a465880",
+      "addedEntries": [
+        "Elsa.Weaver.Core.Contracts.IWeaverSupportSource",
+        "Elsa.Weaver.Core.Contracts.IWeaverSupportSource.ReadAsync(string! actorId, string! tenantId, Elsa.Weaver.Core.Models.WeaverPolicy! policy, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Elsa.Weaver.Core.Models.WeaverSupportView!>!",
+        "Elsa.Weaver.Core.Contracts.WeaverToolDescriptor.CanPerformWithoutPersistence.get -> bool",
+        "Elsa.Weaver.Core.Contracts.WeaverToolDescriptor.CanPerformWithoutPersistence.init -> void",
+        "Elsa.Weaver.Core.Contracts.WeaverToolDescriptor.ModuleCodes.get -> System.Collections.Generic.IReadOnlyCollection<string!>?",
+        "Elsa.Weaver.Core.Contracts.WeaverToolDescriptor.ModuleCodes.init -> void",
+        "Elsa.Weaver.Core.IWeaverPrincipalSource",
+        "Elsa.Weaver.Core.IWeaverPrincipalSource.GetCurrent(string! actorId, string! tenantId) -> System.Security.Claims.ClaimsPrincipal?",
+        "Elsa.Weaver.Core.Models.WeaverActionProposalStatus.Performed = 12 -> Elsa.Weaver.Core.Models.WeaverActionProposalStatus",
+        "Elsa.Weaver.Core.Models.WeaverContextProviderDescriptor.ModuleCodes.get -> System.Collections.Generic.IReadOnlyCollection<string!>?",
+        "Elsa.Weaver.Core.Models.WeaverContextProviderDescriptor.ModuleCodes.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.<Clone>$() -> Elsa.Weaver.Core.Models.WeaverContextSupportView!",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Admission.get -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Admission.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Authority.get -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Authority.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ContextKinds.get -> System.Collections.Generic.IReadOnlyList<string!>!",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ContextKinds.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Deconstruct(out string! Id, out string! ModuleId, out string! ScopeKind, out System.Collections.Generic.IReadOnlyList<string!>! ContextKinds, out System.Collections.Generic.IReadOnlyList<string!>! SchemaVersions, out System.Collections.Generic.IReadOnlyList<string!>! ResourceTypes, out Elsa.Weaver.Core.Models.WeaverSupportStatus Admission, out Elsa.Weaver.Core.Models.WeaverSupportStatus Authority) -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Equals(Elsa.Weaver.Core.Models.WeaverContextSupportView? other) -> bool",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Id.get -> string!",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.Id.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ModuleId.get -> string!",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ModuleId.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ResourceTypes.get -> System.Collections.Generic.IReadOnlyList<string!>!",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ResourceTypes.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.SchemaVersions.get -> System.Collections.Generic.IReadOnlyList<string!>!",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.SchemaVersions.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ScopeKind.get -> string!",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.ScopeKind.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverContextSupportView.WeaverContextSupportView(string! Id, string! ModuleId, string! ScopeKind, System.Collections.Generic.IReadOnlyList<string!>! ContextKinds, System.Collections.Generic.IReadOnlyList<string!>! SchemaVersions, System.Collections.Generic.IReadOnlyList<string!>! ResourceTypes, Elsa.Weaver.Core.Models.WeaverSupportStatus Admission, Elsa.Weaver.Core.Models.WeaverSupportStatus Authority) -> void",
+        "Elsa.Weaver.Core.Models.WeaverEffectReceipt.ModuleCode.get -> string?",
+        "Elsa.Weaver.Core.Models.WeaverEffectReceipt.ModuleCode.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverEffectScope.NoPersistedEffect = 2 -> Elsa.Weaver.Core.Models.WeaverEffectScope",
+        "Elsa.Weaver.Core.Models.WeaverError.OwnerUnavailable.get -> bool",
+        "Elsa.Weaver.Core.Models.WeaverError.OwnerUnavailable.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverPreparedToolInvocation.RequiredPrivilegeClasses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>?",
+        "Elsa.Weaver.Core.Models.WeaverPreparedToolInvocation.RequiredPrivilegeClasses.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverPrivilegeClass",
+        "Elsa.Weaver.Core.Models.WeaverPrivilegeClass.Activation = 2 -> Elsa.Weaver.Core.Models.WeaverPrivilegeClass",
+        "Elsa.Weaver.Core.Models.WeaverPrivilegeClass.Administrative = 0 -> Elsa.Weaver.Core.Models.WeaverPrivilegeClass",
+        "Elsa.Weaver.Core.Models.WeaverPrivilegeClass.Irrecoverable = 1 -> Elsa.Weaver.Core.Models.WeaverPrivilegeClass",
+        "Elsa.Weaver.Core.Models.WeaverSupportCompleteness",
+        "Elsa.Weaver.Core.Models.WeaverSupportCompleteness.Complete = 2 -> Elsa.Weaver.Core.Models.WeaverSupportCompleteness",
+        "Elsa.Weaver.Core.Models.WeaverSupportCompleteness.Incomplete = 1 -> Elsa.Weaver.Core.Models.WeaverSupportCompleteness",
+        "Elsa.Weaver.Core.Models.WeaverSupportCompleteness.Unavailable = 0 -> Elsa.Weaver.Core.Models.WeaverSupportCompleteness",
+        "Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverSupportStatus.AvailableHint = 1 -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverSupportStatus.Unchecked = 3 -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverSupportStatus.Unknown = 0 -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverSupportStatus.Withheld = 2 -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverSupportView",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.<Clone>$() -> Elsa.Weaver.Core.Models.WeaverSupportView!",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Completeness.get -> Elsa.Weaver.Core.Models.WeaverSupportCompleteness",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Completeness.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Contexts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverContextSupportView!>!",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Contexts.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Deconstruct(out Elsa.Weaver.Core.Models.WeaverSupportCompleteness Completeness, out System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverToolSupportView!>! Tools, out System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverContextSupportView!>! Contexts) -> void",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Equals(Elsa.Weaver.Core.Models.WeaverSupportView? other) -> bool",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Tools.get -> System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverToolSupportView!>!",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.Tools.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverSupportView.WeaverSupportView(Elsa.Weaver.Core.Models.WeaverSupportCompleteness Completeness, System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverToolSupportView!>! Tools, System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverContextSupportView!>! Contexts) -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolPreparation.RequiredPrivilegeClasses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>?",
+        "Elsa.Weaver.Core.Models.WeaverToolPreparation.RequiredPrivilegeClasses.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolResult.Error.get -> Elsa.Weaver.Core.Models.WeaverError?",
+        "Elsa.Weaver.Core.Models.WeaverToolResult.Error.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.<Clone>$() -> Elsa.Weaver.Core.Models.WeaverToolSupportView!",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Admission.get -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Admission.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Authority.get -> Elsa.Weaver.Core.Models.WeaverSupportStatus",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Authority.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.ContractVersion.get -> string!",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.ContractVersion.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Deconstruct(out string! Name, out string! ModuleId, out string! ContractVersion, out Elsa.Weaver.Core.Models.WeaverExecutionLocation ExecutionLocation, out Elsa.Weaver.Core.Models.WeaverSupportStatus Admission, out Elsa.Weaver.Core.Models.WeaverSupportStatus Authority) -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Equals(Elsa.Weaver.Core.Models.WeaverToolSupportView? other) -> bool",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.ExecutionLocation.get -> Elsa.Weaver.Core.Models.WeaverExecutionLocation",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.ExecutionLocation.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.ModuleId.get -> string!",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.ModuleId.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Name.get -> string!",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.Name.init -> void",
+        "Elsa.Weaver.Core.Models.WeaverToolSupportView.WeaverToolSupportView(string! Name, string! ModuleId, string! ContractVersion, Elsa.Weaver.Core.Models.WeaverExecutionLocation ExecutionLocation, Elsa.Weaver.Core.Models.WeaverSupportStatus Admission, Elsa.Weaver.Core.Models.WeaverSupportStatus Authority) -> void",
+        "override Elsa.Weaver.Core.Models.WeaverContextSupportView.Equals(object? obj) -> bool",
+        "override Elsa.Weaver.Core.Models.WeaverContextSupportView.GetHashCode() -> int",
+        "override Elsa.Weaver.Core.Models.WeaverContextSupportView.ToString() -> string!",
+        "override Elsa.Weaver.Core.Models.WeaverSupportView.Equals(object? obj) -> bool",
+        "override Elsa.Weaver.Core.Models.WeaverSupportView.GetHashCode() -> int",
+        "override Elsa.Weaver.Core.Models.WeaverSupportView.ToString() -> string!",
+        "override Elsa.Weaver.Core.Models.WeaverToolSupportView.Equals(object? obj) -> bool",
+        "override Elsa.Weaver.Core.Models.WeaverToolSupportView.GetHashCode() -> int",
+        "override Elsa.Weaver.Core.Models.WeaverToolSupportView.ToString() -> string!",
+        "static Elsa.Weaver.Core.Models.WeaverContextSupportView.operator !=(Elsa.Weaver.Core.Models.WeaverContextSupportView? left, Elsa.Weaver.Core.Models.WeaverContextSupportView? right) -> bool",
+        "static Elsa.Weaver.Core.Models.WeaverContextSupportView.operator ==(Elsa.Weaver.Core.Models.WeaverContextSupportView? left, Elsa.Weaver.Core.Models.WeaverContextSupportView? right) -> bool",
+        "static Elsa.Weaver.Core.Models.WeaverSupportView.operator !=(Elsa.Weaver.Core.Models.WeaverSupportView? left, Elsa.Weaver.Core.Models.WeaverSupportView? right) -> bool",
+        "static Elsa.Weaver.Core.Models.WeaverSupportView.operator ==(Elsa.Weaver.Core.Models.WeaverSupportView? left, Elsa.Weaver.Core.Models.WeaverSupportView? right) -> bool",
+        "static Elsa.Weaver.Core.Models.WeaverToolSupportView.operator !=(Elsa.Weaver.Core.Models.WeaverToolSupportView? left, Elsa.Weaver.Core.Models.WeaverToolSupportView? right) -> bool",
+        "static Elsa.Weaver.Core.Models.WeaverToolSupportView.operator ==(Elsa.Weaver.Core.Models.WeaverToolSupportView? left, Elsa.Weaver.Core.Models.WeaverToolSupportView? right) -> bool"
+      ],
+      "removedEntries": []
+    },
+    "Api": {
+      "baselineEntries": 799,
+      "targetEntries": 846,
+      "baselineFileSha256": "45dde9f72045d854164b625614f56cd30e0a03124c9e248ba673ac80fa4dee41",
+      "targetFileSha256": "661e97eabb91961167b9deeba405c7b91684460ebb611ce5edfe2bd1adaa4221",
+      "addedEntries": [
+        "Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Privileges.get -> Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView!",
+        "Elsa.Weaver.Api.Models.WeaverBootstrapResponse.Privileges.init -> void",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView!",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Activation.get -> bool",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Activation.init -> void",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Administrative.get -> bool",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Administrative.init -> void",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Deconstruct(out bool Administrative, out bool Irrecoverable, out bool Activation) -> void",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Equals(Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? other) -> bool",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Irrecoverable.get -> bool",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Irrecoverable.init -> void",
+        "Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.WeaverPrivilegePolicyView(bool Administrative, bool Irrecoverable, bool Activation) -> void",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.<Clone>$() -> Elsa.Weaver.Api.Models.WeaverSupportResponse!",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.Deconstruct(out string! PolicyScope, out Elsa.Weaver.Core.Models.WeaverSupportView! Support) -> void",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.Equals(Elsa.Weaver.Api.Models.WeaverSupportResponse? other) -> bool",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.PolicyScope.get -> string!",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.PolicyScope.init -> void",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.Support.get -> Elsa.Weaver.Core.Models.WeaverSupportView!",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.Support.init -> void",
+        "Elsa.Weaver.Api.Models.WeaverSupportResponse.WeaverSupportResponse(string! PolicyScope, Elsa.Weaver.Core.Models.WeaverSupportView! Support) -> void",
+        "override Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.Equals(object? obj) -> bool",
+        "override Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.GetHashCode() -> int",
+        "override Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.ToString() -> string!",
+        "override Elsa.Weaver.Api.Models.WeaverSupportResponse.Equals(object? obj) -> bool",
+        "override Elsa.Weaver.Api.Models.WeaverSupportResponse.GetHashCode() -> int",
+        "override Elsa.Weaver.Api.Models.WeaverSupportResponse.ToString() -> string!",
+        "static Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.operator !=(Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? left, Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? right) -> bool",
+        "static Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView.operator ==(Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? left, Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView? right) -> bool",
+        "static Elsa.Weaver.Api.Models.WeaverSupportResponse.operator !=(Elsa.Weaver.Api.Models.WeaverSupportResponse? left, Elsa.Weaver.Api.Models.WeaverSupportResponse? right) -> bool",
+        "static Elsa.Weaver.Api.Models.WeaverSupportResponse.operator ==(Elsa.Weaver.Api.Models.WeaverSupportResponse? left, Elsa.Weaver.Api.Models.WeaverSupportResponse? right) -> bool",
+        "~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<string>>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverContextSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverContextSupportView>>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.IReadOnlyListWeaverToolSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverToolSupportView>>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverApiResponseWeaverSupportResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverApiResponse<Elsa.Weaver.Api.Models.WeaverSupportResponse>>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverContextSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverContextSupportView>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverPrivilegePolicyView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverPrivilegePolicyView>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportCompleteness.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverSupportCompleteness>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Api.Models.WeaverSupportResponse>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportStatus.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverSupportStatus>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverSupportView>",
+        "~Elsa.Weaver.Api.WeaverJsonContext.WeaverToolSupportView.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverToolSupportView>",
+        "~Elsa.Weaver.Api.WeaverSseJsonContext.IReadOnlyListWeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>>",
+        "~Elsa.Weaver.Api.WeaverSseJsonContext.WeaverPrivilegeClass.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Elsa.Weaver.Core.Models.WeaverPrivilegeClass>"
+      ],
+      "removedEntries": []
+    }
+  },
+  "targetFiles": {
+    "Extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj": {
+      "bytes": 542,
+      "sha256": "2902ffef1e16e31c972e7358267983c4ebe1d7d1d1d071521508e73fab6678c3"
+    },
+    "Extensions/Weaver/src/Core/packages.lock.json": {
+      "bytes": 2000,
+      "sha256": "f4cf054a95d6a296e97c1d1b11045e1a9b1fcc46ed6c59a46fd0dca156212248"
+    },
+    "Extensions/Weaver/src/Core/PublicAPI.Shipped.txt": {
+      "bytes": 17,
+      "sha256": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd"
+    },
+    "Extensions/Weaver/src/Core/PublicAPI.Unshipped.txt": {
+      "bytes": 234719,
+      "sha256": "e2376c413e453504e699b6528b66fae1600b92581e13eda4211fa36d8a465880"
+    },
+    "Extensions/Weaver/src/Api/Elsa.Weaver.Api.csproj": {
+      "bytes": 1315,
+      "sha256": "573e8f52895be5f59a19b2652a2c1355aa58d68d1328e0c8b0cb5ae282ed662b"
+    },
+    "Extensions/Weaver/src/Api/packages.lock.json": {
+      "bytes": 4839,
+      "sha256": "d068b3178ecece1001ccb12f2670b3a180e3ace9087d1efdca84643f2e559b11"
+    },
+    "Extensions/Weaver/src/Api/PublicAPI.Shipped.txt": {
+      "bytes": 17,
+      "sha256": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd"
+    },
+    "Extensions/Weaver/src/Api/PublicAPI.Unshipped.txt": {
+      "bytes": 99834,
+      "sha256": "661e97eabb91961167b9deeba405c7b91684460ebb611ce5edfe2bd1adaa4221"
+    }
+  },
+  "lockedRestores": [
+    {
+      "role": "baseline",
+      "project": "Core",
+      "originalSha256": "7c9e9e479c60b60c474d94eb14aefccc0558eb3b812b7d96f2e83ebdfcf8a71c",
+      "actualGeneratedSha256": "f4cf054a95d6a296e97c1d1b11045e1a9b1fcc46ed6c59a46fd0dca156212248",
+      "onlyAnalyzerNodeAdded": true
+    },
+    {
+      "role": "baseline",
+      "project": "Api",
+      "originalSha256": "b65c4db07086292ea61c52922bc1f8e5a987eabcd06f077953038e9207941cd4",
+      "actualGeneratedSha256": "8b451944761fa8bfc0ab723878964916fcf09daa5e8c0faf90dff39e35812af2",
+      "onlyAnalyzerNodeAdded": true
+    },
+    {
+      "role": "target",
+      "project": "Core",
+      "originalSha256": "7c9e9e479c60b60c474d94eb14aefccc0558eb3b812b7d96f2e83ebdfcf8a71c",
+      "actualGeneratedSha256": "f4cf054a95d6a296e97c1d1b11045e1a9b1fcc46ed6c59a46fd0dca156212248",
+      "onlyAnalyzerNodeAdded": true
+    },
+    {
+      "role": "target",
+      "project": "Api",
+      "originalSha256": "d5ffa9f57b44258d7ac490975f2856e79f4cd3c766ad321b9a27256b0c834fc8",
+      "actualGeneratedSha256": "d068b3178ecece1001ccb12f2670b3a180e3ace9087d1efdca84643f2e559b11",
+      "onlyAnalyzerNodeAdded": true
+    }
+  ],
+  "remainingGates": {
+    "guardRestore": "PASSED",
+    "guardBuild": "TIMEOUT_PARENT_DIAGNOSIS_RAW_STDOUT_STDERR_RETAINED",
+    "fiveGuardTests": "UNRUN_NO_TRX_OR_GUARD_TEST_COMMAND",
+    "fullNativePhase": "FAILED",
+    "nativeExitCode": 1,
+    "originalFullPairedLane": "UNRUN: its protected source/API window expired before product execution",
+    "wholeT042Acceptance": false,
+    "wholeProgramAcceptance": false,
+    "followup": "Run all five PublicApiFilesGuardTests and remaining task gates on the committed head; preserve exact-head CI, composed/package/provider/UX qualification and the formal independent review loop."
+  },
+  "retainedFailures": [
+    "Initial SDK admission falsely matched node inside a kernel task name; corrected exact node/nodejs matching passed with original failure retained.",
+    "A later component reservation reached admission one second too late and refused before guest installation or Git/product execution.",
+    "Two API inventory attempts failed physical-source validation for virtual System.Text.Json generator paths. Early EmitCompilerGeneratedFiles fixed physical emission without relaxing validation.",
+    "The final API phase completed all eight compiler stages and four locked restores, then guard-build exceeded its separate 300-second cap. No guard test/TRX/final receipt exists.",
+    "Initial export refused four inert CLR FIFOs left after the killed build. A narrowly reviewed recovery preserved their exact metadata and all regular proof bytes; original refusal remains retained."
+  ],
+  "laterCommittedHeadCi": {
+    "head": "6ade0c238406f9ed9a57e71d946c6802a788bec7",
+    "run": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43562849596",
+    "job": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43562849596/job/132377978129",
+    "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+    "command": "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-build -p:WarningsNotAsErrors=NU1603 --logger trx --results-directory /home/runner/work/_temp/shard/try1/0 --blame-hang-timeout 10m --blame-hang-dump-type none",
+    "filter": null,
+    "passed": 622,
+    "failed": 0,
+    "skipped": 0,
+    "total": 622,
+    "artifact": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/43562849596/artifacts/14111398496",
+    "artifactContents": "test-outcomes.json; CI did not upload the raw TRX",
+    "scope": "Later successful whole-project CI, including the source roster of five PublicApiFilesGuardTests. This does not change the failed worker phase, prove a separate list-tests comparison or qualify subsequent source, remaining T042 gates or the Program."
+  },
+  "rawCustody": {
+    "location": "Private local evidence archive; not published to the repository",
+    "archiveBytes": 956233963,
+    "archiveSha256": "c23949e5f33855972e762062c06c954bb71a3f0fd60a27c50bda413a5cb87f0c",
+    "selectedRawIndexSha256": "a2033bb67ae654ff14c5dae4c7c08f2c80593cd2b4f06f84a89e7dbeda18f55e",
+    "independentCompilerOnlyReportSha256": "cf61830a2160a74337ab67c0d454c8ca13da0ab95c19bd3db217da571d814076",
+    "fullAudit": "FAILED as expected: actual native phase failed and its mandatory final receipt is absent. Compiler-only verification does not waive this gate.",
+    "cleanupReceiptSha256": "1165965cf834daf517dd1345f21b811bd57bce93fd6867816e5b897ca0f903fa",
+    "limits": {
+      "cpu": 1,
+      "memoryBytes": 3221225472,
+      "maximumMinutes": 90
+    },
+    "deallocatedAtUtc": "2026-11-14T05:14:51.067671Z",
+    "resourceGroupAbsentAtUtc": "2026-11-14T05:18:14.590374Z",
+    "originalExpiryUtc": "2026-11-14T05:23:53.862308Z",
+    "privateKey": "Unlinked without reading at 2026-11-14T05:18:48.270471Z"
+  }
+}

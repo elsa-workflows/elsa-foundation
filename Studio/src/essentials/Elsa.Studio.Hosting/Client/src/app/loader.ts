@@ -5,6 +5,7 @@ import type {
   StudioModuleManifest
 } from "../sdk";
 import type {StudioModuleHostContext, StudioModuleInstance} from "../sdk";
+import { beginWeaverModuleRegistration, isWeaverRegistryCurrent, retireWeaverModuleRegistration, retireWeaverRegistryGeneration } from "./weaver/weaverRegistrationOrigins";
 
 export interface StudioLoadedModule {manifest: StudioModuleManifest; instance: StudioModuleInstance}
 
@@ -60,12 +61,17 @@ export async function initializeStudioModules(manifests: StudioModuleManifest[],
 
 export async function registerStudioModuleInstances(instances: readonly StudioLoadedModule[], api: ElsaStudioModuleApi) {
   for (const {manifest,instance} of instances) {
+    if (!isWeaverRegistryCurrent(api)) return;
+    const registration = beginWeaverModuleRegistration(api, manifest.id);
     try {
-      await instance.register(api);
+      await instance.register(registration.api);
+      if (!registration.pending()) continue;
       for (const contribution of instance.shell ?? []) api.shell?.add(contribution);
+      if (!registration.complete()) continue;
       addDiagnostic(api,manifest.id,"loaded","Module activated.");
     } catch (error) {
-      if (instance.connection) throw error;
+      registration.fail();
+      if (instance.connection) { retireWeaverRegistryGeneration(api); throw error; }
       addDiagnostic(api,manifest.id,"failed",error instanceof Error ? error.message : String(error));
     }
   }
@@ -88,6 +94,8 @@ export async function loadStudioModules(
   const loadStyle = options.loadStyle ?? defaultLoadStyle;
 
   for (const manifest of manifests) {
+    if (!isWeaverRegistryCurrent(api)) break;
+    retireWeaverModuleRegistration(api, manifest.id);
     if (!isVersionRangeCompatible(manifest.requiredHostVersion, options.hostVersion)) {
       diagnostics.push(addDiagnostic(api, manifest.id, "incompatible", `Requires host ${manifest.requiredHostVersion}.`));
       continue;
@@ -106,7 +114,10 @@ export async function loadStudioModules(
 
       const module = await importModule(addModuleVersion(manifest.entry, moduleVersion));
       if (!("register" in module)) throw new Error("This module requires the host initialization lifecycle.");
-      await module.register(api);
+      if (!isWeaverRegistryCurrent(api)) break;
+      const registration = beginWeaverModuleRegistration(api, manifest.id);
+      try { await module.register(registration.api); if (!registration.complete()) continue; }
+      catch (error) { registration.fail(); throw error; }
       diagnostics.push(addDiagnostic(api, manifest.id, "loaded", "Module activated."));
     } catch (error) {
       diagnostics.push(addDiagnostic(api, manifest.id, "failed", error instanceof Error ? error.message : String(error)));

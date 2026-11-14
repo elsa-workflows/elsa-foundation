@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Weaver.Core.Models;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.Services;
 using Elsa.Weaver.Tests;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -16,21 +17,21 @@ public sealed class EfWeaverStoreFailureTests
 {
     private const string Owner = "owner-a";
 
-    public static TheoryData<string, string> Tampering() => new()
+    public static TheoryData<string, string, bool> Tampering() => new()
     {
-        { "tampered session ciphertext", "UPDATE elsa_weaver_sessions SET Payload = substr(Payload, 1, length(Payload) - 6) || 'AAAAAA'" },
-        { "a payload that is not ciphertext", "UPDATE elsa_weaver_messages SET Payload = 'plain text'" },
-        { "ciphertext moved to another row", "UPDATE elsa_weaver_messages SET Payload = (SELECT Payload FROM elsa_weaver_messages WHERE MessageId = 'message-1') WHERE MessageId = 'message-2'" },
-        { "a plain column that disagrees with its record", "UPDATE elsa_weaver_messages SET Status = 99 WHERE MessageId = 'message-1'" },
-        { "a snapshot whose recorded size disagrees", "UPDATE elsa_weaver_disclosure_snapshots SET Size = Size + 1" },
-        { "snapshot text moved to another digest of the same size", "UPDATE elsa_weaver_disclosure_snapshots SET Canonical = (SELECT Canonical FROM elsa_weaver_disclosure_snapshots WHERE Digest = 'digest-1') WHERE Digest = 'digest-2'" },
-        { "a key whose hash disagrees", "UPDATE elsa_weaver_call_keys SET Key = 'call-2'" },
-        { "a schema version this build does not read", "UPDATE elsa_weaver_proposals SET SchemaVersion = '9.0.0'" }
+        { "tampered session ciphertext", "UPDATE elsa_weaver_sessions SET Payload = substr(Payload, 1, length(Payload) - 6) || 'AAAAAA'", false },
+        { "a payload that is not ciphertext", "UPDATE elsa_weaver_messages SET Payload = 'plain text'", false },
+        { "ciphertext moved to another row", "UPDATE elsa_weaver_messages SET Payload = (SELECT Payload FROM elsa_weaver_messages WHERE MessageId = 'message-1') WHERE MessageId = 'message-2'", false },
+        { "a plain column that disagrees with its record", "UPDATE elsa_weaver_messages SET Status = 99 WHERE MessageId = 'message-1'", false },
+        { "a snapshot whose recorded size disagrees", "UPDATE elsa_weaver_disclosure_snapshots SET Size = Size + 1", false },
+        { "snapshot text moved to another digest of the same size", "UPDATE elsa_weaver_disclosure_snapshots SET Canonical = (SELECT Canonical FROM elsa_weaver_disclosure_snapshots WHERE Digest = 'digest-1') WHERE Digest = 'digest-2'", false },
+        { "a key whose hash disagrees", "UPDATE elsa_weaver_call_keys SET Key = 'call-2'", false },
+        { "a schema version this build does not read", "UPDATE elsa_weaver_proposals SET SchemaVersion = '9.0.0'", true }
     };
 
     [Theory]
     [MemberData(nameof(Tampering))]
-    public async Task Unreadable_state_is_unavailable_with_its_cause_and_changes_nothing(string _, string tamper)
+    public async Task Unreadable_state_is_unavailable_with_its_cause_and_changes_nothing(string _, string tamper, bool schemaSkew)
     {
         using var database = new WeaverSqliteDatabase();
         var store = database.RecordStore(new RestartTestClock());
@@ -42,7 +43,14 @@ public sealed class EfWeaverStoreFailureTests
 
         Assert.Equal("unreadable", failure.Reason);
         Assert.Equal("session-1", failure.SessionId);
-        Assert.IsType<InvalidDataException>(failure.InnerException);
+        // Shared chain readability distinguishes a future format from corrupt authenticated content.
+        if (schemaSkew)
+        {
+            var skew = Assert.IsType<EfSchemaVersionSkewException>(failure.InnerException);
+            Assert.Equal("Weaver", skew.Family);
+            Assert.Equal("9.0.0", skew.Found);
+        }
+        else Assert.IsType<InvalidDataException>(failure.InnerException);
         Assert.Equal(before, await database.ReadAllTextAsync());
         // Authorization still reads the plain owner columns.
         Assert.Equal(new WeaverSessionOwner("actor-1", "tenant-1"), await store.FindOwnerAsync("session-1"));

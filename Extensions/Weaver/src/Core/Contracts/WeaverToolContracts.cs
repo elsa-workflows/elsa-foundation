@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Weaver.Core.Models;
 
 namespace Elsa.Weaver.Core.Contracts;
@@ -37,6 +38,20 @@ public sealed record WeaverToolDescriptor(
     public string? ResultSchemaVersion { get; init; }
     public string? ResultJsonSchema { get; init; }
     public string? ResultRendererId { get; init; }
+
+    /// <summary>Whether this tool can produce owning-resource evidence of an action without a persisted resource change.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool CanPerformWithoutPersistence { get; init; }
+
+    private readonly IReadOnlyCollection<string>? _moduleCodes;
+
+    /// <summary>Copied closed set of typed outcome codes; null preserves undeclared compatibility and empty allows no code.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyCollection<string>? ModuleCodes
+    {
+        get => _moduleCodes;
+        init => _moduleCodes = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
 }
 
 /// <summary>A concrete request to run a tool, produced by the orchestrator from a provider tool call.</summary>

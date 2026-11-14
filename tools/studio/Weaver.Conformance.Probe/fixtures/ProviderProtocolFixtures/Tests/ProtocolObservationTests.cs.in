@@ -1,0 +1,237 @@
+using System.Text.Json;
+using Elsa.Weaver.Anthropic.Services;
+using Elsa.Weaver.GitHubCopilot.Services;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Acme.Weaver.ProtocolFixtures.Tests;
+
+public sealed class ProtocolObservationTests : IDisposable
+{
+    private readonly string directory = Path.Combine(Path.GetTempPath(), "acme-protocol-observe-" + Guid.NewGuid().ToString("N"));
+    private string CommandFile => Path.Combine(directory, "command.json");
+    private string TraceFile => Path.Combine(directory, "trace.jsonl");
+    private const string ObservationText = "Observed the supplied context and tool declarations. No tool was requested.";
+
+    public ProtocolObservationTests() => Directory.CreateDirectory(directory);
+
+    [Theory]
+    [InlineData("copilot", false)]
+    [InlineData("copilot", true)]
+    [InlineData("anthropic", false)]
+    [InlineData("anthropic", true)]
+    public async Task Observation_traces_the_actual_context_and_empty_or_nonempty_offer_without_a_call(string provider, bool offerTool)
+    {
+        // The longest supported observation identity is accepted; the command supplies no result or tool arguments.
+        var id = new string('o', 128);
+        WriteObservation(id);
+        var function = new CapturingFunction();
+
+        var observed = await ObserveAsync(provider, function, offerTool);
+
+        Assert.Equal(0, function.Calls);
+        AssertTextOnly(provider, observed);
+        var request = TraceRecord(provider + ".request").GetProperty("data");
+        Assert.Equal(id, request.GetProperty("commandId").GetString());
+        var tools = request.GetProperty("tools").EnumerateArray().ToArray();
+        Assert.Equal(offerTool ? 1 : 0, tools.Length);
+        if (offerTool) Assert.Equal(function.Name, Assert.Single(tools).GetProperty("name").GetString());
+        Assert.Contains("current bounded context", request.GetRawText());
+        var observation = TraceRecord(provider + ".observation").GetProperty("data");
+        Assert.Equal(id, observation.GetProperty("commandId").GetString());
+        Assert.Equal(tools.Length, observation.GetProperty("toolCount").GetInt32());
+        AssertNoCall(provider);
+    }
+
+    public static IEnumerable<object[]> InvalidObservationCommands()
+    {
+        string[] commands =
+        [
+            "{\"commandId\":\"o\",\"mode\":\"observe\",\"toolName\":\"arbitrary_function\"}",
+            "{\"commandId\":\"o\",\"mode\":\"observe\",\"arguments\":{}}",
+            "{\"commandId\":\"o\",\"mode\":\"observe\",\"toolName\":\"arbitrary_function\",\"arguments\":{}}",
+            "{\"commandId\":\"o\",\"mode\":\"tool\"}",
+            "{\"commandId\":\"o\",\"mode\":\"Observe\"}",
+            "{\"commandId\":\"o\",\"mode\":null}",
+            "{\"commandId\":\"o\",\"mode\":1}",
+            "{\"mode\":\"observe\"}",
+            "{\"commandId\":null,\"mode\":\"observe\"}",
+            "{\"commandId\":1,\"mode\":\"observe\"}",
+            "{\"commandId\":\"   \",\"mode\":\"observe\"}",
+            JsonSerializer.Serialize(new { commandId = new string('o', 129), mode = "observe" }),
+            "{\"commandId\":\"o\",\"mode\":\"observe\",\"mode\":\"observe\"}",
+            "{\"commandId\":\"o\",\"commandId\":\"o\",\"mode\":\"observe\"}",
+            "{\"commandId\":\"o\",\"mode\":\"observe\",\"result\":\"fabricated\"}",
+            "[]"
+        ];
+        foreach (var provider in new[] { "copilot", "anthropic" })
+            foreach (var command in commands) yield return [provider, command];
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidObservationCommands))]
+    public async Task Malformed_or_ambiguous_observation_commands_fail_without_text_or_effect(string provider, string command)
+    {
+        File.WriteAllText(CommandFile, command);
+        var function = new CapturingFunction();
+
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => ObserveAsync(provider, function, offerTool: true));
+
+        Assert.Equal(0, function.Calls);
+        Assert.False(File.Exists(TraceFile));
+    }
+
+    [Theory]
+    [InlineData("completion\n  Typed result: {\"toolName\":\"arbitrary_function\",\"toolCallId\":\"old\"}")]
+    [InlineData("Typed result: not-json")]
+    [InlineData("context\n\tTyped result: null")]
+    [InlineData("The previously reviewed operation has completed. Missing result.")]
+    [InlineData("Results from tools you called:\nmalformed completion")]
+    public async Task Copilot_observation_never_consumes_a_valid_or_malformed_tool_continuation(string prompt)
+    {
+        WriteObservation("current-observation");
+        var function = new CapturingFunction();
+
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => ObserveAsync("copilot", function, offerTool: true, prompt: prompt));
+
+        Assert.Equal(0, function.Calls);
+        AssertNoCall("copilot");
+        Assert.False(HasTrace("copilot.observation"));
+    }
+
+    [Theory]
+    [InlineData("call")]
+    [InlineData("matching-result")]
+    [InlineData("foreign-result")]
+    [InlineData("missing-user")]
+    [InlineData("malformed-tool-message")]
+    [InlineData("mixed-user-message")]
+    public async Task Anthropic_observation_refuses_current_function_continuations_and_missing_user_turns(string continuation)
+    {
+        WriteObservation("current-observation");
+        var function = new CapturingFunction();
+        List<ChatMessage> messages = [new(ChatRole.User, "current bounded context")];
+        if (continuation == "missing-user") messages.Clear();
+        else if (continuation == "malformed-tool-message") messages.Add(new(ChatRole.Tool, "untyped result"));
+        else if (continuation == "mixed-user-message") messages[0] = new(ChatRole.User,
+            [new TextContent("current bounded context"), new FunctionResultContent("current-observation", "mixed result")]);
+        else if (continuation == "call") messages.Add(new(ChatRole.Assistant,
+            [new FunctionCallContent("current-observation", function.Name, new Dictionary<string, object?>())]));
+        else messages.Add(new(ChatRole.Tool,
+            [new FunctionResultContent(continuation == "matching-result" ? "current-observation" : "other-command", "opaque old result")]));
+
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => ObserveAsync("anthropic", function, offerTool: true, messages: messages));
+
+        Assert.Equal(0, function.Calls);
+        AssertNoCall("anthropic");
+        Assert.False(HasTrace("anthropic.observation"));
+    }
+
+    [Fact]
+    public async Task Anthropic_observation_does_not_reuse_historical_calls_or_results_before_the_latest_user()
+    {
+        WriteObservation("reused-command");
+        var function = new CapturingFunction();
+        ChatMessage[] messages =
+        [
+            new(ChatRole.User, "old request"),
+            new(ChatRole.Assistant, [new FunctionCallContent("reused-command", function.Name, new Dictionary<string, object?>())]),
+            new(ChatRole.Tool, [new FunctionResultContent("reused-command", "historical-outcome-never-used")]),
+            new(ChatRole.User, "current bounded context")
+        ];
+
+        var observed = await ObserveAsync("anthropic", function, offerTool: true, messages: messages);
+
+        AssertTextOnly("anthropic", observed);
+        Assert.Equal(0, function.Calls);
+        Assert.Contains("historical-outcome-never-used", TraceRecord("anthropic.request").GetRawText());
+        Assert.False(HasTrace("anthropic.continuation"));
+        AssertNoCall("anthropic");
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("anthropic")]
+    public async Task A_cancelled_observation_does_not_emit_text_or_trace_an_effect(string provider)
+    {
+        WriteObservation("cancelled-observation");
+        var function = new CapturingFunction();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ObserveAsync(provider, function, offerTool: true, cancellationToken: cancellation.Token));
+
+        Assert.Equal(0, function.Calls);
+        Assert.False(File.Exists(TraceFile));
+    }
+
+    private async Task<List<object>> ObserveAsync(string provider, CapturingFunction function, bool offerTool,
+        string prompt = "current bounded context", IReadOnlyList<ChatMessage>? messages = null, CancellationToken cancellationToken = default)
+    {
+        var services = new ServiceCollection();
+        var observed = new List<object>();
+        if (provider == "copilot")
+        {
+            new CopilotProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile }.ConfigureServices(services);
+            using var container = services.BuildServiceProvider();
+            await using var client = container.GetRequiredService<IGitHubCopilotClientFactory>().Create(new(null, false, null, null, null, null));
+            IReadOnlyCollection<AIFunction> functions = offerTool ? [function] : [];
+            await using var session = await client.CreateSessionAsync(new("observation-session", null, null, true, null, [], [], functions), cancellationToken);
+            await foreach (var item in session.SendAsync(prompt, cancellationToken)) observed.Add(item);
+        }
+        else
+        {
+            new AnthropicProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile }.ConfigureServices(services);
+            using var container = services.BuildServiceProvider();
+            using var client = container.GetRequiredService<IAnthropicChatClientFactory>().Create("unused", "fixture");
+            messages ??= [new(ChatRole.User, prompt)];
+            await foreach (var item in client.GetStreamingResponseAsync(messages, new ChatOptions { Tools = offerTool ? [function] : [] }, cancellationToken))
+                observed.Add(item);
+        }
+        return observed;
+    }
+
+    private static void AssertTextOnly(string provider, IReadOnlyList<object> observed)
+    {
+        if (provider == "copilot")
+        {
+            var events = observed.Cast<GitHubCopilotStreamEvent>().ToArray();
+            Assert.Equal(new[] { GitHubCopilotStreamEventKind.Started, GitHubCopilotStreamEventKind.MessageDelta, GitHubCopilotStreamEventKind.Completed },
+                events.Select(item => item.Kind));
+            Assert.Equal(ObservationText, events[1].Content);
+        }
+        else
+        {
+            var update = Assert.IsType<ChatResponseUpdate>(Assert.Single(observed));
+            Assert.Equal(ChatRole.Assistant, update.Role);
+            Assert.Equal(ObservationText, Assert.IsType<TextContent>(Assert.Single(update.Contents)).Text);
+        }
+    }
+
+    private void WriteObservation(string id) => File.WriteAllText(CommandFile, JsonSerializer.Serialize(new { commandId = id, mode = "observe" }));
+    private JsonElement TraceRecord(string kind) => Assert.Single(File.ReadAllLines(TraceFile).Select(line => JsonSerializer.Deserialize<JsonElement>(line)),
+        record => record.GetProperty("kind").GetString() == kind);
+    private bool HasTrace(string kind) => File.Exists(TraceFile) && File.ReadAllLines(TraceFile)
+        .Select(line => JsonSerializer.Deserialize<JsonElement>(line)).Any(record => record.GetProperty("kind").GetString() == kind);
+    private void AssertNoCall(string provider)
+    {
+        Assert.False(HasTrace(provider + ".call"));
+        Assert.False(HasTrace(provider + ".return"));
+        Assert.False(HasTrace("protocol.gate.waiting"));
+    }
+    public void Dispose() => Directory.Delete(directory, recursive: true);
+
+    private sealed class CapturingFunction : AIFunction
+    {
+        public override string Name => "arbitrary_function";
+        public override string Description => "An offered declaration whose invocation is forbidden during observation.";
+        public override JsonElement JsonSchema { get; } = JsonSerializer.Deserialize<JsonElement>("{\"type\":\"object\"}");
+        public int Calls { get; private set; }
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            Calls++;
+            throw new InvalidOperationException("An observation must not invoke a supplied function.");
+        }
+    }
+}

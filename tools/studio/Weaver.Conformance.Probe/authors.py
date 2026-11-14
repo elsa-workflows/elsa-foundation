@@ -143,7 +143,9 @@ def _pack(run, tag, source, env, package_id, version, *, register=True):
         for name in names:
             if name.endswith((".js", ".css", ".json", ".props", ".targets")):
                 contents = archive.read(name)
-                check(str(REPO).encode() not in contents and str(run.sdk).encode() not in contents, "Module archive embeds source/SDK paths")
+                sdk = getattr(run, "sdk", None)
+                check(str(REPO).encode() not in contents and (sdk is None or str(sdk).encode() not in contents),
+                      "Module archive embeds source/SDK paths")
     if register:
         run.module_packages[package_id] = metadata
         run.report["modules"] = dict(run.module_packages)
@@ -229,8 +231,8 @@ def build_authors(run):
     authors = run.report.setdefault("authors", {})
     version = "1.0.0-witness.g" + run.source[:8]
     replacements = {"__FIXTURE_VERSION__": version}
-    for name, fixture, package_id, count in (("protocol", "ProviderProtocolFixtures", MODULE_IDS[0], 21),
-                                              ("backend", "Resource.Backend", MODULE_IDS[1], 123),
+    for name, fixture, package_id, count in (("protocol", "ProviderProtocolFixtures", MODULE_IDS[0], 71),
+                                              ("backend", "Resource.Backend", MODULE_IDS[1], 233),
                                               ("studio", "Resource.Studio", MODULE_IDS[2], None)):
         authors[name] = {"source": run.source, "status": "building"}
         run.save()

@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible", "autonomy-size", "workflow-read-only", "workflow-batch", "workflow-explain", "workflow-library", "workflow-templates", "workflow-version-history", "workflow-executable-inspector", "workflow-run", "module-effects"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 // T015 (#3440): each lifecycle case reuses one original journey; FullAuto is selected before the conversation exists.
@@ -73,7 +73,17 @@ function retain(name, value) {
 const result = { journey: config.journey, provider: config.provider, evidenceCategory: "deterministic-provider-protocol", liveProvider: false,
   status: "running", observations: {}, evidence: [], startedAt: new Date().toISOString(), noFabricatedResponses: true };
 process.on("uncaughtExceptionMonitor", retainFailureDiagnostic);
-const browser = await chromium.launch({ headless: true });
+const effectsProcess = config.journey === "module-effects";
+const lease = value => {
+  need(effectsProcess && path.isAbsolute(config.effectsProcessLease) && typeof config.effectsProcessToken === "string", "An owned effects browser process lease is required.");
+  const temporary = config.effectsProcessLease + ".tmp";
+  fs.writeFileSync(temporary, JSON.stringify({ token: config.effectsProcessToken, nodePid: process.pid, ...value }), { mode: 0o600 });
+  fs.renameSync(temporary, config.effectsProcessLease);
+};
+if (effectsProcess) lease({ phase: "launching", browserPid: null });
+const browserServer = effectsProcess ? await chromium.launchServer({ headless: true }) : null;
+if (browserServer) lease({ phase: "running", browserPid: browserServer.process().pid });
+const browser = browserServer ? await chromium.connect(browserServer.wsEndpoint()) : await chromium.launch({ headless: true });
 result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
 const page = await context.newPage();
@@ -130,7 +140,7 @@ if (config.journey === "workflow-read-only") page.on("response", response => {
 // the native SSE capture's own raw bytes. The explanation journey searches all of it for the typed canary.
 const weaverTraffic = [], weaverResponseReads = [];
 // Spec 1193 T045: the run journey searches the same raw Weaver traffic for its Run canary.
-if (["workflow-explain", "workflow-run"].includes(config.journey)) {
+if (["workflow-explain", "workflow-run", "module-effects"].includes(config.journey)) {
   page.on("request", request => {
     const url = new URL(request.url());
     if (url.origin === backend && url.pathname.startsWith("/_elsa/weaver/"))
@@ -459,7 +469,7 @@ async function owner(name, endpoint, headers = {}) {
   const value = JSON.parse(rawBody);
   const receipt = retain(name, { url: response.url(), status: response.status(), value });
   result.evidence.push(receipt);
-  return { value, receipt };
+  return { value, receipt, rawBody, url: response.url(), status: response.status() };
 }
 async function screenshot(name) {
   const file = path.join(config.output, name + ".png");
@@ -2178,6 +2188,275 @@ function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
 }
+
+function requireEffectsDisclosureCapture(audit, traffic, streams, visible, canary, origin, sessionPath) {
+  need(typeof canary === "string" && /^[a-f0-9]{48}$/.test(canary), "Exact private effects canary required.");
+  const auditUrl = new URL(audit.url), expectedAudit = new URL(origin + "/_elsa/weaver/audit");
+  need(auditUrl.origin === expectedAudit.origin && auditUrl.pathname === expectedAudit.pathname
+    && auditUrl.searchParams.get("take") === "100" && auditUrl.searchParams.get("sessionId") === sessionPath.split("/").at(-1)
+    && [...auditUrl.searchParams].length === 2 && audit.status === 200 && typeof audit.rawBody === "string" && audit.rawBody
+    && JSON.stringify(JSON.parse(audit.rawBody)) === JSON.stringify(audit.value) && Array.isArray(audit.value?.data),
+    "Actual raw and decoded current-session audit required.");
+  need(Array.isArray(traffic) && traffic.length > 0 && traffic.every(item => !Object.hasOwn(item, "unreadable") && typeof item.body === "string")
+    && traffic.some(item => item.method === "POST" && item.url === origin + sessionPath + "/messages"),
+    "Raw Weaver traffic was absent or unreadable.");
+  need(Array.isArray(streams) && streams.length > 0 && streams.every(item => item.url === origin + sessionPath + "/stream"
+    && item.status === 200 && item.contentType?.split(";", 1)[0].trim() === "text/event-stream"
+    && item.captureError == null && item.captureValidationError == null && ["streamResourceContent", "getResponseBody"].includes(item.captureMethod)
+    && item.trailingIncompleteUtf8Bytes === 0 && item.textTruncation === "none"
+    && typeof item.rawBody === "string" && item.rawBody.startsWith("data: ") && item.rawBody.endsWith("\n\n")),
+    "Raw Weaver streams were absent, incomplete or had capture errors.");
+  const decoded = streams.map(item => item.rawBody.replace(/\r\n/g, "\n").split("\n\n").filter(Boolean).map(frame => {
+    const lines = frame.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).replace(/^ /, ""));
+    need(lines.length > 0, "An effects stream had no native data frame.");
+    const value = JSON.parse(lines.join("\n"));
+    need(typeof value.id === "string" && value.id && typeof value.kind === "string", "Malformed native effects frame.");
+    return value;
+  }));
+  need(decoded.every(frames => frames.length > 0 && frames.some(frame => ["completed", "toolApprovalRequested", "error", "turnCancelled"].includes(frame.kind))),
+    "The effects stream did not retain its native terminal boundary.");
+  need(typeof visible === "string" && ![audit.rawBody, JSON.stringify(audit.value), JSON.stringify(traffic),
+    JSON.stringify(streams), JSON.stringify(decoded), visible].some(value => value.includes(canary)),
+    "Typed canary leaked through actual raw/decoded audit, Weaver traffic, stream or review.");
+  return { found: 0, rawWeaverTraffic: true, nativeStreams: true, reviewCard: true, audit: true, canarySha256: digest(Buffer.from(canary)) };
+}
+
+// Spec1203's independently packaged author. This is probe-only fixture knowledge;
+// all context collection, review, policy and execution remain the composed product.
+async function moduleEffects() {
+  const spec = config.effectsScenario;
+  const tools = ["acme_home_admin_visibility", "acme_home_irrecoverable_visibility", "acme_home_omitted_admin_visibility",
+    "acme_home_raised_risk_visibility", "acme_home_activation_visibility", "acme_home_check_widget"];
+  need(spec && tools.includes(spec.tool) && ["browser", "browser-failed", "browser-typed", "nested-removal"].includes(spec.condition), "Exact effects fixture scenario required.");
+  const typed = spec.condition === "browser-typed";
+  if (typed) need(typeof config.effectsCanary === "string" && config.effectsCanary.length === 48
+    && ["authorization", "preparation", "execution", "receipt", "context"].includes(spec.channel), "Private typed-channel input required.");
+  result.effectsScenario = spec;
+  result.effectsRefs = {};
+  const capture = async name => {
+    await screenshot("effects-" + name);
+    return result.evidence.at(-1);
+  };
+  const read = async (name, endpoint, headers = {}) => {
+    const value = await owner("effects-" + name, endpoint, headers);
+    result.effectsRefs[name] = value.receipt;
+    return value.value;
+  };
+  const layoutHeaders = { "X-Elsa-Studio-Host-Id": witness.hostId };
+  await page.goto(studio + "/qualification/acme-home-effects");
+  await expect(page.getByTestId("acme-effects-revision")).toBeVisible();
+  const before = await read("before", witness.ownerEndpoint);
+  const layoutBefore = await read("layoutBefore", "/_elsa/studio/preferences/home-layout", layoutHeaders);
+  const checksBefore = await read("checksBefore", witness.ownerEndpoint + "/checks");
+  const searchTyped = async sessionPath => {
+    if (!typed) return;
+    const sessionId = sessionPath.split("/").at(-1);
+    const audit = await owner("effects-typedAudit", "/_elsa/weaver/audit?take=100&sessionId=" + encodeURIComponent(sessionId));
+    result.effectsRefs.typedAudit = audit.receipt;
+    const rawAudit = retain("effects-typedAudit-raw", { url: audit.url, status: audit.status, rawBody: audit.rawBody, value: audit.value });
+    result.evidence.push(rawAudit); result.effectsRefs.typedAuditRaw = rawAudit;
+    if (spec.channel !== "context") await expect.poll(async () => (await streamCapture()).some(stream =>
+      stream.url === backend + sessionPath + "/stream" && stream.rawBody?.endsWith("\n\n")
+      && stream.rawBody.replace(/\r\n/g, "\n").split("\n\n").filter(Boolean).some(frame => {
+        const lines = frame.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).replace(/^ /, ""));
+        return lines.length > 0 && JSON.parse(lines.join("\n")).kind === "completed";
+      }))).toBe(true);
+    await read("refusalSession", sessionPath);
+    await Promise.all(weaverResponseReads);
+    const nativeStreams = await streamCapture();
+    result.typedCanarySearch = requireEffectsDisclosureCapture(audit, weaverTraffic, nativeStreams,
+      await page.locator("body").innerText(), config.effectsCanary, backend, sessionPath);
+  };
+  if (spec.condition === "nested-removal") {
+    need(before.visible === true, "The nested widget must actually be visible before removal.");
+    const exchange = await page.request.get(backend + "/_elsa/identity/token");
+    need(exchange.status() === 200, "Normal fixture management authentication failed.");
+    const token = (await exchange.json()).accessToken;
+    need(typeof token === "string" && token, "Management authentication returned no token.");
+    const hostRead = async (endpoint, name) => {
+      const response = await page.request.get(studio + endpoint, { headers: { Authorization: "Bearer " + token } });
+      need(response.status() === 200, "Studio owning read failed.");
+      const value = await response.json();
+      const receipt = retain("effects-studio-" + crypto.randomUUID(), { endpoint, status: response.status(), value });
+      result.evidence.push(receipt);
+      if (name) result.effectsRefs[name] = receipt;
+      return value;
+    };
+    const catalog = await hostRead("/modularity/features");
+    const registryBefore = await hostRead("/_elsa/studio/module-registry", "registryBefore");
+    const selected = catalog.features.find(row => row.id === witness.studioFeature);
+    need(selected?.enabled === true, "The actual resource Studio feature is not enabled.");
+    const select = async enabled => {
+      const current = await hostRead("/modularity/features");
+      const features = current.features.filter(row => row.enabled || row.id === selected.id)
+        .map(row => ({ id: row.id, enabled: row.id === selected.id ? enabled : row.enabled, configuration: row.configuration }));
+      result.evidence.push(retain("effects-module-selection-attempt-" + enabled, { featureId: selected.id, enabled, revision: current.revision }));
+      const response = await page.request.post(studio + "/modularity/features/apply", { headers: { Authorization: "Bearer " + token }, data: { revision: current.revision, features } });
+      need(response.status() === 200, "Native Studio module selection failed.");
+      const applied = await response.json();
+      need(applied.reloadedShellCount > 0, "Module selection did not reload the serving shell.");
+      result.evidence.push(retain("effects-module-selection-" + enabled, applied));
+    };
+    await page.goto(studio + "/dashboard");
+    await expect(page.getByTestId("acme-home-widget")).toBeVisible();
+    const review = await capture("nested-before");
+    const observe = async (name, route) => {
+      await page.goto(studio + route);
+      if (!await dock().isVisible()) await page.getByRole("button", { name: /^Weaver/ }).click();
+      const fresh = dock().getByRole("button", { name: "New conversation", exact: true });
+      if (await fresh.isVisible()) await fresh.click();
+      const selected = { commandId: crypto.randomUUID(), mode: "observe" };
+      const temporary = config.commandFile + "." + selected.commandId;
+      fs.writeFileSync(temporary, JSON.stringify(selected), { mode: 0o600 });
+      fs.renameSync(temporary, config.commandFile);
+      const commandReceipt = retain("effects-" + name + "-command", selected);
+      result.evidence.push(commandReceipt);
+      const message = responseFor("/messages");
+      await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+      await dock().getByLabel("Ask Weaver", { exact: true }).fill("Describe the currently available Studio context without calling a tool.");
+      await dock().getByRole("button", { name: "Send message", exact: true }).click();
+      const sent = await accepted(message, "effects-" + name);
+      const sessionPath = new URL(sent.response.url()).pathname.replace(/\/messages$/, "");
+      await expect.poll(async () => (await streamCapture()).filter(stream => stream.url === backend + sessionPath + "/stream"
+        && stream.termination === "loadingFinished").length).toBe(1);
+      await expect(dock()).toHaveAttribute("aria-busy", "false");
+      const streams = (await streamCapture()).filter(stream => stream.url === backend + sessionPath + "/stream");
+      const stream = retain("effects-" + name + "-stream", streams);
+      result.evidence.push(stream);
+      return { commandId: selected.commandId, route, sessionPath, stream, command: commandReceipt,
+        message: ref(path.join(config.output, "effects-" + name + ".json")) };
+    };
+    const nestedBefore = await observe("nested-before-observe", "/dashboard");
+    const unrelatedBefore = await observe("unrelated-before-observe", "/workflows/definitions");
+    {
+      await select(false);
+      await page.goto(studio + "/dashboard");
+      await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
+      const nestedAfter = await observe("nested-after-observe", "/dashboard");
+      const unrelatedAfter = await observe("unrelated-after-observe", "/workflows/definitions");
+      await page.goto(studio + "/dashboard");
+      await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
+      const registryAfter = await hostRead("/_elsa/studio/module-registry", "registryAfter");
+      const after = await read("after", witness.ownerEndpoint);
+      expect(after).toEqual(before);
+      await expect(page.getByRole("link", { name: "Workflows", exact: true }).first()).toBeVisible();
+      result.effects = { before, after, registryBefore, registryAfter, removedNestedWidget: true,
+        nestedObservations: { nestedBefore, unrelatedBefore, nestedAfter, unrelatedAfter } };
+      result.effectsCaptures = { review, result: await capture("nested-removed"),
+        accessibility: retain("effects-nested-accessibility", { route: new URL(page.url()).pathname, snapshot: await page.locator("body").ariaSnapshot() }) };
+    } // Python restores this module only after proving the owned browser groups absent.
+    return;
+  }
+  const isCheck = spec.tool === "acme_home_check_widget";
+  const args = isCheck ? { expectedVisible: spec.condition === "browser-failed" ? !before.visible : before.visible } : { visible: !before.visible };
+  const selected = command(spec.tool, args);
+  const authorizationGate = typed && spec.channel === "authorization";
+  const gateEpoch = crypto.randomUUID();
+  const writeControl = (file, value) => {
+    need(path.isAbsolute(file), "The fixture control must remain at its explicit private path.");
+    const temporary = file + "." + crypto.randomUUID();
+    fs.writeFileSync(temporary, JSON.stringify(value), { mode: 0o600, flag: "wx" });
+    fs.renameSync(temporary, file);
+  };
+  if (authorizationGate) writeControl(config.effectsGateFile, { commandId: selected.commandId, epoch: gateEpoch, state: "hold", timeoutMilliseconds: 60000 });
+  if (isCheck) await page.getByRole("checkbox", { name: "Expect the card to be visible when checked", exact: true }).setChecked(args.expectedVisible);
+  else {
+    await page.getByRole("combobox", { name: "Visibility operation", exact: true }).selectOption(spec.tool);
+    await page.getByRole("checkbox", { name: "Show the card after the visibility change", exact: true }).setChecked(args.visible);
+  }
+  const cards = dock().locator(".weaver-proposal"), count = await cards.count();
+  const message = responseFor("/messages");
+  await page.getByRole("button", { name: isCheck ? "Review widget check" : "Review classed visibility change", exact: true }).click();
+  const sent = await accepted(message, "effects-message");
+  const sessionPath = new URL(sent.response.url()).pathname.replace(/\/messages$/, "");
+  if (authorizationGate) {
+    need(path.isAbsolute(config.traceFile) && Number.isSafeInteger(config.effectsTraceOffset) && config.effectsTraceOffset >= 0, "Exact actual gate trace offset required.");
+    await expect.poll(() => {
+      if (!fs.existsSync(config.traceFile)) return false;
+      const raw = fs.readFileSync(config.traceFile).subarray(config.effectsTraceOffset);
+      if (!raw.length || raw.at(-1) !== 10) return false;
+      return raw.toString("utf8").split("\n").filter(Boolean).map(line => JSON.parse(line)).some(row =>
+        row.kind === "protocol.gate.waiting" && row.data?.commandId === selected.commandId && row.data?.epoch === gateEpoch);
+    }).toBe(true);
+    writeControl(config.effectsFaultFile, { channel: "authorization", code: "outside.declared." + config.effectsCanary,
+      message: "Unsupported module diagnostic " + config.effectsCanary, ownerUnavailable: spec.ownerUnavailable });
+    writeControl(config.effectsGateFile, { commandId: selected.commandId, epoch: gateEpoch, state: "release" });
+    result.effectsGateEpoch = gateEpoch;
+  }
+  if (typed && ["authorization", "preparation", "context"].includes(spec.channel)) {
+    const expectedCode = spec.ownerUnavailable ? "module.owner.unavailable" : spec.channel === "authorization" ? "weaver.tool.forbidden" : "module.code.unsupported";
+    await expect.poll(async () => JSON.stringify(await streamCapture()).includes(expectedCode)).toBe(true);
+    await expect(dock()).toHaveAttribute("aria-busy", "false");
+    await expect(cards).toHaveCount(count);
+    const review = await capture("typed-" + spec.channel + "-refusal");
+    const after = await read("after", witness.ownerEndpoint);
+    const layoutAfter = await read("layoutAfter", "/_elsa/studio/preferences/home-layout", layoutHeaders);
+    const checksAfter = await read("checksAfter", witness.ownerEndpoint + "/checks");
+    expect(after).toEqual(before); expect(layoutAfter).toEqual(layoutBefore); expect(checksAfter).toEqual(checksBefore);
+    await searchTyped(sessionPath);
+    result.effects = { toolName: spec.tool, commandId: selected.commandId, before, after, layoutBefore, layoutAfter, checksBefore, checksAfter };
+    result.effectsCaptures = { review, result: await capture("typed-" + spec.channel + "-terminal"),
+      accessibility: retain("effects-accessibility", { route: new URL(page.url()).pathname, snapshot: await dock().ariaSnapshot() }) };
+    return;
+  }
+  await expect(cards).toHaveCount(count + 1);
+  // Capture position before status transitions; never retain a locator filtered by awaiting-approval.
+  const card = cards.nth(count);
+  await expect(card).toHaveAttribute("data-status", "awaiting-approval");
+  const policy = dock().locator("details.weaver-privilege-policy");
+  if ((await policy.getAttribute("open")) === null) await policy.locator("summary").click();
+  await expect(policy.locator("dd")).toHaveText(["Enabled", "Enabled", "Enabled"]);
+  await expect(policy.locator("input, select, button")).toHaveCount(0);
+  await card.locator('[aria-label="Required host privileges"]').isVisible().then(value => need(value, "No effective class review."));
+  const expectedLabels = spec.tool.includes("irrecoverable") || spec.tool.includes("omitted_admin") ? ["Administrative", "Irrecoverable"]
+    : spec.tool.includes("activation") ? ["Activation"] : ["Administrative"];
+  for (const label of expectedLabels) await expect(card.locator('[aria-label="Required host privileges"]')).toContainText(label);
+  const review = await capture("review-" + spec.tool);
+  const decisionResponse = responseFor("/approve");
+  await nativeEnter("effects-approve", card.getByRole("button", { name: "Approve", exact: true }), "Approve");
+  const decision = await accepted(decisionResponse, "effects-approve");
+  result.effectsRefs.approve = result.evidence.at(-1);
+  await expect(card).toHaveAttribute("data-status", "approved");
+  const prepared = decision.value.data.preparedInvocation;
+  need(prepared?.toolName === spec.tool && prepared.moduleId === witness.moduleId, "The approved card names another tool/owner.");
+  const executionResponse = responseFor("/execute");
+  await nativeEnter("effects-execute", card.getByRole("button", { name: "Apply", exact: true }), "Apply");
+  let delivery;
+  if (typed && spec.channel === "execution") {
+    const response = await executionResponse, rawBody = await response.text();
+    const value = JSON.parse(rawBody);
+    need(!response.ok() && value.error?.code === (spec.ownerUnavailable ? "module.owner.unavailable" : "module.code.unsupported"), "Wrong typed execution cause.");
+    result.evidence.push(retain("effects-execute-http", { url: diagnosticUrl(response.url()), status: response.status(), rawBody }));
+    result.evidence.push(retain("effects-execute", { url: response.url(), status: response.status(), request: response.request().postDataJSON(), response: value }));
+    delivery = { response, value };
+  } else delivery = await accepted(executionResponse, "effects-execute");
+  result.effectsRefs.execute = result.evidence.at(-1);
+  await expect(card).toHaveAttribute("data-status", typed && spec.channel === "execution" ? "failed" : isCheck ? "performed" : "executed");
+  if (isCheck && !(typed && spec.channel === "execution")) {
+    await expect(card.getByTestId("acme-check-confirmation")).toContainText("independently confirmed");
+    await expect(card.getByTestId("acme-check-invocation")).toHaveText(prepared.invocationId);
+    await expect(card).toContainText(spec.condition === "browser-failed" ? "Business condition failed." : "Business condition passed.");
+    await expect(card.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
+  } else if (!isCheck) await expect(card.getByTestId("acme-home-result")).toContainText("independently confirmed the saved visibility");
+  const after = await read("after", witness.ownerEndpoint);
+  const layoutAfter = await read("layoutAfter", "/_elsa/studio/preferences/home-layout", layoutHeaders);
+  const checksAfter = await read("checksAfter", witness.ownerEndpoint + "/checks");
+  if (isCheck) { expect(after).toEqual(before); expect(layoutAfter).toEqual(layoutBefore); }
+  else { expect(after.visible).toBe(args.visible); expect(unrelated(layoutAfter)).toEqual(unrelated(layoutBefore)); }
+  result.effects = { toolName: spec.tool, commandId: selected.commandId, prepared, execution: delivery.value.data,
+    before, after, layoutBefore, layoutAfter, checksBefore, checksAfter, stableCardIdentity: true, noEnabledApply: isCheck };
+  await searchTyped(sessionPath);
+  result.effectsCaptures = { review, result: await capture("result-" + spec.tool),
+    accessibility: retain("effects-accessibility", { route: new URL(page.url()).pathname, snapshot: await card.ariaSnapshot() }) };
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(card).toBeVisible();
+  await capture("result-narrow-" + spec.tool);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "Dark", exact: true }).click();
+  await capture("result-dark-" + spec.tool);
+  await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "Light", exact: true }).click();
+  await capture("result-light-" + spec.tool);
+}
 try {
   if (config.journey === "sdk-incompatible") await incompatibleModule();
   else if (config.journey === "renderer-unavailable") await rendererUnavailable();
@@ -2190,8 +2469,8 @@ try {
   else if (config.journey === "workflow-version-history") await workflowVersionHistory();
   else if (config.journey === "workflow-executable-inspector") await workflowExecutableInspector();
   else if (config.journey === "workflow-run") await workflowRun();
-  else if (config.journey === "autonomy-size" || lifecycle) {
-    const bounded = config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
+  else if (config.journey === "module-effects" || config.journey === "autonomy-size" || lifecycle) {
+    const bounded = config.journey === "module-effects" ? moduleEffects : config.journey === "autonomy-size" ? autonomySize : config.journey === "resource" ? resource : workflow;
     let deadline;
     try {
       await Promise.race([bounded(), new Promise((_resolve, reject) => {
@@ -2199,8 +2478,9 @@ try {
           // Stop pending UI actions in this owned context; never let an expired
           // journey submit a late intent while failure evidence is captured.
           void context.close().catch(error => { result.deadlineCleanupError = redact({ type: error.name, message: error.message }); });
-          reject(new Error("The bounded autonomy browser journey expired after 180 seconds; no retry."));
-        }, 180000);
+          reject(new Error(config.journey === "module-effects" ? "The bounded effects browser journey expired after 120 seconds; no retry."
+            : "The bounded autonomy browser journey expired after 180 seconds; no retry."));
+        }, config.journey === "module-effects" ? 120000 : 180000);
       })]);
     } finally { clearTimeout(deadline); }
   }
@@ -2235,6 +2515,10 @@ try {
   retain("observation", result);
   await context.close();
   await browser.close();
+  if (browserServer) {
+    await browserServer.close();
+    lease({ phase: "closed", browserPid: browserServer.process().pid });
+  }
 }
 console.log(JSON.stringify({ status: result.status, journey: result.journey, expectedFailureObserved: !!result.expectedFailureObserved,
   observations: result.observations, failure: result.failure, evidence: path.join(config.output, "observation.json") }));

@@ -1,11 +1,68 @@
 import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
 import { createEndpointContext } from "../../../sdk";
-import { collectWeaverContext } from "../weaverContext";
+import { collectWeaverContext, isWeaverContextCollectionCurrent } from "../weaverContext";
+import { beginWeaverModuleRegistration, retireWeaverModuleRegistration, retireWeaverRegistryGeneration } from "../weaverRegistrationOrigins";
 
 const attachment = { id: "one", source: "Sample", label: "Selected sample", contentType: "sample", sensitivity: "internal" as const, scope: "selection" };
 function registry() { return createStudioRegistry({ ...createEndpointContext("https://example.test/"), hostVersion: "1", sdkVersion: "1" }); }
 describe("module context collection", () => {
+  it("does not invoke a retired satellite provider even when its resource owner remains present", async () => {
+    const api = registry(); const collect = vi.fn(async () => [attachment]);
+    const registration = beginWeaverModuleRegistration(api, "Sample.Satellite");
+    registration.api.weaver.contextProviders.add({ id: "sample", moduleId: "Sample.Resource", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect });
+    registration.complete(); retireWeaverModuleRegistration(api, "Sample.Satellite");
+    expect(await collectWeaverContext(api, { route: "/" }, "explain")).toEqual({ attachments: [], diagnostics: [] });
+    expect(collect).not.toHaveBeenCalled();
+  });
+
+  it("rechecks registration before the deferred contributor callback begins", async () => {
+    const api = registry(); const collect = vi.fn(async () => [attachment]);
+    const registration = beginWeaverModuleRegistration(api, "Sample.Satellite");
+    registration.api.weaver.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect });
+    registration.complete();
+    const operation = collectWeaverContext(api, { route: "/" }, "explain");
+    const refusal = expect(operation).rejects.toThrow("Module context changed");
+    retireWeaverModuleRegistration(api, "Sample.Satellite");
+    await refusal;
+    expect(collect).not.toHaveBeenCalled();
+  });
+
+  it.each(["module", "generation"] as const)("rejects a late snapshot after its %s is retired", async kind => {
+    const api = registry(); let release!: (value: typeof attachment[]) => void;
+    let enter!: () => void; const entered = new Promise<void>(resolve => { enter = resolve; });
+    const registration = beginWeaverModuleRegistration(api, "Sample.Satellite");
+    registration.api.weaver.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect: () => { enter(); return new Promise(resolve => { release = resolve; }); } });
+    registration.complete();
+    const refusal = expect(collectWeaverContext(api, { route: "/" }, "explain")).rejects.toThrow("Module context changed");
+    await entered;
+    if (kind === "module") retireWeaverModuleRegistration(api, "Sample.Satellite");
+    else retireWeaverRegistryGeneration(api);
+    release([attachment]); await refusal;
+  });
+
+  it("rejects an earlier completed source retired while an independent source is awaiting", async () => {
+    const api = registry(); let release!: (value: typeof attachment[]) => void;
+    let enter!: () => void; const entered = new Promise<void>(resolve => { enter = resolve; });
+    const first = beginWeaverModuleRegistration(api, "Sample.First");
+    first.api.weaver.contextProviders.add({ id: "first", displayName: "First", surfaces: ["*"], sensitivity: "internal", order: 1, collect: async () => [attachment] }); first.complete();
+    const second = beginWeaverModuleRegistration(api, "Sample.Second");
+    second.api.weaver.contextProviders.add({ id: "second", displayName: "Second", surfaces: ["*"], sensitivity: "internal", order: 2, collect: () => { enter(); return new Promise(resolve => { release = resolve; }); } }); second.complete();
+    const refusal = expect(collectWeaverContext(api, { route: "/" }, "explain")).rejects.toThrow("Module context changed");
+    await entered; retireWeaverModuleRegistration(api, "Sample.First"); release([]); await refusal;
+  });
+
+  it("binds an accepted snapshot to its actual registry and registration lifetime", async () => {
+    const api = registry(); const registration = beginWeaverModuleRegistration(api, "Sample.Satellite");
+    registration.api.weaver.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect: async () => [attachment] }); registration.complete();
+    const collection = await collectWeaverContext(api, { route: "/" }, "explain");
+    expect(collection.attachments).toEqual([attachment]);
+    expect(isWeaverContextCollectionCurrent(api, collection)).toBe(true);
+    expect(isWeaverContextCollectionCurrent(registry(), collection)).toBe(false);
+    retireWeaverModuleRegistration(api, "Sample.Satellite");
+    expect(isWeaverContextCollectionCurrent(api, collection)).toBe(false);
+  });
+
   it("preserves explicit content and typed optional limitations", async () => {
     const api = registry(); api.weaver.contextProviders.add({ id: "sample", displayName: "Sample", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: [{ contributorId: "sample", code: "absent", message: "Optional evidence unavailable.", required: false }] }) });
     expect(await collectWeaverContext(api, { route: "/arbitrary" }, "explain", undefined, [attachment])).toEqual({ attachments: [attachment], diagnostics: [expect.objectContaining({ required: false })] });

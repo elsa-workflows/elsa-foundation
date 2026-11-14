@@ -14,10 +14,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Weaver.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Essentials\src\Events\Core\Elsa.Events.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The built-in API projects the same private admission decision; module authors use the public contribution contracts. -->
+    <InternalsVisibleTo Include="Elsa.Weaver.Api" />
     <InternalsVisibleTo Include="Elsa.Weaver.Tests" />
     <InternalsVisibleTo Include="Elsa.Weaver.Persistence.Tests" />
   </ItemGroup>

@@ -39,7 +39,9 @@ public enum WeaverExecutionLocation
 public enum WeaverEffectScope
 {
     ClientWorkingState,
-    ServerPersisted
+    ServerPersisted,
+    /// <summary>The action ran without changing its owning resource's persisted identity or revision.</summary>
+    NoPersistedEffect = 2
 }
 
 public enum WeaverClientOutcome
@@ -61,6 +63,16 @@ public sealed record WeaverToolPreparation(
     bool RequiresApproval)
 {
     public WeaverClientBinding? Client { get; init; }
+
+    private readonly IReadOnlyList<WeaverPrivilegeClass>? _requiredPrivilegeClasses;
+
+    /// <summary>Additional host privileges; copied on assignment. The engine validates and canonicalizes the set before review.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<WeaverPrivilegeClass>? RequiredPrivilegeClasses
+    {
+        get => _requiredPrivilegeClasses;
+        init => _requiredPrivilegeClasses = value is { Count: > 0 } ? Array.AsReadOnly(value.ToArray()) : null;
+    }
 }
 
 /// <summary>The frozen, server-retained meaning of one validated tool invocation and its review.</summary>
@@ -86,6 +98,16 @@ public sealed record WeaverPreparedToolInvocation(
 {
     /// <summary>Original module-declared result disclosure owner, frozen into preparation and its review digest.</summary>
     public string? DisclosureSourceId { get; init; }
+
+    private readonly IReadOnlyList<WeaverPrivilegeClass>? _requiredPrivilegeClasses;
+
+    /// <summary>Frozen host privilege requirements. Missing legacy requirements do not change the original approval digest.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<WeaverPrivilegeClass>? RequiredPrivilegeClasses
+    {
+        get => _requiredPrivilegeClasses;
+        init => _requiredPrivilegeClasses = value is { Count: > 0 } ? Array.AsReadOnly(value.ToArray()) : null;
+    }
 }
 
 /// <summary>An owning module's observed effect; local working state does not imply durable save/publish.</summary>
@@ -94,7 +116,12 @@ public sealed record WeaverEffectReceipt(
     WeaverResourceTarget Before,
     WeaverResourceTarget After,
     WeaverEffectScope Scope,
-    WeaverPayload Evidence);
+    WeaverPayload Evidence)
+{
+    /// <summary>Optional owning-module outcome code, subject to its installed descriptor's declaration.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ModuleCode { get; init; }
+}
 
 /// <summary>A browser observation admitted by the owning backend tool; acknowledging never executes a tool.</summary>
 public sealed record WeaverClientAcknowledgement(
@@ -116,6 +143,16 @@ public sealed record WeaverContextProviderDescriptor(
 {
     /// <summary>Whether a missing, failed or timed-out source blocks provider use. Existing sources remain required by default.</summary>
     public bool Required { get; init; } = true;
+
+    private readonly IReadOnlyCollection<string>? _moduleCodes;
+
+    /// <summary>Copied closed set of typed outcome codes; null preserves undeclared compatibility and empty allows no code.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyCollection<string>? ModuleCodes
+    {
+        get => _moduleCodes;
+        init => _moduleCodes = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
 }
 
 /// <summary>Source limitations are data. Required outcomes block collection; unexpected required-source faults retain Sequential failure semantics.</summary>

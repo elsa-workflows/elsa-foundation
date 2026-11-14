@@ -12,6 +12,8 @@ internal sealed class WeaverCamelCaseEnumConverter : JsonStringEnumConverter
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, Converters = [typeof(WeaverCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(WeaverApiResponse<WeaverBootstrapResponse>))]
+[JsonSerializable(typeof(WeaverPrivilegePolicyView))]
+[JsonSerializable(typeof(WeaverApiResponse<WeaverSupportResponse>))]
 [JsonSerializable(typeof(WeaverApiResponse<WeaverCreateSessionResponse>))]
 [JsonSerializable(typeof(WeaverApiResponse<WeaverSessionDetailsResponse>))]
 [JsonSerializable(typeof(WeaverApiResponse<WeaverSessionPolicyResponse>))]

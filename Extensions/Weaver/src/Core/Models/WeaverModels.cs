@@ -57,6 +57,14 @@ public enum WeaverRisk
     Admin
 }
 
+/// <summary>Host privileges required in addition to the current actor's owning-resource permissions.</summary>
+public enum WeaverPrivilegeClass
+{
+    Administrative = 0,
+    Irrecoverable = 1,
+    Activation = 2
+}
+
 /// <summary>
 /// How much Weaver may do without per-mutation human approval. Ordered from most to least restrictive:
 /// the integer value doubles as the autonomy "level" used when clamping a requested mode to a deployment ceiling.
@@ -86,7 +94,9 @@ public enum WeaverActionProposalStatus
     Cancelled,
     Executing,
     AwaitingClient,
-    Uncertain
+    Uncertain,
+    /// <summary>The action ran with owning-resource evidence and no persisted change to that resource.</summary>
+    Performed = 12
 }
 
 public enum WeaverAuditEventKind
@@ -166,6 +176,10 @@ public enum WeaverProviderRiskProfile
 
 public sealed record WeaverError(string Code, string Message, int StatusCode = 400)
 {
+    /// <summary>The installed owner could not decide. This transport value alone does not establish trusted owner origin.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool OwnerUnavailable { get; init; }
+
     /// <summary>
     /// Preview: what a <c>weaver.context.disclosure_budget_exceeded</c> refusal reached. The session limits, recorded on the
     /// session and offered a continuation: <c>snapshots</c> (64 distinct snapshots) and <c>bytes</c> (8 MiB of recorded
@@ -548,6 +562,10 @@ public sealed record WeaverTurnMessage(WeaverRole Role, string Content, string? 
 /// <summary>The result of executing one tool, fed back to the provider on the next step.</summary>
 public sealed record WeaverToolResult(string ToolCallId, string ToolName, bool Succeeded, string Content, WeaverPayload? Payload = null)
 {
+    /// <summary>Preview: the normalized typed refusal; absent for legacy results and never evidence of an effect.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WeaverError? Error { get; init; }
+
     public WeaverEffectReceipt? Receipt { get; init; }
     /// <summary>Preparation identity stamped by the engine for current authority checks before later disclosure.</summary>
     public WeaverToolResultAccess? Access { get; init; }

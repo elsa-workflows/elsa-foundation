@@ -34,13 +34,20 @@ public sealed class StudioModuleManifestProvider(
     public async Task<StudioModuleRegistryResponse> GetModuleRegistry(CancellationToken cancellationToken)
     {
         var result = await Collect(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        // Disabled discoveries still participate in identity integrity. Otherwise duplicate disabled
+        // handlers could produce an apparently complete inventory that cannot identify its modules.
+        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var manifest in result.CollectedManifests.Concat(result.FailedManifests))
+            if (string.IsNullOrWhiteSpace(manifest.Id) || !identities.Add(manifest.Id))
+                throw new InvalidOperationException("Studio module discovery requires unique, nonblank identities.");
         var diagnosticsByModule = result.Diagnostics
             .GroupBy(x => x.ModuleId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.ToArray() as IReadOnlyCollection<StudioModuleDiagnostic>, StringComparer.OrdinalIgnoreCase);
 
         var disabledIds = result.Options.DisabledModuleIds;
         var activeModules = result.Modules.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
-        var registry = result.CollectedManifests
+        var registry = result.CollectedManifests.Concat(result.FailedManifests)
             .OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
             .Select(manifest =>
             {
@@ -68,11 +75,12 @@ public sealed class StudioModuleManifestProvider(
             })
             .ToArray();
 
+        cancellationToken.ThrowIfCancellationRequested();
         return new StudioModuleRegistryResponse(
             result.Options.HostVersion,
             result.Options.SdkVersion,
             DateTimeOffset.UtcNow,
-            registry);
+            registry) { Complete = true };
     }
 
     private async Task<CollectionResult> Collect(CancellationToken cancellationToken)
@@ -86,6 +94,7 @@ public sealed class StudioModuleManifestProvider(
         // Discover manifests from [StudioModule] attributes on feature classes.
         var handlerIds = new HashSet<string>(collection.Manifests.Select(m => m.Id), StringComparer.OrdinalIgnoreCase);
         var diagnostics = new List<StudioModuleDiagnostic>();
+        var failedManifests = new Dictionary<string, StudioModuleManifest>(StringComparer.OrdinalIgnoreCase);
         var snapshot = await runtimeFeatureCatalog.GetSnapshotAsync(cancellationToken);
 
         foreach (var descriptor in snapshot.FeatureDescriptors)
@@ -116,6 +125,11 @@ public sealed class StudioModuleManifestProvider(
             catch (Exception exception) when (exception is JsonException or InvalidDataException or
                                                KeyNotFoundException or InvalidOperationException or FormatException or IOException)
             {
+                // Discovery of a known module failed; it is not an absent installation. Keep this
+                // metadata inspectable without putting its invalid entry into the loader response.
+                failedManifests[moduleId] = new StudioModuleManifest(
+                    moduleId, attr.DisplayName, version, entry, [], attr.RequiredHostVersion,
+                    attr.RequiredSdkVersion, attr.Capabilities, descriptor.Id);
                 diagnostics.Add(new StudioModuleDiagnostic(moduleId, StudioModuleDiagnosticStatuses.Failed,
                     "Module stylesheet contract is invalid or unavailable."));
                 continue;
@@ -132,6 +146,7 @@ public sealed class StudioModuleManifestProvider(
                 attr.Capabilities,
                 descriptor.Id) { StylesHaveContentHashes = styles.HaveContentHashes });
 
+            failedManifests.Remove(moduleId);
             handlerIds.Add(moduleId);
         }
 
@@ -166,7 +181,7 @@ public sealed class StudioModuleManifestProvider(
                 "Module manifest accepted."));
         }
 
-        return new CollectionResult(studioOptions, shellSettings, collection.Manifests.ToArray(), modules, diagnostics);
+        return new CollectionResult(studioOptions, shellSettings, collection.Manifests.ToArray(), failedManifests.Values.ToArray(), modules, diagnostics);
     }
 
     /// <summary>
@@ -308,6 +323,7 @@ public sealed class StudioModuleManifestProvider(
         StudioApiOptions Options,
         ShellSettings? ShellSettings,
         IReadOnlyCollection<StudioModuleManifest> CollectedManifests,
+        IReadOnlyCollection<StudioModuleManifest> FailedManifests,
         IReadOnlyCollection<StudioModuleManifest> Modules,
         IReadOnlyCollection<StudioModuleDiagnostic> Diagnostics);
 }

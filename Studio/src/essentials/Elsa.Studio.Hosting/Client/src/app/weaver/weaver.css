@@ -160,6 +160,18 @@
 .weaver-status[data-tone="success"] { color: var(--studio-success); }
 .weaver-status[data-tone="warning"] { color: var(--studio-warning); }
 
+.weaver-privilege-policy {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--studio-border);
+  font-size: 0.75rem;
+  color: var(--studio-text-muted);
+}
+.weaver-privilege-policy summary { cursor: pointer; }
+.weaver-privilege-policy dl { margin: 0.5rem 0; }
+.weaver-privilege-policy dl div { display: flex; justify-content: space-between; gap: 0.5rem; }
+.weaver-privilege-policy dd { margin: 0; color: var(--studio-text); }
+.weaver-privilege-policy p { margin: 0.5rem 0 0; }
+
 .weaver-mode-status {
   display: flex;
   align-items: center;

@@ -6,27 +6,27 @@
 
 | Model | Field and rule | Lifetime |
 | --- | --- | --- |
-| AgentToolPreparation | RequiredPrivilegeClasses nullable immutable list of three known enum values; canonical empty is null | Owner preparation, then copied into frozen invocation |
-| AgentPreparedToolInvocation | Same canonical class list; nonempty participates in digest; legacy empty retains exact prior hash shape | Existing proposal protected payload, paused/retained turn graphs and API/SSE |
-| AgentToolDescriptor | CanPerformWithoutPersistence false by default; optional ModuleCodes closed set | Installed request-scoped discovery, never inferred from name |
-| AgentContextProviderDescriptor | Optional ModuleCodes closed set | Installed context source descriptor |
-| AgentEffectReceipt | ModuleCode nullable, omitted; NoPersistedEffect scope 2 requires unchanged owning identity/revision and actual ran evidence | Existing proposal/execution result and audit payload graphs |
-| AgentActionProposal | Performed status 12 appended; terminal | Existing proposal plain Status plus protected payload; session/result graphs |
-| AgentError | OwnerUnavailable false/omitted; trusted origin is separate private provenance | Normalized error transport; persisted where an existing result graph holds it |
-| AgentPrivilegePolicyOptions | Administrative, Irrecoverable, Activation, all false | Live host configuration, never a session grant |
-| AgentBootstrapResponse | Read-only three-bool Privileges snapshot | Current HTTP response only; client display |
+| WeaverToolPreparation | RequiredPrivilegeClasses nullable immutable list of three known enum values; canonical empty is null | Owner preparation, then copied into frozen invocation |
+| WeaverPreparedToolInvocation | Same canonical class list; nonempty participates in digest; legacy empty retains exact prior hash shape | Existing proposal protected payload, paused/retained turn graphs and API/SSE |
+| WeaverToolDescriptor | CanPerformWithoutPersistence false by default; optional ModuleCodes closed set | Installed request-scoped discovery, never inferred from name |
+| WeaverContextProviderDescriptor | Optional ModuleCodes closed set | Installed context source descriptor |
+| WeaverEffectReceipt | ModuleCode nullable, omitted; NoPersistedEffect scope 2 requires unchanged owning identity/revision and actual ran evidence | Existing proposal/execution result and audit payload graphs |
+| WeaverActionProposal | Performed status 12 appended; terminal | Existing proposal plain Status plus protected payload; session/result graphs |
+| WeaverError | OwnerUnavailable false/omitted; trusted origin is separate private provenance | Normalized error transport; persisted where an existing result graph holds it |
+| WeaverPrivilegePolicyOptions | Administrative, Irrecoverable, Activation, all false | Live host configuration, never a session grant |
+| WeaverBootstrapResponse | Read-only three-bool Privileges snapshot | Current HTTP response only; client display |
 
 Classes are a set, codes are bounded ordinal identifiers, and optional values use explicit null/false omission. Existing positional constructors, enum ordinals and purpose strings stay intact. Opaque module data remains module-owned and allowlisted; these generic fields do not authorize raw secret/settings values.
 
 ## Ephemeral authority and discovery
 
-- `IAgentPrincipalSource` is scoped and returns the genuine current principal for exact actor/tenant. Never serialize/cache a principal in a session, proposal, audit, digest, provider context or prepared arguments.
+- `IWeaverPrincipalSource` is scoped and returns the genuine current principal for exact actor/tenant. Never serialize/cache a principal in a session, proposal, audit, digest, provider context or prepared arguments.
 - Selected feature metadata holds actual Type and its direct static requirements. Existing private store-selection metadata adds the required variation Type. It is immutable composition metadata, not stored session state.
 - Shared schema availability, current options and owning permission checks are observations at each required boundary. They are not a distributed revocation fence.
 - Support inventory holds bounded module identity/display/status/support facts with side/host/generation/observation provenance. Browser observations are client-asserted. Failed/incomplete discovery remains unknown; it is never successful absence. No feed credentials, entry URLs, paths or raw exception text enter the projection.
 - Module-code trusted provenance is private source-bound metadata. Deserialization of OwnerUnavailable does not recreate owner authority.
 
-## Existing Agent EF placement
+## Existing Weaver EF placement
 
 | Existing row | New-data/read obligation |
 | --- | --- |
@@ -37,7 +37,7 @@ Classes are a set, codes are bounded ordinal identifiers, and optional values us
 | Unique key | Existing duplicate/ownership fence semantics, readable stamp |
 | Audit owner / counter | Readable stamp despite no protected content; existing counter 1.0 never restamps as Last advances |
 
-Agent 1.1.0 is an additive content-chain step. Its upcaster returns protected content unchanged; authenticated deserialization supplies missing defaults. Every old row kind remains readable. New stamp selection is per actual metadata attempt from the existing context gate; old representable writes can remain 1.0 while held. Unknown/unreadable stamps cannot fall back to 1.0. New content cannot be written through a raw content update that bypasses the interceptor.
+Weaver 1.1.0 is an additive content-chain step. Its upcaster returns protected content unchanged; authenticated deserialization supplies missing defaults. Every old row kind remains readable. New stamp selection is per actual metadata attempt from the existing context gate; old representable writes can remain 1.0 while held. Unknown/unreadable stamps cannot fall back to 1.0. New content cannot be written through a raw content update that bypasses the interceptor.
 
 Minimal plain owner/proposal-session lookups remain before authorization. Validate owned rows and summary/count projections only after exact actor/tenant/workspace filtering. Foreign unreadable data yields shared 403/404 without hydration or settlement.
 

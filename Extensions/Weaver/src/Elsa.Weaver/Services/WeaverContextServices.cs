@@ -89,7 +89,8 @@ internal sealed class DefaultWeaverContextCollector(
         await events.Publish(collecting, cancellationToken);
         // A marker counts only where CollectWeaverContext recorded it for a source's own diagnostic; any other is cleared.
         var diagnostics = collecting.Diagnostics
-            .Select(x => x.OwnerUnavailable && !WeaverContextOwnerMarkers.IsRecorded(collecting, x) ? x with { OwnerUnavailable = false } : x)
+            .Select(x => x.OwnerUnavailable && !WeaverContextOwnerMarkers.IsRecorded(collecting, x)
+                ? x with { OwnerUnavailable = false, Message = WeaverModuleCodes.UnsupportedMessage } : x)
             .ToList();
         var sanitized = await sanitizer.SanitizeAsync(collecting.Attachments.ToList(), cancellationToken);
         foreach (var attachment in sanitized.Where(x => x.Sensitivity == WeaverContextSensitivity.SecretRedacted))
@@ -128,7 +129,7 @@ internal sealed class DefaultWeaverContextCollector(
         // engine's fixed message, never its own text. Only when every required failure says so: any definite refusal,
         // host diagnostic or reserved code keeps the ordinary incomplete-context failure exactly.
         if (requiredFailures.All(x => x.OwnerUnavailable && WeaverContextOwnerMarkers.IsRecorded(collecting, x)))
-            return new(contribution, WeaverContextOwnerMarkers.Unavailable(requiredFailures[0].Code));
+            return new(contribution, WeaverContextOwnerMarkers.Unavailable(collecting, requiredFailures[0]));
         return new(contribution, new("weaver.context.incomplete", string.Join(" ", requiredFailures.Select(x => x.Message)), 400));
     }
 }

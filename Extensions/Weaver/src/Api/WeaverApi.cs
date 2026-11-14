@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Security.Cryptography;
 
@@ -35,6 +36,8 @@ public static class WeaverApi
 
         Map(api, "GET", $"{RoutePrefix}/bootstrap", "Bootstrap", WeaverPermissionKeys.Use,
             null, typeof(WeaverApiResponse<WeaverBootstrapResponse>), HandleBootstrapAsync);
+        Map(api, "GET", $"{RoutePrefix}/support", "Support", WeaverPermissionKeys.Use,
+            null, typeof(WeaverApiResponse<WeaverSupportResponse>), HandleSupportAsync);
         Map(api, "POST", $"{RoutePrefix}/sessions", "CreateSession", WeaverPermissionKeys.Use,
             typeof(WeaverCreateSessionRequest), typeof(WeaverApiResponse<WeaverCreateSessionResponse>), HandleCreateSessionAsync);
         Map(api, "GET", $"{RoutePrefix}/sessions", "ListSessions", WeaverPermissionKeys.Use,
@@ -128,6 +131,23 @@ public static class WeaverApi
         return Math.Max(1, (long)Math.Ceiling((retryAt - now).TotalSeconds));
     }
 
+    private static async Task HandleSupportAsync(HttpContext context)
+    {
+        var actorId = WeaverEndpointActor.Resolve(context.User);
+        var tenantId = WeaverEndpointActor.ResolveTenant(context.User);
+        if (context.User.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(tenantId))
+        {
+            await WriteAsync(context, WeaverApiResponse<WeaverSupportResponse>.Failure(new("weaver.actor.unresolved",
+                "The current principal does not carry a resolvable authenticated actor and tenant identity.", 403)),
+                WeaverJsonContext.Default.WeaverApiResponseWeaverSupportResponse, 403);
+            return;
+        }
+        var support = await context.RequestServices.GetRequiredService<IWeaverSupportSource>()
+            .ReadAsync(actorId, tenantId, WeaverPolicy.Default, context.RequestAborted);
+        await WriteAsync(context, WeaverApiResponse<WeaverSupportResponse>.Success(new("hostDefault", support)),
+            WeaverJsonContext.Default.WeaverApiResponseWeaverSupportResponse);
+    }
+
     private static async Task HandleBootstrapAsync(HttpContext context)
     {
         var providers = context.RequestServices.GetRequiredService<IWeaverProviderRegistry>();
@@ -136,6 +156,7 @@ public static class WeaverApi
         var diagnostics = providers.Active is null ? null : await providers.Active.GetDiagnosticsAsync(context.RequestAborted);
         var availability = await evaluator.EvaluateAvailabilityAsync(WeaverPolicy.Default, context.RequestAborted);
         var listed = (await capabilities.ListAsync(context.RequestAborted)).ToList();
+        var privileges = context.RequestServices.GetRequiredService<IOptionsMonitor<WeaverPrivilegePolicyOptions>>().CurrentValue;
         var enabled = availability.Allowed && diagnostics?.IsAvailable == true;
         var modes = enabled ? BuildModes(listed) : [];
         var response = new WeaverBootstrapResponse(
@@ -150,7 +171,8 @@ public static class WeaverApi
                 WeaverPolicy.Default.AllowedAutonomyModes.Select(x => x.ToContractString()).ToList(),
                 WeaverPolicy.Default.RetentionLabel))
         {
-            Recovery = DescribeRecovery(context)
+            Recovery = DescribeRecovery(context),
+            Privileges = new(privileges.Administrative, privileges.Irrecoverable, privileges.Activation)
         };
         await WriteAsync(context, WeaverApiResponse<WeaverBootstrapResponse>.Success(response), WeaverJsonContext.Default.WeaverApiResponseWeaverBootstrapResponse);
     }

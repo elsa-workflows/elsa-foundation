@@ -15,14 +15,18 @@ namespace Elsa.Weaver.Services;
 /// </remarks>
 internal static class WeaverContextOwnerMarkers
 {
-    private static readonly ConditionalWeakTable<WeaverContextCollecting, HashSet<WeaverContributionDiagnostic>> Recorded = new();
+    private static readonly ConditionalWeakTable<WeaverContextCollecting, Dictionary<WeaverContributionDiagnostic, bool>> Recorded = new();
 
-    internal static void Record(WeaverContextCollecting collecting, WeaverContributionDiagnostic diagnostic) =>
-        Recorded.GetValue(collecting, _ => new HashSet<WeaverContributionDiagnostic>(ReferenceEqualityComparer.Instance)).Add(diagnostic);
+    internal static void Record(WeaverContextCollecting collecting, WeaverContributionDiagnostic diagnostic, bool declaredCodes = false) =>
+        Recorded.GetValue(collecting, _ => new(ReferenceEqualityComparer.Instance))[diagnostic] = declaredCodes;
 
     /// <summary>Whether this exact diagnostic is a recorded source marker with an owner code.</summary>
     internal static bool IsRecorded(WeaverContextCollecting collecting, WeaverContributionDiagnostic diagnostic) =>
-        Recorded.TryGetValue(collecting, out var recorded) && recorded.Contains(diagnostic) && WeaverToolAccess.IsOwnerUnavailable(diagnostic);
+        Recorded.TryGetValue(collecting, out var recorded) && recorded.ContainsKey(diagnostic) && WeaverToolAccess.IsOwnerUnavailable(diagnostic);
 
-    internal static WeaverError Unavailable(string code) => new(code, WeaverToolAccess.OwnerUnavailableMessage, 503);
+    internal static WeaverError Unavailable(WeaverContextCollecting collecting, WeaverContributionDiagnostic diagnostic) =>
+        new(diagnostic.Code, WeaverToolAccess.OwnerUnavailableMessage, 503)
+        {
+            OwnerUnavailable = IsRecorded(collecting, diagnostic) && Recorded.GetValue(collecting, _ => new(ReferenceEqualityComparer.Instance))[diagnostic]
+        };
 }

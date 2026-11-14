@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfEffectsFeature
+Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfEffectsFeature.WeaverEfEffectsFeature() -> void
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverDbContext
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverDbContext.WeaverDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
 Elsa.Weaver.Persistence.EntityFrameworkCore.WeaverEfModule

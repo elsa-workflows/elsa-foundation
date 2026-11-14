@@ -13,11 +13,11 @@ Every native run owns its processes, database/cache/output roots and chosen port
 After implementation, run each affected project whole and compare discovered/executed counts. Run affected API/serializer, current-authority, receipt-integrity, context/disclosure and lifecycle tests together, including both default and replacement executors.
 
 ```sh
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release --list-tests
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj -c Release --list-tests
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj -c Release
-ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1 /usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj -c Release
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj -c Release --list-tests
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj -c Release
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj -c Release --list-tests
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj -c Release
+ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1 /usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Persistence/ProviderTests/Elsa.Weaver.Persistence.ProviderTests.csproj -c Release
 python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
 ```
 
@@ -45,9 +45,9 @@ bash tools/architecture/restore-ci-project-graph.sh
 2. Exercise all principal registration orderings in the policy contract, distinct request scopes/current principal identity, missing/unauthenticated/mismatched actor/tenant, missing/duplicate owning authorization and selected backend isolation. Direct tools and context providers must fail closed even when bypassing default facades.
 3. Perform an owner-backed no-persistence action. Independently read its invocation counter/result and unchanged resource revision. Test failed business verdict versus could-not-run refusal, every wrong status/scope/declaration/target/evidence combination, and a lying custom executor. Duplicate/late/recovered delivery never calls the owner twice.
 4. Put generated canaries in every typed owner code/message/result/diagnostic path. Verify fixed replacement and unavailable classification in HTTP, SSE, provider payload, generic review/results and audit. Include malformed code, reserved code, dotted out-of-set code, forged host/event/custom-executor flag, explicit empty set and undeclared compatibility. Module fixtures separately prove opaque allowlists.
-5. Compose memory and EF variations, neither/both/wrong selection, direct AddAgentStores consumer context, old two-argument/explicit-null custom or EF factories refusing effects composition, declared custom variation, custom specialization with omitted/static declarations, root registration copy and no EF observation. Compare actual catalog, Attention, capabilities and tool/read acceptance while held, unobserved, finalized and newly available without restart.
+5. Compose memory and EF variations, neither/both/wrong selection, direct AddWeaverStores consumer context, old two-argument/explicit-null custom or EF factories refusing effects composition, declared custom variation, custom specialization with omitted/static declarations, root registration copy and no EF observation. Compare actual catalog, Attention, capabilities and tool/read acceptance while held, unobserved, finalized and newly available without restart.
 6. Hydrate old/new mixed row kinds, protected corruption and mismatched projected columns; prove canonical disclosure bytes and legacy digests unchanged. Test audit-owner/counter and owned summary/count projections. A foreign unreadable row cannot hydrate, settle or disclose schema state.
-7. Hold Agent at 1.0: representable legacy writes work, new behavior refuses before effect. Finalize 1.1, read old rows and keep the old counter readable without restamping. Place a barrier between stamp selection and save: only the safe metadata attempt retries, with fresh entities/stamp; domain invocation count stays one. Test paused/pending-only session writes and direct consumer contexts through the shared interceptor.
+7. Hold Weaver at 1.0: representable legacy writes work, new behavior refuses before effect. Finalize 1.1, read old rows and keep the old counter readable without restamping. Place a barrier between stamp selection and save: only the safe metadata attempt retries, with fresh entities/stamp; domain invocation count stays one. Test paused/pending-only session writes and direct consumer contexts through the shared interceptor.
 8. Inventory available, disabled, failed, partially registered, removed and unknown modules in normal Studio and a selected backend. Deselect structured logging, toggle ExtensionBuilder, remove a nested contributed source and reload the independent package. Facts retain side/host/generation; unknown route is route-only. Search projection/provider output for canary credentials, URLs, paths and failure text.
 
 Use barriers and deterministic faults rather than sleeps for race assertions. For behavior changes, retain a failing pre-fix or mutation run and the corrected pass. Invalid cases must fail for the intended cause, not a startup/locator failure.
