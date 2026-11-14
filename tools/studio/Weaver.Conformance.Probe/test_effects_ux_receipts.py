@@ -9,7 +9,7 @@ import zlib
 
 from case_records import retained
 from effects_journeys import (CHECK_TOOL, EXPECTED_CASES, OWNER, HOME_PREFERENCES_PATH, ROUTE,
-                             require_browser_captures, require_browser_terminal, require_called_refusal)
+                             require_browser_captures, require_browser_terminal, require_called_refusal, require_uncertainty_presentation)
 from test_effects_journeys import check_fixture, refusal_fixture
 
 
@@ -147,6 +147,20 @@ def terminal_fixture(root):
 
 
 class EffectsTerminalIntegrityTests(unittest.TestCase):
+    def test_uncertainty_needs_both_the_card_caution_and_the_separate_native_warning(self):
+        warning = "Execution was interrupted after dispatch. Its effect is uncertain and will not be replayed."
+        presentation = {"cardStatus": "uncertain", "cardText": "Widget check is unconfirmed. No matching owner receipt is available here. Use the shared operation status; a possibly completed action must not be repeated automatically.",
+                        "warningText": warning}
+        # The genuine card deliberately has no copy of the separate native warning.
+        require_uncertainty_presentation(presentation, warning)
+        for mutate in (lambda row: row.update(warningText=""),
+                       lambda row: row.update(warningText="The operation was refused; no effect occurred."),
+                       lambda row: row.update(cardStatus="performed"),
+                       lambda row: row.update(cardText=warning),
+                       lambda row: row.update(cardText="Widget check is unconfirmed.")):
+            changed = copy.deepcopy(presentation); mutate(changed)
+            with self.assertRaises(RuntimeError): require_uncertainty_presentation(changed, warning)
+
     def test_retained_performed_result_and_native_owner_remain_exact(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

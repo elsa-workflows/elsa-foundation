@@ -1531,6 +1531,15 @@ def require_browser_terminal(browser, root, spec, origin, trace):
               "duplicate performed delivery changed the native layout")
 
 
+def require_uncertainty_presentation(value, native_warning):
+    """The card's owner caution and the separately rendered native warning are both required."""
+    _need(isinstance(value, dict) and value.get("cardStatus") == "uncertain"
+          and isinstance(value.get("cardText"), str) and "Widget check is unconfirmed" in value["cardText"]
+          and "a possibly completed action must not be repeated automatically" in value["cardText"]
+          and isinstance(native_warning, str) and "uncertain" in native_warning.lower() and "not be replayed" in native_warning.lower()
+          and value.get("warningText") == native_warning, "uncertain presentation lost its owner caution or separate native no-replay warning")
+
+
 def require_browser_uncertain(browser, root, value, spec, trace):
     data, origin = browser["effects"], value["backendOrigin"]
     _called_once(trace, value["provider"], data["commandId"], CHECK_TOOL)
@@ -1562,6 +1571,7 @@ def require_browser_uncertain(browser, root, value, spec, trace):
           and prepared.get("toolName") == CHECK_TOOL and prepared.get("moduleId") == MODULE and _target(prepared.get("target"), data["before"]["revision"]),
           "uncertainty is not the approved actual owner dispatch")
     result = execution.get("toolResult") or {}
+    require_uncertainty_presentation(browser.get("effectsUncertaintyPresentation"), result.get("content"))
     _need(result.get("toolCallId") == prepared.get("toolCallId") and result.get("toolName") == CHECK_TOOL and result.get("succeeded") is False
           and result.get("receipt") is None and result.get("payload", {}).get("typeId") == "weaver.operation-outcome"
           and result["payload"].get("data", {}).get("status") == "uncertain", "uncertainty invented a performed/persisted receipt")

@@ -2650,7 +2650,15 @@ async function moduleEffects() {
   await expect(card).toHaveAttribute("data-status", spec.condition === "browser-uncertain" ? "uncertain" : typed && spec.channel === "execution" ? "failed" : isCheck ? "performed" : "executed");
   if (spec.condition === "browser-uncertain") {
     await expect(card).toContainText(/uncertain/i);
-    await expect(card).toContainText(/not be replayed/i);
+    await expect(card).toContainText("Widget check is unconfirmed");
+    await expect(card).toContainText("a possibly completed action must not be repeated automatically");
+    // The accepted server outcome updates the card's status/result. Its native
+    // warning is rendered separately by WeaverToolResults, outside this card.
+    const nativeWarning = delivery.value.data.toolResult.content;
+    need(typeof nativeWarning === "string" && /uncertain/i.test(nativeWarning) && /not be replayed/i.test(nativeWarning), "The native uncertainty warning lost its no-replay instruction.");
+    const warning = dock().getByRole("region", { name: "Module results", exact: true }).getByText(nativeWarning, { exact: true });
+    await expect(warning).toBeVisible();
+    result.effectsUncertaintyPresentation = { cardStatus: await card.getAttribute("data-status"), cardText: await card.innerText(), warningText: await warning.innerText() };
     await expect(card.getByRole("button", { name: "Apply", exact: true })).toBeDisabled();
     await expect(card.getByRole("group", { name: "Resolve uncertain change", exact: true })).toHaveCount(0);
   } else if (isCheck && !(typed && spec.channel === "execution")) {
