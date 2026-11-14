@@ -1,5 +1,7 @@
 import copy
+from contextlib import redirect_stdout
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -12,6 +14,47 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).with_name('run.py'))
 acceptance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(acceptance)
+
+
+class ProvenanceInputPrivacyTests(unittest.TestCase):
+    def test_full_hex_head_reaches_provenance_check_in_canonical_form(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'evidence'
+            with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'B' * 40}), \
+                 patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                 patch.object(acceptance, 'supplies_pr_head', return_value=False) as provenance, \
+                 patch.object(acceptance, 'command') as build, redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(ValueError, 'claimed PR head'):
+                    acceptance.run(output)
+            self.assertEqual('b' * 40, json.loads((output / 'report.json').read_text())['headSha'])
+            self.assertTrue(provenance.called)
+            self.assertTrue(all(call.args[-1] == 'b' * 40 for call in provenance.call_args_list))
+            build.assert_not_called()
+
+    def test_invalid_head_never_enters_failed_report_or_stdout_and_starts_no_build(self):
+        for profile in ('default', 'weaver-inventory'):
+            for supplied in ('/Users/private-head-canary/auth.json', 'Bearer private-head-canary',
+                             'eyJprivate-head-canary.payload.signature', 'private-head-canary\nBearer token'):
+                with self.subTest(profile=profile, supplied=supplied), tempfile.TemporaryDirectory() as temporary:
+                    output = Path(temporary) / 'evidence'
+                    printed = io.StringIO()
+                    with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': supplied}), \
+                         patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                         patch.object(acceptance, 'supplies_pr_head') as provenance, \
+                         patch.object(acceptance, 'command') as build, redirect_stdout(printed):
+                        with self.assertRaises((ValueError, RuntimeError)):
+                            acceptance.run(output, profile=profile)
+                    serialized = (output / 'report.json').read_text()
+                    for text in (serialized, printed.getvalue()):
+                        self.assertNotIn(supplied, text)
+                        self.assertNotIn('private-head-canary', text)
+                    report = json.loads(serialized)
+                    self.assertEqual('failed', report['status'])
+                    self.assertEqual('source-provenance', report['stage'])
+                    self.assertEqual('invalid_pr_head_sha', report['errorCode'])
+                    self.assertNotIn('headSha', report)
+                    provenance.assert_not_called()
+                    build.assert_not_called()
 
 
 class VerdictTests(unittest.TestCase):

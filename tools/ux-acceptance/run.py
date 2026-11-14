@@ -402,12 +402,19 @@ def run(output, journey=None, studio_root=None, profile='default'):
     studio_root = (studio_root or ROOT).resolve()
     sha, dirty = source_state(ROOT)
     studio_sha, studio_dirty = source_state(studio_root)
-    head = os.environ.get('UX_PR_HEAD_SHA', sha)
-    report = {'sourceSha': sha, 'headSha': head, 'dirty': bool(dirty),
+    supplied_head = os.environ.get('UX_PR_HEAD_SHA', sha)
+    # Untrusted provenance input must never reach the failure report or finally's printed JSON.
+    head = supplied_head.lower() if re.fullmatch(r'[0-9a-fA-F]{40}', supplied_head) else None
+    report = {'sourceSha': sha, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
               'profile': profile, 'journeys': sorted(weaver_inventory.JOURNEYS) if profile == 'weaver-inventory' else [journey] if journey else sorted(JOURNEYS)}
+    if head is not None:
+        report['headSha'] = head
     try:
+        if head is None:
+            report.update(stage='source-provenance', errorCode='invalid_pr_head_sha')
+            raise ValueError('Invalid PR head: a full 40-hex revision is required')
         if dirty or studio_dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
