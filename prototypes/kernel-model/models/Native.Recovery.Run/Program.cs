@@ -11,9 +11,9 @@ if (args.Length != 0) throw new ArgumentException("Use --list or no argument.");
 // profile request; the named assertion exposes the missing continuing-parent boundary.
 var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
 var target = InstanceRef.In(0, "native-recovery"); var actor = world.Of(0, 0);
-var workflow = Wf.Workflow("native-recovery", Wf.Sequence("sequence",
+var workflow = Wf.Workflow("native-recovery", Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.Sequence("sequence",
     Wf.Set("before", "before", 1), Wf.Node<RecoveryLeaf>("leaf", ("Value", Binding.Literal(17))),
-    Wf.Set("after", "after", 1)));
+    Wf.Set("after", "after", 1))));
 workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
 void Apply(Act action)
 {
@@ -51,4 +51,14 @@ internal sealed class RecoveryLeaf : Kernel.Native.Activity<int>
         Observed = Value;
         return ValueTask.FromResult(Fault("expected-intervention", "ordinary recoverable-dependency witness"));
     }
+}
+
+// Preserve the simulator's genuine-fault guard: ordinary absorption lets the old workflow finish,
+// while the missing intervention still fails the independent continuing-parent assertion.
+internal sealed class AbsorbRecoveryFault : CompositeActivity
+{
+    public AbsorbRecoveryFault() { }
+    protected internal override void Execute(CompositeContext context) => context.Schedule(context.Children.Single());
+    protected internal override void OnChildCompleted(CompositeContext context, ChildCompleted child) => context.Complete();
+    protected internal override void OnChildFaulted(CompositeContext context, ChildFaulted child) => context.Complete();
 }
