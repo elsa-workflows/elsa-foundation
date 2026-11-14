@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Persistence.EntityFramework;

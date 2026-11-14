@@ -19,6 +19,7 @@ internal sealed class EfTriggerSourceResourceCommitStore(RuntimeDbContext contex
     private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> policies = RuntimeIngressReservationRules.Policies(reservationPolicies);
     public bool SupportsActivatedResources => resources is EfStandaloneTriggerStore store && ReferenceEquals(store.Context, context) &&
         RuntimeSchemaWriteVersion.SupportsIngress(context) && ingress.SupportsAdmission &&
+        (policies.Count == 0 || RuntimeSchemaWriteVersion.SupportsReservationSemantics(context)) &&
         activationSwitch is EfWorkflowActivationSwitch selected && RuntimeIngressReservationRules.SamePolicies(selected.ReservationPolicies, policies) && ReferenceEquals(selected.ReservationContext, context) &&
         bindings is EfWorkflowTriggerBindingStore selectedBindings && ReferenceEquals(selectedBindings.Context, context) &&
         targets?.Slots is EfWorkflowActivationAuthority authority && ReferenceEquals(authority.Context, context) &&
