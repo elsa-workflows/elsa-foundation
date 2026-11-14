@@ -140,7 +140,7 @@ internal sealed class CollectWeaverContext(IEnumerable<IWeaverContextProvider> s
                 var metadata = tools.ListAsync(sourceCancellation.Token);
                 pending = metadata;
                 var installed = (await metadata.WaitAsync(sourceCancellation.Token)).Select(tool => tool.Descriptor).ToArray();
-                needsEffects |= retainedDisclosure.Results.Any(result => result.Receipt is { ModuleCode: not null }
+                needsEffects |= retainedDisclosure.Results.Any(result => result.Error is not null || result.Receipt is { ModuleCode: not null }
                     or { Scope: WeaverEffectScope.NoPersistedEffect }
                     || installed.Any(tool => tool.Name == result.ToolName
                         && tool.ModuleId == result.Access?.ModuleId && Services.WeaverEffectsAdmission.UsesNewContract(tool)));

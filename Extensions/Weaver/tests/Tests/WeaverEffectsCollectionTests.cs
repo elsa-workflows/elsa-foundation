@@ -113,6 +113,7 @@ public sealed class WeaverEffectsCollectionTests
     [InlineData("performed")]
     [InlineData("code")]
     [InlineData("descriptor")]
+    [InlineData("lifecycle-error")]
     public async Task Retained_optional_new_source_blocks_provider_history_until_admission_recovers(string kind)
     {
         var resultOnly = kind != "context";
@@ -134,6 +135,12 @@ public sealed class WeaverEffectsCollectionTests
         Assert.True(admitted.Succeeded);
         var context = resultOnly ? Array.Empty<WeaverContextAttachment>() : admitted.Value!.Attachments.ToArray();
         var results = resultOnly ? new[] { source.Result(kind) } : [];
+        if (kind == "lifecycle-error")
+        {
+            Assert.False(Assert.Single(results).Succeeded);
+            Assert.Null(results[0].Receipt);
+            Assert.Equal("weaver.proposal.expired", results[0].Error?.Code);
+        }
         await sessions.AddMessageAsync(session.Id, new(WeaverRole.User, "Earlier evidence", WeaverMessageStatus.Completed, null,
             context.Select(x => x.Id).ToArray(), context) { HasDisclosureProvenance = true, ToolResults = results });
         var callbacks = source.Calls;
@@ -555,6 +562,18 @@ public sealed class WeaverEffectsCollectionTests
         {
             var target = new WeaverResourceTarget(Descriptor.ModuleId, "sample.resource", "resource", "1");
             var ran = new WeaverPayload("sample.ran", "1", JsonSerializer.SerializeToElement(new { ran = true }));
+            if (kind == "lifecycle-error")
+            {
+                // The engine can retain a new typed lifecycle error for an otherwise unclassed legacy operation.
+                var prepared = new WeaverPreparedToolInvocation("invocation", "session", "turn", "call", "retained_read", "1",
+                    Descriptor.ModuleId, "actor", "tenant", target, JsonSerializer.SerializeToElement(new { }), "legacy-digest",
+                    WeaverRisk.ReadOnly, ran, WeaverExecutionLocation.Server, false, null, DateTimeOffset.UnixEpoch);
+                return DefaultWeaverActionProposalExecutor.LifecycleResult(prepared, "refused", "The prepared operation expired before dispatch. No effect occurred.") with
+                {
+                    Error = new("weaver.proposal.expired", "The prepared operation has expired.", 409),
+                    Access = new(Descriptor.ModuleId, "1", target) { DisclosureSourceId = id, InvocationId = "invocation" }
+                };
+            }
             return new("call", "retained_read", true, "Ran", ran)
             {
                 Receipt = new("invocation", target, target, kind == "performed" ? WeaverEffectScope.NoPersistedEffect : WeaverEffectScope.ServerPersisted, ran)
