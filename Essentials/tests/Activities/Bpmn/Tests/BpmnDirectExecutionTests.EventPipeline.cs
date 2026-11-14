@@ -242,7 +242,7 @@ public sealed partial class BpmnDirectExecutionTests
     private static async Task<WorkflowActivationResult> PublishPipelineTargetAsync(IServiceProvider services, string definition,
         RuntimeExecutionMaterial material, string publication, long expectedRevision)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = services.GetRequiredService<TimeProvider>().GetUtcNow();
         var reference = new WorkflowExecutableSourceReference(WorkflowActivationReferenceIdentity.Create(publication), material.Identity.ArtifactId,
             "WorkflowDefinition", publication, publication, definition, publication, publication, now, now, WorkflowExecutableReferenceScope.Published);
         var result = await services.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new(definition, material, reference,
@@ -254,7 +254,7 @@ public sealed partial class BpmnDirectExecutionTests
     private static async Task CreatePipelineAssociationAsync(IServiceProvider services, string model, WorkflowActivationResult published,
         IReadOnlyList<TriggerInputMapping> mappings)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = services.GetRequiredService<TimeProvider>().GetUtcNow();
         var definition = published.Slot.WorkflowDefinitionId;
         var trigger = new StandaloneTrigger("pipeline-trigger", "Actual workflow Event", "event", 1, JsonSerializer.SerializeToElement(new { eventName = "orders" }),
             1, 1, 1, TriggerDesiredState.Enabled, new(TriggerManagementKind.Studio), now, now, "operator");

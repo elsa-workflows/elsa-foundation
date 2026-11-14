@@ -110,10 +110,13 @@ public sealed partial class BpmnDirectExecutionTests
         await store.SaveAsync(worker);
         var workerMaterial = (await store.FindMaterialAsync(worker.Identity.ArtifactId))!;
         var now = DateTimeOffset.UtcNow;
-        var reference = new WorkflowExecutableSourceReference("unused", worker.Identity.ArtifactId, "WorkflowDefinition", "worker-version", "1",
-            "worker-logical-definition", "worker-version", "1", now, now, WorkflowExecutableReferenceScope.Published, TenantId: "actual-tenant");
-        Assert.True((await services.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new("worker-logical-definition",
-            workerMaterial, reference, "default", "worker-publication", WorkflowActivationSource.Publishing, 0))).Succeeded);
+        var logicalDefinition = mappedInput ? "worker-logical-definition" : worker.Identity.DefinitionId;
+        var reference = new WorkflowExecutableSourceReference("unused", worker.Identity.ArtifactId, "WorkflowDefinition",
+            worker.Identity.DefinitionVersionId, worker.Identity.ArtifactVersion, logicalDefinition, worker.Identity.DefinitionVersionId,
+            worker.Identity.ArtifactVersion, now, now, WorkflowExecutableReferenceScope.Published, TenantId: "actual-tenant");
+        var activation = await services.GetRequiredService<IWorkflowActivationCoordinator>().ActivateMaterialAsync(new(logicalDefinition,
+            workerMaterial, reference, "default", "worker-publication", WorkflowActivationSource.Publishing, 0));
+        Assert.True(activation.Succeeded, activation.Outcome + ": " + activation.Diagnostic);
         var process = new BpmnProcessDefinition("ingress-service", Elements:
             [new("start", BpmnElementTypes.StartEvent), new("service", BpmnElementTypes.ServiceTask, bindingRef: "worker"), new("end", BpmnElementTypes.EndEvent)],
             SequenceFlows: [new("to-service", "start", "service"), new("to-end", "service", "end")]);
