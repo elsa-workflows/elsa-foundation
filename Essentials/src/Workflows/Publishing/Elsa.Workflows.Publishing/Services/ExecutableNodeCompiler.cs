@@ -428,7 +428,21 @@ public sealed class ExecutableNodeCompiler(
             // The same rule as a variable target: the declared workflow output owns the assignment contract, so the
             // value is published, validated and stored as the output's declared type rather than Studio's dynamic fallback.
             var key = WorkflowIntrinsicInputKeys.Value;
-            bindings[key] = PinIntrinsicSourceConversion(activity.NodeId, CompileInput(key, declaredType), projection, workflowVariables, workflowInputs);
+            var binding = bindings[key];
+            if (binding.Source == RuntimeInputBindingSource.Expression)
+            {
+                // The expression was validated against its authored result contract above. Keep that source
+                // contract and convert its result to the destination, rather than recompiling a portable Any
+                // expression as Int32 (which would contradict its explicitly declared result type).
+                var targetType = new ValueTypeDescriptor(declaredType.Alias, declaredType.CollectionKind);
+                var plan = _conversionPlanResolver.Resolve(binding.TargetType, ValueRepresentationDefaults.Infer(binding.TargetType),
+                    targetType, binding: new ValueConversionBindingContext(activity.NodeId, key, ValueConversionBindingKind.Input));
+                bindings[key] = new RuntimeInputBinding(key, targetType, binding.EffectivePolicy, binding.Source,
+                    expression: binding.Expression, metadata: binding.Metadata, conversionPlan: plan,
+                    conversionRequest: binding.ConversionRequest);
+            }
+            else
+                bindings[key] = PinIntrinsicSourceConversion(activity.NodeId, CompileInput(key, declaredType), projection, workflowVariables, workflowInputs);
         }
         foreach (var literalKey in LiteralIntrinsicKeys(runtimeKind))
         {

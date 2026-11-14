@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Core.Requests;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -46,12 +48,51 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal("Elsa.Any", binding.TargetType.Alias);
     }
 
-    private async Task<RuntimeInputBinding> PublishSetOutputValueAsync(string outputName, TypeReference authoredType, object? value = null)
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_dynamic_portable_SetOutput_preserves_its_result_contract_and_converts_to_the_declared_output(bool serialized)
+    {
+        var expression = SetOutputExpression(new TypeReference("Elsa.Any"));
+        var argument = new ArgumentValue(serialized ? JsonSerializer.SerializeToElement(expression) : expression, "JavaScript");
+
+        var binding = await PublishSetOutputValueAsync("Count", new TypeReference("Elsa.Any"), argument: argument);
+
+        Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
+        Assert.Equal("Elsa.Any", binding.Expression!.ResultType!.Id);
+        Assert.Equal(expression.Source, binding.Expression.Expression);
+        Assert.Equal(expression.CapabilityProfile, binding.Expression.CapabilityProfile);
+        Assert.Equal("Int32", binding.TargetType.Alias);
+        var plan = Assert.IsType<ValueConversionPlan>(binding.ConversionPlan);
+        Assert.Equal("Elsa.Any", plan.SourceType.Alias);
+        Assert.Equal("Int32", plan.TargetType.Alias);
+        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal("elsa.json", plan.Profile!.Id);
+    }
+
+    [Theory]
+    [InlineData("Int32", CollectionKind.Single)]
+    [InlineData("Elsa.Any", CollectionKind.List)]
+    public async Task A_portable_SetOutput_still_refuses_a_result_contract_that_differs_from_its_authored_value_type(string alias, CollectionKind collection)
+    {
+        var expression = SetOutputExpression(new TypeReference(alias, collection));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            PublishSetOutputValueAsync("Count", new TypeReference("Elsa.Any"), argument: new ArgumentValue(expression, "JavaScript")));
+
+        Assert.Contains("portable expression declares result type", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    private static ExpressionDefinition SetOutputExpression(TypeReference resultType) =>
+        new("JavaScript", "7", resultType, new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+
+    private async Task<RuntimeInputBinding> PublishSetOutputValueAsync(string outputName, TypeReference authoredType, object? value = null, ArgumentValue? argument = null)
     {
         var setOutput = new ActivityNode("set-output", "elsa.intrinsic.set-output@1",
         [
             new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Name, new ArgumentValue(JsonSerializer.SerializeToElement(outputName), "Literal"), null, null, null, null),
-            new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, new ArgumentValue(JsonSerializer.SerializeToElement(value ?? 7), "Literal"), null, null, null, null)
+            new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, argument ?? new ArgumentValue(JsonSerializer.SerializeToElement(value ?? 7), "Literal"), null, null, null, null)
         ], [])
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.SetOutput, authoredType, null)
