@@ -10,9 +10,9 @@ internal interface IInvocationInputReceiver
 
 internal sealed partial class Burst
 {
-    private CompositeActivity RestoreComposite(Frame frame, Node node) => typeof(IInvocationInputReceiver).IsAssignableFrom(node.Type)
-        ? (CompositeActivity)Activator.CreateInstance(node.Type)!
-        : (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
+    private ActivityBase RestoreActivity(Frame frame, Node node) => typeof(IInvocationInputReceiver).IsAssignableFrom(node.Type)
+        ? (ActivityBase)Activator.CreateInstance(node.Type)!
+        : Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
 
     private void DrainInputs()
     {
@@ -22,7 +22,7 @@ internal sealed partial class Burst
                 !_s.Inboxes![id].Pending.Any(i => _s.Inboxes[id].Receipts[i.Id].Status == "Queued")) continue;
             var node = _wf.Nodes[frame.Node];
             if (!typeof(IInvocationInputReceiver).IsAssignableFrom(node.Type)) continue;
-            var receiver = (IInvocationInputReceiver)RestoreComposite(frame, node);
+            var receiver = (IInvocationInputReceiver)RestoreActivity(frame, node);
             var context = new CompositeContext(this, frame, node);
             if (!receiver.CanAcceptInput(context)) continue;
             receiver.AcceptInput(context, SelectInput(frame)!);

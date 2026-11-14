@@ -493,7 +493,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         }
         if (!_s.Frames.TryGetValue(frame.Parent, out var parent)) return;
         var node = _wf.Nodes[parent.Node];
-        var composite = RestoreComposite(parent, node);
+        var composite = (CompositeActivity)RestoreActivity(parent, node);
         composite.OnChildCompleted(new CompositeContext(this, parent, node), new ChildCompleted(frame.Id, frame.Node, outcome, result, frame.Tag));
     }
 
@@ -528,7 +528,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             return;
         }
         var node = _wf.Nodes[parent.Node];
-        var composite = RestoreComposite(parent, node);
+        var composite = (CompositeActivity)RestoreActivity(parent, node);
         composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
     }
 
