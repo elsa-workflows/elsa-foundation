@@ -65,7 +65,7 @@ internal static class RetryWitness
         if (cut == "legacy-v5")
         {
             // Deliberately seeded old-schema context, separately counted; not a historical writer/binary claim.
-            var old = State(); old.InterventionPolicy = 0; old.Frames[source.Id].RecoveryMaterial = null;
+            var old = State(); StatefulPolicy.RemoveNewStatefulPins(old); old.InterventionPolicy = 0; old.Frames[source.Id].RecoveryMaterial = null;
             var upgraded = new NativeModel(new()).UpgradeState(Json.Write(old), 5);
             world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(upgraded) };
             Reload(); Drain();

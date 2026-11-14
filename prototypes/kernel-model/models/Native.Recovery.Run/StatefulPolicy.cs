@@ -14,6 +14,12 @@ internal static class StatefulPolicy
         foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var policy in new[] { 0, 1, 2 }) Legacy(mode, policy);
         foreach (var c in Readers()) { c.Run(); Console.WriteLine("PASS recovery-stateful-reader:" + c.Name); }
     }
+    // Construct only the old checkpoint shape; this is not an old-binary/writer claim.
+    internal static void RemoveNewStatefulPins(NativeState state)
+    {
+        foreach (var f in state.Frames.Values.Where(f => f.RecoveryStateful))
+        { f.RecoveryStateful = false; f.RecoveryInputs = null; f.RecoveryMaterial = null; f.OperationKey = null; }
+    }
     private static void Legacy(string mode, int policy)
     {
         StatefulProbe.Calls.Clear(); StatefulProbe.StartFault = false;
@@ -41,7 +47,7 @@ internal static class StatefulPolicy
         {
             // Constructed old suspended checkpoint, never claimed as bytes produced by an old binary.
             var old = State(); old.InterventionPolicy = policy;
-            foreach (var f in old.Frames.Values) { f.RecoveryStateful = false; f.RecoveryInputs = null; f.RecoveryMaterial = null; f.OperationKey = null; }
+            RemoveNewStatefulPins(old);
             world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(new NativeModel(new()).UpgradeState(Json.Write(old), 7)) };
         }
         wf.InterventionRequested = policy == 0; Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1; Apply(new("take", Actor().Id)); Drain();

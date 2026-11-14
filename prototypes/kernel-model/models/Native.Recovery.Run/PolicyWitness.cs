@@ -38,7 +38,7 @@ internal static class PolicyWitness
             if (kind is "sequence" or "parallel" or "foreach")
             {
                 // Deliberately constructed v6 migration context, not a historical writer/binary guarantee.
-                var legacy = State(); legacy.InterventionPolicy = 0;
+                var legacy = State(); StatefulPolicy.RemoveNewStatefulPins(legacy); legacy.InterventionPolicy = 0;
                 var upgraded = new NativeModel(new()).UpgradeState(Json.Write(legacy), 6);
                 world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(upgraded) };
             }
