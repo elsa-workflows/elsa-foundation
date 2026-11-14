@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 
 namespace Kernel.Native;
 
+internal sealed record LexicalScopeInfo(string Owner, string? Parent);
+
 internal sealed record LexicalResource(string Owner, string? Parent, Dictionary<string, JsonNode?> Values);
 
 public sealed partial class NativeState
@@ -76,6 +78,12 @@ internal static class LexicalScopes
 
 internal sealed partial class Burst
 {
+    internal LexicalScopeInfo LexicalScopeInfo(Frame owner, string id)
+    {
+        var resource = LexicalScopes.Accessible(_s, owner.Id, id);
+        return new(resource.Owner, resource.Parent);
+    }
+    internal string[] OwnedLexicalScopes(Frame owner) => (_s.LexicalScopes ?? []).Where(p => p.Value.Owner == owner.Id).Select(p => p.Key).ToArray();
     internal string CreateLexicalScope(Frame owner, IReadOnlyDictionary<string, JsonNode?> values, string? parent)
     {
         if (!_s.Frames.ContainsKey(owner.Id)) throw new InvalidOperationException("Lexical scope owner is not live.");
@@ -132,6 +140,8 @@ internal sealed partial class Burst
 
 public sealed partial class CompositeContext
 {
+    internal LexicalScopeInfo LexicalScopeInfo(string scope) => _burst.LexicalScopeInfo(_frame, scope);
+    internal string[] OwnedLexicalScopes() => _burst.OwnedLexicalScopes(_frame);
     internal string CreateLexicalScope(IReadOnlyDictionary<string, JsonNode?> values, string? parent = null) => _burst.CreateLexicalScope(_frame, values, parent);
     internal string ScheduleInScope(Node child, string scope, string? tag = null) => _burst.Schedule(_frame, child, tag, null, scope);
     internal void ReleaseLexicalScope(string scope) => _burst.ReleaseLexicalScope(_frame, scope);
