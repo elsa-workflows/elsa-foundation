@@ -304,3 +304,9 @@ bytes without expanding the target reader API. The final independent owner verif
 The source profile currently requires the qualified SQLite publication/template/reference ports. Missing
 original evidence, nonmatching source associations, unsupported providers or ambiguous contexts refuse.
 This feature does not compile, stage, activate, select latest versions or establish complete promotion.
+
+## Material-neutral publication lifecycle
+
+`IPublicationActivator.ActivateMaterialAsync(PublicationMaterialActivationRequest, CancellationToken)` is an opt-in replacement member in Publishing Core. Its default refuses before effects; a native-only implementation never receives a fabricated native workflow. `PublicationActivator` forwards exact stored native/model material and its logical source to Runtime Core's `IWorkflowActivationCoordinator.ActivateMaterialAsync`, retaining the ordinary candidate journal, serving-slot switch, compensation and completion reconciliation. Runtime independently validates physical material and publication authority.
+
+The ordinary unpublish/restore handlers use the same logical slot and exact retained model provenance. Restore allocates a new activation reference rather than reviving a retired reference. A same-artifact no-op returns the actual serving publication and fails the unused candidate. This bridge does not add a model compiler or establish genuine BPMN input/queue, process/restart or full standalone-trigger acceptance.
