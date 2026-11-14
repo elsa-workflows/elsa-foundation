@@ -211,6 +211,18 @@ public sealed class WeaverProviderLogRedactionTests : IDisposable
     [InlineData("query", false)]
     [InlineData("fragment", false)]
     [InlineData("path", false)]
+    [InlineData("dot-path", true)]
+    [InlineData("dot-path", false)]
+    [InlineData("escaped-dot-path", true)]
+    [InlineData("escaped-dot-path", false)]
+    [InlineData("single-dot-path", true)]
+    [InlineData("single-dot-path", false)]
+    [InlineData("escaped-single-dot-path", true)]
+    [InlineData("escaped-single-dot-path", false)]
+    [InlineData("backslash-path", true)]
+    [InlineData("backslash-path", false)]
+    [InlineData("empty-userinfo", true)]
+    [InlineData("empty-userinfo", false)]
     public async Task Copilot_refuses_runtime_url_components_before_sdk_factory_or_logging(string component, bool absolute)
     {
         var endpointCanary = "endpoint-" + Guid.NewGuid().ToString("N");
@@ -223,6 +235,12 @@ public sealed class WeaverProviderLogRedactionTests : IDisposable
             "fragment" => $"{authority}#{secret}",
             // The old bare-host fallback accepted paths when the last component looked like a port.
             "path" => $"{endpointCanary}.invalid/{secret}:49152",
+            "dot-path" => $"{authority}/{secret}/..",
+            "escaped-dot-path" => $"{authority}/{secret}/%2e%2e",
+            "single-dot-path" => $"{authority}/.",
+            "escaped-single-dot-path" => $"{authority}/%2e",
+            "backslash-path" => $"{authority}\\{secret}\\..",
+            "empty-userinfo" => $"@{authority}",
             _ => throw new ArgumentOutOfRangeException(nameof(component))
         };
         var runtimeUrl = absolute ? "https://" + address : address;

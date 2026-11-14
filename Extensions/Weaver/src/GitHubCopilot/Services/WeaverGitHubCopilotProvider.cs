@@ -546,6 +546,15 @@ public sealed class WeaverGitHubCopilotProvider(
             candidate = "http://" + runtimeUrl;
         }
 
+        // Uri normalizes dot segments and backslashes. Inspect the raw candidate first so
+        // an ignored path or an empty userinfo/query/fragment cannot become an endpoint hint.
+        var authorityStart = candidate.IndexOf("://", StringComparison.Ordinal) + 3;
+        if (candidate.IndexOfAny(['@', '?', '#', '\\'], authorityStart) >= 0)
+            return false;
+        var pathStart = candidate.IndexOf('/', authorityStart);
+        if (pathStart >= 0 && pathStart != candidate.Length - 1)
+            return false;
+
         return Uri.TryCreate(candidate, UriKind.Absolute, out var uri) && (uri.Scheme is "http" or "https")
             && !string.IsNullOrWhiteSpace(uri.Host) && IsValidPort(uri.Port)
             && string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment)
