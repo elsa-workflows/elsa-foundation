@@ -199,10 +199,15 @@ class _OwnedProcess:
         self.profile = dict(profile)
         self.content_root = owned_content_root(run, self.profile)
         Http(origin)  # Validate origin before process creation.
+        self.process_namespace = profile.get("processNamespace", name)
+        check(isinstance(self.process_namespace, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", self.process_namespace),
+              "Process evidence namespace must be a bounded owned name")
         suffix = "" if generation == 1 else "-g" + str(generation)
-        self.log = run.root / (name + "-runtime" + suffix + ".log")
-        self.receipt = run.root / (name + "-process" + suffix + ".json")
-        check(generation == 1 or not (self.log.exists() or self.receipt.exists()), "Never overwrite a retained host generation")
+        self.log = run.root / (self.process_namespace + "-runtime" + suffix + ".log")
+        self.receipt = run.root / (self.process_namespace + "-process" + suffix + ".json")
+        check((generation == 1 and "processNamespace" not in profile)
+              or not (self.log.exists() or self.log.is_symlink() or self.receipt.exists() or self.receipt.is_symlink()),
+              "Never overwrite a retained host generation")
         self.marker = "WEAVER_" + name.upper() + "_CONSUMER_READY"
         self.assembly = self.root / profile["assembly"]
         check(self.assembly.is_file() and not self.assembly.is_symlink() and self.assembly.resolve().parent == self.root,
@@ -225,7 +230,7 @@ class _OwnedProcess:
         command = [self.run.dotnet, str(self.assembly), "--contentRoot", str(self.content_root), "--urls", self.origin]
         # Restore caches are producer inputs, not undeclared native runtime feeds. Each launch
         # receives new empty caches; the explicit retained archive closure must suffice.
-        runtime_inputs = self.run.root / (self.name + "-runtime-inputs-" + str(time.time_ns()))
+        runtime_inputs = self.run.root / (self.process_namespace + "-runtime-inputs-" + str(time.time_ns()))
         runtime_inputs.mkdir(mode=0o700)
         # Runtime inputs are explicit private files/feed archives. Ambient provider credentials,
         # interposers, startup hooks and restore/build-cache overrides are not consumer inputs.
@@ -246,6 +251,8 @@ class _OwnedProcess:
         if self.published_files is not None:
             self.started.update(publishedFilesSha256=published_files_digest(self.published_files),
                                 publishedFileCount=len(self.published_files))
+        if self.process_namespace != self.name:
+            self.started["processNamespace"] = self.process_namespace
         if self.generation != 1:
             self.started["generation"] = self.generation
         self.save()

@@ -87,6 +87,20 @@ class RuntimeClosureTests(unittest.TestCase):
             for name in ("appsettings.json", "shells.json"):
                 self.assertEqual(0, (directory / name).stat().st_mode & 0o077)
 
+    def test_backend_only_runtime_configuration_needs_no_studio_profile_or_mutation(self):
+        backend = self.root / "standalone-backend"
+        backend.mkdir()
+        (backend / "appsettings.json").write_text(json.dumps({"Qualification": {}}))
+        (backend / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": backend_features(backend)}}}}))
+        run = SimpleNamespace(root=self.root, profiles={"backend": {"published": backend, "commandFile": backend / "command.json",
+            "traceFiles": {"copilot": backend / "copilot.jsonl", "anthropic": backend / "anthropic.jsonl"}}})
+        configure_runtime(run, backend_url="http://127.0.0.1:18001", studio_url="http://127.0.0.1:18002",
+                          admin_username="private-fixture", admin_password=secrets.token_urlsafe(24) + "!aA1", backend_only=True)
+        self.assertEqual({"backend"}, set(run.profiles))
+        self.assertNotIn("Studio", json.loads((backend / "appsettings.json").read_text()))
+        for name in ("appsettings.json", "shells.json"):
+            self.assertEqual(0, (backend / name).stat().st_mode & 0o077)
+
     def test_framework_assembly_sharing_does_not_satisfy_the_nuget_dependency(self):
         before = copy.deepcopy(self.author)
         result = self.select()

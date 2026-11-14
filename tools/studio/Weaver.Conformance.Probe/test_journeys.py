@@ -164,6 +164,22 @@ class JourneyBoundariesTests(unittest.TestCase):
             self.assertEqual("release", json.loads(runtime.gate_file.read_text())["state"])
             self.assertFalse(runtime.cas_control.exists()); self.assertFalse(runtime.cas_receipt.exists())
 
+    def test_independent_runtime_can_retain_a_separate_journey_namespace_without_replacing_prior_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run = SimpleNamespace(root=root, profiles={"backend": {"commandFile": root / "command.json"}})
+            normal = JourneyRuntime(run, "http://127.0.0.1:51001", "http://127.0.0.1:51002", {}, [])
+            original = normal.gate_file.read_bytes()
+            upgrade = JourneyRuntime(run, "http://127.0.0.1:51003", "http://127.0.0.1:51004", {}, [], output_namespace="upgrade-copilot")
+            self.assertEqual(root / "upgrade-copilot", upgrade.root)
+            self.assertNotEqual(normal.controls, upgrade.controls)
+            self.assertEqual(original, normal.gate_file.read_bytes())
+            with self.assertRaises(FileExistsError):
+                JourneyRuntime(run, "http://127.0.0.1:51003", "http://127.0.0.1:51004", {}, [], output_namespace="upgrade-copilot")
+            for name in (None, "", "../escape", "/absolute", ".", "..", "x" * 97):
+                with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "namespace"):
+                    JourneyRuntime(run, "http://127.0.0.1:51003", "http://127.0.0.1:51004", {}, [], output_namespace=name)
+
     def test_browser_export_summary_cannot_copy_private_auth_or_config_paths(self):
         config = {"journey": "workflow", "provider": "copilot", "studioOrigin": "http://127.0.0.1:51001", "backendOrigin": "http://127.0.0.1:51002",
                   "storageState": "/private/auth-state.json", "bearer": "PRIVATE_CREDENTIAL", "commandFile": "/private/command.json",

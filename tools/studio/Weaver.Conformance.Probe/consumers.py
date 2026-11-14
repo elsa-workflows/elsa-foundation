@@ -296,7 +296,7 @@ def configure_weaver_privileges(run, *, administrative, irrecoverable, activatio
     return dict(privileges)
 
 
-def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_password, provider="copilot", enroll=False):
+def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_password, provider="copilot", enroll=False, backend_only=False):
     """Write private owned origins/seed settings before launch; never emit credentials to receipts."""
     from urllib.parse import urlparse
     for address in (backend_url, studio_url):
@@ -307,9 +307,10 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
               "Runtime URL must be an explicit owned loopback origin")
     check(backend_url.rstrip("/") != studio_url.rstrip("/"), "Backend and Studio require separate owned origins")
     check(bool(admin_username.strip()) and bool(admin_password), "Explicit private native administrator seed inputs are required")
+    check(type(backend_only) is bool, "Select backend-only runtime configuration explicitly")
     backend = owned_content_root(run, run.profiles["backend"])
-    studio = owned_content_root(run, run.profiles["studio"])
-    for profile in (run.profiles["backend"], run.profiles["studio"]):
+    studio = None if backend_only else owned_content_root(run, run.profiles["studio"])
+    for profile in ([run.profiles["backend"]] if backend_only else [run.profiles["backend"], run.profiles["studio"]]):
         for name in ("appsettings.json", "shells.json"):
             _runtime_configuration(run, profile, name)
     settings = json.loads((backend / "appsettings.json").read_text())
@@ -329,14 +330,17 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
           "Owned runtime artifact paging needs its private persistent signing key")
     write_json(backend / "shells.json", document)
     configure_weaver_privileges(run, administrative=True, irrecoverable=True, activation=True)
-    settings = json.loads((studio / "appsettings.json").read_text())
-    settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
-    settings["Qualification"]["EnrollOwnedStore"] = bool(enroll)
-    settings["Qualification"]["DiagnosticGateDirectory"] = ""
-    write_json(studio / "appsettings.json", settings)
+    if studio is not None:
+        settings = json.loads((studio / "appsettings.json").read_text())
+        settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
+        settings["Qualification"]["EnrollOwnedStore"] = bool(enroll)
+        settings["Qualification"]["DiagnosticGateDirectory"] = ""
+        write_json(studio / "appsettings.json", settings)
     select_protocol_profile(run, provider)
     # These runtime files include the fixture's private native administrator seed.
-    for path in (backend / "appsettings.json", backend / "shells.json", studio / "appsettings.json", studio / "shells.json"):
+    private_paths = [backend / "appsettings.json", backend / "shells.json"]
+    if studio is not None: private_paths += [studio / "appsettings.json", studio / "shells.json"]
+    for path in private_paths:
         path.chmod(0o600)
 
 

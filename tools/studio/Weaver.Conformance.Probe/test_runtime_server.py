@@ -166,6 +166,52 @@ class RuntimeContentRootTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "special entries"):
                 runtime.published_files(self.published)
 
+    def test_isolated_process_namespace_preserves_existing_host_receipts_and_refuses_reuse(self):
+        ordinary_log, ordinary_receipt = self.root / "backend-runtime.log", self.root / "backend-process.json"
+        ordinary_log.write_text("original host log")
+        ordinary_receipt.write_text("original host receipt")
+        self.profile["processNamespace"] = "weaver-upgrade-copilot"
+        with patch.object(runtime.subprocess, "Popen") as launch:
+            launch.return_value.pid = 123
+            owned = runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+            receipt = owned.spawn()
+        self.assertEqual("weaver-upgrade-copilot", receipt["processNamespace"])
+        self.assertEqual(self.root / "weaver-upgrade-copilot-process.json", owned.receipt)
+        self.assertEqual("WEAVER_BACKEND_CONSUMER_READY", owned.marker)
+        self.assertEqual("original host log", ordinary_log.read_text())
+        self.assertEqual("original host receipt", ordinary_receipt.read_text())
+        with self.assertRaisesRegex(RuntimeError, "Never overwrite"):
+            runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+        self.profile["processNamespace"] = "backend"
+        with self.assertRaisesRegex(RuntimeError, "Never overwrite"):
+            runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+        self.assertEqual("original host log", ordinary_log.read_text())
+        self.assertEqual("original host receipt", ordinary_receipt.read_text())
+
+    def test_process_namespace_cannot_escape_the_owned_output_directory(self):
+        for name in (None, "", "../escape", "/absolute", ".", "..", "x" * 97):
+            with self.subTest(name=name), patch.object(runtime.subprocess, "Popen") as launch:
+                self.profile["processNamespace"] = name
+                with self.assertRaisesRegex(RuntimeError, "namespace"):
+                    runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+                launch.assert_not_called()
+
+    def test_dangling_namespaced_output_links_are_occupied_without_touching_their_external_targets(self):
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        target = Path(outside.name) / "must-not-be-created"
+        self.profile["processNamespace"] = "weaver-upgrade"
+        for name in ("weaver-upgrade-runtime.log", "weaver-upgrade-process.json"):
+            link = self.root / name
+            link.symlink_to(target)
+            with self.subTest(name=name), patch.object(runtime.subprocess, "Popen") as launch:
+                with self.assertRaisesRegex(RuntimeError, "Never overwrite"):
+                    runtime._OwnedProcess(self.run, "backend", "http://127.0.0.1:18001")
+                launch.assert_not_called()
+                self.assertFalse(target.exists())
+                self.assertTrue(link.is_symlink())
+            link.unlink()
+
 
 class RuntimeObservationTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "Requires a real POSIX SIGTERM handler")
