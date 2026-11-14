@@ -57,6 +57,14 @@ with cumulative numbering and no reset. Full M0–M5 delivery remains authorized
 claim/WIP/readiness rule and resulting-main check remains required. The narrowly authorized one-file
 owner-account workflow update is complete; ordinary writes and merges use the worker's own App.
 
+The [14 November bounded T042 and merge authorization](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6871081882)
+authorizes one fresh disposable T042 worker, capped at one CPU and 3 GiB for at most 90 minutes,
+with cleanup afterward. It does not renew a previous allocation. The owner also authorizes an admin
+override to self-merge after a clean self-review loop. This exception covers the merge mechanism;
+exact-head independent review, required passing checks, unresolved human holds and resulting-main
+verification remain binding. The cumulative review history and all Program acceptance and charter
+boundaries remain intact. This authorization does not mark T042 or the implementation complete.
+
 The [1 November native-baseline exception](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6563215730)
 authorizes resuming #3440's native baseline after its three failed runs (`1495b57a6`, `d82a0b7fa`,
 `81965ed8a`), which stay recorded as Failed. Its scope is a stable locator for the reviewed size card
