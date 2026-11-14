@@ -440,6 +440,14 @@ public sealed class MongoStore : IKernelStore
         return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
     }
 
+    public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        // A find may span multiple cursor batches. Keep them on the same committed snapshot.
+        var docs = await _journal.WithReadConcern(ReadConcern.Snapshot).Find(new BsonDocument { { "partition", partition }, { "instance", instance }, { "position", new BsonDocument("$gt", after) } })
+            .Sort(new BsonDocument("position", 1)).ToListAsync(cancellationToken);
+        return docs.Select(d => new JournalRow(d["partition"].AsInt32, d["position"].AsInt64, d["instance"].AsString, d["revision"].AsInt64, d["entries"].AsString)).ToList();
+    }
+
     public async ValueTask<int> SweepAsync(CancellationToken cancellationToken = default)
     {
         var expired = new BsonDocument("$expr", new BsonDocument("$lt", new BsonArray { "$keepUntil", NowMs }));

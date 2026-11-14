@@ -540,6 +540,17 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
     }
 
+    public async ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();      // the index on Journal(Partition, Instance)
+        // With RCSI disabled a SQL Server scan needs range locks to hold its committed image for this statement.
+        var journal = Engine is SqlServerEngine { ReadCommittedSnapshot: false }
+            ? db.Journal.FromSqlRaw("SELECT * FROM [Journal] WITH (HOLDLOCK)")
+            : db.Journal.AsQueryable();
+        var rows = await journal.AsNoTracking().Where(j => j.Partition == partition && j.Instance == instance && j.Position > after).OrderBy(j => j.Position).ToListAsync(cancellationToken);
+        return rows.Select(j => new JournalRow(j.Partition, j.Position, j.Instance, j.Revision, j.Entries)).ToList();
+    }
+
     private sealed class ProjectionRow
     {
         public long Position { get; set; }
