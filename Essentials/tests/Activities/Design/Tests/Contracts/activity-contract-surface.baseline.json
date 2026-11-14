@@ -452,8 +452,10 @@
       ],
       "outputs": [],
       "outcomes": {
-        "declared": false,
-        "ports": [],
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
         "dynamic": null
       },
       "structure": null
@@ -1351,8 +1353,10 @@
       ],
       "outputs": [],
       "outcomes": {
-        "declared": false,
-        "ports": [],
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
         "dynamic": null
       },
       "structure": null

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Integrations.Sdk.Harness;
+namespace Elsa.Integrations.Sdk.Testing;
 
 internal sealed class CapturingLoggerProvider : ILoggerProvider
 {

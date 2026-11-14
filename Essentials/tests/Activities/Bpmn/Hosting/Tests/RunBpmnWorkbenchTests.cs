@@ -130,11 +130,29 @@ public sealed class RunBpmnWorkbenchTests
         Assert.Single((await host.GetAsync("/runtime/workflows/instances")).AsArray());
         var final = await host.GetAsync(modelPath);
         Assert.Equal(cancel ? "Cancelled" : "Completed", final["result"]!["status"]!.GetValue<string>());
+        JsonNode? lateReceipt = null;
         if (cancel)
         {
-            await host.PostAsync(modelPath + "/work/" + waiting["invocationId"]!.GetValue<string>() + "/complete",
-                new { requestId = "late-embedded", attemptId = waiting["attemptId"]!.GetValue<string>() }, System.Net.HttpStatusCode.Conflict);
-            Assert.True(JsonNode.DeepEquals(final, await host.GetAsync(modelPath)));
+            var beforeLateNative = view.DeepClone();
+            var late = await host.PostCommandOutcomeAsync(modelPath + "/work/" + waiting["invocationId"]!.GetValue<string>() + "/complete",
+                new { requestId = "late-embedded", attemptId = waiting["attemptId"]!.GetValue<string>() });
+            Assert.Equal(late.Status == System.Net.HttpStatusCode.Accepted, late.Body["pending"]!.GetValue<bool>());
+            lateReceipt = late.Body;
+            deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+            while (lateReceipt["pending"]!.GetValue<bool>())
+            {
+                Assert.True(DateTimeOffset.UtcNow < deadline, "The durably admitted late completion did not settle.");
+                await Task.Delay(100);
+                lateReceipt = await host.GetAsync(modelPath + "/commands/late-embedded");
+            }
+            Assert.Equal(modelId, lateReceipt["executionId"]!.GetValue<string>());
+            Assert.Equal("late-embedded", lateReceipt["inputId"]!.GetValue<string>());
+            Assert.Equal("Rejected", lateReceipt["result"]!["status"]!.GetValue<string>());
+            Assert.Equal("execution-terminal", lateReceipt["result"]!["code"]!.GetValue<string>());
+            Assert.True(JsonNode.DeepEquals(final, await host.GetAsync(modelPath)), "Late completion changed the terminal model or revision.");
+            Assert.True(JsonNode.DeepEquals(beforeLateNative, await host.GetAsync("/runtime/workflows/instances/" + execution)),
+                "Late completion changed native activity occurrences, outcomes or continuation.");
+            Assert.Empty((await host.GetAsync(modelPath + "/work"))["items"]!.AsArray());
         }
         JsonNode checkedFinal;
         deadline = DateTimeOffset.UtcNow.AddSeconds(30);
@@ -155,6 +173,16 @@ public sealed class RunBpmnWorkbenchTests
         Assert.Equal(cancel ? "Cancelled" : "Completed", (await host.GetAsync("/runtime/workflows/instances/" + execution))["instance"]!["status"]!.GetValue<string>());
         var retainedPhysical = await host.ReadEmbeddingAsync(modelId, execution, directId);
         Assert.True(JsonNode.DeepEquals(finishedPhysical, retainedPhysical));
+        if (lateReceipt is not null)
+        {
+            var retainedLate = await host.GetAsync(modelPath + "/commands/late-embedded");
+            Assert.False(retainedLate["pending"]!.GetValue<bool>());
+            Assert.Equal(modelId, retainedLate["executionId"]!.GetValue<string>());
+            Assert.Equal("late-embedded", retainedLate["inputId"]!.GetValue<string>());
+            Assert.True(JsonNode.DeepEquals(lateReceipt["result"], retainedLate["result"]));
+            Assert.True(JsonNode.DeepEquals(view, await host.GetAsync("/runtime/workflows/instances/" + execution)));
+            Assert.Empty((await host.GetAsync(modelPath + "/work"))["items"]!.AsArray());
+        }
         if (evidenceDirectory is not null)
         {
             var sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION") ?? throw new InvalidOperationException("Embedding evidence requires its exact executing source.");
@@ -162,7 +190,7 @@ public sealed class RunBpmnWorkbenchTests
                 nativeExecutionId = execution, modelExecutionId = modelId, directCounterpartId = directId, published, publication,
                 firstProcess, secondProcess, thirdProcess, predecessorExit, termination = ".NET Process.Kill(entireProcessTree: true)",
                 binaries = host.DescribeBinaries(sourceRevision, includePublishing: true), before, nativeBefore, final, nativeFinal = view,
-                actualHumanWait = waiting, snapshots = new[] { waitingRuntime, waitingDesign, completedRuntime, completedDesign },
+                actualHumanWait = waiting, lateReceipt, snapshots = new[] { waitingRuntime, waitingDesign, completedRuntime, completedDesign },
                 limits = new[] { "Model-owned human-work profile only; native-service/ETL embedding is not yet admitted.",
                     "Same-source process loss; no upgraded-host, pending-parent-result crash or cancellation-before-admission acceptance.",
                     "Direct trace counterpart is qualified for completion only; no new direct-cancel endpoint is claimed.",

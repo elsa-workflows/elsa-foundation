@@ -159,7 +159,7 @@ is which operation is authorized to write which records. An outside insert canno
 | Publish / event publisher | Event key and ID | Inserts the kept event; the publisher then finds subscriptions and adds delivery messages as separate operations. |
 | Register start subscription / registrar | Subscription identity | Upserts/inserts the subscription; catch-up reads kept events and adds deliveries separately. |
 | Project / projector | Journal page and cursor; cursor must still equal `from` | Moves projection cursor and writes/removes view rows in its own transaction, separate from owner commits. |
-| Viewer/API reads | Projection cursor, journal pages and instance view keys | None. No owner commit is forced by these reads. |
+| Viewer/API reads | Projection cursor, instance views and a consistent per-instance journal tail | None. No owner commit is forced by these reads. |
 | Sweep / maintenance | Database time and expiry predicates | Deletes handled expired inbox rows and expired events; no checkpoint, subscription, node, view or journal TTL cleanup. |
 
 Clock-bearing writes add the optional metadata validation/stamping described above to the same in-memory commit;
@@ -266,15 +266,17 @@ The [qualification findings](../../prototypes/kernel-model/FINDINGS.md) retain k
 - **Projection:** advancing the projector cursor and changing its views is atomic and conditional on the old cursor.
   The cursor does not participate in the owner's checkpoint fence.
 
-### Viewer read proposed beyond this schema baseline
+### Viewer read
 
-The existing store exposes journal pages, projection positions and views. The reviewed viewer change (#4359),
-implementing the [proposal's viewer path](../reports/clean-slate-kernel/design-sketch-draft-5.md), adds a required
-`ReadJournalOfAsync(partition, instance, after)` query returning one committed per-instance snapshot.
-That addition is not in the source baseline described above. Its proposed viewer reads cursor, view and the
-instance's tail, then merges in memory; paging unrelated snapshots can race a deletion and lose both history and
-its later marker. The proposal uses a consistent provider query and explicit snapshot/locking semantics where needed.
-It reuses the journal's partition/instance access path and does not add a table, collection or owner hot-path write.
+The [viewer](../../prototypes/kernel-model/src/Kernel.Durable/Viewer.cs) reads the projection cursor, the instance's
+projected view, then `ReadJournalOfAsync(partition, instance, after)` for a consistent per-instance journal tail.
+These are three logical store reads. A projector round can commit between them; the in-memory merge ignores
+revisions already represented in the view, applies deletion markers and resets the previous run's view and count.
+
+The tail query returns its rows from one committed snapshot. Paging across unrelated snapshots can race a deletion
+and lose both history and its later marker, so providers must preserve this consistency across any cursor batches.
+Snapshot and locking mechanisms, and therefore physical round trips, depend on the provider. The query reuses the
+journal's partition/instance access path and adds no table, collection or owner hot-path write.
 
 ## Growth, retention and measurement limits
 

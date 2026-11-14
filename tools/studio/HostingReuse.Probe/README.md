@@ -19,7 +19,7 @@ and unchanged empty completion. Update/removal verify discovery before reload co
 generation's actual services and a retained old-generation scope. The control must exit **one**, specifically
 because an update did not replace the serving generation. The restored normal run must exit zero again.
 
-The public package baseline is CShells `0.0.31` and Nuplane abstractions/loading abstractions `0.0.12`, pinned by
+The public package baseline is CShells `0.0.31` and Nuplane abstractions/loading abstractions `0.0.13`, pinned by
 the repository's central versions and these projects' lock files. JSON also reports assembly informational
 versions/source commits; those values are not NuGet package versions (the Nuplane assembly reports `1.0.0`).
 

@@ -34,6 +34,37 @@ class VerdictTests(unittest.TestCase):
                 for project in acceptance.PROJECTS]}
             for journey in acceptance.JOURNEYS]}]}
 
+        # Explicit positive receipt fixtures; every behavioral guard below mutates one fact at a time.
+        for row in self.report['suites'][0]['specs']:
+            title = row['title']
+            if title not in acceptance.DATA_JOURNEYS:
+                continue
+            member = {'expressionType': 'ActivityResultMember', 'value': {'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False, 'memberPath': ['customerId']}}
+            scoped = [{'expressionType': 'VariableMember', 'value': {'referenceKey': key, 'declaringScopeId': scope, 'memberPath': ['a.b', '']}}
+                      for key, scope in [('inner-payload', 'root'), ('outer-payload', 'workflow')]]
+            declared = {'expressionType': 'WorkflowRequestMember', 'value': {'memberKey': 'payload', 'memberPath': ['a.b', '']}}
+            bindings = [member, member] if title == 'choose nested activity data' else scoped + [declared, declared] if title == 'choose declared and scoped activity data' else []
+            values = ['cust-1042', 'cust-1042'] if title == 'choose nested activity data' else ['inner-id', 'outer-id', 'declared-ui-id'] if bindings else []
+            proof = {'composition': 'normal', 'contexts': [{'response': {'state': 'supported', 'analysis': {'memberReadsEnabled': True, 'sources': [{'binding': {'expressionType': 'ActivityResult', 'value': {'projectionKey': 'Customer'}}}]}}}],
+                     'selections': [{'binding': binding, 'offered': binding} for binding in bindings],
+                     'runtime': [{'committed': value, 'consumer': {'status': 'Completed'}, 'producers': [{'status': 'Completed'}]} for value in values], 'scripts': [],
+                     'transportControls': [{'kind': 'cancelled', 'request': {'nodeId': 'consumer', 'inputKey': 'text'}, 'failure': 'net::ERR_ABORTED'}]}
+            for selection in proof['selections']:
+                before = {'definitionId': 'owned', 'nodeId': 'consumer', 'inputKey': 'text', 'documentRevision': 'before',
+                          'snapshot': {'consumer': {'inputs': []}}}
+                selection['before'] = before
+                selection['admission'] = {'request': {**copy.deepcopy(before), 'query': {'source': {'expressionType': 'Variable', 'value': 'setup'}, 'memberPath': selection['binding']['value']['memberPath']}},
+                                          'response': {'state': 'supported', 'documentRevision': 'before', 'analysis': {'sources': [{'binding': copy.deepcopy(selection['offered'])}]}}}
+            file = self.root / (title.replace(' ', '-') + '.json')
+            file.write_text(json.dumps(proof))
+            for test in row['tests']:
+                attachments = test['results'][0]['attachments']
+                next(item for item in attachments if item['name'] == 'activity-data-proof.json')['path'] = str(file)
+                if not bindings:
+                    runtime = self.root / 'whole-runtime.json'
+                    runtime.write_text(json.dumps({'committed': '00:00:01'}))
+                    attachments += [{'name': f'whole-output-runtime-{index}.json', 'path': str(runtime)} for index in range(2)]
+
     def test_native_reader_must_be_recorded_in_the_combined_trace(self):
         with zipfile.ZipFile(self.trace, 'w') as archive:
             archive.writestr('owner.trace', json.dumps({'type': 'context-options', 'origin': 'library', 'contextId': 'owner'}) + '\n')
@@ -100,6 +131,55 @@ class VerdictTests(unittest.TestCase):
                     target = next(row for row in report['suites'][0]['specs'] if row['title'] == spec['title'])
                     target['tests'][0]['results'][0]['attachments'].remove(attachment)
                     with self.assertRaises(ValueError): acceptance.verdict(report, self.root)
+
+    def test_activity_data_receipts_reject_wrong_runtime_offer_scope_and_capability(self):
+        for title, change in [('choose nested activity data', 'runtime'), ('choose nested activity data', 'offer'),
+                              ('choose declared and scoped activity data', 'scope'), ('choose declared and scoped activity data', 'split-path'),
+                              ('choose data for activity outputs', 'capability')]:
+            with self.subTest(title=title, change=change):
+                file = self.root / (title.replace(' ', '-') + '.json')
+                original = file.read_text(); proof = json.loads(original)
+                if change == 'runtime': proof['runtime'][0]['committed'] = 'wrong-customer'
+                if change == 'offer': proof['selections'][0]['offered'] = {'expressionType': 'Literal', 'value': 'cust-1042'}
+                if change == 'scope': proof['selections'][1]['binding']['value']['declaringScopeId'] = 'root'
+                if change == 'split-path': proof['selections'][0]['binding']['value']['memberPath'] = ['a', 'b', '']
+                if change == 'capability': proof['contexts'][0]['response']['analysis']['memberReadsEnabled'] = False
+                file.write_text(json.dumps(proof))
+                try:
+                    with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
+                finally: file.write_text(original)
+        self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+
+    def test_missing_actual_browser_cancellation_cannot_pass(self):
+        file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)
+        proof['transportControls'] = []; file.write_text(json.dumps(proof))
+        try:
+            with self.assertRaisesRegex(ValueError, 'cancellation evidence'): acceptance.verdict(self.report, self.root)
+        finally: file.write_text(original)
+
+    def test_post_edit_provenance_cannot_replace_committing_admission(self):
+        file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)
+        admission = proof['selections'][0]['admission']
+        admission['request']['documentRevision'] = admission['response']['documentRevision'] = 'after'
+        admission['request']['snapshot']['consumer']['inputs'] = [proof['selections'][0]['binding']]
+        file.write_text(json.dumps(proof))
+        try:
+            with self.assertRaisesRegex(ValueError, 'pre-edit admission'): acceptance.verdict(self.report, self.root)
+        finally: file.write_text(original)
+        self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+
+    def test_default_off_rejects_an_enabled_host_and_still_requires_typed_source_and_whole_runtime(self):
+        title = 'choose data for activity outputs'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        file = self.root / (title.replace(' ', '-') + '.json'); proof = json.loads(file.read_text())
+        proof['composition'] = 'default-off'; file.write_text(json.dumps(proof))
+        with self.assertRaisesRegex(ValueError, 'capability'): acceptance.verdict(report, self.root, [title], 'default-off')
+        proof['contexts'][0]['response']['analysis']['memberReadsEnabled'] = False; file.write_text(json.dumps(proof))
+        self.assertEqual(4, acceptance.verdict(report, self.root, [title], 'default-off'))
+        proof['contexts'][0]['response']['analysis']['sources'] = []; file.write_text(json.dumps(proof))
+        with self.assertRaisesRegex(ValueError, 'typed source'): acceptance.verdict(report, self.root, [title], 'default-off')
+
 
     def test_stale_development_overlays_never_reach_owned_content_root(self):
         project = self.root / 'source/Host.csproj'
@@ -241,6 +321,65 @@ class VerdictTests(unittest.TestCase):
 
 
 
+class CompositionTests(unittest.TestCase):
+    def test_defaults_and_explicit_inventory(self):
+        self.assertEqual(acceptance.JOURNEYS, acceptance.selected_journeys())
+        for mode in ('minimal', 'default-off'):
+            with self.assertRaises(ValueError): acceptance.selected_journeys(None, mode)
+        for choices in ([], ['unknown'], ['choose nested activity data'] * 2):
+            with self.assertRaises(ValueError): acceptance.selected_journeys(choices)
+        self.assertEqual(acceptance.DATA_JOURNEYS, acceptance.selected_journeys(sorted(acceptance.DATA_JOURNEYS), 'minimal'))
+        with self.assertRaises(ValueError): acceptance.selected_journeys(['choose nested activity data'], 'default-off')
+        with self.assertRaises(ValueError): acceptance.selected_journeys(['agent authoring and navigation'], 'minimal')
+
+    def test_private_modes_remove_exact_optional_modules_and_preserve_off_default(self):
+        backend_keys = {'HttpJavaScript', 'JavaScriptActivities', 'JavaScriptEndpoints', 'JavaScriptExpressions', 'JavaScriptJintEngine', 'JavaScriptWorkflowsDesign', 'Liquid'}
+        studio_keys = {'JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'}
+        original_backend = {'CShells': {'Shells': {'default': {'Features': {key: {} for key in backend_keys | {'Keep'}}}}}}
+        original_studio = {'CShells': {'Shells': {'Default': {'Features': {key: {} for key in studio_keys | {'Keep'}}}}}}
+        for mode in ('normal', 'minimal', 'default-off'):
+            backend, studio = copy.deepcopy(original_backend), copy.deepcopy(original_studio)
+            acceptance.configure_activity_data(backend, studio, mode, {'choose data for activity outputs'})
+            b = backend['CShells']['Shells']['default']['Features']; f = studio['CShells']['Shells']['Default']['Features']
+            if mode == 'default-off':
+                self.assertEqual(original_backend, backend); self.assertEqual(original_studio, studio)
+            else:
+                self.assertIs(True, b['WorkflowDesignValidations']['MemberReads'])
+                self.assertEqual(({'Keep', 'WorkflowDesignValidations'} if mode == 'minimal' else backend_keys | {'Keep', 'WorkflowDesignValidations'}), set(b))
+                self.assertEqual(({'Keep'} if mode == 'minimal' else studio_keys | {'Keep'}), set(f))
+
+
+    def test_live_minimal_graph_and_descriptors_are_non_vacuous(self):
+        observation = {'features': [
+            {'id': 'WorkflowsPublishingApi', 'enabled': True, 'runtimeAvailable': True, 'dependencies': [{'id': 'WorkflowsPublishing', 'optional': False}]},
+            {'id': 'WorkflowsPublishing', 'enabled': False, 'runtimeAvailable': True, 'dependencies': []},
+            {'id': 'WorkflowDesignValidations', 'enabled': True, 'runtimeAvailable': True, 'dependencies': []},
+            {'id': 'JavaScriptJintEngine', 'enabled': False, 'runtimeAvailable': True, 'dependencies': []}],
+            'mandatoryClosure': ['WorkflowDesignValidations', 'WorkflowsPublishing', 'WorkflowsPublishingApi'],
+            'expressionTypes': ['Literal', 'Object'], 'syntaxChoices': ['Literal', 'Activity output…']}
+        for title, native_syntax in [('choose nested activity data', 'Activity output member'),
+                                     ('choose declared and scoped activity data', 'Variable member'),
+                                     ('choose data for activity outputs', 'Activity output…')]:
+            current = copy.deepcopy(observation)
+            current['syntaxChoices'] = ['Literal', native_syntax]
+            acceptance.validate_minimal_composition(current, title)
+            for change in ('empty', 'dependency', 'unresolved', 'descriptors', 'empty-menu', 'optional-menu', 'wrong-native-menu', 'missing-literal-menu'):
+                with self.subTest(title=title, change=change):
+                    broken = copy.deepcopy(current)
+                    if change == 'empty': broken['features'] = []
+                    if change == 'dependency':
+                        broken['features'][1]['dependencies'] = [{'id': 'JavaScriptJintEngine', 'optional': False}]
+                        broken['mandatoryClosure'].append('JavaScriptJintEngine'); broken['mandatoryClosure'].sort()
+                    if change == 'unresolved': broken['features'][1]['runtimeAvailable'] = False
+                    if change == 'descriptors': broken['expressionTypes'].append('JavaScript')
+                    if change == 'empty-menu': broken['syntaxChoices'] = []
+                    if change == 'optional-menu': broken['syntaxChoices'].append('Liquid')
+                    if change == 'wrong-native-menu': broken['syntaxChoices'] = ['Literal', 'Input member']
+                    if change == 'missing-literal-menu': broken['syntaxChoices'].remove('Literal')
+                    with self.assertRaises(ValueError): acceptance.validate_minimal_composition(broken, title)
+        with self.assertRaises(ValueError): acceptance.validate_minimal_composition(observation, 'unknown journey')
+
+
 class SourcePairTests(unittest.TestCase):
     def test_dirty_studio_checkout_is_refused_even_when_backend_source_is_clean(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -264,6 +403,27 @@ class SourcePairTests(unittest.TestCase):
                     acceptance.run(output, 'existing home widgets and layout defaults')
             command.assert_not_called()
             self.assertEqual("failed", json.loads((output / "report.json").read_text())["status"])
+
+    def test_opt_in_fixture_cleanup_retains_primary_and_cleanup_failures(self):
+        for fail_cleanup in (False, True):
+            with self.subTest(fail_cleanup=fail_cleanup), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); output = root / 'evidence'
+                fixture = root / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
+                fixture.parent.mkdir(parents=True); fixture.write_text('test import'); fixture.with_name('CustomerFixture.cs').write_text('test fixture')
+                dll = root / 'Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+                dll.parent.mkdir(parents=True)
+                def command(_args, log, **_kwargs):
+                    if log.name == 'backend-build.log': raise RuntimeError('primary build failure')
+                    self.assertEqual('fixture-cleanup-build.log', log.name)
+                    if fail_cleanup: raise RuntimeError('cleanup build failure')
+                    dll.write_bytes(b'fixture-free default host')
+                with patch.object(acceptance, 'ROOT', root), patch.object(acceptance, 'source_state', return_value=('same-head', '')), patch.object(acceptance, 'command', side_effect=command):
+                    with self.assertRaisesRegex(RuntimeError, 'cleanup build failure' if fail_cleanup else 'primary build failure'):
+                        acceptance.run(output, 'choose nested activity data')
+                report = json.loads((output / 'report.json').read_text())
+                self.assertEqual('failed', report['status']); self.assertEqual('primary build failure', report['error'])
+                if fail_cleanup: self.assertEqual('cleanup build failure', report['cleanupError'])
+                else: self.assertTrue(report['fixtureCleanup']['markerAbsent'])
 
     def test_ci_merge_accepts_only_its_reviewed_second_parent(self):
         with tempfile.TemporaryDirectory() as directory:

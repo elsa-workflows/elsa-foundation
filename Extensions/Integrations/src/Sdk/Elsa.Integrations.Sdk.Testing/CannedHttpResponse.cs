@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace Elsa.Integrations.Sdk.Harness;
+namespace Elsa.Integrations.Sdk.Testing;
 
 /// <summary>One canned HTTP response for <see cref="RecordingHttpMessageHandler"/>.</summary>
 public sealed class CannedHttpResponse
