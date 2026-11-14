@@ -335,7 +335,7 @@ public sealed class ExternalAuthenticationFlowTests
             });
             // This broker fixture supplies a controlled current administrator authority; HTTP tests
             // qualify the real persisted identity adapter and permission changes under issued cookies.
-            services.Replace(ServiceDescriptor.Scoped<ICurrentSubjectPermissionAuthorizer, BrokerAdministratorAuthority>());
+            services.ReplaceCurrentSubjectPermissionAuthorizer<BrokerAdministratorAuthority>();
             services.Replace(ServiceDescriptor.Scoped<ICanonicalUserSignInService, BrokerAdministratorAuthority>());
             services.AddNormalizedAuthenticationType("flow-tests");
             var node = services.BuildServiceProvider();
