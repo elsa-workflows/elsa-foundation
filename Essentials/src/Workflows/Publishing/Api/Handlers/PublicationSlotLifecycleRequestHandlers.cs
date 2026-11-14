@@ -61,12 +61,19 @@ public sealed class UnpublishPublicationSlotRequestHandler(
             : await executableStore.FindAsync(publication.ArtifactId, cancellationToken);
         if (material is null && executable is null)
             throw new PublicationSlotNotFoundException($"Executable artifact '{publication.ArtifactId}' is unavailable, so publication '{publicationId}' cannot be unpublished.");
-        if (material?.Model is not null && (publication.WorkflowDefinitionId != slot.WorkflowDefinitionId ||
+        var sourceReference = publication.SourceReferenceId is { } referenceId
+            ? await sourceReferenceStore.FindAsync(referenceId, cancellationToken) : null;
+        // Native material can have a distinct logical definition, and its protected reference must keep the
+        // material lifecycle even when producer and logical identities happen to match. Preserve legacy native
+        // activation for existing unprotected publications and native-only coordinator replacements.
+        var usesMaterialLifecycle = material is not null && (material.Model is not null ||
+            material.Identity.DefinitionId != slot.WorkflowDefinitionId || sourceReference?.PublicationScope is not null);
+        if (usesMaterialLifecycle && (publication.WorkflowDefinitionId != slot.WorkflowDefinitionId ||
             publication.SlotId != slot.SlotId || publication.SlotName != slot.SlotName ||
             publication.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(publicationId)))
-            throw new PublicationSlotNotFoundException("The model publication does not belong to the selected logical slot and source.");
-        var deactivation = material?.Model is not null
-            ? await activationCoordinator.DeactivateMaterialAsync(new(slot.WorkflowDefinitionId, material, request.SlotName,
+            throw new PublicationSlotNotFoundException("The material publication does not belong to the selected logical slot and source.");
+        var deactivation = usesMaterialLifecycle
+            ? await activationCoordinator.DeactivateMaterialAsync(new(slot.WorkflowDefinitionId, material!, request.SlotName,
                 PublicationActivator.Source, slot.Revision), cancellationToken)
             : await activationCoordinator.DeactivateAsync(new WorkflowDeactivationCommand(executable!, request.SlotName,
                 PublicationActivator.Source, slot.Revision), cancellationToken);
@@ -155,11 +162,13 @@ public sealed class RestorePublicationSlotRequestHandler(
         var priorReference = prior.SourceReferenceId is { } priorReferenceId
             ? await sourceReferenceStore.FindAsync(priorReferenceId, cancellationToken)
             : null;
-        if (material?.Model is not null && (priorReference is null || priorReference.ArtifactId != material.Identity.ArtifactId ||
+        var usesMaterialLifecycle = material is not null && (material.Model is not null ||
+            material.Identity.DefinitionId != slot.WorkflowDefinitionId || priorReference?.PublicationScope is not null);
+        if (usesMaterialLifecycle && (priorReference is null || priorReference.ArtifactId != material!.Identity.ArtifactId ||
             priorReference.DefinitionId != prior.WorkflowDefinitionId || priorReference.DefinitionVersionId != prior.WorkflowDefinitionVersionId ||
             priorReference.Scope != WorkflowExecutableReferenceScope.Published || priorReference.ActivationId != prior.PublicationId ||
             priorReference.SlotId != slot.SlotId || priorReference.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(prior.PublicationId)))
-            throw new PublicationSlotNotFoundException("The retired model publication lacks its exact logical source provenance.");
+            throw new PublicationSlotNotFoundException("The retired material publication lacks its exact logical source provenance.");
         var now = timeProvider.GetUtcNow();
         var publicationId = $"publication-{ShortIdentityGenerator.Generate(now)}";
         var sourceReferenceId = WorkflowActivationReferenceIdentity.Create(publicationId);
@@ -187,8 +196,8 @@ public sealed class RestorePublicationSlotRequestHandler(
                 SlotId = slot.SlotId
             };
 
-        var activation = material?.Model is not null
-            ? await activator.ActivateMaterialAsync(new(candidate, material, reference), cancellationToken)
+        var activation = usesMaterialLifecycle
+            ? await activator.ActivateMaterialAsync(new(candidate, material!, reference), cancellationToken)
             : await activator.ActivateAsync(new PublicationActivationRequest(candidate, executable!, reference), cancellationToken);
         if (!activation.Succeeded)
         {

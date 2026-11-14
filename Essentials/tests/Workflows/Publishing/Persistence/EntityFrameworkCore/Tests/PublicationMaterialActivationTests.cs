@@ -13,6 +13,9 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Triggers;
+using Elsa.Workflows.Runtime.Scheduling;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -170,6 +173,62 @@ public sealed class PublicationMaterialActivationTests
         Assert.Equal(PublicationStatus.Retired, (await host.Publications.FindAsync(original.Publication.PublicationId))!.Status);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Native_material_unpublish_and_restore_use_the_logical_slot_and_leave_the_producer_slot_untouched(bool producerSlotExists)
+    {
+        await using var host = await Harness.OpenAsync();
+        var material = await host.NativeAsync("logical-native");
+        PublicationActivationResult? producer = null;
+        if (producerSlotExists)
+            producer = await host.Activator().ActivateMaterialAsync(host.Request(await host.NativeAsync("producer-control"),
+                "producer-publication", "producer-version", definition: material.Identity.DefinitionId));
+        var original = await host.Activator().ActivateMaterialAsync(host.Request(material, "logical-publication", "logical-version"));
+        Assert.True(original.Succeeded);
+        Assert.NotEqual(material.Identity.DefinitionId, original.Publication.WorkflowDefinitionId);
+        Assert.NotNull((await host.References.FindAsync(original.Publication.SourceReferenceId!))!.PublicationScope);
+
+        var inactive = await host.Unpublisher().Handle(new("logical-definition", "default"), default);
+        Assert.Equal("logical-definition", inactive.WorkflowDefinitionId);
+        Assert.Null(inactive.ActiveActivationId);
+        Assert.Null((await host.Authority.FindAsync("logical-definition", "default"))!.ActiveActivationId);
+        Assert.Equal(PublicationStatus.Retired, (await host.Publications.FindAsync("logical-publication"))!.Status);
+        if (producer is null) Assert.Null(await host.Authority.FindAsync(material.Identity.DefinitionId, "default"));
+        else
+        {
+            Assert.Equal(producer.Slot, await host.Authority.FindAsync(material.Identity.DefinitionId, "default"));
+            Assert.Equal(PublicationStatus.Active, (await host.Publications.FindAsync("producer-publication"))!.Status);
+            Assert.Null((await host.References.FindAsync(producer.Publication.SourceReferenceId!))!.DeletedAt);
+        }
+
+        var restored = await host.Restorer().Handle(new("logical-definition", "default"), default);
+        Assert.Equal("logical-definition", restored.WorkflowDefinitionId);
+        Assert.NotNull(restored.ActiveActivationId);
+        var publication = (await host.Publications.FindAsync(restored.ActiveActivationId))!;
+        Assert.Equal(material.Identity.ArtifactId, publication.ArtifactId);
+        var reference = (await host.References.FindAsync(publication.SourceReferenceId!))!;
+        Assert.Equal("logical-definition", reference.DefinitionId);
+        Assert.NotNull(reference.PublicationScope);
+        Assert.Null(reference.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Native_material_with_matching_producer_identity_restores_through_the_protected_material_boundary()
+    {
+        await using var host = await Harness.OpenAsync();
+        var material = await host.NativeAsync("same-logical-native");
+        var original = await host.Activator().ActivateMaterialAsync(host.Request(material, "same-logical-publication", "native-version",
+            definition: material.Identity.DefinitionId));
+        Assert.True(original.Succeeded);
+        var inactive = await host.Unpublisher().Handle(new(material.Identity.DefinitionId, "default"), default);
+        Assert.Null(inactive.ActiveActivationId);
+        var restored = await host.Restorer().Handle(new(material.Identity.DefinitionId, "default"), default);
+        Assert.NotNull(restored.ActiveActivationId);
+        Assert.Equal(material.Identity.DefinitionId, restored.WorkflowDefinitionId);
+        Assert.NotNull((await host.References.FindAsync(WorkflowActivationReferenceIdentity.Create(restored.ActiveActivationId)))!.PublicationScope);
+    }
+
     private sealed class BeforeDeactivation(IWorkflowActivationCoordinator inner, Func<Task> before) : IWorkflowActivationCoordinator
     {
         public ValueTask<WorkflowActivationResult> ActivateAsync(WorkflowActivationCommand command, CancellationToken cancellationToken = default) => inner.ActivateAsync(command, cancellationToken);
@@ -248,7 +307,9 @@ public sealed class PublicationMaterialActivationTests
         public WorkflowActivationCoordinator Coordinator(IWorkflowTriggerIndexObserver? observer = null) =>
             new(Materials, Authority, _switch, References,
                 new WorkflowExecutableRootWriteLeaseManager(Materials, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), TimeProvider.System),
-                TimeProvider.System, triggerBindingStore: _bindings, recurringScheduleStore: _schedules,
+                TimeProvider.System, triggerIndexer: new RecurringTriggerScheduleIndexer(new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor([]), _bindings),
+                    [], _schedules, new RecurringScheduleCalculator(), TimeProvider.System, NullLogger<RecurringTriggerScheduleIndexer>.Instance),
+                triggerBindingStore: _bindings, recurringScheduleStore: _schedules,
                 triggerObservers: observer is null ? [] : [observer]);
         public PublicationActivator Activator(IWorkflowTriggerIndexObserver? observer = null) => new(
             Coordinator(observer), Publications, Authority, References, TimeProvider.System);
@@ -267,13 +328,23 @@ public sealed class PublicationMaterialActivationTests
             return (await Materials.FindMaterialAsync(hash))!;
         }
 
-        public PublicationMaterialActivationRequest Request(RuntimeExecutionMaterial material, string publication, string version, long revision = 0)
+        public async Task<RuntimeExecutionMaterial> NativeAsync(string name)
+        {
+            var executable = new WorkflowExecutable(new("native-" + name, "native-producer", "native-material-version", "1", "native-hash-" + name),
+                new ExecutableNode("root", "root", "test/activity", "1", "test", JsonSerializer.SerializeToElement(new { }),
+                    new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>()),
+                new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+            await Materials.SaveAsync(executable);
+            return (await Materials.FindMaterialAsync(executable.Identity.ArtifactId))!;
+        }
+
+        public PublicationMaterialActivationRequest Request(RuntimeExecutionMaterial material, string publication, string version, long revision = 0, string definition = "logical-definition")
         {
             var now = DateTimeOffset.UtcNow;
             var sourceId = WorkflowActivationReferenceIdentity.Create(publication);
-            return new(new(publication, WorkflowActivationSlotIdentity.Create("logical-definition", "default"), "logical-definition", version,
+            return new(new(publication, WorkflowActivationSlotIdentity.Create(definition, "default"), definition, version,
                     material.Identity.ArtifactId, sourceId, revision, PublicationStatus.Candidate, now, null, null, null), material,
-                new(sourceId, material.Identity.ArtifactId, "authored-model", version, "1", "logical-definition", version, "1", now, now,
+                new(sourceId, material.Identity.ArtifactId, "authored-model", version, "1", definition, version, "1", now, now,
                     WorkflowExecutableReferenceScope.Published));
         }
 
