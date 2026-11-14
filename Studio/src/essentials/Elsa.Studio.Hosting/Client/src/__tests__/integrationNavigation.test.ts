@@ -4,6 +4,7 @@ import { createStudioRegistry } from "../app/registry";
 import { filterAccessibleNavigation, getTopLevelNavigationItemsByPlacement } from "../app/navigation/placement";
 import { register as registerConnections } from "../../../../../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/module";
 import { register as registerSecrets } from "../../../../../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/module";
+import { register as registerExternalAuthentication } from "../../../../../../../Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client/src/module";
 import { register as registerUserTasks } from "../../../../../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/module";
 
 import { register as registerDashboard } from "../../../../Elsa.Studio.Dashboard/Client/src/module";
@@ -41,5 +42,20 @@ describe("registered integration navigation", () => {
       { label: "Forms", path: "/user-tasks/forms" }
     ]);
     expect(getTopLevelNavigationItemsByPlacement(filterAccessibleNavigation(api.navigation.list(), { authenticated: true, permissions: [] }), "operate")).toEqual([]);
+  });
+
+  it("keeps external sign-in and user access discoverable under their own permissions", () => {
+    const api = createStudioRegistry({ hostVersion: "1", sdkVersion: "1", ...createEndpointContext("https://studio.example") });
+    registerExternalAuthentication(api);
+    const access = { authenticated: true, canReadAdmin: false,
+      permissions: ["identity/providers:read", "identity/providers:manage", "identity/users:read"] };
+    const visible = filterAccessibleNavigation(api.navigation.list(), access);
+    expect(getTopLevelNavigationItemsByPlacement(visible, "integrations").map(item => item.path)).toContain("/security/external-sign-in");
+    expect(getTopLevelNavigationItemsByPlacement(visible, "operate").map(item => item.path)).toContain("/security/user-access");
+    const usersOnly = filterAccessibleNavigation(api.navigation.list(), { ...access, permissions: ["identity/users:read"] });
+    expect(usersOnly.map(item => item.path)).toContain("/security/user-access");
+    expect(usersOnly.map(item => item.path)).not.toContain("/security/external-sign-in");
+    expect(filterAccessibleNavigation(api.navigation.list(), { ...access, permissions: [] })).toEqual([]);
+    for (const item of visible) expect(item.requiresBackend).toEqual([{ id: "elsa.api.identity.external-authentication", contractVersion: "1" }]);
   });
 });
