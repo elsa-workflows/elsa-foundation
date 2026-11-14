@@ -105,7 +105,7 @@ public sealed class HttpSemanticReservationTests
             { method, path = route, sourceAccess = "Anonymous", http = new { mode = "AsyncFanOut", admissionPolicy = "RequireAll" } }),
             revision, revision, 1, TriggerDesiredState.Paused, new(TriggerManagementKind.Studio), Now, Now, "creator", hasActivated: true, tenantId: Scope.TenantId);
         var store = services.GetRequiredService<ITriggerSourceResourceCommitStore>(); Assert.True(store.SupportsActivatedResources);
-        await store.CommitAsync(Scope, new(id + ":" + revision, id + ":" + revision, "operator", revision == 1 ? null : revision - 1, resource, []),
+        await store.CommitAsync(Scope, new(id + ":" + revision, id + ":" + revision, "operator", revision == 1 ? null : revision - 1, resource, []) { ObservedTargets = [] },
             [new(HttpEndpointRouting.StimulusType, Identity(route, method), Metadata(route, method))]);
     }
 
@@ -149,7 +149,7 @@ public sealed class HttpSemanticReservationTests
         }
         public void Dispose() => provider.Dispose();
     }
-    private sealed class Indexer(IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore schedules) : IWorkflowTriggerIndexer
+    private sealed class Indexer(IWorkflowTriggerBindingStore bindings, IRecurringTriggerScheduleStore? schedules = null) : IWorkflowTriggerIndexer
     {
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(WorkflowExecutable executable,
@@ -160,7 +160,8 @@ public sealed class HttpSemanticReservationTests
             var binding = new WorkflowTriggerBinding(WorkflowTriggerBinding.BuildId(activationId, pin.ArtifactId, "root", hash), pin.ArtifactId,
                 pin.DefinitionId, pin.ArtifactVersion, pin.ArtifactHash, "root", HttpEndpointRouting.StimulusType, hash, null, metadata, Now,
                 activationId, slotId, TriggerCardinality.Exclusive);
-            await bindings.PrepareActivationAsync(activationId, [binding], cancellationToken); await schedules.PrepareActivationAsync(activationId, [], cancellationToken);
+            await bindings.PrepareActivationAsync(activationId, [binding], cancellationToken);
+            if (schedules is not null) await schedules.PrepareActivationAsync(activationId, [], cancellationToken);
             return [binding];
         }
     }
