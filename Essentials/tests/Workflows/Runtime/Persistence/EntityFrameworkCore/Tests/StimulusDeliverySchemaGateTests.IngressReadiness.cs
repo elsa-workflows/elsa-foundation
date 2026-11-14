@@ -56,8 +56,10 @@ public sealed partial class StimulusDeliverySchemaGateTests
         Assert.Equal(TriggerDesiredState.Enabled, (await prepared.Resources.FindAsync(prepared.Scope, prepared.Activation.Trigger.Id))!.Trigger.DesiredState);
     }
 
-    private static async Task<GatedIngressPreparation> PrepareGatedIngressAsync(RuntimeDbContext context, IInlineEventPublisher publisher)
+    private static async Task<GatedIngressPreparation> PrepareGatedIngressAsync(RuntimeDbContext context, IInlineEventPublisher publisher,
+        IEnumerable<IIngressReservationPolicy>? policies = null)
     {
+        var reservationPolicies = (policies ?? []).ToArray();
         var access = new Accessor(); var clock = new FakeTimeProvider(Now); var scope = new TriggerScope(Scope, Scope.Value);
         var materials = new EfWorkflowExecutableStore(context, access);
         var references = new EfWorkflowExecutableSourceReferenceStore(context, access, new NoTokens(), clock);
@@ -96,8 +98,9 @@ public sealed partial class StimulusDeliverySchemaGateTests
         { ObservedTargets = [TriggerManagementTargets.Observation(subscription.DefinitionId, subscription.SlotName, target)] };
         var bindings = new EfWorkflowTriggerBindingStore(context, access);
         var source = new EfTriggerSourceResourceCommitStore(context, resources, ingress,
-            new EfWorkflowActivationSwitch(slots, bindings, references, access, clock), bindings, access, clock, [],
-            targets: new TriggerManagementTargets(resolver, new TriggerInputMapper(new WorkflowExecutableInputValidator())));
+            new EfWorkflowActivationSwitch(slots, bindings, references, access, clock, reservationPolicies), bindings, access, clock, [],
+            targets: new TriggerManagementTargets(resolver, new TriggerInputMapper(new WorkflowExecutableInputValidator())),
+            reservationPolicies: reservationPolicies);
         var actor = new WorkflowExecutionAuthoritySnapshot("source-module", "initiator");
         var schema = new ValueTypeDescriptor("Test.Payload", schemaVersion: 1);
         var payload = JsonSerializer.SerializeToElement(new { value = 42 });
@@ -136,9 +139,9 @@ public sealed partial class StimulusDeliverySchemaGateTests
 
     private sealed partial class Fixture
     {
-        internal static async Task<Fixture> CreateIngressReadiness(string laggingFamily, string previousVersion)
+        internal static async Task<Fixture> CreateIngressReadiness(string laggingFamily, string previousVersion, string? connectionString = null)
         {
-            var fixture = new Fixture(laggingFamily); await fixture.connection.OpenAsync();
+            var fixture = new Fixture(laggingFamily, connectionString); await fixture.connection.OpenAsync();
             await using (var context = fixture.Open())
             {
                 await context.Database.EnsureCreatedAsync();
@@ -158,6 +161,6 @@ public sealed partial class StimulusDeliverySchemaGateTests
 
         private static readonly string[] IngressFamilies = [RuntimePostCommitOutboxEfModule.SchemaFamily, RuntimeSchedulerWorkEfModule.SchemaFamily,
             RuntimeWorkflowExecutionEfModule.SchemaFamily, RuntimeModelStateEfModule.SchemaFamily, RuntimeArtifactEfModule.SchemaFamily,
-            RuntimeOperationalStateEfModule.SchemaFamily];
+            RuntimeOperationalStateEfModule.SchemaFamily, StandaloneTriggersEfModule.SchemaFamily, RuntimeTriggerBindingEfModule.SchemaFamily];
     }
 }

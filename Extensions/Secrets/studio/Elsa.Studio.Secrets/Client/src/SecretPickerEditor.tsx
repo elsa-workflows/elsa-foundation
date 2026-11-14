@@ -11,6 +11,7 @@ type LoadState =
   | { endpointContext: StudioEndpointContext; status: "error"; items: SecretPickerMetadata[] };
 
 export function SecretPickerEditor({
+  descriptor,
   value,
   disabled,
   initialFocus,
@@ -58,7 +59,7 @@ export function SecretPickerEditor({
   const selectionDisabled = !!disabled || visibleState.status !== "ready";
 
   return (
-    <div className="secret-picker-editor"><StudioField controlId={selectId} label="Secret">
+    <div className="secret-picker-editor"><StudioField controlId={selectId} label={descriptor.displayName || descriptor.name}>
 
       <select
         ref={selectRef}

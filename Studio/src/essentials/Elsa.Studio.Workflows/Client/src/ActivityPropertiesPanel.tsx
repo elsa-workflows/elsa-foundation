@@ -1,7 +1,7 @@
 import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
-import { AdvancedSection, AnchoredPopover, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, AnchoredPopover, StudioField, StudioFieldAdornmentProvider } from "@elsa-workflows/studio-ui";
 import {
   authSessionEndedEvent,
   authSessionStartedEvent,
@@ -1127,11 +1127,29 @@ function PropertyRow({
   const renderedValueEditor = expanded && editingMode === "text" ? null : valueEditor;
   // Scalar editors own the caption on their outline. Keep the row caption for composite,
   // unavailable and third-party editors that have not opted into that presentation contract.
-  const editorPresentsField = !secretOnly && !dictionaryType && !collectionType && !expanded && (
-    valueMasked ? editingMode === "literal" && editor?.id === maskedPropertyEditorId
-      : editingMode === "text" && inlineExpressionContext ? !contributedExpressionEditor
-      : !contributedExpressionEditor && editingMode === "literal" && (!editor || editor.presentsField)
+  const editorPresentsField = !dictionaryType && !collectionType && !expanded && (
+    contributedExpressionEditor ? Boolean(inlineExpressionEditor?.presentsField)
+      : !secretOnly && (valueMasked ? editingMode === "literal" && editor?.id === maskedPropertyEditorId
+        : editingMode === "text" && inlineExpressionContext ? true
+        : editingMode === "literal" && (!editor || editor.presentsField))
   );
+  const fieldOwnsInlineActions = editorPresentsField && !useToggleLayout;
+  const inlineSyntaxPicker = <SyntaxPicker
+    label={`${input.displayName || input.name} expression syntax`}
+    value={syntax}
+    descriptors={syntaxDescriptors}
+    getUnavailableReason={getUnavailableReason}
+    disabled={readOnly}
+    variant="inline"
+    onChange={setSyntax}
+  />;
+  const inlineExpandAction = canExpandEditor ? <button
+    type="button"
+    className="wf-expression-expand-button"
+    aria-label={`Open expanded ${input.displayName || input.name} editor`}
+    title="Open expanded editor"
+    onClick={() => setExpandRequested(true)}
+  ><Maximize2 size={13} /></button> : null;
 
   return (
     <div ref={rowRef} className="wf-property-row" role="group" aria-label={`${input.displayName || input.name} property`}>
@@ -1169,31 +1187,14 @@ function PropertyRow({
       </div>
       {input.description ? <p>{input.description}</p> : null}
       {useInlineSyntaxPicker ? (
-        <div className={`wf-expression-field${useToggleLayout ? " wf-expression-field--toggle" : useControlLayout ? " wf-expression-field--control" : ""}`}>
+        <div className={`wf-expression-field${useToggleLayout ? " wf-expression-field--toggle" : useControlLayout ? " wf-expression-field--control" : ""}${fieldOwnsInlineActions ? " wf-expression-field--outlined" : ""}`}>
           <div className="wf-expression-editor">
-            {renderedValueEditor}
+            {fieldOwnsInlineActions ? <StudioFieldAdornmentProvider trailing={<>{inlineSyntaxPicker}{inlineExpandAction}</>}>
+              {renderedValueEditor}
+            </StudioFieldAdornmentProvider> : renderedValueEditor}
             {renderExpressionDiagnostics(inlineDiagnostics)}
           </div>
-          <SyntaxPicker
-            label={`${input.displayName || input.name} expression syntax`}
-            value={syntax}
-            descriptors={syntaxDescriptors}
-            getUnavailableReason={getUnavailableReason}
-            disabled={readOnly}
-            variant="inline"
-            onChange={setSyntax}
-          />
-          {canExpandEditor ? (
-            <button
-              type="button"
-              className="wf-expression-expand-button"
-              aria-label={`Open expanded ${input.displayName || input.name} editor`}
-              title="Open expanded editor"
-              onClick={() => setExpandRequested(true)}
-            >
-              <Maximize2 size={13} />
-            </button>
-          ) : null}
+          {fieldOwnsInlineActions ? null : <>{inlineSyntaxPicker}{inlineExpandAction}</>}
         </div>
       ) : useDictionarySyntaxPicker ? (
         <div className="wf-dictionary-expression">
