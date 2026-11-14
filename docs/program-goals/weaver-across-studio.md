@@ -66,6 +66,8 @@ exact-head independent review, required passing checks, unresolved human holds a
 verification remain binding. The cumulative review history and all Program acceptance and charter
 boundaries remain intact. This authorization does not mark T042 or the implementation complete.
 
+The later [14 November coordinator authority](https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6883609973), verified against Sipke's actual messages, permits admin merges of active authorized work after clean exact-head self-review without waiting on CI, and permits the existing authenticated `sfmskywalker` account when the worker App lacks bypass permission. This supersedes the administrative CI-wait timing condition for that work only. Actual CI states remain reported as observed; substantive acceptance, unresolved findings or human holds, scope decisions, dependency ordering, retry/review limits and resulting-main qualification remain binding. A future merge audit records the reviewed SHA, evidence, actual CI state, fallback reason and verified merge SHA/tree. It grants no credentials, resources, agreement signing, releases, deployments, publishers or protection/authentication changes.
+
 The [1 November native-baseline exception](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6563215730)
 authorizes resuming #3440's native baseline after its three failed runs (`1495b57a6`, `d82a0b7fa`,
 `81965ed8a`), which stay recorded as Failed. Its scope is a stable locator for the reviewed size card
