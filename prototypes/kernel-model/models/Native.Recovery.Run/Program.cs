@@ -8,6 +8,7 @@ if (args is ["--retry-minimal"]) { RetryWitness.Run(); return; }
 if (args is ["--retry"]) { RetryWitness.Run(full: true); return; }
 if (args is ["--retry-refusals"]) { RetryWitness.Run(refusals: true); return; }
 if (args is ["--root-minimal"]) { RootWitness.Run(); return; }
+if (args is ["--iteration-minimal"]) { RootWitness.Run(onlyRoot: false); return; }
 if (args is ["--list"]) { Console.WriteLine("recovery:ordinary-child-intervention-minimal"); foreach (var name in InterventionWitness.Names.Concat(RecoveryReader.Names).Concat(RetryWitness.Names).Concat(RetryWitness.RefusalNames)) Console.WriteLine(name); return; }
 if (args.Length != 0 && args is not ["--minimal"]) throw new ArgumentException("Use --list, --minimal or no argument.");
 

@@ -6,9 +6,9 @@ using Kernel.Sim.Native;
 
 internal static class RootWitness
 {
-    internal static void Run()
+    internal static void Run(bool? onlyRoot = null)
     {
-        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var root in new[] { true, false }) Run(mode, root);
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var root in new[] { true, false }.Where(r => onlyRoot is null || r == onlyRoot)) Run(mode, root);
     }
     private static void Run(string mode, bool root)
     {
