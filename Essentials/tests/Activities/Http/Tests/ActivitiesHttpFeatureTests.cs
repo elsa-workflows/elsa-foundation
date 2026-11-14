@@ -8,6 +8,7 @@ using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Options;
 using Elsa.Activities.Http.Options;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
@@ -64,6 +65,8 @@ public sealed class ActivitiesHttpFeatureTests
         var feature = new ActivitiesHttpFeature();
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
+        services.AddWorkflowRuntime(); services.AddWorkflowStimulusRouter();
+        new Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature().ConfigureServices(services);
         services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
         // The middleware's route-table/matcher/binding-store dependencies are contributed in production by the
         // features ActivitiesHttpFeature.DependsOn ("Http" provides IRouteTable/IRouteMatcher; "WorkflowsRuntime-
@@ -71,7 +74,6 @@ public sealed class ActivitiesHttpFeatureTests
         // guarantee: the endpoint template is seeded so a request under the base path resolves and reaches
         // dispatch, where the no-start router yields 404 (proving the mounted middleware, not the sentinel,
         // answered).
-        services.AddPersistenceCore(); // Normal Runtime dependency of the mounted source middleware.
         services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
         services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
         services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore>();
@@ -101,6 +103,7 @@ public sealed class ActivitiesHttpFeatureTests
         var pipeline = app.Build();
 
         await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new(PersistenceScope.DefaultValue)));
         var context = new Microsoft.AspNetCore.Http.DefaultHttpContext { RequestServices = scope.ServiceProvider };
         context.Request.Path = "/workflows/http/orders/webhook";
         context.Request.Method = "GET";
