@@ -117,17 +117,18 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 6 adds private successor material, scheduling and control lineage.</summary>
-    public int StateVersion => 6;
+    /// <summary>Version 7 freezes private recovery capabilities; old invocations keep their child-only policy.</summary>
+    public int StateVersion => 7;
     public object UpgradeState(string state, int fromVersion)
     {
-        if (fromVersion is not (1 or 2 or 3 or 4 or 5)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
         if (fromVersion < 4 && LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
         if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
-        if (NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
+        if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
+        if (native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
         return native;
     }
 

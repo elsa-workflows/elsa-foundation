@@ -8,7 +8,7 @@ internal sealed record NativeRetry(string Id, string Source, string Incident, st
 {
     internal const string Kind = "native.retry-intervention";
 }
-internal sealed record RetryChild(string Source, string Successor, string Node, string? Tag);
+internal sealed record RetryChild(string Source, string Successor, string Node, string? Tag, IReadOnlyDictionary<string, JsonNode?>? Scope = null);
 internal sealed record NativeRetryReceipt(NativeRetry Request, Frame Source, string Successor, string Resolution = "Retried");
 internal sealed record NativeRetryResult(string Id, string Result, string? Successor = null);
 
@@ -97,21 +97,29 @@ internal sealed partial class Burst
         if (!_s.InterventionEnabled || !_s.Frames.TryGetValue(request.Source, out var source) || source.Intervention is not { Outcome: "WaitForIntervention" } incident || incident.Id != request.Incident)
             return Result("NotEligible");
         if (source.RecoveryMaterial is null) return Result("MaterialIdentityUnavailable"); // v5 incidents are not blessed by the newest registry
-        if (source.Parent is null || !_s.Frames.TryGetValue(source.Parent, out var parent) || Blocked(parent.Id)) return Result("ParentUnavailable");
+        Frame? parent = null;
+        if (source.Parent is { } parentId)
+        { if (!_s.Frames.TryGetValue(parentId, out parent) || Blocked(parent.Id)) return Result("ParentUnavailable"); }
+        else if (!NativeInterventions.Root(_s, source)) return Result("RootUnavailable");
         if (!JsonNode.DeepEquals(source.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf))) return Result("MaterialUnavailable");
         if (!_wf.Nodes.TryGetValue(source.Node, out var node) || !typeof(ILeaf).IsAssignableFrom(node.Type) || node.Background || source.RecoveryInputs is null ||
-            Hydrator.Of(node.Type).Any(p => !source.RecoveryInputs.ContainsKey(p.Name)) || !InterventionParent(source)) return Result("UnsupportedBoundary");
+            Hydrator.Of(node.Type).Any(p => !source.RecoveryInputs.ContainsKey(p.Name)) || !InterventionBoundary(source)) return Result("UnsupportedBoundary");
         if (_s.Waits.Values.Any(w => w.Frame == source.Id) || _s.Frames.Values.Any(f => f.Parent == source.Id) ||
             _s.Agenda.Any(w => w.Frame == source.Id || w.Parent == source.Id) || (_s.LexicalScopes?.Values.Any(s => s.Owner == source.Id) ?? false)) return Result("SourceBusy");
-        if (source.LexicalScope is { } scope) _ = LexicalScopes.Accessible(_s, parent.Id, scope);
+        if (source.LexicalScope is { } scope) _ = LexicalScopes.Accessible(_s, parent!.Id, scope);
         if (_s.Next == long.MaxValue) return Result("IdentityExhausted");
         var successor = "f" + (_s.Next + 1);
         if (_s.Frames.ContainsKey(successor) || _s.Agenda.Any(w => w.Frame == successor)) return Result("IdentityConflict");
-        var parentNode = _wf.Nodes[parent.Node]; JsonNode? prepared;
+        JsonNode? prepared = null;
         try
         {
             // Known structural parents have pure, value-only preparation; no source or parent input binding is evaluated.
-            prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag));
+            if (parent is not null)
+            {
+                var parentNode = _wf.Nodes[parent.Node];
+                var scheduling = source.Scope?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal);
+                prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag, scheduling));
+            }
         }
         catch (Exception error) when (error is InvalidOperationException or System.Text.Json.JsonException) { return Result("ParentObligationUnavailable"); }
         var archived = Json.Read<Frame>(Json.Write(source));
@@ -120,7 +128,7 @@ internal sealed partial class Burst
             RecoveryInputs = (JsonObject)source.RecoveryInputs.DeepClone(), RecoveryMaterial = (JsonObject)source.RecoveryMaterial.DeepClone(), OperationKey = source.OperationKey };
         // All preparation completed. One normal checkpoint owns resolution, parent rebind and the owed successor.
         (_s.Retries ??= new(StringComparer.Ordinal)).Add(request.Id, new(request, archived, successor));
-        _s.Frames.Remove(source.Id); parent.State = prepared; _s.Next++; _s.Agenda.Add(work); _retryAccepted = true;
+        _s.Frames.Remove(source.Id); if (parent is not null) parent.State = prepared; _s.Next++; _s.Agenda.Add(work); _retryAccepted = true;
         turn.Record($"retry:{request.Id}:{source.Id}:{successor}");
         return Result("Accepted", successor);
     }
