@@ -25,6 +25,8 @@ def records(recipe, phase="mutated"):
         "r15-optional-representation": 'Assert.Null() Failure: Value is not null\nValue: WeaverError { Code = "weaver.proposal.expired" }',
         "copilot-external-constructor-auth": "System.ArgumentException : GitHubToken and UseLoggedInUser cannot be combined with RuntimeConnection.ForUri (the existing runtime manages its own auth). (Parameter 'options')",
         "active-route-admission": "System.Collections.Generic.KeyNotFoundException : The given key was not present in the dictionary.",
+        "copilot-runtime-url-redaction": 'Assert.DoesNotContain() Failure: Sub-string found\nString: "unredacted endpoint remains"\nFound:  "endpoint-' + "a" * 32 + '"',
+        "copilot-runtime-url-validation": "Assert.False() Failure\nExpected: False\nActual: True",
     }
     def message(name):
         if recipe.id == "copilot-external-auth-mode":
@@ -40,9 +42,9 @@ def records(recipe, phase="mutated"):
 
 
 class VerdictControls(unittest.TestCase):
-    def test_the_twelve_concrete_contracts_accept_only_their_declared_triplet(self):
-        self.assertEqual(len(proof.RECIPES), 12)
-        self.assertEqual(len({recipe.id for recipe in proof.RECIPES}), 12)
+    def test_the_fourteen_concrete_contracts_accept_only_their_declared_triplet(self):
+        self.assertEqual(len(proof.RECIPES), 14)
+        self.assertEqual(len({recipe.id for recipe in proof.RECIPES}), 14)
         for recipe in proof.RECIPES:
             with self.subTest(recipe=recipe.id):
                 proof.assess(recipe, "baseline", 0, records(recipe, "baseline"))
@@ -114,6 +116,53 @@ class VerdictControls(unittest.TestCase):
         for code in (0, 2):
             with self.subTest(exit=code), self.assertRaises(proof.ProofFailure):
                 proof.assess(recipe, "mutated", code, records(recipe))
+
+    def test_url_redaction_control_requires_the_endpoint_canary_failure_after_the_full_url_check(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "copilot-runtime-url-redaction")
+        for change in (
+                lambda row: row.update(message=row["message"].replace('Found:  "endpoint-', 'Found:  "runtime-')),
+                lambda row: row.update(message=row["message"].replace("Sub-string found", "Filter matched in collection")),
+                lambda row: row.update(message='Assert.Equal() Failure\nExpected: "sdk-unavailable"\nActual: "misconfigured"'),
+                lambda row: row.update(message="System.InvalidOperationException : wrapped\n---> " + row["message"]),
+                lambda row: row.update(stack=row["stack"].replace(":line 169", ":line 168")),
+                lambda row: row.update(stack=row["stack"].replace(":line 169", ":line 1690"))):
+            with self.subTest(change=change):
+                rows = records(recipe)
+                change(rows[0])
+                with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 1, rows)
+
+    def test_url_validation_control_requires_exactly_the_seven_canonicalized_rows_at_availability(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "copilot-runtime-url-validation")
+        self.assertEqual(len(recipe.names()), 20)
+        self.assertEqual(len(recipe.failed_names()), 7)
+        def swap_failure(rows):
+            failed = next(row for row in rows if row["status"] == "failed")
+            passed = next(row for row in rows if row["status"] == "passed")
+            passed.update(status="failed", message=failed["message"], stack=failed["stack"])
+            failed["status"] = "passed"
+        for change in (
+                swap_failure,
+                lambda rows: next(row for row in rows if row["status"] == "failed").update(status="passed"),
+                lambda rows: next(row for row in rows if row["status"] == "failed").update(message="Assert.Equal() Failure\nExpected: 0\nActual: 1"),
+                lambda rows: next(row for row in rows if row["status"] == "failed").update(message="System.ArgumentException : invalid URI"),
+                lambda rows: next(row for row in rows if row["status"] == "failed").update(stack="at WeaverProviderLogRedactionTests.cs:line 257"),
+                lambda rows: next(row for row in rows if row["status"] == "failed").update(stack="at WeaverProviderLogRedactionTests.cs:line 2560")):
+            with self.subTest(change=change):
+                rows = records(recipe)
+                change(rows)
+                with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 1, rows)
+
+    def test_url_controls_refuse_incomplete_foreign_duplicate_skipped_rows_and_wrong_command_exits(self):
+        for recipe in proof.RECIPES:
+            if not recipe.id.startswith("copilot-runtime-url-"): continue
+            for rows in ([], records(recipe)[:-1], records(recipe) + [records(recipe)[0]],
+                    [{**row, "name": "Foreign.test"} for row in records(recipe)],
+                    [{**row, "status": "skipped"} for row in records(recipe)]):
+                with self.subTest(recipe=recipe.id, rows=len(rows)), self.assertRaises(proof.ProofFailure):
+                    proof.assess(recipe, "mutated", 1, rows)
+            for code in (0, 2):
+                with self.subTest(recipe=recipe.id, exit=code), self.assertRaises(proof.ProofFailure):
+                    proof.assess(recipe, "mutated", code, records(recipe))
 
     def test_wrong_cause_wrong_frame_and_wrong_theory_row_never_count_as_a_bite(self):
         recipe = proof.RECIPES[0]
