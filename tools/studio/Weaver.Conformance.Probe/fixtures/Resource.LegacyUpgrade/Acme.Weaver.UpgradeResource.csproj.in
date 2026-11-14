@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Acme.Weaver.UpgradeResource</PackageId>
+    <AssemblyName>Acme.Weaver.UpgradeResource</AssemblyName>
+    <Version>__FIXTURE_VERSION__</Version>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Description>Independent Weaver 1.0-compatible native owner for the T038 upgrade witness.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Elsa.Weaver.Core" Version="[__PRODUCT_VERSION__]" />
+    <PackageReference Include="Elsa.Foundation.Identity.Core" Version="[__PRODUCT_VERSION__]" />
+    <PackageReference Include="Elsa.Studio.Preferences.Core" Version="[__PRODUCT_VERSION__]" />
+    <PackageReference Include="CShells.Abstractions" Version="[__CSHELLS_VERSION__]" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" Version="[__CSHELLS_VERSION__]" />
+    <InternalsVisibleTo Include="Acme.Weaver.UpgradeResource.Tests" />
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>
