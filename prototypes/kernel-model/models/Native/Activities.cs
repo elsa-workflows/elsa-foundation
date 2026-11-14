@@ -117,7 +117,8 @@ public sealed class Parallel : CompositeActivity, IInterventionParent
     System.Text.Json.Nodes.JsonNode? IInterventionParent.PrepareRetry(Node definition, System.Text.Json.Nodes.JsonNode? state, RetryChild child)
     {
         var progress = Values.To<ParallelState>(state?.DeepClone()) ?? throw new InvalidOperationException("Missing parallel retry obligation.");
-        if (progress.Joined || progress.Pending.Count(f => f == child.Source) != 1 || progress.Pending.Contains(child.Successor) ||
+        if (progress.Joined || progress.Pending is null || progress.Done < 0 || progress.Faulted < 0 || progress.Pending.Count + progress.Done + progress.Faulted != definition.Children.Count ||
+            progress.Pending.Distinct(StringComparer.Ordinal).Count() != progress.Pending.Count || progress.Pending.Count(f => f == child.Source) != 1 || progress.Pending.Contains(child.Successor) ||
             child.Tag != child.Node || definition.Children.Count(n => n.Id == child.Node) != 1)
             throw new InvalidOperationException("Invalid parallel retry obligation.");
         progress.Pending[progress.Pending.IndexOf(child.Source)] = child.Successor;

@@ -7,20 +7,26 @@ using Kernel.Sim.Native;
 internal static class RetryWitness
 {
     private static string[] Cuts => ["steady", "reload-before", "reload-staged", "lost-before-apply", "lost-answer"];
+    private static string[] Refusals => ["legacy-v5", "replace-leaf", "replace-binding", "replace-capture", "replace-parent"];
     internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Cuts select $"recovery:successor,{m},parallel-parent={d},cut={c}";
-    internal static void Run(bool full = false)
+    internal static IEnumerable<string> RefusalNames => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Refusals select $"recovery:{(c == "legacy-v5" ? "seeded-context" : "material-refusal")},{m},parallel-parent={d},case={c}";
+    internal static void Run(bool full = false, bool refusals = false)
     {
-        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var direct in new[] { false, true }) foreach (var cut in full ? Cuts : ["steady"]) Run(mode, direct, cut);
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var direct in new[] { false, true }) foreach (var cut in refusals ? Refusals : full ? Cuts : ["steady"]) Run(mode, direct, cut);
     }
     private static void Run(string mode, bool direct, string cut)
     {
         RetryLeaf.Invocations.Clear();
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
         var target = InstanceRef.In(0, "successor"); var owner = 0; Actor Actor() => world.Of(owner, 0);
-        var leaf = Wf.Node<RetryLeaf>("leaf", ("Value", Binding.Var("sourceValue")));
-        var workflow = Wf.Workflow("successor", Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.Parallel("parallel", null,
+        Workflow Build(bool replacement = false)
+        {
+        var leaf = new Node("leaf", replacement ? typeof(ReplacementRetryLeaf) : typeof(RetryLeaf)); leaf.Inputs.Add("Value", Binding.Var("sourceValue"));
+        return Wf.Workflow("successor", Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.Parallel("parallel", null,
             direct ? leaf : Wf.Sequence("sequence", Wf.Set("before", "before", 1), leaf, Wf.Set("after", "after", 1)),
             Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish")))), ("sourceValue", 17));
+        }
+        var workflow = Build();
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
         void Apply(Act a) { world.Apply(a); if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
         void Drain(bool cut = false)
@@ -52,7 +58,31 @@ internal static class RetryWitness
         Check(State().Variables["sourceValue"]!.ToString() == "99", "R15: pinned-input witness did not change its source value");
         if (cut == "reload-before") { Reload(); Drain(); }
         var request = new NativeRetry("operator-1", source.Id, source.Intervention!.Id, "dependency repaired");
+        var serial = State().Next;
+        if (cut == "legacy-v5")
+        {
+            // Deliberately seeded old-schema context, separately counted; not a historical writer/binary claim.
+            var old = State(); old.Frames[source.Id].RecoveryMaterial = null;
+            world.Store.Instances[target.Id] = world.Store.Instances[target.Id] with { State = Json.Write(old), StateVersion = 5 };
+            Reload(); Drain();
+        }
+        if (cut.StartsWith("replace-", StringComparison.Ordinal))
+        {
+            var replacement = Build(cut == "replace-leaf");
+            if (cut == "replace-binding") replacement.Nodes["leaf"].Inputs["Value"] = Binding.Literal(22);
+            if (cut == "replace-capture") replacement.Nodes["leaf"].Captures.Add("new-capture", "");
+            if (cut == "replace-parent") replacement.Nodes[direct ? "parallel" : "sequence"].Children.Reverse();
+            NativeWorkflows.Registry.Add(replacement); Reload(); Drain();
+        }
         Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(request), ReplyTo: ReplyTo.Of("outside", "retry", world.Time + 120_000), TargetCreation: 1)));
+        if (Refusals.Contains(cut))
+        {
+            Drain(); var refused = State();
+            Check(world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().LastOrDefault()?.Result == (cut == "legacy-v5" ? "MaterialIdentityUnavailable" : "MaterialUnavailable") &&
+                RetryLeaf.Invocations.Count == 1 && refused.Retries is null && refused.Next == serial && refused.Frames[source.Id].Intervention == source.Intervention,
+                "R18: unverifiable or replaced material was retried or refusal mutated its source obligation");
+            Console.WriteLine($"PASS recovery:{(cut == "legacy-v5" ? "seeded-context" : "material-refusal")},{mode},parallel-parent={direct},case={cut}"); return;
+        }
         NativeState checkpoint;
         if (cut.StartsWith("lost-", StringComparison.Ordinal))
         {
@@ -94,6 +124,13 @@ internal static class RetryWitness
             "R17: replay, conflict or stale source created another successor or changed its receipt");
         Console.WriteLine($"PASS recovery:successor,{mode},parallel-parent={direct},cut={cut}");
     }
+}
+internal sealed class ReplacementRetryLeaf : Kernel.Native.Activity<int>
+{
+    public ReplacementRetryLeaf() { }
+    [Input] public int Value { get; set; }
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext context)
+    { RetryLeaf.Invocations.Add((context.FrameId, context.OperationKey, 999)); return ValueTask.FromResult(Complete(999)); }
 }
 internal sealed class RetryLeaf : Kernel.Native.Activity<int>
 {

@@ -109,7 +109,7 @@ internal sealed partial class Burst
             // Known structural parents have pure, value-only preparation; no source or parent input binding is evaluated.
             prepared = ((IInterventionParent)Activator.CreateInstance(parentNode.Type)!).PrepareRetry(parentNode, parent.State?.DeepClone(), new(source.Id, successor, source.Node, source.Tag));
         }
-        catch (InvalidOperationException) { return Result("ParentObligationUnavailable"); }
+        catch (Exception error) when (error is InvalidOperationException or System.Text.Json.JsonException) { return Result("ParentObligationUnavailable"); }
         var archived = Json.Read<Frame>(Json.Write(source));
         var work = new Work { Frame = successor, Node = source.Node, Parent = source.Parent, Tag = source.Tag, LexicalScope = source.LexicalScope,
             Scope = source.Scope?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal), RetrySource = source.Id,
