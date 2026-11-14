@@ -72,7 +72,17 @@ public sealed class NativeGraphOwnerVerificationTests
                 var root = document["content"]!["executable"]!["rootActivity"]!;
                 root["descriptor"]!["payload"]!["definitionId"] = "other"; root["descriptorPayload"]!["definitionId"] = "other";
             }
-            var reader = new Replaced(original, member, System.Text.Encoding.UTF8.GetBytes(document.ToJsonString()));
+            IReleaseContentReader reader = new Replaced(original, member, System.Text.Encoding.UTF8.GetBytes(document.ToJsonString()));
+            if (change == "provider-null")
+            {
+                var activity = f.Codec.DecodeActivityVersion(original.GetPayload(member.Key));
+                var templateMember = original.GetMember(new(ReleaseRuntimeCodecs.TemplateKind, activity.TemplateId));
+                reader = AlterTemplate(f, reader, templateMember, template =>
+                {
+                    template["directDependencies"]![0]!["occurrenceOverlay"]!["inputBindings"]![0]!["value"]!["value"] = null;
+                    template["root"]!["descriptor"]!["payload"]!["occurrences"]![0]!["inputBindings"]![0]!["value"]!["value"] = null;
+                });
+            }
             var providerSite = kind == ReleaseRuntimeCodecs.ActivityVersionKind;
             var inspector = Graph(f); var nodeId = providerSite ? "$catalog"
                 : f.Codec.DecodeWorkflow(reader.GetPayload(member.Key)).Executable.RootActivity.ExecutableNodeId;
@@ -91,16 +101,8 @@ public sealed class NativeGraphOwnerVerificationTests
         {
             var member = original.Members.Single(value => value.Key.Kind == ReleaseRuntimeCodecs.TemplateKind &&
                 f.Codec.DecodeTemplate(original.GetPayload(value.Key)).Template.Root.Descriptor.ConsumerKey == WellKnownRuntimeActivityConsumers.GraphActivity);
-            var source = f.Codec.DecodeTemplate(original.GetPayload(member.Key)).Template;
-            var document = JsonNode.Parse(original.GetPayload(member.Key).Span)!; var root = document["content"]!["template"]!["root"]!;
-            foreach (var payload in new[] { root["descriptor"]!["payload"]!, root["descriptorPayload"]!, root["activityContract"]!["descriptorPayload"]! })
-                payload["outcomeMappings"] = new JsonArray();
-            var contract = source.Root.ActivityContract!;
-            var changedPayload = JsonSerializer.SerializeToElement(root["descriptor"]!["payload"]);
-            var changedContract = new Elsa.Activities.Runtime.Core.Models.ActivityContract(contract.ActivityTypeKey, contract.ContractVersion, contract.DescriptorKind,
-                changedPayload, contract.Inputs.Values, contract.Result, contract.Outcomes, contract.Activation, contract.SideEffectProfile, contract.SupportsBackgroundExecution);
-            root["activityContract"]!["schemaFingerprint"] = changedContract.SchemaFingerprint;
-            var reader = new Replaced(original, member, System.Text.Encoding.UTF8.GetBytes(document.ToJsonString()));
+            var reader = AlterTemplate(f, original, member, template =>
+                template["root"]!["descriptor"]!["payload"]!["outcomeMappings"] = new JsonArray());
             var nodeId = f.Codec.DecodeTemplate(reader.GetPayload(member.Key)).Template.Root.ExecutableNodeId;
             var result = await Graph(f).InspectAsync(new(member.Key, [], nodeId, null,
                 new(ReleaseRuntimeSiteKinds.Descriptor, WellKnownRuntimeActivityConsumers.GraphActivity, 1), JsonSerializer.SerializeToElement(new { nodeId })), reader);
@@ -124,6 +126,19 @@ public sealed class NativeGraphOwnerVerificationTests
             JsonSerializer.SerializeToElement(new { nodeId = "root" })), new Joined());
         Assert.Equal(ReleaseSemanticStatus.Unsupported, result.Status);
         Assert.Contains(result.Diagnostics, value => value.Code == "graph_site_unsupported");
+    }
+
+    private static IReleaseContentReader AlterTemplate(PublishedNativeFixture f, IReleaseContentReader original, ReleaseContentMember member, Action<JsonNode> change)
+    {
+        var source = f.Codec.DecodeTemplate(original.GetPayload(member.Key)).Template;
+        var document = JsonNode.Parse(original.GetPayload(member.Key).Span)!; var template = document["content"]!["template"]!;
+        change(template); var root = template["root"]!; var payload = root["descriptor"]!["payload"]!;
+        root["descriptorPayload"] = payload.DeepClone(); root["activityContract"]!["descriptorPayload"] = payload.DeepClone();
+        var contract = source.Root.ActivityContract!;
+        var changedContract = new Elsa.Activities.Runtime.Core.Models.ActivityContract(contract.ActivityTypeKey, contract.ContractVersion, contract.DescriptorKind,
+            JsonSerializer.SerializeToElement(payload), contract.Inputs.Values, contract.Result, contract.Outcomes, contract.Activation, contract.SideEffectProfile, contract.SupportsBackgroundExecution);
+        root["activityContract"]!["schemaFingerprint"] = changedContract.SchemaFingerprint;
+        return new Replaced(original, member, System.Text.Encoding.UTF8.GetBytes(document.ToJsonString()));
     }
 
     private static IReleaseOccurrenceInspector Graph(PublishedNativeFixture f) => f.ServicesOf<IReleaseOccurrenceInspector>().Single(value => value.Identity.Name == "elsa.graph-release-profile");
