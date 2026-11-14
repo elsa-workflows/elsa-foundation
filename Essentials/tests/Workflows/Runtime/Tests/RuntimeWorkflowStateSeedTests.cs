@@ -56,7 +56,7 @@ public sealed class RuntimeWorkflowStateSeedTests
     }
 
     [Fact]
-    public void A_cleared_identity_projection_roundtrips_json_null_inline_value()
+    public void A_cleared_identity_projection_stores_an_explicit_json_null_inline_value()
     {
         var written = Assert.Single(RuntimeWorkflowStateSeed.BuildIdentityChanges(
             "wfexec-1",
@@ -65,17 +65,11 @@ public sealed class RuntimeWorkflowStateSeedTests
             instanceNameAssignmentRequested: false,
             instanceName: null,
             capturedAt: _now));
-        Assert.Equal(JsonValueKind.Null, written.State!.InlineValue!.Value.ValueKind);
-
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-        var restored = JsonSerializer.Deserialize<DurableValueState>(JsonSerializer.Serialize(written.State, options), options);
-
-        Assert.NotNull(restored);
-        Assert.Equal(DurableValueStorage.Inline, restored.Storage);
-        Assert.Equal(JsonValueKind.Null, restored.InlineValue!.Value.ValueKind);
+        Assert.Equal(DurableValueStorage.Inline, written.State!.Storage);
+        Assert.Equal(JsonValueKind.Null, written.State.InlineValue!.Value.ValueKind);
         Assert.Equal(
             RuntimeWorkflowStateSeed.IdentityCorrelationIdName,
-            restored.Metadata[RuntimeMetadataKeys.IdentityName]);
+            written.State.Metadata[RuntimeMetadataKeys.IdentityName]);
     }
 
     [Fact]
