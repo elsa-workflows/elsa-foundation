@@ -37,7 +37,8 @@ export function useGraphAuthoringCanvas<TDocument>({
   documentSignature = stableSignature,
   onChange,
   captureView,
-  restoreView
+  restoreView,
+  tryChange
 }: {
   document: TDocument;
   adapter: GraphDocumentAdapter<TDocument>;
@@ -58,9 +59,12 @@ export function useGraphAuthoringCanvas<TDocument>({
   reconcileDocument?(previous: TDocument, next: TDocument): TDocument;
   /** Compare server acknowledgements using the host's persisted representation. */
   documentSignature?(document: TDocument): string;
+  /** Legacy notification; its return value is not a parent acknowledgement. */
   onChange(document: TDocument): void;
   captureView?(): GraphAuthoringView;
   restoreView?(view: GraphAuthoringView, document: TDocument): void;
+  /** Optional synchronous admission against the exact acknowledged baseline. */
+  tryChange?(document: TDocument, expectedDocument: TDocument): boolean;
 }) {
   const viewHandlersRef = useRef({ captureView, restoreView });
   viewHandlersRef.current = { captureView, restoreView };
@@ -105,42 +109,68 @@ export function useGraphAuthoringCanvas<TDocument>({
     setHistoryVersion(version => version + 1);
   }, [resetKey, signature]);
 
-  const emit = useCallback((candidate: TDocument, record = true) => {
-    const next = reconcileDocument?.(documentRef.current, candidate) ?? candidate;
-    if (record) {
-      historyRef.current = recordActivityGraphEdit(historyRef.current, position(documentRef.current));
-    }
-    documentRef.current = next;
-    emittedSignatureRef.current = documentSignature(next);
+  const emit = useCallback((candidate: TDocument, record = true, nextHistory = historyRef.current) => {
+    const previous = documentRef.current;
+    const next = reconcileDocument?.(previous, candidate) ?? candidate;
     const model = derive(next);
+    const nextSignature = documentSignature(next);
+    const history = record ? recordActivityGraphEdit(historyRef.current, position(previous)) : nextHistory;
+    const previousEmission = emittedSignatureRef.current;
+    const restoreCanvas = () => {
+      emittedSignatureRef.current = previousEmission;
+      const current = derive(documentRef.current);
+      setNodes(current.nodes);
+      setEdges(current.edges);
+    };
+    // Parent admission is authoritative. A child history entry or optimistic document is not a
+    // receipt when the Activity Definition host has closed or advanced this provider draft.
+    // Register only the echo marker early: a synchronous parent render may run the signature effect.
+    emittedSignatureRef.current = nextSignature;
+    try {
+      if (tryChange) {
+        const accepted: unknown = tryChange(next, previous);
+        if (accepted !== true) {
+          // A malformed async host is never an acknowledgement; observe a rejected Promise
+          // without letting its eventual completion commit child history.
+          void Promise.resolve(accepted).catch(() => undefined);
+          restoreCanvas();
+          return false;
+        }
+      } else {
+        onChange(next);
+      }
+    }
+    catch (error) { restoreCanvas(); throw error; }
+    historyRef.current = history;
+    documentRef.current = next;
     setNodes(model.nodes);
     setEdges(model.edges);
     setHistoryVersion(version => version + 1);
-    onChange(next);
-  }, [derive, documentSignature, onChange, position, reconcileDocument]);
+    return true;
+  }, [derive, documentSignature, onChange, position, reconcileDocument, tryChange]);
 
   const commitCanvas = useCallback((
     nextNodes: Node<WorkflowNodeData>[],
     nextEdges: WorkflowEdge[] = edges,
     options?: GraphCanvasCommitOptions
   ) => {
-    emit(applyModel(documentRef.current, nextNodes, nextEdges, options));
+    return emit(applyModel(documentRef.current, nextNodes, nextEdges, options));
   }, [applyModel, edges, emit]);
 
   const undo = useCallback(() => {
     const step = undoActivityGraph(historyRef.current, position(documentRef.current));
     if (!step) return;
-    historyRef.current = step.state;
-    emit(step.document.document, false);
-    if (step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+    const accepted = emit(step.document.document, false, step.state);
+    if (accepted && step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+    return accepted;
   }, [emit, position]);
 
   const redo = useCallback(() => {
     const step = redoActivityGraph(historyRef.current, position(documentRef.current));
     if (!step) return;
-    historyRef.current = step.state;
-    emit(step.document.document, false);
-    if (step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+    const accepted = emit(step.document.document, false, step.state);
+    if (accepted && step.document.view) viewHandlersRef.current.restoreView?.(step.document.view, step.document.document);
+    return accepted;
   }, [emit, position]);
 
   return {
@@ -154,6 +184,12 @@ export function useGraphAuthoringCanvas<TDocument>({
       setEdges(current => applyEdgeChanges(changes, current)),
     commitCanvas,
     commitDocument: emit,
+    /** Revision-check a controlled canvas against the synchronously acknowledged document. */
+    updateDocument: (recipe: (current: TDocument) => TDocument | null): boolean => {
+      const next = recipe(documentRef.current);
+      if (!next) return false;
+      return emit(next);
+    },
     undo,
     redo,
     canUndo: canUndoActivityGraph(historyRef.current),
