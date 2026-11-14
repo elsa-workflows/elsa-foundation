@@ -63,7 +63,7 @@ export function NativeBlockCommands(props: {
     const id = ++request.current;
     setBusy(true); setPlan(null); setMessages([]);
     try {
-      const result = await original.validate(nativeBlockEditorDocument(proposed.document));
+      const result = await original.validate(nativeBlockEditorDocument(proposed.document, original.context.catalog));
       if (id !== request.current) return;
       if (applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), proposed).status !== "ready") { refuseStale(); return; }
       setMessages(result.messages);
@@ -80,13 +80,13 @@ export function NativeBlockCommands(props: {
     setBusy(true); setMessages([]);
     try {
       // Recheck normal resource authority at confirmation, including server-side revision and access changes.
-      const result = await current.current.validate(nativeBlockEditorDocument(checked.document));
+      const result = await current.current.validate(nativeBlockEditorDocument(checked.document, current.current.context.catalog));
       if (id !== request.current) return;
       const final = applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), checked);
       if (final.status !== "ready") { setPlan(null); refuseStale(); return; }
       if (result.state !== "validated") { setPlan(null); setMessages(result.messages.length ? result.messages : ["The resource or its authority changed. Preview again."]); return; }
       committingRef.current = true; setCommitting(true);
-      await current.current.apply(nativeBlockEditorDocument(final.document), final.selection, () => request.current === id && applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), checked).status === "ready");
+      await current.current.apply(nativeBlockEditorDocument(final.document, current.current.context.catalog), final.selection, () => request.current === id && applyNativeBlockPlan(nativeBlockPlannerContext(current.current.context), checked).status === "ready");
       committingRef.current = false; setCommitting(false);
       if (id === request.current) close();
     } catch { if (id === request.current) setMessages(["The change was not applied. Refresh the resource and preview again."]); }

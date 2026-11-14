@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NativeBlockCommands, type NativeBlockValidation } from "../graph-authoring/NativeBlockCommands";
 import { planExtractNativeBlock, type NativeBlockContext, type NativeBlockDocument } from "../graph-authoring/nativeBlocks";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { normalizeActivityStructures } from "../workflowAdapter";
 import type { ActivityNode } from "../workflowTypes";
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
 import { sequenceActivity, sequenceNode, writeLine, leafNode, setVariableActivity } from "./fixtures";
@@ -132,6 +133,9 @@ it("preserves explicit result bindings through the expanded editor input boundar
   expect(payload.variables).toHaveLength(1);
   const children = payload.activities as ActivityNode[];
   expect(children[0].structure!.payload.activities).toHaveLength(3);
+  const transfer = (children[0].structure!.payload.activities as ActivityNode[]).find(node => node.nodeId.endsWith("-capture-1"))!;
+  expect(transfer.structure).toBeNull();
+  expect(normalizeActivityStructures(candidate.rootActivity, context.catalog)).toBe(candidate.rootActivity);
   const binding = children[1].inputs[0] as { value: { value: { source: string; parameters: unknown } } };
   expect(binding.value.value.source).toBe("args.prior + 1");
   expect(binding.value.value.parameters).toEqual({ prior: { kind: "Variable", declaringScopeNodeId: "root", variableKey: expect.any(String) } });
