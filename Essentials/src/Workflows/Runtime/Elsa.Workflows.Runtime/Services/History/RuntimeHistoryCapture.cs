@@ -88,11 +88,22 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
 
     private static async ValueTask<T> ReadAsync<T>(string workflowId, Func<ValueTask<T>> read, CancellationToken token)
     {
-        try { return await read(); }
+        try
+        {
+            var result = await read();
+            token.ThrowIfCancellationRequested();
+            return result;
+        }
         catch (Exception exception) when (RuntimeHistoryReadFailures.IsMalformed(exception))
-        { throw new RuntimeHistoryIntegrityException(workflowId, "the capture owner could not interpret its admitted policy", exception); }
-        catch (Exception exception) when (!token.IsCancellationRequested && RuntimeHistoryReadFailures.IsUnavailable(exception))
-        { throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History capture dependency is unavailable.", exception); }
+        {
+            token.ThrowIfCancellationRequested();
+            throw new RuntimeHistoryIntegrityException(workflowId, "the capture owner could not interpret its admitted policy", exception);
+        }
+        catch (Exception exception) when (RuntimeHistoryReadFailures.IsUnavailable(exception))
+        {
+            token.ThrowIfCancellationRequested();
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History capture dependency is unavailable.", exception);
+        }
     }
 
     private static bool IsFlush(RuntimeCheckpointCommit commit) => commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
