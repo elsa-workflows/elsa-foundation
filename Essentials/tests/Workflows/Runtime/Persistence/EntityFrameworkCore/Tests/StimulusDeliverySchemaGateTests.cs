@@ -252,15 +252,15 @@ public sealed partial class StimulusDeliverySchemaGateTests
     }
     private sealed partial class Fixture : IAsyncDisposable
     {
-        private readonly SqliteConnection connection = new("Data Source=:memory:");
+        private readonly SqliteConnection connection;
         private readonly EfSchemaFinalizationGates gates = new();
         private readonly ServiceProvider services;
         public IEfSchemaFleet Fleet { get; } = new SingleCurrentMember();
         public EfSchemaModuleGate Gate { get; }
         private readonly string family;
-        private Fixture(string family)
+        private Fixture(string family, string? connectionString = null)
         {
-            this.family = family;
+            this.family = family; connection = new(connectionString ?? "Data Source=:memory:");
             services = new ServiceCollection().AddSingleton(gates).BuildServiceProvider();
             Gate = new(EfSchemaModuleFamilies.ForContext(typeof(RuntimeDbContext))!, Fleet,
                 new EfSchemaFinalizationObservations(), new());

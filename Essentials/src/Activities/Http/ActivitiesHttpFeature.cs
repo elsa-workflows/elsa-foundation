@@ -7,10 +7,13 @@ using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
+using Elsa.Activities.Http.StandaloneTriggers;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Http.Core.Options;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -62,6 +65,11 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddHttpContextAccessor();
+        services.TryAddScoped<HttpTriggerSourceContext>();
+        services.TryAddScoped<IStandaloneTriggerSourceContext<StandaloneHttpTriggerSource>>(provider => provider.GetRequiredService<HttpTriggerSourceContext>());
+        services.AddStandaloneTriggerIngress<StandaloneHttpTriggerSource>(StandaloneHttpTriggerSource.Descriptor);
+        services.TryAddScoped<StandaloneHttpTriggerMiddleware>();
         services.AddApiCapabilitySource<HttpWorkflowEndpointsCapabilitySource>();
         services.Configure<HttpEndpointOptions>(options => options.BasePath = BasePath);
         services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = SyncRequestTimeout);
@@ -123,6 +131,7 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     public void UseMiddleware(IApplicationBuilder app, Microsoft.Extensions.Hosting.IHostEnvironment? environment)
     {
         app.UseMiddleware<HttpTestRunIngressMiddleware>();
+        app.UseMiddleware<StandaloneHttpTriggerMiddleware>();
         app.UseMiddleware<HttpEndpointMiddleware>();
     }
 }

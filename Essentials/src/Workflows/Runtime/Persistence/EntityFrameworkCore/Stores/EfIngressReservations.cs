@@ -56,18 +56,37 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
 
     /// <summary>Stages one owner's whole exact claim set in the caller's resource/activation transaction.</summary>
     internal async ValueTask StageOwnerAsync(TriggerScope scope, string ownerKind, string ownerId,
-        IReadOnlyList<RuntimeIngressReservation> claims, CancellationToken ct)
+        IReadOnlyList<RuntimeIngressReservation> claims, CancellationToken ct,
+        IReadOnlyDictionary<string, IIngressReservationPolicy>? policies = null)
     {
         Require(scope.Persistence, ct);
         if (context.Database.CurrentTransaction is null) throw new InvalidOperationException("Reservation mutation requires its owning source transaction.");
+        policies ??= RuntimeIngressReservationRules.Policies(null);
+        if (ownerKind == RuntimeIngressReservation.StandaloneTriggerOwner && claims.Any(claim => policies.ContainsKey(claim.StimulusType)))
+            RuntimeSchemaWriteVersion.RequireReservationSemantics(context);
+        RuntimeIngressReservationRules.CheckSemanticCandidates(claims, policies);
+        // The owning SERIALIZABLE transaction keeps the entire same-type predicate until commit, including absence.
+        foreach (var type in claims.Select(claim => claim.StimulusType).Distinct(StringComparer.Ordinal).Where(policies.ContainsKey))
+        {
+            var physicalScopeHash = Hash(scope.Persistence.Value); var typeHash = Hash(type);
+            var existing = await context.IngressReservations.AsNoTracking().Where(row => row.ScopeHash == physicalScopeHash &&
+                row.StimulusTypeHash == typeHash).ToArrayAsync(ct);
+            foreach (var row in existing)
+                foreach (var claim in claims.Where(claim => claim.StimulusType == type))
+                    RuntimeIngressReservationRules.CheckSemanticOwner(Read(row, scope.Persistence), claim, policies);
+        }
         var scopeHash = Hash(scope.Persistence.Value); var ownerHash = Hash(ownerId);
         var tenantKey = Encode(JsonSerializer.Serialize(scope.TenantId));
-        var ownedRows = await context.IngressReservations.Where(row => row.ScopeHash == scopeHash && row.TenantKey == tenantKey &&
-            row.OwnerKind == ownerKind && row.OwnerHash == ownerHash).ToArrayAsync(ct);
+        // A logical publication slot is owned by its physical scope, even when a replacement captures a new tenant.
+        // Standalone resource identities remain tenant-scoped and cannot reconcile another tenant's claims.
+        var publicationOwner = ownerKind == RuntimeIngressReservation.PublicationSlotOwner;
+        var owned = context.IngressReservations.Where(row => row.ScopeHash == scopeHash && row.OwnerKind == ownerKind && row.OwnerHash == ownerHash);
+        if (!publicationOwner) owned = owned.Where(row => row.TenantKey == tenantKey);
+        var ownedRows = await owned.ToArrayAsync(ct);
         foreach (var row in ownedRows)
         {
             var old = Read(row, scope.Persistence);
-            if (old.OwnerKind != ownerKind || old.OwnerId != ownerId || old.Scope.TenantId != scope.TenantId)
+            if (old.OwnerKind != ownerKind || old.OwnerId != ownerId || !publicationOwner && old.Scope.TenantId != scope.TenantId)
                 throw new InvalidDataException("The reservation owner projection differs from its actual source and tenant.");
         }
         var ids = claims.Select(item => item.ReservationId).ToHashSet(StringComparer.Ordinal);
@@ -78,7 +97,11 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
                 throw new InvalidDataException("A reservation plan contains another owner.");
             var row = ownedRows.SingleOrDefault(item => item.Id == claim.ReservationId)
                 ?? await context.IngressReservations.SingleOrDefaultAsync(item => item.Id == claim.ReservationId, ct);
-            if (row is null) context.IngressReservations.Add(ToEntity(claim, 1));
+            if (row is null)
+            {
+                var created = ToEntity(claim, 1); created.SchemaVersion = RuntimeSchemaWriteVersion.Standalone(context);
+                context.IngressReservations.Add(created);
+            }
             else
             {
                 RuntimeIngressReservationRules.CheckOwner(Read(row, scope.Persistence), claim);
@@ -102,10 +125,11 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
 
     internal static RuntimeIngressReservation Read(RuntimeIngressReservationEntity row, PersistenceScope scope)
     {
-        if (row.SchemaVersion != StandaloneTriggersEfModule.SchemaVersion || row.Revision <= 0)
+        if (EfSchemaVersion.NotReadable(StandaloneTriggersEfModule.Chain, row.SchemaVersion) || row.Revision <= 0)
             throw new InvalidDataException("The reservation schema or revision is invalid.");
         RuntimeIngressReservation value;
-        try { value = JsonSerializer.Deserialize<RuntimeIngressReservation>(row.ContentJson, Json) ?? throw new InvalidDataException("A reservation has no content."); }
+        try { value = JsonSerializer.Deserialize<RuntimeIngressReservation>(StandaloneTriggersEfModule.Chain.Upcast<RuntimeIngressReservationEntity>(row.SchemaVersion,
+            (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!, Json) ?? throw new InvalidDataException("A reservation has no content."); }
         catch (Exception e) when (e is JsonException or ArgumentException) { throw new InvalidDataException("The reservation content is invalid.", e); }
         var expected = ToEntity(value, row.Revision);
         if (value.Scope.Persistence != scope || value.ReservationId != RuntimeIngressReservation.CreateIdentity(scope, value.StimulusType, value.StimulusHash) ||
@@ -124,9 +148,9 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
         OwnerId = Encode(value.OwnerId), OwnerHash = Hash(value.OwnerId), Revision = revision, ContentJson = JsonSerializer.Serialize(value, Json)
     };
 
-    private static void Copy(RuntimeIngressReservationEntity row, RuntimeIngressReservation value, long revision)
+    private void Copy(RuntimeIngressReservationEntity row, RuntimeIngressReservation value, long revision)
     {
-        var next = ToEntity(value, revision);
+        var next = ToEntity(value, revision); next.SchemaVersion = RuntimeSchemaWriteVersion.Standalone(context, row.SchemaVersion);
         row.ScopeKey = next.ScopeKey; row.ScopeHash = next.ScopeHash; row.TenantKey = next.TenantKey;
         row.StimulusType = next.StimulusType; row.StimulusTypeHash = next.StimulusTypeHash; row.StimulusHash = next.StimulusHash;
         row.StimulusHashHash = next.StimulusHashHash; row.OwnerKind = next.OwnerKind; row.OwnerId = next.OwnerId;
@@ -140,3 +164,15 @@ internal sealed class EfIngressReservationStore(RuntimeDbContext context, IPersi
     }
 }
 
+internal sealed partial class EfRuntimeIngressDeliveryStore
+{
+    partial void GetReservationAdmissionFence(RuntimeIngressAdmissionRequest request, ref Func<CancellationToken, ValueTask>? fence)
+    {
+        var expected = request.Reservation ?? throw new InvalidDataException("A routed source has no reservation.");
+        fence = async token =>
+        {
+            RuntimeIngressReservationRules.CheckAdmission(request, expected);
+            await new EfIngressReservationStore(context, access).FenceAsync(expected, token);
+        };
+    }
+}

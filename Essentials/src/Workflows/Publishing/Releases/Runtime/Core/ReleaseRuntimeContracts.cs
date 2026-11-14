@@ -101,6 +101,8 @@ public interface IReleaseRuntimeSiteReader
 {
     ReleaseRuntimeNodeContext ReadNode(ReleaseSemanticSite site, IReleaseContentReader content);
     ReleaseRuntimeModel ReadModel(ReleaseSemanticSite site, IReleaseContentReader content);
+    ReleaseRuntimeTemplate ReadTemplate(ReleaseMemberKey member, IReleaseContentReader content);
+    ReleaseActivityVersion ReadActivityVersion(ReleaseMemberKey member, IReleaseContentReader content);
 }
 
 public static class ReleaseRuntimeCodecs

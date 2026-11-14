@@ -274,3 +274,33 @@ the source adapter must independently require a real activated published associa
 
 Provider reads and connection cleanup wrap infrastructure failures in `PublicationSourceSnapshotPersistenceException`,
 with the original cause, publication identity and physical scope. Cancellation and coded source refusals propagate.
+
+## Native published-root release source
+
+`WorkflowsPublishingReleaseCaptureFeature` is optional. It registers `IReleaseCaptureSource` with
+identity `elsa.native-workflow-source/1` for `elsa.workflow-definition-version`; it adds no compiler,
+import, activation or export policy. It requires the Capture/Runtime-source features and exact original
+qualified snapshots. See [the source boundary](SourceCapture/README.md) for unsupported provenance profiles.
+
+| Port | Kind / layer / default | Signature | Override and dependent callers |
+|---|---|---|---|
+| `INativeReleaseCaptureContextAccessor` | Replacement, Publishing.Core; no default | `ReleaseRuntimeContentScope Current { get; }` | Select exactly one trusted source namespace, matching Runtime source acquisition and the physical persistence scope. Used before acquisition and around the callback. It grants no access. |
+| `INativeReleaseCaptureAuthorization` | Replacement, Publishing.Core; no default | `ValueTask<bool> AuthorizeWorkflowVersionAsync(ReleaseRuntimeContentScope context, string definitionVersionId, CancellationToken cancellationToken = default)` and `ValueTask<bool> AuthorizeSelectedMaterialAsync(ReleaseRuntimeContentScope context, string definitionVersionId, string sourceReferenceId, string artifactId, CancellationToken cancellationToken = default)` | The host explicitly admits original authored bytes/provenance and the selected root body before its full producer pin is known. Runtime source policy independently admits the retained closure. `NativeReleaseCaptureSource` checks permission before each relevant provider read and propagates requested cancellation. |
+
+## Original reusable catalog acquisition
+
+`WorkflowsPublishingReleaseCatalogCaptureFeature` adds the `elsa.native-catalog-source/2` strategy to
+`IReleaseSourceMemberContributor`, aggregated by the named `ReleaseSourceMembersCapturing` event.
+It follows exact retained placement version IDs and template dependencies, not current/latest catalog heads.
+Ordinary authorable CLR nodes do not create reusable-placement associations. The source host must select
+one `INativeReleaseCatalogCaptureAuthorization` (Publishing.Core replacement port; no default):
+`ValueTask<bool> AuthorizeActivityVersionAsync(ReleaseRuntimeContentScope context, string activityVersionId,
+CancellationToken cancellationToken = default)`. It admits original publication JSON before its qualified
+owner read. Runtime source policy independently admits each template body before the bounded provider read.
+The captured namespace stays fixed around the awaited callback; original nullable owner tenant is inert
+provenance and grants no target visibility. Source-only private codec reads validate captured headers and
+bytes without expanding the target reader API. The final independent owner verifier still checks every site.
+
+The source profile currently requires the qualified SQLite publication/template/reference ports. Missing
+original evidence, nonmatching source associations, unsupported providers or ambiguous contexts refuse.
+This feature does not compile, stage, activate, select latest versions or establish complete promotion.
