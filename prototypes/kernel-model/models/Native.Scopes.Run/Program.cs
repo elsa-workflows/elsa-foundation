@@ -34,13 +34,14 @@ if (state.Variables.GetValueOrDefault("observed")?.ToString() != "1")
     throw new InvalidOperationException("L1: ordinary phase work did not retain the scope value");
 Console.WriteLine("PASS lexical:cross-phase-value");
 
-// Ordinary child scopes are copied; later phases cannot reuse a completed child's local dictionary.
+// The resource belongs to this live composite; separate ordinary phases share its declared values.
 internal sealed class ScopeSession : CompositeActivity
 {
     public ScopeSession() { }
     protected override void Execute(CompositeContext context)
     {
-        context.SetState("entry");
+        var scope = context.CreateLexicalScope(new Dictionary<string, JsonNode?> { ["counter"] = Values.From(0) });
+        context.SetState(scope);
         Schedule(context, "entry");
     }
     protected override void OnChildCompleted(CompositeContext context, ChildCompleted child)
@@ -49,5 +50,5 @@ internal sealed class ScopeSession : CompositeActivity
         else context.Complete();
     }
     private static void Schedule(CompositeContext context, string node) =>
-        context.Schedule(context.Children.Single(n => n.Id == node), scope: new Dictionary<string, JsonNode?> { ["counter"] = Values.From(0) });
+        context.ScheduleInScope(context.Children.Single(n => n.Id == node), context.ReadState<string>()!);
 }

@@ -62,7 +62,7 @@ public sealed class NativeOptions
 
 // ---- the state: live frames, scheduled work, waits, variables, results ---------------------------------------------
 
-public sealed class NativeState
+public sealed partial class NativeState
 {
     public string Mode { get; set; } = Modes.Balanced;
     public bool Started { get; set; }
@@ -79,7 +79,7 @@ public sealed class NativeState
 }
 
 /// <summary>A live activity: a composite with children, or an activity that waits.</summary>
-public sealed class Frame
+public sealed partial class Frame
 {
     public string Id { get; set; } = "";
     public string Node { get; set; } = "";
@@ -92,7 +92,7 @@ public sealed class Frame
 }
 
 /// <summary>Scheduled work: execute a node as a new frame, or resume a frame's wait.</summary>
-public sealed class Work
+public sealed partial class Work
 {
     public bool Resume { get; set; }
     public string Frame { get; set; } = "";
@@ -117,10 +117,15 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 3 captures optional terminal receipt policy; legacy identities remain protected without invented expiry.</summary>
-    public int StateVersion => 3;
-    public object UpgradeState(string state, int fromVersion) => fromVersion is 1 or 2 ? Json.Read<NativeState>(state)
-        : throw new NotSupportedException($"native state has no version {fromVersion}");
+    /// <summary>Version 4 adds private durable lexical resources; old state contains no invented resources.</summary>
+    public int StateVersion => 4;
+    public object UpgradeState(string state, int fromVersion)
+    {
+        if (fromVersion is not (1 or 2 or 3)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        var native = Json.Read<NativeState>(state);
+        if (LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
+        return native;
+    }
 
     internal WorkflowRegistry Registry => registry;
     internal NativeOptions Options { get; } = options ?? new NativeOptions();
@@ -173,6 +178,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     public async ValueTask RunAsync()
     {
+        LexicalScopes.Validate(_s);
         if (AdmitPrefix()) return;
         foreach (var message in turn.Inbox)
             if (model.HandlesMetadata(message)) turn.Hold(message);
@@ -280,7 +286,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     {
         if (work.Parent is not null && !_s.Frames.ContainsKey(work.Parent)) return;     // its parent was cancelled meanwhile
         var node = _wf.Nodes[work.Node!];
-        var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope };
+        var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope, LexicalScope = work.LexicalScope };
         var scope = new FrameScope(this, frame);
         if (node.Background)
         {
@@ -432,6 +438,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         CloseInbox(frame.Id, "completed");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
+        DisposeLexicalScopes(frame.Id);
         if (result is not null) _s.Results[frame.Node] = result;
         foreach (var (variable, path) in _wf.Nodes[frame.Node].Captures) Assign(frame, variable, Values.Path(result, path)?.DeepClone());
         turn.Record($"c:{frame.Id}:{frame.Node}");
@@ -473,6 +480,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         CloseInbox(frame.Id, "faulted");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
+        DisposeLexicalScopes(frame.Id);
         turn.Record($"f:{frame.Id}:{frame.Node}");
         if (frame.Parent is null || !_s.Frames.TryGetValue(frame.Parent, out var parent))
         {
@@ -484,9 +492,10 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
     }
 
-    internal string Schedule(Frame parent, Node child, string? tag, IReadOnlyDictionary<string, JsonNode?>? scope)
+    internal string Schedule(Frame parent, Node child, string? tag, IReadOnlyDictionary<string, JsonNode?>? scope, string? lexicalScope = null)
     {
-        var work = new Work { Frame = NewId("f"), Node = child.Id, Parent = parent.Id, Tag = tag };
+        if (lexicalScope is not null) _ = LexicalScopes.Accessible(_s, parent.Id, lexicalScope);
+        var work = new Work { Frame = NewId("f"), Node = child.Id, Parent = parent.Id, Tag = tag, LexicalScope = lexicalScope };
         if (scope is not null)
         {
             if (Has(NativeFlaw.ScopeInMemory)) work.LiveScope = new(scope);     // MUTATION: the iteration scope is not in the row
@@ -517,6 +526,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 Unregister(id, wait, cancel: true);
             }
             CancelChildren(frame);
+            DisposeLexicalScopes(frame);
             turn.Record($"x:{f.Id}:{f.Node}");
         }
         _s.Agenda.RemoveAll(w => !w.Resume && w.Frame == frame);
@@ -559,11 +569,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     internal JsonNode? Read(Frame? frame, string name)
     {
-        for (; frame is not null; frame = ParentOf(frame))
-        {
-            if (frame.LiveScope is { } live && live.TryGetValue(name, out var l)) return l;
-            if (frame.Scope is { } scope && scope.TryGetValue(name, out var v)) return v;
-        }
+        foreach (var scope in VisibleScopes(frame))
+            if (scope.TryGetValue(name, out var value)) return value;
         return _s.Variables.GetValueOrDefault(name);
     }
 
@@ -572,11 +579,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     /// <summary>A write goes to the nearest scope that declares the variable, else to the workflow's.</summary>
     private void Assign(Frame frame, string name, JsonNode? value)
     {
-        for (var f = (Frame?)frame; f is not null; f = ParentOf(f))
-        {
-            if (f.LiveScope?.ContainsKey(name) == true) { f.LiveScope[name] = value; return; }
-            if (f.Scope?.ContainsKey(name) == true) { f.Scope[name] = value; return; }
-        }
+        foreach (var scope in VisibleScopes(frame))
+            if (scope.ContainsKey(name)) { scope[name] = value; return; }
         _s.Variables[name] = value;
     }
 }
