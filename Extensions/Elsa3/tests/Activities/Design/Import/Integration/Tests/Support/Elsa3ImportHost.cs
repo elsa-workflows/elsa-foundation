@@ -249,6 +249,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Services.AddAuthorization();
             builder.Services.AddCShellsAspNetCore(shells => shells
                 .WithAssemblies(
+                    typeof(Elsa.Foundation.Identity.FoundationIdentityAbstractionsFeature).Assembly,
                     typeof(PrimitivesFeature).Assembly,
                     typeof(SerializationFeature).Assembly,
                     typeof(MediatorFeature).Assembly,
@@ -361,6 +362,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// <summary>The features the shell enables by name. CShells adds what they depend on.</summary>
     private static readonly string[] Features =
     [
+        "FoundationIdentityAbstractions",
         "Primitives",
         "Serialization",
         "Mediator",
