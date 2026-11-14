@@ -251,15 +251,14 @@ internal sealed class ActivityDataSelectionAnalyzer(
             // never typed: a request can be seeded by any caller, so the runtime checks the member when it reads it.
             var requestRead = binding.Role is "WorkflowRequest" or ActivityDataReadRoles.WorkflowRequestMember;
             var memberOfInput = binding.IsMemberRead;
-            if (requestRead && context.OpenWorkflowRequest)
-                return new($"request:{binding.Key}", binding.Key, null, RequestRead(binding.Key, binding, memberOfInput),
-                    ActivityChildResultAvailability.Definite, null, null, null, null, null, null, "OpenWorkflowRequest");
             var input = requestRead
                 ? context.RequestInputs.GetValueOrDefault(binding.Key) is [var requested] ? requested : null
                 : context.InputIndex.TryFind(binding.Key, out var declared) ? declared : null;
             if (input is null)
             {
-                findings.Add(new(path, "ActivityData/UnknownInput", "The referenced boundary input is missing or ambiguous."));
+                findings.Add(new(path, "ActivityData/UnknownInput", context.WorkflowBoundary
+                    ? "The referenced workflow input is missing or ambiguous. Declare the input before reading its request value."
+                    : "The referenced boundary input is missing or ambiguous."));
                 return null;
             }
             // A workflow's inputs are its request members, keyed by name, and publication lowers a stored Input or
@@ -547,8 +546,6 @@ internal sealed class ActivityDataSelectionAnalyzer(
         public HashSet<ActivityDataSelectionTarget> ConnectionTargets { get; } = [];
         public DeclaredInputIndex InputIndex { get; } = new(document.Inputs);
         public bool WorkflowBoundary { get; } = document.ResourceKind is "Workflow" or "WorkflowDefinition";
-        // Empty workflow declarations compile to the legacy null/open InputContract. Activity definitions are closed.
-        public bool OpenWorkflowRequest { get; } = (document.ResourceKind is "Workflow" or "WorkflowDefinition") && document.Inputs.IsEmpty;
         public Dictionary<string, InputDefinition[]> RequestInputs { get; } = document.Inputs
             .GroupBy(input => document.ResourceKind is "Workflow" or "WorkflowDefinition" ? input.Name : input.ReferenceKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);

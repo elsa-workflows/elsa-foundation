@@ -27,7 +27,6 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [literal, setLiteral] = useState("");
-  const [requestName, setRequestName] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const latest = useRef({ host, target, current, onSelect, onRefusal, onRefresh });
   latest.current = { host, target, current, onSelect, onRefusal, onRefresh };
@@ -98,11 +97,6 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
   const changePath = (path: string[], choose = false) => {
     if (canonicalRoot && shown && current) open(canonicalRoot, selectedId, shown.label, path, choose);
   };
-  const openRequest = () => {
-    if (current && requestName.trim()) open({ expressionType: "WorkflowRequest", value: { memberKey: requestName, path: null } }, undefined, requestName, []);
-  };
-  const canProposeRequest = host.openWorkflowRequest === true && result.target && result.target.isSensitive !== true && result.target.isCredential !== true &&
-    (!result.target.constraint || result.target.constraint.allowedExpressionTypes.some(role => role.toLowerCase() === "workflowrequest"));
 
   return <div ref={rootRef} className="wf-data-members" aria-busy={pending || refreshing || undefined}>
     {result.target?.type ? <p className="wf-data-chooser-note">Input type: {activityDataTypeLabel(result.target.type)}</p> : null}
@@ -163,12 +157,6 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
         </div>
       </div>)}
       {families.length === 0 ? <p className="wf-data-chooser-note">No earlier data is available for this input.</p> : null}
-      {canProposeRequest ? <div className="wf-data-member-literal">
-        <StudioField label="Request member"><input aria-label="Request member" value={requestName} disabled={!current}
-          onChange={event => setRequestName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); openRequest(); } }} /></StudioField>
-        <button type="button" disabled={!current || !requestName.trim()} onClick={openRequest}>Open request member</button>
-        <small>Use the exact name supplied when this workflow starts. Studio asks the server before offering a value.</small>
-      </div> : null}
       {result.hasMoreSources ? <p className="wf-data-chooser-note">More sources exist than this browser can show.</p> : null}
     </>}
     {pending || refreshing ? <p className="wf-data-chooser-note" role="status">Updating for your latest changes…</p> : null}
