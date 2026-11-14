@@ -1,6 +1,6 @@
 # Primitive release owner extension points
 
-This optional adapter specializes the actual [primitive module](../EXTENSION_POINTS.md) through Releases.Core.
+This optional adapter specializes the actual [primitive module](../Elsa.Activities.Primitives/README.md) through Releases.Core.
 It references the concrete module only for its canonical activity alias and declared CLR member names.
 
 | Strategy | Contract / layer | Signature and identity | Registration / callers / replacement |

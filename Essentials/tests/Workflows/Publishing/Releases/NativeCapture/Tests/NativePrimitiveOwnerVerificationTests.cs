@@ -48,8 +48,10 @@ public sealed class NativePrimitiveOwnerVerificationTests
         });
     }
 
-    [Fact]
-    public async Task Actual_WriteLine_owner_refuses_a_different_frozen_side_effect_contract()
+    [Theory]
+    [InlineData("side-effect", "primitive_contract_mismatch")]
+    [InlineData("absent-literal", "primitive_literal_missing")]
+    public async Task Actual_WriteLine_owner_refuses_a_different_frozen_contract_or_absent_required_literal(string change, string code)
     {
         await WithCaptured("1", true, async (f, original, roots) =>
         {
@@ -60,17 +62,28 @@ public sealed class NativePrimitiveOwnerVerificationTests
                 contract.Inputs.Values, contract.Result, contract.Outcomes, contract.Activation, SideEffectProfile.External, contract.SupportsBackgroundExecution);
             var document = JsonNode.Parse(original.GetPayload(member.Key).Span)!;
             var node = document["content"]!["executable"]!["rootActivity"]!["childSlots"]![0]!["activities"]![0]!;
-            node["activityContract"]!["sideEffectProfile"] = "External";
-            node["activityContract"]!["schemaFingerprint"] = alteredContract.SchemaFingerprint;
+            if (change == "side-effect")
+            {
+                node["activityContract"]!["sideEffectProfile"] = "External";
+                node["activityContract"]!["schemaFingerprint"] = alteredContract.SchemaFingerprint;
+            }
+            else
+            {
+                var binding = node["inputBindings"]!["text"]!;
+                binding["literal"]!["presence"] = "Absent"; binding["literal"]!.AsObject().Remove("inlineValue");
+                binding.AsObject().Remove("literalValue");
+            }
             var bytes = System.Text.Encoding.UTF8.GetBytes(document.ToJsonString()); var changed = new Replaced(original, member, bytes);
             // First establish the controlled body is decodable; full artifact hash verification is independently mandatory.
-            Assert.Equal(SideEffectProfile.External, f.Codec.DecodeWorkflow(changed.GetPayload(member.Key)).Executable.RootActivity.ChildSlots.Single().Activities.Single().ActivityContract!.SideEffectProfile);
+            var changedNode = f.Codec.DecodeWorkflow(changed.GetPayload(member.Key)).Executable.RootActivity.ChildSlots.Single().Activities.Single();
+            if (change == "side-effect") Assert.Equal(SideEffectProfile.External, changedNode.ActivityContract!.SideEffectProfile);
+            else Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ValuePresence.Absent, changedNode.InputBindings["text"].Literal!.Presence);
             var inspector = f.ServicesOf<IReleaseOccurrenceInspector>().Single(value => value.Identity.Name == "elsa.primitive-release-profile");
             var result = await inspector.InspectAsync(new(member.Key, [], child.ExecutableNodeId, null,
                 new(ReleaseRuntimeSiteKinds.ClrActivity, TypeAliasConvention.CanonicalAlias(typeof(WriteLine)), 1),
                 JsonSerializer.SerializeToElement(new { nodeId = child.ExecutableNodeId })), changed);
             Assert.Equal(ReleaseSemanticStatus.Invalid, result.Status);
-            Assert.Contains(result.Diagnostics, value => value.Code == "primitive_contract_mismatch");
+            Assert.Contains(result.Diagnostics, value => value.Code == code);
         });
     }
 

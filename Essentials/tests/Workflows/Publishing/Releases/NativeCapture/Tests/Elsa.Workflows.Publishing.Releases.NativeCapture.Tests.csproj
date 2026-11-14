@@ -10,7 +10,7 @@
     <ProjectReference Include="../../../../../../src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../../src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="../../../../../../src/Events/Elsa.Events/Elsa.Events.csproj" />
-    <ProjectReference Include="../../../../../../src/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../../../../src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../../../../../src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="../../../../../../src/Activities/Graph/Releases/Elsa.Activities.Graph.Releases.csproj" />
     <ProjectReference Include="../../../../../../src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />

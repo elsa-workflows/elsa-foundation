@@ -65,6 +65,7 @@ internal sealed class PrimitiveReleaseOccurrenceInspector(IReleaseRuntimeSiteRea
                     plan.Operation == ValueConversionOperation.Identity && !ValueConversionCompatibility.SameType(plan.SourceType, plan.TargetType) ||
                     plan.Operation == ValueConversionOperation.NullableCompatibility && !ValueConversionCompatibility.IsNullableCompatibility(plan.SourceType, plan.TargetType)))
                     return ValueTask.FromResult(Failed("primitive_conversion_mismatch"));
+                if (binding.Source == RuntimeInputBindingSource.Literal && binding.LiteralValue is null) return ValueTask.FromResult(Failed("primitive_literal_missing"));
                 if (binding.LiteralValue is { } literal && !Text(literal, input.IsNullable)) return ValueTask.FromResult(Failed("primitive_literal_mismatch"));
             }
             var key = JsonSerializer.Serialize(new object?[] { site.Member.Kind, site.Member.Identity, site.Origin, site.Node, "activity-module", "ActivitiesPrimitives" });
