@@ -51,13 +51,16 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
     private static string Name(string m, bool n, string p, bool r, Profile profile) => $"native-graph:{profile.Name},{m},nested={n},{p},reverse={r}";
     private static string[] Refusals => ["missing-profile", "both-profiles", "unknown-entry", "unknown-exit", "unknown-action", "dynamic-profile"];
     internal static IEnumerable<string> Names => Cases().Select(c => Name(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile))
-        .Concat(Refusals.Select(n => "native-refusal:" + n)).Concat(NativeGraphReaders.Names);
+        .Concat(Refusals.Select(n => "native-refusal:" + n)).Concat(NativeGraphReaders.Names)
+        .Concat(from m in new[] { Modes.Balanced, Modes.Durable } from v in new[] { 1, 2 } select $"identity-consumption:literal-v{v},{m}");
     internal static void Run()
     {
         foreach (var c in Cases()) new NativeGraphWitness(c.Mode, c.Nested, c.Phase, c.Reverse, c.Profile).Execute();
         foreach (var name in Refusals) new NativeGraphWitness(Modes.Durable, false, "transition", false, Profiles().First()).Refuse(name);
         NativeGraphReaders.Run();
-        Console.WriteLine($"{Cases().Count()} actual native graph schedules, {Refusals.Length} native refusals and {NativeGraphReaders.Names.Length} literal identity readers passed; no physical lexical-scope/recovery/source-wave guarantee.");
+        foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var v in new[] { 1, 2 })
+            new NativeGraphWitness(m, false, "transition", false, Profiles().First()).ConsumeReader(v);
+        Console.WriteLine($"{Cases().Count()} actual native graph schedules, {Refusals.Length} native refusals and {NativeGraphReaders.Names.Length} literal identity readers and four literal-reader consumption schedules passed; no physical lexical-scope/recovery/source-wave guarantee.");
     }
 
     private readonly World _world = new(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
@@ -193,6 +196,28 @@ internal sealed class NativeGraphWitness(string mode, bool nested, string phase,
             Add(Events.Deliver(new(key, "release-" + ++_serial, null, _world.Time + 120_000), wait)); Drain();
         }
         throw new InvalidOperationException("N0: native graph phase exceeded its bounded work");
+    }
+    // Explicitly seeded reader input: not a historical writer/binary upgrade or a new-graph write proof.
+    private void ConsumeReader(int version)
+    {
+        var machine = Wf.Node<StateMachine>("machine", ("ChartDefinition", Binding.Literal(new Definition(new("Working", [new("Working")]), []))));
+        NativeWorkflows.Registry.Add(Wf.Workflow("reader-consumption", machine));
+        Apply(new("take", Actor.Id)); Add(new("start", _target, Kinds.Start, Start: NativeModel.Spec("reader-consumption", mode) with { Creation = new(1, 0, "reader") })); Drain();
+        var native = Native; var frame = native.Frames.Values.Single(f => f.Node == "machine");
+        Apply(new("crash", _owner));
+        frame.State = JsonSerializer.SerializeToNode(new { Active = new[] { "Working" }, Pending = (object?)null, Version = version });
+        var row = _world.Store.Instances[_target.Id]; _world.Store.Instances[_target.Id] = row with { State = Json.Write(native) };
+        Apply(new("tick", 20_000)); _owner = 1 - _owner; Apply(new("take", Actor.Id)); Drain(); _frame = frame.Id;
+        Signal("old-unmatched", "unknown"); Drain();
+        Check(Machine?.Version == 3 && Machine.Visits is [{ State: "Working" }] && Machine.VisitSerial == 1,
+            "N8: unhandled input did not persist the literal reader migration");
+        var visits = Json.Write(Machine!.Visits); Reload();
+        Signal("next-unmatched", "unknown"); Drain();
+        Check(Json.Write(Machine!.Visits) == visits && Machine.VisitSerial == 1 &&
+            Trace().Count(p => p[1] == "old-unmatched" && p[2] == "unhandled") == 1 &&
+            Trace().Count(p => p[1] == "next-unmatched" && p[2] == "unhandled") == 1,
+            "N8: consumed reader visits were reallocated or its outcome repeated");
+        Console.WriteLine($"PASS identity-consumption:literal-v{version},{mode}");
     }
     private void Refuse(string name)
     {
