@@ -547,7 +547,12 @@ public sealed class ExecutableNodeCompiler(
             return null;
         var name = literal.InlineValue.Value.GetString();
         var declared = workflowOutputs.Where(output => StringComparer.Ordinal.Equals(output.Name, name)).Take(2).ToArray();
-        return declared is [{ Type: { } type }] && !IsDynamicType(type) ? type : null;
+        // A scalar Object declaration is open, as Elsa.Any is: retain the authored dynamic binding
+        // instead of asking the typed JSON converter to project into CLR object.
+        return declared is [{ Type: { } type }] && !IsDynamicType(type) &&
+               !(type.CollectionKind == CollectionKind.Single && StringComparer.OrdinalIgnoreCase.Equals(type.Alias, "Object"))
+            ? type
+            : null;
     }
 
     private static bool IsDynamicType(TypeReference type) => StringComparer.OrdinalIgnoreCase.Equals(type.Alias, "Elsa.Any");

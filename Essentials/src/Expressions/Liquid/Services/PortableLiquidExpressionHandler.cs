@@ -77,7 +77,9 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
             return number;
         }
 
-        if ((StringComparer.Ordinal.Equals(resultTypeAlias, "Object") || StringComparer.Ordinal.Equals(resultTypeAlias, "Any"))
+        if ((StringComparer.Ordinal.Equals(resultTypeAlias, "Object") ||
+             StringComparer.Ordinal.Equals(resultTypeAlias, "Any") ||
+             StringComparer.OrdinalIgnoreCase.Equals(resultTypeAlias, "Elsa.Any"))
             && TryParseJson(rendered, out var structuredValue))
             return structuredValue;
 
