@@ -108,7 +108,7 @@ public sealed partial class BpmnDirectExecutionTests
                 null, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy, null, null, state.TenantId,
                 new(origin.Scope.Value), state.Authority, WorkflowExecutableStartAuthority.FromModelWork(origin))).AsTask());
         Assert.Contains("model-work-input-mismatch", rejected.ReasonCode);
-        await scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(
+        await scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100,
             workflowExecutionId: state.ExecutionId, intentKind: BpmnNativeWorkBoundary.InputStartKind));
         var actual = (await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId))!;
         Assert.NotNull(actual);

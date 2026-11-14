@@ -7,32 +7,35 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.PublishingSnapshotReview.Sqlite
+namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.PublishingSnapshotReview.PostgreSql
 {
-    [DbContext(typeof(PublishingSnapshotReviewSqliteDbContext))]
-    [Migration("20260928040708_Initial")]
+    [DbContext(typeof(PublishingSnapshotReviewPostgreSqlDbContext))]
+    [Migration("20261114121250_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -45,44 +48,46 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Family")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("FinalizedVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("FinishHistoryJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("FinishJson")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("HistoryJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("HoldsJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("IntentJson")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.HasKey("Family");
 
@@ -95,55 +100,62 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<int>("ReceiptExpiresAtOffsetMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<long>("ReceiptExpiresAtUtcTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("TestRunId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("TestRunIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("TestRunIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(902)
-                        .HasColumnType("BLOB");
+                        .HasColumnType("bytea");
 
                     b.HasKey("Id");
 
@@ -163,44 +175,52 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("Content")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("ReceiptKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("ReceiptTenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -217,59 +237,69 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefaultAction")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefaultSlotName")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("PolicyKey")
                         .IsRequired()
                         .HasMaxLength(1244)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1244)")
+                        .UseCollation("C");
 
                     b.Property<string>("PolicyKeyHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("UpdatedAtOffsetMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<long>("UpdatedAtUtcTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("WorkflowDefinitionIdHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -286,87 +316,99 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int>("AttemptCount")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<string>("IntentId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("IntentIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<byte[]>("IntentIdOrderKey")
                         .IsRequired()
                         .HasMaxLength(902)
-                        .HasColumnType("BLOB");
+                        .HasColumnType("bytea");
 
                     b.Property<string>("LastFailureCode")
                         .HasMaxLength(344)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(344)");
 
                     b.Property<string>("LastFailureMessage")
                         .HasMaxLength(1368)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1368)");
 
                     b.Property<int?>("NextAttemptAtOffsetMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<long?>("NextAttemptAtUtcTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Operation")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("ProjectionKind")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("ProjectionKindHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("PublicationId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("PublicationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -386,101 +428,119 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<int?>("ActivatedAtOffsetMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<long?>("ActivatedAtUtcTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("ArtifactId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<int>("CreatedAtOffsetMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<long>("CreatedAtUtcTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<long>("ExpectedSlotRevision")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("FailureCode")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("FailureMessage")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("text");
 
                     b.Property<string>("PublicationId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("PublicationIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("RequestFingerprint")
+                        .HasMaxLength(1200)
+                        .HasColumnType("character varying(1200)");
 
                     b.Property<int?>("RetiredAtOffsetMinutes")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("integer");
 
                     b.Property<long?>("RetiredAtUtcTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("SlotId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("SlotIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("SourceReferenceId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("TenantIdHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.Property<string>("WorkflowDefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(1200)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(1200)")
+                        .UseCollation("C");
 
                     b.HasKey("Id");
 
@@ -500,71 +560,84 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                 {
                     b.Property<string>("PreflightToken")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("Action")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("ActivePublicationId")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("CandidateHash")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Incarnation")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<long?>("PolicyRevision")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("PolicySource")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("RequestedAction")
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("RequestedExpectedPublicationId")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("RequestedSlotName")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
                     b.Property<string>("SlotName")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<long>("SlotRevision")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.HasKey("PreflightToken");
 

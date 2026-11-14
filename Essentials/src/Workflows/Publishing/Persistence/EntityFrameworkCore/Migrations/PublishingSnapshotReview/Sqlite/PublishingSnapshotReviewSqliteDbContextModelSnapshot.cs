@@ -421,6 +421,10 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RequestFingerprint")
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("RetiredAtOffsetMinutes")
                         .HasColumnType("INTEGER");
 

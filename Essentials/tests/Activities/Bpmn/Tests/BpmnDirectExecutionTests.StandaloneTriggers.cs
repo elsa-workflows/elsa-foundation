@@ -9,7 +9,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -75,7 +74,7 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal("actual-tenant", state.TenantId);
         Assert.Equal(fixture.Recipient.Partition, state.Partition);
         Assert.True(state.IngressOrigin!.IsEquivalentTo(seal.Command.Deserialize<RuntimeModelExecutionCommand>(Web)!.IngressOrigin));
-        Assert.Equal("1.1.0", (await services.GetRequiredService<RuntimeDbContext>().Set<RuntimeModelExecutionEntity>().AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal("1.1.0", (await services.GetRequiredService<RuntimeDbContext>().Database.SqlQueryRaw<string>("SELECT SchemaVersion AS Value FROM elsa_runtime_model_execution").SingleAsync()));
         var receipt = (await target.ReconcileAsync(source, fixture.Recipient, seal))!;
         await fixture.Port.RecordReceiptAsync(new(claim, fixture.Scope.Persistence), receipt);
         await services.GetRequiredService<IStandaloneTriggerStore>().WriteAsync(fixture.Scope,
@@ -107,7 +106,7 @@ public sealed partial class BpmnDirectExecutionTests
             WorkflowExecutionHarness.NewFaultingNode("input-worker", "Expected worker fault"),
             new Dictionary<string, WorkflowExecutableResumeTarget>(), WorkflowExecutionHarness.Timestamp, new Dictionary<string, string>(),
             inputContract: new(1, mappedInput ? [new("message", new("String"), true)] : []), dependencies: null,
-            incidentStrategy: Elsa.Workflows.Runtime.Core.Configuration.IncidentStrategyBuiltIns.FaultReference);
+            incidentStrategy: Elsa.Workflows.Runtime.Core.Models.IncidentStrategyBuiltIns.FaultReference);
         await store.SaveAsync(worker);
         var workerMaterial = (await store.FindMaterialAsync(worker.Identity.ArtifactId))!;
         var now = DateTimeOffset.UtcNow;
@@ -138,7 +137,7 @@ public sealed partial class BpmnDirectExecutionTests
         var nativeSource = (await services.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(origin.SourceOutboxItemId))!;
         Assert.Equal(BpmnNativeWorkBoundary.IngressStartKind, nativeSource.Intent.Kind);
 
-        await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(
+        await services.GetRequiredService<IRuntimePostCommitOutboxProcessor>().ProcessAsync(new(100,
             workflowExecutionId: modelState.ExecutionId, intentKind: BpmnNativeWorkBoundary.IngressStartKind));
 
         var actual = (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId))!;
