@@ -177,7 +177,7 @@ public sealed class EfActivityDraftTestRunStore(
         return receipt;
     }
 
-    private static ActivityDraftTestRunEntity ToEntity(ActivityDraftTestRunReceipt receipt, string? scope)
+    private ActivityDraftTestRunEntity ToEntity(ActivityDraftTestRunReceipt receipt, string? scope)
     {
         var row = new ActivityDraftTestRunEntity
         {
@@ -194,14 +194,14 @@ public sealed class EfActivityDraftTestRunStore(
         return row;
     }
 
-    private static void CopyMutable(ActivityDraftTestRunEntity row, ActivityDraftTestRunReceipt receipt)
+    private void CopyMutable(ActivityDraftTestRunEntity row, ActivityDraftTestRunReceipt receipt)
     {
         var expiry = EfPublishingStoreSupport.DateTimeOffsetParts(receipt.ReceiptExpiresAt);
         row.ReceiptExpiresAtUtcTicks = expiry.UtcTicks;
         row.ReceiptExpiresAtOffsetMinutes = expiry.OffsetMinutes;
         row.Status = receipt.Status.ToString();
         row.Content = PublishingEfJson.Serialize(receipt);
-        row.SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion;
+        row.SchemaVersion = PublishingLedgerWriteVersion.For(context, row.SchemaVersion);
         row.Revision = receipt.Revision;
     }
 

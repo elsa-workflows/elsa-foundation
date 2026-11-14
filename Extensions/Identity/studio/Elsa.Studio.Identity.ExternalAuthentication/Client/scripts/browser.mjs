@@ -161,19 +161,21 @@ try {
   await page.getByRole("button", { name: "Test configuration", exact: true }).click();
   await expect(page.getByText("Configuration test passed", { exact: true })).toBeVisible();
   if (settings.uiRecovery) await recovery.exercisePreviewDenial({ page, admin, backend, expect, capture, confirm: confirmStudio, control, exchangeCount });
-  const beforeExchanges = await exchangeCount();
+  await exchangeCount();
   const beforePreview = await (await admin.request.get(backend + "/__probe/state")).json();
   await page.getByRole("button", { name: "Preview sign-in", exact: true }).click();
   await confirmStudio(page, "Preview provider sign-in", "Continue to provider");
   await completeProviderLogin(page);
   await expect(page.getByText("Preview complete. No user, role assignment or normal session was changed.", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Would be created", { exact: true })).toBeVisible();
-  const previewAdministratorTokenExchanges = await exchangeCount() - beforeExchanges;
+  await exchangeCount();
   const afterPreview = await (await admin.request.get(backend + "/__probe/state")).json();
+  const previewAdministratorTokenExchanges = afterPreview.credentialExchanges - beforePreview.credentialExchanges;
   expect(afterPreview.users).toBe(beforePreview.users); expect(afterPreview.links).toBe(beforePreview.links);
   // The ordinary Studio redirect adapter exchanges the existing administrator cookie on API calls/reload.
+  // The probe snapshots committed pairs and completed exchanges under one gate, avoiding a split baseline.
   // Account for exactly those access/refresh pairs; the preview protocol may mint no additional credentials.
-  expect(afterPreview.tokens).toBe(beforePreview.tokens + previewAdministratorTokenExchanges * 2);
+  expect(afterPreview.tokens).toBe(beforePreview.tokens + (afterPreview.credentialExchanges - beforePreview.credentialExchanges) * 2);
   expect(beforePreview.sessions).toBe(1); expect(afterPreview.sessions).toBe(beforePreview.sessions);
   expect((await (await admin.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(adminSession.subject);
   expect(new URL(page.url()).searchParams.has("externalPreviewHandle")).toBe(false);
@@ -426,13 +428,14 @@ try {
     expect(beforePromotion.connections.find(item => item.source === 1 && item.document.key === "company").effective).toBe(false);
     await page.getByRole("button", { name: "Test configuration", exact: true }).click();
     await expect(page.getByText("Configuration test passed", { exact: true })).toBeVisible();
-    const beforeOverrideExchanges = await exchangeCount(); const beforeOverridePreview = await (await admin.request.get(backend + "/__probe/state")).json();
+    await exchangeCount(); const beforeOverridePreview = await (await admin.request.get(backend + "/__probe/state")).json();
     await page.getByRole("button", { name: "Preview sign-in", exact: true }).click(); await confirmStudio(page, "Preview provider sign-in", "Continue to provider");
     await expect(page.getByText("Would be created", { exact: true })).toBeVisible();
-    const overrideAdministratorExchanges = await exchangeCount() - beforeOverrideExchanges;
+    await exchangeCount();
     const afterOverridePreview = await (await admin.request.get(backend + "/__probe/state")).json();
+    const overrideAdministratorExchanges = afterOverridePreview.credentialExchanges - beforeOverridePreview.credentialExchanges;
     for (const field of ["users", "links", "sessions"]) expect(afterOverridePreview[field]).toBe(beforeOverridePreview[field]);
-    expect(afterOverridePreview.tokens).toBe(beforeOverridePreview.tokens + overrideAdministratorExchanges * 2);
+    expect(afterOverridePreview.tokens).toBe(beforeOverridePreview.tokens + (afterOverridePreview.credentialExchanges - beforeOverridePreview.credentialExchanges) * 2);
     await page.getByRole("button", { name: "Use as override", exact: true }).click(); await confirmStudio(page, "Use as override");
     await expect(page.getByRole("button", { name: "Disable sign-in", exact: true })).toBeVisible();
     const promoted = await (await admin.request.get(backend + "/_elsa/identity/external-connections")).json();

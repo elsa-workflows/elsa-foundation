@@ -34,7 +34,7 @@ public sealed partial class EfPublicationRecordStore(
         if (row is not null)
         {
             if (ToModel(row) != publication)
-                throw new InvalidOperationException($"Publication '{publication.PublicationId}' already exists.");
+                throw new PublicationRecordAlreadyExistsException(publication.PublicationId);
             return;
         }
 
@@ -53,7 +53,7 @@ public sealed partial class EfPublicationRecordStore(
             if (winner is null)
                 throw;
             if (winner != publication)
-                throw new InvalidOperationException($"Publication '{publication.PublicationId}' already exists.");
+                throw new PublicationRecordAlreadyExistsException(publication.PublicationId);
         }
         finally
         {
@@ -222,7 +222,7 @@ public sealed partial class EfPublicationRecordStore(
         return row;
     }
 
-    private static PublicationRecordEntity ToEntity(PublicationRecord publication, string? tenantId)
+    private PublicationRecordEntity ToEntity(PublicationRecord publication, string? tenantId)
     {
         var created = EfPublishingStoreSupport.DateTimeOffsetParts(publication.CreatedAt);
         var row = new PublicationRecordEntity
@@ -237,6 +237,7 @@ public sealed partial class EfPublicationRecordStore(
             WorkflowDefinitionVersionId = EfPublishingStoreSupport.Encode(publication.WorkflowDefinitionVersionId),
             ArtifactId = EfPublishingStoreSupport.Encode(publication.ArtifactId),
             ExpectedSlotRevision = publication.ExpectedSlotRevision,
+            RequestFingerprint = EfPublishingStoreSupport.EncodeNullable(publication.RequestFingerprint),
             CreatedAtUtcTicks = created.UtcTicks,
             CreatedAtOffsetMinutes = created.OffsetMinutes,
             TenantId = EfPublishingStoreSupport.EncodeNullable(tenantId),
@@ -248,9 +249,9 @@ public sealed partial class EfPublicationRecordStore(
     }
 
     /// <summary>Copies the lifecycle members a transition may change, stamps the schema version, and advances the row revision.</summary>
-    private static void CopyMutable(PublicationRecordEntity row, PublicationRecord publication)
+    private void CopyMutable(PublicationRecordEntity row, PublicationRecord publication)
     {
-        row.SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion;
+        row.SchemaVersion = PublishingLedgerWriteVersion.For(context, row.SchemaVersion, publication.RequestFingerprint is not null);
         row.SourceReferenceId = EfPublishingStoreSupport.EncodeNullable(publication.SourceReferenceId);
         row.Status = publication.Status.ToString();
         (row.ActivatedAtUtcTicks, row.ActivatedAtOffsetMinutes) = NullableParts(publication.ActivatedAt);
@@ -264,6 +265,8 @@ public sealed partial class EfPublicationRecordStore(
     private static PublicationRecord ToModel(PublicationRecordEntity row)
     {
         EfSchemaVersion.EnsureReadable(PublishingLedgerEfModule.Chain, row.SchemaVersion);
+        if (row.SchemaVersion == PublishingLedgerEfModule.LegacyContentSchemaVersion && row.RequestFingerprint is not null)
+            throw new InvalidOperationException("A predecessor publication row cannot carry exact request replay evidence.");
         var publicationId = EfPublishingStoreSupport.DecodeIdentity(row.PublicationId, nameof(row.PublicationId));
         var tenantId = EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId));
         if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(tenantId)) ||
@@ -293,7 +296,10 @@ public sealed partial class EfPublicationRecordStore(
             NullableDateTimeOffset(row.ActivatedAtUtcTicks, row.ActivatedAtOffsetMinutes, "activation"),
             NullableDateTimeOffset(row.RetiredAtUtcTicks, row.RetiredAtOffsetMinutes, "retirement"),
             row.FailureCode is null ? null : new PublicationFailure(DecodeText(row.FailureCode, "failure code"), DecodeText(row.FailureMessage!, "failure message")),
-            EfPublishingStoreSupport.DecodeIdentity(row.SlotName, nameof(row.SlotName)));
+            EfPublishingStoreSupport.DecodeIdentity(row.SlotName, nameof(row.SlotName)))
+        {
+            RequestFingerprint = EfPublishingStoreSupport.DecodeNullableIdentity(row.RequestFingerprint, nameof(row.RequestFingerprint))
+        };
     }
 
     private static (long? UtcTicks, int? OffsetMinutes) NullableParts(DateTimeOffset? value)
@@ -327,7 +333,7 @@ public sealed partial class EfPublicationRecordStore(
     {
         if (current.PublicationId != next.PublicationId || current.SlotId != next.SlotId || current.SlotName != next.SlotName ||
             current.WorkflowDefinitionId != next.WorkflowDefinitionId || current.WorkflowDefinitionVersionId != next.WorkflowDefinitionVersionId ||
-            current.ArtifactId != next.ArtifactId || current.ExpectedSlotRevision != next.ExpectedSlotRevision || current.CreatedAt != next.CreatedAt)
+            current.ArtifactId != next.ArtifactId || current.RequestFingerprint != next.RequestFingerprint || current.ExpectedSlotRevision != next.ExpectedSlotRevision || current.CreatedAt != next.CreatedAt)
             throw new InvalidOperationException("A publication lifecycle transition cannot change immutable publication identity.");
     }
 
@@ -341,6 +347,8 @@ public sealed partial class EfPublicationRecordStore(
         EfPublishingStoreSupport.EnsureIdentity(publication.ArtifactId, nameof(publication.ArtifactId));
         if (publication.SourceReferenceId is not null)
             EfPublishingStoreSupport.EnsureIdentity(publication.SourceReferenceId, nameof(publication.SourceReferenceId));
+        if (publication.RequestFingerprint is not null)
+            EfPublishingStoreSupport.EnsureIdentity(publication.RequestFingerprint, nameof(publication.RequestFingerprint));
         ArgumentOutOfRangeException.ThrowIfNegative(publication.ExpectedSlotRevision);
         if (!Enum.IsDefined(publication.Status))
             throw new ArgumentException("The publication status is invalid.", nameof(publication));
