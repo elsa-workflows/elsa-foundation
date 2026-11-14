@@ -10,9 +10,12 @@ from unittest.mock import Mock, patch
 
 from weaver_transport import Response, WeaverTransportError
 from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
-from contextlib import nullcontext
+from contextlib import contextmanager
 from unittest.mock import DEFAULT
 from evidence import REQUIRED_CASES
+from effects_journeys import (CLASSED_RESTART_CASES, EVIDENCE_CATEGORY, RESTART_REQUIREMENTS,
+                              RESTART_SECTION as EFFECT_RESTART_SECTION)
+from upgrade_journeys import LEGACY_RESTART_CASES
 from journeys import (_unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove, _incompatible, _restore,
                       _autonomy_preflight)
 
@@ -310,7 +313,7 @@ class JourneyBoundariesTests(unittest.TestCase):
 
 
 class CompleteWitnessOrchestrationTests(unittest.TestCase):
-    """Order/isolation of the appended #3440 inventory; synthetic coordinator only, no host is started."""
+    """Synthetic coordinator order/isolation; native producers and deep readers are ports, not witness evidence."""
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -318,37 +321,96 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         (self.root / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": {"AcmeCopilotProtocolFixture": {}}}}}}))
         self.run = SimpleNamespace(report={"status": "distributions-prepared", "cases": []}, source="a" * 40, root=self.root,
                                    profiles={"backend": {"published": self.root}}, assert_immutable_inputs=Mock(), save=Mock())
+        self.hosts_open = {"backend": False, "studio": False}
+        self.backend_host = SimpleNamespace(restarts=[{"reason": "synthetic"}])
+        self.classed_records = self.restart_records(CLASSED_RESTART_CASES)
+        self.legacy_records = self.restart_records(LEGACY_RESTART_CASES)
+
+    def restart_records(self, identities):
+        # Only the index shape is real here. Both deep native readers are mocked below;
+        # these synthetic payloads cannot establish native qualification.
+        return [{"id": identity, "status": "passed", "source": self.run.source, "evidenceCategory": EVIDENCE_CATEGORY,
+                 "liveProvider": False, "qualified": False, "independentPackageWitness": False,
+                 "record": {"synthetic": identity}} for identity in identities]
 
     def qualify(self, **overrides):
+        self.assertEqual("distributions-prepared", self.run.report["status"])
+        self.assertEqual([], self.run.report["cases"])
+        self.assertNotIn(EFFECT_RESTART_SECTION, self.run.report)
         names = (*ORIGINAL_SEQUENCE, "owned_origin", "configure_runtime", "_seed_principals", "JourneyRuntime", "private_json", "CaseRecords",
                  "server", "RestartableServer", "qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "qualify_workflow_library", "qualify_workflow_inspection", "qualify_workflow_run", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_witness_restarts",
-                 "qualify_effects", "capture_consumer_after", "validate_complete_witness")
+                 "qualify_effects", "qualify_classed_effect_restarts", "qualify_legacy_effect_restarts",
+                 "capture_consumer_after", "validate_complete_witness")
         order = []
+        self.saved_states = []
+        self.run.save.side_effect = lambda: self.saved_states.append(
+            (self.run.report["status"], self.run.report["independentPackageWitness"], tuple(order)))
+        sections = {"qualify_workflow_authorization": "workflowAuthorizationQualification",
+                    "qualify_workflow_truth_seams": "workflowTruthSeamQualification",
+                    "qualify_workflow_batch": "workflowBatchQualification", "qualify_workflow_explain": "workflowExplainQualification",
+                    "qualify_workflow_library": "workflowLibraryQualification", "qualify_workflow_inspection": "workflowInspectionQualification",
+                    "qualify_workflow_run": "workflowRunQualification", "qualify_witness_autonomy": "autonomyLifecycleQualification",
+                    "qualify_effects": "moduleEffectsQualification", "qualify_witness_restarts": "restartRecoveryQualification"}
+
+        @contextmanager
+        def host(name):
+            self.hosts_open[name] = True
+            try:
+                yield self.backend_host if name == "backend" else None
+            finally:
+                self.hosts_open[name] = False
+                order.append(name + "-closed")
+
         def recorder(name):
             def call(*args, **kwargs):
                 order.append(name)
+                self.assertFalse(self.run.report["independentPackageWitness"])
+                self.assertNotEqual("passed", self.run.report["status"])
                 if name == "qualify_context_disclosure":
-                    self.run.report["cases"] = [{"id": case} for case in sorted(REQUIRED_CASES)]
+                    self.run.report["cases"] = [{"id": case, "synthetic": {"original": index}}
+                                                for index, case in enumerate(sorted(REQUIRED_CASES))]
                     self.run.report["contextDisclosureQualification"] = {"status": "passed"}
+                if name == "qualify_classed_effect_restarts":
+                    self.assertTrue(all(self.hosts_open.values()))
+                    self.assertIs(args[0], self.runtime); self.assertIs(args[1], self.backend_host)
+                    self.earlier_records = copy.deepcopy({key: value for key, value in self.run.report.items()
+                        if key in ("cases", "contextDisclosureQualification", *sections.values())})
+                if name == "qualify_legacy_effect_restarts":
+                    self.assertFalse(any(self.hosts_open.values()))
+                    self.assertIs(args[0], self.runtime)
+                    self.assertEqual("verifying", self.run.report["status"])
+                    self.assertIn(self.run.report[EFFECT_RESTART_SECTION]["status"], ("running", "failed"))
+                    self.assertEqual(self.classed_records, self.run.report[EFFECT_RESTART_SECTION]["records"])
+                if name in ("require_classed_effect_restarts", "require_legacy_effect_restarts"):
+                    self.assertFalse(any(self.hosts_open.values()))
+                    self.assertEqual((self.root, self.run.source), (args[1], kwargs["source"]))
+                    self.assertEqual(self.classed_records if name == "require_classed_effect_restarts" else self.legacy_records, args[0])
+                if name == "validate_complete_witness":
+                    self.assertFalse(any(self.hosts_open.values()))
+                    self.assertEqual("verifying", self.run.report["status"])
+                    self.assertEqual("passed", self.run.report[EFFECT_RESTART_SECTION]["status"])
+                    self.assertEqual(1, order.count("require_classed_effect_restarts"))
+                    self.assertEqual(1, order.count("require_legacy_effect_restarts"))
                 if name in overrides: return overrides[name](*args, **kwargs)
-                if name == "server": return nullcontext()
-                if name == "RestartableServer": return nullcontext(SimpleNamespace(restarts=[{"reason": "synthetic"}]))
-                if name == "qualify_workflow_authorization": self.run.report["workflowAuthorizationQualification"] = {"status": "passed"}
-                if name == "qualify_workflow_truth_seams": self.run.report["workflowTruthSeamQualification"] = {"status": "passed"}
-                if name == "qualify_workflow_batch": self.run.report["workflowBatchQualification"] = {"status": "passed"}
-                if name == "qualify_workflow_explain": self.run.report["workflowExplainQualification"] = {"status": "passed"}
-                if name == "qualify_workflow_library": self.run.report["workflowLibraryQualification"] = {"status": "passed"}
-                if name == "qualify_workflow_inspection": self.run.report["workflowInspectionQualification"] = {"status": "passed"}
-                if name == "qualify_workflow_run": self.run.report["workflowRunQualification"] = {"status": "passed"}
-                if name == "qualify_witness_autonomy": self.run.report["autonomyLifecycleQualification"] = {"status": "passed"}
+                if name == "server": return host("studio")
+                if name == "RestartableServer": return host("backend")
+                if name in sections:
+                    self.run.report[sections[name]] = {"status": "passed", "synthetic": {"producer": name}}
                 if name == "JourneyRuntime":
-                    return SimpleNamespace(gate_file=self.root / "gate.json", root=self.root, select_provider=Mock(), browser=Mock(),
-                                           native=SimpleNamespace(feature=Mock()), studio=object(), witness={"studioFeature": "resource"})
+                    self.runtime = SimpleNamespace(gate_file=self.root / "gate.json", root=self.root, select_provider=Mock(), browser=Mock(),
+                                                   native=SimpleNamespace(feature=Mock()), studio=object(), witness={"studioFeature": "resource"})
+                    return self.runtime
+                if name == "qualify_classed_effect_restarts": return copy.deepcopy(self.classed_records)
+                if name == "qualify_legacy_effect_restarts": return copy.deepcopy(self.legacy_records)
                 if name == "_install": return {}
                 if name == "_autonomy_preflight": return {"gateReleased": True, "evidence": []}
                 return DEFAULT
             return call
-        with patch.multiple("journeys", **{name: Mock(side_effect=recorder(name)) for name in names}):
+        # Keep append_effect_restarts and its manifest/source-binding gate real. Only
+        # the external native record producers/readers stop at synthetic test ports.
+        with patch.multiple("journeys", **{name: Mock(side_effect=recorder(name)) for name in names}), \
+                patch("effects_journeys.require_classed_effect_restarts", side_effect=recorder("require_classed_effect_restarts")), \
+                patch("upgrade_journeys.require_legacy_effect_restarts", side_effect=recorder("require_legacy_effect_restarts")):
             try:
                 qualify_distributions(self.run)
             finally:
@@ -358,10 +420,12 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
     def test_inventory_runs_once_after_the_unchanged_original_sequence_and_before_cleanup_capture(self):
         order = self.qualify()
         sequence = [name for name in order if name in ORIGINAL_SEQUENCE]
-        self.assertEqual("qualify_context_disclosure", sequence[-1])
+        self.assertEqual([*ORIGINAL_SEQUENCE[:-1], "_positives", "qualify_context_disclosure"], sequence)
         tail = order[order.index("qualify_context_disclosure") + 1:]
         self.assertEqual(["qualify_workflow_authorization", "qualify_workflow_truth_seams", "qualify_workflow_batch", "qualify_workflow_explain", "qualify_workflow_library", "qualify_workflow_inspection", "qualify_workflow_run", "_autonomy_preflight", "qualify_witness_autonomy", "qualify_effects", "qualify_witness_restarts",
-                          "capture_consumer_after", "validate_complete_witness", "validate_complete_witness"], tail)
+                          "qualify_classed_effect_restarts", "capture_consumer_after", "studio-closed", "backend-closed",
+                          "qualify_legacy_effect_restarts", "require_classed_effect_restarts", "require_legacy_effect_restarts",
+                          "validate_complete_witness"], tail)
         self.assertEqual(1, order.count("qualify_workflow_authorization"))
         self.assertEqual(1, order.count("qualify_workflow_truth_seams"))
         self.assertEqual(1, order.count("qualify_workflow_batch"))
@@ -372,11 +436,23 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         self.assertEqual(1, order.count("qualify_witness_autonomy"))
         self.assertEqual(1, order.count("qualify_effects"))
         self.assertEqual(1, order.count("qualify_witness_restarts"))
+        for name in ("qualify_classed_effect_restarts", "qualify_legacy_effect_restarts", "require_classed_effect_restarts",
+                     "require_legacy_effect_restarts", "validate_complete_witness"):
+            self.assertEqual(1, order.count(name))
         self.assertEqual(1, order.count("RestartableServer"))
         self.assertEqual([{"reason": "synthetic"}], self.run.report["hostRestarts"])
         self.assertEqual(("passed", True), (self.run.report["status"], self.run.report["independentPackageWitness"]))
+        self.assertEqual(self.earlier_records, {key: self.run.report[key] for key in self.earlier_records})
+        section = self.run.report[EFFECT_RESTART_SECTION]
+        self.assertEqual("passed", section["status"])
+        self.assertEqual(list(RESTART_REQUIREMENTS), [row["id"] for row in section["records"]])
+        self.assertEqual((14, 16, 30), (len(self.classed_records), len(self.legacy_records), len(section["records"])))
+        self.assertTrue(all(status != "passed" and not independent for status, independent, _ in self.saved_states[:-1]))
+        self.assertEqual(("passed", True, tuple(order)), self.saved_states[-1])
+        self.assertFalse(hasattr(self.runtime, "run"))
         manifest = self.run.report["witnessManifest"]
         self.assertEqual(107 + len(manifest["moduleEffectsCases"]) + len(manifest["story1RestartRequirements"]), manifest["expectedCaseCount"])
+        self.assertEqual((200, 30, 337), (len(manifest["moduleEffectsCases"]), len(manifest["story1RestartRequirements"]), manifest["expectedCaseCount"]))
         self.assertNotIn("stageCount", json.dumps(self.run.report["witnessManifest"]))
 
     def test_failed_matrix_changed_original_records_or_failed_gate_never_promote(self):
@@ -385,13 +461,113 @@ class CompleteWitnessOrchestrationTests(unittest.TestCase):
         def rejects(*_args): raise ValueError("Incomplete complete witness")
         def restart_failed(_runtime, _host): raise RuntimeError("copilot-dispatched-without-receipt: restart.dispatch_not_held")
         def restart_relabels(_runtime, _host): self.run.report["autonomyLifecycleQualification"]["status"] = "relabelled"
-        for name, override in (("qualify_witness_autonomy", failed), ("qualify_witness_autonomy", relabels), ("validate_complete_witness", rejects),
-                               ("qualify_witness_restarts", restart_failed), ("qualify_witness_restarts", restart_relabels)):
+        for name, override, cause in (
+                ("qualify_witness_autonomy", failed, "anthropic-cancel-before-effect: lifecycle.gate"),
+                ("qualify_witness_autonomy", relabels, "The appended autonomy matrix changed the original or current-authority records"),
+                ("validate_complete_witness", rejects, "Incomplete complete witness"),
+                ("qualify_witness_restarts", restart_failed, "copilot-dispatched-without-receipt: restart.dispatch_not_held"),
+                ("qualify_witness_restarts", restart_relabels, "The appended restart inventory changed an earlier witness record")):
             with self.subTest(override=override.__name__):
                 self.setUp()
-                with self.assertRaises((RuntimeError, ValueError)): self.qualify(**{name: override})
-                self.assertFalse(self.run.report["independentPackageWitness"]); self.assertNotEqual("passed", self.run.report["status"])
+                with self.assertRaisesRegex(ValueError if override is rejects else RuntimeError, cause):
+                    self.qualify(**{name: override})
+                self.assert_not_promoted()
+                self.assertEqual(1, self.order.count(name))
                 if name in ("qualify_witness_autonomy", "qualify_witness_restarts"): self.assertNotIn("capture_consumer_after", self.order)
+
+    def assert_not_promoted(self):
+        self.assertFalse(self.run.report["independentPackageWitness"])
+        self.assertNotEqual("passed", self.run.report["status"])
+        self.assertTrue(all(status != "passed" and not independent for status, independent, _ in self.saved_states))
+
+    def test_new_native_producer_failures_stop_before_final_promotion(self):
+        def fails(*_args): raise RuntimeError("synthetic native producer failed")
+        for name in ("qualify_classed_effect_restarts", "qualify_legacy_effect_restarts"):
+            with self.subTest(producer=name):
+                self.setUp()
+                with self.assertRaisesRegex(RuntimeError, "synthetic native producer failed"):
+                    self.qualify(**{name: fails})
+                self.assert_not_promoted()
+                self.assertEqual(1, self.order.count(name))
+                self.assertFalse(any(self.hosts_open.values()))
+                self.assertNotIn("validate_complete_witness", self.order)
+                self.assertNotIn("require_classed_effect_restarts", self.order)
+                if name == "qualify_classed_effect_restarts":
+                    self.assertNotIn("capture_consumer_after", self.order)
+                    self.assertNotIn("qualify_legacy_effect_restarts", self.order)
+                else:
+                    self.assertIn("capture_consumer_after", self.order)
+                    self.assertEqual(self.classed_records, self.run.report[EFFECT_RESTART_SECTION]["records"])
+
+    def test_new_restart_producers_cannot_change_original_effect_or_restart_records(self):
+        for producer, records in (("qualify_classed_effect_restarts", "classed_records"),
+                                  ("qualify_legacy_effect_restarts", "legacy_records")):
+            for section in ("cases", "moduleEffectsQualification", "restartRecoveryQualification"):
+                with self.subTest(producer=producer, changed=section):
+                    self.setUp()
+                    def relabels(*_args):
+                        value = self.run.report[section]
+                        if section == "cases": value[0]["synthetic"]["original"] = "relabelled"
+                        else: value["synthetic"]["producer"] = "relabelled"
+                        return copy.deepcopy(getattr(self, records))
+                    cause = ("Classed recovery changed earlier native witness records" if producer == "qualify_classed_effect_restarts"
+                             else "Upgrade qualification changed earlier witness records")
+                    with self.assertRaisesRegex(RuntimeError, cause):
+                        self.qualify(**{producer: relabels})
+                    self.assert_not_promoted()
+                    self.assertEqual(1, self.order.count(producer))
+                    self.assertNotIn("validate_complete_witness", self.order)
+                    if producer == "qualify_classed_effect_restarts":
+                        self.assertNotIn("capture_consumer_after", self.order)
+                    else:
+                        self.assertEqual(1, self.order.count("require_classed_effect_restarts"))
+                        self.assertEqual(1, self.order.count("require_legacy_effect_restarts"))
+
+    def test_real_restart_index_gate_refuses_incomplete_duplicate_failed_or_foreign_records(self):
+        for lane in ("classed_records", "legacy_records"):
+            for kind in ("missing", "duplicate", "failed", "foreign-source", "foreign-id"):
+                with self.subTest(lane=lane, kind=kind):
+                    self.setUp()
+                    rows = getattr(self, lane)
+                    if kind == "missing": rows.pop()
+                    elif kind == "duplicate": rows.append(copy.deepcopy(rows[0]))
+                    elif kind == "failed": rows[0]["status"] = "failed"
+                    elif kind == "foreign-source": rows[0]["source"] = "b" * 40
+                    else: rows[0]["id"] = "synthetic-foreign-case"
+                    cause = ("duplicate effects restart observations" if kind == "duplicate" else
+                             "foreign effects restart record" if kind == "foreign-id" else
+                             "incomplete effects upgrade/recovery matrix")
+                    with self.assertRaisesRegex(RuntimeError, cause): self.qualify()
+                    self.assert_not_promoted()
+                    producer = "qualify_classed_effect_restarts" if lane == "classed_records" else "qualify_legacy_effect_restarts"
+                    self.assertEqual(1, self.order.count(producer))
+                    if kind not in ("duplicate", "foreign-id"):
+                        self.assertEqual(1, self.order.count("qualify_legacy_effect_restarts"))
+                        self.assertEqual("Module effects: " + cause, self.run.report[EFFECT_RESTART_SECTION]["failure"]["message"])
+                    elif lane == "classed_records":
+                        self.assertNotIn("qualify_legacy_effect_restarts", self.order)
+                        self.assertNotIn("capture_consumer_after", self.order)
+                    self.assertNotIn("validate_complete_witness", self.order)
+                    self.assertNotIn("require_classed_effect_restarts", self.order)
+                    self.assertNotIn("require_legacy_effect_restarts", self.order)
+
+    def test_failed_native_reader_keeps_complete_index_failed_and_never_reaches_final_gate(self):
+        def rejects(*_args, **_kwargs): raise RuntimeError("synthetic native reader refused")
+        for name in ("require_classed_effect_restarts", "require_legacy_effect_restarts"):
+            with self.subTest(reader=name):
+                self.setUp()
+                with self.assertRaisesRegex(RuntimeError, "synthetic native reader refused"):
+                    self.qualify(**{name: rejects})
+                self.assert_not_promoted()
+                self.assertEqual(1, self.order.count(name))
+                self.assertLess(self.order.index("qualify_legacy_effect_restarts"), self.order.index(name))
+                section = self.run.report[EFFECT_RESTART_SECTION]
+                self.assertEqual("failed", section["status"])
+                self.assertEqual("RuntimeError", section["failure"]["type"])
+                self.assertEqual("synthetic native reader refused", section["failure"]["message"])
+                self.assertEqual(list(RESTART_REQUIREMENTS), [row["id"] for row in section["records"]])
+                self.assertNotIn("validate_complete_witness", self.order)
+                if name == "require_classed_effect_restarts": self.assertNotIn("require_legacy_effect_restarts", self.order)
 
     def preflight_runtime(self):
         bootstrap = Mock(); bootstrap.require_status.return_value = bootstrap; bootstrap.receipt = {"synthetic": "bootstrap"}
