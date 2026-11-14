@@ -27,12 +27,17 @@ paths; they never stand in for the engine, the store or the owner. Nothing here 
 from __future__ import annotations
 
 import calendar
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
+import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import secrets
+import signal
+import stat
 import threading
 import time
 from urllib.parse import urlencode
@@ -685,14 +690,32 @@ def _owner_ref(runtime, name, *, http=None):
     return reference
 
 
-def _command_trace(t, o, command_id, name):
+def _command_trace(t, o, command_id, name, *, owned_root=None):
     """This command's rows of the actual factory trace; one phase interleaves several cases in one adapter trace."""
     raw = t.protocol_trace(o["traceOffset"])
     rows = [row for row in raw["records"] if isinstance(row.get("data"), dict) and row["data"].get("commandId") == command_id]
     path = t.output / (name + "-command-trace.json")
     check(not path.exists(), "Never overwrite a retained command trace")
-    private_json(path, {"commandId": command_id, "sourcePath": raw["sourcePath"], "offset": raw["offset"], "nextOffset": raw["nextOffset"],
-                        "incompleteTailBytes": raw["incompleteTailBytes"], "rawTrace": raw["receipt"], "records": rows})
+    record = {"commandId": command_id, "sourcePath": raw["sourcePath"], "offset": raw["offset"], "nextOffset": raw["nextOffset"],
+              "incompleteTailBytes": raw["incompleteTailBytes"], "rawTrace": raw["receipt"], "records": rows}
+    if owned_root is not None:
+        from effects_journeys import _protocol_source_path
+        source = _protocol_source_path(owned_root, raw["sourcePath"])
+        end = raw["nextOffset"] + raw["incompleteTailBytes"]
+        check(0 < end - raw["offset"] <= 67108864, "Actual protocol window exceeds its evidence bound")
+        with source.open("rb") as stream:
+            identity = os.fstat(stream.fileno())
+            check(stat.S_ISREG(identity.st_mode) and identity.st_size >= end, "Actual protocol source lost its observed byte window")
+            stream.seek(raw["offset"])
+            observed = stream.read(end - raw["offset"])
+        check(hashlib.sha256(observed).hexdigest() == raw["observedBytesSha256"], "Actual protocol bytes changed before immutable capture")
+        window = t.output / (name + "-protocol-window.jsonl")
+        with window.open("xb") as stream:
+            stream.write(observed)
+        window.chmod(0o600)
+        record.update(window=retained(window), observedBytesSha256=raw["observedBytesSha256"], capturedAt=time.time(),
+                      sourceSizeAtObservation=end, sourceIdentity={"device": identity.st_dev, "inode": identity.st_ino})
+    private_json(path, record)
     return retained(path), raw["receipt"]
 
 
@@ -1185,6 +1208,318 @@ def _enable_store(runtime, host):
     bootstrap = runtime.transport("durable-store-weaver").bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "The durable store composition left the actual provider unavailable")
     return {**selected, "restart": restart["ref"], "catalog": record["receipt"], "bootstrap": bootstrap.receipt, "databaseObserved": False}
+
+
+# --- Spec1203 T038: classed recovery and actual removed-owner recovery ----------------------------
+# This slice produces fourteen records. It never replaces the separate thirty-case aggregate gate.
+
+@contextmanager
+def _classed_restart_bound():
+    check(threading.current_thread() is threading.main_thread() and signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0),
+          "Classed recovery needs an unoccupied interruptible main-thread stage")
+    def expired(_signum, _frame):
+        raise TimeoutError("Classed recovery stage exceeded 180 seconds; no action is replayed")
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, 180)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def _effect_journal_snapshot(runtime, paths, name):
+    """Retain immutable bytes and namespace identity; failure is retained outside the potentially broken namespace."""
+    refs = {}
+    for kind, path in paths.items():
+        record = {"sourcePath": str(path), "observedAt": time.time(), "status": "unknown"}
+        output = runtime.output(name + "-" + kind)
+        try:
+            path = Path(path)
+            check(path.is_absolute() and path.resolve().is_relative_to(runtime.run.root.resolve()) and not path.is_symlink()
+                  and not path.parent.is_symlink(), "Journal escaped its private observation namespace")
+            with path.open("rb") as stream:
+                identity = os.fstat(stream.fileno())
+                check(stat.S_ISREG(identity.st_mode) and identity.st_size <= 2 * 1024 * 1024, "Journal is not a bounded regular file")
+                raw = stream.read(2 * 1024 * 1024 + 1)
+                final = os.fstat(stream.fileno())
+            check((identity.st_dev, identity.st_ino, identity.st_size, identity.st_mtime_ns) ==
+                  (final.st_dev, final.st_ino, final.st_size, final.st_mtime_ns) and len(raw) == identity.st_size,
+                  "Journal changed while its bytes were being observed")
+            record.update(status="observed", device=identity.st_dev, inode=identity.st_ino, mode=stat.S_IMODE(identity.st_mode),
+                          parentMode=stat.S_IMODE(path.parent.stat().st_mode), size=len(raw), rawBody=raw.decode("utf-8", "strict"),
+                          bytesSha256=hashlib.sha256(raw).hexdigest(), failedMarker=os.path.lexists(str(path) + ".failed"),
+                          probeExists=os.path.lexists(str(path) + ".probe"))
+            reference = runtime.save(output, "journal", record)
+            refs[kind] = reference
+            from effects_journeys import require_execution_observation
+            require_execution_observation(record, path=str(path), owner=runtime.active_identity, execution=kind == "execution")
+        except Exception as error:
+            # Even when a module cannot retain its .failed marker, this external receipt stays failed/unknown.
+            failure = runtime.save(output, "failed-unknown", {"observation": record, "cause": type(error).__name__,
+                                                              "requiresFreshObservationPath": True})
+            raise RestartCaseFailure("effects.restart.journal_unknown: A module observation cannot prove a count",
+                                     "effects.restart.journal_unknown", {"journal": refs.get(kind), "failure": failure}) from error
+    return refs
+
+
+def _effect_restart_snapshot(runtime, paths, name, *, available=True):
+    from effects_journeys import OWNER, EXECUTION_ENDPOINT
+    from journey_runtime import HOME_PREFERENCES_PATH
+    result = {}
+    reads = (("layout", HOME_PREFERENCES_PATH),)
+    if available: reads += (("widget", OWNER), ("checks", OWNER + "/checks"), ("entries", EXECUTION_ENDPOINT))
+    for key, path in reads:
+        _, _, result[key] = runtime.snapshot(name + "-" + key, endpoint=path)
+    result["journals"] = _effect_journal_snapshot(runtime, paths, name + "-journals")
+    return result
+
+
+def _effect_restart_identity(runtime, name):
+    _, record = runtime.native.json(runtime.backend, name, "/_elsa/identity/session")
+    return record["receipt"]
+
+
+def _effect_restart_prepare(runtime, tool, branch_name, value):
+    from effects_journeys import OWNER, CHECK_TOOL, _attachment
+    before, _, _ = runtime.snapshot("classed-preparation-owner", endpoint=OWNER)
+    arguments = {"expectedVisible": before["visible"]} if tool == CHECK_TOOL else {"visible": not before["visible"]}
+    prepared_at = time.time()
+    turn = runtime.turn("classed-restart-" + branch_name, tool=tool, arguments=arguments,
+                        attachment=_attachment(runtime, before), capability="acme.home.effects")
+    turn.message.require_status(200)
+    check(turn.proposal is not None and turn.proposal.get("status") == "awaitingApproval", "No genuine classed pending preparation")
+    proposal = turn.proposal
+    branch = {"sessionId": turn.session, "commandId": turn.command_id, "proposalId": proposal["id"],
+              "prepared": copy.deepcopy(proposal["preparedInvocation"]), "times": {"prepared": prepared_at},
+              "refs": {"initialStream": turn.stream.receipt,
+                       "command": next(ref for ref in turn.evidence if Path(ref["path"]).name == "selected-command.json")}}
+    value["branches"][branch_name] = branch
+    if branch_name == "approved": branch["refs"]["approvedBefore"] = runtime.approve(turn).receipt
+    return turn, branch
+
+
+def _effect_restart_reopen(runtime, turn, branch, restart, name):
+    # _begin owns graceful lease-release diagnostics and fresh-generation transport selection.
+    state = {"o": {"sessionId": turn.session, "refs": {}}}
+    t, observation = _begin(runtime, state, restart, name)
+    branch["refs"]["recoveredSession"] = observation["refs"]["recoveredSession"]
+    branch["times"]["recovered"] = observation["recoveredAt"]
+    branch["refs"]["recoveredProposals"] = t.request("GET", _session_path(turn.session) + "/proposals").require_status(200).receipt
+    return t
+
+
+def _effect_restart_refuse(runtime, turn, branch, t, branch_name, *, removed):
+    from effects_journeys import POLICY_CODE, _restart_failure, _restart_proposal, require_withheld_owner_continuation, _effect_restart_trace, native_frames, _owned
+    # One command file is shared by the fixture. Restore this exact command before its continuation, never another tool.
+    t.set_command(turn.command_id, branch["prepared"]["toolName"], branch["prepared"]["arguments"])
+    if branch_name == "pending":
+        decision = t.approve(turn.proposal["id"], revision=turn.proposal["baseRevision"])
+        branch["refs"]["decision"] = decision.receipt
+        if removed:
+            decision.require_status(200)
+            check(decision.json().get("data", {}).get("status") == "approved", "Removed-owner approval did not succeed")
+        else:
+            _restart_failure(runtime.run.root, decision.receipt, runtime.backend_origin, turn.proposal, "approve", POLICY_CODE, 403)
+    branch["times"]["execute"] = time.time()
+    branch["refs"]["execute"] = t.execute(turn.proposal["id"], revision=turn.proposal["baseRevision"]).receipt
+    _restart_failure(runtime.run.root, branch["refs"]["execute"], runtime.backend_origin, turn.proposal, "execute",
+                     "weaver.proposal.executor_unavailable" if removed else POLICY_CODE, 409 if removed else 403)
+    branch["refs"]["continuation"] = t.collect_turn(turn.session).receipt
+    branch["times"]["disclosureStopped"] = time.time()
+    branch["refs"]["session"] = t.session(turn.session).require_status(200).receipt
+    branch["refs"]["terminalProposals"] = t.request("GET", _session_path(turn.session) + "/proposals").require_status(200).receipt
+    terminal = _restart_proposal(runtime.run.root, branch["refs"]["terminalProposals"], runtime.backend_origin,
+                                 turn.session, turn.proposal["id"], branch["prepared"])
+    check(terminal.get("status") == "failed", "No proven terminal refusal; restoration must never trigger an execute retry")
+    branch["refs"]["audit"] = t.audit(turn.session).require_status(200).receipt
+    branch["refs"]["trace"], branch["refs"]["rawTrace"] = _command_trace(
+        t, {"traceOffset": turn.offset}, turn.command_id, "classed-" + branch_name, owned_root=runtime.run.root)
+    if removed:
+        # The missing disclosure owner withholds this continuation before either actual SDK is entered.
+        # The old session is never redelivered after package restoration.
+        trace = _effect_restart_trace(runtime.run.root, branch["refs"]["trace"], turn.command_id)
+        require_withheld_owner_continuation(trace, runtime.provider, turn.command_id, branch["prepared"], turn.proposal["id"],
+            native_frames(_owned(runtime.run.root, branch["refs"]["initialStream"]), runtime.backend_origin, turn.session),
+            native_frames(_owned(runtime.run.root, branch["refs"]["continuation"]), runtime.backend_origin, turn.session),
+            _owned(runtime.run.root, branch["refs"]["session"]), runtime.backend_origin,
+            observed_rows=_owned(runtime.run.root, branch["refs"]["rawTrace"])["records"])
+
+
+def _effect_restart_remove(runtime, value):
+    """Remove only the resource's exact private feed archive using the existing native package lifecycle."""
+    from native_lifecycle import remove_resource_archives, require_installed_package, require_removed_package
+    from artifacts import sha
+    package = runtime.run.report["authors"]["backend"]["packed"]["package"]
+    value["package"] = {key: package[key] for key in ("id", "version", "sha256")}
+    selected = [item for item in runtime.run.profiles["backend"]["runtimeArchiveInputs"]
+                if item["identity"].casefold() == (package["id"] + "/" + package["version"]).casefold()]
+    check(len(selected) == 1 and selected[0]["sha256"] == package["sha256"], "No unique original independent resource archive")
+    feed = runtime.run.profiles["backend"]["runtimeFeed"]
+    delta = {"added": selected, "baseline": {path.name: sha(path) for path in feed.glob("*.nupkg") if path != Path(selected[0]["path"])}}
+    installed, ref = runtime.native.membership(runtime.backend, "classed-owner-installed")
+    value["refs"]["installed"] = ref["receipt"]
+    require_installed_package(installed, package)
+    disabled = runtime.native.feature(runtime.backend, "classed-owner-disable", runtime.witness["backendFeature"], enabled=False)
+    value["refs"]["disableTransition"] = runtime.save(runtime.output("classed-owner-disable"), "transition", disabled)
+    disabled_inventory, ref = runtime.native.membership(runtime.backend, "classed-owner-disabled")
+    value["refs"]["disabled"] = ref["receipt"]
+    require_installed_package(disabled_inventory, package)
+    # Publish the delta before removal so cleanup knows exactly what was attempted even on an ambiguous failure.
+    value["archiveDelta"] = delta
+    remove_resource_archives(runtime.run, "backend", delta)
+    _, ref = runtime.native.reconcile(runtime.backend, "classed-owner-native-remove")
+    value["refs"]["removeReconcile"] = ref["receipt"]
+    removed, ref = runtime.native.membership(runtime.backend, "classed-owner-removed")
+    value["refs"]["removed"] = ref["receipt"]
+    require_removed_package(installed, removed, package)
+    _, ref = runtime.native.generation(runtime.backend, "classed-owner-removed-generation")
+    value["refs"]["generationRemoved"] = ref["receipt"]
+
+
+def _effect_restart_restore(runtime, value, configuration):
+    from native_lifecycle import restore_resource_archives
+    if "archiveDelta" in value:
+        restore_resource_archives(runtime.run, "backend", value["archiveDelta"])
+        _, ref = runtime.native.reconcile(runtime.backend, "classed-owner-native-restore")
+        value["refs"]["restoreReconcile"] = ref["receipt"]
+        restored = runtime.native.feature(runtime.backend, "classed-owner-enable", runtime.witness["backendFeature"],
+                                          enabled=True, configuration=configuration)
+        value["refs"]["restoreTransition"] = runtime.save(runtime.output("classed-owner-restore"), "transition", restored)
+        _, ref = runtime.native.membership(runtime.backend, "classed-owner-restored")
+        value["refs"]["restored"] = ref["receipt"]
+        value["ownerRestored"] = True
+
+
+def _classed_effect_restart(runtime, host, value, original):
+    from effects_journeys import (EXECUTION_HEADER, CLASSES, _policy, require_effect_restart_case, _restart_policy)
+    from consumers import configure_weaver_privileges
+    removed = value["id"].endswith("/removed-owner-pending")
+    refs, paths = value["refs"], value["journalPaths"]
+    root = runtime.output("classed-journal-namespace")
+    for kind, filename in (("execution", "execution-entries.jsonl"), ("checks", "checks.jsonl")):
+        path = root / filename
+        # Never repair/rearm a path, including a failed marker whose journal vanished.
+        check(not any(os.path.lexists(str(path) + suffix) for suffix in ("", ".failed", ".probe")), "Journal namespace was already used")
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(EXECUTION_HEADER + "\n" if kind == "execution" else "")
+        path.chmod(0o600)
+        paths[kind] = str(path)
+    config = dict(original["configuration"], StudioHostId=runtime.witness["hostId"], ExecutionObservationFile=paths["execution"],
+                  CheckObservationFile=paths["checks"])
+    runtime.apply_features("classed-arm-owner-journals", {runtime.witness["backendFeature"]: (True, config)})
+    runtime.sign_in()
+    refs["policyBefore"] = _policy(runtime, [True] * len(CLASSES))
+    refs["identityBefore"] = _effect_restart_identity(runtime, "classed-owner-identity-before")
+    _, catalog = runtime.native.json(runtime.backend, "classed-journal-configuration", "/modularity/features")
+    refs["catalog"] = catalog["receipt"]
+    _, generation = runtime.native.generation(runtime.backend, "classed-owner-generation-before")
+    refs["generationBefore"] = generation["receipt"]
+    value["snapshots"]["before"] = _effect_restart_snapshot(runtime, paths, "classed-before")
+    states = {name: _effect_restart_prepare(runtime, value["tool"], name, value)
+              for name in (("pending",) if removed else ("pending", "approved"))}
+    if removed: _effect_restart_remove(runtime, value)
+    def disable_policy():
+        configure_weaver_privileges(runtime.run, **dict.fromkeys(CLASSES, False))
+        return {"privileges": dict.fromkeys(CLASSES, False)}
+    restart = _restart_host(runtime, host, "classed-" + runtime.provider + "-" + value["tool"] + ("-removed" if removed else "-disabled"),
+                            GRACEFUL, while_stopped=None if removed else disable_policy)
+    refs["restart"] = restart["ref"]
+    value.update(fromGeneration=restart["fromGeneration"], toGeneration=restart["toGeneration"])
+    refs["identityRecovered"] = _effect_restart_identity(runtime, "classed-owner-identity-recovered")
+    # Read the new generation before making any live policy write; this proves the disabled policy crossed the restart.
+    refs["policyRecovered"] = runtime.transport("classed-recovered-bootstrap").bootstrap().require_status(200).receipt
+    _restart_policy(runtime.run.root, refs["policyRecovered"], runtime.backend_origin, removed)
+    _, generation = runtime.native.generation(runtime.backend, "classed-owner-generation-recovered")
+    refs["generationRecovered"] = generation["receipt"]
+    if removed:
+        _, ref = runtime.native.membership(runtime.backend, "classed-owner-absent-after-restart")
+        refs["removedRecovered"] = ref["receipt"]
+    transports = {name: _effect_restart_reopen(runtime, turn, branch, restart, "classed-recovered-" + name)
+                  for name, (turn, branch) in states.items()}
+    value["snapshots"]["recovered"] = _effect_restart_snapshot(runtime, paths, "classed-recovered-no-dispatch", available=not removed)
+    for name, (turn, branch) in states.items():
+        _effect_restart_refuse(runtime, turn, branch, transports[name], name, removed=removed)
+    if removed: _effect_restart_restore(runtime, value, config)
+    runtime.sign_in()
+    refs["identityAfter"] = _effect_restart_identity(runtime, "classed-owner-identity-after")
+    value["snapshots"]["after"] = _effect_restart_snapshot(runtime, paths, "classed-refused")
+    refs["policyRestored"] = _policy(runtime, [True] * len(CLASSES))
+    for name, (turn, branch) in states.items():
+        t = runtime.transport("classed-repeat-closed-" + name)
+        branch["times"]["repeated"] = time.time()
+        branch["refs"]["repeatExecute"] = t.execute(turn.proposal["id"], revision=turn.proposal["baseRevision"]).receipt
+    value["snapshots"]["repeated"] = _effect_restart_snapshot(runtime, paths, "classed-refused-after-restoration")
+    _, generation = runtime.native.generation(runtime.backend, "classed-owner-generation-after")
+    refs["generationAfter"] = generation["receipt"]
+    value["status"] = "passed"
+    require_effect_restart_case(value, runtime.run.root, source=runtime.run.source)
+
+
+def qualify_classed_effect_restarts(runtime, host):
+    """Produce fourteen native records once; failures stay explicit and cannot promote the full T038 matrix."""
+    from effects_journeys import CLASSED_RESTART_CASES, CHECK_TOOL, effect_restart_bindings, EVIDENCE_CATEGORY, _policy
+    from consumers import DURABLE_EFFECTS_FEATURE
+    check(runtime.run.report.get("independentPackageWitness") is False and host.current is not None,
+          "Classed recovery runs inside an unqualified owned package witness")
+    output = runtime.run.root / "classed-effect-restart-records.json"
+    started = runtime.run.root / "classed-effect-restarts-started.json"
+    check(not output.exists() and not started.exists(), "Never resume/overwrite classed recovery observations")
+    private_json(started, {"source": runtime.run.source, "expectedCaseIds": list(CLASSED_RESTART_CASES), "qualified": False})
+    original_provider, records, blocked = runtime.provider, [], None
+    original = None
+    try:
+        catalog, _ = runtime.native.json(runtime.backend, "classed-restart-original-catalog", "/modularity/features")
+        features = {row["id"]: row for row in catalog["features"]}
+        check(all(features.get(name, {}).get("enabled") is True for name in (DURABLE_STORE_FEATURE, DURABLE_STORE_DEPENDENCY, DURABLE_EFFECTS_FEATURE)),
+              "Root must select/finalize the packaged durable effects composition before classed recovery")
+        original = copy.deepcopy(features[runtime.witness["backendFeature"]])
+        check(original["enabled"] is True, "Independent resource owner must initially be installed and enabled")
+    except Exception as error:
+        blocked = {"type": type(error).__name__, "message": str(error)[:1000], "cause": "effects.restart.setup"}
+    for identity in CLASSED_RESTART_CASES:
+        provider, key = identity.split("/", 1)
+        value = {"id": identity, "provider": provider, "adapter": provider, "tool": CHECK_TOOL if key == "removed-owner-pending" else key.removesuffix(":recovery-disabled"),
+                 "status": "running", "source": runtime.run.source, "bindings": effect_restart_bindings(), "evidenceCategory": EVIDENCE_CATEGORY,
+                 "liveProvider": False, "qualified": False, "independentPackageWitness": False, "backendOrigin": runtime.backend_origin,
+                 "witness": copy.deepcopy(runtime.witness), "journalPaths": {}, "refs": {}, "snapshots": {}, "branches": {}}
+        try:
+            if blocked is not None:
+                value.update(status="failed", failure=dict(blocked), attempted=False)
+            else:
+                with _classed_restart_bound():
+                    runtime.select_provider(provider)
+                    _classed_effect_restart(runtime, host, value, original)
+        except Exception as error:
+            value.update(status="failed", failure={"type": type(error).__name__, "cause": getattr(error, "cause", "effects.restart.verification"),
+                                                   "message": str(error)[:1000], "observation": getattr(error, "observation", None)})
+        finally:
+            if original is not None and blocked is None:
+                try:
+                    check(host.current is not None, "Owned backend stopped before recovery cleanup; do not start/replay it implicitly")
+                    runtime.sign_in()
+                    if "archiveDelta" in value and value.get("ownerRestored") is not True:
+                        configuration = dict(original["configuration"], StudioHostId=runtime.witness["hostId"],
+                                             ExecutionObservationFile=value["journalPaths"]["execution"], CheckObservationFile=value["journalPaths"]["checks"])
+                        _effect_restart_restore(runtime, value, configuration)
+                    _policy(runtime, [True] * 3)
+                    runtime.apply_features("classed-restore-original-owner", {runtime.witness["backendFeature"]: (original["enabled"], original["configuration"])})
+                except Exception as error:
+                    blocked = {"type": type(error).__name__, "message": str(error)[:1000], "cause": "effects.restart.cleanup"}
+                    value.update(status="failed", cleanupFailure=dict(blocked))
+            # A failed/unknown result is immutable evidence too; no native retry or same-namespace repair.
+            value["record"] = runtime.save(runtime.output("classed-restart-case"), "observation", value)
+            records.append(value)
+    if blocked is None:
+        try:
+            runtime.select_provider(original_provider)
+        except Exception as error:
+            last = records[-1]
+            previous = last.pop("record")
+            last.update(status="failed", previousRecord=previous, cleanupFailure={"type": type(error).__name__, "message": str(error)[:1000]})
+            last["record"] = runtime.save(runtime.output("classed-final-cleanup-failure"), "observation", last)
+    private_json(output, records)
+    return records
 
 
 def qualify_witness_restarts(runtime, host):

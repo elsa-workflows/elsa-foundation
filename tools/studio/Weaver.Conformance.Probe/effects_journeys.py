@@ -93,6 +93,25 @@ RESTART_REQUIREMENTS = tuple(provider + "/" + name for provider in PROVIDERS for
     *(tool + ":recovery-disabled" for tool in TOOLS), "removed-owner-pending", "legacy-pending-upgrade",
     "legacy-approved-upgrade", "legacy-admin-disabled-upgrade", "expired-upgrade", "client-awaiting-upgrade",
     "all-legacy-row-kinds", "effects-held", "effects-finalized"))
+CLASSED_RESTART_CASES = tuple(provider + "/" + name for provider in PROVIDERS for name in (
+    *(tool + ":recovery-disabled" for tool in TOOLS), "removed-owner-pending"))
+EXECUTION_HEADER = '{"Format":"acme.home.execution-entries","Version":2}'
+EXECUTION_ENDPOINT = OWNER + "/execution-entries"
+RESTART_SOURCE_PATHS = tuple(dict.fromkeys((*SOURCE_PATHS,
+    "tools/studio/Weaver.Conformance.Probe/restart_journeys.py",
+    "tools/studio/Weaver.Conformance.Probe/journey_runtime.py",
+    "tools/studio/Weaver.Conformance.Probe/runtime.py",
+    "tools/studio/Weaver.Conformance.Probe/consumers.py",
+    "tools/studio/Weaver.Conformance.Probe/native_lifecycle.py",
+    "tools/studio/Weaver.Conformance.Probe/weaver_transport.py",
+    "tools/studio/Weaver.Conformance.Probe/witness.json",
+    "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/AcmeHomeFeature.cs.in",
+    "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/WidgetResource.cs.in",
+    "tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/WidgetExecutionJournal.cs.in")))
+
+
+def effect_restart_bindings():
+    return {name: sha(TOOL.parents[2] / name) for name in RESTART_SOURCE_PATHS}
 
 
 def source_bindings():
@@ -550,6 +569,443 @@ def restart_manifest_gaps(section, source=None):
     # Deliberately fail closed until T038 delivers its real durable/old-writer
     # validator. A fabricated passed section cannot stand in for that implementation.
     return ["T038 source-bound story1 upgrade/recovery qualification remains required"]
+
+
+def _restart_http(root, ref, origin, method, path, status=200):
+    record, value = _http(root, ref, origin, method, path)
+    _need(record["status"] == status and not record.get("errorType") and isinstance(record.get("rawBody"), str)
+          and record.get("rawBodySha256") == hashlib.sha256(record["rawBody"].encode()).hexdigest(), "wrong restart wire response")
+    # _http predates these cases. Require strict JSON here as well as in retained envelopes.
+    _need(same(value, strict_json(record["rawBody"])), "ambiguous restart wire JSON")
+    return record, value
+
+
+def _restart_native(root, ref, origin, path):
+    record = _owned(root, ref)
+    _need(record.get("origin") == origin and record.get("method") == "GET" and record.get("path") == path
+          and record.get("status") == 200 and not record.get("transportFailure"), "missing native restart observation")
+    return _owned(root, record["body"])
+
+
+def require_execution_observation(value, *, path, owner, execution=True):
+    """Decode the module's durable journal; missing/unarmed/poisoned storage never establishes zero."""
+    _need(isinstance(value, dict) and value.get("status") == "observed" and value.get("sourcePath") == path
+          and type(value.get("device")) is int and type(value.get("inode")) is int
+          and type(value.get("mode")) is int and value["mode"] & 0o777 == 0o600
+          and type(value.get("parentMode")) is int and value["parentMode"] & 0o777 == 0o700
+          and value.get("failedMarker") is False and value.get("probeExists") is False,
+          "journal is unarmed, poisoned, foreign or unknown")
+    raw = value.get("rawBody")
+    _need(isinstance(raw, str) and len(raw.encode()) <= 2 * 1024 * 1024
+          and type(value.get("size")) is int and value["size"] == len(raw.encode()) and value.get("bytesSha256") == hashlib.sha256(raw.encode()).hexdigest(),
+          "incomplete journal bytes")
+    lines = raw.splitlines()
+    if execution:
+        _need(lines and lines.pop(0) == EXECUTION_HEADER, "wrong execution journal version/header")
+    rows = [strict_json(line) for line in lines]
+    _need(len(rows) <= 4096 and all(isinstance(row, dict) for row in rows), "invalid module journal")
+    fields = ({"Actor", "Tenant", "Host", "RequestedActor", "RequestedTenant", "ToolName", "RequestedToolName", "SessionId", "TurnId",
+               "InvocationId", "ToolCallId", "EntryNumber"} if execution else
+              {"Actor", "Tenant", "Host", "InvocationId", "ToolCallId", "ToolName", "Revision", "Passed", "CallNumber"})
+    counts, selected = {}, []
+    for row in rows:
+        _need(set(row) == fields, "malformed journal row")
+        strings = fields - ({"EntryNumber"} if execution else {"Passed", "CallNumber"})
+        _need(all(isinstance(row[key], str) and len(row[key]) <= 256 for key in strings)
+              and all(row[key].strip() for key in ("Actor", "Tenant", "Host")), "malformed journal identities")
+        key = (row["Actor"], row["Tenant"], row["Host"])
+        counts[key] = counts.get(key, 0) + 1
+        number = row["EntryNumber" if execution else "CallNumber"]
+        _need(type(number) is int and number == counts[key] and row["ToolName"] in TOOLS, "invalid journal order/tool")
+        if not execution:
+            _need(row["ToolName"] == CHECK_TOOL and type(row["Passed"]) is bool
+                  and all(row[key].strip() for key in ("InvocationId", "ToolCallId", "Revision")), "invalid business check journal")
+        if key == (owner["subject"], owner["tenantId"], HOST): selected.append(row)
+    return selected
+
+
+def _restart_snapshot(root, snapshot, origin, owner, paths, *, available=True):
+    _need(set(snapshot) == ({"widget", "layout", "checks", "entries", "journals"} if available else {"layout", "journals"}),
+          "incomplete restart owner snapshot")
+    values = {"layout": _restart_native(root, snapshot["layout"], origin, HOME_PREFERENCES_PATH)}
+    journals = snapshot["journals"]
+    _need(set(journals) == {"execution", "checks"}, "missing durable module journal")
+    decoded = {kind: require_execution_observation(_owned(root, journals[kind]), path=paths[kind], owner=owner, execution=kind == "execution")
+               for kind in journals}
+    values["journals"] = decoded
+    if available:
+        for key, path in (("widget", OWNER), ("checks", OWNER + "/checks"), ("entries", EXECUTION_ENDPOINT)):
+            values[key] = _restart_native(root, snapshot[key], origin, path)
+        widget = values["widget"]
+        _need(widget.get("widgetId") == WIDGET and widget.get("hostId") == HOST and isinstance(widget.get("visible"), bool)
+              and isinstance(widget.get("revision"), str) and widget["revision"] and values["layout"].get("revision") == widget["revision"],
+              "wrong native owner resource")
+        for key in ("checks", "entries"):
+            _need(all(values[key].get(field) == widget[field] for field in ("widgetId", "revision", "hostId")), "foreign journal projection")
+        entries = [{key[0].lower() + key[1:]: item for key, item in row.items()} for row in decoded["execution"]]
+        checks = [{key[0].lower() + key[1:]: item for key, item in row.items() if key not in ("Actor", "Tenant", "Host")}
+                  for row in decoded["checks"][-16:]]
+        _need(type(values["entries"].get("entryCount")) is int and values["entries"]["entryCount"] == len(entries)
+              and same(values["entries"].get("entries"), entries), "native entry projection differs from durable module journal")
+        _need(type(values["checks"].get("ranCount")) is int and values["checks"]["ranCount"] == len(decoded["checks"])
+              and same(values["checks"].get("runs"), checks), "native business runs differ from durable module journal")
+    return values
+
+
+def _restart_proposal(root, ref, origin, session, proposal_id, prepared):
+    _, value = _restart_http(root, ref, origin, "GET", "/_elsa/weaver/sessions/" + session + "/proposals")
+    rows = value.get("data")
+    _need(isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict), "lost/duplicate/foreign recovered proposal")
+    row = rows[0]
+    _need(row.get("id") == proposal_id and row.get("sessionId") == session and same(row.get("preparedInvocation"), prepared),
+          "recovery rewrote the frozen preparation, digest or deadline")
+    return row
+
+
+def _restart_policy(root, ref, origin, enabled):
+    _, value = _restart_http(root, ref, origin, "GET", "/_elsa/weaver/bootstrap")
+    _need(value.get("error") is None and same(value.get("data", {}).get("privileges"), dict.fromkeys(CLASSES, enabled))
+          and value["data"].get("recovery") == "durable" and value["data"].get("providerStatus") == "available",
+          "wrong live policy, actual provider or durable recovery composition")
+
+
+def _restart_identity(root, ref, origin):
+    value = _restart_native(root, ref, origin, "/_elsa/identity/session")
+    _need(value.get("status") == "authenticated" and all(isinstance(value.get(key), str) and value[key].strip() for key in ("subject", "tenantId")),
+          "missing real current actor/tenant")
+    return {key: value[key] for key in ("subject", "tenantId")}
+
+
+def _restart_generation(root, ref, origin):
+    value = _restart_native(root, ref, origin, "/__qualification/generation")
+    _need(isinstance(value.get("generation"), str) and value["generation"] and isinstance(value.get("tools"), list)
+          and isinstance(value.get("contextSources"), list) and type(value.get("featureConfiguration", {}).get("rootGuardUses")) is int
+          and value["featureConfiguration"]["rootGuardUses"] == 0,
+          "missing native serving generation")
+    return value
+
+
+def _restart_membership(root, ref, origin):
+    from native_lifecycle import package_inventory
+    return package_inventory(_restart_native(root, ref, origin, "/__qualification/packages"))
+
+
+def _restart_feature_transition(root, ref, origin, enabled, configuration):
+    transition = _owned(root, ref)
+    evidence = transition.get("evidence")
+    _need(isinstance(evidence, list) and len(evidence) == 4, "missing actual owner feature transition")
+    before = _restart_generation(root, evidence[0], origin)
+    catalog = _restart_native(root, evidence[1], origin, "/modularity/features")
+    wire = _owned(root, evidence[2])
+    _need(wire.get("origin") == origin and wire.get("method") == "POST" and wire.get("path") == "/modularity/features/apply"
+          and wire.get("status") == 200 and not wire.get("transportFailure"), "missing native full-state apply")
+    applied = _owned(root, wire["body"])
+    after = _restart_generation(root, evidence[3], origin)
+    _need(before["generation"] != after["generation"] and type(applied.get("reloadedShellCount")) is int and applied["reloadedShellCount"] > 0
+          and same(transition.get("before"), before) and same(transition.get("after"), after) and same(transition.get("applied"), applied),
+          "owner feature change did not reload the serving shell")
+    selected = {row["id"]: row for row in applied["catalog"]["features"]}
+    original = {row["id"]: row for row in catalog["features"]}
+    _need(len(selected) == len(applied["catalog"]["features"]) and selected.get("AcmeHomeWidget", {}).get("enabled") is enabled
+          and same(selected["AcmeHomeWidget"].get("configuration"), configuration)
+          and all(same(selected.get(key, {}).get("enabled"), row["enabled"])
+                  and same(selected[key].get("configuration"), row.get("configuration")) for key, row in original.items() if key != "AcmeHomeWidget"),
+          "feature transition changed unrelated selection or observation paths")
+
+
+def _restart_reconcile(root, ref, origin):
+    record = _owned(root, ref)
+    _need(record.get("origin") == origin and record.get("method") == "POST" and record.get("path") == "/__qualification/reconcile"
+          and record.get("status") == 200 and not record.get("transportFailure"), "missing native package reconciliation")
+    value = _owned(root, record["body"])
+    _need(type(value.get("outcomeCode")) is int and value["outcomeCode"] == 0 and isinstance(value.get("runResult"), dict)
+          and value["runResult"].get("isDegraded") is False and value["runResult"].get("failedPackages") == [], "package reconciliation failed or is unknown")
+
+
+def _restart_failure(root, ref, origin, proposal, action, code, status):
+    wire, value = _restart_http(root, ref, origin, "POST", "/_elsa/weaver/proposals/" + proposal["id"] + "/" + action, status)
+    _need(wire.get("requestBody") == {"revision": proposal["baseRevision"], **({"comment": None} if action == "approve" else {})}
+          and value.get("data") is None and isinstance(value.get("error"), dict), "wrong explicit refusal request/envelope")
+    error = value["error"]
+    _need(error.get("code") == code and error.get("statusCode") == status and type(error.get("statusCode")) is int
+          and isinstance(error.get("message"), str) and error["message"] and error.get("ownerUnavailable", False) is False,
+          "wrong-cause restart refusal")
+    return error
+
+
+def _protocol_source_path(root, path):
+    root, path = Path(root), Path(path)
+    _need(path.is_absolute() and path.is_relative_to(root) and path.resolve().is_relative_to(root.resolve())
+          and ".." not in path.relative_to(root).parts and path.is_file() and not path.is_symlink()
+          and all(not (root / parent).is_symlink() for parent in path.relative_to(root).parents), "missing/foreign/symlinked actual protocol file")
+    return path
+
+
+def _effect_restart_trace(root, ref, command):
+    """Reconstruct one command from the immutable captured window of its actual append-only protocol source."""
+    trace = _owned(root, ref)
+    _protocol_source_path(root, trace["rawTrace"]["path"])
+    raw = _owned(root, trace["rawTrace"])
+    fields = ("sourcePath", "offset", "nextOffset", "incompleteTailBytes", "observedBytesSha256")
+    _need(trace.get("commandId") == command and all(same(trace.get(key), raw.get(key)) for key in fields), "command/raw trace observations differ")
+    offset, end = trace.get("offset"), trace.get("nextOffset")
+    _need(type(offset) is int and type(end) is int and 0 <= offset < end and end - offset <= 67108864
+          and type(trace.get("incompleteTailBytes")) is int and trace["incompleteTailBytes"] == 0
+          and type(trace.get("sourceSizeAtObservation")) is int and trace["sourceSizeAtObservation"] == end
+          and type(trace.get("capturedAt")) in (int, float), "incomplete or malformed protocol byte window")
+    source = _protocol_source_path(root, trace["sourcePath"])
+    identity = trace.get("sourceIdentity")
+    _need(isinstance(identity, dict) and set(identity) == {"device", "inode"}
+          and all(type(value) is int for value in identity.values()), "missing actual protocol file identity")
+    with source.open("rb") as stream:
+        observed = os.fstat(stream.fileno())
+        _need(identity == {"device": observed.st_dev, "inode": observed.st_ino} and observed.st_size >= end,
+              "actual protocol source was replaced or truncated")
+        if offset:
+            stream.seek(offset - 1)
+            _need(stream.read(1) == b"\n", "protocol window starts inside a record")
+        stream.seek(offset)
+        actual = stream.read(end - offset)
+    window_path = _protocol_source_path(root, trace["window"]["path"])
+    _owned_file(root, trace["window"])
+    window = window_path.read_bytes()
+    _need(window == actual and len(window) == end - offset and window.endswith(b"\n")
+          and hashlib.sha256(window).hexdigest() == trace["observedBytesSha256"], "captured protocol window/source/hash differ")
+    records = [strict_json(line.decode("utf-8", "strict")) for line in window.splitlines() if line.strip()]
+    _need(all(isinstance(row, dict) for row in records) and same(raw.get("records"), records), "raw trace records differ from actual protocol bytes")
+    selected = [row for row in records if isinstance(row.get("data"), dict) and row["data"].get("commandId") == command]
+    _need(same(trace.get("records"), selected), "command trace omitted, added or substituted actual matching rows")
+    return selected
+
+
+def require_withheld_owner_continuation(rows, provider, command, prepared, proposal, initial, terminal, session_record, origin, *, observed_rows):
+    """A removed owner withholds retained context before the SDK sees a result; it never fabricates a completed turn."""
+    session, call = prepared["sessionId"], prepared["toolCallId"]
+    _need([frame.get("kind") for frame in terminal] == ["contextAdmitted", "error"], "removed owner did not withhold disclosure before provider entry")
+    context, error = terminal[0].get("payload"), terminal[1].get("error")
+    _need(isinstance(error, dict) and error.get("code") == "weaver.context.incomplete" and type(error.get("statusCode")) is int
+          and error["statusCode"] == 400 and error.get("ownerUnavailable", False) is False
+          and isinstance(error.get("message"), str) and error["message"], "wrong removed-owner disclosure refusal")
+    _need(isinstance(context, dict) and context.get("attachments") == [] and isinstance(context.get("diagnostics"), list)
+          and len(context["diagnostics"]) == 1 and all(item.get("moduleId") == "host" and item.get("code") == error["code"]
+          and item.get("message") == error["message"] and item.get("required") is True for item in context["diagnostics"]),
+          "removed-owner engine refusal lost its withheld-context correlation")
+    starts = [frame.get("payload") for frame in initial if frame.get("kind") == "started"]
+    calls = [frame.get("payload") for frame in initial if frame.get("kind") == "toolCallStarted"]
+    proposals = [frame.get("payload") for frame in initial if frame.get("kind") == "proposalCreated"]
+    _need(len(starts) == len(calls) == len(proposals) == 1 and starts[0].get("turnId") == prepared["turnId"]
+          and calls[0].get("toolCallId") == call and calls[0].get("toolName") == prepared["toolName"]
+          and proposals[0].get("id") == proposal and same(proposals[0].get("preparedInvocation"), prepared)
+          and [frame.get("kind") for frame in initial if frame.get("kind") in ("completed", "error", "turnCancelled", "toolApprovalRequested")] == ["toolApprovalRequested"],
+          "withheld continuation does not belong to the original reviewed native turn/call")
+    lifecycle = [row for row in rows if row.get("kind", "").startswith(provider + ".")]
+    expected = [provider + ".request", provider + ".call"] + (["copilot.return"] if provider == "copilot" else [])
+    _need(provider in PROVIDERS and [row.get("kind") for row in lifecycle] == expected
+          and all(row.get("data", {}).get("commandId") == command for row in lifecycle)
+          and same([row for row in observed_rows if row.get("kind", "").startswith(provider + ".")], lifecycle),
+          "removed-owner result entered an SDK continuation or an unexplained provider request")
+    request, invoked = lifecycle[0]["data"], lifecycle[1]["data"]
+    _need(sum(item.get("name") == prepared["toolName"] for item in request.get("tools", [])) == 1
+          and invoked.get("toolName") == prepared["toolName"] and same(invoked.get("arguments"), prepared["arguments"]), "wrong initial removed-owner adapter call")
+    if provider == "copilot":
+        returned = lifecycle[2]["data"].get("result")
+        _need(request.get("sessionId") == session and isinstance(returned, dict) and returned.get("status") == "awaiting-approval"
+              and lifecycle[2]["data"].get("toolName") == prepared["toolName"]
+              and returned.get("executed") is False and returned.get("proposalId") == proposal, "wrong initial SDK review pause")
+    else:
+        _need(call == command and not _current_function_results(request), "removed-owner request reused a historical/current function result")
+    _need(session_record.get("origin") == origin and session_record.get("method") == "GET" and session_record.get("status") == 200
+          and session_record.get("path") == "/_elsa/weaver/sessions/" + session and not session_record.get("transportErrorType"), "missing exact withheld native session")
+    reopened = strict_json(session_record["rawBody"]).get("data")
+    _need(isinstance(reopened, dict) and reopened.get("sessionId") == session and isinstance(reopened.get("messages"), list), "lost withheld native session")
+    results = [strict_json(row["content"]) for row in reopened["messages"] if row.get("role") == "tool"
+               and row.get("status") == "completed" and strict_json(row["content"]).get("toolCallId") == call]
+    _need(len(results) == 1 and results[0].get("toolName") == prepared["toolName"] and results[0].get("succeeded") is False
+          and results[0].get("receipt") is None and results[0].get("error", {}).get("code") == "weaver.proposal.executor_unavailable"
+          and results[0]["error"].get("statusCode") == 409, "lost original explicit execution refusal while disclosure was withheld")
+    return results[0]
+
+
+def require_effect_restart_case(value, root, *, source, bindings=None):
+    """Deep reader for the fourteen classed/removed-owner records; never qualifies the remaining T038 requirements."""
+    from restart_journeys import GRACEFUL, _restart, instant
+    current_bindings = effect_restart_bindings()
+    _need(bindings is None or bindings == current_bindings, "restart validator source bindings were overridden")
+    bindings = current_bindings
+    _need(isinstance(value, dict) and value.get("id") in CLASSED_RESTART_CASES and value.get("source") == source
+          and value.get("bindings") == bindings and value.get("status") == "passed" and value.get("qualified") is False
+          and value.get("independentPackageWitness") is False and value.get("liveProvider") is False
+          and value.get("evidenceCategory") == EVIDENCE_CATEGORY, "incomplete/foreign/self-promoted effect restart record")
+    provider, key = value["id"].split("/", 1)
+    removed = key == "removed-owner-pending"
+    tool = CHECK_TOOL if removed else key.removesuffix(":recovery-disabled")
+    _need(value.get("provider") == provider and value.get("tool") == tool and value.get("adapter") == provider,
+          "wrong actual adapter/tool")
+    refs, origin, paths = value["refs"], value["backendOrigin"], value["journalPaths"]
+    _need(same(value.get("witness"), strict_json((TOOL / "witness.json").read_text())), "foreign independent witness contract")
+    _need(set(paths) == {"execution", "checks"} and paths["execution"] != paths["checks"]
+          and all(isinstance(path, str) and Path(path).is_absolute() and Path(path).is_relative_to(Path(root)) for path in paths.values()),
+          "foreign observation namespace")
+    owner = _restart_identity(root, refs["identityBefore"], origin)
+    _need(same(owner, _restart_identity(root, refs["identityRecovered"], origin))
+          and same(owner, _restart_identity(root, refs["identityAfter"], origin)), "restart changed the authenticated owner")
+    for label, enabled in (("policyBefore", True), ("policyRecovered", removed), ("policyRestored", True)):
+        _restart_policy(root, refs[label], origin, enabled)
+    catalog = _restart_native(root, refs["catalog"], origin, "/modularity/features")
+    features = {row["id"]: row for row in catalog["features"]}
+    from consumers import DURABLE_STORE_FEATURE, DURABLE_STORE_DEPENDENCY
+    _need(len(features) == len(catalog["features"]) and features.get(COMMON_EFFECTS_FEATURE, {}).get("enabled") is not True
+          and all(features.get(name, {}).get("enabled") is True and features[name].get("runtimeAvailable") is True
+                  for name in (DURABLE_STORE_FEATURE, DURABLE_STORE_DEPENDENCY, DURABLE_EFFECTS_FEATURE, "AcmeHomeWidget")),
+          "classed recovery did not use the packaged durable effects composition")
+    config = features["AcmeHomeWidget"].get("configuration", {})
+    _need(config.get("ExecutionObservationFile") == paths["execution"] and config.get("CheckObservationFile") == paths["checks"]
+          and config.get("StudioHostId") == HOST, "native observation was not armed on the module feature")
+    restart = _restart(root, {"refs": {"restart": refs["restart"]}, "fromGeneration": value["fromGeneration"],
+                              "toGeneration": value["toGeneration"]}, GRACEFUL)
+    _need(restart.get("origin") == origin and restart.get("name") == "backend"
+          and restart["toGeneration"] == restart["fromGeneration"] + 1, "wrong owned consumer restart")
+    old_process, new_process = restart["stoppedProcess"], restart["startedProcess"]
+    _need(old_process.get("inputsUnchangedAtCloseout") is True and old_process.get("origin") == new_process.get("origin") == origin
+          and type(old_process.get("pid")) is int and type(new_process.get("pid")) is int
+          and all(old_process.get(field) is not None and same(old_process[field], new_process.get(field))
+                  for field in ("assemblySha256", "publishedDirectory", "contentRoot", "contentRootIdentity", "command")),
+          "restart binary/content-root provenance changed")
+    generations = {label: _restart_generation(root, refs[label], origin) for label in ("generationBefore", "generationRecovered", "generationAfter")}
+    _need(generations["generationBefore"]["generation"] != generations["generationRecovered"]["generation"], "no actual serving generation change")
+    snapshots = {label: _restart_snapshot(root, snapshot, origin, owner, paths, available=not (removed and label == "recovered"))
+                 for label, snapshot in value["snapshots"].items()}
+    _need(set(snapshots) == {"before", "recovered", "after", "repeated"}, "missing before-dispatch or terminal native snapshot")
+    before = snapshots["before"]
+    _need(before["entries"]["entryCount"] == before["checks"]["ranCount"] == 0, "new observation namespace did not start at observed zero")
+    for label, snapshot in snapshots.items():
+        _need(same(snapshot["layout"], before["layout"]) and same(snapshot["journals"], before["journals"]), "refusal/recovery changed owner or module runs/entries")
+        if label != "recovered" or not removed:
+            _need(same(snapshot, before), "refusal changed complete native widget/check/entry observations")
+        for kind, ref in value["snapshots"][label]["journals"].items():
+            initial, observed = _owned(root, value["snapshots"]["before"]["journals"][kind]), _owned(root, ref)
+            _need(all(observed[field] == initial[field] for field in ("sourcePath", "device", "inode", "bytesSha256")), "journal was replaced/truncated across generations")
+    branches = value["branches"]
+    _need(set(branches) == ({"pending"} if removed else {"pending", "approved"}), "missing pending/already-approved recovery branch")
+    identities = set()
+    all_times = [branch["times"] for branch in branches.values()]
+    boundaries = {"before": (float("-inf"), min(times["prepared"] for times in all_times)),
+                  "recovered": (max(times["recovered"] for times in all_times), min(times["execute"] for times in all_times)),
+                  "after": (max(times["execute"] for times in all_times), min(times["repeated"] for times in all_times)),
+                  "repeated": (max(times["repeated"] for times in all_times), float("inf"))}
+    for label, snapshot in value["snapshots"].items():
+        lower, upper = boundaries[label]
+        for ref in snapshot["journals"].values():
+            observed_at = _owned(root, ref).get("observedAt")
+            _need(type(observed_at) in (int, float) and lower <= observed_at <= upper, "owner snapshot does not bracket the native recovery/dispatch boundary")
+    for branch_name, branch in branches.items():
+        brefs, session, command = branch["refs"], branch["sessionId"], branch["commandId"]
+        initial = native_frames(_owned(root, brefs["initialStream"]), origin, session)
+        proposals = [frame.get("payload") for frame in initial if frame.get("kind") == "proposalCreated"]
+        _need(len(proposals) == 1 and isinstance(proposals[0], dict), "missing unique real preparation")
+        proposal, prepared = proposals[0], proposals[0].get("preparedInvocation") or {}
+        _need(same(prepared, branch["prepared"]) and proposal.get("id") == branch["proposalId"] and proposal.get("sessionId") == session
+              and proposal.get("status") == "awaitingApproval" and proposal.get("baseRevision") == before["widget"]["revision"], "wrong initial pending proposal")
+        expected_risk = "reviewRequired" if tool == "acme_home_activation_visibility" else "admin"
+        expected_arguments = {"expectedVisible": before["widget"]["visible"]} if tool == CHECK_TOOL else {"visible": not before["widget"]["visible"]}
+        _need(prepared.get("moduleId") == MODULE and prepared.get("toolName") == tool and prepared.get("toolContractVersion") == "1"
+              and prepared.get("executionLocation") == "server" and prepared.get("requiresApproval") is True and prepared.get("client") is None
+              and prepared.get("actorId") == owner["subject"] and prepared.get("tenantId") == owner["tenantId"] and prepared.get("sessionId") == session
+              and prepared.get("risk") == expected_risk and sorted(prepared.get("requiredPrivilegeClasses") or []) == sorted(TOOLS[tool])
+              and same(prepared.get("arguments"), expected_arguments) and _target(prepared.get("target"), before["widget"]["revision"])
+              and isinstance(prepared.get("approvalDigest"), str) and prepared["approvalDigest"], "wrong frozen effect contract/classes/identity")
+        preview = {"widgetId": WIDGET, "revision": before["widget"]["revision"], "hostId": HOST}
+        preview.update({"expectedVisible": expected_arguments["expectedVisible"]} if tool == CHECK_TOOL else
+                       {"beforeVisible": before["widget"]["visible"], "visible": expected_arguments["visible"]})
+        _need(prepared.get("preview") == {"typeId": CHECK_KIND if tool == CHECK_TOOL else "acme.home.widget-visibility", "schemaVersion": "1", "data": preview},
+              "frozen owner preview does not match the reviewed native resource")
+        for field in ("sessionId", "turnId", "invocationId", "toolCallId"):
+            _need(isinstance(prepared.get(field), str) and prepared[field] and prepared[field] not in identities, "missing/reused native branch identity")
+            identities.add(prepared[field])
+        _need(_owned(root, brefs["command"]) == {"commandId": command, "toolName": tool, "arguments": expected_arguments}, "wrong recovered adapter command")
+        recovered = _restart_proposal(root, brefs["recoveredProposals"], origin, session, proposal["id"], prepared)
+        _need(recovered.get("status") == ("approved" if branch_name == "approved" else "awaitingApproval"), "recovery executed/settled undispatched operation")
+        if branch_name == "approved":
+            _, decision = _restart_http(root, brefs["approvedBefore"], origin, "POST", "/_elsa/weaver/proposals/" + proposal["id"] + "/approve")
+            _need(decision.get("data", {}).get("status") == "approved" and same(decision["data"].get("preparedInvocation"), prepared), "missing real pre-restart approval")
+        _, recovered_session = _restart_http(root, brefs["recoveredSession"], origin, "GET", "/_elsa/weaver/sessions/" + session)
+        _need(recovered_session.get("error") is None and recovered_session.get("data", {}).get("sessionId") == session, "lost recovered session")
+        times = branch["times"]
+        _need(all(type(times.get(key)) in (int, float) for key in ("prepared", "recovered", "execute", "repeated"))
+              and times["prepared"] < restart["stoppedAt"] <= restart["startedAt"] <= times["recovered"] <= times["execute"] <= times["repeated"] < instant(prepared.get("expiresAt")),
+              "wrong native recovery/deadline boundary")
+        code, status = ("weaver.proposal.executor_unavailable", 409) if removed else (POLICY_CODE, 403)
+        if branch_name == "pending":
+            if removed:
+                decision_wire, decision = _restart_http(root, brefs["decision"], origin, "POST", "/_elsa/weaver/proposals/" + proposal["id"] + "/approve")
+                _need(decision_wire.get("requestBody") == {"revision": proposal["baseRevision"], "comment": None}
+                      and decision.get("error") is None and decision.get("data", {}).get("id") == proposal["id"]
+                      and decision["data"].get("status") == "approved" and same(decision["data"].get("preparedInvocation"), prepared),
+                      "approval did not succeed on core checks with owner absent")
+            else: _restart_failure(root, brefs["decision"], origin, proposal, "approve", code, status)
+        error = _restart_failure(root, brefs["execute"], origin, proposal, "execute", code, status)
+        repeated = _restart_failure(root, brefs["repeatExecute"], origin, proposal, "execute", code, status)
+        _need(same(error, repeated), "reenabling policy/restoring owner resurrected the refused proposal")
+        terminal = native_frames(_owned(root, brefs["continuation"]), origin, session)
+        session_record, reopened = _restart_http(root, brefs["session"], origin, "GET", "/_elsa/weaver/sessions/" + session)
+        _need(same(brefs["rawTrace"], _owned(root, brefs["trace"])["rawTrace"]), "branch/raw trace receipts differ")
+        trace = _effect_restart_trace(root, brefs["trace"], command)
+        _need(_owned(root, brefs["trace"])["capturedAt"] >= times["disclosureStopped"] >= times["execute"], "trace predates observed disclosure boundary")
+        if removed:
+            result = require_withheld_owner_continuation(trace, provider, command, prepared, proposal["id"], initial, terminal, session_record, origin,
+                                                       observed_rows=_owned(root, brefs["rawTrace"])["records"])
+        else:
+            result = require_called_refusal(trace, provider, command, tool, expected_arguments, session, initial, terminal,
+                                           code, reopened.get("data"), proposal_id=proposal["id"])
+        _need(same(result["error"], error), "retained/provider outcome differs from the native execution refusal")
+        failed = _restart_proposal(root, brefs["terminalProposals"], origin, session, proposal["id"], prepared)
+        _need(failed.get("status") == "failed", "refused proposal is not terminal")
+        _, audit = _restart_http(root, brefs["audit"], origin, "GET", "/_elsa/weaver/audit?take=100&sessionId=" + session)
+        _need(isinstance(audit.get("data"), list) and all(row.get("sessionId") == session for row in audit["data"])
+              and any(row.get("kind") == "proposalFailed" and row.get("metadata", {}).get("proposalId") == proposal["id"] for row in audit["data"]),
+              "missing correlated native failure audit")
+    if removed:
+        from native_lifecycle import require_installed_package, require_removed_package
+        package = value["package"]
+        inventories = {name: _restart_membership(root, refs[name], origin) for name in ("installed", "disabled", "removed", "removedRecovered", "restored")}
+        require_installed_package(inventories["installed"], package)
+        require_installed_package(inventories["disabled"], package)
+        for name in ("removed", "removedRecovered"):
+            require_removed_package(inventories["installed"], inventories[name], package)
+            _need(same(inventories[name], {key: row for key, row in inventories["installed"].items() if key != package["id"].casefold()}),
+                  "module removal changed unrelated packages")
+        _need(same(inventories["installed"], inventories["restored"]), "restoration did not retain exact package membership")
+        for label in ("generationRemoved", "generationRecovered"):
+            current = _restart_generation(root, refs[label], origin)
+            _need(not any(row.get("moduleId") == MODULE for row in current["tools"] + current["contextSources"]), "removed owner still contributes contracts")
+        _need(package.get("id") == value["witness"]["backendPackage"] and re.fullmatch(r"[a-f0-9]{64}", package.get("sha256", "")), "wrong independent owner package")
+        _restart_feature_transition(root, refs["disableTransition"], origin, False, config)
+        _restart_feature_transition(root, refs["restoreTransition"], origin, True, config)
+        for label in ("removeReconcile", "restoreReconcile"): _restart_reconcile(root, refs[label], origin)
+        delta = value["archiveDelta"]
+        _need(isinstance(delta, dict) and len(delta.get("added", [])) == 1, "unexpected owner archive removal scope")
+        archive = delta["added"][0]
+        _need(archive.get("identity", "").casefold() == (package["id"] + "/" + package["version"]).casefold()
+              and archive.get("sha256") == package["sha256"], "wrong removed owner archive identity")
+        for field in ("path", "sourceArchive"):
+            _owned_file(root, {"path": archive[field], "sha256": package["sha256"]})
+        _need(Path(archive["path"]).resolve() != Path(archive["sourceArchive"]).resolve(), "retained author archive was used as the disposable feed copy")
+    for label in ("generationBefore", "generationAfter") + (() if removed else ("generationRecovered",)):
+        current = generations[label]
+        require_resource_inventory([row for row in current["tools"] if row.get("moduleId") == MODULE],
+                                   [row for row in current["contextSources"] if row.get("moduleId") == MODULE], value["witness"])
+    return value
+
+
+def require_classed_effect_restarts(records, root, *, source):
+    """Validate this subset without claiming the full thirty-case T038 inventory passed."""
+    _need(isinstance(records, list) and [row.get("id") for row in records] == list(CLASSED_RESTART_CASES), "missing/duplicate classed recovery records")
+    bindings = effect_restart_bindings()
+    for row in records:
+        _need(isinstance(row.get("record"), dict) and same(_owned(root, row["record"]), {key: item for key, item in row.items() if key != "record"}),
+              "classed recovery index differs from its immutable native record")
+        require_effect_restart_case(row, root, source=source, bindings=bindings)
+    return records
 
 
 def _snapshot(runtime, name):
