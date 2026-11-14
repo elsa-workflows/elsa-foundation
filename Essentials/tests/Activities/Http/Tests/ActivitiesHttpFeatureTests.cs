@@ -66,6 +66,7 @@ public sealed class ActivitiesHttpFeatureTests
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
         services.AddWorkflowRuntime(); services.AddWorkflowStimulusRouter();
+        services.AddAuthorization();
         new Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature().ConfigureServices(services);
         services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
         // The middleware's route-table/matcher/binding-store dependencies are contributed in production by the
