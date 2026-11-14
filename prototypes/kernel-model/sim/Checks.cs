@@ -18,6 +18,7 @@ public sealed class Oracle
     public readonly HashSet<string> Trees = [];                                          // roots of trees started from outside
     public readonly Dictionary<string, List<string>> Events = new();                   // key -> events published
     public readonly List<SubscriptionRow> Starts = [];                                   // start subscriptions registered
+    public readonly Dictionary<string, long> InMemory = new(StringComparer.Ordinal);      // decision 4: instances kept in memory, unwritten, and their last revision there
     public readonly HashSet<string> Deleted = [];                                        // instances that were sent a delete
 
     public bool Accepts(Message m) => m.Kind != "cancel" || Parents.ContainsKey(m.Target.Id) || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
@@ -146,7 +147,10 @@ public sealed partial class World
             revisions.Sort();
             if (Store.Instances.GetValueOrDefault(id) is not { } row) return $"I2 the journal has a commit of {id} and there is no row";
             if (row.History == History.Minimal) return $"I6 {id} keeps minimal history and has journal rows";
-            if (revisions.Count != row.Revision || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
+            // Decision 4: an Ephemeral instance that waited in memory is written at the last revision it had there (a write
+            // of the instance as it is) or the next (a turn or a park), so its journal starts there, with no gap after it.
+            var first = Oracle.InMemory.TryGetValue(id, out var kept) && (revisions[0] == kept || revisions[0] == kept + 1) ? revisions[0] : 1;
+            if (revisions.Count != row.Revision - first + 1 || revisions[0] != first || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
         }
         foreach (var row in Store.Instances.Values)
         {
@@ -208,8 +212,14 @@ public sealed partial class World
             if (worker.Idle > 2) return $"I21 actor {actor.Id} holds {worker.Idle} idle instances; the bound is 2";
             if (!worker.Flushing && worker.Position != partition.Position)
                 return $"I9 actor {actor.Id} believes partition {actor.Partition} is at {worker.Position}; it is at {partition.Position}";
+            var unwritten = worker.Unwritten.ToHashSet(StringComparer.Ordinal);
+            var busyNow = worker.Instances.Where(i => i.Busy).Select(i => i.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var id in unwritten)       // decision 4: in memory only, so never a row (unless the commit that writes it is in flight)
+                if (Store.Instances.ContainsKey(id) && !busyNow.Contains(id))
+                    return $"I9 actor {actor.Id} holds {id} in memory only, and it has a row";
             foreach (var (id, row, state, busy) in worker.Instances)
             {
+                if (unwritten.Contains(id)) continue;
                 if (row is { Model: "counter", StateVersion: 2 } && actor.Version == 1) Count("a version-1 owner holds a counter row at version 2");
                 if (busy) continue;
                 if (row != Store.Instances.GetValueOrDefault(id))

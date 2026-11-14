@@ -74,7 +74,11 @@ internal sealed class Turn : ITurn
     public void Unsubscribe(string key, string wait) => _durable.Unsubscribe(key, wait);
     public string Publish(string key, string? payload, TimeSpan keep) => _durable.Publish(key, payload, keep);
 
-    public void Record(object entry) => _entries.Add(entry);
+    public void Record(object entry)
+    {
+        if ((_input.Row?.History ?? _input.Spec!.History) == History.Full)
+            _entries.Add(System.Text.Json.JsonSerializer.SerializeToElement(entry));
+    }
     public void Rebind(string definition) => _definition = Has(Flaw.RebindForgotten) ? null : definition;
     public void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null) => (_status, _output) = (status, output);
 
@@ -92,9 +96,28 @@ internal sealed class Turn : ITurn
             row = ended with { State = Json.Write(State), Revision = _durable.Revision, StateVersion = version };
         if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running } && row.Parent is not null) _durable.Add(WorkflowInstance.Finished(row, _output is null ? null : Json.Write(_output)));
         var unit = _durable.Outcome(_status);
-        // An ephemeral instance that ends in the turn that created it, and leaves nothing for anyone else, is never written.
-        if (created && Instance.Creation == 0 && _input.Spec!.Ephemeral && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0) return unit;
-        unit = _durable.Seal(unit, row, State, WorkflowInstance.Journal(history, _entries));
+        // An ephemeral instance that ends in the turn that created it, or while it is still in memory, and leaves nothing
+        // for anyone else, is never written.
+        var unwritten = created ? Instance.Creation == 0 && _input.Spec!.Ephemeral : _input.Unwritten;
+        // The history of its turns in memory comes with the commit that writes it (decision 4).
+        List<object> entries = _input.Unwritten && _input.Pending is List<object> pending ? [.. pending, .. _entries] : _entries;
+        if (unwritten && (created || _input.Services.Now < _input.Until) && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0 && unit.Replied.Count == 0) return unit;
+        // Decision 4: one that waits only for its own short timers and jobs stays in memory, unwritten, up to its short wait.
+        if (unwritten && _status == InstanceStatus.Running)
+        {
+            var until = created ? _input.Services.Now + (long)(_input.Spec!.ShortWait ?? _input.Services.ShortWait).TotalMilliseconds : _input.Until;
+            if (created)
+                foreach (var reply in _input.Taken.Select(i => i.Message.ReplyTo).OfType<string>())
+                    until = Math.Min(until, ReplyTo.Parse(reply).Deadline);
+            if (_durable.CanWaitInMemory(until))
+            {
+                _durable.WaitInMemory();
+                var kept = _durable.Seal(unit, row, State, null);
+                (kept.InMemory, kept.Until, kept.Pending) = (true, until, entries);
+                return kept;
+            }
+        }
+        unit = _durable.Seal(unit, row, State, WorkflowInstance.Journal(history, entries));
         if (_status != InstanceStatus.Running && _input.Row is not { Status: not InstanceStatus.Running })
             unit.Row = WorkflowCommitClock.End(unit.Row!);
         return unit;

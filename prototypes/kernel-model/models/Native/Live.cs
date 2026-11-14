@@ -96,7 +96,8 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
         if (routes.TryStart(request.Method, request.Path, out var route))
         {
             var instance = InstanceRef.In(local.Partition, $"http-{node}-{_requests}");
-            var spec = NativeModel.Spec(route.Workflow, mode, null, route.Node);
+            // Decision 4: an Ephemeral run may wait in memory for its own short timers and jobs up to the route's timeout.
+            var spec = NativeModel.Spec(route.Workflow, mode, null, route.Node) with { ShortWait = TimeSpan.FromMilliseconds(open.Deadline - local.Now) };
             local.Post(new Message($"{instance}#start", instance, Kinds.Start, Start: spec, ReplyTo: replyTo), fresh: true, ambient: Values.From(request));
         }
         else
