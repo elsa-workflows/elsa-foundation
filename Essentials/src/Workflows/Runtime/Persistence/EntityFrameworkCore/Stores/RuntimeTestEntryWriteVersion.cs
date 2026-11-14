@@ -12,7 +12,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Raises physical format requirements; payload presence never grants execution authority.</summary>
 internal static class RuntimeTestEntryWriteVersion
 {
-    internal static bool Requires(WorkflowExecutionState state) => state.TestEntry is not null;
+    internal static bool Requires(WorkflowExecutionState state)
+    {
+        if (state.TestContext is not null)
+            throw new NotSupportedException("Shared persistence has no qualified selected lexical-frame interpreter.");
+        return state.TestEntry is not null;
+    }
 
     internal static bool Requires(RuntimeSchedulerWorkItem item)
     {
@@ -44,6 +49,10 @@ internal static class RuntimeTestEntryWriteVersion
     internal static bool ContentHasEntry(string content)
     {
         using var document = JsonDocument.Parse(content);
+        if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.EnumerateObject().Any(x =>
+            x.Name.Equals(nameof(WorkflowExecutionState.TestContext), StringComparison.OrdinalIgnoreCase) &&
+            x.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined)))
+            throw new NotSupportedException("Shared persistence has no qualified selected lexical-frame interpreter.");
         return HasEntry(document.RootElement);
     }
 

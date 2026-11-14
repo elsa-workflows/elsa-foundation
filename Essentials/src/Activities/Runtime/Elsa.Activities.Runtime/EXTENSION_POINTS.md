@@ -168,3 +168,15 @@ the typed unavailable signal; disposal failure follows the ordinary fault path w
 ### Collection child-slot input metadata *(Core — `Elsa.Activities.Runtime.Core`)*
 
 `ActivityChildSlotAttribute.ItemIdProperty` optionally names a stable collection-item identity and `ConditionProperty` names its structure-owned argument. CLR reconciliation carries both into optional `ActivityChildSlotDesignDescriptor` members. Studio uses stable identities for case rows, expression documents and child navigation while retaining the current index for immutable mutations. Omitted metadata preserves legacy slot behavior. Structure inputs activate through [`IRuntimeStructureInputConsumer`](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimestructureinputconsumer-core--elsaworkflowsruntimecore), rather than CLR input properties.
+
+
+### Selected lexical capture participant
+
+The existing output projector and workflow-variable writeback keep their public signatures. Internal
+completion overloads carry Runtime Core `IRuntimeTestContextFrameAccess` targets for an admitted native
+terminal leaf whose closed enclosing scope was supplied as run-owned state. Invoke, resume, structural
+callback and parent-completion paths all stage these writes in the same completion checkpoint; their
+ordinary closed-invocation path takes precedence. The Runtime owner checks exact workflow, context
+fingerprint, frame/scope and revision before writeback. No capture creates an ancestor invocation or
+synthetic graph-variable row. This wiring does not qualify composites, reusable invocations, suspension,
+shared providers or arbitrary effects for selected execution.

@@ -55,6 +55,8 @@ public static class RuntimeCheckpointCommitValidator
         {
             ValidateChanges(commit, [workflow], "Workflow execution", state => state.WorkflowExecutionId, UpsertOnly);
             RequireStateId(workflow.StateId, workflow.State.WorkflowExecutionId, "Workflow execution", "WorkflowExecutionState.WorkflowExecutionId");
+            if (workflow.State.TestContext is not null)
+                RequireModelRule(() => Values.RuntimeTestContextOwner.RequireContext(workflow.State));
         }
 
         if (changes.Scheduler is { } scheduler)
@@ -179,7 +181,13 @@ public static class RuntimeCheckpointCommitValidator
     private static IEnumerable<(string Location, ValueEnvelope Value)> WorkflowExecutionEnvelopes(RuntimeStateChange<WorkflowExecutionState>? change) =>
         change is null
             ? []
-            : FrameEnvelopes($"Workflow execution '{change.StateId}' root variable", change.State.RootVariableFrame);
+            : FrameEnvelopes($"Workflow execution '{change.StateId}' root variable", change.State.RootVariableFrame)
+                .Concat(TestContextEnvelopes(change.StateId, change.State.TestContext));
+
+    private static IEnumerable<(string Location, ValueEnvelope Value)> TestContextEnvelopes(string stateId, RuntimeTestContextState? context) =>
+        (context?.Frames ?? []).SelectMany(owner => FrameEnvelopes($"Workflow execution '{stateId}' test frame '{owner.Frame.FrameId}'", owner.Frame)
+            .Concat(owner.Inputs.Select(x => ($"Workflow execution '{stateId}' test input '{x.Key}'", x.Value))))
+            .Concat((context?.Results ?? []).Select(x => ($"Workflow execution '{stateId}' test fixture '{x.ProducerNodeId}'", x.Result)));
 
     private static IEnumerable<(string Location, ValueEnvelope Value)> ActivityExecutionEnvelopes(string stateId, ActivityExecutionState state)
     {

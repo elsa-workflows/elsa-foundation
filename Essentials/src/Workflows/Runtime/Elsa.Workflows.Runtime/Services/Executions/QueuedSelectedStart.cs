@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
@@ -15,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTestEntryAdmission admission,
     RuntimeTestContextPreparer preparer, TimeProvider clock)
 {
-    internal async ValueTask<VariableFrameState> PrepareAsync(WorkflowExecutionStartCommandPayload payload,
+    internal async ValueTask<RuntimeTestContextPreparation> PrepareAsync(WorkflowExecutionStartCommandPayload payload,
         WorkflowExecutable executable, string executionId, IWorkflowExecutionStateStore executions,
         IWorkflowSchedulerWorkQueue? scheduler, RuntimeCheckpointCommitter? committer, IWorkflowExecutionActorProvider? callerActors, CancellationToken cancellationToken)
     {
@@ -38,10 +39,17 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
         var prepared = await preparer.PrepareAsync(entry, executable, executionId, payload.Inputs, payload.Variables, cancellationToken);
         if (!prepared.IsAvailable)
             throw Refused("The trusted selected setup is unavailable.");
-        if (prepared.Context!.Frames.Count != 0 || prepared.Context.Results.Count != 0)
-            throw Refused("Enclosing frames and outside result fixtures require the qualified lexical interpreter profile.");
+        if (prepared.Context!.Results.Count != 0)
+            throw Refused("Outside result fixtures require the qualified result-reference interpreter profile.");
+        if (prepared.Context.Frames.GroupBy(x => x.Frame.ScopeId, StringComparer.Ordinal).Any(group =>
+            group.Count() > 1 && !group.Select(x => x.Frame.Kind).SequenceEqual([VariableFrameKind.Iteration, VariableFrameKind.Container])))
+            throw Refused("Supplied frames must retain the native iteration-before-container order for each scope.");
+        if (target.OutputCaptures.Values.Where(x => x.CaptureOnSuccessfulCompletion && x.Metadata.ContainsKey(RuntimeMetadataKeys.CaptureTargetScopeId))
+            .GroupBy(x => (x.Metadata[RuntimeMetadataKeys.CaptureTargetScopeId],
+                x.Metadata.GetValueOrDefault(RuntimeMetadataKeys.TargetVariableReferenceKey))).Any(x => x.Count() != 1))
+            throw Refused("Competing selected captures into one supplied variable are unavailable.");
         await RequireSourceAsync(payload, cancellationToken);
-        return prepared.RootVariableFrame!;
+        return prepared;
     }
 
     private async ValueTask RequireSourceAsync(WorkflowExecutionStartCommandPayload payload, CancellationToken cancellationToken)
@@ -62,7 +70,10 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
         var selectedCommitter = services.GetRequiredService<RuntimeCheckpointCommitter>();
         var checkpoint = Physical(services.GetRequiredService<IRuntimeCheckpointCommitStore>());
         var scopeOwners = services.GetServices<IWorkflowTestScopeStore>().ToArray();
-        if (callerActors is not null && !ReferenceEquals(callerActors, services.GetRequiredService<IWorkflowExecutionActorProvider>()) ||
+        var frameOwners = services.GetServices<IRuntimeTestContextFrameAccess>().ToArray();
+        if (frameOwners.Length != 1 || !ReferenceEquals(frameOwners[0], services.GetRequiredService<RuntimeTestContextOwner>()) ||
+            !services.GetRequiredService<RuntimeTestContextOwner>().Uses(selectedExecutions, services.GetRequiredService<IActivityExecutionStateStore>()) ||
+            callerActors is not null && !ReferenceEquals(callerActors, services.GetRequiredService<IWorkflowExecutionActorProvider>()) ||
             !ReferenceEquals(executions, selectedExecutions) || scheduler is not null && !ReferenceEquals(scheduler, selectedQueue) ||
             committer is not null && !ReferenceEquals(committer, selectedCommitter) ||
             !ReferenceEquals(Physical(selectedCommitter.SelectedStore), checkpoint) ||

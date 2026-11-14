@@ -679,7 +679,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 completedAt,
                 cancellationToken,
                 // A capture into a graph variable writes the row of the producer's nearest closed scope.
-                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
+                closedScopeBoundary: await ClosedScopeCaptureBoundary.FindAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken),
+                testCaptureTargets: await ClosedScopeCaptureBoundary.FindTestTargetsAsync(serviceProvider, workItem.WorkflowExecutionId, currentParentState.InvocationId, parentExecutableNode, cancellationToken));
             completionDurableValueChanges = (completionCheckpointPreparation?.DurableValueChanges ?? [])
                 .Concat(captureProjection.DurableValues)
                 .GroupBy(change => change.StateId, StringComparer.Ordinal)
@@ -697,7 +698,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                     [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
                 },
-                cancellationToken);
+                cancellationToken, serviceProvider.GetService<IRuntimeTestContextFrameAccess>(), captureProjection.TestFrameWrites);
             var completedAttempt = new ActivityAttempt(
                 openAttempt.AttemptId,
                 openAttempt.InvocationId,

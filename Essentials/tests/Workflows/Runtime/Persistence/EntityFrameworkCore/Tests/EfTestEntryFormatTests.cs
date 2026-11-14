@@ -10,6 +10,34 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class EfSchedulerWorkQueueStoreTests
 {
+
+    [Fact]
+    public async Task Process_private_lexical_header_cannot_be_serialized_for_shared_storage()
+    {
+        await using var database = await TestDatabase.CreateAsync(); await using var fixture = database.Open("tenant-a");
+        var state = TestExecution(DateTimeOffset.UtcNow);
+        state = state with { TestContext = new(state.TestEntry!.ContextId, state.TestEntry.ContextFingerprint, [], [], [state.TestEntry.ExecutableNodeId]) };
+        Assert.Throws<NotSupportedException>(() => EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a",
+            EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1));
+        Assert.Empty(await fixture.Context.WorkflowExecutionStates.AsNoTracking().ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Process_private_lexical_header_is_refused_by_physical_save_guard(bool synchronous)
+    {
+        await using var database = await TestDatabase.CreateAsync(); await using var fixture = database.Open("tenant-a");
+        var state = TestExecution(DateTimeOffset.UtcNow);
+        var row = EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a", EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(row.ContentJson)!;
+        json["TestContext"] = new System.Text.Json.Nodes.JsonObject { ["ContextId"] = "private" };
+        row.ContentJson = json.ToJsonString(); fixture.Context.WorkflowExecutionStates.Add(row);
+        if (synchronous) Assert.Throws<NotSupportedException>(() => fixture.Context.SaveChanges());
+        else await Assert.ThrowsAsync<NotSupportedException>(() => fixture.Context.SaveChangesAsync());
+        Assert.Empty(await fixture.Context.WorkflowExecutionStates.AsNoTracking().ToArrayAsync());
+    }
+
     [Theory]
     [InlineData(WorkflowExecutionCommandKind.Start, false)]
     [InlineData(WorkflowExecutionCommandKind.Checkpoint, false)]

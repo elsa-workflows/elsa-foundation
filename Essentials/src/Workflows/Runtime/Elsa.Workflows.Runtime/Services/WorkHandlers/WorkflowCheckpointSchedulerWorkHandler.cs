@@ -177,7 +177,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
-        VariableFrameState? selectedRootFrame = null;
+        RuntimeTestContextPreparation? selectedPreparation = null;
         if (payload.TestEntry is not null)
         {
             QueuedSelectedStart.RequireWireProtocol(workItem.Payload);
@@ -192,7 +192,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 payload.RunKind, payload.PinnedSource, payload.ParentWorkflowExecutionId, payload.CorrelationId,
                 payload.TenantId, payload.Partition, payload.Authority, WorkflowExecutableStartAuthority.LiveReference,
                 payload.DispatchNestingDepth, payload.TestScope, payload.SeedTriggerMetadata) { TestEntry = payload.TestEntry };
-            selectedRootFrame = await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
+            selectedPreparation = await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
                 .PrepareAsync(start, executable, workItem.WorkflowExecutionId, _workflowExecutionStateStore, null, _checkpointCommitter, null, cancellationToken);
         }
         else if (payload.CheckpointName == RuntimeCheckpointNames.WorkflowStarted && priorWorkflowState?.TestEntry is not null)
@@ -215,7 +215,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode, selectedRootFrame),
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode, selectedPreparation),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -310,10 +310,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
         WorkflowExecutable? executable,
-        PersistenceMode? persistenceMode, VariableFrameState? selectedRootFrame)
+        PersistenceMode? persistenceMode, RuntimeTestContextPreparation? selectedPreparation)
     {
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted))
-            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode, selectedRootFrame);
+            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode, selectedPreparation);
 
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
             return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt, priorWorkflowState);
@@ -327,7 +327,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
         WorkflowExecutable? executable,
-        PersistenceMode? persistenceMode, VariableFrameState? selectedRootFrame)
+        PersistenceMode? persistenceMode, RuntimeTestContextPreparation? selectedPreparation)
     {
         var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
@@ -356,7 +356,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             TestEntry = priorWorkflowState?.TestEntry ?? payload.TestEntry,
-            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? selectedRootFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
+            TestContext = priorWorkflowState?.TestContext ?? selectedPreparation?.Context,
+            RootVariableFrame = priorWorkflowState?.RootVariableFrame ?? selectedPreparation?.RootVariableFrame ?? CreateRootVariableFrame(workItem.WorkflowExecutionId, payload.SeedVariables, executable)
         };
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
@@ -457,6 +458,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             DispatchNestingDepth = priorWorkflowState?.DispatchNestingDepth ?? payload.DispatchNestingDepth,
             TestScope = priorWorkflowState?.TestScope ?? payload.TestScope,
             TestEntry = priorWorkflowState?.TestEntry ?? payload.TestEntry,
+            TestContext = priorWorkflowState?.TestContext?.Close(),
             RootVariableFrame = priorWorkflowState?.RootVariableFrame is { } rootFrame
                 ? rootFrame.Status == VariableFrameStatus.Active ? rootFrame.Close(rootFrame.Revision) : rootFrame
                 : null
