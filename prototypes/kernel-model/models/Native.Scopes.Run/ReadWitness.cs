@@ -139,6 +139,7 @@ internal sealed class ReadProbe : CompositeActivity, ISignalledComposite
     {
         var state = context.ReadState<ReadScopeState>()!;
         JsonNode? Read(Binding binding) => context.EvaluateInScope(binding, state.Inner);
+        if (Read(Binding.Var("counter"))?.ToString() != "21") throw new InvalidOperationException("RS1: targeted read lost nearest scope value");
         var copy = Read(Binding.Var("obj"))!; copy["n"] = 99;
         if (Read(Binding.Var("obj"))?["n"]?.ToString() != "7") throw new InvalidOperationException("RS5: variable read leaked a JSON alias");
         var literal = Binding.Literal(new JsonObject { ["n"] = 3 }); Read(literal)!["n"] = 99;
