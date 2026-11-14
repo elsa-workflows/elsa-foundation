@@ -71,7 +71,7 @@ public static class CreationProtocol
         if (row.Creation < 0 || row.ParentCreation < 0) RefuseWrite("negative creation identity");
         if (row.Creation == 0 && (row.Retired || row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.Creation > 0 && (row.Parent is null ? row.ParentCreation != 0 : row.ParentCreation <= 0)) RefuseWrite("incomplete exact parent address");
-        if (row.PendingStart is { } pending && (pending.Length == 0 || row.Status != InstanceStatus.Running ||
+        if (row.PendingStart is { } pending && (string.IsNullOrEmpty(pending.Id) || row.Status != InstanceStatus.Running ||
             previous is { Retired: false } && previous.PendingStart != pending ||
             previous?.PendingStart != pending && turn.Held?.Contains(pending) != true)) RefuseWrite("invalid held start continuation");
         if (previous?.PendingStart is { } retained && row.PendingStart is null && row.Status == InstanceStatus.Running &&

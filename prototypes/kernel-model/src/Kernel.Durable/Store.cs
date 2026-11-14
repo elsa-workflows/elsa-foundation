@@ -11,7 +11,7 @@ namespace Kernel.Durable;
 /// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, string? PendingStart = null, string? CustomHandles = null);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null);
 
 /// <summary>A requested spelling, its stored actor identity (or first equivalent candidate if missing), and its snapshot.</summary>
 public sealed record ActorLookup(string Requested, string Canonical, InstanceRow? Row)
@@ -215,7 +215,7 @@ public sealed class EventDelivery
 public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
 {
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null) =>
-        new(Events.RoutedMessage(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
+        new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, new(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation));
 }
 
 public sealed record EventAcceptance(bool Added, InstanceRef Target)
@@ -237,20 +237,10 @@ public sealed record EventMatch(
 public static class Events
 {
     /// <summary>
-    /// The message that delivers an event to a wait, or that starts an instance for it. Both sides derive the same id, so
-    /// the double is refused; a start's target is derived from event and subscription too, so it is created once.
-    /// </summary>
-    public static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
-        ? new(s.Creation > 0 ? FormattableString.Invariant($"evq:{e.Id.Length}:{e.Id}:{CreationProtocol.Origin(s.Instance, s.Creation)}:{s.Wait}")
-            : $"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
-            TargetCreation: s.Creation > 0 ? s.Creation : null)
-        : new($"ev:{e.Id}::{s.Wait}", InstanceRef.In(InstanceRef.Spread($"{e.Id}:{s.Wait}", partitions), $"on:{e.Id}:{s.Wait}"), Kinds.Event, e.Payload, Start: s.Start, KeepUntil: e.KeepUntil);
-
-    /// <summary>
     /// The logical wire envelope for a match. A start carries its placement partition until the store
     /// allocates the physical target and returns it with the acceptance receipt.
     /// </summary>
-    internal static Message RoutedMessage(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
+    internal static Message Deliver(EventRow e, SubscriptionRow s, int partitions = 1) => s.Start is null
         ? new(s.Creation > 0 ? FormattableString.Invariant($"evq:{e.Id.Length}:{e.Id}:{CreationProtocol.Origin(s.Instance, s.Creation)}:{s.Wait}")
             : $"ev:{e.Id}:{s.Instance}:{s.Wait}", new InstanceRef(s.Instance), Kinds.Event, e.Payload, KeepUntil: e.KeepUntil,
             TargetCreation: s.Creation > 0 ? s.Creation : null)
