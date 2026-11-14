@@ -8,7 +8,7 @@ using Kernel.Sim.Native;
 var cases = (from mode in new[] { Modes.Balanced, Modes.Durable } from nested in new[] { false, true } from reload in new[] { false, true }
     select (mode, nested, reload)).ToArray();
 string Name((string mode, bool nested, bool reload) c) => $"lexical:cross-phase,{c.mode},nested={c.nested},reload={c.reload}";
-if (args is ["--list"]) { foreach (var c in cases) Console.WriteLine(Name(c)); foreach (var name in LifecycleWitness.Names) Console.WriteLine(name); return; }
+if (args is ["--list"]) { foreach (var c in cases) Console.WriteLine(Name(c)); foreach (var name in LifecycleWitness.Names.Concat(SafetyWitness.Names)) Console.WriteLine(name); return; }
 if (args.Length != 0) throw new ArgumentException("Use --list or no argument.");
 foreach (var c in cases)
 {
@@ -56,6 +56,7 @@ foreach (var c in cases)
     Console.WriteLine("PASS " + Name(c));
 }
 LifecycleWitness.Run();
+SafetyWitness.Run();
 Console.WriteLine("8/8 ordinary cross-phase scope schedules passed; StateMachine attachment and broader scope lifecycle remain unqualified.");
 
 // The resource belongs to this live composite; separate ordinary phases share its declared values.
