@@ -576,20 +576,20 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="commit">
   <div class="num">06</div>
   <h2>The commit</h2>
-  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Two ways to send it were built and measured; switch between them.</p>
+  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Switch between the two PostgreSQL paths. The list groups possible writes by table. Their order can vary with the operations in the batch.</p>
   <div class="seg" role="group" aria-label="How the fence is sent">
     <button type="button" data-mode="tok" aria-pressed="true">Fence in the batch (2 round trips)</button>
     <button type="button" data-mode="first" aria-pressed="false">Fence first (3 round trips)</button>
   </div>
   <ol class="stmts" id="stmts">
-    <li class="fence" data-o-tok="7" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
+    <li class="fence" data-o-tok="6" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
     <li class="check" data-o-tok="8" data-o-first="2" data-rt-tok="check" data-rt-first="check"><span class="rt"></span><span><b>Exactly one row changed?</b> If not, roll back and reset. This check must come before COMMIT is sent.</span></li>
     <li data-o-tok="1" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the instance rows the batch changed, each update <code>WHERE revision = r</code>.</span></li>
-    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
-    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
-    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. Each id is derived from the sender and its revision, with a fixed-width ordinal, so a repeat is refused and order holds.</span></li>
-    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
-    <li data-o-tok="6" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
+    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
+    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
+    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. <code>Send</code> derives IDs from the sender, revision and ordinal; repeats are refused. Its fixed-width ordinal orders sends within one revision. The provider must preserve send order across revisions too.</span></li>
+    <li data-o-tok="7" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
+    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
     <li class="commitrow" data-o-tok="9" data-o-first="9" data-rt-tok="RT 2" data-rt-first="RT 3"><span class="rt"></span><span><b>COMMIT.</b></span></li>
   </ol>
   <p id="commit-note" class="note"></p>
@@ -1153,14 +1153,16 @@ ol.stmts code { font-size: 12.5px; }
   const stmts = document.getElementById("stmts");
   const note = document.getElementById("commit-note");
   const notes = {
-    tok: "EF Core sends the writes and the fence in one batch, the fence last because EF orders the statements by table; on SQL Server this lets a take deadlock with a stale commit (E9), which the checked fence avoids. It uses epoch and position as concurrency tokens. It reads the affected-row count before it sends COMMIT, so a stale owner's batch rolls back. 2 round trips on PostgreSQL; the lease time comes from the node's clock.",
+    tok: "In a traced PostgreSQL batch, EF wrote the instance, journal and messages, updated the partition fence, then inserted a subscription. Epoch and position are concurrency tokens. EF checks the affected-row count before COMMIT and rolls back a stale batch. This took 2 round trips, using the node clock for the lease. On SQL Server, locking messages before the partition can deadlock with a take (E9).",
     first: "The fence goes alone and returns the database's time. Only when its count checks out are the writes sent. 3 round trips on PostgreSQL; the lease time comes from the database."
   };
   const setMode = mode => {
-    [...stmts.children].forEach(li => {
-      li.style.order = li.dataset["o" + (mode === "tok" ? "Tok" : "First")];
-      li.querySelector(".rt").textContent = li.dataset["rt" + (mode === "tok" ? "Tok" : "First")];
+    const suffix = mode === "tok" ? "Tok" : "First";
+    const rows = [...stmts.children].sort((a, b) => Number(a.dataset["o" + suffix]) - Number(b.dataset["o" + suffix]));
+    rows.forEach(li => {
+      li.querySelector(".rt").textContent = li.dataset["rt" + suffix];
     });
+    stmts.replaceChildren(...rows); // Native list reading order follows the visible statement order.
     document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"));
     note.textContent = notes[mode];
   };

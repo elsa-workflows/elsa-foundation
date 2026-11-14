@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -86,7 +87,6 @@ public sealed class RuntimePostCommitOutboxItem
     }
 
     /// <summary>Source-discriminated wire; absent additive members preserve historical workflow serialization.</summary>
-    [JsonConstructor]
     public RuntimePostCommitOutboxItem(string outboxItemId, RuntimePostCommitIntent? intent,
         RuntimePostCommitOutboxStatus status, DateTimeOffset recordedAt, DateTimeOffset? availableAt,
         RuntimePostCommitRetryPolicy? retryPolicy, int deliveryAttemptCount, string? deliveringOwnerId,
@@ -95,6 +95,22 @@ public sealed class RuntimePostCommitOutboxItem
         int? stimulusDeliveryProtocolVersion, PersistenceScope? stimulusDeliverySourceScope, StimulusDeliverySnapshot? recipientSnapshot,
         RuntimeStandaloneIngressSource? standaloneIngress, int? subscriptionDeliveryProtocolVersion,
         RuntimeSubscriptionDelivery? subscriptionDelivery)
+        : this(outboxItemId, intent, status, recordedAt, availableAt, retryPolicy, deliveryAttemptCount, deliveringOwnerId,
+            deliveryStartedAt, deliveredAt, lastFailureMessage, metadata, deliveryFencingToken, deliveryVisibleAfter,
+            stimulusDeliveryProtocolVersion, stimulusDeliverySourceScope, recipientSnapshot, standaloneIngress,
+            subscriptionDeliveryProtocolVersion, subscriptionDelivery, null)
+    { }
+
+    /// <summary>Source-discriminated wire; absent additive members preserve historical workflow serialization.</summary>
+    [JsonConstructor]
+    public RuntimePostCommitOutboxItem(string outboxItemId, RuntimePostCommitIntent? intent,
+        RuntimePostCommitOutboxStatus status, DateTimeOffset recordedAt, DateTimeOffset? availableAt,
+        RuntimePostCommitRetryPolicy? retryPolicy, int deliveryAttemptCount, string? deliveringOwnerId,
+        DateTimeOffset? deliveryStartedAt, DateTimeOffset? deliveredAt, string? lastFailureMessage,
+        IReadOnlyDictionary<string, string>? metadata, long deliveryFencingToken, DateTimeOffset? deliveryVisibleAfter,
+        int? stimulusDeliveryProtocolVersion, PersistenceScope? stimulusDeliverySourceScope, StimulusDeliverySnapshot? recipientSnapshot,
+        RuntimeStandaloneIngressSource? standaloneIngress, int? subscriptionDeliveryProtocolVersion,
+        RuntimeSubscriptionDelivery? subscriptionDelivery, IReadOnlyDictionary<string, JsonElement>? savedStimulusStarts)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
         if ((intent is null) == (standaloneIngress is null))
@@ -159,6 +175,9 @@ public sealed class RuntimePostCommitOutboxItem
         StandaloneIngress = standaloneIngress;
         SubscriptionDeliveryProtocolVersion = subscriptionDeliveryProtocolVersion;
         SubscriptionDelivery = subscriptionDelivery;
+        if (savedStimulusStarts is { Count: > 0 } && (recipientSnapshot is null || intent?.IdempotencyKey is null || standaloneIngress is not null))
+            throw new ArgumentException("Saved start commands require an actual ordinary source and immutable cohort.", nameof(savedStimulusStarts));
+        SavedStimulusStarts = savedStimulusStarts?.ToFrozenDictionary(pair => pair.Key, pair => pair.Value.Clone(), StringComparer.Ordinal);
     }
 
     public string OutboxItemId { get; }
@@ -197,6 +216,24 @@ public sealed class RuntimePostCommitOutboxItem
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeSubscriptionDelivery? SubscriptionDelivery { get; }
+
+    /// <summary>Provider-sealed ordinary start commands, keyed by deterministic target execution. Not caller admission proof.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, JsonElement>? SavedStimulusStarts { get; }
+
+    /// <summary>Pure monotonic copy; only a provider's fenced source transition may persist a new command.</summary>
+    public RuntimePostCommitOutboxItem WithSavedStimulusStart(WorkflowExecutionCommandEnvelope envelope)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        if (SavedStimulusStarts?.ContainsKey(envelope.WorkflowExecutionId) == true)
+            throw new InvalidOperationException("A saved target's accepted command cannot be replaced.");
+        var seals = SavedStimulusStarts?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
+        seals.Add(envelope.WorkflowExecutionId, JsonSerializer.SerializeToElement(envelope));
+        return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
+            DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
+            DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, RecipientSnapshot,
+            StandaloneIngress, SubscriptionDeliveryProtocolVersion, SubscriptionDelivery, seals);
+    }
 
     [JsonIgnore] public RuntimeDeliverySourceKind SourceKind => StandaloneIngress is null ? RuntimeDeliverySourceKind.WorkflowCheckpoint : RuntimeDeliverySourceKind.StandaloneIngress;
     [JsonIgnore] public string DeliveryKind => StandaloneIngress?.DeliveryKind ?? Intent!.Kind;
@@ -237,7 +274,7 @@ public sealed class RuntimePostCommitOutboxItem
         return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
             DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
             DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, RecipientSnapshot,
-            StandaloneIngress, SubscriptionDeliveryProtocolVersion, delivery);
+            StandaloneIngress, SubscriptionDeliveryProtocolVersion, delivery, SavedStimulusStarts);
     }
 
     /// <summary>Whether unresolved stimulus delivery still needs this publisher or an exact recipient's execution/dedup state.</summary>
@@ -284,7 +321,7 @@ public sealed class RuntimePostCommitOutboxItem
         return new(OutboxItemId, Intent, Status, RecordedAt, AvailableAt, RetryPolicy, DeliveryAttemptCount,
             DeliveringOwnerId, DeliveryStartedAt, DeliveredAt, LastFailureMessage, Metadata, DeliveryFencingToken,
             DeliveryVisibleAfter, StimulusDeliveryProtocolVersion, StimulusDeliverySourceScope, candidate,
-            StandaloneIngress, SubscriptionDeliveryProtocolVersion, SubscriptionDelivery);
+            StandaloneIngress, SubscriptionDeliveryProtocolVersion, SubscriptionDelivery, SavedStimulusStarts);
     }
 
     /// <summary>Validate a provider's canonical source and current claim before selection or saved-recipient effects.</summary>
@@ -368,6 +405,9 @@ public sealed class RuntimePostCommitOutboxItem
         (RecipientSnapshot is null ? other.RecipientSnapshot is null : RecipientSnapshot.IsEquivalentTo(other.RecipientSnapshot)) &&
         (StandaloneIngress is null ? other.StandaloneIngress is null : StandaloneIngress.IsEquivalentTo(other.StandaloneIngress)) &&
         SubscriptionDeliveryProtocolVersion == other.SubscriptionDeliveryProtocolVersion &&
+        ((SavedStimulusStarts is null && other.SavedStimulusStarts is null) ||
+         (SavedStimulusStarts is not null && other.SavedStimulusStarts is not null && SavedStimulusStarts.Count == other.SavedStimulusStarts.Count &&
+          SavedStimulusStarts.All(pair => other.SavedStimulusStarts.TryGetValue(pair.Key, out var value) && JsonElement.DeepEquals(pair.Value, value)))) &&
         (SubscriptionDelivery is null ? other.SubscriptionDelivery is null : SubscriptionDelivery.IsEquivalentTo(other.SubscriptionDelivery));
 
     /// <summary>
@@ -940,7 +980,7 @@ public static class RuntimePostCommitOutboxClaimTransitions
             item.RecipientSnapshot,
             item.StandaloneIngress,
             item.SubscriptionDeliveryProtocolVersion,
-            item.SubscriptionDelivery);
+            item.SubscriptionDelivery, item.SavedStimulusStarts);
 }
 
 public sealed class RuntimePostCommitRetryPolicy

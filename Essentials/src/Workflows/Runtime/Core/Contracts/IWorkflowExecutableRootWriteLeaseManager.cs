@@ -9,6 +9,16 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public interface IWorkflowExecutableRootWriteLeaseManager
 {
+    /// <summary>Retains a bounded exact source root set using fresh scope-qualified owner reads and canonical leases.</summary>
+    /// <remarks>Reload the actual complete native/model closure by exact ID, check full pins where declared, cycles,
+    /// counts, depth and aggregate source bytes. Never trust caller closure data or enumerate unrelated store material.
+    /// Default/decorators refuse. Cancellation/renewal loss remains cancellation, and grants are not independent authority.</remarks>
+    ValueTask ExecuteFencedAsync(IReadOnlyCollection<Models.WorkflowExecutableIdentity> roots, string leaseId,
+        Models.PersistenceScope expectedScope, Models.RuntimeSourceReadLimits limits,
+        Func<string, string, Models.WorkflowExecutableIdentity?, CancellationToken, ValueTask> authorizeRead,
+        Func<IReadOnlyList<Models.WorkflowExecutableRootWriteLease>, CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new Models.RuntimeSourceReadException("runtime_source_retention_profile_unsupported", true));
     /// <summary>
     /// Executes a durable retention-root write while holding and renewing a lease for <paramref name="artifactId"/>.
     /// </summary>
