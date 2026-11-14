@@ -264,9 +264,20 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                 throw new InvalidOperationException("A captured checkpoint receipt belongs to a different or deleted history scope.");
         var execution = await native.FindAsync(original.WorkflowExecutionId, cancellationToken) ??
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The captured checkpoint's native owner is unavailable.");
-        access.EnsureTenantScope(execution.TenantId);
+        EnsureHistoryNativeScope(access, execution);
         if (_persistenceAccessContextAccessor!.Current != access)
             throw new InvalidOperationException("Persistence access changed during captured checkpoint replay.");
+    }
+
+    private static void EnsureHistoryNativeScope(PersistenceAccessContext access, WorkflowExecutionState execution)
+    {
+        var scope = access.RequireScope();
+        // Sealed ingress/saved starts bind a physical partition independently of their logical tenant.
+        // Admission still validates the actual source seal; this grants no new source authority.
+        if (!NativeIngressCheckpointAuthority.HasBoundScope(execution, scope.Value))
+            access.EnsureTenantScope(execution.TenantId);
+        if (execution.Partition is { } partition && partition.Value != scope.Value)
+            throw new InvalidOperationException("The native execution belongs to a different physical persistence scope.");
     }
 
     private InMemoryWorkflowExecutionStateStore? ExactResumeExecutions => _retentionExecutions ?? _workflowExecutionStateStore as InMemoryWorkflowExecutionStateStore;
@@ -386,7 +397,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
         }
         if ((incomingPolicy?.Required == true || retainedHistoryOwner?.Policy.Required == true) && !hasHistoryBatch)
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "The execution requires its pinned history contribution.");
-        if (hasHistoryBatch || incomingPolicy is not null || retainedHistoryOwner is not null && commit.StateChanges.WorkflowExecution is not null)
+        if (hasHistoryBatch || incomingPolicy is not null || retainedHistoryOwner is not null)
         {
             if (!((IRuntimeCheckpointCommitStore)this).SupportsHistory || historyAccess is null)
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History persistence requires its exact scoped native provider.");
@@ -394,7 +405,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
             var retained = await ExactResumeExecutions!.FindAsync(commit.WorkflowExecutionId, cancellationToken);
             if (retained is not null)
             {
-                historyAccess.EnsureTenantScope(retained.TenantId);
+                EnsureHistoryNativeScope(historyAccess, retained);
                 admittedHistoryPolicy = retained.HistoryCapturePolicy;
                 if (hasHistoryBatch && (retained.HistoryCapturePolicy is not { } admitted ||
                     commit.HistoryBatches!.Any(batch => !admitted.IsEquivalentTo(batch.Policy))) ||
@@ -402,7 +413,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
                     !(retained.HistoryCapturePolicy?.IsEquivalentTo(incomingPolicy) ?? incomingPolicy is null))
                     throw new InvalidOperationException("History must retain the native execution's admitted policy, including legacy absence.");
             }
-            if (commit.StateChanges.WorkflowExecution is { } incoming) historyAccess.EnsureTenantScope(incoming.State.TenantId);
+            if (commit.StateChanges.WorkflowExecution is { } incoming) EnsureHistoryNativeScope(historyAccess, incoming.State);
             EnsureHistoryAccess();
         }
 

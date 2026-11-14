@@ -441,9 +441,9 @@ public sealed class NativeStandaloneTriggerTargetTests
                 RuntimeCheckpointCommit WithHistory(RuntimeCheckpointCommit value, bool starts) => batch ? value with
                 {
                     HistoryBatches = [new(required, value.Checkpoint.CheckpointId, value.Checkpoint.OccurredAt, starts,
-                        [new(new RuntimeHistoryEvent("event-" + value.CommitId, key.WorkflowExecutionId, 0,
+                        starts ? [new(new RuntimeHistoryEvent("event-" + value.CommitId, key.WorkflowExecutionId, 0,
                             RuntimeHistoryEventCategory.WorkflowLifecycle, "WorkflowStarted", value.Checkpoint.OccurredAt,
-                            checkpointId: value.Checkpoint.CheckpointId) { Authority = RuntimeHistoryAuthority.CommittedTransition }, 0)])]
+                            checkpointId: value.Checkpoint.CheckpointId) { Authority = RuntimeHistoryAuthority.CommittedTransition }, 0)] : [])]
                 } : value;
                 var first = WithHistory(staged, true);
                 await fixture.CheckpointStore.CommitAsync(first, new(RuntimeCheckpointPersistenceMode.Immediate));
