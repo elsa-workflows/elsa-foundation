@@ -1,3 +1,4 @@
+using System.Reflection;
 using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Nuplane;
 using Elsa.Studio.Tests.Administration;
@@ -166,8 +167,14 @@ public sealed class HostingConfigurationLifetimeTests
         }
     }
 
-    private static void AssertDisposed(PhysicalFileProvider provider) =>
-        Assert.Throws<ObjectDisposedException>(() => provider.Watch("lifetime-probe.json"));
+    private static void AssertDisposed(PhysicalFileProvider provider)
+    {
+        // .NET permits Watch after disposal; whether it throws depends on the watcher backend.
+        // Inspect the real provider's disposal state instead of creating another native watch.
+        var disposed = typeof(PhysicalFileProvider).GetField("_disposed", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(disposed);
+        Assert.True(Assert.IsType<bool>(disposed.GetValue(provider)), "The owned physical file provider was not disposed.");
+    }
 
     private sealed class ConfigurationHost : IAsyncDisposable
     {
