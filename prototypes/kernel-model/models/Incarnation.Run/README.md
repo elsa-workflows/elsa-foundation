@@ -25,6 +25,10 @@ and two mixed legacy/qualified oracle cases. Select subsets with
 `--parent-race`, `--transport-races` (also includes the job race), `--refusal-takeover`, `--held-singleton`,
 `--native-child-cancel`, `--recreation-park`, `--held-start`, `--mixed-oracle`, `--boundaries`, `--visits` or `--job-ack`.
 The default run includes every listed case. An assertion failure stops it; subsequent cases are not run.
+Job acknowledgement cases also inspect a real pending result with the exact creation and refuse a missing or
+different creation. The BPMN runner's `identity-list`/`identity` commands separately cover twelve normal call,
+escalation and cancellation paths (legacy/qualified, all history settings, fresh/reloaded child), including old
+cancellation against a replacement. These cases are not counted in the61 inventory and are not provider proof.
 
 Normal workflows create the positive lifecycle witnesses. Their delete clears workflow content and ordinary
 positive history, but retains an actor-ID/generation high-water mark for as long as that ID is reusable. This

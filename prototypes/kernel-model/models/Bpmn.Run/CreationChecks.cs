@@ -5,12 +5,14 @@ namespace Kernel.Bpmn.Run;
 internal static class CreationChecks
 {
     internal static IEnumerable<string> Names => from qualified in new[] { false, true }
-        from history in Enum.GetValues<History>() select $"bpmn-creation:qualified={qualified},history={history}";
+        from history in Enum.GetValues<History>() from recover in new[] { false, true }
+        select $"bpmn-creation:qualified={qualified},history={history},recover={recover}";
 
     internal static async Task Run()
     {
         foreach (var qualified in new[] { false, true })
         foreach (var history in Enum.GetValues<History>())
+        foreach (var recover in new[] { false, true })
         {
             var registry = new ProcessRegistry();
             var escalation = new BpmnEventDefinition(BpmnEventDefinitionTypes.Escalation,
@@ -26,9 +28,11 @@ internal static class CreationChecks
             p = new ProcessDraft("identity-child");
             p.B.StartEvent("start").IntermediateThrowEvent("raise", escalation)
                 .IntermediateCatchEvent("hold", message, bindingRef: "hold").EndEvent("end");
-            p.Chain("start", "raise", "hold", "end");
+            if (recover) p.B.IntermediateCatchEvent("gate", message, bindingRef: "gate");
+            if (recover) p.Chain("start", "gate", "raise", "hold", "end");
+            else p.Chain("start", "raise", "hold", "end");
             registry.Add(new BpmnProcess(p.Build(), new Dictionary<string, Work>
-            { ["hold"] = new MessageWork("child-release", "order") }));
+            { ["hold"] = new MessageWork("child-release", "order"), ["gate"] = new MessageWork("child-go", "order") }));
             p = new ProcessDraft("identity-wait");
             p.B.StartEvent("start").IntermediateCatchEvent("hold", message, bindingRef: "hold").EndEvent("end");
             p.Chain("start", "hold", "end");
@@ -48,6 +52,15 @@ internal static class CreationChecks
                 for (var i = 0; i < 20; i++) await owner.Worker.RunAsync();
             }
             await Drain();
+            if (recover)
+            {
+                Check(capture.Sent.All(m => m.Kind != BpmnKinds.Signal), "BC0: recovery missed the waiting child");
+                await owner.Worker.DisposeAsync();
+                owner = new Owner("identity-before-signal", 0, capture, registry, () => 100);
+                await owner.StartAsync();
+                await Events.PublishAsync(store, new(BpmnModel.MessageKey("child-go", ""), "child-go", null, 1000));
+                await Drain();
+            }
             var signal = capture.Sent.Single(m => m.Kind == BpmnKinds.Signal);
             Check(signal.TargetCreation == (qualified ? 1 : null), "BC1: scope signal lost its parent creation");
             var child = signal.Read<ScopeSignal>().Child;
@@ -76,7 +89,7 @@ internal static class CreationChecks
             await Drain();
             Check(store.Instances[parent.Id].Status == InstanceStatus.Finished, "BC5: parent did not finish its ordinary message wait");
             await owner.Worker.DisposeAsync();
-            Console.WriteLine($"PASS bpmn-creation:qualified={qualified},history={history}");
+            Console.WriteLine($"PASS bpmn-creation:qualified={qualified},history={history},recover={recover}");
         }
     }
 
