@@ -43,6 +43,7 @@ public sealed class RuntimeContainerScopeService(
 
         var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' has no durable variable-frame owner state.");
+        RuntimeTestContextOwner.RequireConsumer(workflowState, activityState);
         var root = workflowState.RootVariableFrame
             ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' has no canonical root variable frame.");
         if (root.Status != VariableFrameStatus.Active ||

@@ -223,7 +223,7 @@ public sealed partial class QueuedSelectedStartTests
         var weakened = fixture with { Result = ValueEnvelope.Inline(fixture.Result.Type, fixture.Result.InlineValue!.Value, ValueProtectionPolicy.InstanceInline) };
         restored = JsonSerializer.Deserialize<WorkflowExecutionState>(JsonSerializer.Serialize(restored with
         {
-            TestContext = new(original.ContextId, original.ContextFingerprint, original.Frames, [weakened], original.OwnedNodeIds)
+            TestContext = new(original.ContextId, original.ContextFingerprint, original.Frames, [weakened], original.OwnedNodeIds) { RootActivityExecutionId = original.RootActivityExecutionId }
         }))!;
         Assert.Throws<RuntimeTestContextUnavailableException>(() => Read(restored));
     }

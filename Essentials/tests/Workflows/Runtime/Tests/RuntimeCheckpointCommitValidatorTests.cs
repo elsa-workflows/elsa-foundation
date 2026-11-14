@@ -296,7 +296,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
             TestEntry = new("context", "fingerprint", state.PinnedExecutable, "selected", scope, authority),
             TestContext = new("context", "fingerprint", location == "fixture" ? [] : [new(frame, false, true,
                 location == "input" ? new Dictionary<string, ValueEnvelope> { ["token"] = value } : new Dictionary<string, ValueEnvelope>(),
-                new Dictionary<string, string>())], location == "fixture" ? [new("outside", "scope-1", value)] : [], ["selected"])
+                new Dictionary<string, string>())], location == "fixture" ? [new("outside", "scope-1", value)] : [], ["selected"]) { RootActivityExecutionId = ActivityExecutionId }
         };
         return new(new(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>()), null, [], [], [], [], []);
     }

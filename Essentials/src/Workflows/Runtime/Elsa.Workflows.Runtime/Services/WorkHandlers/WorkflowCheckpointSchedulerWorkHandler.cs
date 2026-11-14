@@ -181,7 +181,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         if (payload.TestEntry is not null)
         {
             QueuedSelectedStart.RequireWireProtocol(workItem.Payload);
-            ValidateSelectedRootIntent(workItem, payload);
+            var selectedRootId = ValidateSelectedRootIntent(workItem, payload);
             if (executable is null || _workflowExecutionStateStore is null)
                 throw QueuedSelectedStart.Refused("The selected checkpoint has no exact native executable or state provider.");
             if (priorWorkflowState is not null && IsSelectedStartReplay(workItem, payload)) return null;
@@ -194,6 +194,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 payload.DispatchNestingDepth, payload.TestScope, payload.SeedTriggerMetadata) { TestEntry = payload.TestEntry };
             selectedPreparation = await (_selectedStarts ?? throw QueuedSelectedStart.Refused("The selected interpreter is unavailable."))
                 .PrepareAsync(start, executable, workItem.WorkflowExecutionId, _workflowExecutionStateStore, null, _checkpointCommitter, null, cancellationToken);
+            selectedPreparation = RuntimeTestContextPreparation.Available(
+                selectedPreparation.Context! with { RootActivityExecutionId = selectedRootId }, selectedPreparation.RootVariableFrame!);
         }
         else if (payload.CheckpointName == RuntimeCheckpointNames.WorkflowStarted && priorWorkflowState?.TestEntry is not null)
             throw QueuedSelectedStart.Refused("An ordinary start cannot replace a selected root.");
@@ -238,7 +240,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         return metadata;
     }
 
-    private static void ValidateSelectedRootIntent(RuntimeSchedulerWorkItem workItem, RuntimeCheckpointCommandPayload payload)
+    private static string ValidateSelectedRootIntent(RuntimeSchedulerWorkItem workItem, RuntimeCheckpointCommandPayload payload)
     {
         if (payload.CheckpointName != RuntimeCheckpointNames.WorkflowStarted || payload.Reason != RuntimeCheckpointCommandPayload.WorkflowStartReason ||
             payload.ModelWorkOrigin is not null || payload.ActivityExecutionIds.Count != 0 || payload.PostCommitIntents.Count != 1)
@@ -261,6 +263,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             work.Attempt is not { AttemptNumber: 1, PreviousAttemptActivityExecutionId: null } ||
             work.Attempt.FirstAttemptActivityExecutionId != child.ActivityExecutionId)
             throw QueuedSelectedStart.Refused("The selected root scheduling intent differs from its admitted entry.");
+        return child.ActivityExecutionId;
     }
 
     private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedDurableValueChanges(

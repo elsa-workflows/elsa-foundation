@@ -23,6 +23,7 @@ internal static class RuntimeActivityResultReader
         var test = workflow is null ? null : RuntimeTestContextOwner.RequireContext(workflow);
         if (test is null) return Actual();
 
+        RuntimeTestContextOwner.RequireConsumer(workflow!, consumer);
         // This is a committed context snapshot, not an ambient overlay. No fixture becomes a producer
         // invocation or a causal edge, and no unowned consumer may inherit another leaf's fixtures.
         if (workflow!.WorkflowExecutionId != context.WorkflowExecutionId ||
