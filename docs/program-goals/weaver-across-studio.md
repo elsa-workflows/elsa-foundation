@@ -6,6 +6,7 @@
 - **Charter, decisions and progress:** [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428).
 - **Kanban WIP:** [Project #65, view 1](https://github.com/orgs/elsa-workflows/projects/65/views/1).
 - **Full hierarchy:** [Project #65, Roadmap](https://github.com/orgs/elsa-workflows/projects/65/views/2).
+- **Current execution:** Blocked, 14 November 2026; the Program remains in the Active goal bucket. [Verified blockers and preserved source](https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6880323124) record the existing owner's unresolved importer repair (PR4491), pending normal-host FR022 clarification, terminal failed draft CI and exhausted/cleaned worker allocation. Project65 Program/M4/leaf0 are Blocked; later leaves remain Backlog. [Leaf0's specific claim was released](https://github.com/elsa-workflows/elsa-foundation/issues/3831#issuecomment-6880323394). Reviewed private source is retained; acceptance, exact-head checks, native/package/composed UX, formal review and resulting-main verification remain open. This is not completion, a scope reduction or an authorization for more resources.
 
 ## Purpose and ownership
 
