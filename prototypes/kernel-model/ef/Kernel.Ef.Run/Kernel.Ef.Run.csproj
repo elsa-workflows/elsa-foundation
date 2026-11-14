@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="../../sim/Models.cs" Link="Models.cs" />
     <Compile Include="../../sim/Correlation.cs" Link="Correlation.cs" />
+    <Compile Include="../../models/Native.Run/ParkMetadataChecks.cs" Link="ParkMetadataChecks.cs" />
     <ProjectReference Include="../Kernel.EntityFramework/Kernel.EntityFramework.csproj" />
     <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
   </ItemGroup>

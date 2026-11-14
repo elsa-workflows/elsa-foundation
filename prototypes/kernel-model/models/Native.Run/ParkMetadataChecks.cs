@@ -49,6 +49,7 @@ internal static class ParkMetadataChecks
     private sealed class World
     {
         private readonly bool qualified;
+        private readonly Func<IActorType, IActorType> wrap;
         public long Time = 100;
         public readonly Probe Model = new();
         public readonly InMemoryStore Store;
@@ -56,11 +57,11 @@ internal static class ParkMetadataChecks
         public long Creation => qualified ? 1 : 0;
         public string Ticket => Worker.TicketId(Id, "sibling", Creation);
         public Transport Transport = null!;
-        public World(bool qualified) { this.qualified = qualified; Store = new(1, () => Time); }
+        public World(bool qualified, Func<IActorType, IActorType>? wrap = null) { this.qualified = qualified; this.wrap = wrap ?? (actor => actor); Store = new(1, () => Time); }
         public async Task Take(string name)
         {
             Transport ??= new(Store);
-            Owner = new(name, 0, Store, new WorkflowInstance([Model]), new WorkerOptions { Monotonic = () => Time, MaxAttempts = 1, Transport = Transport });
+            Owner = new(name, 0, Store, wrap(new WorkflowInstance([Model])), new WorkerOptions { Monotonic = () => Time, MaxAttempts = 1, Transport = Transport });
             await new DurableHost([Owner]).ActivateAsync(0);
         }
         public async Task Until(Func<bool> done)
@@ -110,9 +111,9 @@ internal static class ParkMetadataChecks
         await w.Owner.DisposeAsync();
     }
 
-    public static async Task MetadataAsync(bool qualified, bool raw)
+    public static async Task MetadataAsync(bool qualified, bool raw, Func<IActorType, IActorType>? wrap = null)
     {
-        var w = new World(qualified);
+        var w = new World(qualified, wrap);
         await w.Start();
         var parked = w.Store.Instances[Id];
         if (raw)

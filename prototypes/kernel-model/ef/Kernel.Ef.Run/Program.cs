@@ -13,6 +13,22 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- stress-unfenced "<connection string>" ...     the same with the fence broken: it must fail
 //   dotnet run -c Release --project ef/Kernel.Ef.Run -- x <command> <engine> "<connection string>" [key=value ...]   any engine: EngineRun.cs, ENGINES.md
 
+if (args is ["park-shaped"])
+{
+    var failures = 0;
+    foreach (var qualified in new[] { false, true })
+    {
+        try
+        {
+            await Kernel.Native.Run.ParkMetadataChecks.MetadataAsync(qualified, true, actor => new Leveled(History.Full, 64).Over(actor));
+            Console.WriteLine($"pass actual Leveled, lost trial and metadata (qualified={qualified})");
+        }
+        catch (Exception error) { failures++; Console.WriteLine($"FAIL actual Leveled (qualified={qualified}): {error.Message}"); }
+    }
+    try { ActorBoundaryChecks.Run(); }
+    catch (Exception error) { failures++; Console.WriteLine($"FAIL singleton hook forwarding: {error.Message}"); }
+    return failures == 0 ? 0 : 1;
+}
 if (args is ["x", ..]) return await EngineRun.RunAsync(args[1..]);
 if (args is ["cost", "sqlite"])
 {
