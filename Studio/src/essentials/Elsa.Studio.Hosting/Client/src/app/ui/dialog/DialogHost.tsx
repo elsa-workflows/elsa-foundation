@@ -1,3 +1,4 @@
+import { StudioField } from "../forms/Field";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import type { StudioDialogRequest } from "../../../sdk";
@@ -65,7 +66,7 @@ function DialogBody({ request }: { request: StudioDialogRequest }) {
       <Dialog.Description className="studio-dialog-message">{request.message}</Dialog.Description>
 
       {isPrompt ? (
-        <input
+        <StudioField label={request.title ?? request.message}><input
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
           className="studio-dialog-input"
@@ -73,7 +74,7 @@ function DialogBody({ request }: { request: StudioDialogRequest }) {
           placeholder={request.placeholder}
           aria-label={request.title ?? request.message}
           onChange={event => setValue(event.target.value)}
-        />
+        /></StudioField>
       ) : null}
 
       <div className="studio-dialog-actions">

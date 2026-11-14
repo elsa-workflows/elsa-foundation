@@ -4,7 +4,7 @@ import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { bpmnActivity } from "./fixtures";
 import { capabilityDocument, definition, renderRegisteredRoute, response } from "./routeRenderingHelpers";
 
-async function editor(direct: boolean, service = false) {
+async function editor(direct: boolean, service = false, options: { retained?: boolean; organization?: boolean; handle?: (url: string, init?: RequestInit) => Promise<Response | undefined> } = {}) {
   const root = { nodeId: "root", activityVersionId: bpmnActivity.activityVersionId, inputs: [], outputs: [], structure: {
     kind: "elsa.bpmn.structure", schemaVersion: "1.0.0", payload: { activities: [], elements: [{ elementId: "keep", name: "Keep this task", elementType: "task" }], sequenceFlows: [] }
   } };
@@ -14,8 +14,14 @@ async function editor(direct: boolean, service = false) {
     { rel: "bpmn-authored-publish", href: "interchange/bpmn/versions/{versionId}/publish-direct", templated: true },
     ...(service ? [{ rel: "bpmn-authored-service-publish", href: "interchange/bpmn/versions/{versionId}/publish-direct", templated: true }] : [])] });
   if (service) capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definitions/page" });
+  if (options.organization) capabilities.capabilities[0].links.push(
+    { rel: "workflow-organization", href: "design/workflows/organization/{definitionId}", templated: true },
+    { rel: "workflow-definition-folder-move", href: "placement/bulk" },
+    { rel: "workflow-folders", href: "inventory/folders" });
   const calls = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    const override = await options.handle?.(url, init);
+    if (override) return override;
     if (service && url.includes("/definitions/page?")) return response({ items: [{ ...definition(), id: "worker-1", name: "ETL service worker" }], nextContinuationToken: null });
     if (service && url.includes("/definitions/worker-1")) return response({ definition: { ...definition(), id: "worker-1", name: "ETL service worker" }, draft: null, versions: [] });
     if (service && url.endsWith("activation-slots/worker-1")) return response({ items: [{ slotId: "slot-1", definitionId: "worker-1", slotName: "Published", activeActivationId: "publication-1", sourceKind: "publishing", sourceId: "publication-1" }] });
@@ -34,7 +40,7 @@ async function editor(direct: boolean, service = false) {
     Object.defineProperty(api, "backendSession", { value: { key: "session", profile: { id: "backend", baseUrl: api.backend.baseUrl, name: "Backend", source: "configuration", environment: "Test" },
       context: api.backend, identity: { status: "authenticated", subject: "author", roles: [], permissions: [] }, capabilities, disposed: false,
       pendingWrites: 0, refreshCapabilities: async () => capabilities } satisfies StudioBackendSession });
-  }, false, capabilities);
+  }, false, capabilities, {}, options.retained);
   await vi.waitFor(() => expect(rendered.container.querySelector(".wf-editor-toolbar")).not.toBeNull(), { timeout: 5000 });
   return { ...rendered, calls };
 }
@@ -87,7 +93,7 @@ it("selects an immutable service publication through the real picker, undo, redo
   flushSync(() => { publications.value = "slot-1"; publications.dispatchEvent(new Event("change", { bubbles: true })); });
   flushSync(() => [...view.container.querySelectorAll("button")].find(button => button.textContent === "Use this service publication")!.click());
   await vi.waitFor(() => expect(view.container.querySelector<HTMLSelectElement>("[aria-label='Task execution']")?.value).toBe("service"));
-  expect(view.container.querySelector(".react-flow__node[data-id='keep']")?.textContent).toContain("Native service");
+  await vi.waitFor(() => expect(view.container.querySelector(".react-flow__node[data-id='keep']")?.textContent).toContain("Native service"));
   flushSync(() => view.container.querySelector<HTMLButtonElement>("[aria-label='Undo']")!.click());
   flushSync(() => view.container.querySelector<HTMLElement>(".react-flow__node[data-id='keep']")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await vi.waitFor(() => expect(view.container.querySelector<HTMLSelectElement>("[aria-label='Task execution']")?.value).toBe("unbound"));
@@ -144,5 +150,138 @@ it("edits human binding through normal undo, redo and save in the actual editor"
   const saved = view.calls.mock.calls.find(([, init]) => init?.method === "PUT")!;
   expect(saved[1]?.body).toContain('"elsa.direct.binding"');
   expect(saved[1]?.body).toContain('"elementType":"userTask"');
+  await view.unmount();
+});
+
+
+function editorButton(container: ParentNode, text: string) {
+  const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(node => node.textContent?.trim() === text);
+  expect(button, text).toBeDefined();
+  return button!;
+}
+async function chooseBpmnExport(view: Awaited<ReturnType<typeof editor>>) {
+  flushSync(() => view.container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!.click());
+  const button = await vi.waitFor(() => editorButton(document, "Export BPMN"));
+  flushSync(() => button.click());
+}
+function interceptBpmnDownload() {
+  const downloads: string[] = [];
+  const create = vi.fn((blob: Blob) => { expect(blob.type).toBe("application/xml"); return "blob:bpmn-proof"; });
+  vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL: create, revokeObjectURL: vi.fn() }));
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloads.push(this.download); });
+  return { downloads, create, restore: () => click.mockRestore() };
+}
+
+it("keeps a real BPMN download and routes only its completion to shared notifications", async () => {
+  const download = interceptBpmnDownload();
+  try {
+    const view = await editor(false, false, { handle: async url => url.endsWith("interchange/bpmn/export") ? response({ xml: "<definitions />" }) : undefined });
+    const status = view.container.querySelector(".wf-editor-save-status")?.textContent;
+    await chooseBpmnExport(view);
+    await vi.waitFor(() => expect(view.api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Exported BPMN 2.0 XML." }));
+    expect(download.downloads).toEqual(["Hello World.bpmn"]);
+    expect(download.create.mock.calls[0][0]).toBeInstanceOf(Blob);
+    expect(view.container.querySelector(".wf-editor-save-status")?.textContent).toBe(status);
+    await view.unmount();
+  } finally { download.restore(); }
+});
+
+it("retains the exact inline BPMN export error without a success notification", async () => {
+  const view = await editor(false, false, { handle: async url => url.endsWith("interchange/bpmn/export") ? response({ title: "Export refused" }, 500) : undefined });
+  await chooseBpmnExport(view);
+  await vi.waitFor(() => expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("BPMN export failed."));
+  expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+  await view.unmount();
+});
+
+it("clears an earlier BPMN export failure when an owned retry succeeds after tab retirement", async () => {
+  let attempts = 0; let finish!: (value: Response) => void;
+  const work = new Promise<Response>(resolve => { finish = resolve; });
+  const download = interceptBpmnDownload();
+  try {
+    const view = await editor(false, false, { retained: true, handle: async url => {
+      if (!url.endsWith("interchange/bpmn/export")) return undefined;
+      return ++attempts === 1 ? response({ title: "Export refused" }, 500) : work;
+    } });
+    await chooseBpmnExport(view);
+    await vi.waitFor(() => expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("BPMN export failed."));
+    await chooseBpmnExport(view);
+    await vi.waitFor(() => expect(attempts).toBe(2));
+    view.setVisible(false); view.setVisible(true);
+    finish(response({ xml: "<definitions />" }));
+    await vi.waitFor(() => expect(download.downloads).toEqual(["Hello World.bpmn"]));
+    await vi.waitFor(() => expect(view.container.querySelector('[role="alert"]')?.textContent ?? "").not.toContain("BPMN export failed."));
+    expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+    await view.unmount();
+  } finally { download.restore(); }
+});
+
+it("finishes an accepted BPMN download without toasting after its editor is disposed", async () => {
+  let finish!: (value: Response) => void;
+  const work = new Promise<Response>(resolve => { finish = resolve; });
+  const download = interceptBpmnDownload();
+  try {
+    const view = await editor(false, false, { handle: async url => url.endsWith("interchange/bpmn/export") ? work : undefined });
+    await chooseBpmnExport(view);
+    await vi.waitFor(() => expect(view.calls.mock.calls.some(([input]) => String(input).endsWith("interchange/bpmn/export"))).toBe(true));
+    await view.unmount();
+    finish(response({ xml: "<definitions />" }));
+    await vi.waitFor(() => expect(download.downloads).toHaveLength(1));
+    expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+  } finally { download.restore(); }
+});
+
+it("copies a real editor error trace through shared notifications and keeps failure/retry inline", async () => {
+  const view = await editor(true, false, { handle: async (url, init) => url.includes("/drafts/draft-1") && init?.method === "PUT"
+    ? response({ title: "Save rejected", traceId: "trace-copy-proof", status: 500 }, 500) : undefined });
+  const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  const writeText = vi.fn().mockRejectedValueOnce(new Error("Clipboard unavailable")).mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  try {
+    const node = await vi.waitFor(() => { const value = view.container.querySelector<HTMLElement>('.react-flow__node[data-id="keep"]'); expect(value).not.toBeNull(); return value!; });
+    flushSync(() => node.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const execution = await vi.waitFor(() => { const value = view.container.querySelector<HTMLSelectElement>('[aria-label="Task execution"]'); expect(value).not.toBeNull(); return value!; });
+    flushSync(() => { execution.value = "human"; execution.dispatchEvent(new Event("change", { bubbles: true })); });
+    flushSync(() => view.container.querySelector<HTMLButtonElement>('[title="Save workflow"]')!.click());
+    const copy = await vi.waitFor(() => { const value = view.container.querySelector<HTMLButtonElement>('[aria-label="Copy trace id"]'); expect(value).not.toBeNull(); return value!; });
+    flushSync(() => copy.click());
+    await vi.waitFor(() => expect(view.container.querySelector(".wf-editor-save-status")?.textContent).toBe("Could not copy Trace id."));
+    expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+    flushSync(() => copy.click());
+    await vi.waitFor(() => expect(view.api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Trace id copied." }));
+    expect(writeText).toHaveBeenLastCalledWith("trace-copy-proof");
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("Save rejected");
+    expect(view.container.querySelector(".wf-editor-save-status")?.textContent).not.toContain("Trace id copied.");
+  } finally {
+    if (clipboard) Object.defineProperty(navigator, "clipboard", clipboard); else Reflect.deleteProperty(navigator, "clipboard");
+    await view.unmount();
+  }
+});
+
+it("saves real editor organization through the shared notifier and retains rejected-move recovery", async () => {
+  let fail = true;
+  const writes: unknown[] = [];
+  const folder = { id: "folder-target", parentId: null, name: "Target", normalizedName: "TARGET", revision: "1", createdAt: "", lastModifiedAt: "" };
+  const view = await editor(false, false, { organization: true, handle: async (url, init) => {
+    if (url.includes("/organization/definition-1")) return response({ definitionId: "definition-1", folderId: null, folderBreadcrumb: [], tags: [], revision: "r1", permissions: { canManageFolders: true } });
+    if (url.includes("inventory/folders")) return response({ items: [folder], nextContinuationToken: null });
+    if (url.endsWith("placement/bulk") && init?.method === "POST") { writes.push(JSON.parse(String(init.body))); return fail ? response({ title: "Move refused" }, 409) : new Response(null, { status: 204 }); }
+    return undefined;
+  } });
+  const properties = await vi.waitFor(() => editorButton(view.container, "Properties"));
+  flushSync(() => properties.click());
+  const open = await vi.waitFor(() => editorButton(view.container, "Move to folder"));
+  flushSync(() => open.click());
+  const target = await vi.waitFor(() => { const value = document.querySelector<HTMLInputElement>('input[data-folder-id="folder-target"]'); expect(value).not.toBeNull(); return value!; });
+  flushSync(() => target.click());
+  flushSync(() => editorButton(document.querySelector('[role="dialog"]')!, "Move").click());
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"] [role="alert"]')?.textContent).toContain("Couldn't move the selected workflow definitions."));
+  expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+  fail = false;
+  flushSync(() => editorButton(document.querySelector('[role="dialog"]')!, "Move").click());
+  await vi.waitFor(() => expect(view.api.notifications!.notify).toHaveBeenCalledWith({ level: "success", title: "Workflow organization updated" }));
+  expect(writes).toHaveLength(2);
+  expect(writes[1]).toEqual(expect.objectContaining({ definitionIds: ["definition-1"], folderId: "folder-target" }));
+  expect(view.container.querySelector(".wf-editor-save-status")?.textContent).not.toContain("Workflow organization updated");
   await view.unmount();
 });

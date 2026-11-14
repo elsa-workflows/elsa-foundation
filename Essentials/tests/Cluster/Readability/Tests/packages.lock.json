@@ -48,17 +48,17 @@
       },
       "Nuplane.Loading": {
         "type": "Direct",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "yZIC1sixa81ndOM+UCeMoypdAGgv0WWNJ7iK7azuFdWwlyePN/MzdGPghWqHiTOecIkouQL39uqTycOtU+9C5g==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "bR3r96hHBBc4HN1MXw7GJOCu+XIaK+jKeiSJoA9enw4PGF/TA7LNNvbVEok2xcy9HUukKVbatpta86sw+TWBxg==",
         "dependencies": {
           "Microsoft.Extensions.Configuration.Binder": "10.0.3",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3",
           "Microsoft.Extensions.Logging.Abstractions": "10.0.3",
           "Microsoft.Extensions.Options": "10.0.3",
-          "Nuplane": "0.0.12",
-          "Nuplane.Abstractions": "0.0.12",
-          "Nuplane.Loading.Abstractions": "0.0.12"
+          "Nuplane": "0.0.13",
+          "Nuplane.Abstractions": "0.0.13",
+          "Nuplane.Loading.Abstractions": "0.0.13"
         }
       },
       "System.Reflection.MetadataLoadContext": {
@@ -300,8 +300,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.12",
-        "contentHash": "8D2uJaKL1v+0GPt38HafW7+JVvvb8gyb8TNBFPcU6k45u+i5X61hWNWuUs0ROCgBAfDy0Gsr0tm8uq+hQH0t5A=="
+        "resolved": "0.0.13",
+        "contentHash": "3QaKweEyDncmytmpGKT9I0zYtpRg2ZSgzzU092yo/iVeon3d7q9LBW7J79yB7kDzQMxEriP8pl1VfrmkezQxTw=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -440,7 +440,7 @@
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
-          "Nuplane.Loading.Abstractions": "[0.0.12, )"
+          "Nuplane.Loading.Abstractions": "[0.0.13, )"
         }
       },
       "elsa.events.core": {
@@ -587,6 +587,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
@@ -606,6 +607,16 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.core": {
+        "type": "Project"
+      },
+      "elsa.workflows.publishing.releases.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {
@@ -817,9 +828,9 @@
       },
       "Nuplane": {
         "type": "CentralTransitive",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "NEwfkfvss8zB0yiNM9yITjdw0p7xACYe9LdAImAN5EJLqZ0oHgXj8GNzY1K+4HXZMwRi4LcgIidbDpvjYJExdg==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "G8tJJPIyNYTI+RUUtzN8zT3KAysJU3LAf61Og6W0xjTRt/2Til9cWDRRNCCKzq+/NF59h8zaOkVkyTfmPvuIqQ==",
         "dependencies": {
           "Microsoft.Extensions.Configuration.Binder": "10.0.3",
           "Microsoft.Extensions.DependencyInjection": "10.0.3",
@@ -832,17 +843,17 @@
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.12",
+          "Nuplane.Abstractions": "0.0.13",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.12, )",
-        "resolved": "0.0.12",
-        "contentHash": "uCLhTsG1kPWU5fNJBEstCJuT9D0p2r0oKaFGJpauvvrmtMBeIsvE7ATqdJZONpOLOANOJ14qqRIwDqmd+cSKog==",
+        "requested": "[0.0.13, )",
+        "resolved": "0.0.13",
+        "contentHash": "HC2V7HnZXL6p2SHkn7ronHT8qZhgiW9HTkULJ+Y8TfCZjdev9aD43ST44Gws7Dh2/sG5SVCiilOJx+LtR6ZGRw==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.12"
+          "Nuplane.Abstractions": "0.0.13"
         }
       },
       "System.Security.Cryptography.Pkcs": {

@@ -1,0 +1,6 @@
+<Project>
+  <!-- Standalone prototype: no central package management. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

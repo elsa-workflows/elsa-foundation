@@ -1,5 +1,5 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -18,6 +18,7 @@ import type { WorkflowExecutableListScope, WorkflowExecutableSummary } from "../
 import { formatDate } from "../workflowFormatting";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { ExecutableReferenceList, ExecutableRunStatusLine, CopyValueButton } from "./executableShared";
+import { getNotifications, useNotificationGuard } from "./notifications";
 import { getDialogs } from "./dialogs";
 import type { ExecutableRunState } from "./editorTypes";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
@@ -88,7 +89,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   });
   const artifactExport = useExecutableArtifactDownload({
     context,
-    onExported: fileName => { setError(""); setLastRun(null); setStatus(`Exported ${fileName}`); },
+    onExported: (fileName, _executable, canNotify) => { setError(""); setLastRun(null); setStatus(""); if (canNotify()) getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 
@@ -133,7 +134,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
     if (dispatchAiAction(ai, explainExecutableAction, executable)) {
       setError("");
       setLastRun(null);
-      setStatus(`Sent ${executable.artifactId} to Weaver`);
+      setStatus(""); getNotifications().notify({ level: "success", title: `Sent ${executable.artifactId} to Weaver` });
     }
   };
 
@@ -174,14 +175,11 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           value={definitionFilter ?? ""}
           onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
         />
-        <label className="wf-toolbar-field">
-          <span>Scope</span>
-          <select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
+        <StudioField className="wf-toolbar-field" label={<><span>Scope</span></>}><select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
             <option value="published">Published</option>
             <option value="test-runs">Test runs</option>
             <option value="all">All</option>
-          </select>
-        </label>
+          </select></StudioField>
         <label className="wf-toolbar-field wf-toolbar-checkbox">
           <input
             type="checkbox"
@@ -336,12 +334,9 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           <span className="wf-pagination-summary" aria-live="polite">
             Showing {pagerFirstItem}-{pagerLastItem} of {totalCount}
           </span>
-          <label className="wf-page-size">
-            Rows
-            <select aria-label="Executable page size" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
+          <StudioField className="wf-page-size" label="Rows"><select aria-label="Executable page size" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>
               {definitionPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
+            </select></StudioField>
           <div className="wf-page-controls">
             <StudioButton onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page" title="Previous page">
               <ChevronLeft size={14} /> Previous
@@ -429,7 +424,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   });
   const artifactExport = useExecutableArtifactDownload({
     context,
-    onExported: fileName => { setError(""); setLastRun(null); setStatus(`Exported ${fileName}`); },
+    onExported: (fileName, _executable, canNotify) => { setError(""); setLastRun(null); setStatus(""); if (canNotify()) getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
 
@@ -468,18 +463,20 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
     if (dispatchAiAction(ai, explainExecutableAction, artifact)) {
       setError("");
       setLastRun(null);
-      setStatus(`Sent ${artifact.artifactId} to Weaver`);
+      setStatus(""); getNotifications().notify({ level: "success", title: `Sent ${artifact.artifactId} to Weaver` });
     }
   };
 
+  const captureNotificationGuard = useNotificationGuard(context);
   const unpublish = async (slot: PublicationSlot) => {
+    const canNotify = captureNotificationGuard();
     if (!(await getDialogs().confirm({ message: `Unpublish slot ${slot.slotName}? Existing workflow runs keep their pinned executable, but this slot will stop starting new runs.`, confirmLabel: "Unpublish", tone: "danger" }))) return;
     setStatus("");
     setLastRun(null);
     setError("");
     try {
       await unpublishSlot(context, definitionId, slot.slotName);
-      setStatus(`Unpublished ${slot.slotName}`);
+      if (canNotify()) getNotifications().notify({ level: "success", title: `Unpublished ${slot.slotName}` });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -487,12 +484,13 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   };
 
   const restore = async (slot: PublicationSlot) => {
+    const canNotify = captureNotificationGuard();
     setStatus("");
     setLastRun(null);
     setError("");
     try {
       await restorePublicationSlot(context, definitionId, slot.slotName);
-      setStatus(`Restored ${slot.slotName}`);
+      if (canNotify()) getNotifications().notify({ level: "success", title: `Restored ${slot.slotName}` });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -512,7 +510,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   const markCopied = (label: string) => {
     setError("");
     setLastRun(null);
-    setStatus(`Copied ${label}`);
+    setStatus(""); getNotifications().notify({ level: "success", title: `Copied ${label}` });
   };
 
   const markCopyFailed = (label: string) => {
@@ -592,11 +590,11 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
               <div className="wf-artifact-card-values">
                 <span className="wf-cell-line">
                   <code title={artifact.artifactId}>{artifact.artifactId}</code>
-                  <CopyValueButton value={artifact.artifactId} ariaLabel={`Copy artifact ID ${artifact.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactId} ariaLabel={`Copy artifact ID ${artifact.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
                 <span className="wf-cell-line wf-cell-line-muted">
                   <code title={artifact.artifactHash}>{artifact.artifactHash}</code>
-                  <CopyValueButton value={artifact.artifactHash} ariaLabel={`Copy artifact hash ${artifact.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactHash} ariaLabel={`Copy artifact hash ${artifact.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
               </div>
               <dl>

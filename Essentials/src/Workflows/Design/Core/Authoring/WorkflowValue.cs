@@ -25,9 +25,9 @@ internal readonly record struct WorkflowValueScope(WorkflowValueScopeKind Kind, 
     public static WorkflowValueScope Unscoped { get; } = new(WorkflowValueScopeKind.Unscoped, null);
 }
 
-public sealed class WorkflowRequestMember<T> : WorkflowValue<T>
+public sealed class WorkflowRequestRead<T> : WorkflowValue<T>
 {
-    internal WorkflowRequestMember(string memberKey, string? path)
+    internal WorkflowRequestRead(string memberKey, string? path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(memberKey);
         MemberKey = memberKey;

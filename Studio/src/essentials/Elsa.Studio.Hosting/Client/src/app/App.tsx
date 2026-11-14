@@ -538,6 +538,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
         contentRef={contentRef}
+        toastHost={<ToastHost navigate={navigateTo} />}
         tabStrip={
           <WorkspaceTabStrip
             baseId={workspaceBaseId}
@@ -555,7 +556,6 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
           />
         }
       >
-        <ToastHost navigate={navigateTo} />
         <ShellContributions api={api} modules={modules} placement="notice" navigate={navigateTo}/>
         <WorkspaceTabPanels
           baseId={workspaceBaseId}
@@ -631,7 +631,7 @@ function routeMatchesPath(routePath: string, path: string) {
 
 /**
  * Publishes the top bar's bottom edge as `--studio-shell-header-bottom` on the document root, so host
- * overlays anchored below the header (toasts, the Notification Center) follow theme layouts and the
+ * overlays bounded by the header (toasts, the Notification Center) follow theme layouts and the
  * stacked narrow-viewport layout instead of assuming a fixed header height. The shell itself never
  * scrolls, so the edge only moves when the header or the main frame around it resizes.
  */
@@ -656,6 +656,28 @@ function useShellHeaderBottom(headerRef: React.RefObject<HTMLElement | null>) {
   }, [headerRef]);
 }
 
+/** Keep bottom-anchored overlays above the dock, including floating layouts and dock resizing. */
+function useShellBottomInset(panelRef: React.RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const root = document.documentElement;
+    const publish = () => {
+      root.style.setProperty("--studio-shell-bottom-inset", `${Math.max(0, Math.round(window.innerHeight - panel.getBoundingClientRect().top))}px`);
+    };
+    publish();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(panel);
+    if (panel.parentElement) observer?.observe(panel.parentElement);
+    window.addEventListener("resize", publish);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", publish);
+      root.style.removeProperty("--studio-shell-bottom-inset");
+    };
+  }, [panelRef]);
+}
+
 export function ShellFrame({
   navigation,
   panels,
@@ -671,6 +693,7 @@ export function ShellFrame({
   onNavigate,
   tabStrip,
   contentRef,
+  toastHost,
   children
 }: {
   navigation: StudioNavigationContribution[];
@@ -688,6 +711,8 @@ export function ShellFrame({
   /** The workspace tab strip, shown between the top bar and the content area once Studio is ready. */
   tabStrip?: React.ReactNode;
   contentRef?: React.Ref<HTMLElement>;
+  /** Fixed host feedback remains available when the dock hides the workspace. */
+  toastHost?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [navQuery, setNavQuery] = useState("");
@@ -1017,6 +1042,7 @@ export function ShellFrame({
         <main className="content" ref={contentRef}>{children}</main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
+      {toastHost}
       {topNav ? (
         <footer className="studio-statusbar" aria-label="Environment status">
           {backendAction ?? <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>}
@@ -1032,6 +1058,8 @@ function registerBuiltInContributions(api: ElsaStudioModuleApi) {
 }
 
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
+  const panelRef = useRef<HTMLElement>(null);
+  useShellBottomInset(panelRef);
   const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
@@ -1184,6 +1212,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
 
   return (
     <section
+      ref={panelRef}
       className={`bottom-panel ${collapsed ? "collapsed" : ""} ${maximized ? "maximized" : ""}`}
       style={{ "--bottom-panel-height": `${height}px` } as React.CSSProperties}
       aria-label="Bottom panel"

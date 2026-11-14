@@ -77,7 +77,7 @@ The audit sink, reader and ownership are one store's facets and are replaced tog
 
 Known provider implementations:
 
-- `WeaverGitHubCopilotProvider` (`Elsa.Weaver.GitHubCopilot`) *(intra-domain — provider adapter)* implements `IWeaverProvider` and `IWeaverHarness`; its feature registers the provider with `TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverProvider, WeaverGitHubCopilotProvider>())`.
+- `WeaverGitHubCopilotProvider` (`Elsa.Weaver.GitHubCopilot`) *(intra-domain — provider adapter; [owning boundary](../GitHubCopilot/EXTENSION_POINTS.md))* implements `IWeaverProvider` and `IWeaverHarness`; its feature registers the provider with `TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverProvider, WeaverGitHubCopilotProvider>())`.
 - `WeaverAnthropicProvider` (`Elsa.Weaver.Anthropic`) *(intra-domain — provider adapter)* implements `IWeaverProvider` for the host step loop; its feature uses the corresponding scoped enumerable registration.
 - `DeterministicWeaverProvider` (`Elsa.Weaver.Tests`) *(intra-domain — test fixture)* and the private journey `ScriptedProvider` *(cross-domain — qualification fixture)* are not shipped defaults. Their existence does not establish live-provider coverage.
 
@@ -135,6 +135,8 @@ Across admissions the first error is returned, a 503 included. History admission
 The `Note*` examples refer to the private [source-composed journey fixture](../../../../tools/studio/Composition.Probe/fixtures/WeaverJourney.Backend.cs.in). The independent package example below has separate author/consumer evidence.
 
 The separately authored [Acme Home fixture](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend) adds `WidgetContextSource` (`IWeaverContextProvider`), `WidgetCapabilities` (`IWeaverCapabilityProvider`), and `ReadWidgetTool` / `SetWidgetVisibilityTool` (`IWeaverTool`) through `AcmeHomeWidgetFeature` *(cross-domain — qualification package)*. Its [Studio companion](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio) contributes public SDK context, prompt actions and result rendering. The [76ec independent witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) qualifies the actual external consumer journeys, native add/remove/incompatible/restore controls and both provider adapters at that code baseline. [Final-head review/CI, merge and resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143) completed through [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497). Durable shared lifecycle/recovery and broader Program M2–M5 coverage remain open. The [preview migration](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration) identifies removed exports and package/namespace changes.
+
+`Elsa.Weaver.Dashboard` contributes `DashboardAuthoringContextProvider` (`IWeaverContextProvider`), `DashboardWeaverCapabilityProvider` (`IWeaverCapabilityProvider`) and three authorized `IWeaverTool` implementations *(cross-domain)*. See its [owning catalog](../Dashboard/EXTENSION_POINTS.md) for stable IDs, scope and disclosure limits; it adds no model loop or aggregator.
 
 ## Events
 

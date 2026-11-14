@@ -103,6 +103,34 @@ internal static class ConnectionsProviderContract
         await Assert.ThrowsAsync<ConnectionConflictException>(async () => await second.SaveAsync(restored));
         Assert.True(await second.DeleteAsync(tenant.ToLowerInvariant(), "mail"));
         Assert.True(await second.DeleteAsync(tenant + " ", "mail"));
+        foreach (var (oldIdentity, newIdentity) in new[]
+                 { ("old-incarnation", "new-incarnation"), ("ordinal-id", "ORDINAL-ID"), ("", "adopted-incarnation") })
+        {
+            var name = "recreated-" + Guid.NewGuid().ToString("N");
+            var original = Document(tenant, name, "stale-secret");
+            original.Definition.IncarnationId = oldIdentity;
+            Assert.True(await first.TryAddAsync(original));
+            var prior = (await second.FindAsync(tenant, name))!;
+            Assert.True(await first.DeleteAsync(tenant, name));
+            var replacement = Document(tenant, name, "replacement-secret");
+            replacement.Definition.IncarnationId = newIdentity;
+            Assert.True(await first.TryAddAsync(replacement));
+            Assert.Equal(prior.State.Version, replacement.State.Version);
+            prior.Definition.DisplayName = "Stale overwrite";
+            await Assert.ThrowsAsync<ConnectionConflictException>(() => second.SaveAsync(prior).AsTask());
+            var retained = (await first.FindAsync(tenant, name))!;
+            Assert.Equal(newIdentity, retained.Definition.IncarnationId);
+            Assert.Equal(replacement.State.Version, retained.State.Version);
+            Assert.True(await second.IsSecretReferencedAsync(tenant, "replacement-secret"));
+            Assert.False(await second.IsSecretReferencedAsync(tenant, "stale-secret"));
+            retained.Definition.IncarnationId = "forged-incarnation";
+            await Assert.ThrowsAsync<ConnectionConflictException>(() => second.SaveAsync(retained).AsTask());
+            retained = (await first.FindAsync(tenant, name))!;
+            retained.Definition.DisplayName = "Valid after refused reservation";
+            await second.SaveAsync(retained);
+            Assert.Equal("Valid after refused reservation", (await first.FindAsync(tenant, name))!.Definition.DisplayName);
+            Assert.True(await first.DeleteAsync(tenant, name));
+        }
         // Exercise the complete declared key sizes, including the reference PK on SQL Server.
         var longestTenant = new string('T', 256);
         var longestName = new string('n', 128);

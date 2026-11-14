@@ -45,6 +45,40 @@ afterEach(() => {
 });
 
 describe("feature management module", () => {
+  it("keeps feature loading and errors inside the selected host panel", async () => {
+    let reject = (_reason: Error) => {};
+    const pending = new Promise((_resolve, fail) => { reject = fail; });
+    register(stubApi({ getJson: async () => pending }));
+    const { container, unmount } = await renderFeatureManagementPage();
+    try {
+      assertLinkedPanels(container);
+      const selected = container.querySelector("[aria-label='Hosts'] [aria-selected='true']")!;
+      const panel = document.getElementById(selected.getAttribute("aria-controls")!)!;
+      expect(panel.querySelector('.feature-management-list[aria-busy="true"]')).not.toBeNull();
+      reject(new Error("Catalog unavailable"));
+      await flushPromises();
+      assertLinkedPanels(container);
+      expect(panel.textContent).toContain("Catalog unavailable");
+      expect(panel.querySelector('.feature-management-list[aria-busy="true"]')).toBeNull();
+    } finally { reject(new Error("Catalog unavailable")); await unmount(); }
+  });
+
+  it("links feature hosts while keyboard selection preserves focus", async () => {
+    register(stubApi());
+    const { container, unmount } = await renderFeatureManagementPage();
+    try {
+      assertLinkedPanels(container);
+      for (const key of ["Home", "End", "ArrowLeft", "ArrowRight"]) {
+        const selected = container.querySelector<HTMLButtonElement>("[aria-label='Hosts'] [aria-selected='true']")!;
+        selected.focus();
+        flushSync(() => selected.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+        await flushPromises();
+        expect(document.activeElement).toBe(container.querySelector("[aria-label='Hosts'] [aria-selected='true']"));
+        assertLinkedPanels(container);
+      }
+    } finally { await unmount(); }
+  });
+
   it("registers navigation, route, and shared setting editors", () => {
     const api = stubApi();
 
@@ -1301,7 +1335,7 @@ describe("feature impact review", () => {
       .find(dialog => dialog.textContent?.includes("Save draft"));
     const modeLabel = Array.from(settingsDialog?.querySelectorAll("label") ?? [])
       .find(label => label.textContent?.includes("Mode"));
-    await changeInput(modeLabel?.querySelector("input, textarea") as HTMLInputElement | null, "fast");
+    await changeInput(modeLabel?.control as HTMLInputElement | null, "fast");
     await click(buttonByText(settingsDialog!, "Save draft"));
 
     expect(impactReviewRegion(container)).toBeNull();
@@ -1398,8 +1432,8 @@ describe("feature impact review", () => {
 
       dialog = await openSettingsDialog();
       const existingSettingLabel = Array.from(dialog.querySelectorAll("label"))
-        .find(label => label.querySelector("strong")?.textContent === "Existing setting");
-      const existingSettingInput = existingSettingLabel?.querySelector("input, textarea") as HTMLInputElement | null;
+        .find(label => label.textContent === "Existing setting");
+      const existingSettingInput = existingSettingLabel?.control as HTMLInputElement | null;
       expect(existingSettingInput?.value).toBe("preserve me");
       await changeInput(existingSettingInput, "");
       await click(buttonByText(dialog, "Save draft"));
@@ -2178,7 +2212,7 @@ async function editSettingValue(container: Element, featureId: string, settingLa
     .find(candidate => Array.from(candidate.querySelectorAll("button")).some(button => button.textContent === "Save draft")) ?? null;
   const settingField = Array.from(dialog?.querySelectorAll("label") ?? [])
     .find(label => label.textContent?.includes(settingLabel));
-  const input = settingField?.querySelector("input, textarea") as HTMLInputElement | null;
+  const input = settingField?.control as HTMLInputElement | null;
   await changeInput(input, value);
   await click(buttonByText(dialog!, "Save draft"));
 }
@@ -2284,3 +2318,17 @@ describe("backend feature administration isolation",() => {
     } finally {await page.unmount();}
   });
 });
+
+function assertLinkedPanels(container: Element) {
+  const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+  expect(tabs.length).toBeGreaterThan(0);
+  const ids = Array.from(container.querySelectorAll('[id]'), element => element.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const tab of tabs) {
+    const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+    expect(panel, `Panel for ${tab.textContent}`).not.toBeNull();
+    expect(panel?.getAttribute("role")).toBe("tabpanel");
+    expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
+    expect(panel?.hidden).toBe(tab.getAttribute("aria-selected") !== "true");
+  }
+}

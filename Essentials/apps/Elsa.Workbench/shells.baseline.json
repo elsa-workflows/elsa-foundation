@@ -84,7 +84,13 @@
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
-          }
+          },
+          "StudioDashboardApi": {},
+          "StudioDashboardEntityFrameworkCore": {
+            "ConnectionString": "Data Source=elsa-studio-dashboards.db"
+          },
+          "WorkflowDashboardQueries": {},
+          "StudioDashboardWeaver": {}
         },
         "Configuration": {
           "WebRouting": {

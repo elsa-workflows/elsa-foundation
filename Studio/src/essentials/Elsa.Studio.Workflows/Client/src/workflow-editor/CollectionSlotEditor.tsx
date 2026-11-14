@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useId, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ActivityNode } from "../workflowTypes";
@@ -85,8 +86,8 @@ function CollectionItemRow({ label, item, value, readOnly, duplicate, onRename, 
   const error = duplicate(text);
   const commit = () => { if (!readOnly && !error && text !== value) onRename(text); };
   return (
-    <div className="wf-slot-collection-item">
-      <label htmlFor={id}>{label}</label>
+    <div className="wf-slot-collection-item"><StudioField controlId={id} label={<>{label}</>}>
+
       <div className="wf-slot-collection-label-row">
         <input id={id} type="text" value={text} readOnly={readOnly} aria-invalid={error || undefined} aria-describedby={error ? `${id}-error` : undefined}
           onChange={event => setEdit({ signature, text: event.target.value })}
@@ -99,6 +100,6 @@ function CollectionItemRow({ label, item, value, readOnly, duplicate, onRename, 
       </div>
       {error ? <p id={`${id}-error`} className="wf-slot-collection-error" role="alert">This value is already used. Each {label.endsWith("match") ? "case match" : label.endsWith("label") ? "case label" : "branch name"} must be unique.</p> : null}
       {children}
-    </div>
+    </StudioField></div>
   );
 }
