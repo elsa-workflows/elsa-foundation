@@ -57,6 +57,8 @@ internal static class ReaderWitness
         });
         var bad = new (string Name, Action<NativeState> Change, string Expected)[]
         {
+            ("self-frame", s => s.Frames["f2"].LexicalScope = "s4", "Invalid lexical scope frame reference."),
+            ("root-frame", s => s.Frames["f1"].LexicalScope = "s3", "Invalid lexical scope frame reference."),
             ("missing-owner", s => s.LexicalScopes!["s4"] = s.LexicalScopes["s4"] with { Owner = "missing" }, "Lexical scope owner or values are missing."),
             ("missing-parent", s => s.LexicalScopes!["s4"] = s.LexicalScopes["s4"] with { Parent = "missing" }, "Lexical scope is missing or inaccessible."),
             ("foreign-parent", s => { Foreign(s); s.LexicalScopes!["s4"] = s.LexicalScopes["s4"] with { Parent = "s6" }; }, "Lexical scope is missing or inaccessible."),
