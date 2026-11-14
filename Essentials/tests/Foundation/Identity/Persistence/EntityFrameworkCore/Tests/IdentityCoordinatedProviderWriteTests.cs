@@ -14,6 +14,50 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTests
 {
+    [Theory]
+    [InlineData("provider")]
+    [InlineData("attach")]
+    [InlineData("remove")]
+    public async Task Coordinated_operations_wrap_connection_open_failures_without_borrowing_the_callers_database(string operation)
+    {
+        await using var fixture = await CoordinatedFixture.OpenAsync();
+        var guards = await fixture.Guards();
+        var before = await fixture.Snapshots();
+        var missingDirectory = System.IO.Path.Combine(fixture.Path + ".missing", "database.sqlite");
+        await using var unavailableIam = new IdentityIamSqliteDbContext(
+            new DbContextOptionsBuilder<IdentityIamSqliteDbContext>().UseSqlite(ConnectionTo(missingDirectory)).Options);
+        await using var unavailableProviders = CreateContext(missingDirectory);
+        var failure = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(async () =>
+        {
+            if (operation == "provider")
+            {
+                var store = new EfProviderConfigurationStore(unavailableProviders, fixture.GlobalAccess, unavailableIam);
+                Assert.True(store.SupportsIdentityRevisionGuards);
+                await store.SaveWithIdentityRevisionGuardsAsync(fixture.Configuration, fixture.Revision, guards);
+            }
+            else
+            {
+                var store = new EfExternalIdentityAdministrationStore(unavailableIam, fixture.GlobalAccess, unavailableProviders);
+                Assert.True(store.SupportsProviderRevisionGuards);
+                var key = new ExternalIdentityKey("tenant-a", "company", "https://company.example", "unavailable-subject");
+                if (operation == "attach")
+                    await store.AttachAsync(new(key, before.User.Record, false, ExternalIdentityLinkPolicy.Admin),
+                        guards[0], guards, new(fixture.Configuration, fixture.Revision));
+                else
+                    await store.RemoveAsync(key, guards[0], guards[0].Revision, guards,
+                        new(fixture.Configuration, fixture.Revision));
+            }
+        });
+        Assert.IsType<SqliteException>(failure.InnerException);
+        Assert.DoesNotContain("SQLite Error", failure.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(missingDirectory));
+        var after = await fixture.Snapshots();
+        Assert.Equal(before.User.Revision, after.User.Revision);
+        Assert.Equal(before.Role.Revision, after.Role.Revision);
+        Assert.Equal(before.Stamp, after.Stamp);
+        Assert.Equal(fixture.Revision, (await fixture.Store.FindGlobalWithRevisionAsync("external-authentication"))!.Revision);
+    }
+
     [Fact]
     public async Task Coordinated_provider_write_commits_its_catalog_and_IAM_guards_without_changing_security_or_permissions()
     {

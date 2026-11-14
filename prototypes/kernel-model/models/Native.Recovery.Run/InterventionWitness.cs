@@ -86,7 +86,9 @@ internal sealed class InterventionWitness
         if (c.Parallel)
         {
             var wait = _world.Store.Subscriptions.Single(s => s.Instance == _target.Id && s.Key == "event:release");
-            Apply(new("add", M: Events.Deliver(new("event:release", "release", null, _world.Time + 120_000), wait))); Drain();
+            var accepted = _world.Store.AddEventAsync(Events.Route(new(wait.Key, "release", null, _world.Time + 120_000), wait)).Result;
+            Check(accepted.Added && accepted.Target == _target, "R7: release missed the intervened workflow's sibling");
+            Drain();
             state = State; var progress = Values.To<ParallelState>(state.Frames.Values.Single(f => f.Node == "parent").State)!;
             Check(state.Variables["sibling-done"]!.ToString() == "1" && progress.Done == 1 && progress.Faulted == 0 && !progress.Joined && progress.Pending.SequenceEqual(new[] { source.Id }) &&
                 Json.Write(state.Frames[source.Id]) == retained && MutableFault.Calls == 1,
