@@ -362,7 +362,8 @@ def field_gallery_verdict(report, artifacts, requested_port=None):
 def clean_environment():
     # Hosts read environment variables after shells.json. Never inherit a developer's stores/provider secrets.
     allowed = {'PATH', 'HOME', 'USERPROFILE', 'DOTNET_ROOT', 'DOTNET_ROOT_X64', 'TMPDIR', 'TEMP', 'TMP',
-               'DOTNET_CLI_HOME', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO', 'LANG', 'LC_ALL'}
+               'DOTNET_CLI_HOME', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO', 'LANG', 'LC_ALL',
+               'DOTNET_HOSTBUILDER__RELOADCONFIGONCHANGE', 'DOTNET_USE_POLLING_FILE_WATCHER'}
     env = {key: value for key, value in os.environ.items() if key in allowed}
     env.update(ASPNETCORE_ENVIRONMENT='Development', DOTNET_ENVIRONMENT='Development')
     return env

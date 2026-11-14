@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Qualification shares the owned HTTP provider and explicit vendor wiring, not an alternate auth implementation. -->
+    <Compile Include="../../../Essentials/tests/Foundation/Identity/Tests/ManagedOidc/ControlledOidcServer.cs" Link="Fixtures/ControlledOidcServer.cs" />
+    <Compile Include="../../../Essentials/tests/Foundation/Identity/Tests/OpenIddict/OpenIddictVendorTestRegistration.cs" Link="Fixtures/OpenIddictVendorTestRegistration.cs" />
+    <Compile Include="../../../Essentials/tests/Foundation/Identity/Tests/TestAdmin.cs" Link="Fixtures/TestAdmin.cs" />
+  </ItemGroup>
+</Project>
