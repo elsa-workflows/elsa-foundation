@@ -181,26 +181,24 @@ public static class Cases
             var a = await h.StartAsync();
             await Settle(h);
             var store = h.StoreOf(a.Name);
-            store.Stall(System.Threading.Timeout.InfiniteTimeSpan);      // the node pauses until the thief has its lease, however slow the store
-            int commits, refused;
+            // Hold an already admitted write on its way to the store. A stall before admission instead permits
+            // the local lease deadline to prevent the stale write entirely, which cannot exercise this database fence.
+            store.StallNextCommit(System.Threading.Timeout.InfiniteTimeSpan, partition: 0);
+            var tokens = Enumerable.Range(0, 5).Select(i => "f" + i).ToList();
             try
             {
-                await Task.Delay(h.Lease);
-                // Another process takes it once the node's lease has run out (a commit that slipped in just before the
-                // stall may have renewed it), then dies without releasing it.
+                await h.AddAsync(Token(0, "c", tokens[0]));
+                That(await h.WaitAsync(() => store.Stalls > 0, h.Lease * 3), "no admitted turn commit entered the hold");
                 That(await Harness.WaitAsync(async () => await h.Outside.TakeAsync(0, "thief", h.Lease) is not null, h.Lease * 3),
                     "the stalled node's lease on partition 0 did not run out");
-                // The stalled node must try to write after its scope was taken (its renewal beat at the latest); only
-                // then is the store's answer the fence's.
-                (commits, refused) = (store.Commits, store.Refused);
             }
             finally { store.Resume(); }
-            That(await h.WaitAsync(() => store.Commits > commits, h.Lease * 3), "the stalled node made no commit after its scope was taken: the case did not test the fence");
-            if (!await h.WaitAsync(() => store.Refused > refused, h.Lease))
-                throw new FenceException("the store did not refuse the stalled node's commit: it did not learn that it lost partition 0");
+            var held = store.Held;
+            That(await Task.WhenAny(held, Task.Delay(h.Lease * 3)) == held, "the admitted stale commit never returned");
+            if (await held != "refused" || store.HeldRefused != 1)
+                throw new FenceException($"the admitted stale commit was not refused by the store: {await held}");
             await Settle(h, "partition 0 activated again");
-            var tokens = Enumerable.Range(0, 5).Select(i => "f" + i).ToList();
-            foreach (var token in tokens) await h.AddAsync(Token(0, "c", token));
+            foreach (var token in tokens.Skip(1)) await h.AddAsync(Token(0, "c", token));
             await Applied(h, 0, "c", tokens, h.Lease * 3 + Slack);
         }, Fence: true),
 

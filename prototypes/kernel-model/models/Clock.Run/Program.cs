@@ -3,6 +3,11 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Workflows;
 
+if (args is ["--pass-cancellation", var boundary]) { await ShortWaitRaces.PassCancellation(boundary); return; }
+if (args.SequenceEqual(["--job-retries"])) { await ShortWaitRaces.JobRetries(); return; }
+if (args.SequenceEqual(["--trial-jobs"])) { await ShortWaitRaces.TrialJobAdmission(); return; }
+if (args.SequenceEqual(["--job-progress"])) { await ShortWaitRaces.JobProgress(); return; }
+if (args.SequenceEqual(["--job-entry"])) { await ShortWaitRaces.JobEntry(); return; }
 if (args.SequenceEqual(["--race-check"])) { Environment.ExitCode = await ShortWaitRaces.Run(); return; }
 if (args.SequenceEqual(["--shortwait-check"])) { Environment.ExitCode = await ShortWaitIntegration.Run(); return; }
 var names = new[] { "normal", "before-apply", "lost-ack", "reload", "stale-commit", "future-pending-end", "unsupported" };
