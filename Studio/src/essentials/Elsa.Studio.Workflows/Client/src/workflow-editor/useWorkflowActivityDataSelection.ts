@@ -139,12 +139,11 @@ export function useWorkflowActivityDataSelection({
     documentRevision,
     baseRevision,
     saving,
-    openWorkflowRequest: (draft?.state.inputs?.length ?? 0) === 0,
     requestSources,
     describeActivity,
     revealActivity,
     findingsFor
-  } : null, [baseRevision, describeActivity, documentRevision, draft?.state.inputs?.length, findingsFor, on, requestSources, revealActivity, saving]);
+  } : null, [baseRevision, describeActivity, documentRevision, findingsFor, on, requestSources, revealActivity, saving]);
 }
 
 function acknowledgedRevision(draft: WorkflowDraft | null, saved: WorkflowDraft | null) {

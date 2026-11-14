@@ -24,6 +24,8 @@ public sealed record RuntimeIngressReservation(string ReservationId, TriggerScop
 public interface ITriggerSourceResourceCommitStore
 {
     bool SupportsActivatedResources => false;
+    /// <summary>Readiness of one resource family, including its selected source-owned reservation format.</summary>
+    bool SupportsActivatedType(string typeKey) => SupportsActivatedResources;
     ValueTask<TriggerMutationReceipt> CommitAsync(TriggerScope scope, TriggerStoreWrite write,
         IReadOnlyList<RuntimeIngressReservationDescriptor> reservations, CancellationToken cancellationToken = default);
 }

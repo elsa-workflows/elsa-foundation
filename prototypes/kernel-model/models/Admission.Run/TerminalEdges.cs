@@ -25,8 +25,8 @@ internal sealed class EdgeHarness(AdmissionFlaw defect)
     internal void Send(string kind, object? input = null, StartSpec? start = null, bool reply = false, InstanceRef? target = null)
     {
         var id = "edge-message-" + ++_serial;
-        Apply(new("add", M: new Message(id, target ?? Target, kind, input is null ? null : Json.Write(input), Start: start,
-            ReplyTo: reply ? ReplyTo.Of("outside", id, World.Time + 30_000) : null)));
+        Apply(new("add", M: CreationFixture.Pin(new Message(id, target ?? Target, kind, input is null ? null : Json.Write(input), Start: start,
+            ReplyTo: reply ? ReplyTo.Of("outside", id, World.Time + 30_000) : null))));
     }
     internal void Drain()
     {
@@ -66,7 +66,7 @@ internal static class TerminalEdges
         var reply = h.Query("never-registered", "sender-id");
         EdgeHarness.Require(reply.Result == "UnknownInvocation" && reply.Actor == h.Target.Id, "T5", "absent model state had no defined lookup result");
         h.Send(Kinds.Delete); h.Drain();
-        EdgeHarness.Require(!h.World.Store.Instances.ContainsKey(h.Target.Id), "T5", "normal failed-start deletion wedged");
+        EdgeHarness.Require(h.World.Store.Instances[h.Target.Id].Retired, "T5", "normal failed-start deletion wedged");
         Console.WriteLine("PASS terminal:null-state");
     }
 

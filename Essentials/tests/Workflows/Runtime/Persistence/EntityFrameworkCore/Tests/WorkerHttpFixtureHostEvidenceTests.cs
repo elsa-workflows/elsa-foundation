@@ -53,7 +53,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// Exercises the proposed Worker selection through its mapped, permission-protected HTTP routes and the EF runtime
 /// store. The selected feature IDs are kept separate from CShells' dependency closure.
 /// </summary>
-public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
+public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
 {
     private const string ShellName = "worker-runtime";
     private const string ResourceName = "Worker";
@@ -215,8 +215,10 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
             File.Delete(path);
     }
 
-    private async Task<WorkerHttpHost> StartHostAsync()
+    private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false, bool automaticResumption = true, double? responseTimeoutSeconds = null, bool suppressHttpPrompt = false)
     {
+        var baseFeatures = SelectedFeatureIds.Where(id => automaticResumption || id != "WorkflowsRuntimeResumption").ToArray();
+        var selectedFeatures = standaloneHttp ? baseFeatures.Concat(["FoundationIdentityAbstractions", "ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : baseFeatures;
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -226,11 +228,14 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 [$"ConnectionStrings:{ResourceName}"] = ConnectionString,
                 [$"CShells:Shells:{ShellName}:Configuration:WebRouting:Path"] = "",
                 [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
-                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey
-            }.Concat(SelectedFeatureIds.Select(id => KeyValuePair.Create(
+                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey,
+            }.Concat(selectedFeatures.Select(id => KeyValuePair.Create(
                 $"CShells:Shells:{ShellName}:Features:{id}",
                 (string?)null))))
             .Build();
+        if (standaloneHttp)
+            configuration[$"CShells:Shells:{ShellName}:Features:ActivitiesHttp:SyncRequestTimeout"] =
+                TimeSpan.FromSeconds(responseTimeoutSeconds ?? 30).ToString("c", System.Globalization.CultureInfo.InvariantCulture);
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -243,6 +248,7 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IConfiguration>(configuration);
         builder.Services.AddEfPersistenceResources(configuration, typeof(WorkerHttpFixtureHostEvidenceTests).Assembly);
+        if (suppressHttpPrompt) DeferHttpPrompt(builder.Services);
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(
                 typeof(PrimitivesFeature).Assembly,
@@ -259,6 +265,11 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                 typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                 typeof(WorkflowsRuntimeTriggersFeature).Assembly,
+                typeof(Elsa.Workflows.Runtime.Scheduling.WorkflowsRuntimeRecurringTriggersFeature).Assembly,
+                typeof(Elsa.Foundation.Identity.FoundationIdentityAbstractionsFeature).Assembly,
+                typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
+                typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
+                typeof(Elsa.Http.HttpFeature).Assembly,
                 typeof(TasksFeature).Assembly)
             .WithConfigurationProvider(configuration));
 

@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 
 namespace Elsa.Workflows.Runtime.Services.Triggers;
 
-internal static class RuntimeIngressReservationRules
+internal static partial class RuntimeIngressReservationRules
 {
     internal static IReadOnlyList<RuntimeIngressReservation> Prepare(TriggerScope scope, string ownerKind, string ownerId,
         long revision, long configurationRevision, IReadOnlyList<RuntimeIngressReservationDescriptor> claims)

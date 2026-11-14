@@ -230,6 +230,7 @@ public static class LeaseChecks
 // Delay a successful commit's response, after the inner store has actually committed.
 public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
 {
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool DelayNext, DelayTake;
     public TaskCompletionSource Taken = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -258,6 +259,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken ct = default) => inner.FindSubscriptionsAsync(key, ct);
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken ct = default) => inner.FindEventsAsync(keys, ct);
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken ct = default) => inner.ReadJournalAsync(partition, after, take, ct);
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken ct = default) => inner.ReadJournalOfAsync(partition, instance, after, ct);
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken ct = default) => inner.ProjectedAsync(partition, ct);
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken ct = default) => inner.ProjectAsync(partition, from, to, rows, ct);
     public ValueTask<int> SweepAsync(CancellationToken ct = default) => inner.SweepAsync(ct);

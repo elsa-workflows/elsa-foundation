@@ -1,4 +1,6 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
+import { isFieldUnobscured } from "../visibleContent";
+import { holdToastForPlacement } from "./toastPlacementControl";
 
 export async function phoneContentJourney(page: Page, info: TestInfo, capture: (page: Page, info: TestInfo, name: string) => Promise<void>) {
   const original = page.viewportSize()!;
@@ -66,6 +68,9 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await capture(page, info, "phone-theme-assets");
   await theme.getByRole("tab", { name: "Overview", exact: true }).click();
   await theme.getByRole("button", { name: "Duplicate", exact: true }).click();
+  const duplicationNotice = page.locator(".studio-toast").filter({ hasText: "Theme duplicated as an editable custom theme." });
+  // Exercise the real notice's existing hover pause, retaining it during the viewport sweep.
+  const noticeHold = await holdToastForPlacement(page, duplicationNotice);
   const name = theme.getByRole("textbox", { name: "Name", exact: true });
   await expect(name).toBeEditable();
   const selectedId = await themeSelect.inputValue();
@@ -81,18 +86,27 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await page.setViewportSize({ width: 768, height: 900 });
   await expect(primary).toHaveValue("oklch(0.5 0.15 250)"); await expect(primary).toBeFocused();
   await expect(primary).toBeInViewport();
+  await expect.poll(() => primary.evaluate(isFieldUnobscured)).toBe(true);
   await capture(page, info, "theme-tablet-dirty");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(primary).toHaveValue("oklch(0.5 0.15 250)"); await expect(primary).toBeFocused();
   await expect(primary).toBeInViewport();
   await expect(themeSelect).toHaveValue(selectedId);
+  await noticeHold.assertCurrent();
+  await expect.poll(() => primary.evaluate(isFieldUnobscured)).toBe(true);
   await capture(page, info, "phone-theme-dirty");
   await page.setViewportSize({ width: 390, height: 600 });
   await expect(primary).toHaveValue("oklch(0.5 0.15 250)"); await expect(primary).toBeFocused();
   await expect(primary).toBeInViewport();
+  await noticeHold.assertCurrent();
+  await expect.poll(() => primary.evaluate(isFieldUnobscured)).toBe(true);
   await capture(page, info, "phone-theme-short");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(primary).toBeFocused(); await expect(primary).toBeInViewport();
+  await expect.poll(() => primary.evaluate(isFieldUnobscured)).toBe(true);
+  await noticeHold.release();
+  await duplicationNotice.getByRole("button", { name: "Dismiss notification", exact: true }).click();
+  await expect(duplicationNotice).toHaveCount(0);
   await themeSelect.focus(); await page.setViewportSize({ width: 1280, height: 900 });
   await expect(theme.locator(".theme-builder-list button.active")).toBeFocused();
   await theme.getByRole("tab", { name: "Overview", exact: true }).click();

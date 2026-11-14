@@ -842,6 +842,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../StudioUi
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17

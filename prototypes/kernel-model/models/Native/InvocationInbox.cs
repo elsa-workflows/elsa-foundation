@@ -113,6 +113,7 @@ internal sealed partial class Burst
         var digest = Digest(input);
         if (!AdmissionHas(AdmissionFlaw.ForgetIds) && inbox.Receipts.TryGetValue(input.Id, out var existing))
             return Result(existing.Digest == digest ? "Duplicate" : "Conflict", existing);
+        if (turn.Instance.Creation <= 0) return Result("CreationIdentityUnavailable");
         if (ended is not null && inbox.Closed is null) return Result("TerminalMetadataUnresolved");
         if (inbox.Closed is not null || ended is not null) return Result("Ended");
         if (!_s.Frames.ContainsKey(input.Frame)) return Result("UnknownInvocation");
@@ -148,6 +149,7 @@ internal sealed partial class Burst
 
     internal void RegisterInbox(Frame frame, int capacity, int receipts, TimeSpan? retention)
     {
+        if (turn.Instance.Creation <= 0) throw new NotSupportedException("invocation admission requires a qualified actor creation");
         if (capacity < 1 || receipts < capacity) throw new ArgumentOutOfRangeException(nameof(capacity));
         var duration = retention is null ? (long?)null : checked((long)Math.Ceiling(retention.Value.TotalMilliseconds));
         if (duration is <= 0) throw new ArgumentOutOfRangeException(nameof(retention));

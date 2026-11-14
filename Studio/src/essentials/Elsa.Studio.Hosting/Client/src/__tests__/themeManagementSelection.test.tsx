@@ -117,8 +117,12 @@ describe("theme management with an empty selectable default", () => {
     const context = { http: { getJson: async () => ({ themes: [custom], themesMode: "DirectoryOnly", directoryThemeIds: [], defaultThemeId: "", assets: [] }) } } as unknown as StudioEndpointContext;
     const api = { host: context, notifications, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
     await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
-    const customButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-list button")).find(button => button.textContent?.includes("Managed Theme"));
-    await update(() => customButton!.click());
+    const customButton = await vi.waitFor(() => {
+      const button = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-list button")).find(candidate => candidate.textContent?.includes("Managed Theme"));
+      expect(button).toBeDefined();
+      return button!;
+    });
+    await update(() => customButton.click());
     expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(true);
 
     const field = Array.from(container.querySelectorAll<HTMLInputElement>(".theme-builder-detail input")).find(input => !input.disabled && input.type !== "file" && input.type !== "checkbox")!;

@@ -10,6 +10,7 @@ namespace Kernel.Durable;
 public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
     public bool CommitClockAvailable { get; set; } = true;
+    public bool CreationIdentityAvailable { get; set; } = true;
 
     public sealed class PartitionRow
     {
@@ -62,6 +63,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
         {
@@ -84,8 +86,9 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                         if (Refuses?.Invoke(row) == true) throw new StoreException(Failure.Definite, $"the row of {row.Id} was refused");
                         var revision = Instances.GetValueOrDefault(row.Id)?.Revision;
                         if (revision != turn.Expected) Diverged($"instance {row.Id} is at revision {revision?.ToString() ?? "none"}, the commit expected {turn.Expected?.ToString() ?? "none"}");
-                        CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
+                        if (!row.Retired) CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
+                    CreationProtocol.Validate(turn, Instances.GetValueOrDefault(turn.Instance));
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var message in turn.Sent)
@@ -101,7 +104,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
                 if (turn.Row is not null) Instances[turn.Row.Id] = CommitClockFacts.Stamp(turn.Row, now);
                 if (turn.Delete)
                 {
-                    Instances.Remove(turn.Instance);
+                    if (turn.Row is not { Retired: true }) Instances.Remove(turn.Instance);
                     foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
                     {
                         Journal.Remove(key);
@@ -176,6 +179,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
         lock (_gate)
         {
             if (Messages.ContainsKey(message.Id)) return new(false);
@@ -197,6 +201,7 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default)
     {
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(subscription);
         lock (_gate) Subscriptions.Add(subscription);
         return default;
     }
@@ -231,11 +236,22 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
         {
             if (Projection[partition] != from && !Has(Flaw.ProjectorBlindWrite)) return new(false);
             Projection[partition] = to;
-            foreach (var row in rows.Where(r => r.Revision > 0))
-                Views[row.Instance] = Views.GetValueOrDefault(row.Instance) is { } view ? new ViewRow(row.Instance, Math.Max(view.Revision, row.Revision), view.Commits + 1) : new ViewRow(row.Instance, row.Revision, 1);
-            foreach (var row in rows.Where(r => r.Revision < 0)) Views.Remove(row.Instance);
+            foreach (var change in ViewChange.From(rows))
+            {
+                if (change.Commits == 0) Views.Remove(change.Instance);
+                else
+                {
+                    int prior = change.Reset ? 0 : Views.GetValueOrDefault(change.Instance)?.Commits ?? 0;
+                    Views[change.Instance] = new(change.Instance, change.Revision, prior + change.Commits);
+                }
+            }
             return new(true);
         }
+    }
+
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default)
+    {
+        lock (_gate) return new(Journal.Values.Where(j => j.Partition == partition && j.Instance == instance && j.Position > after).OrderBy(j => j.Position).ToList());
     }
 
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default)

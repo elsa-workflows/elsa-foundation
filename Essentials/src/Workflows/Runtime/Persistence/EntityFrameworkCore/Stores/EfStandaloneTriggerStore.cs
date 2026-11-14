@@ -184,6 +184,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
                 throw new TriggerOperationException("conflict", "The association identity belongs to another or removed association.");
         }
         var replacement = ResourceRow(scope, write.Trigger);
+        replacement.SchemaVersion = RuntimeSchemaWriteVersion.Standalone(context, oldRow?.SchemaVersion);
         context.StandaloneTriggers.Attach(replacement);
         context.Entry(replacement).State = oldRow is null ? EntityState.Added : EntityState.Modified;
         if (oldRow is not null) context.Entry(replacement).Property(row => row.Revision).OriginalValue = oldRow.Revision;
@@ -191,6 +192,7 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
         foreach (var subscription in subscriptions)
         {
             var row = SubscriptionRow(scope, subscription, isDeleted: false);
+            row.SchemaVersion = RuntimeSchemaWriteVersion.Standalone(context, existing.GetValueOrDefault(subscription.Id)?.SchemaVersion);
             context.TriggerSubscriptions.Attach(row);
             context.Entry(row).State = existing.TryGetValue(subscription.Id, out var old) ? EntityState.Modified : EntityState.Added;
             if (old is not null) context.Entry(row).Property(item => item.Revision).OriginalValue = old.Revision;
@@ -199,13 +201,15 @@ internal sealed class EfStandaloneTriggerStore(RuntimeDbContext context, IPersis
         {
             var value = ReadSubscription(old, scope).Subscription;
             var tombstone = SubscriptionRow(scope, value, isDeleted: true);
+            tombstone.SchemaVersion = RuntimeSchemaWriteVersion.Standalone(context, old.SchemaVersion);
             context.TriggerSubscriptions.Attach(tombstone);
             context.Entry(tombstone).State = EntityState.Modified;
             context.Entry(tombstone).Property(row => row.Revision).OriginalValue = old.Revision;
         }
         var receipt = new TriggerMutationReceipt(write.RequestId, write.RequestFingerprint, write.ActorId,
             write.Trigger.Id, write.Trigger.Revision, time.GetUtcNow());
-        context.TriggerMutations.Add(MutationRow(scope, receipt));
+        var mutation = MutationRow(scope, receipt); mutation.SchemaVersion = RuntimeSchemaWriteVersion.Standalone(context);
+        context.TriggerMutations.Add(mutation);
         return receipt;
     }
 

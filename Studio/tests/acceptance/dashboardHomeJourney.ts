@@ -123,8 +123,13 @@ export async function dashboardHomeJourney(page: Page, info: TestInfo, capture: 
     const picker = page.getByRole("dialog", { name: "Add widget", exact: true });
     await expect(picker).toBeVisible(); await picker.getByRole("textbox", { name: "Search widgets", exact: true }).fill(targetTitle);
     await capture(page, info, "home-widget-picker");
+    const restoredWrite = page.waitForResponse(response => response.request().method() === "PUT" && /\/_elsa\/studio\/home-layout$/.test(response.url()));
     await picker.getByRole("button", { name: `${targetTitle} Dismissed`, exact: true }).click();
+    expect((await restoredWrite).ok()).toBe(true);
     await expect(page.locator(`[data-widget-id="${hiddenId}"]`)).toBeVisible();
+    // The widget is optimistic; confirm its personal write before comparing it with the saved default.
+    await expect.poll(async () => (await backend.api<Layout>("/_elsa/studio/home-layout", "GET", undefined, scope))
+      .value.widgets.find(widget => widget.id === hiddenId)?.visible).toBe(true);
     const defaultWrite = page.waitForResponse(response => response.request().method() === "PUT" && /\/_elsa\/studio\/home-layout\/default$/.test(response.url()));
     await page.getByRole("button", { name: "Save as server default", exact: true }).click(); expect((await defaultWrite).ok()).toBe(true); changedDefault = true;
     const savedDefault = await backend.api<Layout>("/_elsa/studio/home-layout/default", "GET", undefined, scope);

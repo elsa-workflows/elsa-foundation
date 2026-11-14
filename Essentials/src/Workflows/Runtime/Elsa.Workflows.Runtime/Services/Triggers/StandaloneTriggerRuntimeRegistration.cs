@@ -71,7 +71,7 @@ internal static class StandaloneTriggerRuntimeRegistration
             provider.GetRequiredService<Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointStoreState>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(), provider.GetRequiredService<TimeProvider>(),
             provider.GetServices<IStandaloneSchedulePlanner>(), provider.GetService<IRecurringTriggerScheduleStore>(),
-            provider.GetRequiredService<TriggerManagementTargets>()));
+            provider.GetRequiredService<TriggerManagementTargets>(), provider.GetServices<IIngressReservationPolicy>()));
         services.Add(reader); services.Add(sourceCommit);
         services.AddSingleton(new StandaloneTriggerProviderRegistration("InMemory", resource, ingress) { Reservations = reader, SourceCommit = sourceCommit });
     }

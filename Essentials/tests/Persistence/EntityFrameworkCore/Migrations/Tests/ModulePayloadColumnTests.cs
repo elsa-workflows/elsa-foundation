@@ -23,8 +23,7 @@ public sealed class ModulePayloadColumnTests
     {
         ["RuntimeDbContext"] = new(StringComparer.Ordinal)
         {
-            // Includes model execution, accepted input, User Tasks and immutable task forms, plus standalone
-            // triggers, subscriptions, mutations and ingress reservations.
+            // Includes standalone trigger definitions, subscriptions, mutations and ingress reservations.
             ["ContentJson"] = 39,
             ["PayloadJson"] = 1,
             ["MetadataJson"] = 1,

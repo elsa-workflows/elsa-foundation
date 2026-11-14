@@ -8,7 +8,12 @@ for (const theme of builtInThemeDefinitions) for (const mode of allThemeModes) {
     await page.getByLabel("Focused", { exact: true }).focus();
     await expect(page.getByLabel("Focused", { exact: true })).toBeFocused();
     const frames = page.getByRole("region", { name: "Field states", exact: true }).locator(".studio-form-control");
-    await expect(frames).toHaveCount(19);
+    await expect(frames).toHaveCount(20);
+    const ownedEditor = page.getByLabel("Host actions", { exact: true });
+    await expect(ownedEditor).toHaveValue("Opaque editor value");
+    const ownedFrame = frames.filter({ has: ownedEditor });
+    await expect(ownedFrame.getByRole("button", { name: "Editor action", exact: true })).toBeVisible();
+    await expect(ownedFrame.getByRole("button", { name: "Host action", exact: true })).toBeVisible();
     const geometry = await frames.evaluateAll(elements => elements.map(element => {
       const box = element.getBoundingClientRect(), legend = element.querySelector("legend")!.getBoundingClientRect(), style = getComputedStyle(element);
       return { border: style.borderLeftWidth, overflows: element.scrollWidth > element.clientWidth + 1, labelFits: legend.right <= box.right + 1 && legend.left >= box.left - 1 };

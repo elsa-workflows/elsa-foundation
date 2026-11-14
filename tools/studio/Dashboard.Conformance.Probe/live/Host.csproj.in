@@ -90,7 +90,7 @@
     <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Activities/Http/Elsa.Activities.Http.csproj" />
-    <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="__SOURCE_ROOT__/Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />

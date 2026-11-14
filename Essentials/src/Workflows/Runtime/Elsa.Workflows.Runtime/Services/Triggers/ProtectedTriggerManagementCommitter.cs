@@ -16,14 +16,14 @@ internal sealed class ProtectedTriggerManagementCommitter(IStandaloneTriggerStor
         .Where(item => item.SupportsResourceAuthorization).ToArray();
     private readonly IReadOnlyDictionary<string, ITriggerReservationPlanner> planners = reservationPlanners.ToDictionary(item => item.TypeKey, StringComparer.Ordinal);
     public bool SupportsActivatedResources => physical.SupportsActivatedResources;
-    public bool CanActivateType(string typeKey, int schemaVersion) => SupportsActivatedResources &&
+    public bool CanActivateType(string typeKey, int schemaVersion) => physical.SupportsActivatedType(typeKey) &&
         installed.Any(item => item.Descriptor.TypeKey == typeKey && item.Descriptor.SchemaVersion == schemaVersion &&
             (item.WorkflowIntentKind is null
                 ? ingress?.SupportsAdmission == true && TriggerSourcePipeline.Supports(processor, dispatcher,
                     RuntimeDeliverySourceKind.StandaloneIngress, RuntimeStandaloneIngressSource.StandaloneTriggerDeliveryKind)
                 : ingress?.SupportsWorkflowCohort(item.WorkflowIntentKind) == true && TriggerSourcePipeline.Supports(processor, dispatcher,
                     RuntimeDeliverySourceKind.WorkflowCheckpoint, item.WorkflowIntentKind)));
-    public bool CanStopType(string typeKey, int schemaVersion) => SupportsActivatedResources && (CanActivateType(typeKey, schemaVersion) ||
+    public bool CanStopType(string typeKey, int schemaVersion) => physical.SupportsActivatedType(typeKey) && (CanActivateType(typeKey, schemaVersion) ||
         planners.ContainsKey(typeKey) || schedulePlanners?.Any(planner => planner.Supports(typeKey)) == true);
 
     public async ValueTask<TriggerMutationReceipt> CommitAsync(TriggerScope scope, TriggerStoreWrite write, CancellationToken cancellationToken = default)

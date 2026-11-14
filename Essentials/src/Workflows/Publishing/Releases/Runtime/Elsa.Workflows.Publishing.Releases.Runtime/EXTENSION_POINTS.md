@@ -51,3 +51,19 @@ hide or invent evidence by relabeling its version. Source namespace and owner-te
 This partial native verification capability grants no root action, source publication authority, import or
 activation. Placement metadata and individual activity-module semantics remain mandatory separate owner sites.
 The production package dependency closure is unchanged; Runtime-only consumers require no Design/compiler/source package.
+
+### Retained placement associations
+
+The built-in placement inspector checks the original workflow-producer origin, exact catalog/template pins,
+placed node and dependency-frame inventories, and child-slot order. It admits the existing six-field placed
+CLR descriptor only with the separately mandatory placement and exact CLR owner sites. It does not resolve
+CLR types, recompile a template or approve Graph-provider semantics. Unsupported inline template placements
+remain explicit refusals. `IReleaseRuntimeSiteReader.ReadTemplate` and `ReadActivityVersion` expose only
+qualified captured members for those independent owner inspectors; they do not read a live source catalog.
+
+### Overlay owner discovery
+
+Discovery capability `elsa.runtime-release-profile/2` qualifies template-overlay sites by the root Runtime
+consumer, preserving independent owner registrations. The selected inspector checks the actual opaque
+overlay schema. This changes discovery ownership, without changing retained bytes or manifest structure.
+A host carrying an earlier generic overlay inspector must register its consumer-specific key explicitly.

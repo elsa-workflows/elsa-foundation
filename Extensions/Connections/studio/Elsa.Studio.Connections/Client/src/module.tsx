@@ -36,6 +36,7 @@ export function register(api: ElsaStudioModuleApi) {
 
   api.expressionEditors.add({
     id: "elsa.connection-reference-editor", requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
+    presentsField: true,
     order: 100,
     supports: context => context.syntax === "Connection" || context.descriptor.uiHint === "connection-picker",
     surfaces: {

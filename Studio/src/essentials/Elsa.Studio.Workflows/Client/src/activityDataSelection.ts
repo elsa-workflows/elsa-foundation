@@ -61,8 +61,6 @@ export interface ActivityDataSelectionHost {
   baseRevision: string;
   /** True while the owner's own save is in flight: a stale answer then means "wait", not "changed elsewhere". */
   saving: boolean;
-  /** The ordinary workflow has no declared input contract; request names are proposals checked by the server. */
-  openWorkflowRequest?: boolean;
   /** One page of the sources for the current document, starting at `skip`. */
   requestSources(target: ActivityDataTarget, signal: AbortSignal, skip: number, query?: ActivityDataSourceQuery): Promise<ActivityDataContextResult>;
   /** Null when the activity is not in the current document. */
@@ -273,6 +271,8 @@ export function describeReferenceFinding(finding: ActivityDataInputFinding): str
       return "The source activity is reached again through a loop. Replace it or clear it.";
     case "ValueFlow/ScopeBoundary":
       return "The source activity is inside a container this input can't read from. Replace it or clear it.";
+    case "ActivityData/UnknownInput":
+      return "This source input is not declared. Declare it, replace this reference or clear it.";
     case "ActivityData/UnknownProjection":
     case "ActivityData/UnknownProducerContract":
       return "The source activity no longer has this output. Replace it or clear it.";

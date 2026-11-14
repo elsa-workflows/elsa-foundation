@@ -104,6 +104,7 @@ public sealed partial class World
             NoteGraph(instance, entry);
             return;
         }
+        instance = NativeCreation(instance);
         var parts = entry.Split(':');
         switch (parts[0])
         {
@@ -139,7 +140,7 @@ public sealed partial class World
     {
         var p = entry.Split('|');
         var (kind, frame, flowId) = (p[1], p[2], p[3]);
-        var key = instance + "|" + frame;
+        var key = NativeCreation(instance) + "|" + frame;
         if (Store.Instances.GetValueOrDefault(instance) is not { } row) return;
         var flow = NativeWorkflows.Registry.Get(row.Definition).Nodes[flowId];
         switch (kind)
@@ -200,8 +201,9 @@ public sealed partial class World
         foreach (var row in Store.Instances.Values)
         {
             if (row.Model != NativeModel.ModelKey || !NativeWorkflows.Graphs.Contains(row.Definition)) continue;
-            if (Native.GraphRevisions.TryGetValue(row.Id, out var seen) && seen == row.Revision) continue;
-            Native.GraphRevisions[row.Id] = row.Revision;
+            var identity = NativeCreation(row.Id);
+            if (Native.GraphRevisions.TryGetValue(identity, out var seen) && seen == row.Revision) continue;
+            Native.GraphRevisions[identity] = row.Revision;
             if (row.Status != InstanceStatus.Running || Parked.Contains(row.Id)) continue;
             var state = Json.Read<NativeState>(row.State);
             var nodes = NativeWorkflows.Registry.Get(row.Definition).Nodes;
@@ -235,7 +237,7 @@ public sealed partial class World
     private void External(Actor actor, string instance, string frame, int attempt, bool again)
     {
         ScanJournal();
-        var key = instance + "|" + frame;
+        var key = NativeCreation(instance) + "|" + frame;
         Native.Effects[key] = Native.Effects.GetValueOrDefault(key) + 1;
         if (Native.Effects[key] > 1)
         {
@@ -255,6 +257,8 @@ public sealed partial class World
         ScanJournal();
         return null;    // what the journal says is reported through Faults, which Check reads first
     }
+
+    private string NativeCreation(string instance) => CreationProtocol.Origin(instance, Store.Instances.GetValueOrDefault(instance)?.Creation ?? 0);
 
     // ---- the end ---------------------------------------------------------------------------------------------------------
 

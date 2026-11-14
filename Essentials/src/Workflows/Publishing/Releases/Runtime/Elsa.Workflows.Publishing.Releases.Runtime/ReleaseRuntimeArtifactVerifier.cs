@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Publishing.Releases.Runtime;
 
 internal sealed class ReleaseRuntimeArtifactVerifier(RuntimeCapturedContentCache cache, IWorkflowExecutableHasher hasher) : IReleaseArtifactSemanticVerifier
 {
-    public ReleaseSemanticAdapterIdentity Identity { get; } = new("elsa.runtime-release-profile", "1");
+    public ReleaseSemanticAdapterIdentity Identity { get; } = new("elsa.runtime-release-profile", "2");
     public IReadOnlyCollection<ReleaseCodecKey> SupportedCodecs { get; } = Array.AsReadOnly(new[]
     {
         new ReleaseCodecKey(ReleaseRuntimeCodecs.WorkflowKind, ReleaseRuntimeCodecs.Workflow, 1),

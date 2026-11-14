@@ -328,7 +328,7 @@ public sealed partial class StandaloneTriggerStoreTests
         await using var restarted = database.Open();
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => ReadAsync(restarted.Store, family));
         Assert.Equal(StandaloneTriggersEfModule.SchemaFamily, skew.Family);
-        Assert.Equal([StandaloneTriggersEfModule.SchemaVersion], skew.ReadableVersions);
+        Assert.Equal([StandaloneTriggersEfModule.SchemaVersion, StandaloneTriggersEfModule.SemanticReservationsSchemaVersion], skew.ReadableVersions);
     }
 
     [Fact]

@@ -44,7 +44,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
     <!-- Exercise genuine provider publication before admitting reusable defaults in a workflow. -->
     <ProjectReference Include="../../../../../src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />

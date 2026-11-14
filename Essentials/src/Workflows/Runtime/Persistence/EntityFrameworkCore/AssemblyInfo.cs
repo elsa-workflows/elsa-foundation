@@ -35,7 +35,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(RuntimePostCommitOutboxEfModule.SchemaFamily, "Workflows.Runtime", RuntimePostCommitOutboxEfModule.SchemaVersion, Entities = [typeof(RuntimePostCommitOutboxEntity)], Upcasters = [typeof(RuntimePostCommitOutboxV1Upcaster), typeof(RuntimePostCommitOutboxV2Upcaster)], Rewriter = typeof(Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.RuntimePostCommitOutboxRowRewriter))]
 [assembly: EfSchemaFamily(RuntimeSchedulerWorkEfModule.SchemaFamily, "Workflows.Runtime", RuntimeSchedulerWorkEfModule.IngressSchemaVersion, Entities = [typeof(SchedulerWorkItemEntity)], Upcasters = [typeof(RuntimeSchedulerWorkV1Upcaster), typeof(RuntimeSchedulerWorkV2Upcaster), typeof(RuntimeSchedulerIngressV3Upcaster)])]
 [assembly: EfSchemaFamily(RuntimeSchedulerPoisonEfModule.SchemaFamily, "Workflows.Runtime", RuntimeSchedulerPoisonEfModule.SchemaVersion, Entities = [typeof(WorkflowSchedulerPoisonEntity)])]
-[assembly: EfSchemaFamily(RuntimeTriggerBindingEfModule.SchemaFamily, "Workflows.Runtime", RuntimeTriggerBindingEfModule.SchemaVersion, Entities = [typeof(WorkflowTriggerBindingEntity), typeof(WorkflowTriggerBindingProjectionStateEntity)])]
+[assembly: EfSchemaFamily(RuntimeTriggerBindingEfModule.SchemaFamily, "Workflows.Runtime", RuntimeTriggerBindingEfModule.SemanticReservationsSchemaVersion, Entities = [typeof(WorkflowTriggerBindingEntity), typeof(WorkflowTriggerBindingProjectionStateEntity)], Upcasters = [typeof(IngressOwnershipV1Upcaster)])]
 [assembly: EfSchemaFamily(RuntimeWorkflowAlterationEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowAlterationEfModule.SchemaVersion, Entities = [typeof(WorkflowAlterationPlanEntity), typeof(WorkflowAlterationJobEntity)])]
 [assembly: EfSchemaFamily(RuntimeWorkflowDispatchEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowDispatchEfModule.SchemaVersion, Entities = [typeof(WorkflowDispatchEntity)])]
 [assembly: EfSchemaFamily(RuntimeWorkflowExecutionEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowExecutionEfModule.IngressSchemaVersion, Entities = [typeof(WorkflowExecutionStateEntity)], Upcasters = [typeof(RuntimeWorkflowExecutionV1Upcaster), typeof(RuntimeWorkflowIngressV2Upcaster)])]
@@ -90,8 +90,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskEntity), nameof(UserTaskEntity.ContentJson))]
 [assembly: EfSchemaContent(UserTasksEfModule.SchemaFamily, typeof(UserTaskFormEntity), nameof(UserTaskFormEntity.ContentJson))]
 
-[assembly: EfSchemaFamily(StandaloneTriggersEfModule.SchemaFamily, "Workflows.Runtime", StandaloneTriggersEfModule.SchemaVersion,
-    Entities = [typeof(StandaloneTriggerEntity), typeof(TriggerSubscriptionEntity), typeof(TriggerMutationEntity), typeof(RuntimeIngressReservationEntity)])]
+[assembly: EfSchemaFamily(StandaloneTriggersEfModule.SchemaFamily, "Workflows.Runtime", StandaloneTriggersEfModule.SemanticReservationsSchemaVersion,
+    Entities = [typeof(StandaloneTriggerEntity), typeof(TriggerSubscriptionEntity), typeof(TriggerMutationEntity), typeof(RuntimeIngressReservationEntity)], Upcasters = [typeof(IngressOwnershipV1Upcaster)])]
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(StandaloneTriggerEntity), nameof(StandaloneTriggerEntity.ContentJson))]
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(TriggerSubscriptionEntity), nameof(TriggerSubscriptionEntity.ContentJson))]
 [assembly: EfSchemaContent(StandaloneTriggersEfModule.SchemaFamily, typeof(TriggerMutationEntity), nameof(TriggerMutationEntity.ContentJson))]

@@ -178,3 +178,5 @@ Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEviden
 Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.ContractJson.get -> string!
 Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.ProviderJson.get -> string!
 Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityPublicationEvidence.Metadata.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSiteReader.ReadActivityVersion(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseActivityVersion!
+Elsa.Workflows.Publishing.Releases.Runtime.Core.IReleaseRuntimeSiteReader.ReadTemplate(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content) -> Elsa.Workflows.Publishing.Releases.Runtime.Core.ReleaseRuntimeTemplate!

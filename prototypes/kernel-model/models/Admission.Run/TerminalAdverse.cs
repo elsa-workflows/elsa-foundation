@@ -66,8 +66,8 @@ internal sealed class TerminalWire(string mode, bool nested, Flaw defect = Flaw.
     private void Send(string kind, object? payload = null, bool reply = false, StartSpec? start = null)
     {
         var id = "terminal-wire-" + ++_serial;
-        Apply(new("add", M: new Message(id, _target, kind, payload is null ? null : Json.Write(payload), Start: start,
-            ReplyTo: reply ? ReplyTo.Of("outside", id, _world.Time + 120_000, beforeCommit: true) : null)));
+        Apply(new("add", M: CreationFixture.Pin(new Message(id, _target, kind, payload is null ? null : Json.Write(payload), Start: start,
+            ReplyTo: reply ? ReplyTo.Of("outside", id, _world.Time + 120_000, beforeCommit: true) : null))));
     }
     private void Drain()
     {
@@ -182,9 +182,9 @@ internal sealed class TerminalWire(string mode, bool nested, Flaw defect = Flaw.
         Require(!old.Worker.Owns && _world.Store.Instances.GetValueOrDefault(_target.Id) == stored && _world.Store.Partitions[0].Position == position,
             "U4", "stale delete changed the ended row or journal position");
         Drain();
-        Require(!_world.Store.Instances.ContainsKey(_target.Id), "U4", "current-owner replay of expired delete did not complete");
+        Require(_world.Store.Instances[_target.Id].Retired, "U4", "current-owner replay of expired delete did not complete");
         Send(Kinds.Delete); Drain();
-        Require(!_world.Store.Instances.ContainsKey(_target.Id), "U4", "repeated delete recreated its target");
+        Require(_world.Store.Instances[_target.Id].Retired, "U4", "repeated delete recreated its target");
     }
 
     internal void QueryReplyBoundary()

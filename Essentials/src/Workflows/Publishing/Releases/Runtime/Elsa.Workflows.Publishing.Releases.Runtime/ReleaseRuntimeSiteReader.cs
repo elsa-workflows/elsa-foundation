@@ -51,4 +51,34 @@ internal sealed class ReleaseRuntimeSiteReader(RuntimeCapturedContentCache cache
         catch (Exception exception) when (exception is not OperationCanceledException)
         { throw ReleaseRuntimeArtifactCodec.Refuse("invalid_runtime_site"); }
     }
+    public ReleaseRuntimeTemplate ReadTemplate(ReleaseMemberKey member, IReleaseContentReader content) => Boundary(() =>
+    {
+        var captured = Require(member, content, ReleaseRuntimeCodecs.TemplateKind, ReleaseRuntimeCodecs.Template);
+        var value = cache.Template(content, member);
+        if (value.Template.TemplateId != member.Identity || captured.OwnerVersion is not null) throw ReleaseRuntimeArtifactCodec.Refuse("runtime_site_member_mismatch");
+        return value;
+    });
+    public ReleaseActivityVersion ReadActivityVersion(ReleaseMemberKey member, IReleaseContentReader content) => Boundary(() =>
+    {
+        var captured = Require(member, content, ReleaseRuntimeCodecs.ActivityVersionKind, ReleaseRuntimeCodecs.ActivityVersion);
+        var value = cache.ActivityVersion(content, member);
+        if (value.VersionId != member.Identity || captured.OwnerVersion != new ReleaseOwnerVersion("semver", value.Version, null))
+            throw ReleaseRuntimeArtifactCodec.Refuse("runtime_site_member_mismatch");
+        return value;
+    });
+    private ReleaseContentMember Require(ReleaseMemberKey member, IReleaseContentReader content, string kind, string codec)
+    {
+        var captured = cache.Member(content, member);
+        if (member.Kind != kind || captured.Codec.Kind != kind || captured.Codec.Codec != codec ||
+            captured.Codec.CodecVersion != ReleaseRuntimeCodecs.Version && !(kind == ReleaseRuntimeCodecs.ActivityVersionKind && captured.Codec.CodecVersion == 2))
+            throw ReleaseRuntimeArtifactCodec.Refuse("runtime_site_kind_unsupported");
+        return captured;
+    }
+    private static T Boundary<T>(Func<T> read)
+    {
+        try { return read(); }
+        catch (ReleaseRuntimeArtifactException) { throw; }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        { throw ReleaseRuntimeArtifactCodec.Refuse("invalid_runtime_captured_member"); }
+    }
 }
