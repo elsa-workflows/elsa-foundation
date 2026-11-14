@@ -86,8 +86,8 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         var reference = binding.ActivityResult!;
         var consumer = context.ConsumerInvocation
             ?? throw new InvalidOperationException($"Activity result input '{binding.InputName}' requires a consumer invocation identity.");
-        var resolution = new CausalActivityResultResolver().Resolve(reference, consumer, context.RuntimeView);
-        if (resolution is null)
+        var source = RuntimeActivityResultReader.Read(reference, context);
+        if (source is null)
         {
             var unavailable = ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, binding.EffectivePolicy);
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
@@ -96,7 +96,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             };
         }
 
-        var result = RequireReadable(resolution.Completion.Result, binding);
+        var result = RequireReadable(source, binding);
         if (StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result"))
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)

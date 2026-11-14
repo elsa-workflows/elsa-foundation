@@ -1337,8 +1337,8 @@ The resolver binds the current caller in this read-only path; future queued star
 resolved caller scope and authority to admission, rather than echoing the descriptor's own facts. Malformed
 returned seed shapes are setup refusals; exceptions thrown by providers remain infrastructure failures.
 These are preflight reads, not the scope store's atomic root-start admission transaction. The bounded
-process-private integration is described below. Lexical consumption and shared predecessor-reader fences
-remain follow-up work; no default authority or public Testing runner is activated.
+process-private integration is described below. Shared predecessor-reader qualification
+remains follow-up work; no default authority or public Testing runner is activated.
 
 ### Process-private queued selected leaf execution
 
@@ -1358,7 +1358,7 @@ IRuntimeActivityExecutionPipeline, CancellationToken)`. Register with
 Startup diagnoses duplicate owners; missing, duplicate or false qualification refuses selected starts.
 The owner qualifies the exact pinned leaf, construction/inputs, the actual selected pipeline and its
 complete effect/terminal responsibility profile. Trusted context and routing alone are insufficient.
-This interpreter rejects every child slot and outside-result fixture;
+This interpreter rejects every child slot; whole outside-result fixtures use the qualified reader below.
 composite execution, reusable invocation, script, unknown/custom effects, controlled-time and asynchronous owner profiles
 remain unqualified unless a later interpreter explicitly implements and proves them. Only Durable and
 Balanced modes are qualified here; unsupported expression/member/conversion setup keeps its preflight refusal.
@@ -1397,8 +1397,8 @@ with type/protection/revision checks. Supplied iteration frames stay read-only. 
 output capture targets the exact supplied closed frame and is committed with activity completion, without
 creating a synthetic boundary row. Canonical workflow-root capture is unavailable across a supplied closed
 boundary; competing captures into the same supplied variable refuse before execution. Completion, fault
-and cancellation close the context through the normal terminal boundary. Outside result fixtures and
-composite/async responsibility profiles remain unavailable.
+and cancellation close the context through the normal terminal boundary. Composite/async responsibility
+profiles remain unavailable.
 
 `IRuntimeTestContextFrameAccess` is the scoped single-owner capture participant in Runtime Core. Runtime
 registers its internal canonical owner and aliases the contract. It is public for cross-assembly Activities
@@ -1417,3 +1417,35 @@ The checkpoint envelope backstop scans supplied frame values, closed inputs and 
 shape for plaintext requiring encryption. EF typed header writers/readers and physical SaveChanges paths
 refuse non-null TestContext, including raw header content. Existing dormant TestEntry formats do not
 qualify this executing lexical protocol; shared readable versions and predecessor-worker proof remain open.
+
+
+### Native prior-result fixture consumption
+
+The process-private terminal-leaf interpreter accepts the prepared context's immutable whole-result
+fixtures. `RuntimeInputBindingResolutionContext.WorkflowState` carries the same committed workflow
+snapshot as lexical inputs; it supplies no start authority. Extension materializers must forward that
+committed store snapshot rather than construct a replacement. Activity invocation rows carry no run-kind
+or test-scope stamp, so a snapshot-less context cannot identify selected execution and retains the ordinary
+causal resolver for compatibility. The canonical activity and intrinsic adapters always forward the snapshot.
+The visible-frame projection retains that
+snapshot internally, avoiding an extra workflow-store read. Intrinsics pass their captured workflow
+snapshot through the same context.
+
+The internal `RuntimeActivityResultReader` serves direct ActivityResult bindings and both portable
+expression dependency-policy and parameter-value reads. It validates the admitted context, pin,
+workflow/consumer identity and active boundary before consuming a fixture. Outside optional references
+require explicit setup too; missing and ambiguous fixtures never fall through to ordinary optional-null
+resolution. A declared producer scope must match exactly; a scope-less expression parameter requires a
+unique fixture for that pinned producer. The fixture's producer and whole-result type/policy must match
+the captured contract. Setup cannot replace selected owned work; actual owned results still use the
+ordinary causal resolver. No producer invocation, completion, causal edge or durable output row is
+manufactured, and the complete executable remains unchanged.
+
+Only `$result` for a producer with no named projections is qualified. Conversions, member reads,
+named projections, external/transient/withheld/absent fixture values and incompatible protection remain
+unavailable before execution. Explicit null is preserved when the producer and consumer contracts allow
+it. Sensitive policy, redaction and retention propagate before expression evaluation. Fixtures survive
+the normal header/checkpoint JSON roundtrip and fresh DI/actor activation without setup re-resolution;
+shared-provider and host-restart execution remain unqualified. Existing EF header and command-transport
+fences apply unchanged, and the checkpoint encryption inventory covers fixture envelopes directly.
+This slice activates no Testing library, public runner, Studio or headless surface.

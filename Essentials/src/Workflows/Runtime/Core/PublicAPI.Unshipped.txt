@@ -10654,3 +10654,6 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.WorkflowExecutionId.
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.WorkflowExecutionId.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ContextFingerprint.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeTestCaptureTarget.ContextFingerprint.init -> void
+
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.WorkflowState.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState?
+Elsa.Workflows.Runtime.Core.Models.RuntimeInputBindingResolutionContext.WorkflowState.init -> void

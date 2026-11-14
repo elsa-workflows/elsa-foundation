@@ -99,13 +99,13 @@ public sealed class RuntimeContainerScopeService(
 
         return boundary is null
             ? new RuntimeVisibleVariableFrames(ordered, null,
-                testBoundary?.VariableNames ?? new Dictionary<string, string>(), testBoundary)
+                testBoundary?.VariableNames ?? new Dictionary<string, string>(), testBoundary) { WorkflowState = workflowState }
             : new RuntimeVisibleVariableFrames(
                 ordered,
                 boundary,
                 durableValues is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
-                    : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId));
+                    : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId)) { WorkflowState = workflowState };
     }
 
     /// <summary>
@@ -500,6 +500,7 @@ public sealed class RuntimeContainerScopeService(
 
 public sealed class RuntimeVisibleVariableFrames
 {
+    internal WorkflowExecutionState? WorkflowState { get; init; }
     public RuntimeVisibleVariableFrames(IReadOnlyCollection<VariableFrameState> frames)
         : this(frames, null, new Dictionary<string, string>(StringComparer.Ordinal))
     {

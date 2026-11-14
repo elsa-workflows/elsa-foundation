@@ -626,7 +626,7 @@ public sealed class WorkflowIntrinsicExecutor(
             workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
             visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames, rootVariableNames),
-            correlationId: projections.CorrelationId);
+            correlationId: projections.CorrelationId) { WorkflowState = workflowState };
         if (binding.Selection is not null)
             return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken);
 

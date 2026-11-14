@@ -25,7 +25,7 @@ internal sealed class RuntimeTestContextOwner(IWorkflowExecutionStateStore workf
             !WorkflowExecutionAuthoritySnapshot.Matches(entry.Authority, workflow.Authority.SystemIdentity,
                 workflow.Authority.RootInitiator, workflow.Authority.Metadata) ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(workflow.PinnedExecutable, entry.Executable) ||
-            context.Results.Count != 0 || context.OwnedNodeIds.Count != 1 || context.OwnedNodeIds[0] != entry.ExecutableNodeId)
+            context.OwnedNodeIds.Count != 1 || context.OwnedNodeIds[0] != entry.ExecutableNodeId)
             throw new InvalidOperationException("The persisted lexical owner differs from its admitted terminal leaf.");
         var parent = workflow.RootVariableFrame?.FrameId
             ?? throw new InvalidOperationException("The selected lexical owner has no canonical root.");
