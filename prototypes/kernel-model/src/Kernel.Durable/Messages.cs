@@ -13,14 +13,17 @@ public enum InstanceStatus { Running, Finished, Faulted, Cancelled }
 public enum History { Full, State, Minimal }
 
 /// <summary>What a message needs to create its target when the target does not exist.</summary>
-public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full);
+public sealed record CreationStart(long Generation, long Previous, string Intent);
 
-public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null);
+public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full,
+    CreationStart? Creation = null, long ParentCreation = 0);
+
+public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null, long? TargetCreation = null);
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(
     string Id, InstanceRef Target, string Kind, string? Payload = null, string? Sender = null,
-    StartSpec? Start = null, long? Due = null, long? KeepUntil = null, string? ReplyTo = null)
+    StartSpec? Start = null, long? Due = null, long? KeepUntil = null, string? ReplyTo = null, long? TargetCreation = null)
 {
     public T Read<T>() => Json.Read<T>(Payload!);
 }
@@ -50,6 +53,7 @@ public static class Kinds
 public interface IJob
 {
     InstanceRef Instance { get; }
+    long Creation => 0;
     string Key { get; }
     string? Arguments { get; }
 }

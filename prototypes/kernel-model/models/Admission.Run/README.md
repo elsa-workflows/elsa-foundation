@@ -31,16 +31,17 @@ operator retry. Model reload/takeover is not a real process/host/provider restar
 statechart, production authorization/API, retention/deletion, compensation and Studio acceptance remain open.
 No result is asserted by this README until an exact-source run is recorded on its PR.
 
-## Delete/recreate counterexample
+## Delete/recreate regression
 
-`--recreate` is a separate diagnostic, not a passing semantic qualification. It uses normal start, ordinary child
-completion, delete and start commands, then retries the old invocation input against the reused workflow ID.
-Four cases cross Balanced/Durable and root/nested placement. Its expected observation is a reused local frame
-address and a fresh acceptance into the new creation. The existing simulation oracle first reports I10 (the same ID went from its recorded Finished revision to a
-new Running row); the diagnostic records that exact target/status/revision failure and rejects other reported
-errors. Later checks, including I22 (deleted row reappeared), are not reached or independently qualified. No row is seeded or edited, no private nonce fixes the shared identity
-contract, and no public/provider/host result is claimed. If identity is fixed, this expected-counterexample
-assertion must fail and be replaced with a rejection regression. See the [terminal plan](../../../../specs/1210-state-machine/terminal-receipts-plan.md).
+`--recreate` now exercises the shared creation prototype: four cases cross Balanced/Durable and root/nested
+placement using ordinary start, completion, receipt expiry, Delete and explicit recreation. The replacement
+has the same local frame but the next shared generation. The old pinned input must be refused before its new
+inbox is touched; correctly addressed replacement input must succeed. Delete retains only the lifecycle
+high-water mark after clearing workflow content. I10/I22 permit only that observed retirement/next-generation
+birth, while unqualified resurrection remains forbidden. No row is seeded or edited for these cases.
+The original #4394 counterexample and raw I10 failure remain historical evidence; I22 was not reached in that
+original diagnostic. See [the incarnation runner](../Incarnation.Run/README.md) for propagation/reader boundaries
+and outstanding product/provider gates, and [the terminal plan](../../../../specs/1210-state-machine/terminal-receipts-plan.md).
 
 ## Terminal receipt slice
 
@@ -48,7 +49,7 @@ assertion must fail and be replaced with a rejection regression. See the [termin
 them. The slice adds an optional model-owned metadata contract at the workflow actor, cold receipt queries and
 retries, native normal/forced terminal settlement, persisted commit-time references and fenced normal delete refusal. Pending inputs have no expiry; each final disposition starts the full captured duration.
 Queries do not restamp it. The fixture removes its definition from the registry and forbids receiver construction.
-The recreation diagnostic now waits out its explicit promise before normal deletion; its identity bug remains.
+The recreation regression waits out its explicit promise before normal retirement and advances shared identity.
 
 Native state v3 supports v1/v2 reads. Legacy receipts get no invented retention window and remain protected;
 legacy inboxes without a captured policy refuse new admissions. An older model refuses deleting newer state.
@@ -104,6 +105,7 @@ output is a different path and cannot stand in for that mutation. The internal s
 the existing kernel I1 epoch-fence invariant. Preserve both detected controls separately from positive runs.
 
 These are in-memory wire cuts and model reload, not process/provider restart or exactly-once external effects.
-Actual future-native binaries, legacy fixtures, re-entry/equal-frame addressing, budget reuse, shared actor
-incarnation and transport/value retention remain unqualified. This witness changes no execution implementation.
+Actual future-native binaries and transport/value retention remain unqualified. The separate incarnation runner
+adds legacy reader, re-entry/equal-frame, active budget reuse and shared identity cases; those are not counted
+among these 35 schedules. This adverse witness itself changes no execution implementation.
 No current-source execution result is asserted here until its packet is recorded on the PR.
