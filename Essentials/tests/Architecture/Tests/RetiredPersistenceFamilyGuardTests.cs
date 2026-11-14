@@ -77,38 +77,34 @@ public sealed class RetiredPersistenceFamilyGuardTests
     [Fact]
     public void No_project_or_directory_is_named_after_a_retired_persistence_family()
     {
-        var scannedProjects = 0;
+        var tracked = TrackedFiles()
+            .Where(path => ScannedRoots.Any(root => path.StartsWith(root + "/", StringComparison.Ordinal)))
+            .Where(path => !IsBuildOrPackageOutput(path))
+            .ToArray();
+        var projects = tracked.Where(path => path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)).ToArray();
         var violations = new List<string>();
 
-        foreach (var root in ScannedRoots)
+        foreach (var project in projects)
         {
-            var rootPath = FullPath(root);
-            if (!Directory.Exists(rootPath))
-                continue;
-
-            foreach (var project in Directory.EnumerateFiles(rootPath, "*.csproj", SearchOption.AllDirectories)
-                         .Where(path => !IsBuildOrPackageOutput(path)))
-            {
-                scannedProjects++;
-                var relativePath = RelativePath(project);
-                if (NamesRetiredFamily(relativePath))
-                    violations.Add($"{relativePath}: project path names a retired persistence family");
-            }
-
-            foreach (var directory in Directory.EnumerateDirectories(rootPath, "*", SearchOption.AllDirectories)
-                         .Where(path => !IsBuildOrPackageOutput(path)))
-            {
-                var relativePath = RelativePath(directory);
-                if (NamesRetiredFamily(Path.GetFileName(relativePath)))
-                    violations.Add($"{relativePath}: directory names a retired persistence family");
-            }
+            if (NamesRetiredFamily(project))
+                violations.Add($"{project}: project path names a retired persistence family");
         }
 
-        Assert.True(scannedProjects > 0, "The retired-family guard found no projects; its roots are wrong.");
+        foreach (var directory in tracked.SelectMany(ParentDirectories).Distinct(StringComparer.Ordinal))
+            if (NamesRetiredFamily(Path.GetFileName(directory)))
+                violations.Add($"{directory}: directory names a retired persistence family");
+
+        Assert.True(projects.Length > 0, "The retired-family guard found no projects; its roots are wrong.");
         Assert.True(
             violations.Count == 0,
             "No project or directory may be named after a retired persistence family:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations.Order(StringComparer.Ordinal)));
+    }
+
+    private static IEnumerable<string> ParentDirectories(string path)
+    {
+        for (var separator = path.LastIndexOf('/'); separator > 0; separator = path.LastIndexOf('/', separator - 1))
+            yield return path[..separator];
     }
 
     [Fact]

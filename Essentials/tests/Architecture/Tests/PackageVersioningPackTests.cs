@@ -163,7 +163,13 @@ public sealed class PackageVersioningPackTests : IDisposable
         Assert.Equal([("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
     }
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose()
+    {
+        // Git's loose objects are read-only on Windows. Remove that attribute, without masking a real cleanup failure.
+        foreach (var file in root.EnumerateFiles("*", SearchOption.AllDirectories))
+            file.Attributes &= ~FileAttributes.ReadOnly;
+        root.Delete(recursive: true);
+    }
 
     /// <summary>The calculator's pack-properties file for <paramref name="commit"/>: App is being published, Lib is not.</summary>
     private string Computed(string commit)

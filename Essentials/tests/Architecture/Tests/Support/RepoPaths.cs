@@ -8,6 +8,22 @@ internal static class RepoPaths
     /// <summary>The nearest ancestor of the test output directory that holds <c>Elsa.Server.slnx</c>.</summary>
     internal static string RepoRoot { get; } = FindRepoRoot();
 
+    /// <summary>Existing files in the repository's Git index, excluding untracked checkouts and build leftovers.</summary>
+    internal static IReadOnlyList<string> TrackedFiles()
+    {
+        var (exitCode, output) = ChildProcess.Run("git", ["ls-files", "--cached", "-z"], RepoRoot);
+        if (exitCode != 0)
+            throw new InvalidOperationException($"git ls-files failed with exit {exitCode}:\n{output}");
+
+        var files = output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(path => File.Exists(Path.Join(RepoRoot, path)))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (files.Length == 0)
+            throw new InvalidOperationException("The architecture guard found no tracked files in this checkout.");
+        return files;
+    }
+
     /// <summary><see cref="IsBuildOutput(string, string)"/> judged against <see cref="RepoRoot"/>.</summary>
     internal static bool IsBuildOutput(string path) => IsBuildOutput(RepoRoot, path);
 
