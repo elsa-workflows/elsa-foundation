@@ -151,12 +151,23 @@ export async function exerciseConnectionConflict({ page, admin, backend, compone
     await expect(other.locator(".external-auth-notice")).toContainText("Connection updated.");
   } finally { await other.close(); }
   await page.getByLabel("Display name", { exact: true }).fill("Preserved stale draft");
-  const assessed = page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/_elsa/identity/external-connections/assess"));
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  expect((await assessed).status()).toBe(409);
-  await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Preserved stale draft");
-  await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  let unexpectedCommands = 0;
+  const observeCommands = request => { if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/_elsa/identity/external-connections/commands")) ++unexpectedCommands; };
+  page.on("request", observeCommands);
+  try {
+    const assessed = page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/_elsa/identity/external-connections/assess"));
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    expect((await assessed).status()).toBe(409);
+    await expect(page.locator(".external-auth-shell:visible").getByRole("alert")).toContainText("changed on the server");
+    // Refresh is disabled during the request: this proves the recovery state has settled.
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+    await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Preserved stale draft");
+    await expect(page.getByLabel("Display name", { exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Test configuration", exact: true })).toBeDisabled();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(unexpectedCommands).toBe(0);
+  } finally { page.off("request", observeCommands); }
   await capture(page, "stale-assessment-refresh-required", { action: "real-catalog-assessment409-before-confirmation" });
   await page.getByRole("button", { name: "Refresh", exact: true }).click(); await confirm(page, "Discard unsaved changes?", "Discard changes");
   await expect(page.getByLabel("Display name", { exact: true })).toBeEnabled();
