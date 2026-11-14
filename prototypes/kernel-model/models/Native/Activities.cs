@@ -61,7 +61,7 @@ public sealed class CallService : Activity<string>
 // ---- composites ------------------------------------------------------------------------------------------------------
 
 /// <summary>Stateless: the next child follows from the position of the one that completed.</summary>
-public sealed class Sequence : CompositeActivity
+public sealed class Sequence : CompositeActivity, IInterventionParent
 {
     protected internal override void Execute(CompositeContext context)
     {
@@ -106,7 +106,7 @@ public sealed record ParallelState
 }
 
 /// <summary>Fork and threshold join. It counts its branches in its own state, where Elsa 4 queried the activity-state store.</summary>
-public sealed class Parallel : CompositeActivity
+public sealed class Parallel : CompositeActivity, IInterventionParent
 {
     [Input] public int? Threshold { get; set; }
 

@@ -78,7 +78,7 @@ public sealed partial class NativeState
     public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
 
-/// <summary>A live activity: a composite with children, or an activity that waits.</summary>
+/// <summary>Owned activity state: running/waiting, or a retained fault awaiting intervention.</summary>
 public sealed partial class Frame
 {
     public string Id { get; set; } = "";
@@ -117,15 +117,16 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 4 adds private durable lexical resources; old state contains no invented resources.</summary>
-    public int StateVersion => 4;
+    /// <summary>Version 5 adds opt-in ordinary intervention data; legacy policy remains unchanged.</summary>
+    public int StateVersion => 5;
     public object UpgradeState(string state, int fromVersion)
     {
-        if (fromVersion is not (1 or 2 or 3)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        if (fromVersion is not (1 or 2 or 3 or 4)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
-        if (LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
+        if (fromVersion < 4 && LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
+        if (NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
         return native;
     }
 
@@ -185,6 +186,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     public async ValueTask RunAsync()
     {
         LexicalScopes.Validate(_s);
+        NativeInterventions.Validate(_s);
         if (AdmitPrefix()) return;
         foreach (var message in turn.Inbox)
             if (model.HandlesMetadata(message)) turn.Hold(message);
@@ -203,6 +205,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             case Kinds.Start when !_s.Started:
             {
                 _s.Started = true;
+                InitializeIntervention();
                 var start = Json.Read<NativeStart>(m.Start?.Input ?? "{}");
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
@@ -271,7 +274,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 turn.Send(turn.Instance.Ref, NativeKinds.Continue);
                 return;
             }
-            var work = _s.Agenda.First(w => !w.Gone);
+            var work = _s.Agenda.FirstOrDefault(w => !w.Gone && Runnable(w));
+            if (work is null) return;
             if (!work.Resume && Durable && _wf.Nodes[work.Node!].External && work.Attempt == 0 && !Has(NativeFlaw.NoAttemptCommit))
             {
                 // Not replay-safe: commit the attempt first, run it in the next turn. After a crash the row says it may have run.
@@ -303,7 +307,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             turn.StartJob(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope))));
             return;
         }
-        var activity = Hydrator.Create(node, b => Evaluate(b, scope));
+        var pinned = PinRecoveryInputs(frame, node, scope);
+        var activity = pinned is null ? Hydrator.Create(node, b => Evaluate(b, scope)) : Hydrator.Create(node, pinned);
         switch (activity)
         {
             case IIntrinsic set:
@@ -358,7 +363,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
     }
 
-    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation);
+    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -483,6 +488,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     internal void Fail(Frame frame, ActivityFault fault)
     {
+        if (CaptureIntervention(frame, fault)) return;
         CloseInbox(frame.Id, "faulted");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
