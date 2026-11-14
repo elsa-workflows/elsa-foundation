@@ -1539,6 +1539,52 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  weaver-causal-controls:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.weaver == 'true'
+    name: Weaver causal controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      WEAVER_CAUSAL_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Studio dependencies
+        uses: ./.github/actions/setup-studio
+
+      - name: Verify causal driver refusal controls
+        run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_causal_proof.py'
+
+      - name: Prove scoped runtime assertions fail and recover
+        run: >-
+          python3 tools/studio/Weaver.Conformance.Probe/causal_proof.py
+          --scope all
+          --output "$RUNNER_TEMP/weaver-causal-evidence"
+
+      - name: Retain separate causal evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-causal-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-causal-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
   package-witness:
     needs: plan-scope
     if: needs.plan-scope.outputs.weaver == 'true'
