@@ -179,7 +179,7 @@ internal sealed class SelectionChart
             var parent = _paths[id].Skip(1).FirstOrDefault(entries.Contains);
             return new GraphStep("entry:" + id, "entry", id, _nodes[id].Entry, null, null, parent is null ? actions.Select(a => a.Id).ToArray() : ["entry:" + parent]);
         });
-        return new(candidates.Select(c => c.Rule.Id).ToArray(), selected.Select(c => c.Rule.Id).ToArray(),
-            active.Keys.Except(exits, StringComparer.Ordinal).Concat(entries).ToArray(), [.. exitSteps, .. actions, .. entrySteps]);
+        return new(candidates.OrderBy(c => c.Rule.Order).Select(c => c.Rule.Id).ToArray(), selected.Select(c => c.Rule.Id).ToArray(),
+            active.Keys.Except(exits, StringComparer.Ordinal).Concat(entries).Order(StringComparer.Ordinal).ToArray(), [.. exitSteps, .. actions, .. entrySteps]);
     }
 }
