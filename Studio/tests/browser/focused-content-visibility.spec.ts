@@ -47,6 +47,7 @@ for (const appearance of ["light", "dark"]) for (const bound of ["start", "end"]
     const field = page.getByRole("textbox", { name: bound === "start" ? "Setting 1" : "Setting 12", exact: true });
     await field.fill("Nested retained value");
     await expect.poll(() => field.evaluate(isFieldUnobscured)).toBe(true);
+    // The last fixture field has trailing space inside its frame, so end clipping exceeds the border's one pixel.
     // Reproduce a native input already visible while its legend/frame is clipped by the outer port.
     const clipped = await field.evaluate((element, edge) => {
       const input = element as HTMLInputElement;
@@ -60,9 +61,11 @@ for (const appearance of ["light", "dark"]) for (const bound of ["start", "end"]
       const native = input.getBoundingClientRect();
       const frame = input.closest<HTMLElement>(".studio-form-control")!.getBoundingClientRect();
       const top = clip.top + outer.clientTop, bottom = top + outer.clientHeight;
-      return { nativeVisible: native.top >= top && native.bottom <= bottom, frameClipped: frame.top < top || frame.bottom > bottom };
+      return { nativeVisible: native.top >= top && native.bottom <= bottom,
+        frameClipped: frame.top < top - 1 || frame.bottom > bottom + 1,
+        innerAtBound: Math.abs(inner.scrollTop - (edge === "start" ? 0 : inner.scrollHeight - inner.clientHeight)) <= 1 };
     }, bound);
-    expect(clipped).toEqual({ nativeVisible: true, frameClipped: true });
+    expect(clipped).toEqual({ nativeVisible: true, frameClipped: true, innerAtBound: true });
     await page.evaluate(() => window.dispatchEvent(new Event("resize")));
     await expect.poll(() => field.evaluate(isFieldUnobscured)).toBe(true);
     await expect(field).toBeFocused();

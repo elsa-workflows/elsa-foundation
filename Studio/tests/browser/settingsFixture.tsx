@@ -23,6 +23,7 @@ function FocusedSettingsFields({ controller }: { controller: StudioNotificationC
   const { contentRef } = useCompactNavigation();
   const fields = Array.from({ length: 12 }, (_, index) => <StudioField key={index} label={`Setting ${index + 1}`}>
     {largeFrame && index === 0 ? <div style={{ minHeight: 350 }}><input defaultValue={`Draft ${index + 1}`} /></div>
+      : nestedFocus && index === 11 ? <div style={{ paddingBlockEnd: 12 }}><input defaultValue={`Draft ${index + 1}`} /></div>
       : <input defaultValue={`Draft ${index + 1}`} />}
   </StudioField>);
   return <div ref={contentRef}>
