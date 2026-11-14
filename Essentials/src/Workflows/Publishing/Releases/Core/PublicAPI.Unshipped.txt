@@ -1,0 +1,292 @@
+#nullable enable
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.ReadDirectoryAsync(string! directory, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.ReadZipAsync(System.IO.Stream! input, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.Validate(System.ReadOnlyMemory<byte> manifestUtf8, System.Collections.Generic.IReadOnlyDictionary<string!, System.ReadOnlyMemory<byte>>! blobs, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null) -> Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.WriteZipAsync(Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport! bundle, System.IO.Stream! output, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.AttachmentPaths.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.Digest.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.GetAttachmentBytes(string! path) -> byte[]!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.GetBlobBytes(string! payloadDigest) -> byte[]!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.GetManifestBytes() -> byte[]!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.Manifest.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport.Members.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleFormatException
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleFormatException.Code.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleFormatException.ReleaseBundleFormatException(string! code) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxArchiveBytes.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxArchiveBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxBlobBytes.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxBlobBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxDependencyDepth.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxDependencyDepth.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEdges.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEdges.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEntries.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxEntries.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxExpandedBytes.get -> long
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxExpandedBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxJsonDepth.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxJsonDepth.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxManifestBytes.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxManifestBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxMembers.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.MaxMembers.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits.ReleaseBundleLimits() -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.ByteLength.get -> long
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.Codec.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.CodecVersion.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.Identity.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.Kind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.PayloadDigest.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember.ReleaseBundleMember(string! kind, string! identity, string! codec, int codecVersion, string! payloadDigest, long byteLength) -> void
+Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier
+Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier.Identity.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier.SupportedCodecs.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseArtifactSemanticVerifier.VerifyAsync(Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember! member, System.ReadOnlyMemory<byte> payload, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts!>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader
+Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader.GetMember(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! key) -> Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader.GetPayload(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! key) -> System.ReadOnlyMemory<byte>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader.Members.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseOccurrenceInspector
+Elsa.Workflows.Publishing.Releases.Core.IReleaseOccurrenceInspector.Identity.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseOccurrenceInspector.InspectAsync(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite! site, Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts!>
+Elsa.Workflows.Publishing.Releases.Core.IReleaseOccurrenceInspector.SupportedSites.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseSemanticVerifier
+Elsa.Workflows.Publishing.Releases.Core.IReleaseSemanticVerifier.VerifyAsync(Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport! bundle, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult!>
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.Codec.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.Codec.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.CodecVersion.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.CodecVersion.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.Deconstruct(out string! Kind, out string! Codec, out int CodecVersion) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey? other) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.Kind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.Kind.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.ReleaseCodecKey(string! Kind, string! Codec, int CodecVersion) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember
+Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember.Codec.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember.Descriptor.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember.Key.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember.OwnerVersion.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseContentMember.ReleaseContentMember(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleMember! descriptor, Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? ownerVersion) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation
+Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation.Association = 1 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation
+Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation.Dependency = 0 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.Deconstruct(out string! Kind, out string! Identity) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey? other) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.Identity.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.Identity.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.Kind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.Kind.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.ReleaseMemberKey(string! Kind, string! Identity) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts.Edges.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts.Prerequisites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts.ReleaseOccurrenceFacts(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus status, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge!>? edges = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement!>? resources = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite!>? prerequisites = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic!>? diagnostics = null) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts.Resources.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOccurrenceFacts.Status.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.Deconstruct(out string! Scheme, out string? TextValue, out long? IntegerValue) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? other) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.IntegerValue.get -> long?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.IntegerValue.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.ReleaseOwnerVersion(string! Scheme, string? TextValue, long? IntegerValue) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.Scheme.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.Scheme.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.TextValue.get -> string?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.TextValue.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement
+Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement.Kind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement.Origin.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement.Reference.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement.ReleaseResourceRequirement(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, System.Collections.Generic.IReadOnlyList<string!>! origin, string! reference, string! kind, string! schemaVersion) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement.SchemaVersion.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterCapability
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterCapability.Codecs.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterCapability.Identity.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterCapability.ReleaseSemanticAdapterCapability(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity! identity, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey!>! codecs, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey!>! sites) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterCapability.Sites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.Deconstruct(out string! Name, out string! Version) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity? other) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.Name.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.Name.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.ReleaseSemanticAdapterIdentity(string! Name, string! Version) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.Version.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.Version.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic.Code.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic.Input.get -> string?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic.Origin.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic.ReleaseSemanticDiagnostic(string! code, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey? member = null, System.Collections.Generic.IReadOnlyList<string!>? origin = null, string? input = null) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.Deconstruct(out Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! From, out Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! To, out Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation Relation, out string! Occurrence) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge? other) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.From.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.From.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.Occurrence.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.Occurrence.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.Relation.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.Relation.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.ReleaseSemanticEdge(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! From, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! To, Elsa.Workflows.Publishing.Releases.Core.ReleaseEdgeRelation Relation, string! Occurrence) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.To.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.To.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.Edges.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.Identity.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.OwnerHashVerified.get -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.OwnerVersion.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.Prerequisites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.ReleaseSemanticFacts(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus status, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey? identity, Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? ownerVersion, bool ownerHashVerified, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge!>? edges = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement!>? resources = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite!>? prerequisites = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite!>? sites = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic!>? diagnostics = null, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability!>? rootCapabilities = null) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.Resources.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.Sites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.Status.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Constraint.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Constraint.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Deconstruct(out string! Key, out Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! Member, out string! Kind, out string! Identity, out string! Scheme, out string! Constraint) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite? other) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Identity.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Identity.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Key.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Key.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Kind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Kind.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Member.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.ReleaseSemanticPrerequisite(string! Key, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! Member, string! Kind, string! Identity, string! Scheme, string! Constraint) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Scheme.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Scheme.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite.Input.get -> string?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite.Node.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite.Origin.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite.Payload.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite.ReleaseSemanticSite(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, System.Collections.Generic.IReadOnlyList<string!>! origin, string! node, string? input, Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey! site, System.Text.Json.JsonElement payload) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticSite.Site.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus.Incomplete = 0 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus.Invalid = 2 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus.Unsupported = 3 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus.Verified = 1 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.ExpectedDigest.get -> string?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.ExpectedDigest.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxDiagnostics.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxDiagnostics.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxSites.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxSites.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.ReleaseSemanticVerificationOptions() -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.TransportLimits.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.TransportLimits.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.Capabilities.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterCapability!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.Digest.get -> string?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.Edges.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.Prerequisites.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.ReleaseSemanticVerificationResult(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus status, string? digest, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge!>! edges, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement!>! resources, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite!>! prerequisites, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterCapability!>! capabilities, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticDiagnostic!>! diagnostics) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.Resources.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseResourceRequirement!>!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult.Status.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticStatus
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.Deconstruct(out string! SiteKind, out string! Discriminator, out int SchemaVersion) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.Discriminator.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.Discriminator.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey? other) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.ReleaseSiteKey(string! SiteKind, string! Discriminator, int SchemaVersion) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.SchemaVersion.get -> int
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.SchemaVersion.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.SiteKind.get -> string!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.SiteKind.init -> void
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.ToString() -> string!
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.ToString() -> string!
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseCodecKey? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseOwnerVersion? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticAdapterIdentity? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticEdge? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticPrerequisite? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseSiteKey? right) -> bool
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleCodec.ValidateParts(System.ReadOnlyMemory<byte> manifestUtf8, System.Collections.Generic.IReadOnlyDictionary<string!, System.ReadOnlyMemory<byte>>! blobs, System.Collections.Generic.IReadOnlyDictionary<string!, System.ReadOnlyMemory<byte>>! attachments, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleLimits? limits) -> Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction.None = 0 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction.ActivateServing = 1 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction.MakeAvailable = 2 -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.ReleaseRootCapability(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! Content, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction Action) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.Content.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.Content.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.Action.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.Action.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.Deconstruct(out Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! Content, out Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction Action) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? other) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.ToString() -> string!
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability? right) -> bool
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticFacts.RootCapabilities.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseRootCapability!>!
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder
+Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleBuilder.BuildAsync(Elsa.Workflows.Publishing.Releases.Core.IReleaseContentReader! content, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot!>! roots, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult!>
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Bundle.get -> Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport?
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.ReleaseBundleBuildResult(Elsa.Workflows.Publishing.Releases.Core.IReleaseBundleTransport? bundle, Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult! verification) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Verification.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationResult!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Action.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Content.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.Member.get -> Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleRoot.ReleaseBundleRoot(Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! member, Elsa.Workflows.Publishing.Releases.Core.ReleaseMemberKey! content, Elsa.Workflows.Publishing.Releases.Core.ReleaseRootAction action) -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.get -> long
+Elsa.Workflows.Publishing.Releases.Core.ReleaseSemanticVerificationOptions.MaxInspectionBytes.init -> void
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.<Clone>$() -> Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult!
+Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Equals(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? other) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator !=(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool
+static Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.operator ==(Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? left, Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult? right) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.Equals(object? obj) -> bool
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.GetHashCode() -> int
+override Elsa.Workflows.Publishing.Releases.Core.ReleaseBundleBuildResult.ToString() -> string!

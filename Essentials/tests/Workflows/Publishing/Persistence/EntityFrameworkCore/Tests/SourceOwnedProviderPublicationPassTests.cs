@@ -26,10 +26,12 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Options = Microsoft.Extensions.Options.Options;
@@ -91,6 +93,36 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
         await using var again = PublishingNativeProvider.Sqlite.Design(activitiesDesign.ConnectionString, []);
         Assert.Single(await again.ActivityDefinitionVersionPublications.AsNoTracking().ToListAsync());
         Assert.Equal(refused.Keys.Order(StringComparer.Ordinal), diagnostics.List().Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Reconciler_startup_with_publishing_keeps_the_shell_scope_and_writes_null_tenant_catalog_rows()
+    {
+        var access = new BindableAccess(PersistenceAccessContext.Scoped(new PersistenceScope(PersistenceScope.DefaultValue)));
+        var diagnostics = new InMemoryActivityReconciliationDiagnosticStore();
+        await using var scope = OpenScope(access);
+        var publisher = CreatePublisher(scope);
+        await using var provider = StartupServices(scope, access, publisher, diagnostics);
+
+        await new ActivityVersionReconcilerStartupTask(provider.GetRequiredService<IServiceScopeFactory>())
+            .ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(PersistenceAccessPolicy.Ordinary, access.Current.AccessPolicy);
+        Assert.False(access.Current.IsGlobal);
+        Assert.Equal(PersistenceScope.DefaultValue, access.Current.RequireScope(admitPrivileged: true).Value);
+
+        scope.Design.ChangeTracker.Clear();
+        scope.Runtime.ChangeTracker.Clear();
+        var definition = Assert.Single(await scope.Design.ActivityDefinitions.AsNoTracking().ToListAsync());
+        var version = Assert.Single(await scope.Design.ActivityDefinitionVersions.AsNoTracking().ToListAsync());
+        Assert.Null(definition.TenantId);
+        Assert.Null(version.TenantId);
+        Assert.Equal("Acme.Valid", definition.ActivityTypeKey);
+        Assert.Single(await scope.Design.ActivityDefinitionVersionPublications.AsNoTracking().ToListAsync());
+        Assert.Equal(
+            EfRelationalIdentity.Encode(PersistenceScope.DefaultValue),
+            Assert.Single(await scope.Runtime.ExecutableActivityTemplates.AsNoTracking().ToListAsync()).ScopeKey);
+        Assert.Equal(2, diagnostics.List().Count);
     }
 
     private static string TypeKeyOf(string versionId) =>
@@ -190,7 +222,7 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
         await AssertNoPublicationWritesAsync(scope);
     }
 
-    private ActivityPublicationScope OpenScope(TestAccess access) => new(
+    private ActivityPublicationScope OpenScope(IPersistenceAccessContextAccessor access) => new(
         PublishingNativeProvider.Sqlite.Publishing(publishing.ConnectionString, []),
         PublishingNativeProvider.Sqlite.Design(activitiesDesign.ConnectionString, []),
         PublishingNativeProvider.Sqlite.Runtime(runtime.ConnectionString, []), access);
@@ -247,11 +279,31 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
             PublishingNativeProvider.Sqlite.Design(activitiesDesign.ConnectionString, []),
             PublishingNativeProvider.Sqlite.Runtime(runtime.ConnectionString, []),
             Access);
+        await CreateReconciler(scope, CreatePublisher(scope), diagnostics).Reconcile(CancellationToken.None);
+    }
+
+    private static ServiceProvider StartupServices(
+        ActivityPublicationScope scope,
+        BindableAccess access,
+        IActivitySourceVersionPublisher publisher,
+        IActivityReconciliationDiagnosticStore diagnostics)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextBinder>(access);
+        services.AddSingleton(publisher);
+        services.AddSingleton<IActivityVersionReconciler>(CreateReconciler(scope, publisher, diagnostics));
+        return services.BuildServiceProvider();
+    }
+
+    private static ActivityVersionReconciler CreateReconciler(
+        ActivityPublicationScope scope,
+        IActivitySourceVersionPublisher publisher,
+        IActivityReconciliationDiagnosticStore diagnostics)
+    {
         var stores = scope.DesignStores;
-        var publisher = CreatePublisher(scope);
         var identities = new TestIdentityGenerator();
         var hasher = new DefaultActivityDefinitionHasher();
-        await new ActivityVersionReconciler(
+        return new ActivityVersionReconciler(
             NullLogger<ActivityVersionReconciler>.Instance,
             hasher,
             new HandlingPublisher<ActivityVersionsReconciling>(new CollectActivityVersions(
@@ -267,7 +319,7 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
             stores,
             stores,
             [publisher],
-            diagnostics).Reconcile(CancellationToken.None);
+            diagnostics);
     }
 
     private static SourceOwnedActivityVersionPublisher CreatePublisher(ActivityPublicationScope scope,
@@ -394,5 +446,13 @@ public sealed class SourceOwnedProviderPublicationPassTests : IAsyncLifetime
 
         public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationStrategyRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class BindableAccess(PersistenceAccessContext current)
+        : IPersistenceAccessContextAccessor, IPersistenceAccessContextBinder
+    {
+        public PersistenceAccessContext Current { get; private set; } = current;
+
+        public void Bind(PersistenceAccessContext context) => Current = context;
     }
 }

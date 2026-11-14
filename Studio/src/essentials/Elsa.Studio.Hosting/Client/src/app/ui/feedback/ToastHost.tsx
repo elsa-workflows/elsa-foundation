@@ -4,6 +4,7 @@ import { notificationToastDurationMs, type StudioNotificationController, type St
 import { notificationController } from "../../notifications";
 import { focusIfConnected, NotificationLevelIcon, notificationLevelLabel, runNotificationAction } from "./notificationShared";
 import { useNoticeTimer } from "./useNoticeTimer";
+import { notifyToastLayoutChange } from "../focusedContentVisibility";
 
 const maxVisibleToasts = 3;
 const zeroWidthSpace = "\u200B";
@@ -52,6 +53,16 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
   const hostRef = useRef<HTMLDivElement>(null);
   const focusedRemovalIndex = useRef<number | null>(null);
 
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    const owner = host?.ownerDocument ?? document;
+    const changed = () => notifyToastLayoutChange(owner);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(changed) : null;
+    if (host) observer?.observe(host);
+    changed();
+    return () => { observer?.disconnect(); changed(); };
+  }, [visible.length]);
+
   // Announce the newest entry that is new or changed in place, not every render. Derived while
   // rendering so the live region updates in the same commit as the toast. Opening or closing the
   // Notification Center only moves the baseline, so it announces nothing by itself.
@@ -67,14 +78,16 @@ export function ToastHost({ navigate, controller = notificationController }: Toa
     setAnnouncements(next);
   }
 
-  // A toast that closed while focused hands focus to the toast now in its place, else to the bell.
+  // A toast that closed while focused hands focus to the toast now in its place, else to the visible shell control.
   useLayoutEffect(() => {
     const index = focusedRemovalIndex.current;
     if (index === null) return;
     focusedRemovalIndex.current = null;
     const remaining = hostRef.current?.querySelectorAll<HTMLElement>(".studio-toast") ?? [];
     if (focusIfConnected(remaining[Math.min(index, remaining.length - 1)])) return;
-    focusIfConnected(document.querySelector<HTMLElement>(".studio-notification-bell"));
+    const fallback = document.querySelector<HTMLElement>('.bottom-panel.maximized [aria-label="Restore bottom panel"]')
+      ?? document.querySelector<HTMLElement>(".studio-notification-bell");
+    focusIfConnected(fallback);
   });
 
   return (

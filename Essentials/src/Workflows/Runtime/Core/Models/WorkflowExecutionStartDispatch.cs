@@ -297,7 +297,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
             return;
 
         if (startAuthority.Kind is WorkflowExecutableStartAuthorityKind.RetainedDependency or WorkflowExecutableStartAuthorityKind.StimulusDelivery or
-            WorkflowExecutableStartAuthorityKind.ModelWork)
+            WorkflowExecutableStartAuthorityKind.ModelWork or WorkflowExecutableStartAuthorityKind.StandaloneTrigger)
         {
             if (sourceSelection is not null || provenanceRequirement != WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
                 throw new ArgumentException("Saved authority cannot be combined with live-source selection or requirements.", nameof(startAuthority));
@@ -354,7 +354,8 @@ public enum WorkflowExecutableStartAuthorityKind
     LiveReference = 0,
     RetainedDependency = 1,
     StimulusDelivery = 2,
-    ModelWork = 3
+    ModelWork = 3,
+    StandaloneTrigger = 4
 }
 
 /// <summary>
@@ -376,12 +377,21 @@ public sealed class WorkflowExecutableStartAuthority
         WorkflowExecutableStimulusDeliveryAuthority? stimulusDelivery)
         : this(kind, retainedDependency, stimulusDelivery, null) { }
 
-    [JsonConstructor]
     public WorkflowExecutableStartAuthority(WorkflowExecutableStartAuthorityKind kind,
         WorkflowExecutableRetainedDependencyAuthority? retainedDependency,
         WorkflowExecutableStimulusDeliveryAuthority? stimulusDelivery,
         RuntimeModelNativeWorkOrigin? modelWork)
+        : this(kind, retainedDependency, stimulusDelivery, modelWork, null) { }
+
+    [JsonConstructor]
+    public WorkflowExecutableStartAuthority(WorkflowExecutableStartAuthorityKind kind,
+        WorkflowExecutableRetainedDependencyAuthority? retainedDependency,
+        WorkflowExecutableStimulusDeliveryAuthority? stimulusDelivery,
+        RuntimeModelNativeWorkOrigin? modelWork, RuntimeIngressCommandOrigin? standaloneTrigger)
     {
+        if ((kind == WorkflowExecutableStartAuthorityKind.StandaloneTrigger) != (standaloneTrigger is not null) ||
+            standaloneTrigger is not null && (retainedDependency is not null || stimulusDelivery is not null || modelWork is not null))
+            throw new ArgumentException("Standalone-trigger authority requires only its physical committed recipient origin.", nameof(standaloneTrigger));
         if ((kind == WorkflowExecutableStartAuthorityKind.ModelWork) != (modelWork is not null) ||
             modelWork is not null && (retainedDependency is not null || stimulusDelivery is not null))
             throw new ArgumentException("Model-work authority requires only its exact committed model invocation.", nameof(modelWork));
@@ -398,6 +408,7 @@ public sealed class WorkflowExecutableStartAuthority
         RetainedDependency = retainedDependency;
         StimulusDelivery = stimulusDelivery;
         ModelWork = modelWork;
+        StandaloneTrigger = standaloneTrigger;
     }
 
     public WorkflowExecutableStartAuthorityKind Kind { get; }
@@ -407,6 +418,11 @@ public sealed class WorkflowExecutableStartAuthority
     public WorkflowExecutableStimulusDeliveryAuthority? StimulusDelivery { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelNativeWorkOrigin? ModelWork { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressCommandOrigin? StandaloneTrigger { get; }
+
+    public static WorkflowExecutableStartAuthority FromStandaloneTrigger(RuntimeIngressCommandOrigin origin) =>
+        new(WorkflowExecutableStartAuthorityKind.StandaloneTrigger, null, null, null, origin);
 
     public static WorkflowExecutableStartAuthority FromModelWork(RuntimeModelNativeWorkOrigin origin) =>
         new(WorkflowExecutableStartAuthorityKind.ModelWork, null, null, origin);
@@ -698,6 +714,9 @@ public sealed class WorkflowExecutionStartCommandPayload
     public string? TenantId { get; }
     public WorkflowExecutionPartition? Partition { get; }
     public WorkflowExecutionAuthoritySnapshot? Authority { get; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeStimulusDeliveryOrigin? StimulusDeliveryOrigin { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkflowExecutableStartAuthority? StartAuthority { get; }
 
@@ -732,7 +751,7 @@ public sealed class WorkflowExecutionStartCommandPayload
 
         // Saved stimulus provenance was checked before command admission; the cohort explicitly captured either
         // its selected source or a legitimate reference-less legacy null. It never borrows dependency authority.
-        if (startAuthority.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
+        if (startAuthority.Kind is WorkflowExecutableStartAuthorityKind.StimulusDelivery or WorkflowExecutableStartAuthorityKind.StandaloneTrigger)
             return;
 
         if (pinnedSource is null)

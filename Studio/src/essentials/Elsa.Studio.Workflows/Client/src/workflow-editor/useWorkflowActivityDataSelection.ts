@@ -3,7 +3,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire } from "../activityInputWire";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
 import type { ActivityDataInputFinding, ActivityDataProducerDescription, ActivityDataSelectionHost } from "../activityDataSelection";
-import { hasWorkflowActivityDataSelection, requestWorkflowActivityData, type ActivityDataTarget } from "../api/activityDataSelection";
+import { hasWorkflowActivityDataSelection, requestWorkflowActivityData, type ActivityDataContextResult, type ActivityDataSourceQuery, type ActivityDataTarget } from "../api/activityDataSelection";
 import { parseValidationErrorPath } from "../validationDiagnostics";
 import { getChildSlots } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode, ValidationError, WorkflowDraft } from "../workflowTypes";
@@ -58,26 +58,38 @@ export function useWorkflowActivityDataSelection({
   }, [baseUrl, enabled]);
 
   const on = available && enabled && draft != null;
-  const latest = useRef({ draft, persistedDraft });
-  latest.current = { draft, persistedDraft };
+  const latest = useRef({ draft, persistedDraft, on });
+  latest.current = { draft, persistedDraft, on };
   // The document reducer replaces the draft object on every edit, so identity is enough to recompute; other
   // editor renders reuse the revision instead of serializing the draft again.
   const documentRevision = useMemo(() => on && draft ? getDraftContentRevision(draft) : "", [draft, on]);
   const baseRevision = on ? acknowledgedRevision(draft, persistedDraft) : "";
 
-  const requestSources = useCallback((target: ActivityDataTarget, signal: AbortSignal, skip: number) => {
-    const { draft: current, persistedDraft: saved } = latest.current;
+  const requestSources = useCallback(async (target: ActivityDataTarget, signal: AbortSignal, skip: number, query?: ActivityDataSourceQuery): Promise<ActivityDataContextResult> => {
+    const { draft: current, persistedDraft: saved, on: active } = latest.current;
     const base = acknowledgedRevision(current, saved);
-    if (!current || !base) return Promise.reject(new Error("The draft has no acknowledged revision."));
-    return requestWorkflowActivityData(contextRef.current, {
+    if (!active || !current || !base) return Promise.reject(new Error("The draft has no acknowledged revision."));
+    const endpoint = contextRef.current;
+    const revision = getDraftContentRevision(current);
+    const result = await requestWorkflowActivityData(endpoint, {
       definitionId: current.definitionId,
       draftId: current.id,
       expectedBaseRevision: base,
-      documentRevision: getDraftContentRevision(current),
+      documentRevision: revision,
       target,
       snapshot: canonicalizeStateForWire(current.state),
-      skip
+      skip,
+      query
     }, signal);
+    const latestDraft = latest.current.draft;
+    if (signal.aborted) throw new DOMException("The request was aborted.", "AbortError");
+    if (!latest.current.on || contextRef.current !== endpoint || !latestDraft || latestDraft.id !== current.id ||
+      latestDraft.definitionId !== current.definitionId || getDraftContentRevision(latestDraft) !== revision ||
+      acknowledgedRevision(latestDraft, latest.current.persistedDraft) !== base) {
+      return { ...result, state: "stale", code: "activity-data.revision-changed", memberReadsEnabled: false,
+        target: null, sources: [], hasMoreSources: false };
+    }
+    return result;
   }, []);
 
   const root = on ? draft!.state.rootActivity : undefined;
