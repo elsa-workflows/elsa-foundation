@@ -300,6 +300,37 @@ public sealed class RuntimeHistoryCandidateTests
         Assert.Equal(evidence, Assert.Single(JsonSerializer.Deserialize<string[]>(value.Metadata["history.valueEvidenceIds"])!));
     }
 
+    [Theory]
+    [InlineData(0, false)] [InlineData(1, false)] [InlineData(2, true)] [InlineData(3, true)]
+    public async Task Outcome_metadata_preserves_exact_names_or_explicitly_omits_unrepresentable_content(int identity, bool representable)
+    {
+        // Construct malformed UTF-16 after discovery, which otherwise substitutes these distinct code units.
+        var name = identity < 2 ? new string((char)(0xd800 + identity), 1) : identity == 2 ? "done-\U0001F9EA" : "Approved";
+        using var fixture = await Fixture.Create(Policy("ActivityContinuationCompleted"));
+        var raw = Commit("outcome", RuntimeCheckpointNames.ActivityCompleted, activity: Activity(ActivityExecutionStatus.Completed)) with
+        {
+            HistorySourceFacts = [new(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, "activity", At.AddSeconds(5),
+                activityExecutionId: "activity", outcomeNames: [name])]
+        };
+        var captured = await fixture.Capture.EnrichAsync(raw); await fixture.Capture.ValidateFinalAsync(captured);
+        var batch = Assert.Single(captured.HistoryBatches!); var candidate = Assert.Single(batch.Candidates); var e = candidate.Event;
+        if (representable)
+            Assert.Equal(name, Assert.Single(JsonSerializer.Deserialize<string[]>(e.Metadata["history.outcomeNames"])!));
+        else
+        {
+            Assert.False(e.Metadata.ContainsKey("history.outcomeNames"));
+            Assert.Equal("unrepresentable", e.Metadata["history.outcomeCaptureState"]);
+            Assert.Equal("1", e.Metadata["history.outcomeCount"]);
+            Assert.Equal(RuntimeHistoryIdentity.CreateBinding([name]), e.Metadata["history.outcomeContentHash"]);
+            var serialized = JsonSerializer.SerializeToNode(e)!;
+            serialized["Metadata"]!["history.outcomeNames"] = JsonSerializer.Serialize(new[] { "\uFFFD" });
+            var replacement = new RuntimeHistoryCandidate(serialized.Deserialize<RuntimeHistoryEvent>()!, candidate.CheckpointOrdinal);
+            var changed = new RuntimeHistoryBatch(batch.Policy, batch.LogicalCheckpointId, batch.OccurredAt, batch.StartsAtRunStart, [replacement])
+                { SourceFingerprint = batch.SourceFingerprint };
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(captured with { HistoryBatches = [changed] }));
+        }
+    }
+
     private static RuntimeHistorySourceFact Fact(RuntimeHistorySourceFactKind kind, int second) =>
         new(kind, kind.ToString(), At.AddSeconds(second), "activity", "attempt", new(SchedulerWorkItemId: "work"));
     private static WorkflowExecutionState Workflow(RuntimeHistoryCapturePolicy? policy) => new("run", new("artifact", "definition", "version", "1", "hash"),
