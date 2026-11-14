@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -88,6 +89,23 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
     }
 
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public void Model_mappings_that_ignore_supplied_history_content_cannot_qualify_pairing(bool insert)
+    {
+        using RuntimeDbContext context = insert
+            ? new IgnoredHistoryInsertContext(new DbContextOptionsBuilder<IgnoredHistoryInsertContext>().UseSqlite("Data Source=:memory:").Options)
+            : new IgnoredHistoryUpdateContext(new DbContextOptionsBuilder<IgnoredHistoryUpdateContext>().UseSqlite("Data Source=:memory:").Options);
+        var entityType = insert ? typeof(RuntimeHistoryEventEntity) : typeof(RuntimeHistoryBookmarkEntity);
+        var property = context.Model.FindEntityType(entityType)!.FindProperty("ContentJson"); Assert.NotNull(property);
+        Assert.Equal(PropertySaveBehavior.Ignore, insert ? property.GetBeforeSaveBehavior() : property.GetAfterSaveBehavior());
+        var access = new HistoryCapabilityAccess(); var reader = new EfRuntimeHistoryStore(context, access, HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain);
+        IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
+        var observer = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, RuntimeHistoryEfModule.Chain);
+        Assert.False(writer.CanCommitHistory(reader)); Assert.False(observer.CanRecordHistory(reader));
+        Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
+    }
+
     private sealed class HistoryCapabilityAccess : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; init; } = PersistenceAccessContext.Scoped(new("tenant-a")); }
 
@@ -108,6 +126,25 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         {
             base.OnModelCreating(builder);
             builder.Entity<RuntimeHistoryOccurrenceMembershipEntity>().Ignore(row => row.Ordinal);
+        }
+    }
+
+    private sealed class IgnoredHistoryInsertContext(DbContextOptions<IgnoredHistoryInsertContext> options) : RuntimeDbContext(options)
+    {
+        protected override void ConfigureProvider(ModelBuilder builder) { }
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<RuntimeHistoryEventEntity>().Property(row => row.ContentJson).Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore);
+        }
+    }
+    private sealed class IgnoredHistoryUpdateContext(DbContextOptions<IgnoredHistoryUpdateContext> options) : RuntimeDbContext(options)
+    {
+        protected override void ConfigureProvider(ModelBuilder builder) { }
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<RuntimeHistoryBookmarkEntity>().Property(row => row.ContentJson).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
         }
     }
 }
