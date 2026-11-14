@@ -18,9 +18,9 @@ function DetailRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(pat
 export function register(api: ElsaStudioModuleApi) {
   api.userTaskForms?.add({ id: "user-tasks.basic", provider: basicProvider, component: BasicTaskForm });
   api.featureAreas.add({ id: "user-tasks", title: "User Tasks", navGroup: "Workspace", order: 30, description: "Assigned work, group queues and reusable forms.", ownedPaths: ["/user-tasks"], required: false, defaultEnabled: true,
-    nav: { title: "User Tasks", icon: ClipboardList, path: "/user-tasks", order: 30, items: [
-      { title: "Inbox", icon: ClipboardList, path: "/user-tasks", requiresPermission: ["user-tasks:read", "user-tasks:manage"] },
-      { title: "Forms", icon: FileText, path: "/user-tasks/forms", requiresPermission: ["user-task-forms:read", "user-task-forms:manage"] }
+    nav: { title: "User Tasks", icon: ClipboardList, path: "/user-tasks", placement: "operate", order: 30, items: [
+      { title: "Inbox", icon: ClipboardList, path: "/user-tasks", placement: "operate", order: 40, requiresPermission: ["user-tasks:read", "user-tasks:manage"] },
+      { title: "Forms", icon: FileText, path: "/user-tasks/forms", placement: "operate", order: 41, requiresPermission: ["user-task-forms:read", "user-task-forms:manage"] }
     ], requiresBackend: taskCapability, requiresPermission: ["user-tasks:read", "user-tasks:manage", "user-task-forms:read", "user-task-forms:manage"] },
     routes: [
       { id: "user-tasks.forms", path: "/user-tasks/forms", label: "Task forms", requiresBackend: taskCapability, component: () => <FormsPage api={api} /> },

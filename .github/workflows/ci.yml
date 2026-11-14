@@ -1190,8 +1190,10 @@ jobs:
       - name: Verify acceptance tooling and gate failure controls
         run: |
           python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
+          node --test tools/ux-acceptance/*.test.mjs
           python3 -m unittest discover -s tools/ci -p 'test_studio_gate.py'
       - name: Exercise real composed hosts with disposable stores
+        id: composed-ux
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -1226,8 +1228,10 @@ jobs:
             ${{ runner.temp }}/elsa-3579-full-studio-*/build-provenance.json
             ${{ runner.temp }}/elsa-3579-full-studio-*/failure-*.json
             ${{ runner.temp }}/elsa-3579-full-studio-*/mode-failure.json
+      # Job timeouts are cancelled outcomes too; retain their partial evidence without accepting it.
+      # Restrict uploads to an attempted producer, so setup failures do not create empty artifacts.
       - name: Retain reviewable success and failure evidence
-        if: ${{ !cancelled() }}
+        if: ${{ always() && (steps.composed-ux.outcome == 'success' || steps.composed-ux.outcome == 'failure' || steps.composed-ux.outcome == 'cancelled') }}
         uses: actions/upload-artifact@v4
         with:
           name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}

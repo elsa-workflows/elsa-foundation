@@ -50,7 +50,7 @@ test("empty, null and malformed command or executable records fail closed", () =
     const malformed = receipt(); change(malformed.executions[0].executable); refused(malformed);
   }
   for (const execution of [null, [], {}]) { const malformed = receipt(); malformed.executions = [execution]; refused(malformed); }
-  for (const change of [value => { delete value.processGroup; }, value => { value.timeoutMs = 0; }, value => { value.timeoutMs = 46 * 60_000; }]) {
+  for (const change of [value => { delete value.processGroup; }, value => { value.timeoutMs = 0; }, value => { value.timeoutMs = 66 * 60_000; }]) {
     const malformed = receipt(); change(malformed.executions[0]); refused(malformed);
   }
 });
@@ -69,4 +69,12 @@ test("a producer requires exactly its ordered phase commands and pinned executab
   const missing = structuredClone(probe); missing.commands.pop(); missing.executions.pop(); refused(missing, "probe");
   const reversed = structuredClone(probe); reversed.commands.reverse(); reversed.executions.reverse(); refused(reversed, "probe");
   refused({ ...probe, phase: "controls" }, "controls"); refused(probe, "unknown");
+});
+
+test("the standard producer admits the measured full run within a finite 65 minute ceiling", () => {
+  for (const minutes of [54, 65]) {
+    const completed = receipt(); completed.executions[0].timeoutMs = minutes * 60_000;
+    assert.doesNotThrow(() => assertBuildReceipt(completed, "studio", identity, outputs, toolchain));
+  }
+  const beyond = receipt(); beyond.executions[0].timeoutMs = 65 * 60_000 + 1; refused(beyond);
 });

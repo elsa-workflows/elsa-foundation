@@ -39,9 +39,11 @@ credentials; exchanges by another subject, failed exchanges and direct preview w
 Browser response checks separately require the existing administrator subject. This avoids counting a normal
 exchange in both a database baseline and a later independently sampled browser delta.
 
-The Studio producer has a bounded45-minute operational ceiling, including queue time. Hosted run43627566756
-was stopped at its former30-minute ceiling after reaching journey71of104; it did not establish acceptance.
-The longer ceiling changes no assertions, producer recipes, source/tool identity checks or child-process cleanup.
+The Studio producer has a bounded 65-minute operational ceiling, including queue time. The retained
+171-case composed run 43628431065 took 53 minutes 19 seconds, exceeding the incoming 45-minute wrapper.
+Hosted run 43627566756 was stopped at its former 30-minute ceiling after reaching journey 71 of 104;
+it did not establish acceptance. The longer ceiling changes no case budgets, assertions, producer recipes,
+source/tool identity checks or child-process cleanup. The complete 171-case suite still has to pass.
 
 ## Browser and owning dependencies
 
