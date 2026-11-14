@@ -67,28 +67,14 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
                 $"Result projection '{projection.Key}' on activity contract '{contract.ActivityTypeKey}'"));
         var selectedProjections = new Dictionary<string, (ActivityResultProjectionContract Contract, JsonElement? Value, ActivityValuePolicy EffectivePolicy)>(StringComparer.Ordinal);
 
+        var selectedValues = RuntimeResultProjectionSelector.Select(contract.Result, resultJson);
         foreach (var projection in contract.Result.Projections.Values)
         {
-            if (!projection.Policy.IsPersistable)
-                throw new InvalidOperationException($"VF-ACT-005: Result projection '{projection.Key}' is not persistable.");
-
             var effectivePolicy = ValuePolicyCombiner.Combine(
                 resultPolicy,
                 projection.Policy,
                 $"Result projection '{projection.Key}' on activity contract '{contract.ActivityTypeKey}'");
-            if (!TrySelect(resultJson, projection.Path, out var selected))
-            {
-                if (projection.IsRequired)
-                    throw new InvalidOperationException($"VF-ACT-006: Required result projection '{projection.Key}' was not produced.");
-
-                selectedProjections.Add(projection.Key, (projection, null, effectivePolicy));
-                continue;
-            }
-
-            if (projection.IsRequired && selected.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-                throw new InvalidOperationException($"VF-ACT-006: Required result projection '{projection.Key}' was null.");
-
-            selectedProjections.Add(projection.Key, (projection, selected.Clone(), effectivePolicy));
+            selectedProjections.Add(projection.Key, (projection, selectedValues[projection.Key], effectivePolicy));
         }
 
         // Validate every projection before external writes so a malformed projection never exposes a
@@ -207,29 +193,6 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
                 effectivePolicy),
             cancellationToken);
         return ValueEnvelope.External(type, reference, effectivePolicy);
-    }
-
-    private static bool TrySelect(JsonElement root, string path, out JsonElement selected)
-    {
-        if (StringComparer.Ordinal.Equals(path, "$"))
-        {
-            selected = root;
-            return true;
-        }
-
-        // Stable projection keys are opaque identifiers and may themselves contain dots. Prefer an
-        // exact top-level property before interpreting the path as nested member navigation.
-        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty(path, out selected))
-            return true;
-
-        selected = root;
-        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (selected.ValueKind != JsonValueKind.Object || !selected.TryGetProperty(segment, out selected))
-                return false;
-        }
-
-        return true;
     }
 }
 

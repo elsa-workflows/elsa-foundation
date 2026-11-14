@@ -1898,3 +1898,6 @@ static Elsa.Workflows.Runtime.Extensions.ModelHostingServiceCollectionExtensions
 Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointCommitStore.FindUndeliveredDurableAsync(string! workflowExecutionId, System.Collections.Generic.IReadOnlyCollection<string!>! excludedIntentKinds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
 
 Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimePostCommitOutboxStore.FindUndeliveredDurableAsync(string! workflowExecutionId, System.Collections.Generic.IReadOnlyCollection<string!>! excludedIntentKinds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
+
+Elsa.Workflows.Runtime.Services.Values.RuntimeResultProjectionSelector
+static Elsa.Workflows.Runtime.Services.Values.RuntimeResultProjectionSelector.Select(Elsa.Activities.Runtime.Core.Models.ActivityResultContract! contract, System.Text.Json.JsonElement result) -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement?>!
