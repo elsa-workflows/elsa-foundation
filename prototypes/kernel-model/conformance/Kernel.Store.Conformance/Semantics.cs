@@ -61,10 +61,10 @@ public sealed class Context(ProvidedStore provided)
 
     public async Task<Stored?> Row(int partition, string id) => (await All(partition)).FirstOrDefault(m => m.Message.Id == id);
 
-    public Task<Committed> Commit(Lease lease, int partition, IReadOnlyList<TurnCommit> turns, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null, bool handOver = false, TimeSpan? leaseFor = null) =>
+    public Task<Committed> Commit(Lease lease, int partition, IReadOnlyList<TurnCommit> turns, IReadOnlyList<InboxKey>? seen = null, IReadOnlyList<InboxKey>? trial = null, bool handOver = false, TimeSpan? leaseFor = null) =>
         S.CommitAsync(new CommitBatch(partition, lease.Epoch, lease.Position, leaseFor ?? LeaseOf(partition, lease.Epoch), handOver, turns, seen ?? [], trial ?? [])).AsTask();
 
-    public Task<Committed> Commit(int partition, long epoch, long position, IReadOnlyList<TurnCommit> turns, IReadOnlyList<string>? seen = null, IReadOnlyList<string>? trial = null) =>
+    public Task<Committed> Commit(int partition, long epoch, long position, IReadOnlyList<TurnCommit> turns, IReadOnlyList<InboxKey>? seen = null, IReadOnlyList<InboxKey>? trial = null) =>
         S.CommitAsync(new CommitBatch(partition, epoch, position, LeaseOf(partition, epoch), false, turns, seen ?? [], trial ?? [])).AsTask();
 
     /// <summary>A commit that must land. Transient failures are tried again, as the kernel does.</summary>
@@ -121,13 +121,13 @@ public static class Make
     public static InstanceRow Row(string id, long revision, string state = "{}", InstanceStatus status = InstanceStatus.Running) =>
         new(id, "m", "d", status, state, revision, null);
 
-    public static TurnCommit Turn(string instance, InstanceRow? row = null, long? expected = null, IReadOnlyList<string>? consumed = null, IReadOnlyList<string>? done = null,
+    public static TurnCommit Turn(string instance, InstanceRow? row = null, long? expected = null, IReadOnlyList<InboxKey>? consumed = null, IReadOnlyList<InboxKey>? done = null,
         IReadOnlyList<Message>? sent = null, IReadOnlyList<SubscriptionRow>? subscribed = null, IReadOnlyList<SubscriptionRow>? unsubscribed = null, string? journal = "[]",
-        bool unsubscribe = false, IReadOnlyList<string>? held = null) =>
+        bool unsubscribe = false, IReadOnlyList<InboxKey>? held = null) =>
         new(instance, row, expected, consumed ?? [], done ?? [], sent ?? [], subscribed ?? [], unsubscribed ?? [], journal, unsubscribe, held);
 
     /// <summary>A delete of an ended instance at its revision, as the kernel writes it: its waits go too, and its own journal row says so.</summary>
-    public static TurnCommit Delete(string instance, long expected, IReadOnlyList<string>? consumed = null) =>
+    public static TurnCommit Delete(string instance, long expected, IReadOnlyList<InboxKey>? consumed = null) =>
         new(instance, null, expected, consumed ?? [], [], [], [], [], "[\"deleted\"]", Unsubscribe: true, Delete: true);
 
     /// <summary>A new instance, created with a journal row: the commonest turn.</summary>
@@ -614,8 +614,13 @@ public static class Semantics
             await c.Lands(() => c.Commit(lease, 0, [Make.Turn("0/w", Make.Row("0/w", 1), subscribed: [wait])]));
             var e = new EventRow("k", "e1", "p", await c.Now() + 60_000);
             await Events.PublishAsync(c.S, e);
-            Context.That(!await c.S.AddAsync(Events.Deliver(e, wait)), "the subscriber's delivery was added beside the publisher's");
-            Context.Equal(Events.Deliver(e, wait), (await c.Row(0, Events.Deliver(e, wait).Id))!.Message, "the delivered message");
+            var match = Events.Route(e, wait);
+            Context.That(!await c.S.AddEventAsync(match), "the subscriber's delivery was added beside the publisher's");
+            var stored = (await c.Row(0, match.Message.Id))!.Message;
+            Context.Equal(match.Message, stored.WithInboxScope(-2, stored.EventMatch), "the delivered message and exact match");
+            Context.That(await c.S.AddAsync(match.Message), "ordinary ingress must retain its own wire ID domain");
+            Context.That(!await c.S.AddAsync(match.Message), "ordinary replay must still deduplicate");
+            Context.Equal(2, (await c.All(0)).Count(m => m.Message.Id == match.Message.Id), "exactly one event match and one outside envelope");
         }),
 
         // ---- journal and sweep ---------------------------------------------------------------------------------------

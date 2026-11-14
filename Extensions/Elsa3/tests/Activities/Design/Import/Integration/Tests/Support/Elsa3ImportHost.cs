@@ -28,7 +28,6 @@ using Elsa.Expressions;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Foundation.Identity.Core.Authorization;
-using Elsa.Foundation.Identity.Extensions;
 using Elsa.Locking.Core;
 using Elsa.Mediator;
 using Elsa.Primitives.Hosting;
@@ -243,7 +242,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Services.AddSingleton(refusals);
             // Same host-wide fleet/observed schema boundary as Workbench; the publisher must not infer finalization.
             builder.Services.AddEfSchemaReadability();
-            builder.Services.AddFoundationIdentityAbstractions(options =>
+            builder.Services.Configure<Elsa.Foundation.Identity.FoundationIdentityOptions>(options =>
                 options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { AuthenticationScheme });
             builder.Services.AddAuthentication(AuthenticationScheme).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(AuthenticationScheme, _ => { });
             builder.Services.AddAuthorization();

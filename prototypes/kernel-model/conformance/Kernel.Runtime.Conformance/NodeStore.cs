@@ -9,6 +9,7 @@ namespace Kernel.Runtime.Conformance;
 /// </summary>
 public sealed class NodeStore(IKernelStore inner) : IKernelStore
 {
+    public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly object _lock = new();
@@ -151,10 +152,15 @@ public sealed class NodeStore(IKernelStore inner) : IKernelStore
     }
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => Call(() => inner.AddAsync(message, cancellationToken));
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => Call(() => inner.AddEventAsync(delivery, cancellationToken));
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call(() => inner.LoadAsync(ids, cancellationToken));
+    public bool HasActorAliases => inner.HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call(() => inner.LoadActorsAsync(ids, cancellationToken));
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => Call(() => inner.PublishAsync(@event, cancellationToken));
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => Call(() => inner.FindSubscriptionsAsync(key, cancellationToken));
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) => Call(() => inner.FindEventsAsync(keys, cancellationToken));
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) => Call(() => inner.PublishedMatchesAsync(published, cancellationToken));
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) => Call(() => inner.KeptMatchesAsync(waits, cancellationToken));
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) => Call(() => inner.ReadJournalAsync(partition, after, take, cancellationToken));
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) => Call(() => inner.ReadJournalOfAsync(partition, instance, after, cancellationToken));
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => Call(() => inner.SweepAsync(cancellationToken));
