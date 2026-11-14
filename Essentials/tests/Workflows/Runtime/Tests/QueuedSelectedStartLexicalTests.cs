@@ -460,6 +460,26 @@ public sealed partial class QueuedSelectedStartTests
         }
     }
 
+
+    [Fact]
+    public async Task Supplied_Any_variable_preserves_ordinary_intrinsic_assignment_semantics()
+    {
+        var any = new ValueTypeDescriptor("Elsa.Any");
+        var owner = LexicalOwner(); owner.WrapSelected = selected => LexicalContainer(selected, false,
+            new RuntimeVariableDeclaration("amount", "amount", any, ValueProtectionPolicy.InstanceInline));
+        owner.Seed = entry => new(entry.ContextId, entry.ContextFingerprint, [new("container", VariableFrameKind.Container,
+            new Dictionary<string, ValueEnvelope> { ["amount"] = ValueEnvelope.Inline(any, JsonSerializer.SerializeToElement(7), ValueProtectionPolicy.InstanceInline) })], []);
+        await using var harness = Build(owner, PersistenceMode.Balanced);
+        var selected = new ExecutableNode("selected", "selected", "elsa.intrinsic.set", "1", "intrinsic", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding> { [WorkflowIntrinsicInputKeys.Value] = Literal(WorkflowIntrinsicInputKeys.Value, 42) },
+            new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.Set, intrinsicVariable: new("amount", "container"));
+        await Setup(harness, owner, selected); await RunLexical(harness, owner);
+        var state = (await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(harness.ExecutionId))!;
+        var value = Assert.Single(state.TestContext!.Frames).Frame.Values["amount"];
+        Assert.Equal(LexicalInt, value.Type);
+        Assert.Equal(42, value.InlineValue!.Value.GetInt32());
+    }
+
     private sealed class IterationContract : IRuntimeTestScopeContractSource
     {
         public ValueTask<RuntimeTestScopeContract?> GetContractAsync(WorkflowExecutable executable, ExecutableNode node,

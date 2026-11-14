@@ -90,7 +90,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
     /// <summary>
     /// Guards the backstop's hand-maintained scan: every member of a workflow or activity execution state that can carry
     /// a <see cref="ValueEnvelope"/>, found by walking the two state types and the types they compose, must be the member
-    /// of a <see cref="Locations"/> row, and the refusal theory above proves the validator scans each row. A new
+    /// of a <see cref="Locations"/> row or an explicitly unavailable result-fixture shape. The refusal theories prove every classification. A new
     /// envelope-bearing member turns this red until a row, and the scan it proves, are added.
     /// </summary>
     [Fact]
@@ -102,7 +102,19 @@ public sealed class RuntimeCheckpointCommitValidatorTests
             .ToArray();
 
         Assert.NotEmpty(discovered);
-        Assert.Equal(discovered, Locations.Values.Select(location => location.Member).Order(StringComparer.Ordinal));
+        Assert.Equal(discovered, Locations.Values.Select(location => location.Member)
+            .Concat(["WorkflowExecutionState.TestContext.Results[].Result"]).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Outside_result_fixture_location_is_unavailable_before_any_private_checkpoint()
+    {
+        foreach (var value in Payloads.Values.Concat(AcceptedValues.Values))
+        {
+            var exception = Assert.Throws<RuntimeCheckpointCommitValidationException>(() =>
+                RuntimeCheckpointCommitValidator.Validate(Commit(TestContextChanges(value(), "fixture"))));
+            Assert.DoesNotContain(Sentinel, exception.Message, StringComparison.Ordinal);
+        }
     }
 
     [Theory]
@@ -198,6 +210,10 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         {
             IterationFrameRequest = new LoopIterationScopeRequest("loop", "iteration-1", new Dictionary<string, ValueEnvelope> { ["token"] = value })
         })),
+        ["supplied variable"] = new("WorkflowExecutionState.TestContext.Frames[].Frame.Values[]",
+            $"Workflow execution '{WorkflowExecutionId}' test frame 'test-context:7:context:0:scope-1' 'token'", value => TestContextChanges(value, "frame")),
+        ["supplied input"] = new("WorkflowExecutionState.TestContext.Frames[].Inputs[]",
+            $"Workflow execution '{WorkflowExecutionId}' test input 'token'", value => TestContextChanges(value, "input")),
         ["root variable"] = new("WorkflowExecutionState.RootVariableFrame.Values[]", $"Workflow execution '{WorkflowExecutionId}' root variable 'token'", value => new RuntimeCheckpointStateChangeSet(
             new RuntimeStateChange<WorkflowExecutionState>(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, WorkflowState(Frame(VariableFrameKind.Root, value)), new Dictionary<string, string>()),
             null, [], [], [], [], []))
@@ -274,6 +290,26 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         {
             RootVariableFrame = rootFrame
         };
+
+    private static RuntimeCheckpointStateChangeSet TestContextChanges(ValueEnvelope value, string location)
+    {
+        var root = new VariableFrameState("root", Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId, WorkflowExecutionId,
+            null, VariableFrameKind.Root, new Dictionary<string, ValueEnvelope>());
+        var state = WorkflowState(root);
+        var scope = new WorkflowTestScope("guard-scope", OccurredAt.AddHours(1), null, new(WorkflowExecutionPartition.DefaultValue));
+        var authority = new WorkflowExecutionAuthoritySnapshot("tester", "tester");
+        var frame = new VariableFrameState("test-context:7:context:0:scope-1", "scope-1", "context", root.FrameId, VariableFrameKind.Container,
+            location == "frame" ? new Dictionary<string, ValueEnvelope> { ["token"] = value } : new Dictionary<string, ValueEnvelope>());
+        state = state with
+        {
+            RunKind = WorkflowRunKind.TestRun, TestScope = scope, Authority = authority, Partition = scope.Partition,
+            TestEntry = new("context", "fingerprint", state.PinnedExecutable, "selected", scope, authority),
+            TestContext = new("context", "fingerprint", location == "fixture" ? [] : [new(frame, false, true,
+                location == "input" ? new Dictionary<string, ValueEnvelope> { ["token"] = value } : new Dictionary<string, ValueEnvelope>(),
+                new Dictionary<string, string>())], location == "fixture" ? [new("outside", "scope-1", value)] : [], ["selected"])
+        };
+        return new(new(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>()), null, [], [], [], [], []);
+    }
 
     private static ActivityExecutionState ActivityState() =>
         new(

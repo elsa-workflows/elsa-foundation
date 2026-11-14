@@ -22,6 +22,23 @@ public sealed partial class EfSchedulerWorkQueueStoreTests
         Assert.Empty(await fixture.Context.WorkflowExecutionStates.AsNoTracking().ToArrayAsync());
     }
 
+    [Fact]
+    public async Task Process_private_lexical_header_is_refused_by_shared_reader_even_when_physically_injected()
+    {
+        await using var database = await TestDatabase.CreateAsync(); await using var fixture = database.Open("tenant-a");
+        var state = TestExecution(DateTimeOffset.UtcNow);
+        fixture.Context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(state, "tenant-a",
+            EfWorkflowExecutionStateStore.CreateId("tenant-a", state.WorkflowExecutionId), 1));
+        await fixture.Context.SaveChangesAsync();
+        var captured = state with { TestContext = new(state.TestEntry!.ContextId, state.TestEntry.ContextFingerprint,
+            [], [], [state.TestEntry.ExecutableNodeId]) };
+        var json = JsonSerializer.Serialize(captured);
+        await fixture.Context.WorkflowExecutionStates.ExecuteUpdateAsync(update => update.SetProperty(row => row.ContentJson, json));
+        fixture.Context.ChangeTracker.Clear();
+        var row = await fixture.Context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
+        Assert.Throws<NotSupportedException>(() => EfWorkflowExecutionStateStore.ReadChecked(row, "tenant-a", state.WorkflowExecutionId));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

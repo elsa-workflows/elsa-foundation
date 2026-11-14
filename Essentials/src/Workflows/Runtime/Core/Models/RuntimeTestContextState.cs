@@ -79,9 +79,9 @@ public sealed record RuntimeTestContextState
         if (!owner.Writable || owner.Frame.Kind == VariableFrameKind.Iteration)
             throw new InvalidOperationException("The supplied test frame is read-only.");
         if (!owner.Frame.Values.TryGetValue(variableKey, out var declared) ||
-            declared.Type.Alias != value.Type.Alias || declared.Type.CollectionKind != value.Type.CollectionKind ||
+            declared.Type.Alias != "Elsa.Any" && (declared.Type.Alias != value.Type.Alias || declared.Type.CollectionKind != value.Type.CollectionKind ||
             declared.Type.SchemaVersion != value.Type.SchemaVersion ||
-            declared.Type.Schema?.GetRawText() != value.Type.Schema?.GetRawText())
+            declared.Type.Schema?.GetRawText() != value.Type.Schema?.GetRawText()))
             throw new InvalidOperationException("The test frame write differs from its declared variable type.");
         if (value.Presence is ValuePresence.Absent or ValuePresence.Withheld || value.TransientResource is not null || value.ExternalReference is not null ||
             value.Policy.Lifecycle == DurableValueLifecycle.None ||
