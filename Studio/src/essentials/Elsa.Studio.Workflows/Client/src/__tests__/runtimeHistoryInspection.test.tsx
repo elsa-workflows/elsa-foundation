@@ -327,6 +327,25 @@ it("separates current capture/source availability from the historically captured
   expect(container.textContent).not.toContain("capture was disabled");
 });
 
+it.each([
+  { firstSequence: 0, lastSequence: 0, purgedThroughSequence: 0, expected: "No retained events" },
+  { firstSequence: 75, lastSequence: 74, purgedThroughSequence: 74, expected: "No retained events" },
+  { firstSequence: 3, lastSequence: 3, purgedThroughSequence: 2, expected: "3–3" },
+  { firstSequence: 1, lastSequence: 100, purgedThroughSequence: 0, expected: "1–100" },
+])("describes the retained event range truthfully at $firstSequence/$lastSequence", ({ expected, ...range }) => {
+  render(<HistoryCoverage coverage={{ ...historyCoverage, ...range, settledSequence: range.lastSequence }} />);
+  const valueFor = (label: string) => Array.from(container.querySelectorAll("dt")).find(item => item.textContent === label)?.nextElementSibling?.textContent;
+  expect(valueFor("Available positions")).toBe(expected);
+  expect(valueFor("Settled through")).toContain(String(range.lastSequence));
+  if (range.purgedThroughSequence > 0) expect(valueFor("Purged through")).toBe(String(range.purgedThroughSequence));
+});
+
+it.each(["unsupported", "invalid"] as const)("does not invent an available range for %s history", state => {
+  render(<HistoryCoverage coverage={{ ...historyCoverage, state, firstSequence: 0, lastSequence: 0, settledSequence: 0 }} />);
+  const label = Array.from(container.querySelectorAll("dt")).find(item => item.textContent === "Available positions");
+  expect(label?.nextElementSibling?.textContent).toBe("Not available");
+});
+
 
 it("waits for the exact recorded value action and keeps an earlier phase distinct from a later input with the same name", async () => {
   api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { metadata: { "history.valueEvidenceIds": '["early-value"]', "history.valuePhase": "invoke", "history.valueEvaluationId": "evaluation-1" } }), readAt: "now" });

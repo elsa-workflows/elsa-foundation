@@ -109,6 +109,10 @@ export function HistoryCoverage({ coverage, scopeComplete = true, scopeLimitatio
   coverage: RuntimeHistoryCoverage; scopeComplete?: boolean; scopeLimitation?: string | null; readAt?: string;
 }) {
   const settled = coverage.settledSequence >= coverage.lastSequence;
+  const emptyRetainedRange = coverage.firstSequence === 0 && coverage.lastSequence === 0 || coverage.firstSequence > coverage.lastSequence;
+  const availablePositions = emptyRetainedRange
+    ? ["captured", "partial", "pending"].includes(coverage.state) ? "No retained events" : "Not available"
+    : `${coverage.firstSequence}–${coverage.lastSequence}`;
   const label = !["captured", "partial", "pending", "uncaptured", "disabled", "unsupported", "invalid"].includes(coverage.state) ? `Unrecognized recording coverage (${coverage.state}). Completeness cannot be established.`
     : coverage.state === "disabled" ? "History capture was disabled when this run was admitted."
     : coverage.state === "uncaptured" ? "History was not captured for this run; its original capture setting is unavailable."
@@ -127,7 +131,7 @@ export function HistoryCoverage({ coverage, scopeComplete = true, scopeLimitatio
       {readAt ? <><dt>Inspection observed</dt><dd>{historyInstant(readAt)}</dd></> : null}
       <dt>Current capture chain</dt><dd>{coverage.captureAvailable === true ? "Available" : coverage.captureAvailable === false ? "Unavailable now; recorded history remains separate" : coverage.captureAvailable === null ? "Unknown" : "Not reported by this host"}</dd>
       <dt>Source history responsibility</dt><dd>{coverage.sourceHistoryPending === true ? "Recorded source history is still owed" : coverage.sourceHistoryPending === false ? "No owed source history observed at this read; later facts may arrive" : coverage.sourceHistoryPending === null ? "Cannot establish source settlement" : "Not reported by this host"}</dd>
-      <dt>Available positions</dt><dd>{coverage.firstSequence}–{coverage.lastSequence}</dd>
+      <dt>Available positions</dt><dd>{availablePositions}</dd>
       <dt>Settled through</dt><dd>{coverage.settledSequence} · a settled prefix can receive later events</dd>
       {coverage.purgedThroughSequence > 0 ? <><dt>Purged through</dt><dd>{coverage.purgedThroughSequence}</dd></> : null}
       <dt>Capture profile</dt><dd>{coverage.policyId ? `${coverage.policyId} v${coverage.policyVersion ?? "?"}` : "Not recorded"}</dd>
