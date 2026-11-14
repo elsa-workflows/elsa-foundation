@@ -157,6 +157,12 @@ public static class ParkChecks
         await Case("a committed cancellation stops the sibling job", () => JobPoisonChecks.CancellationAsync(throwOnResult: false, cancelOther: true));
         await Case("a refused hold parks the taken job result and its companion delivery", JobPoisonChecks.RefusedHoldAsync);
         await Case("future-model metadata refusal drains an exact late job without reading private state", JobPoisonChecks.FutureMetadataAsync);
+        foreach (var qualified in new[] { false, true })
+        {
+            await Case($"copied volatile result retains durable sibling (qualified={qualified})", () => ParkMetadataChecks.CopyAsync(qualified));
+            await Case($"ended metadata and genuine completion (qualified={qualified})", () => ParkMetadataChecks.MetadataAsync(qualified, false));
+            await Case($"ended metadata and exhausted raw ticket (qualified={qualified})", () => ParkMetadataChecks.MetadataAsync(qualified, true));
+        }
         await Case("suspension preserves the wait", async () =>
         {
             var world = new World();

@@ -3,6 +3,11 @@ namespace Kernel.Native.Run;
 /// <summary>Job tickets, the parked checkpoint and the later termination of its child, through real workers.</summary>
 internal static class JobPoisonChecks
 {
+    private sealed class ReplyCapture : IReplyTransport
+    {
+        public List<Reply> Replies = [];
+        public void Send(string node, Reply reply) => Replies.Add(reply);
+    }
     private class Probe(bool throwOnResult, bool withChild = true, bool cancelOther = false) : Kernel.Sim.Model<List<string>>
     {
         public override string Key => "job-park-probe";
@@ -68,8 +73,9 @@ internal static class JobPoisonChecks
         var time = 100L;
         var store = new InMemoryStore(1, () => time);
         var probe = new MetadataProbe();
+        var replies = new ReplyCapture();
         Worker NewOwner(string name) => new(name, 0, store, new WorkflowInstance([probe]),
-            new WorkerOptions { Monotonic = () => time });
+            new WorkerOptions { Monotonic = () => time, Transport = replies });
         var owner = NewOwner("metadata-first");
         await new DurableHost([owner]).ActivateAsync(0);
         await store.AddAsync(new("metadata-start", new(Id), Kinds.Start,
@@ -89,7 +95,7 @@ internal static class JobPoisonChecks
         await new DurableHost([owner]).ActivateAsync(0);
         await owner.WokenAsync(null);
         for (var i = 0; i < 12 && probe.Pending["other"].Task.IsCompleted; i++) await owner.RunAsync();
-        await store.AddAsync(new("metadata-query", new(Id), "metadata", TargetCreation: 1));
+        await store.AddAsync(new("metadata-query", new(Id), "metadata", ReplyTo: ReplyTo.Of("caller", "future", time + 100000), TargetCreation: 1));
         await owner.PollAsync();
         await owner.FlushAsync();
         probe.Pending["other"].SetResult("late");
@@ -102,6 +108,7 @@ internal static class JobPoisonChecks
                 && j.Entries == Json.Write(new object[] { new ModelMetadataUnavailable(Id, probe.Key, 2, 1) })),
             "old-model metadata refusal must drain the exact late ticket atomically while keeping future state opaque");
         Check(store.Ghost.Count == 0 && owner.Owns, "metadata cleanup must not lose its fence or invent a ticket");
+        Check(replies.Replies.Any(r => r.Channel == Request.Response && r.Item is ModelMetadataUnavailable), "future metadata request must receive the unavailable response");
         await owner.DisposeAsync();
     }
 
