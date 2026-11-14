@@ -154,7 +154,10 @@ internal sealed class NativeIngressTargetEvidence(IWorkflowSchedulerWorkQueue qu
     internal static void ValidateState(RuntimeCommittedRecipient committed, WorkflowExecutionState state)
     {
         var recipient = committed.Recipient;
+        var start = ReadEnvelope(committed.Seal).Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
         if (state.WorkflowExecutionId != recipient.StartIdentity.WorkflowExecutionId ||
+            state.HistoryCaptureEnabledAtAdmission != start.HistoryCaptureEnabledAtAdmission ||
+            !(start.HistoryCapturePolicy?.IsEquivalentTo(state.HistoryCapturePolicy) ?? state.HistoryCapturePolicy is null) ||
             state.IngressOrigin?.IsEquivalentTo(Origin(committed.Item, recipient)) != true ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(state.PinnedExecutable, recipient.Material) ||
             !Equal(state.PinnedSource, recipient.SourceProvenance) || !Equal(state.Authority, recipient.Authority) ||

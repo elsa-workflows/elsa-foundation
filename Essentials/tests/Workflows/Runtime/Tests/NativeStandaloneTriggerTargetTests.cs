@@ -94,6 +94,29 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.Empty((await fixture.Queue.ListAsync(new(start.WorkflowExecutionId))).Items);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Native_ingress_physical_checkpoint_preserves_the_sealed_capture_choice(bool replacePolicy)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
+        var start = StartItem(NativeIngressTargetEvidence.ReadEnvelope(seal));
+        await fixture.StartHandler.HandleAsync(start);
+        var checkpoint = Assert.Single((await fixture.SelectedQueue.ListAsync(new(start.WorkflowExecutionId))).Items);
+        var context = new WorkflowRuntimePipelineContext(checkpoint);
+        await fixture.CheckpointHandler.HandleAsync(checkpoint, context);
+        var commit = Assert.Single(context.Workspace.PendingCheckpointCommits); var changes = commit.StateChanges;
+        var original = changes.WorkflowExecution!;
+        var state = original.State with { HistoryCapturePolicy = replacePolicy ? new("substituted", 1, false, ["WorkflowStarted"]) : null,
+            HistoryCaptureEnabledAtAdmission = replacePolicy };
+        var modified = commit with { StateChanges = new(new(original.StateId, original.Operation, state, original.Metadata),
+            changes.Scheduler, changes.ActivityExecutions, changes.Bookmarks, changes.DurableValues, changes.Incidents, changes.Operational,
+            changes.ActivityExecutionInspections, changes.PostCommitOutbox, changes.ActivityScopeCleanups) };
+        await Assert.ThrowsAsync<TriggerOperationException>(() => fixture.CheckpointStore.CommitAsync(modified, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        Assert.Null(await fixture.Executions.FindAsync(start.WorkflowExecutionId)); Assert.Empty(fixture.CheckpointStore.ListCommits());
+        Assert.Single((await fixture.SelectedQueue.ListAsync(new(start.WorkflowExecutionId))).Items);
+    }
+
     [Fact]
     public async Task Exact_queue_then_deterministic_checkpoint_successor_then_state_are_distinct_physical_witnesses()
     {
@@ -367,6 +390,30 @@ public sealed class NativeStandaloneTriggerTargetTests
         var handed = checkpoint.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
         Assert.Equal(historyEnabled, handed.HistoryCaptureEnabledAtAdmission);
         Assert.Equal(payload.HistoryCapturePolicy is null, handed.HistoryCapturePolicy is null);
+        var physicalContext = new WorkflowRuntimePipelineContext(checkpoint);
+        await fixture.CheckpointHandler.HandleAsync(checkpoint, physicalContext);
+        var originalCommit = Assert.Single(physicalContext.Workspace.PendingCheckpointCommits);
+        var originalChange = originalCommit.StateChanges.WorkflowExecution!;
+        var originalState = originalChange.State;
+        var substitutions = new[]
+        {
+            originalState with { HistoryCapturePolicy = historyEnabled == true ? null : new("substituted", 1, false, ["WorkflowStarted"]),
+                HistoryCaptureEnabledAtAdmission = historyEnabled != true },
+            originalState with { HistoryCaptureEnabledAtAdmission = historyEnabled is null ? false : null }
+        };
+        foreach (var substitution in substitutions)
+        {
+            var changes = originalCommit.StateChanges;
+            var modified = originalCommit with { StateChanges = new(new(originalChange.StateId, originalChange.Operation, substitution, originalChange.Metadata),
+                changes.Scheduler, changes.ActivityExecutions, changes.Bookmarks, changes.DurableValues, changes.Incidents, changes.Operational,
+                changes.ActivityExecutionInspections, changes.PostCommitOutbox, changes.ActivityScopeCleanups) };
+            await Assert.ThrowsAsync<InvalidDataException>(() => fixture.CheckpointStore.CommitAsync(modified, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+            Assert.Null(await fixture.Executions.FindAsync(key.WorkflowExecutionId));
+            Assert.DoesNotContain(fixture.CheckpointStore.ListCommits(), item => item.Commit.WorkflowExecutionId == key.WorkflowExecutionId);
+            Assert.Single((await fixture.SelectedQueue.ListAsync(new(key.WorkflowExecutionId))).Items);
+            Assert.True(JsonElement.DeepEquals(sealedStart.Command.Payload!.Value,
+                SavedStimulusStartSeal.Read(fixture.Executions.CheckpointState.OutboxItems[sourceId], key.WorkflowExecutionId).Command.Payload!.Value));
+        }
         if (payload.HistoryCapturePolicy is { } required)
         {
             Assert.True(required.IsEquivalentTo(handed.HistoryCapturePolicy));
