@@ -68,7 +68,7 @@ only the bounded lookup/delegation services it needs; it does not claim the full
 ## Current roadmap notes
 
 Phase 2 is being delivered through #3579, including the explicit override amendment to ADR 0085 D3. Phases 3–5
-retain their existing sequencing and are not activated by this authorization. The owner closed whole-feature PR #3806 on 9 November for resubmission as reviewable spec slices. Source preparation resumed on 12 November with builds, tests, pushes and merges still excluded. Current acceptance is incomplete;
+retain their existing sequencing and are not activated by this authorization. The owner closed whole-feature PR #3806 on 9 November for resubmission as reviewable spec slices. Source preparation resumed on12November under a local-only hold. After targeted local qualification, the owner authorized latest-main reconciliation, reviewable sizing, stack publication, reviews, CI, merge and resulting-main verification on14November2026; cloud infrastructure remains excluded. The replacement drafts begin with #4531, and the parent feature stays open through full delivery. Current acceptance is incomplete;
 planning or token-isolation tests alone do not close the external-authentication feature.
 
 The User Tasks portion of Phase 5 was delivered separately under owner-authorized
