@@ -183,3 +183,8 @@ static Elsa.Activities.Primitives.Activities.ReadLineResult.operator !=(Elsa.Act
 static Elsa.Activities.Primitives.Activities.ReadLineResult.operator ==(Elsa.Activities.Primitives.Activities.ReadLineResult? left, Elsa.Activities.Primitives.Activities.ReadLineResult? right) -> bool
 static Elsa.Activities.Primitives.Activities.UserTaskWait.operator !=(Elsa.Activities.Primitives.Activities.UserTaskWait? left, Elsa.Activities.Primitives.Activities.UserTaskWait? right) -> bool
 static Elsa.Activities.Primitives.Activities.UserTaskWait.operator ==(Elsa.Activities.Primitives.Activities.UserTaskWait? left, Elsa.Activities.Primitives.Activities.UserTaskWait? right) -> bool
+Elsa.Activities.Primitives.StandaloneTriggers.StandaloneEventTriggerAuthoringFeature.StandaloneEventTriggerAuthoringFeature() -> void
+Elsa.Activities.Primitives.StandaloneTriggers.StandaloneEventTriggerAuthoringFeature
+static Elsa.Activities.Primitives.StandaloneTriggers.StandaloneEventIngressServiceCollectionExtensions.AddStandaloneEventIngress<TSource>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Primitives.Models.ValueTypeDescriptor! payloadSchema, string! sourceFamily = "Elsa.Event.External") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Activities.Primitives.StandaloneTriggers.StandaloneEventIngressServiceCollectionExtensions
+virtual Elsa.Activities.Primitives.StandaloneTriggers.StandaloneEventTriggerAuthoringFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
