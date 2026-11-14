@@ -1095,6 +1095,13 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.graph.releases": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.graph.runtime": {
         "type": "Project",
         "dependencies": {

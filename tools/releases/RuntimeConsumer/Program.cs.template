@@ -14,6 +14,7 @@ services.AddScoped<IWorkflowExecutableHasher, RefuseNativeHasher>();
 var feature = new WorkflowReleaseRuntimeFeature();
 feature.ConfigureServices(services);
 feature.PostConfigureServices(services);
+// OPTIONAL_OWNER_REGISTRATION
 using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
 using var scope = provider.CreateScope();
 var codec = scope.ServiceProvider.GetRequiredService<IReleaseRuntimeArtifactCodec>();
@@ -37,6 +38,7 @@ Array.Fill(bytes, (byte)' ');
 if (codec.DecodeTemplate(encoded.GetPayloadBytes()).Template.TemplateHash != hash)
     throw new InvalidOperationException("Caller mutation changed the retained payload.");
 var content = new OneMember(encoded);
+// OPTIONAL_OWNER_ASSERTIONS
 var owner = scope.ServiceProvider.GetServices<IReleaseArtifactSemanticVerifier>().Single();
 var facts = await owner.VerifyAsync(content.Members[0], encoded.GetPayloadBytes(), content);
 if (facts.Status != ReleaseSemanticStatus.Verified || !facts.OwnerHashVerified || facts.RootCapabilities.Count != 0 || facts.Sites.Count == 0)
