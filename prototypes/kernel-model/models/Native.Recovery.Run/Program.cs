@@ -4,7 +4,10 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Sim.Native;
 
-if (args is ["--list"]) { Console.WriteLine("recovery:ordinary-child-intervention-minimal"); foreach (var name in InterventionWitness.Names.Concat(RecoveryReader.Names)) Console.WriteLine(name); return; }
+if (args is ["--retry-minimal"]) { RetryWitness.Run(); return; }
+if (args is ["--retry"]) { RetryWitness.Run(full: true); return; }
+if (args is ["--retry-refusals"]) { RetryWitness.Run(refusals: true); return; }
+if (args is ["--list"]) { Console.WriteLine("recovery:ordinary-child-intervention-minimal"); foreach (var name in InterventionWitness.Names.Concat(RecoveryReader.Names).Concat(RetryWitness.Names).Concat(RetryWitness.RefusalNames)) Console.WriteLine(name); return; }
 if (args.Length != 0 && args is not ["--minimal"]) throw new ArgumentException("Use --list, --minimal or no argument.");
 
 // A real ordinary native fault, not a seeded incident record. The old runtime ignores the private
