@@ -56,6 +56,7 @@
     <ProjectReference Include="..\..\..\..\Extensions\ExpressionEditors.Liquid\studio\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\ExtensionBuilder\studio\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\FeatureManagement\studio\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj"/>
+    <ProjectReference Include="../../../../Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Elsa.Studio.Identity.ExternalAuthentication.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Secrets\studio\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Agent\studio\Elsa.Studio.Agent\Elsa.Studio.Agent.csproj"/>
     <ProjectReference Include="..\..\..\..\Extensions\Connections\studio\Elsa.Studio.Connections\Elsa.Studio.Connections.csproj"/>

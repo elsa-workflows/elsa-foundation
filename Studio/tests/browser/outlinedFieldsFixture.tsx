@@ -1,7 +1,7 @@
 import { BasicTaskForm } from "../../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/TaskForm";
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { StudioField, StudioFormField } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/forms/Field";
+import { StudioField, StudioFormField, StudioFieldAdornmentProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/forms/Field";
 import { applyThemeStyleVariables } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { getTheme, getThemeColorScheme, getThemeModeDefinition, isThemeMode, themeTokenNames } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/presets";
 import { applyWorkspaceStyle, isWorkspaceStyle } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/workspaceStyles";
@@ -27,6 +27,12 @@ applyThemeStyleVariables(root, applyWorkspaceStyle(theme, style));
 const palette = getThemeModeDefinition(theme, mode)!;
 for (const token of themeTokenNames) root.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
 
+function OwnedEditor() {
+  return <StudioFormField label="Host actions" hint="Actions stay beside the value, above help." trailing={<button type="button" aria-label="Editor action">More</button>}>
+    {attributes => <input {...attributes} defaultValue="Opaque editor value" />}
+  </StudioFormField>;
+}
+
 function Fixture() {
   const [value, setValue] = useState("Draft value");
   const [invalid, setInvalid] = useState(true); const [revealed, setRevealed] = useState(false);
@@ -46,6 +52,7 @@ function Fixture() {
       </StudioFormField>
       <StudioField label="Calculated version"><output>7</output></StudioField>
       <StudioField label="A long translated label that must wrap without clipping the outline or the value" meta="Optional"><input defaultValue="Long label value" /></StudioField>
+      <StudioFieldAdornmentProvider trailing={<button type="button" aria-label="Host action">Syntax</button>}><OwnedEditor /></StudioFieldAdornmentProvider>
       <StudioField label="Options"><label><input type="checkbox" defaultChecked /> Enabled</label><label><input type="radio" name="option" defaultChecked /> Default</label></StudioField>
       <div className="agent-editor"><StudioField label="Agent setting"><input defaultValue="Module style collision" /></StudioField></div>
       <div className="user-task-detail"><StudioField label="Task response"><input defaultValue="User Tasks collision" /></StudioField></div>

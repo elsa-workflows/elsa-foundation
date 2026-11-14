@@ -102,6 +102,14 @@ public interface IRecurringTriggerScheduleStore
     /// <summary>Finds a single schedule by its id, or <c>null</c> if it does not exist.</summary>
     ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default);
 
+    /// <summary>Reads the actual schedule and existing claim/backoff facts. Unsupported readers refuse explicitly.</summary>
+    ValueTask<RecurringTriggerScheduleObservation?> ObserveAsync(string scheduleId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RecurringTriggerScheduleObservation?>(new NotSupportedException("Schedule recovery inspection is unsupported."));
+
+    /// <summary>Removes only this exact held resource occurrence after its accepted final firing; a newer generation is preserved.</summary>
+    ValueTask<bool> ExhaustClaimAsync(RecurringTriggerOccurrenceClaim claim, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<bool>(new NotSupportedException("This recurring store cannot exhaust a resource-owned occurrence safely."));
+
     /// <summary>
     /// Atomically claims at most <see cref="RecurringTriggerOccurrenceClaimRequest.Limit"/> active schedules whose
     /// occurrence is due and whose earlier claim, if any, is no longer visible, ordered by next occurrence then id. The
@@ -142,6 +150,13 @@ public interface IRecurringTriggerScheduleStore
         RecurringTriggerOccurrenceClaim claim,
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Releases the same fenced resource occurrence with a safe admission reason. Legacy providers retain an unknown reason.</summary>
+    ValueTask<bool> ReleaseClaimWithFailureAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset visibleAt,
+        RecurringTriggerScheduleFailureReason failureReason,
+        CancellationToken cancellationToken = default) => ReleaseClaimAsync(claim, visibleAt, cancellationToken);
 
     /// <summary>Deletes every schedule owned by an artifact. Deleting for an unknown artifact is a no-op.</summary>
     ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);

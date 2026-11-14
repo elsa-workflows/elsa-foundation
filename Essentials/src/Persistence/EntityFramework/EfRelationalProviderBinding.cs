@@ -64,6 +64,16 @@ public static class EfRelationalProviderBinding
     public static void UseSqlite(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
         Bind(builder, SqliteEngine, connectionString, historyTableName, Named(migrationsAssembly), schema);
 
+    /// <summary>
+    /// Adds the same serialized pooled-connection open mitigation used by SQLite bindings, preserving a consumer's
+    /// existing provider, connection and migration options. Every opener sharing that pool must use the mitigation.
+    /// </summary>
+    public static void ConfigureSqliteConnectionSafety(DbContextOptionsBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        EfSqliteSerialOpenInterceptor.EnsureAdded(builder);
+    }
+
     public static void UseSqlServer(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
         Bind(builder, SqlServerEngine, connectionString, historyTableName, Named(migrationsAssembly), schema);
 
@@ -216,9 +226,10 @@ public static class EfRelationalProviderBinding
         var configure = BuildRelationalConfigure(actionType, historyTableName, migrationsAssembly, schema);
         method.Invoke(null, [builder, connectionString, configure]);
         EfMigrationsHistory.EnsureAdded(builder);
+        builder.ReplaceService<IModelSource, EfRelationalModelSource>();
         // Microsoft.Data.Sqlite can lend one pooled connection to two opens that check out at once (#2209).
         if (engine == SqliteEngine)
-            EfSqliteSerialOpenInterceptor.EnsureAdded(builder);
+            ConfigureSqliteConnectionSafety(builder);
 
         if (schema is null)
             return;

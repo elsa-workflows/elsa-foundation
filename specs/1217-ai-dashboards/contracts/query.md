@@ -1,6 +1,6 @@
 # Query and module contribution contract
 
-**Status:** Query requirements and design rationale for the implementation under review in #3913. The source and public API files define the implemented names; proposed future seams below are not runtime contracts. Native, live-provider and composed Studio qualification remain separate evidence. [The specification](../spec.md) governs product requirements; [the data inventory](../research-data.md) records existing source limitations.
+**Status:** Query requirements and design rationale for the implementation delivered through the [reviewable slice stack](../delivery-slices.md). The source and public API files define the implemented names; proposed future seams below are not runtime contracts. Native, live-provider and composed Studio qualification remain separate evidence. [The specification](../spec.md) governs product requirements; [the data inventory](../research-data.md) records existing source limitations.
 
 ## Ownership and dispatch
 

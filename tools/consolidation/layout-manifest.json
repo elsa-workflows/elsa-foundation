@@ -214,7 +214,7 @@
     {
       "product": "foundation",
       "source": "src/essentials/Activities/Primitives/Elsa.Activities.Primitives.csproj",
-      "target": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj",
+      "target": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj",
       "project_name": "Elsa.Activities.Primitives",
       "package_id": "Elsa.Activities.Primitives",
       "assembly_name": "Elsa.Activities.Primitives",

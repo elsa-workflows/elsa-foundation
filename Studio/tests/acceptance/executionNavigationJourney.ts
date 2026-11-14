@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { isActivityHeadingReadable } from "../visibleContent";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Run = { instance: { status: string }; activities: Array<{ executableNodeId: string; activityExecutionId: string; startedAt: string }> };
@@ -166,6 +167,9 @@ export async function executionNavigationJourney(page: Page, info: TestInfo, cap
   const details = await openDetails(attached); await exact(attached, attachedItems[0]);
   const retained = await details.elementHandle();
   await boundaries(attached.locator(".wf-execution-scope-occurrence"), attached, attachedItems);
+  const selectedName = attached.locator(".wf-activity-overview-title h4");
+  await expect(selectedName).toHaveText("Show current item");
+  await expect.poll(() => selectedName.evaluate(isActivityHeadingReadable)).toBe(true);
   await expect(chooser).toBeFocused(); await capture(page, info, "attached-first-boundary");
   await attached.getByRole("button", { name: /^Next occurrence of / }).press("Enter");
   await exact(attached, attachedItems[1]);
@@ -177,6 +181,7 @@ export async function executionNavigationJourney(page: Page, info: TestInfo, cap
   await page.getByRole("tab", { name: "Inspector", exact: true }).click();
   await exact(attached, attachedItems[1]);
   expect(await details.evaluate((element, original) => element === original, retained)).toBe(true);
+  await expect.poll(() => selectedName.evaluate(isActivityHeadingReadable)).toBe(true);
   await expect(details).toHaveAttribute("open", ""); await capture(page, info, "retained-middle-occurrence");
   await page.getByRole("tab", { name: "Runtime", exact: true }).click();
   await controls.getByRole("button", { name: "Return to editing", exact: true }).press("Enter");

@@ -34,6 +34,7 @@ interface HarnessProps {
   persistedDraft: WorkflowDraft | null;
   enabled: boolean;
   validationErrors: ValidationError[];
+  context?: StudioEndpointContext;
 }
 
 function render(endpoint: StudioEndpointContext, initial: HarnessProps, revealActivity = vi.fn()) {
@@ -44,7 +45,7 @@ function render(endpoint: StudioEndpointContext, initial: HarnessProps, revealAc
     const [props, setProps] = React.useState(initial);
     rerender = next => setProps(previous => ({ ...previous, ...next }));
     current = useWorkflowActivityDataSelection({
-      context: endpoint,
+      context: props.context ?? endpoint,
       enabled: props.enabled,
       draft: props.draft,
       persistedDraft: props.persistedDraft,
@@ -180,4 +181,30 @@ describe("workflow Choose data host", () => {
     await expect(current!.requestSources({ nodeId: "consumer", inputKey: "customerId" }, new AbortController().signal, 0)).rejects.toThrow();
     expect(supported.postJson).not.toHaveBeenCalled();
   });
+
+  it("passes focused literal queries without a save and discards answers after an edit or disable", async () => {
+    const { context, postJson, putJson } = endpoint();
+    const pending: Array<(value: unknown) => void> = [];
+    postJson.mockImplementation((_path, _body) => new Promise(resolve => pending.push(value => resolve(value as Awaited<ReturnType<typeof postJson>>))));
+    const saved = draft("C-1", { authoringRevision: "base-2" });
+    render(context, { draft: saved, persistedDraft: saved, enabled: true, validationErrors: [] });
+    await vi.waitFor(() => expect(current).not.toBeNull());
+    const query = { source: { expressionType: "ActivityResult", value: { producerNodeId: "producer", projectionKey: "$result" } }, memberPath: ["literal.dot", ""] };
+    const result = current!.requestSources({ nodeId: "consumer", inputKey: "customerId" }, new AbortController().signal, 0, query);
+    await vi.waitFor(() => expect(pending).toHaveLength(1));
+    expect(postJson.mock.calls[0]![1]).toMatchObject({ query: { source: query.source, memberPath: query.memberPath } });
+    flushSync(() => rerender({ draft: draft("C-2") }));
+    pending[0]!({ contractVersion: "1", state: "empty", documentRevision: getDraftContentRevision(saved), baseRevision: "base-2",
+      resourceKind: "WorkflowDefinition", resourceId: "draft-1", analysis: { memberReadsEnabled: true, target: null, sources: [] } });
+    expect(await result).toMatchObject({ state: "stale", sources: [], target: null, memberReadsEnabled: false });
+    expect(putJson).not.toHaveBeenCalled();
+
+    const second = current!.requestSources({ nodeId: "consumer", inputKey: "customerId" }, new AbortController().signal, 0);
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    flushSync(() => rerender({ enabled: false }));
+    pending[1]!({ contractVersion: "1", state: "empty", documentRevision: getDraftContentRevision(draft("C-2")), baseRevision: "base-2",
+      resourceKind: "WorkflowDefinition", resourceId: "draft-1", analysis: { memberReadsEnabled: true, target: null, sources: [] } });
+    expect(await second).toMatchObject({ state: "stale", sources: [], memberReadsEnabled: false });
+  });
+
 });

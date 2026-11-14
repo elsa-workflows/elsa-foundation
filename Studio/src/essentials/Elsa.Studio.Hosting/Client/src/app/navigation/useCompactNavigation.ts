@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { observeFocusedContent, revealFocusedContent as revealContent } from "../ui/focusedContentVisibility";
 
 const compactNavigationQuery = "(max-width: 800px)";
 
@@ -11,28 +12,10 @@ export function useCompactNavigation() {
   const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
   const restoreFocus = useRef(false);
   const revealFocusedContent = useCallback(() => {
-    const focused = document.activeElement;
-    if (focused instanceof HTMLElement && contentElement?.contains(focused) && focused.getClientRects().length) {
-      focused.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-    }
+    if (contentElement) revealContent(contentElement);
   }, [contentElement]);
 
-  useEffect(() => {
-    if (!contentElement) return;
-    let frame = 0;
-    const revealAfterLayout = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(revealFocusedContent);
-    };
-    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(revealAfterLayout) : null;
-    observer?.observe(contentElement);
-    window.addEventListener("resize", revealAfterLayout);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", revealAfterLayout);
-      window.cancelAnimationFrame(frame);
-    };
-  }, [contentElement, revealFocusedContent]);
+  useLayoutEffect(() => contentElement ? observeFocusedContent(contentElement) : undefined, [contentElement]);
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;

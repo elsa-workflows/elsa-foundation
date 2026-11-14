@@ -3,7 +3,7 @@ using Kernel.Native;
 namespace Kernel.Sim;
 
 // Native and NativeFlaws: native workflow instances in the mix (sim/NativeSim.cs), and the model broken on purpose.
-public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None);
+public sealed record Config(int Nodes, int Partitions, Flaw Flaws, int Attempts = 3, int Group = 1, bool Upgrade = false, bool Native = false, NativeFlaw NativeFlaws = NativeFlaw.None, AdmissionFlaw AdmissionFlaws = AdmissionFlaw.None);
 
 /// <summary>One thing that happens. Concrete, so that a list of them replays without the random generator.</summary>
 public sealed record Act(string Kind, int A = 0, int B = 0, string S = "", Message? M = null, bool Flag = false)
@@ -83,11 +83,16 @@ public sealed class Actor(int id, int node, int partition)
     public int Version;
     public readonly List<Call> Calls = [];
     public readonly Dictionary<string, TaskCompletionSource<object?>> Jobs = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, bool> ObservedHistory = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, bool> TurnHistoryHint = new(StringComparer.Ordinal);
 }
 
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
+    public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
+    public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {
         if (world.Auto)
@@ -131,16 +136,27 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
         Send("load", $"load [{string.Join(", ", ids)}]", () => world.Store.LoadAsync(ids));
+    public bool HasActorAliases => ((IKernelStore)world.Store).HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
+        Send("load", $"load [{string.Join(", ", ids)}]", () => ((IKernelStore)world.Store).LoadActorsAsync(ids));
 
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) =>
         Send("events", $"events for [{string.Join(", ", keys)}]", () => world.Store.FindEventsAsync(keys));
 
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) =>
+        world.Store.PublishedMatchesAsync(published);
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) =>
+        Send("events", $"events for {waits.Count} waits", () => world.Store.KeptMatchesAsync(waits));
+
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => world.Store.AddAsync(message);
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => world.Store.AddEventAsync(delivery);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => world.Store.PublishAsync(@event);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => world.Store.FindSubscriptionsAsync(key);
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => world.Store.SubscribeAsync(subscription);
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) =>
         Send("journal", $"journal p{partition} after {after}", () => world.Store.ReadJournalAsync(partition, after, take));
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) =>
+        Send("journal", $"journal of {instance} after {after}", () => world.Store.ReadJournalOfAsync(partition, instance, after, cancellationToken));
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) =>
         Send("projected", $"projection p{partition}", () => world.Store.ProjectedAsync(partition));
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) =>
@@ -178,6 +194,12 @@ public sealed partial class World
     public readonly PartitionRuntime[] Runtimes;    // layer 1, one per process: the built-in runtime the simulation drives
     public readonly Dictionary<string, Requests> Processes = new(StringComparer.Ordinal);   // by process name: the requests open there
     public readonly List<(string Process, Request Request, string Instance)> Asked = [];
+
+    /// <summary>
+    /// A request's deadline, which its reply address carries (decision 6): the route's timeout, 30 s; one request in four
+    /// has 250 ms, shorter than the models' 300 ms timers, so callers expire while their instances go on.
+    /// </summary>
+    private long Deadline(string request) => Time + (long.Parse(request[1..]) % 4 == 0 ? 250 : 30_000);
     public readonly List<(string Node, Reply Reply)> Deliveries = [];                   // on the transport between nodes
     public readonly List<SubscriptionRow> CatchingUp = [];                              // start subscriptions inserted, their read still owed
     private readonly TrialGate[] _gates;
@@ -200,8 +222,10 @@ public sealed partial class World
     }
     public Action<string>? Log;
 
-    public World(Config config)
+    private readonly Func<int, IExecutionModel>? _extraModel;
+    public World(Config config, Func<int, IExecutionModel>? extraModel = null)
     {
+        _extraModel = extraModel;
         Config = config;
         Native = new NativeOracle(config.Partitions);
         Store = new InMemoryStore(config.Partitions, () => Time, config.Flaws) { Refuses = row => row.State.Contains(Fragile.Sour) };
@@ -257,6 +281,7 @@ public sealed partial class World
             new Counter(Versions[node]), new Parent(Config.Flaws.HasFlag(Flaw.CancelKnownChildren)), new Child(), new Waiter(), new Sequence(), new Correlation(Config.Flaws.HasFlag(Flaw.CorrelationForgets)), new CWaiter(Config.Partitions),
             new Runner((job, cancel) => Work(actor, job, cancel)), new Fragile(() => Dying = node), new Http(actor.Id, (job, cancel) => Work(actor, job, cancel)),
             new Tree((job, cancel) => Work(actor, job, cancel)), new OnEvent(), NativeModelFor(actor),
+            .. _extraModel is null ? Array.Empty<IExecutionModel>() : new[] { _extraModel(node) },
         ];
         // A node's name is unique per process start: a restarted process is not its predecessor (finding F9).
         actor.Worker = new Worker(Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}", partition, wire, new WorkflowInstance(models), new WorkerOptions
@@ -266,8 +291,12 @@ public sealed partial class World
             WallClock = () => Time + Skew[node],
             Flaws = Config.Flaws, Partitions = Config.Partitions, MaxInstances = 2,
             Transport = new Transport(this, Config.Flaws.HasFlag(Flaw.StableNodeName) ? "node" + node : $"node{node}.{Incarnation[node]}"),
+            OnKeptInMemory = (instance, revision) => Oracle.InMemory[instance] = revision,
+            OnLeftMemory = (instance, status) => { if (status is InstanceStatus.Running or null) Faults.Add($"I9 {instance} left memory without a row while it was {status?.ToString() ?? "missing"}"); },
+            OnObservedDelivery = row => actor.ObservedHistory[row.Message.Id] = row.Seen > 0 || row.Trial > 0,
             OnTurn = (instance, inbox, _) =>
             {
+                actor.TurnHistoryHint[instance.Id] = inbox.Any(m => actor.ObservedHistory.GetValueOrDefault(m.Id));
                 Log?.Invoke($"        actor {actor.Id} turns {instance} with [{string.Join(", ", inbox.Select(m => m.Kind + " " + m.Id))}]");
                 Alone(actor, instance.Id, "a turn of " + instance);
                 // I16: while its committed row says suspended, the current owner gives an instance nothing.
@@ -317,7 +346,7 @@ public sealed partial class World
     {
         Alone(actor, job.Instance.Id, $"job {job.Key} of {job.Instance}");
         var done = new TaskCompletionSource<object?>();
-        actor.Jobs[job.Instance.Id + "!" + job.Key] = done;
+        actor.Jobs[Worker.TicketId(job.Instance.Id, job.Key, job.Creation)] = done;
         cancel.Register(() => done.TrySetCanceled());
         return new ValueTask<object?>(done.Task);
     }
@@ -472,9 +501,9 @@ public sealed partial class World
             {
                 if (Live(act.A) is not { } actor || !actor.Worker.Owns) return null;
                 var request = act.M!.ReplyTo![(act.M.ReplyTo.IndexOf('|') + 1)..];
-                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request) };
+                var asked = act.M with { ReplyTo = ReplyTo.Of(actor.Worker.Node, request, Deadline(request)) };
                 if (!actor.Worker.Post(asked, fresh: true, ambient: "amb:" + asked.Target.Id)) return null;
-                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Time + 30_000), asked.Target.Id));
+                Asked.Add((actor.Worker.Node, Processes[actor.Worker.Node].Open(request, Deadline(request)), asked.Target.Id));
                 Oracle.Https[asked.Target.Id] = (act.S, asked.Start!.Ephemeral, actor.Id, false);
                 return "";
             }
@@ -483,9 +512,9 @@ public sealed partial class World
                 if (Paused[act.A] || !Oracle.Https.ContainsKey(act.M!.Target.Id)) return null;
                 var process = Of(act.A, 0).Worker.Node;
                 var request = act.M.ReplyTo!;
-                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request) };
+                var asked = act.M with { ReplyTo = ReplyTo.Of(process, request, Deadline(request)) };
                 var added = Store.AddAsync(asked).Result;
-                Asked.Add((process, Processes[process].Open(request, Time + 30_000), asked.Target.Id));
+                Asked.Add((process, Processes[process].Open(request, Deadline(request)), asked.Target.Id));
                 return added ? "added" : "duplicate key";
             }
             case "disconnect":
@@ -645,7 +674,7 @@ public sealed class Generator(int seed, World world)
             if (owners.Count == 0) return new Act("tick", r.Next(50));
             var owner = owners[r.Next(owners.Count)];
             var mode = Http.Starts[r.Next(Http.Starts.Length)];
-            var spec = Http.Spec(mode, ephemeral: mode == Http.Respond && r.Next(2) == 0);
+            var spec = Http.Spec(mode, ephemeral: mode != Http.Early && r.Next(2) == 0);     // decision 4: a timer or a job may wait in memory
             return new Act("request", owner.Id, S: mode, M: new Message($"x{n}", InstanceRef.In(owner.Partition, "h" + n), Kinds.Start, Start: spec, ReplyTo: "|q" + n));
         }
         if (roll < 60)
@@ -695,10 +724,13 @@ public sealed class Generator(int seed, World world)
             return new Act("register", S: "d" + which, M: new Message("", default, "s" + which % 2));
         }
         if (roll == 8 && world.CatchingUp.Count > 0) return new Act("catch-up", S: world.CatchingUp[r.Next(world.CatchingUp.Count)].Wait);
-        var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id).Order(StringComparer.Ordinal).ToList();
+        // Decision 4: instances held in memory only, never written, get suspends and resumes too; they are written first.
+        var rows = world.Store.Instances.Values.Where(i => i.Status == InstanceStatus.Running).Select(i => i.Id)
+            .Concat(world.Actors.Where(a => !a.Dead).SelectMany(a => a.Worker.Unwritten)).Distinct().Order(StringComparer.Ordinal).ToList();
         if (rows.Count == 0) return new Act("tick", r.Next(50));
         var target = rows[r.Next(rows.Count)];
-        var kind = world.Store.Instances[target].Suspended == (r.Next(4) == 0) ? Kinds.Suspend : Kinds.Resume;
+        if (!world.Store.Instances.ContainsKey(target)) World.Count("a suspend or resume for an instance held in memory");
+        var kind = (world.Store.Instances.GetValueOrDefault(target)?.Suspended ?? false) == (r.Next(4) == 0) ? Kinds.Suspend : Kinds.Resume;
         return new Act("add", M: new Message($"x{_serial++}", new InstanceRef(target), kind, KeepUntil: world.Time + 3_600_000));
     }
 

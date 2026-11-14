@@ -13,9 +13,9 @@ public sealed class ValidateDesignPersistenceReplacementContractsStartupTask(ISe
         cancellationToken.ThrowIfCancellationRequested();
         var invalidRegistrations = DesignPersistenceBackend.ReplacementContractTypes
             .Select(serviceType => (serviceType, Count: services.Count(descriptor => descriptor.ServiceType == serviceType)))
-            // Library support is optional for existing design backends. Keeping its
-            // contract in the ownership set still rejects an implicit second owner.
-            .Where(item => item.serviceType == typeof(IWorkflowLibraryStore) || item.serviceType == typeof(IWorkflowFolderDeletionStore)
+            // Library and exact-source snapshot support are optional for existing backends.
+            // Keeping the ports in the ownership set still rejects an implicit second owner.
+            .Where(item => item.serviceType == typeof(IWorkflowLibraryStore) || item.serviceType == typeof(IWorkflowFolderDeletionStore) || item.serviceType == typeof(IWorkflowVersionSnapshotReader)
                 ? item.Count > 1 : item.Count != 1)
             .Select(item => $"{item.serviceType.Name} ({item.Count} registrations)")
             .OrderBy(item => item, StringComparer.Ordinal)

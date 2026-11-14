@@ -68,7 +68,7 @@ public abstract class IdentityIamDbContext(DbContextOptions options) : DbContext
         "Id", "TenantId", "TenantLookupKey",
         "UserId", "UserLookupKey", "RoleId", "RoleLookupKey",
         "RuleId", "RuleLookupKey", "CredentialId", "CredentialLookupKey", "SubjectId",
-        "Provider", "ProviderLookupKey", "ProviderSubject", "ProviderSubjectLookupKey",
+        "Provider", "ProviderLookupKey", "Issuer", "ProviderSubject", "ProviderSubjectLookupKey",
         "NormalizedEmail", "NormalizedEmailKey",
         "NormalizedUserName", "NormalizedUserNameKey",
         "NormalizedRoleName", "NormalizedRoleNameKey",

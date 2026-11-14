@@ -63,10 +63,11 @@ nav.rail .brand { font: 600 15px/1.25 var(--display); letter-spacing: .02em; tex
 nav.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: ch; }
 nav.rail li { counter-increment: ch; }
 nav.rail a { display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 14px; line-height: 1.35; }
-nav.rail a::before { content: counter(ch, decimal-leading-zero); font: 500 12px/1.6 var(--mono); color: var(--muted); }
+nav.rail ol a::before { content: counter(ch, decimal-leading-zero); font: 500 12px/1.6 var(--mono); color: var(--muted); }
+nav.rail p a { display: inline; padding: 0; color: var(--accent); }
 nav.rail a:hover { background: var(--surface); }
 nav.rail a.on { background: var(--accent-soft); color: var(--accent); }
-nav.rail a.on::before { color: var(--accent); }
+nav.rail ol a.on::before { color: var(--accent); }
 
 main { padding: 40px 48px 120px; min-width: 0; }
 header.top { max-width: 900px; padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
@@ -213,9 +214,9 @@ ol.stmts code { font-size: 12.5px; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
-  nav.rail { position: sticky; top: 0; height: auto; z-index: 5; background: var(--bg); border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; overflow-x: auto; }
+  nav.rail { position: sticky; top: 0; height: auto; z-index: 5; background: var(--bg); border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; overflow-x: visible; }
   nav.rail .brand { display: none; }
-  nav.rail ol { display: flex; gap: 4px; width: max-content; }
+  nav.rail ol { display: flex; gap: 4px; width: auto; overflow-x: auto; }
   nav.rail a { grid-template-columns: auto auto; white-space: nowrap; font-size: 13px; }
   main { padding: 24px 16px 80px; }
   h1 { font-size: 34px; }

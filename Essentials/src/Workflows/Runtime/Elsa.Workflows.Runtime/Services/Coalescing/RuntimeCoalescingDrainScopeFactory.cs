@@ -113,7 +113,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             // durable Pending row already is the post-drain delivery source.
             var remainingIntents = session.RemainingPendingOutboxChanges()
                 .Where(change => !session.IsOutboxDurablyPersisted(change.StateId))
-                .Select(change => change.State.Intent)
+                .Select(change => change.State.RequireWorkflowIntent())
                 .ToArray();
 
             var now = timeProvider.GetUtcNow();
@@ -133,7 +133,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 Checkpoint: checkpoint,
                 StateChanges: foldedState,
                 PostCommitIntents: remainingIntents,
-                Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
+                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)) { HistoryBatches = session.FoldHistoryBatchesWith() };
         }
 
         public ValueTask DisposeAsync()

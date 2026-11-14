@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Services.Triggers;
 using System.Diagnostics;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -12,6 +13,9 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
 public sealed class RuntimeCheckpointCommitter
 {
+    internal IRuntimeHistoryStore? HistoryStore { get; init; }
+    internal Func<IRuntimeHistoryStore?>? HistoryStoreResolver { get; init; }
+
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
@@ -100,6 +104,14 @@ public sealed class RuntimeCheckpointCommitter
         foreach (var enricher in _enrichers)
             await enricher.ValidateFinalAsync(commit, cancellationToken);
 
+        if (commit.HistoryBatches is { Count: > 0 } history)
+        {
+            var selectedHistory = HistoryStore ?? HistoryStoreResolver?.Invoke();
+            if (selectedHistory is null || !_checkpointCommitStore.SupportsHistory || !_checkpointCommitStore.CanCommitHistory(selectedHistory))
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable", "History capture requires its qualified atomic provider.");
+            foreach (var batch in history) RuntimeHistorySafety.Validate(batch, commit.WorkflowExecutionId);
+        }
+
         // The checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace
         // context, not service location). No new awaits are inserted between the fenced awaits below — attribute writes
@@ -120,7 +132,10 @@ public sealed class RuntimeCheckpointCommitter
         if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
             throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
-        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
+        if (NativeIngressCheckpointAuthority.RequiresInitialPhysicalAdmission(commit))
+            decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
+                "Source-bound starts require their initial physical admission before execution.");
+        else if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
                 "Model decisions and native worker admission require an atomic physical checkpoint.");
         else if (commit.ExpectedBookmarkResume is not null)

@@ -75,7 +75,7 @@ public sealed class EfSourceOwnedStimulusRouterTests
         await using (var scope = provider.CreateAsyncScope())
         {
             var sourceRow = await scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
-            Assert.Equal("2.0.0", sourceRow.SchemaVersion); Assert.Equal(3, sourceRow.Revision);
+            Assert.Equal(RuntimePostCommitOutboxEfModule.Chain.CurrentVersion, sourceRow.SchemaVersion); Assert.Equal(3, sourceRow.Revision);
         }
     }
 

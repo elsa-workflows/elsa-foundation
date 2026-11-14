@@ -121,9 +121,9 @@ public sealed partial class EfWorkflowExecutableStore
         }
     }
 
-    internal static RuntimeExecutionMaterial ReadMaterial(WorkflowExecutableEntity row, string scope, string expected, string id)
+    internal static RuntimeExecutionMaterial ReadMaterial(WorkflowExecutableEntity row, string scope, string expected, string id, RuntimeSourceReadLimits? sourceLimits = null)
     {
-        if (!row.IsModelMaterial) return new(Read(row, scope, expected, id), row.IncarnationId);
+        if (!row.IsModelMaterial) return new(Read(row, scope, expected, id, sourceLimits), row.IncarnationId);
         if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) || row.Id != id ||
             row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.ArtifactId != Encode(expected) ||
             row.ArtifactIdHash != Hash(expected) || row.ArtifactIdOrderKey != OrderKey(expected) || string.IsNullOrWhiteSpace(row.IncarnationId))
@@ -131,7 +131,8 @@ public sealed partial class EfWorkflowExecutableStore
         try
         {
             var content = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson));
-            var document = RuntimeArtifactJson.Deserialize<ModelMaterialDocument>(content[nameof(row.ContentJson)]!);
+            var document = sourceLimits is null ? RuntimeArtifactJson.Deserialize<ModelMaterialDocument>(content[nameof(row.ContentJson)]!) :
+                RuntimeArtifactJson.DeserializeBounded<ModelMaterialDocument>(content[nameof(row.ContentJson)]!, sourceLimits.MaxJsonDepth);
             if (document.RuntimeModelMaterialVersion != 1) throw new NotSupportedException("Unsupported model material document.");
             ValidateModel(document.Material);
             if (document.Material.Identity.ArtifactId != expected || document.Material.Identity.ArtifactHash != row.ArtifactHash)

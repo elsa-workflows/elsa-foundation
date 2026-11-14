@@ -15,6 +15,9 @@ let root: ReturnType<typeof createRoot>;
 let operations: ReturnType<typeof useWorkflowOperations>;
 const setError = vi.fn();
 const startTestRun = vi.fn();
+const setStatus = vi.fn();
+const setActiveRightPanelId = vi.fn();
+const setInspectorCollapsed = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,7 +26,7 @@ beforeEach(() => {
   function Probe() {
     operations = useWorkflowOperations({ context: {} as StudioEndpointContext, draft, details: null, catalog: [], busy: false,
       saveDraft: vi.fn(), flushPendingSave: vi.fn(), reload: vi.fn(), startTestRun, setPublishedArtifact: vi.fn(),
-      setOperation: vi.fn(), setStatus: vi.fn(), setError, setActiveRightPanelId: vi.fn(), setInspectorCollapsed: vi.fn(), setAutosavePaused: vi.fn() });
+      setOperation: vi.fn(), setStatus, setError, setActiveRightPanelId, setInspectorCollapsed, setAutosavePaused: vi.fn() });
     return null;
   }
   flushSync(() => root.render(<Probe />));
@@ -41,22 +44,30 @@ const cases: { patch: Partial<WorkflowTestRunView>; level: string; title: string
 ];
 
 describe("Test Run notifications", () => {
-  it.each(cases)("reports $title with an appropriate notification level", async ({ patch, level, title }) => {
+  it.each(cases)("retains $title on the appropriate feedback surface", async ({ patch, level, title }) => {
     const result = { ...view, ...patch };
     start.mockResolvedValue(result);
     await operations.runTestDrive(draft, {}, { kind: "direct" }, "Direct start", []);
+    expect(startTestRun).toHaveBeenCalledWith(expect.objectContaining({ view: result }));
+    expect(setActiveRightPanelId).toHaveBeenCalledWith("runtime");
+    expect(setInspectorCollapsed).toHaveBeenCalledWith(false);
+    if (level === "error") {
+      expect(notify).not.toHaveBeenCalled();
+      expect(setStatus).toHaveBeenCalledWith(result.status === "Rejected" ? "Test run rejected" : "");
+      return;
+    }
     expect(notify).toHaveBeenCalledOnce();
     const notification = notify.mock.calls[0][0];
     expect(notification).toMatchObject({ level, title });
     if (result.workflowExecutionId) expect(notification.link).toEqual({ label: "Open run", path: "/workflows/instances/run%2F1" });
     else expect(notification.link).toBeUndefined();
-    expect(startTestRun).toHaveBeenCalledWith(expect.objectContaining({ view: result }));
   });
 
-  it("reports dispatch failures as persistent error notifications and retains error details", async () => {
+  it("retains dispatch failures inline with their error details", async () => {
     start.mockRejectedValue(new Error("Connection lost"));
     await operations.runTestDrive(draft, {}, { kind: "direct" }, "Direct start", []);
-    expect(notify).toHaveBeenCalledWith({ level: "error", title: "Test run could not start", message: "Connection lost" });
+    expect(notify).not.toHaveBeenCalled();
+    expect(setStatus).toHaveBeenCalledWith("");
     expect(setError).toHaveBeenCalledWith(expect.objectContaining({ message: "Connection lost" }));
     expect(startTestRun).not.toHaveBeenCalled();
   });

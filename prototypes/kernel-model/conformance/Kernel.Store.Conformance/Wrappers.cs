@@ -8,6 +8,9 @@ namespace Kernel.Store.Conformance;
 /// </summary>
 public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKernelStore
 {
+    public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly Random _random = new(seed);
     private long _before, _after;
     public bool Calm { get; set; }
@@ -39,11 +42,17 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) => Call(() => inner.CommitAsync(batch, cancellationToken));
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => Call(() => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => Call(() => inner.AddAsync(message, cancellationToken));
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => Call(() => inner.AddEventAsync(delivery, cancellationToken));
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call(() => inner.LoadAsync(ids, cancellationToken));
+    public bool HasActorAliases => inner.HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call(() => inner.LoadActorsAsync(ids, cancellationToken));
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => Call(() => inner.PublishAsync(@event, cancellationToken));
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => Call(() => inner.FindSubscriptionsAsync(key, cancellationToken));
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) => Call(() => inner.FindEventsAsync(keys, cancellationToken));
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) => Call(() => inner.PublishedMatchesAsync(published, cancellationToken));
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) => Call(() => inner.KeptMatchesAsync(waits, cancellationToken));
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) => Call(() => inner.ReadJournalAsync(partition, after, take, cancellationToken));
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) => Call(() => inner.ReadJournalOfAsync(partition, instance, after, cancellationToken));
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => Call(() => inner.SweepAsync(cancellationToken));
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default) => Call(() => inner.ReadViewsAsync(instances, cancellationToken));
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => Call(() => inner.HeartbeatAsync(node, window, cancellationToken));
@@ -57,8 +66,11 @@ public sealed class FaultyStore(IKernelStore inner, double rate, int seed) : IKe
 /// on these from outside the store: two landed commits never cover the same position, and along the positions of a
 /// partition the epoch never goes back.
 /// </summary>
-public sealed class RecordingStore(IKernelStore inner) : IKernelStore
+public class RecordingStore(IKernelStore inner) : IKernelStore
 {
+    public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool CommitClockAvailable => inner.CommitClockAvailable;
     public sealed record Landed(int Partition, long Epoch, long Position, int Positions, string Turns);
 
     public ConcurrentQueue<Landed> Commits { get; } = new();
@@ -113,11 +125,17 @@ public sealed class RecordingStore(IKernelStore inner) : IKernelStore
     public ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => inner.ReleaseAsync(partition, epoch, cancellationToken);
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken);
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => inner.AddAsync(message, cancellationToken);
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => inner.AddEventAsync(delivery, cancellationToken);
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => inner.LoadAsync(ids, cancellationToken);
+    public bool HasActorAliases => inner.HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => inner.LoadActorsAsync(ids, cancellationToken);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => inner.PublishAsync(@event, cancellationToken);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => inner.FindSubscriptionsAsync(key, cancellationToken);
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) => inner.FindEventsAsync(keys, cancellationToken);
-    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) => inner.ReadJournalAsync(partition, after, take, cancellationToken);
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) => inner.PublishedMatchesAsync(published, cancellationToken);
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) => inner.KeptMatchesAsync(waits, cancellationToken);
+    public virtual ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) => inner.ReadJournalAsync(partition, after, take, cancellationToken);
+    public virtual ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) => inner.ReadJournalOfAsync(partition, instance, after, cancellationToken);
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => inner.SweepAsync(cancellationToken);
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default) => inner.ReadViewsAsync(instances, cancellationToken);
     public ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default) => inner.HeartbeatAsync(node, window, cancellationToken);

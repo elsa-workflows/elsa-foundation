@@ -515,9 +515,8 @@ describe("activity property organization", () => {
     };
     const container = renderPanel([input("UnknownEditor", { tier: "optional" })], { editors: [unknownEditor] });
 
-    await nextFrame();
     const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    await vi.waitFor(() => expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true"));
     expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
   });
 
@@ -586,9 +585,8 @@ describe("activity property organization", () => {
       tier: "optional"
     })], { expressionEditors: [expressionEditor] });
 
-    await nextFrame();
     const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    await vi.waitFor(() => expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true"));
     expect(disclosure.querySelector(".studio-status-pill")).toBeNull();
   });
 

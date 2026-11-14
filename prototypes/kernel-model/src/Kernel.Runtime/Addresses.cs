@@ -8,7 +8,14 @@ namespace Kernel.Runtime;
 /// </summary>
 public readonly record struct InstanceRef(string Id)
 {
-    public int Partition => int.Parse(Id.AsSpan(0, Id.IndexOf('/')), CultureInfo.InvariantCulture);
+    public bool EventStartAddress => Id.StartsWith("e", StringComparison.Ordinal) && Id.IndexOf('/') > 1;
+    public bool ChildAddress => Id.StartsWith('g');
+    public bool GeneratedAddress => EventStartAddress || ChildAddress;
+    public int Partition => int.Parse(Id.AsSpan(GeneratedAddress ? 1 : 0, Id.IndexOf('/') - (GeneratedAddress ? 1 : 0)), CultureInfo.InvariantCulture);
+    public static InstanceRef ForEvent(int partition, long serial) => new($"e{partition}/{serial}");
+    public static InstanceRef ForChild(int destination, int issuer, long epoch, long ordinal) =>
+        new(FormattableString.Invariant($"g{destination}/child/{issuer}.{epoch}.{ordinal}"));
+
     public static InstanceRef In(int partition, string name) => new($"{partition}/{name}");
 
     /// <summary>A partition for a name, the same on every node: placement, the runtime's business.</summary>
@@ -73,5 +80,14 @@ public enum Flaw : long
     EvictBusy = 1L << 38,          // an instance whose commit is in flight may be evicted
     DeleteLeavesJournal = 1L << 39, // a delete leaves the instance's journal rows
     ProjectorStopsAtGap = 1L << 40, // the projector stops at the first missing position, as in section 10
+    // Bits 43–45 are reserved by the open job-poison and short-wait prototypes.
+    IgnoreJobGeneration = 1L << 46, // mutation: a queued old job may borrow a new generation's lease
+    HideDeliveryHistory = 1L << 48,  // mutation: suppress the delivery-history hint
+    IgnoreLeaseDeadline = 1L << 47, // mutation: start new work after the local safe deadline
     TrialBeforeLoad = 1L << 41,    // for the measurement of section 21: a trial may start before its instance is loaded and idle
+
+    // Round 4 (FINDINGS 25).
+    ForgetShortWaits = 1L << 44,   // an Ephemeral instance written after waiting in memory leaves its timers and jobs in memory only; a stand-down does not write it
+    NoWriteFirst = 1L << 45,       // a command or a message from outside is given to an instance held in memory without writing it first
+    KeepExpiredCallers = 1L << 42, // an owner keeps a caller's reply address past its deadline: it pins the instance and is still sent replies
 }

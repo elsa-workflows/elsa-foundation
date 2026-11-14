@@ -88,11 +88,13 @@ public sealed class Workload(int partitions, int messages, int seconds)
                     // Round 3: an instance started by an event, the subscription registered before or after the publish.
                     var start = new SubscriptionRow("on" + n, "", "s", OnEvent.Spec("o"));
                     var e = new EventRow("on" + n, "f" + n, "f" + n, keep);
-                    onEvents.Add(Events.Deliver(e, start, partitions).Target.Id);
+                    string? matchedTarget = null;
+                    void Matched(EventRoute _, EventAcceptance receipt) => matchedTarget = receipt.Target.Id;
                     var first = random.Next(2) == 0;
-                    if (first) await Retry(s => Events.SubscribeAsync(s, start, partitions), n);
-                    await Retry(s => Events.PublishAsync(s, e, partitions), n);
-                    if (!first) await Retry(s => Events.SubscribeAsync(s, start, partitions), n);
+                    if (first) await Retry(s => Events.SubscribeAsync(s, start, partitions, matched: Matched), n);
+                    await Retry(s => Events.PublishAsync(s, e, partitions, matched: Matched), n);
+                    if (!first) await Retry(s => Events.SubscribeAsync(s, start, partitions, matched: Matched), n);
+                    onEvents.Add(matchedTarget ?? throw new InvalidOperationException("Neither side accepted the start match."));
                     break;
                 default:
                     var count = random.Next(1, 6);

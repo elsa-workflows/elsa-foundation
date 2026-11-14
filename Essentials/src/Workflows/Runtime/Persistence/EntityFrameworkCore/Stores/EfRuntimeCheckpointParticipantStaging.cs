@@ -80,7 +80,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
 
         if (row is null)
         {
-            context.SchedulerStates.Add(EfSchedulerStateStore.ToEntity(
+            context.SchedulerStates.Add(EfSchedulerStateStore.ToEntity(context,
                 change.State,
                 scope,
                 id,
@@ -89,7 +89,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
         }
 
         _ = EfSchedulerStateStore.Read(row, scope, change.StateId);
-        EfSchedulerStateStore.Copy(row, change.State, scope, checked(row.Revision + 1));
+        EfSchedulerStateStore.Copy(context, row, change.State, scope, checked(row.Revision + 1));
     }
 
     /// <summary>
@@ -249,7 +249,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
         if (row is null)
         {
             if (change.Operation == RuntimeStateChangeOperation.Upsert)
-                context.DurableValueStates.Add(EfDurableValueStateStore.ToEntity(state, scope, id, 1));
+                context.DurableValueStates.Add(EfDurableValueStateStore.ToEntity(context, state, scope, id, 1));
 
             // A conditional delete is idempotent for a missing row.
             return;
@@ -262,7 +262,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
             return;
         }
 
-        EfDurableValueStateStore.Copy(row, state, scope, checked(row.Revision + 1));
+        EfDurableValueStateStore.Copy(context, row, state, scope, checked(row.Revision + 1));
     }
 
     /// <summary>Stages execution-liveness state without committing or clearing sibling checkpoint writes.</summary>
@@ -323,7 +323,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
         if (row is null)
         {
             if (change.Operation != RuntimeStateChangeOperation.Delete)
-                context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(state, scope, 1));
+                context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(context, state, scope, 1));
             return;
         }
 
@@ -336,7 +336,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
             case RuntimeStateChangeOperation.Append:
                 throw new InvalidOperationException($"Operational state '{state.ExecutionLivenessStateId}' already exists for create-only append.");
             case RuntimeStateChangeOperation.Upsert:
-                EfExecutionLivenessStateStore.Copy(row, state, scope, checked(row.Revision + 1));
+                EfExecutionLivenessStateStore.Copy(context, row, state, scope, checked(row.Revision + 1));
                 break;
             default:
                 throw new InvalidOperationException($"Unsupported operational state change '{change.Operation}'.");

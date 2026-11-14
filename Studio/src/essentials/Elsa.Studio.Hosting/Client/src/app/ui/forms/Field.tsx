@@ -1,4 +1,11 @@
-import React, { Children, cloneElement, forwardRef, isValidElement, useId } from "react";
+import React, { Children, cloneElement, createContext, forwardRef, isValidElement, useContext, useId } from "react";
+
+const FieldAdornments = createContext<React.ReactNode>(null);
+
+/** Supplies host actions to the single shared field owned by an opaque scalar editor. */
+export function StudioFieldAdornmentProvider({ trailing, children }: { trailing: React.ReactNode; children: React.ReactNode }) {
+  return <FieldAdornments.Provider value={trailing}>{children}</FieldAdornments.Provider>;
+}
 
 type ControlAttributes = {
   id: string;
@@ -28,23 +35,25 @@ export const StudioFormField = forwardRef<HTMLDivElement, FieldProps & {
   children(attributes: ControlAttributes): React.ReactNode;
 }>(function StudioFormField({ label, hint, error, errorRole, meta, controlId, labelId, disabled, leading, trailing, after, className, children, ...rest }, ref) {
   const generatedId = useId();
+  const hostTrailing = useContext(FieldAdornments);
+  const fieldTrailing = trailing || hostTrailing ? <>{trailing}{hostTrailing}</> : null;
   const id = controlId ?? generatedId;
   const descriptionId = hint || error ? `${id}-help` : undefined;
-  return <div {...rest} ref={ref} className={`studio-field studio-form-field${className ? ` ${className}` : ""}`} data-invalid={Boolean(error)} data-disabled={Boolean(disabled)}>
+  return <FieldAdornments.Provider value={null}><div {...rest} ref={ref} className={`studio-field studio-form-field${className ? ` ${className}` : ""}`} data-invalid={Boolean(error)} data-disabled={Boolean(disabled)}>
     <fieldset className="studio-form-control" role="presentation">
       <legend className="studio-form-legend">
         <label id={labelId} htmlFor={id} className="studio-field-label">{label}</label>
         {meta ? <>{" "}<span className="studio-field-meta">{meta}</span></> : null}
       </legend>
-      <div className="studio-form-body" data-leading={Boolean(leading)} data-trailing={Boolean(trailing)}>
+      <div className="studio-form-body" data-leading={Boolean(leading)} data-trailing={Boolean(fieldTrailing)}>
         {leading ? <div className="studio-form-adornment">{leading}</div> : null}
         <div className="studio-form-value">{children({ id, "aria-describedby": descriptionId, "aria-invalid": error ? true : undefined, "data-studio-field-control": "", disabled })}</div>
-        {trailing ? <div className="studio-form-adornment">{trailing}</div> : null}
+        {fieldTrailing ? <div className="studio-form-adornment">{fieldTrailing}</div> : null}
       </div>
     </fieldset>
     {descriptionId ? <small id={descriptionId} role={error ? errorRole : undefined} className={error ? "studio-field-error" : "studio-field-hint"}>{error || hint}</small> : null}
     {after}
-  </div>;
+  </div></FieldAdornments.Provider>;
 });
 
 type NativeProps = React.HTMLAttributes<HTMLElement> & { id?: string; type?: string; disabled?: boolean; children?: React.ReactNode; "data-studio-field-control"?: string };
@@ -85,6 +94,8 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
   children: React.ReactNode;
 }>(function StudioField({ label, description, meta, children, controlId, labelId, disabled, error, errorRole, className, leading, trailing, after, ...rest }, ref) {
   const generatedId = useId();
+  const hostTrailing = useContext(FieldAdornments);
+  const fieldTrailing = trailing || hostTrailing ? <>{trailing}{hostTrailing}</> : null;
   const controls: NativeControl[] = [];
   collectControls(children, controls);
   if (controls.length === 1 && controls[0].type === "input" && choices.has(controls[0].props.type ?? "text")) {
@@ -92,15 +103,16 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
     const id = choice.props.id ?? controlId ?? generatedId;
     const descriptionId = description || error ? `${id}-help` : undefined;
     const attributes: ControlAttributes = { id, "aria-describedby": descriptionId, "aria-invalid": error ? true : undefined, "data-studio-field-control": "", disabled: disabled ?? choice.props.disabled };
-    return <div {...rest} ref={ref} className={`studio-field studio-choice-field${className ? ` ${className}` : ""}`}>
+    return <FieldAdornments.Provider value={null}><div {...rest} ref={ref} className={`studio-field studio-choice-field${className ? ` ${className}` : ""}`}>
       <div className="studio-choice-control">
         {Children.map(children, child => containsControl(child, choice) ? decorateControl(child, choice, attributes) : null)}
         <label id={labelId} htmlFor={id}>{label}</label>{meta}
+        {fieldTrailing ? <div className="studio-form-adornment">{fieldTrailing}</div> : null}
       </div>
       {Children.map(children, child => containsControl(child, choice) ? null : child)}
       {descriptionId ? <small id={descriptionId} role={error ? errorRole : undefined}>{error || description}</small> : null}
       {after}
-    </div>;
+    </div></FieldAdornments.Provider>;
   }
   const control = controls.length === 1 && !(controls[0].type === "input" && choices.has(controls[0].props.type ?? "text")) ? controls[0] : undefined;
   if (!control && controls.length === 0 && controlId) {
@@ -128,12 +140,15 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
     </StudioFormField>;
   }
   const descriptionId = description || error ? `${generatedId}-help` : undefined;
-  return <div {...rest} ref={ref} className={`studio-field studio-field-group${className ? ` ${className}` : ""}`}>
+  return <FieldAdornments.Provider value={null}><div {...rest} ref={ref} className={`studio-field studio-field-group${className ? ` ${className}` : ""}`}>
     <fieldset className="studio-form-control" aria-describedby={descriptionId}>
       <legend id={labelId} className="studio-form-legend"><span className="studio-field-label">{label}</span>{meta}</legend>
-      <div className="studio-form-group-content">{children}</div>
+      <div className="studio-form-body">
+        <div className="studio-form-value"><div className="studio-form-group-content">{children}</div></div>
+        {fieldTrailing ? <div className="studio-form-adornment">{fieldTrailing}</div> : null}
+      </div>
     </fieldset>
     {descriptionId ? <small id={descriptionId} role={error ? errorRole : undefined} className={error ? "studio-field-error" : "studio-field-hint"}>{error || description}</small> : null}
     {after}
-  </div>;
+  </div></FieldAdornments.Provider>;
 });

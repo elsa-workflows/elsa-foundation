@@ -745,6 +745,35 @@
       "elsa.foundation.identity.core": {
         "type": "Project"
       },
+      "elsa.foundation.identity.externalauthentication": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.ExternalAuthentication.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.foundation.identity.externalauthentication.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.foundation.identity.externalauthentication.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Foundation.Identity.ExternalAuthentication": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.ExternalAuthentication.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
       "elsa.foundation.identity.persistence.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
@@ -952,6 +981,7 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
         }
@@ -971,6 +1001,16 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.publishing.releases.core": {
+        "type": "Project"
+      },
+      "elsa.workflows.publishing.releases.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Workflows.Publishing.Releases.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {
