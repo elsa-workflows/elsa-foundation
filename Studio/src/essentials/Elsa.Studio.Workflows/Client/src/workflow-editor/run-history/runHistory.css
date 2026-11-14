@@ -567,6 +567,11 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font: inherit;
   text-align: start;
   overflow-wrap: anywhere;
 }

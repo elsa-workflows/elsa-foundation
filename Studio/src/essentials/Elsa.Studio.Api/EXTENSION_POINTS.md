@@ -63,3 +63,13 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 Independent canonical subscriptions and Events pipeline middleware may observe runtime collection. They do not replace the one source aggregator. The stable event type belongs to Studio.Core; optional module types belong only to scoped contributors/payloads.
 
 Studio module Apply uses the SDK module-reset lifecycle described in [connection extensions](../../../docs/connection-extensions.md). Backend capability refresh uses `studioBackendCapabilitiesChangedEvent` with the exact session key; it rebuilds admission without reinitializing document-owned controllers.
+
+## Private retained-history presentation
+
+Workflows uses the shared private [history presentation](../Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/historyPresentation.tsx)
+for the main Timeline, compact activity journal and exact-event inspector labels/explanations. Known
+schema version1 `DeliveryUnmatched` observations with matching category/authority and closed saved-resume reasons
+render as Resume skipped with a concise explanation. Unknown shapes keep generic recorded rendering;
+raw reason codes remain copyable in recorded metadata. No outcome, callback, consumption or purge is
+inferred beyond the recorded decision. This adds no SDK extension contract or runtime recording authority.
+Current-host/visual acceptance remains separate from frontend control results (spec1211 S10k).
