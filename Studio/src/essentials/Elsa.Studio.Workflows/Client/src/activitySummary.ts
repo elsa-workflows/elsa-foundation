@@ -1,6 +1,7 @@
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
 import { getInputPropertyName, readWrappedInputValue } from "./activityProperties";
+import { isTechnicalActivityLabel } from "./technicalActivityLabel";
 import { isMaskedInput, readSecretReference } from "./maskedInput";
 import { describeInferredSource } from "./conversionSource";
 import { isHttpEndpointType } from "./workflow-editor/httpTestRequest";
@@ -21,11 +22,14 @@ export function formatActivitySummary(activity: ActivityNode, catalogItem: Activ
   const expression = readHeadlineExpression(activity, headline);
   if (!expression) return undefined;
   const summary = formatExpression(expression.type, expression.value);
-  if (!summary || !isMaskedInput(headline)) return summary;
-  // The summary is also the node's tooltip and is reused by the run and executable views, so a masked input (a
-  // password hint, or declared sensitive or secret-only) shows nothing of what it stores there but the name of a
-  // Secret Reference, which names a secret without holding its value.
-  return readSecretReference(expression.type, expression.value)?.name ?? "Protected value";
+  if (!summary) return undefined;
+  if (isMaskedInput(headline)) {
+    // The summary is also the node's tooltip and is reused by the run and executable views, so a masked input (a
+    // password hint, or declared sensitive or secret-only) shows nothing of what it stores there but the name of a
+    // Secret Reference, which names a secret without holding its value.
+    return readSecretReference(expression.type, expression.value)?.name ?? "Protected value";
+  }
+  return isTechnicalActivityLabel(summary) ? undefined : summary;
 }
 
 /**
@@ -38,6 +42,9 @@ function pickHeadlineInput(catalogItem: ActivityCatalogItem): StudioActivityInpu
   const inputs = (catalogItem.inputs ?? []) as StudioActivityInputDescriptor[];
   if (isHttpEndpointType(catalogItem.activityTypeKey)) {
     return inputs.find(input => input.isBrowsable !== false && getInputPropertyName(input).toLowerCase() === "path");
+  }
+  if (isEventActivityType(catalogItem.activityTypeKey)) {
+    return inputs.find(input => input.isBrowsable !== false && getInputPropertyName(input).toLowerCase() === "eventname");
   }
   return inputs
     .map((input, index) => ({ input, index }))
@@ -97,4 +104,9 @@ function formatExpression(expressionType: string, value: unknown): string | unde
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isEventActivityType(activityType: string | null | undefined) {
+  const normalized = activityType?.trim().toLowerCase();
+  return normalized === "elsa.event" || normalized?.endsWith(".event") === true;
 }

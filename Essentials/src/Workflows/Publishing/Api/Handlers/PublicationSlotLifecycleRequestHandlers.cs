@@ -55,13 +55,29 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         if (publication is null)
             throw new PublicationActivationException(ForeignActivationFailure(slot, publicationId));
 
-        var executable = await executableStore.FindAsync(publication.ArtifactId, cancellationToken)
-            ?? throw new PublicationSlotNotFoundException(
-                $"Executable artifact '{publication.ArtifactId}' is unavailable, so publication '{publicationId}' cannot be unpublished.");
-
-        var deactivation = await activationCoordinator.DeactivateAsync(
-            new WorkflowDeactivationCommand(executable, request.SlotName, PublicationActivator.Source, slot.Revision),
-            cancellationToken);
+        var material = await PublicationSlotMaterialReader.FindAsync(executableStore, publication.ArtifactId, cancellationToken);
+        var executable = material is not null ? material.NativeWorkflow
+            : await executableStore.FindAsync(publication.ArtifactId, cancellationToken);
+        if (material is null && executable is null)
+            throw new PublicationSlotNotFoundException($"Executable artifact '{publication.ArtifactId}' is unavailable, so publication '{publicationId}' cannot be unpublished.");
+        var sourceReference = publication.SourceReferenceId is { } referenceId
+            ? await sourceReferenceStore.FindAsync(referenceId, cancellationToken) : null;
+        // Native material can have a distinct logical definition, and its protected reference must keep the
+        // material lifecycle even when producer and logical identities happen to match. Preserve legacy native
+        // activation for existing unprotected publications and native-only coordinator replacements.
+        var usesMaterialLifecycle = material?.Model is not null ||
+            (material?.Identity.DefinitionId ?? executable!.Identity.DefinitionId) != slot.WorkflowDefinitionId || sourceReference?.PublicationScope is not null;
+        if (usesMaterialLifecycle && material is null)
+            throw new NotSupportedException("The selected artifact provider cannot read exact material for this logical publication lifecycle.");
+        if (usesMaterialLifecycle && (publication.WorkflowDefinitionId != slot.WorkflowDefinitionId ||
+            publication.SlotId != slot.SlotId || publication.SlotName != slot.SlotName ||
+            publication.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(publicationId)))
+            throw new PublicationSlotNotFoundException("The material publication does not belong to the selected logical slot and source.");
+        var deactivation = usesMaterialLifecycle
+            ? await activationCoordinator.DeactivateMaterialAsync(new(slot.WorkflowDefinitionId, material!, request.SlotName,
+                PublicationActivator.Source, slot.Revision), cancellationToken)
+            : await activationCoordinator.DeactivateAsync(new WorkflowDeactivationCommand(executable!, request.SlotName,
+                PublicationActivator.Source, slot.Revision), cancellationToken);
         if (!deactivation.Succeeded)
         {
             if (deactivation.Outcome == WorkflowActivationOutcome.Conflict)
@@ -135,12 +151,26 @@ public sealed class RestorePublicationSlotRequestHandler(
             .ThenByDescending(publication => publication.PublicationId, StringComparer.Ordinal)
             .FirstOrDefault()
             ?? throw new PublicationSlotNotFoundException($"Publication slot '{request.SlotName}' has no retired publication to restore.");
-        var executable = await executableStore.FindAsync(prior.ArtifactId, cancellationToken)
-            ?? throw new PublicationSlotNotFoundException($"Executable artifact '{prior.ArtifactId}' is unavailable for restore.");
+        if (prior.WorkflowDefinitionId != slot.WorkflowDefinitionId || prior.SlotId != slot.SlotId || prior.SlotName != slot.SlotName)
+            throw new PublicationSlotNotFoundException("The retired publication does not belong to the selected logical slot.");
+        var material = await PublicationSlotMaterialReader.FindAsync(executableStore, prior.ArtifactId, cancellationToken);
+        var executable = material is not null ? material.NativeWorkflow
+            : await executableStore.FindAsync(prior.ArtifactId, cancellationToken);
+        if (material is null && executable is null)
+            throw new PublicationSlotNotFoundException($"Executable artifact '{prior.ArtifactId}' is unavailable for restore.");
 
         var priorReference = prior.SourceReferenceId is { } priorReferenceId
             ? await sourceReferenceStore.FindAsync(priorReferenceId, cancellationToken)
             : null;
+        var usesMaterialLifecycle = material?.Model is not null ||
+            (material?.Identity.DefinitionId ?? executable!.Identity.DefinitionId) != slot.WorkflowDefinitionId || priorReference?.PublicationScope is not null;
+        if (usesMaterialLifecycle && material is null)
+            throw new NotSupportedException("The selected artifact provider cannot read exact material for this logical publication lifecycle.");
+        if (usesMaterialLifecycle && (priorReference is null || priorReference.ArtifactId != material!.Identity.ArtifactId ||
+            priorReference.DefinitionId != prior.WorkflowDefinitionId || priorReference.DefinitionVersionId != prior.WorkflowDefinitionVersionId ||
+            priorReference.Scope != WorkflowExecutableReferenceScope.Published || priorReference.ActivationId != prior.PublicationId ||
+            priorReference.SlotId != slot.SlotId || priorReference.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(prior.PublicationId)))
+            throw new PublicationSlotNotFoundException("The retired material publication lacks its exact logical source provenance.");
         var now = timeProvider.GetUtcNow();
         var publicationId = $"publication-{ShortIdentityGenerator.Generate(now)}";
         var sourceReferenceId = WorkflowActivationReferenceIdentity.Create(publicationId);
@@ -168,9 +198,9 @@ public sealed class RestorePublicationSlotRequestHandler(
                 SlotId = slot.SlotId
             };
 
-        var activation = await activator.ActivateAsync(
-            new PublicationActivationRequest(candidate, executable, reference),
-            cancellationToken);
+        var activation = usesMaterialLifecycle
+            ? await activator.ActivateMaterialAsync(new(candidate, material!, reference), cancellationToken)
+            : await activator.ActivateAsync(new PublicationActivationRequest(candidate, executable!, reference), cancellationToken);
         if (!activation.Succeeded)
         {
             logger?.LogWarning(
@@ -182,5 +212,20 @@ public sealed class RestorePublicationSlotRequestHandler(
         }
 
         return activation.Slot;
+    }
+}
+
+// SupportsModelMaterial qualifies model support, not the independent exact native-material read seam.
+internal static class PublicationSlotMaterialReader
+{
+    internal static async ValueTask<RuntimeExecutionMaterial?> FindAsync(IWorkflowExecutableStore store, string artifactId, CancellationToken cancellationToken)
+    {
+        try { return await store.FindMaterialAsync(artifactId, cancellationToken); }
+        catch (NotSupportedException) when (!store.SupportsModelMaterial)
+        {
+            // Genuine legacy native stores retain their ordinary path. Callers still refuse any protected or
+            // distinct-logical publication before side effects when the exact material seam is unavailable.
+            return null;
+        }
     }
 }

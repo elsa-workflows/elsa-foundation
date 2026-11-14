@@ -114,7 +114,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Integrations SDK (connector activities, named HTTP client auth scope) | [`Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md) |
+| Integrations SDK (connector activities, named HTTP client auth scope) | [`Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk/EXTENSION_POINTS.md) |
 
 ### Secrets
 
@@ -168,6 +168,7 @@ not automatic constitution violations.
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
 | Activities graph release inspection — compiler-free captured provider, plan and overlay verification | [`Essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Releases/EXTENSION_POINTS.md) |
+| Primitive release inspection — explicit WriteLine CLR owner profile | [`Essentials/src/Activities/Primitives/Releases/EXTENSION_POINTS.md`](Essentials/src/Activities/Primitives/Releases/EXTENSION_POINTS.md) |
 | Activities BPMN (released-semantics host adapter, direct model hosting and native RunBpmn) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
 | Activities BPMN hosting contracts (scoped publication/execution/inspection replacement) | [`Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md) |
 | Activities BPMN design (authored structure lowering and publication pinning) | [`Essentials/src/Activities/Bpmn/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Design/EXTENSION_POINTS.md) |

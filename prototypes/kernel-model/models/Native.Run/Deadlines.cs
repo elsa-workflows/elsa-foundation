@@ -33,6 +33,25 @@ public static class Deadlines
         var evicted = !worker.Instances.Any(i => i.Id == id.Id) && worker.Evicted == 1;
         var retained = store.Instances[id.Id] == row && store.Subscriptions.Count == 1;
         Console.WriteLine($"deadline idle eviction: pinned before={pinned}, deadline scheduled={scheduled}, evicted at deadline={evicted}, committed wait retained={retained}");
-        return pinned && scheduled && evicted && retained ? 0 : 1;
+        return pinned && scheduled && evicted && retained && await QueuedHttp() ? 0 : 1;
+    }
+
+    private static async Task<bool> QueuedHttp()
+    {
+        long clock = 100;
+        var store = new InMemoryStore(1, () => clock);
+        var owner = new Owner("queued-http", 0, store, Reference.Registry(), new Network(),
+            monotonic: () => clock, lease: TimeSpan.FromHours(1));
+        await owner.StartAsync();
+        var checkpointed = false;
+        await owner.Http.SendAsync(new HttpRequest("POST", "slow"), owner.Worker, Modes.Ephemeral, async () =>
+        {
+            clock += 29_990; // the route's 30-second absolute deadline now has only 10 ms left
+            await owner.Worker.RunAsync();
+            checkpointed = store.Instances.Count == 1;
+        });
+        await owner.Worker.DisposeAsync();
+        Console.WriteLine($"queued native HTTP: timer beyond original deadline checkpointed={checkpointed}");
+        return checkpointed;
     }
 }
