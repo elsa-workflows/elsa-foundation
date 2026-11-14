@@ -20,7 +20,14 @@ internal static class NativeGraphWitness
         NativeWorkflows.Registry.Add(Wf.Workflow("native-graph-proof", machine));
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
         var target = InstanceRef.In(0, "native-graph"); var actor = world.Of(0, 0);
-        void Apply(Act act) { world.Apply(act); if (world.Check() is { } error) throw new InvalidOperationException(error); }
+        void Apply(Act act)
+        {
+            world.Apply(act);
+            var error = world.Check();
+            if (world.Store.Instances.TryGetValue(target.Id, out var row) && row.Status == InstanceStatus.Faulted)
+                throw new InvalidOperationException("N1: full graph was not hydrated through the native StateMachine: " + error);
+            if (error is not null) throw new InvalidOperationException(error);
+        }
         void Drain()
         {
             for (var i = 0; i < 100; i++)
