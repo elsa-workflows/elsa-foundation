@@ -192,3 +192,6 @@ Twenty-five new cases cover retained-policy choices at equal clocks, invoke/resu
 
 
 S04c causal follow-up on the current-parent source: replacing only the accumulator with its original985c implementation while retaining all25 current tests produced12 failures and13 positives, covering normalized provider/corruption chains, cross-checkpoint identity and conflicting/duplicate evidence. Restoring the exact qualified accumulator returned the whole52-case set to52/52. No production change was needed beyond the already published f207 corrections; the current-parent cumulative R3 reviews the complete refreshed unit.
+
+
+Current-parent cumulative R3 retained the original fixes but identified one cancellation race: late recognized provider errors escaped the captured-owner boundary when the caller token had been cancelled. Four late raw/contextual IO controls and the two existing wrapped-cancellation controls all failed before correction. The owner now checks the actual caller token in recognized integrity/availability catches and after successful authoritative reads, preserving cancellation before projection work while retaining normal provider classification. All29 value-owner cases plus27 parent contract/fingerprint controls passed (56 total). Cumulative R4 and protected CI remain pending; no production capture registration is added by this unit.

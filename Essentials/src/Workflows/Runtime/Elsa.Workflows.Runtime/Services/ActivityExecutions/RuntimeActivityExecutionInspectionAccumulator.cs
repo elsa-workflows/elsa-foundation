@@ -56,15 +56,18 @@ public sealed class RuntimeActivityExecutionInspectionAccumulator : IRuntimeActi
             try { policy = (await _executions.FindAsync(state.Execution.WorkflowExecutionId, cancellationToken))?.HistoryCapturePolicy; }
             catch (Exception exception) when (IsMalformed(exception))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 throw new RuntimeHistoryIntegrityException(state.Execution.WorkflowExecutionId,
                     "the admitted value-capture policy could not be interpreted", exception);
             }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsUnavailable(exception))
+            catch (Exception exception) when (IsUnavailable(exception))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
                     $"The value owner could not read the admitted policy for execution '{state.Execution.WorkflowExecutionId}'.", exception);
             }
         }
+        cancellationToken.ThrowIfCancellationRequested();
         var capture = RuntimeHistorySourceFacts.IsFinalProfile(policy);
         var source = capture ? sourceFactory?.Invoke() : null;
         if (capture && valueSnapshots is { Count: > 0 } && source is null)
@@ -75,14 +78,17 @@ public sealed class RuntimeActivityExecutionInspectionAccumulator : IRuntimeActi
         try { existing = await _store.FindAsync(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId, cancellationToken); }
         catch (Exception exception) when (capture && IsMalformed(exception))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeHistoryIntegrityException(state.Execution.WorkflowExecutionId,
                 $"inspection evidence for activity '{state.Execution.ActivityExecutionId}' could not be interpreted", exception);
         }
-        catch (Exception exception) when (capture && !cancellationToken.IsCancellationRequested && IsUnavailable(exception))
+        catch (Exception exception) when (capture && IsUnavailable(exception))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
                 $"The value owner could not read inspection evidence for execution '{state.Execution.WorkflowExecutionId}' activity '{state.Execution.ActivityExecutionId}'.", exception);
         }
+        cancellationToken.ThrowIfCancellationRequested();
         var additions = capture ? (valueSnapshots ?? []).Select((value, ordinal) => Stamp(value, ordinal)).ToArray() : valueSnapshots;
         var mergeAdditions = capture ? ValidateAdditions(existing?.ValueSnapshots ?? [], additions ?? []) : additions;
         var projection = existing is null
