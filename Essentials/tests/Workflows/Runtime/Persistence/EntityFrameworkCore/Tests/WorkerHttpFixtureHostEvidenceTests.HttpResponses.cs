@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using CShells;
 using CShells.Lifecycle;
-using CShells.Features;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
@@ -116,20 +116,18 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests
         Assert.Empty(await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
     }
 
-    [ShellFeature(Name, DependsOn = new object[] { "WorkflowsRuntimeApi", "WorkflowsRuntimeEntityFrameworkCore", "ActivitiesHttp" })]
-    public sealed class HttpPromptSuppressionFeature : IShellFeature
+    private static void DeferHttpPrompt(IServiceCollection services)
     {
-        public const string Name = "HttpResponseTestsDeferRoutingHostPrompt";
-        public void ConfigureServices(IServiceCollection services)
-        {
-            var original = Assert.Single(services.Where(item => item.ServiceType == typeof(IRuntimePostCommitOutboxProcessor)));
-            Assert.NotNull(original.ImplementationFactory);
-            services.Remove(original);
-            services.AddSingleton<HttpPromptSuppressionEvidence>();
-            services.AddScoped<IRuntimePostCommitOutboxProcessor>(provider => new DeferredHttpPromptProcessor(
-                (IRuntimePostCommitOutboxProcessor)original.ImplementationFactory!(provider),
-                provider.GetRequiredService<HttpPromptSuppressionEvidence>()));
-        }
+        // CShells copies root registrations before normal shell features configure their services. Keep the
+        // ordinary processor factory; only its scheduling is deferred, without a discoverable test feature.
+        IServiceCollection runtimeRegistration = new ServiceCollection();
+        runtimeRegistration.AddWorkflowRuntime();
+        var original = Assert.Single(runtimeRegistration, item => item.ServiceType == typeof(IRuntimePostCommitOutboxProcessor));
+        Assert.NotNull(original.ImplementationFactory);
+        services.AddSingleton<HttpPromptSuppressionEvidence>();
+        services.AddScoped<IRuntimePostCommitOutboxProcessor>(provider => new DeferredHttpPromptProcessor(
+            (IRuntimePostCommitOutboxProcessor)original.ImplementationFactory!(provider),
+            provider.GetRequiredService<HttpPromptSuppressionEvidence>()));
     }
 
     private sealed class HttpPromptSuppressionEvidence

@@ -219,7 +219,6 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
     {
         var baseFeatures = SelectedFeatureIds.Where(id => automaticResumption || id != "WorkflowsRuntimeResumption").ToArray();
         var selectedFeatures = standaloneHttp ? baseFeatures.Concat(["FoundationIdentityAbstractions", "ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : baseFeatures;
-        if (suppressHttpPrompt) selectedFeatures = selectedFeatures.Append(HttpPromptSuppressionFeature.Name).ToArray();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -247,9 +246,9 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IConfiguration>(configuration);
         builder.Services.AddEfPersistenceResources(configuration, typeof(WorkerHttpFixtureHostEvidenceTests).Assembly);
+        if (suppressHttpPrompt) DeferHttpPrompt(builder.Services);
         builder.Services.AddCShellsAspNetCore(shells => shells
-            .WithAssemblies(new[]
-            {
+            .WithAssemblies(
                 typeof(PrimitivesFeature).Assembly,
                 typeof(SerializationFeature).Assembly,
                 typeof(MediatorFeature).Assembly,
@@ -269,8 +268,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
                 typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
                 typeof(Elsa.Http.HttpFeature).Assembly,
-                typeof(TasksFeature).Assembly
-            }.Concat(suppressHttpPrompt ? [typeof(HttpPromptSuppressionFeature).Assembly] : []).ToArray())
+                typeof(TasksFeature).Assembly)
             .WithConfigurationProvider(configuration));
 
         var app = builder.Build();
