@@ -205,7 +205,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
     {
         var consumer = context.ConsumerInvocation
             ?? throw NewParameterException(parameterName, nodeId, inputName, "requires a consumer invocation identity");
-        return RuntimeActivityResultReader.Read(binding, context)?.Policy;
+        return RuntimeActivityResultReader.Read(binding, context)?.Value.Policy;
     }
 
     /// <summary>Instance metadata comes from the resolution context, which reads it from committed state.</summary>
@@ -418,12 +418,13 @@ internal sealed class RuntimePortableExpressionEvaluator(
     {
         var consumer = context.ConsumerInvocation
             ?? throw NewParameterException(parameterName, nodeId, inputName, "requires a consumer invocation identity");
-        var result = RuntimeActivityResultReader.Read(binding, context);
+        var read = RuntimeActivityResultReader.Read(binding, context);
+        var result = read?.Value;
         if (result is null)
             return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null), null);
 
         var value = await ReadPersistableEnvelopeAsync(result, parameterName, nodeId, inputName, cancellationToken);
-        if (StringComparer.Ordinal.Equals(binding.ProjectionKey, "$result"))
+        if (read!.IsFixture || StringComparer.Ordinal.Equals(binding.ProjectionKey, "$result"))
             return new PortableExpressionParameter(value, result.Policy);
 
         var producerNode = context.Executable?.NodesById.GetValueOrDefault(binding.ProducerNodeId)

@@ -180,3 +180,10 @@ ordinary closed-invocation path takes precedence. The Runtime owner checks exact
 fingerprint, frame/scope and revision before writeback. No capture creates an ancestor invocation or
 synthetic graph-variable row. This wiring does not qualify composites, reusable invocations, suspension,
 shared providers or arbitrary effects for selected execution.
+
+
+The normal completion projector uses Runtime's pure `RuntimeResultProjectionSelector` for declared JSON
+selection and required/persistable projection checks before storage writes. Native prior-result fixture
+preparation uses the same selector without manufacturing a completion or invocation; it adds its own
+constructor-free type/protection qualification. Existing completion APIs and outcome/policy/storage
+responsibilities are unchanged.

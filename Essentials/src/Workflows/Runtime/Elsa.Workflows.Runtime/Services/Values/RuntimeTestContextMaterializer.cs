@@ -181,14 +181,17 @@ internal static class RuntimeTestContextMaterializer
                 throw new RuntimeTestContextUnavailableException("runtime.test-context.fixture-policy-unavailable",
                     "The atomic fixture result requires an unavailable persistence or protection profile.", innerException: exception);
             }
-            if (contract.Result.Projections.Count != 0)
-                throw new RuntimeTestContextUnavailableException("runtime.test-context.result-projection-unavailable",
-                    "Outside result projections require a qualified completion-equivalent payload validator.");
             Validate(fixture.Result, contract.Result.Type, policy);
             if (fixture.Result.HoldsValueRequiringEncryption(policy))
                 throw Refused("A protected prior-result fixture cannot persist unencrypted material.");
-            results.Add(fixture with { Result = new(fixture.Result.Type, fixture.Result.Presence, fixture.Result.InlineValue,
-                fixture.Result.ExternalReference, policy, fixture.Result.WithheldValue) });
+            var admitted = fixture with { Result = new(fixture.Result.Type, fixture.Result.Presence, fixture.Result.InlineValue,
+                fixture.Result.ExternalReference, policy, fixture.Result.WithheldValue) };
+            foreach (var value in RuntimeTestResultProjections.Project(admitted.Result, contract.Result).Values)
+            {
+                ValidateType(value.Type, types);
+                if (value.Presence != ValuePresence.Absent) Validate(value, value.Type, value.Policy);
+            }
+            results.Add(admitted);
         }
         foreach (var node in Descendants(path[^1]))
         {
@@ -230,8 +233,9 @@ internal static class RuntimeTestContextMaterializer
                 {
                     RequireFixture(reference.ProducerExecutableNodeId, reference.ProducerScopeId);
                     if (!owned.Contains(reference.ProducerExecutableNodeId, StringComparer.Ordinal))
-                        ValidateSuppliedInput(binding, node, results.Single(x => x.ProducerNodeId == reference.ProducerExecutableNodeId &&
-                            (reference.ProducerScopeId is null || x.ProducerScopeId == reference.ProducerScopeId)).Result);
+                        ValidateSuppliedInput(binding, node, RuntimeTestResultProjections.Read(results.Single(x => x.ProducerNodeId == reference.ProducerExecutableNodeId &&
+                            (reference.ProducerScopeId is null || x.ProducerScopeId == reference.ProducerScopeId)).Result,
+                            executable.NodesById[reference.ProducerExecutableNodeId].ActivityContract!.Result, reference.ProjectionKey));
                 }
                 if (binding.Expression is { } expression)
                 {
@@ -242,7 +246,12 @@ internal static class RuntimeTestContextMaterializer
                     foreach (var parameter in expression.Parameters.Values)
                         switch (parameter)
                         {
-                            case Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding result: RequireFixture(result.ProducerNodeId, null); break;
+                            case Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding result:
+                                RequireFixture(result.ProducerNodeId, null);
+                                if (!owned.Contains(result.ProducerNodeId, StringComparer.Ordinal))
+                                    _ = RuntimeTestResultProjections.Read(results.Single(x => x.ProducerNodeId == result.ProducerNodeId).Result,
+                                        executable.NodesById[result.ProducerNodeId].ActivityContract!.Result, result.ProjectionKey);
+                                break;
                             case Elsa.Expressions.Core.Models.VariableExpressionParameterBinding variable: RequireVariable(variable.DeclaringScopeNodeId, variable.VariableKey, node); break;
                             case Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterBinding request when !HasOwnedClosedAncestor(node): RequireRequest(request.MemberKey); break;
                         }
@@ -320,10 +329,6 @@ internal static class RuntimeTestContextMaterializer
                     binding.Expression?.Parameters.Values.OfType<WorkflowRequestExpressionParameterBinding>().Any(x => !string.IsNullOrWhiteSpace(x.Path)) == true)
                     throw new RuntimeTestContextUnavailableException("runtime.test-context.legacy-path-unavailable",
                         "Legacy request paths require a qualified pure projection preflight.", memberKey: binding.InputKey);
-                if (binding.ActivityResult is { ProjectionKey: not "$result" } ||
-                    binding.Expression?.Parameters.Values.OfType<ActivityResultExpressionParameterBinding>().Any(x => x.ProjectionKey != "$result") == true)
-                    throw new RuntimeTestContextUnavailableException("runtime.test-context.result-projection-unavailable",
-                        "Named result projections require a qualified pure projection preflight.", memberKey: binding.InputKey);
                 if (binding.Selection is not null)
                     throw new RuntimeTestContextUnavailableException("runtime.test-context.member-selection-unavailable",
                         "Member setup requires a qualified pure selection and destination-fit preflight.", memberKey: binding.InputKey);

@@ -1441,11 +1441,37 @@ the captured contract. Setup cannot replace selected owned work; actual owned re
 ordinary causal resolver. No producer invocation, completion, causal edge or durable output row is
 manufactured, and the complete executable remains unchanged.
 
-Only `$result` for a producer with no named projections is qualified. Conversions, member reads,
-named projections, external/transient/withheld/absent fixture values and incompatible protection remain
+Whole and declared named projections use the constructor-free qualification below. Conversions, member
+reads, external/transient/withheld/absent whole fixture values and incompatible protection remain
 unavailable before execution. Explicit null is preserved when the producer and consumer contracts allow
 it. Sensitive policy, redaction and retention propagate before expression evaluation. Fixtures survive
 the normal header/checkpoint JSON roundtrip and fresh DI/actor activation without setup re-resolution;
 shared-provider and host-restart execution remain unqualified. Existing EF header and command-transport
 fences apply unchanged, and the checkpoint encryption inventory covers fixture envelopes directly.
 This slice activates no Testing library, public runner, Studio or headless surface.
+
+
+### Native prior-result projections
+
+`RuntimeResultProjectionSelector.Select(ActivityResultContract, JsonElement)` is a pure cross-assembly
+helper used by normal `ActivityCompletionProjector` and native fixture preparation. It is an integration
+utility, not a replacement contract. It preserves completion selection: `$` selects the whole value;
+an exact top-level name wins over interpreting dots as nested navigation; nested segments are trimmed
+and case-sensitive. It checks every declared persistable projection and every required missing/null
+value before any completion storage write or selected-start admission.
+
+Fixture preparation also validates every present projection against its captured type without CLR
+construction, including unreferenced projections. Existing safe scalar/JSON type restrictions remain;
+custom converters, CLR object construction, schemas and transient source representations are unqualified.
+Optional absent projections may remain unreferenced; reading one refuses before execution, even for an
+optional producer reference. Explicit null remains a distinct value subject to the consumer contract.
+Unknown projection keys refuse. Protection for the atomic whole fixture includes all projections, so an
+unread sensitive projection still protects the whole fixture and its other views.
+
+The shared result reader returns an already selected fixture envelope to direct bindings and portable
+expression policy/value reads. Both skip their ordinary projection step for that envelope; there is no
+second path selection or policy downgrade. Ordinary causal reads retain their existing behavior. Whole
+fixtures remain unchanged in the execution header; projection views create no producer invocation,
+completion, output row or additional persisted slot. Fresh activation uses that same immutable fixture.
+This remains process-private terminal-leaf execution; conversions/member reads, composites/loops,
+waits/time/shared execution and public Testing activation remain unavailable.
