@@ -257,6 +257,7 @@ export async function activityDataCapabilityControl(page: Page, info: TestInfo, 
   ]));
   await support.open(capable);
   await support.trigger().click();
+  await expect(support.chooser().getByRole("option").first()).toBeFocused();
   if (enhanced) await expect(support.chooser().locator(".wf-data-members")).toBeVisible();
   else {
     await expect(support.chooser().locator(".wf-data-members")).toHaveCount(0);
@@ -264,7 +265,6 @@ export async function activityDataCapabilityControl(page: Page, info: TestInfo, 
     await expect(support.chooser().getByRole("option", { name: /^customerId/ })).toHaveCount(0);
     await expect(support.chooser().getByRole("textbox", { name: "Member name", exact: true })).toHaveCount(0);
   }
-  await expect(support.chooser().getByRole("option").first()).toBeFocused();
   await capture(page, info, "capability-control");
   await page.keyboard.press("Escape"); await expect(support.chooser()).toHaveCount(0); await expect(support.trigger()).toBeFocused();
   expect(await support.stored(capable)).toBeNull();
