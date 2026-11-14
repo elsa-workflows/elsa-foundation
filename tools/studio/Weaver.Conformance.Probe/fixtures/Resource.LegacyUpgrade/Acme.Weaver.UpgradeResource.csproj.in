@@ -16,6 +16,7 @@
     <PackageReference Include="Elsa.Studio.Preferences.Core" Version="[__PRODUCT_VERSION__]" />
     <PackageReference Include="CShells.Abstractions" Version="[__CSHELLS_VERSION__]" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" Version="[__CSHELLS_VERSION__]" />
+    <InternalsVisibleTo Include="Acme.Weaver.UpgradeResource.Tests" />
     <None Update="nuplane.json" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

@@ -150,12 +150,12 @@ class ConformanceRun:
                    if p.is_file() and "__pycache__" not in p.parts}
         check(current == self.report["toolInputHashes"], "Driver/template inputs changed during qualification")
 
-    def run(self, name, command, cwd, env=None):
+    def run(self, name, command, cwd, env=None, *, timeout_seconds=None):
         self.report["stage"] = name
         self.save()
         log = self.root / (name + ".log")
         with log.open("w") as stream:
-            result = subprocess.run(command, cwd=cwd, env=env, stdout=stream, stderr=subprocess.STDOUT)
+            result = subprocess.run(command, cwd=cwd, env=env, stdout=stream, stderr=subprocess.STDOUT, timeout=timeout_seconds)
         self.report["stages"].append({"name": name, "exitCode": result.returncode, "log": str(log)})
         self.save()
         check(result.returncode == 0, f"{name} failed ({result.returncode}); private log: {log}")

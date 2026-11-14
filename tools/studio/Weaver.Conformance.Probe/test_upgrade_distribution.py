@@ -4,17 +4,69 @@ These controls exercise owned configuration and fail-closed inputs, not native
 upgrade semantics. Passing them could never promote an independent witness.
 """
 import copy
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+import zipfile
 
 from consumers import (COMMON_EFFECTS_FEATURE, DURABLE_EFFECTS_FEATURE, DURABLE_STORE_FEATURE, backend_features,
                        consumer_binary_provenance)
-from upgrade_distribution import (BASELINE_SOURCE, JOURNAL_HEADER, RESOURCE_FEATURE, prepare_upgrade_content_root,
-                                  prepare_upgrade_distributions, select_upgrade_generation)
+from upgrade_distribution import (BASELINE_SOURCE, BASELINE_TREE, JOURNAL_HEADER, RESOURCE_FEATURE,
+                                  SOURCE_FETCH_TIMEOUT_SECONDS, _ensure_product_source, _source_identity,
+                                  prepare_upgrade_content_root, prepare_upgrade_distributions, select_upgrade_generation)
+
+
+class PinnedSourceAcquisitionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.distribution = SimpleNamespace(root=self.root, assert_immutable_inputs=Mock(), run=Mock(side_effect=self.stage))
+
+    def stage(self, name, command, cwd, **kwargs):
+        (self.root / (name + ".log")).write_text("retained metadata")
+
+    def test_existing_pinned_commit_does_not_fetch_or_move_refs(self):
+        with patch("upgrade_distribution.subprocess.run", return_value=SimpleNamespace(returncode=0)):
+            result = _ensure_product_source(self.distribution, BASELINE_SOURCE)
+        self.assertFalse(result["acquired"])
+        self.distribution.run.assert_not_called()
+        self.assertEqual(2, self.distribution.assert_immutable_inputs.call_count)
+
+    def test_missing_commit_in_shallow_checkout_fetches_only_exact_pinned_object_with_timeout(self):
+        with patch("upgrade_distribution.subprocess.run", side_effect=[SimpleNamespace(returncode=1), SimpleNamespace(returncode=0)]):
+            result = _ensure_product_source(self.distribution, BASELINE_SOURCE)
+        self.assertTrue(result["acquired"])
+        args, kwargs = self.distribution.run.call_args
+        self.assertEqual(["git", "-c", "core.fsmonitor=false", "fetch", "--no-tags", "--no-write-fetch-head", "--depth=1", "origin", BASELINE_SOURCE], args[1])
+        self.assertEqual(SOURCE_FETCH_TIMEOUT_SECONDS, kwargs["timeout_seconds"])
+        self.assertEqual(2, self.distribution.assert_immutable_inputs.call_count)
+        self.assertTrue(Path(result["fetchLog"]["path"]).is_file())
+
+    def test_failed_acquisition_never_allows_archive_production(self):
+        with patch("upgrade_distribution.subprocess.run", return_value=SimpleNamespace(returncode=1)):
+            with self.assertRaisesRegex(RuntimeError, "still absent"):
+                _ensure_product_source(self.distribution, BASELINE_SOURCE)
+        self.assertEqual(1, self.distribution.run.call_count)
+
+    def test_nonbaseline_missing_revision_cannot_trigger_fetch(self):
+        with patch("upgrade_distribution.subprocess.run", return_value=SimpleNamespace(returncode=1)):
+            with self.assertRaisesRegex(RuntimeError, "exact pinned"):
+                _ensure_product_source(self.distribution, "a" * 40)
+        self.distribution.run.assert_not_called()
+
+    def test_fetched_commit_still_requires_exact_baseline_tree(self):
+        def identity_stage(name, command, cwd):
+            (self.root / (name + ".log")).write_text(BASELINE_SOURCE + "\n" + "0" * 40 + "\n")
+        self.distribution.run.side_effect = identity_stage
+        with patch("upgrade_distribution._ensure_product_source", return_value={"acquired": True}):
+            with self.assertRaisesRegex(RuntimeError, "tree differs"):
+                _source_identity(self.distribution, BASELINE_SOURCE)
+        self.assertNotEqual("0" * 40, BASELINE_TREE)
 
 
 class UpgradeConfigurationTests(unittest.TestCase):
@@ -163,8 +215,19 @@ class PublishedDependencyProvenanceTests(unittest.TestCase):
             "Consumer/1.0.0": {"runtime": {"Consumer.dll": {}}},
             self.identity: {"runtime": {"lib/net10.0/Dependency.dll": {}}}}}}
         self.profile = {"published": self.published, "assembly": "Consumer.dll"}
+        self.archive = self.cache / "fixture.dependency/1.0.0/fixture.dependency.1.0.0.nupkg"
         self.closure = {"assets": {"path": str(self.assets)}, "packageFolders": [str(self.cache)],
-                        "cachedArchives": [{"identity": self.identity, "archive": {"path": "explicitly-retained-by-closure", "sha256": "a" * 64}}]}
+                        "cachedArchives": [{"identity": self.identity, "archive": {"path": str(self.archive), "sha256": ""}}]}
+        self.retain_archive()
+
+    def retain_archive(self, identity=None):
+        package_id, version = (identity or self.identity).rsplit("/", 1)
+        with zipfile.ZipFile(self.archive, "w") as archive:
+            archive.writestr(package_id + ".nuspec", '<package><metadata><id>' + package_id + '</id><version>' + version + '</version></metadata></package>')
+            for path in self.archive.parent.rglob("*"):
+                if path.is_file() and path != self.archive:
+                    archive.write(path, path.relative_to(self.archive.parent).as_posix())
+        self.closure["cachedArchives"][0]["archive"]["sha256"] = hashlib.sha256(self.archive.read_bytes()).hexdigest()
 
     def observe(self):
         (self.published / "Consumer.deps.json").write_text(json.dumps(self.deps))
@@ -193,10 +256,51 @@ class PublishedDependencyProvenanceTests(unittest.TestCase):
         native.parent.mkdir(parents=True); native.write_bytes(b"native-asset")
         (self.published / "fixture.dylib").write_bytes(native.read_bytes())
         self.deps["targets"]["net10.0"][self.identity]["native"] = {"runtimes/osx-arm64/native/fixture.dylib": {}}
+        self.retain_archive()
         record = self.observe()
         self.assertEqual({"runtime", "native"}, {item["category"] for item in record["files"]})
         (self.published / "fixture.dylib").write_bytes(b"different-native-binary")
         with self.assertRaisesRegex(RuntimeError, "bytes differ"):
+            self.observe()
+
+    def test_matching_tampered_cache_and_publish_cannot_override_original_archive(self):
+        original = self.archive.read_bytes()
+        restored = self.cache / "fixture.dependency/1.0.0/lib/net10.0/Dependency.dll"
+        restored.write_bytes(b"same-forged-bytes")
+        (self.published / "Dependency.dll").write_bytes(restored.read_bytes())
+        with self.assertRaisesRegex(RuntimeError, "retained archive ZIP entry"):
+            self.observe()
+        self.assertEqual(original, self.archive.read_bytes())
+
+    def test_native_and_runtime_targets_require_the_exact_original_zip_bytes(self):
+        for category in ("native", "runtimeTargets"):
+            with self.subTest(category=category):
+                native = self.cache / "fixture.dependency/1.0.0/runtimes/osx-arm64/native/fixture.dylib"
+                native.parent.mkdir(parents=True, exist_ok=True); native.write_bytes(b"original-native")
+                self.retain_archive()
+                (self.published / "fixture.dylib").write_bytes(b"forged-native")
+                native.write_bytes(b"forged-native")
+                self.deps["targets"]["net10.0"][self.identity][category] = {"runtimes/osx-arm64/native/fixture.dylib": {}}
+                with self.assertRaisesRegex(RuntimeError, "retained archive ZIP entry"):
+                    self.observe()
+                del self.deps["targets"]["net10.0"][self.identity][category]
+
+    def test_changed_archive_hash_and_wrong_nuspec_identity_are_refused(self):
+        original_hash = self.closure["cachedArchives"][0]["archive"]["sha256"]
+        with zipfile.ZipFile(self.archive, "a") as archive:
+            archive.writestr("additional-file", b"changed")
+        with self.assertRaisesRegex(RuntimeError, "archive is missing, changed"):
+            self.observe()
+        self.assertEqual(original_hash, self.closure["cachedArchives"][0]["archive"]["sha256"])
+        self.retain_archive("Wrong.Dependency/1.0.0")
+        with self.assertRaisesRegex(RuntimeError, "identity differs"):
+            self.observe()
+
+    def test_missing_exact_zip_member_is_refused_even_when_cache_and_publish_match(self):
+        with zipfile.ZipFile(self.archive, "w") as archive:
+            archive.writestr("Fixture.Dependency.nuspec", '<package><metadata><id>Fixture.Dependency</id><version>1.0.0</version></metadata></package>')
+        self.closure["cachedArchives"][0]["archive"]["sha256"] = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(RuntimeError, "unique exact asset"):
             self.observe()
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import shutil
+import subprocess
 
 from artifacts import (BACKEND_PACKAGES, FIXTURES, REPO, ConformanceRun, check,
                        pack_product_projects, package_identity, sha, write_json)
@@ -21,6 +22,7 @@ from runtime import private_json
 
 BASELINE_SOURCE = "dff7c490d0e5501b22d4ba89beb389c956d4f423"
 BASELINE_TREE = "9664f7ff693ce2f244f6e27fdd63b2aeb1e70330"
+SOURCE_FETCH_TIMEOUT_SECONDS = 60
 RESOURCE_PACKAGE = "Acme.Weaver.UpgradeResource"
 RESOURCE_FEATURE = "AcmeWeaverUpgradeResource"
 RESOURCE_MODULE = "Acme.Upgrade"
@@ -34,14 +36,39 @@ def _product_snapshot(run):
     return json.dumps(run.packages, sort_keys=True)
 
 
+def _ensure_product_source(distribution, revision):
+    """Acquire only a missing pinned commit in a shallow checkout, without moving refs.
+
+    Fetch writes Git's object/shallow metadata only; no checkout, branch, tag or
+    FETCH_HEAD is changed. Both source cleanliness checks remain mandatory.
+    """
+    distribution.assert_immutable_inputs()
+    probe = ["git", "-c", "core.fsmonitor=false", "cat-file", "-e", revision + "^{commit}"]
+    present = subprocess.run(probe, cwd=REPO, capture_output=True, timeout=10).returncode == 0
+    acquired = False
+    if not present:
+        check(revision == BASELINE_SOURCE, "Only the exact pinned historical writer may be acquired")
+        distribution.run("acquire-pinned-product-source", ["git", "-c", "core.fsmonitor=false", "fetch",
+                         "--no-tags", "--no-write-fetch-head", "--depth=1", "origin", BASELINE_SOURCE], REPO,
+                         timeout_seconds=SOURCE_FETCH_TIMEOUT_SECONDS)
+        check(subprocess.run(probe, cwd=REPO, capture_output=True, timeout=10).returncode == 0,
+              "The exact pinned historical writer is still absent after bounded acquisition")
+        acquired = True
+    distribution.assert_immutable_inputs()
+    return {"acquired": acquired, "commit": revision,
+            "fetchLog": _ref(distribution.root / "acquire-pinned-product-source.log") if acquired else None}
+
+
 def _source_identity(distribution, revision):
+    acquisition = _ensure_product_source(distribution, revision)
     distribution.run("product-source-identity", ["git", "-c", "core.fsmonitor=false", "show", "--no-patch",
                      "--format=%H%n%T", revision], REPO)
     lines = (distribution.root / "product-source-identity.log").read_text().splitlines()
     check(len(lines) == 2 and lines[0] == revision and len(lines[1]) == 40,
           "Historical writer source must resolve to the exact pinned commit and tree")
     check(revision != BASELINE_SOURCE or lines[1] == BASELINE_TREE, "Pinned historical writer tree differs")
-    return {"commit": lines[0], "tree": lines[1], "identityLog": _ref(distribution.root / "product-source-identity.log")}
+    return {"commit": lines[0], "tree": lines[1], "acquisition": acquisition,
+            "identityLog": _ref(distribution.root / "product-source-identity.log")}
 
 
 def _archive_product(distribution, revision):
@@ -72,6 +99,8 @@ def _author(distribution, name, fixture, package_id, version):
                   sourceFiles={str(path.relative_to(source)): _ref(path) for path in source.rglob("*")
                                if path.is_file() and not {"obj", "bin"}.intersection(path.relative_to(source).parts)},
                   fixtureSource=distribution.source, tests={"status": "not-run"}, runtimeObserved=False)
+    if name == "upgrade-resource":
+        record["tests"].update(fixture="Resource.LegacyUpgrade.Tests", expectedCases=12)
     distribution.report.setdefault("authors", {})[name] = record
     distribution.save()
     return record

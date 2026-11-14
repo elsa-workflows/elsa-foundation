@@ -214,8 +214,14 @@ internal abstract class UpgradeTool(UpgradeOwner owner, WidgetExecutionJournal j
     public async Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     {
         // This exact journal is independently provisioned; missing/failed is never observed zero.
-        var actual = await owner.AuthorizeAsync(null, null, false, cancellationToken);
-        journal.Record(actual, invocation, name);
+        try {
+            cancellationToken.ThrowIfCancellationRequested();
+            var actual = await owner.AuthorizeAsync(null, null, false, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            journal.Record(actual, invocation, name);
+        }
+        catch (WidgetFixtureException error) when (error.ObservationInvalidationRetained is not null) { throw; }
+        catch (Exception error) { throw journal.Invalidate(error); }
         try {
             if (invocation.ToolName != name || invocation.ModuleId != UpgradeContract.Module || invocation.ToolContractVersion != "1"
                 || invocation.Risk != risk || invocation.ExecutionLocation != WeaverExecutionLocation.Server || invocation.Client is not null

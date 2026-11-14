@@ -19,7 +19,11 @@ Runtime inputs are a fixed `StudioHostId`, a private preprovisioned
 authenticated owning read is `/_qualification/acme/upgrade-widget`; execution
 observations are `/_qualification/acme/upgrade-widget/execution-entries`. The
 journal counts entry to the tool, not successful owner changes. Missing or failed
-journals cannot assert zero dispatch.
+journals cannot assert zero dispatch. A failure or cancellation resolving the
+actual entry owner invalidates the observation persistently instead of leaving
+a valid zero. The separate `Resource.LegacyUpgrade.Tests` package-consumer
+fixture authors twelve controls for missing/unauthenticated ownership,
+cancellation and preservation of an already invalidated failure; all are UNRUN.
 
 The root-owned `UpgradeRecordInspection.cs.in` supplies
 `UpgradeRecordInspection.MapEndpoints(endpoints)`. It reuses
@@ -32,3 +36,10 @@ This source checkpoint depends on the root runtime publish-manifest helpers and
 the root-owned inspection fixture. All new helper controls, author compilation,
 old/current package production, native restarts and upgrade journeys are UNRUN.
 Source alone establishes neither actual-writer evidence nor qualification.
+
+Historical source acquisition supports a shallow CI checkout: only a missing
+exact pinned commit is fetched from origin, with a sixty-second timeout, no tags,
+no FETCH_HEAD write and no branch movement. Commit/tree and current driver
+cleanliness checks still apply. Published dependency proof checks every selected
+managed/native/runtime-target asset against the retained archive hash, nuspec
+identity and unique exact ZIP entry before comparing cache and publish bytes.

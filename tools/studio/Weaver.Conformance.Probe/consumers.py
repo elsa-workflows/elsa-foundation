@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 import zipfile
 
-from artifacts import BACKEND_PACKAGES, STUDIO_PACKAGES, check
+from artifacts import BACKEND_PACKAGES, STUDIO_PACKAGES, check, package_identity
 from runtime import owned_content_root
 
 
@@ -363,6 +363,7 @@ def consumer_binary_provenance(profile, closure):
     target = deps["targets"][deps["runtimeTarget"]["name"]]
     cache = Path(closure["packageFolders"][0]).resolve()
     archives = {entry["identity"].casefold(): entry["archive"] for entry in closure["cachedArchives"]}
+    check(len(archives) == len(closure["cachedArchives"]), "Ambiguous retained dependency archive identities")
     libraries = {identity.casefold(): value for identity, value in graph["libraries"].items()}
     records = []
     for identity, library in target.items():
@@ -372,21 +373,37 @@ def consumer_binary_provenance(profile, closure):
                   "Published dependency is absent from the package-only restore graph")
             continue  # The independently built application entry point is not a package.
         check(key in archives, "Published dependency has no explicitly retained archive")
+        archive_ref = archives[key]
+        archive_path = Path(archive_ref["path"])
+        check(archive_path.is_file() and not archive_path.is_symlink() and archive_path.resolve().is_relative_to(cache)
+              and sha(archive_path) == archive_ref["sha256"], "Retained dependency archive is missing, changed or outside its cache")
+        archive_identity = package_identity(archive_path)
+        check((archive_identity["id"] + "/" + archive_identity["version"]).casefold() == key,
+              "Retained dependency archive identity differs from the selected dependency")
         for category in ("runtime", "native", "runtimeTargets"):
             for asset in library.get(category, {}):
                 if Path(asset).name == "_._":
                     continue
                 relative = Path(asset)
-                check(not relative.is_absolute() and ".." not in relative.parts, "Unsafe published dependency asset")
+                check(not relative.is_absolute() and ".." not in relative.parts and "\\" not in asset, "Unsafe published dependency asset")
                 restored = cache / libraries[key]["path"] / relative
                 check(restored.resolve().is_relative_to(cache) and restored.is_file(), "Published dependency has no cached asset")
                 choices = {candidate for candidate in (published / relative, published / relative.name) if candidate.is_file()}
                 check(len(choices) == 1, "Published dependency asset is missing or ambiguous: " + asset)
                 actual = choices.pop()
-                check(actual.resolve().is_relative_to(published) and sha(actual) == sha(restored),
+                with zipfile.ZipFile(archive_path) as archive:
+                    check(archive.namelist().count(asset) == 1, "Retained dependency archive has no unique exact asset entry: " + asset)
+                    member = archive.getinfo(asset)
+                    check(not member.is_dir() and ((member.external_attr >> 16) & 0o170000) in (0, 0o100000),
+                          "Retained dependency archive asset is not a regular file")
+                    asset_hash = hashlib.sha256(archive.read(member)).hexdigest()
+                check(sha(restored) == asset_hash,
+                      "Restored dependency bytes differ from the retained archive ZIP entry: " + asset)
+                check(actual.resolve().is_relative_to(published) and sha(actual) == asset_hash,
                       "Published dependency bytes differ from the retained restored archive: " + asset)
                 records.append({"identity": identity, "category": category, "asset": asset,
-                                "archive": archives[key], "restored": {"path": str(restored), "sha256": sha(restored)},
+                                "archive": archive_ref, "archiveEntry": asset, "archiveEntrySha256": asset_hash,
+                                "restored": {"path": str(restored), "sha256": sha(restored)},
                                 "published": {"path": str(actual), "sha256": sha(actual)}})
     check(records, "Published dependency provenance is empty")
     return {"deps": {"path": str(deps_path), "sha256": sha(deps_path)}, "assets": closure["assets"], "files": records}
