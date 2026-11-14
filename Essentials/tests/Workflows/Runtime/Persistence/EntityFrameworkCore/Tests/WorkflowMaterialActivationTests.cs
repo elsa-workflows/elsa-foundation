@@ -16,13 +16,15 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class WorkflowMaterialActivationTests
 {
-    [Fact]
-    public async Task Slot_route_replacement_across_logical_tenants_releases_the_old_owner_and_deactivates()
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Slot_route_replacement_across_logical_tenants_releases_the_old_owner_and_deactivates(bool sameRoute)
     {
         var physical = new PersistenceScope("shared-physical-scope");
         await using var host = await Harness.OpenAsync(physical);
         var oldMaterial = await host.NativeAsync("old-route");
-        var newMaterial = await host.NativeAsync("new-route");
+        var newMaterial = sameRoute ? oldMaterial : await host.NativeAsync("new-route");
+        var currentRoute = sameRoute ? "old-route" : "new-route";
         var coordinator = host.Coordinator(exclusiveRoutes: true);
         var firstCommand = host.Command(oldMaterial, "tenant-a-activation") with
         { Reference = host.Reference(oldMaterial) with { TenantId = "tenant-a" } };
@@ -37,7 +39,7 @@ public sealed class WorkflowMaterialActivationTests
         var second = await coordinator.ActivateMaterialAsync(secondCommand);
         Assert.True(second.Succeeded);
         Assert.Null(await reader.FindAsync(tenantA, "Http", "old-route"));
-        Assert.Equal(second.Slot.SlotId, (await reader.FindAsync(tenantB, "Http", "new-route"))!.OwnerId);
+        Assert.Equal(second.Slot.SlotId, (await reader.FindAsync(tenantB, "Http", currentRoute))!.OwnerId);
         var removed = await coordinator.DeactivateMaterialAsync(new("logical-definition", newMaterial, "default",
             WorkflowActivationSource.Publishing, second.Slot.Revision));
         Assert.True(removed.Succeeded);
