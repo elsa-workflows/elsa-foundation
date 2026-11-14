@@ -3,6 +3,7 @@ using Kernel.Runtime;
 using Kernel.Sim;
 using Kernel.Workflows;
 
+if (args.SequenceEqual(["--race-check"])) { Environment.ExitCode = await ShortWaitRaces.Run(); return; }
 if (args.SequenceEqual(["--shortwait-check"])) { Environment.ExitCode = await ShortWaitIntegration.Run(); return; }
 var names = new[] { "normal", "before-apply", "lost-ack", "reload", "stale-commit", "future-pending-end", "unsupported" };
 if (args.SequenceEqual(["--list"])) { foreach (var name in names) Console.WriteLine("clock:" + name); Console.WriteLine("clock:delayed-wrapper"); Console.WriteLine("clock:short-wait-promotion"); return; }
