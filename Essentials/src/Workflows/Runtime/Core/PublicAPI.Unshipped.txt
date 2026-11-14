@@ -12186,3 +12186,8 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingAuthorization.Autho
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStagingAuthorization.AuthorizeReadAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDeploymentScope! targetScope, string! commandId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStageRetentionReader
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeMaterialStageRetentionReader.ReadStageRetentionRootsAsync(int maximumRoots, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeMaterialStageRetentionRoot!>!>
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.StimulusType.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.Conflicts(Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeIngressReservationDescriptor! first, Elsa.Workflows.Runtime.Core.StandaloneTriggers.RuntimeIngressReservationDescriptor! second) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.TriggerTypeKey.get -> string?
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerSourceResourceCommitStore.SupportsActivatedType(string! typeKey) -> bool

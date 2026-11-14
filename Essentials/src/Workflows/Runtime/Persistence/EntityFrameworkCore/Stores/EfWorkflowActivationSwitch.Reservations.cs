@@ -8,6 +8,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed partial class EfWorkflowActivationSwitch
 {
+    private readonly IReadOnlyDictionary<string, IIngressReservationPolicy> _reservationPolicies;
+    internal IReadOnlyDictionary<string, IIngressReservationPolicy> ReservationPolicies => _reservationPolicies;
     internal RuntimeDbContext ReservationContext => _context;
 
     private async ValueTask StageReservationsAsync(WorkflowActivationSlot slot, CancellationToken ct)
@@ -24,12 +26,13 @@ public sealed partial class EfWorkflowActivationSwitch
                 throw new InvalidDataException("The publication reservation does not name the selected logical slot.");
             scope = new(persistence, source.TenantId);
             var bindings = await _bindings.ListAllByActivationAsync(activation, ct);
-            var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive)
+            var descriptors = bindings.Where(binding => binding.Cardinality == TriggerCardinality.Exclusive || _reservationPolicies.ContainsKey(binding.StimulusType))
                 .GroupBy(binding => (binding.StimulusType, binding.StimulusHash)).Select(group =>
                     new RuntimeIngressReservationDescriptor(group.Key.StimulusType, group.Key.StimulusHash, group.First().Metadata)).ToArray();
             claims = RuntimeIngressReservationRules.Prepare(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, slot.Revision, slot.Revision, descriptors);
+            // Upgraded publication writers always compare semantics, including before standalone activation is finalized.
             foreach (var claim in claims)
-                if ((await _bindings.ListAllByStimulusAsync(claim.StimulusType, claim.StimulusHash, ct)).Any(binding => binding.SlotId != slot.SlotId))
+                if ((await RuntimeIngressReservationRules.ConflictingBindingsAsync(_bindings, claim, _reservationPolicies, ct, binding => binding.SlotId == slot.SlotId)).Any(binding => binding.SlotId != slot.SlotId))
                     throw new TriggerOperationException("route-conflict", "Another published workflow owns this exclusive endpoint.");
         }
         else
@@ -41,6 +44,6 @@ public sealed partial class EfWorkflowActivationSwitch
             if (tenants.Length > 1) throw new InvalidDataException("A logical slot has conflicting reservation tenants.");
             scope = new(persistence, tenants.SingleOrDefault()); claims = [];
         }
-        await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, claims, ct);
+        await store.StageOwnerAsync(scope, RuntimeIngressReservation.PublicationSlotOwner, slot.SlotId, claims, ct, _reservationPolicies);
     }
 }
