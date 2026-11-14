@@ -61,7 +61,7 @@ internal sealed partial class PublishedNativeFixture : IAsyncDisposable
     public int SelectedMaterialReads { get; private set; }
     public Dictionary<string, string> OriginalSources { get; } = new(StringComparer.Ordinal);
 
-    public static async Task<PublishedNativeFixture> Create(bool graphOwner = false, bool primitiveOwner = false, bool releaseVerification = false)
+    public static async Task<PublishedNativeFixture> Create(bool graphOwner = false, bool primitiveOwner = false, bool releaseVerification = false, bool placementOwner = true)
     {
         var f = new PublishedNativeFixture(); Directory.CreateDirectory(f._directory); var access = new Accessor();
         var services = new ServiceCollection(); services.AddOptions();
@@ -73,6 +73,9 @@ internal sealed partial class PublishedNativeFixture : IAsyncDisposable
         services.AddActivitiesDesignEntityFrameworkCore(new() { Provider = "sqlite", ConnectionString = f.Connection("activities") });
         services.AddScoped<IWorkflowExecutableHasher, Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableHasher>();
         var profile = new WorkflowReleaseRuntimeFeature(); profile.ConfigureServices(services); profile.PostConfigureServices(services);
+        if (!placementOwner)
+            services.Remove(services.Single(value => !value.IsKeyedService && value.ServiceType == typeof(Elsa.Workflows.Publishing.Releases.Core.IReleaseOccurrenceInspector)
+                && value.ImplementationType?.FullName == "Elsa.Workflows.Publishing.Releases.Runtime.RuntimePlacementReleaseInspector"));
         if (graphOwner) new Elsa.Activities.Graph.Releases.GraphActivitiesReleaseVerificationFeature().ConfigureServices(services);
         if (primitiveOwner)
         {

@@ -48,6 +48,18 @@ public sealed class NativePrimitiveOwnerVerificationTests
         });
     }
 
+    [Fact]
+    public async Task Missing_placement_owner_refuses_the_actual_six_field_CLR_body()
+    {
+        await WithCaptured("1", true, async (f, content, roots) =>
+        {
+            var result = await f.Service<IReleaseBundleBuilder>().BuildAsync(content, roots);
+            Assert.Null(result.Bundle); Assert.Equal(ReleaseSemanticStatus.Unsupported, result.Verification.Status);
+            Assert.Equal(18, result.Verification.Diagnostics.Count); // Two placements, each with eight metadata claims.
+            Assert.All(result.Verification.Diagnostics, value => Assert.Equal("unsupported_occurrence_site", value.Code));
+        }, placementOwner: false);
+    }
+
     [Theory]
     [InlineData("side-effect", "primitive_contract_mismatch")]
     [InlineData("absent-literal", "primitive_literal_missing")]
@@ -88,9 +100,9 @@ public sealed class NativePrimitiveOwnerVerificationTests
     }
 
     private static async Task WithCaptured(string schema, bool primitiveOwner,
-        Func<PublishedNativeFixture, IReleaseContentReader, IReadOnlyList<ReleaseBundleRoot>, Task> check)
+        Func<PublishedNativeFixture, IReleaseContentReader, IReadOnlyList<ReleaseBundleRoot>, Task> check, bool placementOwner = true)
     {
-        await using var f = await PublishedNativeFixture.Create(graphOwner: true, primitiveOwner: primitiveOwner, releaseVerification: true);
+        await using var f = await PublishedNativeFixture.Create(graphOwner: true, primitiveOwner: primitiveOwner, releaseVerification: true, placementOwner: placementOwner);
         var child = await f.PublishClrCatalog(); var graph = await f.PublishReusableGraph(child, schema);
         await f.SeedClrWorkflow(graph); await f.Publish("actual-clr-workflow-version");
         await f.Source().ExecuteAsync([new(NativeReleaseCaptureSelections.WorkflowDefinitionVersion, "actual-clr-workflow-version", null, ReleaseRootAction.ActivateServing)], new(), async (root, token) =>
