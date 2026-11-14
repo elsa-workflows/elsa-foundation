@@ -334,6 +334,7 @@ public sealed class FeatureCompositionTests
                 services.AddSingleton<IReleaseRuntimeSourceAuthorization>(new ReleaseSourceCompositionPolicy());
                 services.AddSingleton<INativeReleaseCaptureContextAccessor>(new ReleaseSourceCompositionPolicy());
                 services.AddSingleton<INativeReleaseCaptureAuthorization>(new ReleaseSourceCompositionPolicy());
+                services.AddSingleton<INativeReleaseCatalogCaptureAuthorization>(new ReleaseSourceCompositionPolicy());
                 recording.Attach(services);
             }
 
@@ -362,7 +363,7 @@ public sealed class FeatureCompositionTests
         return type.CreateType();
     }
 
-    private sealed class ReleaseSourceCompositionPolicy : IReleaseRuntimeSourceContextAccessor, IReleaseRuntimeSourceAuthorization, INativeReleaseCaptureContextAccessor, INativeReleaseCaptureAuthorization
+    private sealed class ReleaseSourceCompositionPolicy : IReleaseRuntimeSourceContextAccessor, IReleaseRuntimeSourceAuthorization, INativeReleaseCaptureContextAccessor, INativeReleaseCaptureAuthorization, INativeReleaseCatalogCaptureAuthorization
     {
         public ReleaseRuntimeContentScope Current { get; } = new("architecture-host", null, "architecture-source");
         public ValueTask<bool> AuthorizeMaterialAsync(ReleaseRuntimeContentScope context, string artifactId, string artifactHash,
@@ -372,6 +373,7 @@ public sealed class FeatureCompositionTests
         public ValueTask<bool> AuthorizeWorkflowVersionAsync(ReleaseRuntimeContentScope context, string definitionVersionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
         public ValueTask<bool> AuthorizeSelectedMaterialAsync(ReleaseRuntimeContentScope context, string definitionVersionId, string sourceReferenceId,
             string artifactId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> AuthorizeActivityVersionAsync(ReleaseRuntimeContentScope context, string activityVersionId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 
     private sealed class ReleaseArchiveCompositionContext(DbContextOptions<ReleaseArchiveCompositionContext> options) : DbContext(options)
