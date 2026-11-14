@@ -263,7 +263,7 @@ jobs:
           SHARD: ${{ toJSON(matrix) }}
         run: >-
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
-          --summary "$GITHUB_STEP_SUMMARY"
+          --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the shard outcome
         if: ${{ !cancelled() }}
@@ -282,6 +282,15 @@ jobs:
           name: trx-${{ matrix.shard }}
           path: ${{ runner.temp }}/shard/try*/**/*.trx
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain source-bound test discovery
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/discovery/
+          if-no-files-found: error
           retention-days: 7
 
   # The required context. It reports one result for the PR tier: the plan, every shard, the architecture guards and the
@@ -385,7 +394,7 @@ jobs:
           SHARD: ${{ toJSON(matrix) }}
         run: >-
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
-          --summary "$GITHUB_STEP_SUMMARY"
+          --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the shard outcome
         if: ${{ !cancelled() }}
@@ -403,6 +412,15 @@ jobs:
           name: trx-${{ matrix.shard }}
           path: ${{ runner.temp }}/shard/try*/**/*.trx
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain source-bound test discovery
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/discovery/
+          if-no-files-found: error
           retention-days: 7
 
   # Several EF suites per job, one after another: the suites' own build is paid once per job instead of once per suite,
@@ -479,7 +497,7 @@ jobs:
           ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
         run: >-
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --parallel 1
-          --summary "$GITHUB_STEP_SUMMARY"
+          --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the shard outcome
         if: ${{ !cancelled() }}
@@ -488,6 +506,17 @@ jobs:
           name: test-outcomes-${{ matrix.shard }}
           path: ${{ runner.temp }}/shard/test-outcomes.json
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain native suite discovery and actual results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-suite-evidence-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/shard/discovery/
+            ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: error
           retention-days: 7
 
   # One result for main/nightly alerts; the PR and merge-queue aggregate below owns the required Full tier context.
@@ -554,7 +583,7 @@ jobs:
       - name: Run the architecture guards
         run: |
           entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
-          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the outcome
         if: ${{ !cancelled() }}
@@ -563,6 +592,17 @@ jobs:
           name: test-outcomes-architecture-guards
           path: ${{ runner.temp }}/shard/test-outcomes.json
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain architecture discovery and actual results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: guard-suite-evidence-architecture
+          path: |
+            ${{ runner.temp }}/shard/discovery/
+            ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: error
           retention-days: 7
 
   # Issue #1815 separates required modules from optional ones. This leg is what makes that
@@ -611,7 +651,7 @@ jobs:
       - name: Test (core only)
         run: |
           entry=$(python3 tools/ci/test_tiers.py entry --shard core-only --slnf Elsa.Server.Core.slnf)
-          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the outcome
         if: ${{ !cancelled() }}
@@ -620,6 +660,17 @@ jobs:
           name: test-outcomes-core-only
           path: ${{ runner.temp }}/shard/test-outcomes.json
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain core discovery and actual results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-suite-evidence
+          path: |
+            ${{ runner.temp }}/shard/discovery/
+            ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: error
           retention-days: 7
 
   # A red main has to reach a human. GitHub's own failure notification for a push does go to
