@@ -31,6 +31,25 @@ public sealed record Projection(long Position, long Written);
 /// <summary>The viewer's row of an instance, as the projector has it: the last revision it saw and how many commits.</summary>
 public sealed record ViewRow(string Instance, long Revision, int Commits);
 
+/// <summary>The view change for one key in a projection page. Reset discards the view before the last delete.</summary>
+public sealed record ViewChange(string Instance, long Revision, int Commits, bool Reset)
+{
+    public static IReadOnlyCollection<ViewChange> From(IReadOnlyList<JournalRow> rows)
+    {
+        var changes = new Dictionary<string, ViewChange>(StringComparer.Ordinal);
+        foreach (var row in rows.OrderBy(r => r.Position))
+        {
+            if (row.Revision < 0) changes[row.Instance] = new(row.Instance, 0, 0, true);
+            else if (row.Revision > 0)
+            {
+                changes.TryGetValue(row.Instance, out var previous);
+                changes[row.Instance] = new(row.Instance, row.Revision, (previous?.Commits ?? 0) + 1, previous?.Reset ?? false);
+            }
+        }
+        return changes.Values;
+    }
+}
+
 public sealed record Lease(long Epoch, long Position, long Now);
 
 public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
@@ -127,7 +146,7 @@ public interface IKernelStore : IMembership
     /// <summary>
     /// In one transaction: move the projector's position from <paramref name="from"/> to <paramref name="to"/>, if it is
     /// still at <paramref name="from"/>, and write the view rows of <paramref name="rows"/>; a row of a deleted instance
-    /// removes its view. False when another projector moved it first.
+    /// resets its view at that journal position. Positive revisions after that delete start a fresh count. False when another projector moved it first.
     /// </summary>
     ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default);
 
