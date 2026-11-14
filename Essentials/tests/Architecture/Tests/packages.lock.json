@@ -1138,6 +1138,14 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.primitives.releases": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Releases.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.runtime": {
         "type": "Project",
         "dependencies": {

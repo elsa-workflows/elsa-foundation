@@ -1,6 +1,6 @@
 namespace Kernel.Statecharts;
 
-// Each region chooses one child. Several regions on a state enter together.
+// Existing prototype authoring profile. Full compiled graphs are private until native/schema integration is qualified.
 public sealed record Region(string Initial, State[] States);
 public sealed record State(string Id, Region[]? Regions = null, string? Entry = null, string? Exit = null, bool Final = false);
 public sealed record Rule(string Source, string Event, string Target, string? Action = null, string? When = null);
@@ -8,81 +8,76 @@ public sealed record Definition(Region Root, Rule[] Rules);
 public sealed record Step(string Phase, string State, string? Activity);
 public sealed record Reaction(string? EventId, string[] Next, Step[] Steps);
 
-/// <summary>Pure selection and phase planning for sibling transitions, including transitions between compound siblings.</summary>
+/// <summary>Compatibility facade for the prototype's sibling authoring profile over the one compiled planner.</summary>
 public sealed class Chart
 {
-    private readonly Definition _definition;
-    private readonly Dictionary<string, (State State, Region Region, string? Parent, int Depth)> _nodes = [];
+    private readonly SelectionChart _selection;
+    internal SelectionChart Compiled => _selection;
+    private readonly Rule[] _rules;
 
     public Chart(Definition definition)
     {
-        _definition = definition;
-        Index(definition.Root, null, 0);
-        foreach (var rule in definition.Rules)
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<State>(definition.Root.States);
+        while (pending.TryPop(out var state))
         {
-            if (!_nodes.TryGetValue(rule.Source, out var source) || !_nodes.TryGetValue(rule.Target, out var target))
-                throw new ArgumentException("Unknown state in transition.");
-            if (rule.Source == rule.Target || !ReferenceEquals(source.Region, target.Region))
-                throw new NotSupportedException("The spike supports transitions between distinct siblings in one region.");
+            if (!ids.Add(state.Id)) throw new ArgumentException("Duplicate state identity or containment cycle.");
+            foreach (var region in state.Regions ?? []) foreach (var child in region.States) pending.Push(child);
         }
+        string PrivateId(string stem)
+        {
+            while (!ids.Add(stem)) stem += "_";
+            return stem;
+        }
+        var root = PrivateId("$root");
+        var nodes = new List<GraphNode> { new(root, NodeKind.Root, Initial: definition.Root.Initial) };
+        var todo = new Stack<(State State, string Parent)>(definition.Root.States.Select(s => (s, root)));
+        var ordinal = 0;
+        while (todo.TryPop(out var item))
+        {
+            var s = item.State;
+            var regions = s.Regions ?? [];
+            if (s.Final && (item.Parent != root || regions.Length != 0))
+                throw new NotSupportedException("The legacy prototype profile supports a top-level final leaf.");
+            var kind = s.Final ? NodeKind.Final : regions.Length switch { 0 => NodeKind.Atomic, 1 => NodeKind.Compound, _ => NodeKind.Parallel };
+            nodes.Add(new(s.Id, kind, item.Parent, regions.Length == 1 ? regions[0].Initial : null, s.Entry, s.Exit));
+            foreach (var region in regions)
+            {
+                var parent = s.Id;
+                if (kind == NodeKind.Parallel)
+                {
+                    parent = PrivateId("$region:" + ++ordinal);
+                    nodes.Add(new(parent, NodeKind.Region, s.Id, region.Initial));
+                }
+                foreach (var child in region.States) todo.Push((child, parent));
+            }
+        }
+        var byId = nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
+        _rules = definition.Rules.ToArray();
+        foreach (var rule in _rules)
+        {
+            if (!byId.TryGetValue(rule.Source, out var source) || !byId.TryGetValue(rule.Target, out var target))
+                throw new ArgumentException("Unknown state in transition.");
+            if (source.Id == target.Id || source.Parent != target.Parent)
+                throw new NotSupportedException("The legacy prototype profile supports distinct sibling transitions.");
+        }
+        _selection = new(nodes, _rules.Select((r, i) => new GraphRule("rule:" + i, i, r.Source, r.Target, VisitMode.Reenter, r.Event, r.Action, r.When)));
     }
 
     public Reaction Start()
     {
-        var entered = Enter(_definition.Root.Initial).ToArray();
-        return new(null, entered, entered.Select(id => new Step("entry", id, _nodes[id].State.Entry)).ToArray());
+        var initial = _selection.Initial();
+        return new(null, initial, initial.Select(id => new Step("entry", id, _selection.Entry(id))).ToArray());
     }
 
     public Reaction? Select(IReadOnlyList<string> active, string eventId, string name, string? value)
     {
-        // An eligible descendant shadows its ancestor. A rule's position is its authored order.
-        // The sibling-only subset prevents intersecting exits among the remaining regional rules.
-        var selected = new List<Rule>();
-        foreach (var source in active.OrderByDescending(id => _nodes[id].Depth))
-        {
-            if (selected.Any(rule => Within(rule.Source, source))) continue;
-            var match = _definition.Rules.FirstOrDefault(r => r.Source == source && r.Event == name &&
-                (r.When is null || r.When == value));
-            if (match is not null) selected.Add(match);
-        }
-        if (selected.Count == 0) return null;
-        var exited = active.Where(id => selected.Any(rule => Within(id, rule.Source)))
-            .OrderByDescending(id => _nodes[id].Depth).ToArray();
-        var entered = selected.SelectMany(rule => Enter(rule.Target)).ToArray();
-        var steps = exited.Select(id => new Step("exit", id, _nodes[id].State.Exit))
-            .Concat(selected.Select(rule => new Step("transition", rule.Source, rule.Action)))
-            .Concat(entered.Select(id => new Step("entry", id, _nodes[id].State.Entry)));
-        return new(eventId, active.Except(exited).Concat(entered).ToArray(), steps.ToArray());
+        var plan = _selection.Select(active.Select(id => new StateVisit(id, id)), (r, _) => r.Trigger == name,
+            (r, _) => _rules[r.Order].When is null || _rules[r.Order].When == value);
+        return plan.Selected.Length == 0 ? null : new(eventId, plan.Next, plan.Steps.Select(s => new Step(s.Phase, s.State, s.Activity)).ToArray());
     }
 
-    public bool IsFinal(IEnumerable<string> active) =>
-        active.Any(id => _nodes[id].Parent is null && _nodes[id].State.Final);
+    public bool IsFinal(IEnumerable<string> active) => _selection.IsTopFinal(active);
 
-    private IEnumerable<string> Enter(string id)
-    {
-        yield return id;
-        foreach (var region in _nodes[id].State.Regions ?? [])
-            foreach (var child in Enter(region.Initial)) yield return child;
-    }
-
-    private bool Within(string id, string ancestor)
-    {
-        for (string? current = id; current is not null; current = _nodes[current].Parent)
-            if (current == ancestor) return true;
-        return false;
-    }
-
-    private void Index(Region region, string? parent, int depth)
-    {
-        if (!region.States.Any(state => state.Id == region.Initial))
-            throw new ArgumentException($"Unknown initial state {region.Initial}.");
-        foreach (var state in region.States)
-        {
-            if (!_nodes.TryAdd(state.Id, (state, region, parent, depth)))
-                throw new ArgumentException($"Duplicate state {state.Id}.");
-            if (state.Final && (parent is not null || state.Regions is { Length: > 0 }))
-                throw new NotSupportedException("The spike supports a top-level final leaf.");
-            foreach (var child in state.Regions ?? []) Index(child, state.Id, depth + 1);
-        }
-    }
+    public int[][] Prerequisites(Reaction reaction) => _selection.Prerequisites(reaction.Steps.Select(s => (s.Phase, s.State)).ToArray());
 }
