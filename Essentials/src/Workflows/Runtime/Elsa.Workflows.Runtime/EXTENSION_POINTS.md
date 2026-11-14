@@ -1507,7 +1507,8 @@ child relation, an actual owned scheduling invocation and the parent's effective
 including normalized metadata fallbacks. Ordinary
 and delayed scheduling reuse one workflow-header read. The selected root's original first-attempt and
 start-reason fences remain; retry/time/asynchronous responsibilities require separate qualification.
-Settled child schedules retain an immutable scheduling receipt. An exact retained replay validates that
+Settled child schedules retain an immutable `v1:` scheduling receipt with an explicit field list,
+including individual attempt fields rather than an evolving record's serialized shape. An exact retained replay validates that
 receipt and actual ancestry, then acknowledges without new work even after parent/workflow completion;
 changed content or missing receipts refuse. This acknowledgement grants no access to closed frames,
 fixtures or capture and is distinct from a new child invocation or activity retry.

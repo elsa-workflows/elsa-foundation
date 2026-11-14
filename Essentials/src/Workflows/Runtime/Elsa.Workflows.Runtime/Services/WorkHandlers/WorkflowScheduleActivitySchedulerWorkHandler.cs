@@ -83,10 +83,21 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             pipelineContext.Workspace.StageCheckpointCommit(commit);
     }
 
-    private static string ChildScheduleReceipt(RuntimeSchedulerWorkItem work) => Convert.ToHexString(
+    // V1 has an explicit field list, including attempt members. New semantics require a new receipt version.
+    private static string ChildScheduleReceipt(RuntimeSchedulerWorkItem work) => "v1:" + Convert.ToHexString(
         System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            work.WorkflowExecutionId, work.WorkItemId, work.CommandId, work.ExecutionScopeId, work.Attempt, work.Payload
+            WorkflowExecutionId = work.WorkflowExecutionId,
+            WorkItemId = work.WorkItemId,
+            CommandId = work.CommandId,
+            ExecutionScopeId = work.ExecutionScopeId,
+            Attempt = work.Attempt is { } attempt ? new
+            {
+                AttemptNumber = attempt.AttemptNumber,
+                FirstAttemptActivityExecutionId = attempt.FirstAttemptActivityExecutionId,
+                PreviousAttemptActivityExecutionId = attempt.PreviousAttemptActivityExecutionId
+            } : null,
+            Payload = work.Payload
         })));
 
     private async ValueTask RequireOwnedChildAsync(RuntimeSchedulerWorkItem work, RuntimeScheduleActivityCommandPayload payload,
@@ -98,7 +109,8 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         if (parent.Status is not (ActivityExecutionStatus.Running or ActivityExecutionStatus.Waiting or ActivityExecutionStatus.Suspended) ||
             payload.ActivityExecutionId == context.RootActivityExecutionId ||
             !context.OwnedNodeIds.Contains(payload.ExecutableNodeId, StringComparer.Ordinal) ||
-            !executable.NodesById[parent.Execution.ExecutableNodeId].ChildSlots.SelectMany(x => x.Activities)
+            !executable.NodesById.TryGetValue(parent.Execution.ExecutableNodeId, out var parentNode) ||
+            !parentNode.ChildSlots.SelectMany(x => x.Activities)
                 .Any(x => x.ExecutableNodeId == payload.ExecutableNodeId) ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(workflow.PinnedExecutable, payload.PinnedExecutable) ||
             payload.SchedulingProvenance.ParentActivityExecutionId != payload.ParentActivityExecutionId ||

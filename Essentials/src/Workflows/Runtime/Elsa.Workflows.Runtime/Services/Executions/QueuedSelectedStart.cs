@@ -45,6 +45,8 @@ internal sealed class QueuedSelectedStart(IServiceProvider services, WorkflowTes
                 if (!await profiles[0].CanExecuteOwnedNodeAsync(entry, executable, target, node, pipeline, cancellationToken))
                     throw Refused("Every node of selected owned work requires explicit model/effect qualification.");
         var prepared = await preparer.PrepareAsync(entry, executable, executionId, payload.Inputs, payload.Variables, cancellationToken);
+        // Both walks use root-first depth-first ChildSlots order; the first identity owns the selected root.
+        // Keep this paired with RuntimeTestContextMaterializer.Descendants when changing traversal.
         if (!prepared.IsAvailable || !prepared.Context!.OwnedNodeIds.SequenceEqual(ownedNodes.Select(x => x.ExecutableNodeId), StringComparer.Ordinal))
             throw Refused("The trusted selected setup is unavailable.");
         // Match RuntimeContainerScopeService.BuildVisibleFramesCoreAsync: a scope's iteration is outer

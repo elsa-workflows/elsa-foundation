@@ -46,8 +46,11 @@ public sealed class NativeSelectedCompositeTests
         Assert.Equal(activities.Select(x => x.Execution.ExecutableNodeId).Order(), state.TestContext.OwnedNodeIds.Order());
         Assert.All(activities, x => Assert.Equal(ActivityExecutionStatus.Completed, x.Status));
         foreach (var child in activities.Where(x => x != selected))
+        {
+            Assert.StartsWith("v1:", child.Metadata["runtime.selectedChildScheduleHash"]);
             Assert.Equal(nested && child.Execution.ExecutableNodeId == "owned-b"
                 ? Assert.Single(activities, x => x.Execution.ExecutableNodeId == "inner").InvocationId : selected.InvocationId, child.ParentActivityExecutionId);
+        }
         Assert.Equal(before, JsonSerializer.Serialize(await harness.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(owner.Executable!.Identity.ArtifactId)));
         Assert.Contains("selected", owner.QualifiedNodes);
         if (!empty) Assert.Contains("owned-b", owner.QualifiedNodes);
@@ -101,16 +104,29 @@ public sealed class NativeSelectedCompositeTests
     [InlineData("metadata-scope")]
     [InlineData("root-id")]
     [InlineData("terminal-parent")]
+    [InlineData("missing-pinned-parent")]
     public async Task Invalid_owned_child_schedules_cannot_change_header_invocations_or_queued_work(string defect)
     {
         var owner = new Owner();
         await using var harness = Harness(owner, PersistenceMode.Balanced);
-        await Setup(harness, owner, Sequence("selected", [WorkflowExecutionHarness.NewProbeNode("owned")]));
+        await Setup(harness, owner, Sequence("selected", [defect == "missing-pinned-parent"
+            ? Sequence("inner", [WorkflowExecutionHarness.NewProbeNode("owned")]) : WorkflowExecutionHarness.NewProbeNode("owned")]));
         await harness.Services.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(Request(harness, owner), WorkflowExecutableReferenceScope.TestRun);
         var workflows = harness.Services.GetRequiredService<IWorkflowExecutionStateStore>();
         var activities = harness.Services.GetRequiredService<IActivityExecutionStateStore>();
         await workflows.SaveAsync(owner.RunningHeader!);
         var parent = owner.ActiveRoot!;
+        if (defect == "missing-pinned-parent")
+        {
+            parent = Assert.Single(await activities.ListAllAsync(harness.ExecutionId), x => x.Execution.ExecutableNodeId == "inner");
+            parent = parent with { Status = ActivityExecutionStatus.Running, Execution = parent.Execution with { ExecutableNodeId = "unmapped-parent" } };
+            var original = owner.RunningHeader!.TestContext!;
+            await workflows.SaveAsync(owner.RunningHeader with
+            {
+                TestContext = new(original.ContextId, original.ContextFingerprint, original.Frames, original.Results,
+                    [.. original.OwnedNodeIds, "unmapped-parent"], original.Revision) { RootActivityExecutionId = original.RootActivityExecutionId }
+            });
+        }
         if (defect == "terminal-parent") parent = parent with { Status = ActivityExecutionStatus.Completed };
         if (defect == "duplicate-root") parent = parent with { Execution = parent.Execution with { ActivityExecutionId = "duplicate-root" } };
         await activities.SaveAsync(parent);
