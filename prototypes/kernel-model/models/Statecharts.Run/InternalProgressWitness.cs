@@ -200,6 +200,9 @@ internal static class InternalProgressWitness
         foreach (var (name, bad) in new (string, InternalProgress)[] {
             ("limit", good with { Limit = 0 }), ("steps", good with { Steps = 5 }), ("serial", good with { Serial = 0 }),
             ("duplicate-offer", good with { Offered = [new("A", "a"), new("B", "a")] }),
+            ("duplicate-offer-state", good with { Offered = [new("A", "a"), new("A", "b")] }),
+            ("offered-without-serial", good with { Ready = [], Serial = 0 }),
+            ("phase-without-count", new(4, PhasePending: true)),
             ("unoffered-ready", good with { Offered = [] }), ("ready-order", good with { Ready = [good.Ready![1], good.Ready![0]] }),
             ("stable-ready", good with { Stable = true }), ("stable-phase", new(4, Stable: true, PhasePending: true)),
             ("block-before-limit", good with { Block = new(InternalDecisionKind.Automatic, ["a"], null) }),

@@ -17,9 +17,10 @@ internal sealed record InternalProgress(int Limit, int Steps = 0, long Serial = 
         if (Version != 1) throw new NotSupportedException("Unsupported internal-progress version.");
         var offered = Offered ?? [];
         var ready = Ready ?? [];
-        if (Limit <= 0 || Steps < 0 || Steps > Limit || Serial < 0 ||
+        if (Limit <= 0 || Steps < 0 || Steps > Limit || PhasePending && Steps == 0 || Serial < offered.Length ||
             offered.Any(v => v is null || string.IsNullOrEmpty(v.State) || string.IsNullOrEmpty(v.Occurrence)) ||
             offered.Select(v => v.Occurrence).Distinct(StringComparer.Ordinal).Count() != offered.Length ||
+            offered.Select(v => v.State).Distinct(StringComparer.Ordinal).Count() != offered.Length ||
             ready.Any(r => r is null || r.Order <= 0 || r.Order > Serial ||
                 !offered.Any(v => v.State == r.State && v.Occurrence == r.Visit)) ||
             ready.Select(r => r.Visit).Distinct(StringComparer.Ordinal).Count() != ready.Length ||
