@@ -46,7 +46,7 @@ const moduleNavigation: StudioNavigationContribution[] = [
   { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", order: 20, placement: "main" },
   { id: "workflows-runs", label: "Runs", path: "/workflows/instances", order: 30, placement: "main" },
-  { id: "workflows-executables", label: "Executables", path: "/workflows/executables", order: 10, placement: "more" },
+  { id: "workflows-executables", label: "Executables", path: "/workflows/executables", order: 10, placement: "build" },
   { id: "feature-management", label: "Features", path: "/features", order: 40, placement: "admin" }
 ];
 

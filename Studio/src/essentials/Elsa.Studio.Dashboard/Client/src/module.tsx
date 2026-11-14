@@ -30,8 +30,8 @@ export function register(api: ElsaStudioModuleApi) {
     api.routes.add({ id: `home:${path}`, label: "Home", path, component });
   }
   const requiresBackend = [{ id: "elsa.api.studio-dashboard", contractVersion: "1" }];
-  api.navigation.add({ id: "dashboards", label: "Dashboards", path: "/dashboards", order: 12, placement: "main", requiresBackend });
-  api.navigation.add({ id: "questions", label: "Questions", path: "/questions", order: 13, placement: "more", requiresBackend });
+  api.navigation.add({ id: "dashboards", label: "Dashboards", path: "/dashboards", order: 12, placement: "operate", requiresBackend });
+  api.navigation.add({ id: "questions", label: "Questions", path: "/questions", order: 13, placement: "operate", requiresBackend });
   for (const kind of ["dashboard", "question"] as const) {
     const collection = `/${kind}s`;
     for (const [view, path] of [["list", collection], ["create", `${collection}/new`], ["detail", `${collection}/:resourceId`]] as const) {

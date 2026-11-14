@@ -18,6 +18,7 @@ export function register(api: ElsaStudioModuleApi) {
     id: "weather-forecast-sample",
     label: "Weather",
     path: "/weather",
+    placement: "operate",
     order: 120,
     iconColor: "#14b8a6"
   });

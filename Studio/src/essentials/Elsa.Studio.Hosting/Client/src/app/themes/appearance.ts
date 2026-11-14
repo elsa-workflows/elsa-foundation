@@ -39,7 +39,8 @@ export const appearanceChromeStorageKeys = {
   bottomPanelCollapsed: "elsa-studio-bottom-panel-collapsed",
   bottomPanelHeight: "elsa-studio-bottom-panel-height",
   bottomPanelMaximized: "elsa-studio-bottom-panel-maximized",
-  activeBottomPanel: "elsa-studio-active-bottom-panel"
+  activeBottomPanel: "elsa-studio-active-bottom-panel",
+  navigationGroups: "elsa-studio.ui.nav.groups"
 } as const;
 
 /** Every appearance and chrome override cleared by Reset. */
@@ -54,7 +55,8 @@ export const appearanceResetStorageKeys = [
   appearanceChromeStorageKeys.bottomPanelCollapsed,
   appearanceChromeStorageKeys.bottomPanelHeight,
   appearanceChromeStorageKeys.bottomPanelMaximized,
-  appearanceChromeStorageKeys.activeBottomPanel
+  appearanceChromeStorageKeys.activeBottomPanel,
+  appearanceChromeStorageKeys.navigationGroups
 ] as const;
 
 export const appearanceResetEventName = "elsa-studio:appearance-reset";

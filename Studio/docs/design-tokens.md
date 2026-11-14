@@ -121,7 +121,7 @@ can set `data-workspace-style="minimal"` on `<html>` with its own complete palet
 | Token | Purpose |
 | --- | --- |
 | `--studio-control-height`, `--studio-row-height`, `--studio-table-header-height` | Shared control and collection density |
-| `--studio-page-gap` | Gap between page sections |
+| `--studio-page-gap` | Gap between page sections (24px by default) |
 | `--studio-row-boundary-style`, `--studio-section-boundary-style` | Secondary divider style; never use for a focus outline |
 | `--studio-row-hover`, `--studio-row-selected` | Neutral or palette-owned row surfaces |
 | `--studio-selection-mark` | Narrow selection marker or selected tab boundary |

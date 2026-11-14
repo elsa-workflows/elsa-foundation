@@ -58,8 +58,10 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.setViewportSize({ width: 1600, height: 1100 });
     if (projectViewport.width < 800) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
   };
-  await page.getByRole("button", { name: "More tools", exact: true }).click();
-  await page.getByRole("link", { name: "Forms", exact: true }).click();
+  const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
+  const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
+  if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
+  await operate.getByRole("link", { name: "Forms", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
   await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
@@ -133,7 +135,9 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByLabel("Variable storage driver", { exact: true })).toHaveValue("elsa.json");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await expect(page.getByLabel("Output type", { exact: true })).toHaveValue(jsonAlias);
+  await page.setViewportSize(projectViewport);
   await capture(page, info, "json-output-definitions");
+  await page.setViewportSize({ width: 1600, height: 1100 });
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("ReviewData");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();

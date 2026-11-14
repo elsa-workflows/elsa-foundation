@@ -165,7 +165,7 @@ test("independent choices survive a real reload without re-seeding preferences",
 
 test("Focus clears a hidden navigation filter and preserves an explicit expansion across reload", async ({ page }) => {
   await open(page, "quiet", "classic", "dark");
-  await page.getByRole("searchbox", { name: "Search modules" }).fill("Workflows");
+  await page.getByRole("searchbox", { name: "Search Studio" }).fill("Workflows");
   await chooseStyle(page, "Focus Canvas");
   await expect(page.locator(".studio-shell")).toHaveClass(/sidebar-collapsed/);
   await expect(page.getByRole("link", { name: "Home", exact: true })).toBeVisible();

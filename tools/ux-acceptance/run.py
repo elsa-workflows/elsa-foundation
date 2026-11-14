@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+import base64
+from contextlib import closing, contextmanager, ExitStack
+import copy
 import json
 import os
 import re
 from pathlib import Path
+import secrets
 import shutil
 import signal
 import socket
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -18,7 +22,9 @@ import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
+# The ordinary composed journeys run in every standard project against the combined hosts.
+PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark', 'narrow-390-light', 'narrow-390-dark'}
+TOUCH_PROJECTS = {f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')}
 CAPTURES = {
     'saved dashboard period comparison and membership': ['reference', 'comparison-excluded', 'comparison-excluded-empty', 'comparison-included', 'comparison-included-periods', 'comparison-included-values', 'comparison-included-values-end', 'comparison-saved-reopened', 'comparison-reopened-periods', 'comparison-reopened-values', 'comparison-reopened-values-end', 'comparison-current-drill'],
     'phone authoring and settings content priority': ['reference', 'phone-authoring-entry', 'phone-inspector', 'phone-inspector-maximized', 'phone-activities', 'authoring-768', 'authoring-1280', 'phone-theme-entry', 'phone-theme-assets', 'theme-desktop-dirty', 'theme-tablet-dirty', 'phone-theme-dirty', 'phone-theme-short', 'phone-theme-reopened', 'phone-settings-navigation'],
@@ -29,14 +35,20 @@ CAPTURES = {
     'tabbed Secrets authoring and metadata': ['reference', 'secret-section', 'first-invalid-field', 'storage-section', 'details-section', 'persisted-list', 'persisted-metadata', 'metadata-390', 'storage-390', 'configuration-reference', 'configuration-metadata'],
     'business decisions authoring and explanations': ['reference', 'decisions-list', 'decisions-search', 'decision-create', 'decision-table', 'decision-case-editor', 'decision-case-expectation', 'decision-cases', 'decision-regression', 'decision-published', 'decision-explanation', 'decision-clone', 'decision-conflict', 'decision-history', 'decisions-no-matches', 'decision-imported', 'decision-table-320', 'decision-table-320-scrolled', 'decision-picker', 'decision-picker-new-tab', 'decision-picker-saved-tab', 'decision-picker-selected-toast', 'decision-picker-returned', 'decision-saved-toast'],
     'feature filtering and settings dialogs': ['reference', 'features-server-no-matches', 'features-server-populated', 'features-studio-no-matches', 'features-studio-populated', 'feature-settings-dialog', 'feature-impact-dialog'],
-    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed', 'secret-created-toast', 'secret-dialog-over-toast', 'primary-action-with-toasts', 'toasts-above-expanded-dock', 'toasts-over-maximized-dock', 'notification-history'],
+    'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed', 'library-initial', 'secret-created-toast', 'secret-dialog-over-toast', 'primary-action-with-toasts', 'toasts-above-expanded-dock', 'toasts-over-maximized-dock', 'notification-history'],
+    'grouped navigation and moved destinations': ['reference', 'groups', 'executables-list', 'tags-list', 'tags-create', 'tags-edit', 'library', 'workflow-authoring-settings', 'runtime-settings', 'diagnostic-views', 'search', 'features-navigation', 'completed', 'top-search', 'top-search-no-match', 'top-search-no-match-dismissed', 'top-search-query-edited', 'top-search-query-returned', 'top-search-tab-dismissed', 'top-search-shift-tab-dismissed', 'top-navigation', 'high-contrast'],
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'save template toast': ['reference', 'save-form', 'saved-toast', 'template-list', 'reopened-template'],
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
-    'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
+    'executable designer parity': ['reference', 'definition-sequence', 'definition-frame', 'definition-frame-dock', 'definition-frame-retained', 'definition-frame-scroll-top', 'definition-frame-scroll-middle', 'definition-frame-dock-scroll-top', 'definition-frame-dock-scroll-middle', 'definition-frame-retained-scroll-top', 'definition-frame-retained-scroll-middle', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320'],
     'agent authoring and navigation': ['reference', 'agents-list', 'agent-create', 'agent-designer', 'agent-model', 'advanced-settings', 'inputs', 'outputs', 'input-general', 'input-presentation', 'input-advanced', 'output-general', 'output-presentation', 'output-advanced', 'completed'],
+    # Supplementary journeys (Studio/tests/acceptance/supplements.spec.ts) run once per their own project.
+    'coarse pointer grouped navigation': ['touch-groups-open', 'touch-group-collapsed', 'touch-local-views', 'touch-settings-runtime', 'touch-top-group-open', 'touch-top-search', 'touch-search-no-match', 'touch-search-outside-dismissed', 'touch-keyboard-recovery'],
+    'restricted principal settings access': ['restricted-appearance', 'restricted-features-settings-denied', 'restricted-features-bookmark-denied', 'restricted-runtime-readonly', 'restricted-keyboard-recovery'],
+    'activity availability load failures and recovery': ['availability-loading', 'availability-settled', 'availability-abort-error', 'availability-abort-recovered', 'availability-client-500-error', 'availability-client-500-recovered'],
+    'runtime-only API composition and combined return': ['runtime-workflows-default', 'runtime-design-view-unavailable', 'runtime-design-settings-unavailable', 'runtime-integrations-absent', 'combined-integrations-return'],
     'user task authoring and workflow result': ['reference', 'form-authoring', 'published-form', 'task-authoring', 'form-selection', 'json-output-definitions', 'renamed-output', 'removed-output', 'output-picker', 'frozen-task-form', 'run-outcomes-initial', 'run-outcomes', 'run-outcomes-readable', 'run-output-reached', 'workflow-result', 'task-fault-causes', 'task-fault-details', 'prefill-fault'],
     'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
     'native dashboard questions and sharing': ['reference', 'dashboard-native-reference', 'questions-empty', 'question-controls', 'question-validation', 'question-preview', 'question-drill', 'question-drill-values', 'question-saved', 'question-refreshed', 'question-editor-preview-appearance-1', 'question-editor-preview-appearance-2', 'question-saved-refresh-drill', 'question-saved-refresh-drill-values', 'question-history', 'question-copy', 'question-records', 'question-navigation-cancelled', 'question-retained-tab', 'question-navigation-confirmed', 'dashboard-layout', 'dashboard-reopened', 'dashboard-multi-tile', 'dashboards-collection-appearance-1', 'dashboards-collection-appearance-2', 'dashboard-and-dependency-dialogs-appearance-1-dashboard', 'dashboard-and-dependency-dialogs-appearance-1-share-review', 'dashboard-and-dependency-dialogs-appearance-1-copy-review', 'dashboard-and-dependency-dialogs-appearance-2-dashboard', 'dashboard-and-dependency-dialogs-appearance-2-share-review', 'dashboard-and-dependency-dialogs-appearance-2-copy-review', 'dashboard-refresh-cancelled', 'dashboard-refresh-retried', 'dashboard-tile-settings', 'dashboard-drill', 'dashboard-drill-values', 'dashboard-copy-dependency-review', 'dashboard-copy-independent-question', 'dashboard-copy', 'question-share', 'dashboard-share-dependency-review', 'dashboard-share', 'question-shared-search', 'shared-question', 'shared-dashboard', 'question-source-unavailable', 'question-repair-blank', 'question-repair-reopened', 'question-revoke', 'question-access-lost', 'dashboard-unavailable-tiles', 'question-new-reuse-confirmation', 'questions-collection-appearance-1', 'questions-collection-appearance-2', 'question-conflict', 'question-conflict-recovered'],
@@ -56,12 +68,45 @@ CAPTURES['native dashboard questions and sharing'] += (
     + ['dashboard-share-dependency-review-end', 'dashboard-copy-dependency-review-end', 'dashboard-copy-question-form',
        'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
 )
-JOURNEYS = set(CAPTURES)
 ADDITIONAL_ARTIFACTS = {
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
     'existing home widgets and layout defaults': {'native-weaver-boundary.json', 'home-populated-appearance-matrix.json', 'home-default-baseline.json', 'home-module-widgets.json', 'home-preferences-restored.json'},
 }
+
+# Structured receipts each supplementary journey must retain beside its screenshots, accessibility snapshots and trace.
+EVIDENCE = {
+    'coarse pointer grouped navigation': ['touch-device.json', 'touch-evidence.json'],
+    'restricted principal settings access': ['restricted-session.json', 'restricted-capabilities.json', 'identity-capabilities.json', 'runtime-settings.json', 'restricted-network.json'],
+    'activity availability load failures and recovery': ['availability-requests.json', 'client-500-receipt.json'],
+    'runtime-only API composition and combined return': ['subset-capabilities.json', 'subset-observation.json', 'combined-capabilities.json'],
+}
+JOURNEYS = set(CAPTURES)
+SUPPLEMENT_PROJECTS = {
+    'coarse pointer grouped navigation': TOUCH_PROJECTS,
+    'restricted principal settings access': {'restricted-390-light'},
+    'activity availability load failures and recovery': {'availability-390-light'},
+    'runtime-only API composition and combined return': {'runtime-api-subset-1440-light'},
+}
+JOURNEY_PROJECTS = {journey: SUPPLEMENT_PROJECTS.get(journey, PROJECTS) for journey in JOURNEYS}
+
+# API subset compositions remove the opposite plane's API root and its configured reverse-dependency closure
+# from a private copy of the combined shells.json (DependsOn closure over the current feature declarations).
+# Every listed feature must still be configured; a rename fails setup instead of silently widening a subset.
+# A design-only composition is deferred to #4160: without the runtime API the Workbench does not boot today
+# (runtime features resolve the undeclared runtime core; dropping publishing then hits #4158).
+SUBSET_COMPOSITIONS = {
+    'runtime-api-subset': {
+        'journeys': {'runtime-only API composition and combined return'},
+        'remove': ['ActivitiesDesignApi', 'ActivitiesDispatchWorkflowDesign', 'ActivitiesGraphDesign', 'AgentApi', 'AgentDesign',
+                   'ConnectionsApi', 'SecretsApi', 'WorkflowsDashboard', 'WorkflowsDesignApi'],
+    },
+}
+IDENTITY_SEED_FEATURE = 'FoundationIdentityAspNetCoreIdentityEntityFrameworkCore'
+RESTRICTED_JOURNEY = 'restricted principal settings access'
+RESTRICTED_USER = 'ux-restricted-reader'
+RESTRICTED_SEED_ROLE = 'ux-restricted-seed'
+RESTRICTED_PERMISSIONS = ('api-capabilities:read', 'workflows/execution-evidence:read', 'workflows/runtime:read')
 
 
 def configure_dashboard_qualification(settings, shells):
@@ -121,10 +166,16 @@ def stop_group(process, *, graceful_timeout=15):
 
 
 def command(args, log, *, cwd=ROOT, env=None):
+    # Keep stage timing in the Actions log even if the outer job is interrupted.
+    # Emit only the log basename: arguments/environment may contain private fixture values.
+    started = time.monotonic()
+    print(json.dumps({'event': 'ux-command-started', 'log': log.name}), flush=True)
     with log.open('w') as output:
         process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             result = process.wait()
+            print(json.dumps({'event': 'ux-command-finished', 'log': log.name,
+                              'exitCode': result, 'elapsedSeconds': round(time.monotonic() - started, 3)}), flush=True)
             if result:
                 raise subprocess.CalledProcessError(result, args)
         finally:
@@ -156,7 +207,7 @@ def verdict(report, artifacts, journeys=None):
                     rows.append((test.get('projectName'), spec.get('title'), test))
             walk(suite.get('suites', []))
     walk(report.get('suites', []))
-    expected = {(project, journey) for project in PROJECTS for journey in journeys}
+    expected = {(project, journey) for journey in journeys for project in JOURNEY_PROJECTS[journey]}
     actual = [(project, title) for project, title, _ in rows]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError(f'Incomplete acceptance inventory: expected {sorted(expected)}, got {actual}')
@@ -168,7 +219,7 @@ def verdict(report, artifacts, journeys=None):
             raise ValueError(f'{project} / {title}: not a single successful execution')
         attachments = results[0].get('attachments', [])
         names = {item.get('name') for item in attachments}
-        required = {'trace'} | ADDITIONAL_ARTIFACTS.get(title, set()) | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')}
+        required = {'trace'} | ADDITIONAL_ARTIFACTS.get(title, set()) | {f'{capture}.{suffix}' for capture in CAPTURES[title] for suffix in ('png', 'aria.yml')} | set(EVIDENCE.get(title, []))
         if not required <= names:
             raise ValueError(f'{project} / {title}: missing artifacts {sorted(required - names)}')
         for item in attachments:
@@ -273,6 +324,117 @@ def prepare_host(project, destination):
         shutil.copy2(project.parent / name, destination / name)
 
 
+def compose_shells(shells, studio_url, remove=(), seed=None):
+    """A private shells.json: local origin routing, an optional API subset and an optional first-boot identity seed."""
+    shells = copy.deepcopy(shells)
+    features = shells['CShells']['Shells']['default']['Features']
+    missing = [name for name in remove if name not in features]
+    if missing:
+        raise ValueError(f'Subset composition names features the combined shells.json no longer configures: {missing}')
+    for name in remove:
+        del features[name]
+    features['FoundationIdentityAspNetCoreIdentity']['AllowedReturnUrlOrigins'] = [studio_url]
+    if seed:
+        # The real seeder creates this account (password store, IAM user, role, tenant membership) on first boot.
+        features[IDENTITY_SEED_FEATURE].update(SeedAdminUserName=seed['user'], SeedAdminPassword=seed['password'],
+                                               SeedAdminEmail=f"{seed['user']}@example.invalid", SeedAdminRoleName=seed['role'])
+    return shells
+
+
+def write_overlay(project, destination, studio_url, remove=(), seed=None):
+    # Preserve normal module composition; only origin routing (and an explicit subset/seed) changes in private copies.
+    settings = json.loads((project.parent / 'appsettings.json').read_text(encoding='utf-8-sig'))
+    settings['Cors']['AllowedOrigins'] = [studio_url]
+    shells = json.loads((project.parent / 'shells.json').read_text(encoding='utf-8-sig'))
+    shells = compose_shells(shells, studio_url, remove, seed)
+    if not remove and not seed:
+        configure_dashboard_qualification(settings, shells)
+    (destination / 'appsettings.json').write_text(json.dumps(settings))
+    (destination / 'shells.json').write_text(json.dumps(shells))
+
+
+def encode_identity_text(value):
+    """Every Identity IAM text column is stored as base64 UTF-16LE (IdentityEntityFrameworkUtf16Codec), never as plain text."""
+    return base64.b64encode(value.encode('utf-16-le')).decode('ascii')
+
+
+def decode_identity_text(text):
+    return base64.b64decode(text, validate=True).decode('utf-16-le')
+
+
+def identity_set_payload(values):
+    """IdentityApplicationSetCodec: an ordinal-sorted JSON array of base64 UTF-16LE values."""
+    encoded = [encode_identity_text(value) for value in sorted(set(values))]
+    return json.dumps(encoded, separators=(',', ':')).replace('+', '\\u002B')
+
+
+def encode_identity_set(values):
+    """A set column's stored value: the set payload, itself stored through the text-column codec."""
+    return encode_identity_text(identity_set_payload(values))
+
+
+def decode_identity_set(text):
+    return sorted(decode_identity_text(value) for value in json.loads(decode_identity_text(text)))
+
+
+def identity_store(root):
+    stores = []
+    for file in sorted(root.rglob('*.db')):
+        try:
+            # A plain connection: a read-only one cannot open a WAL store whose -shm sidecar is absent.
+            with closing(sqlite3.connect(file)) as db:
+                if db.execute("select 1 from sqlite_master where type = 'table' and name = 'identity_users'").fetchone():
+                    stores.append(file)
+        except sqlite3.DatabaseError:
+            continue
+    if len(stores) != 1:
+        raise RuntimeError(f'Expected exactly one owned identity store under {root}, found {stores}')
+    return stores[0]
+
+
+def restrict_seeded_reader(root, user=RESTRICTED_USER, role=RESTRICTED_SEED_ROLE, permissions=RESTRICTED_PERMISSIONS):
+    """Narrow the freshly seeded reader to exactly `permissions` and no roles, in the owned store, while no host runs.
+
+    The account, password hash, IAM user, role and membership rows were written by the real Workbench seeder; this
+    changes only their grant columns. The real claims projection then derives the session from them on sign-in.
+    """
+    store = identity_store(root)
+    def one(db, sql, args, what):
+        rows = db.execute(sql, args).fetchall()
+        if len(rows) != 1:
+            raise RuntimeError(f'Expected exactly one {what}, found {len(rows)}')
+        return rows[0]
+    with closing(sqlite3.connect(store, timeout=30)) as db:
+        with db:
+            if db.execute('select count(*) from identity_users').fetchone()[0] != 1:
+                raise RuntimeError('The restricted reader must be the only account in a freshly seeded store')
+            # Lookups compare stored (encoded) values; tenant and subject are passed back exactly as stored.
+            key, tenant, subject, role_ids, direct = one(db, 'select Id, TenantId, UserId, RoleIdsJson, DirectPermissionsJson from identity_users where UserName = ?', (encode_identity_text(user),), 'seeded reader')
+            role_key, role_id = one(db, 'select Id, RoleId from identity_roles where TenantId = ? and Name = ?', (tenant, encode_identity_text(role)), 'seed role')
+            member_key, member_roles, member_permissions = one(db, 'select Id, RoleIdsJson, DirectPermissionsJson from identity_tenant_memberships where TenantId = ? and UserId = ?', (tenant, subject), 'tenant membership')
+            before = {'userRoleIds': decode_identity_set(role_ids), 'userDirectPermissions': decode_identity_set(direct),
+                      'membershipRoleIds': decode_identity_set(member_roles), 'membershipDirectPermissions': decode_identity_set(member_permissions)}
+            role_id = decode_identity_text(role_id)
+            if before != {'userRoleIds': [role_id], 'userDirectPermissions': [], 'membershipRoleIds': [role_id], 'membershipDirectPermissions': []}:
+                raise RuntimeError(f'The seeded reader does not have the seeder shape: {before}')
+            db.execute('update identity_users set RoleIdsJson = ?, DirectPermissionsJson = ? where Id = ?', (encode_identity_set([]), encode_identity_set(permissions), key))
+            db.execute('update identity_tenant_memberships set RoleIdsJson = ?, DirectPermissionsJson = ? where Id = ?', (encode_identity_set([]), encode_identity_set([]), member_key))
+            # The framework UserRole link the seeder materialized stays, but its role can no longer grant anything.
+            db.execute('update identity_roles set PermissionsJson = ? where Id = ?', (encode_identity_set([]), role_key))
+        _, _, _, role_ids, direct = one(db, 'select Id, TenantId, UserId, RoleIdsJson, DirectPermissionsJson from identity_users where Id = ?', (key,), 'seeded reader')
+        _, member_roles, member_permissions = one(db, 'select Id, RoleIdsJson, DirectPermissionsJson from identity_tenant_memberships where Id = ?', (member_key,), 'tenant membership')
+        (role_permissions,) = one(db, 'select PermissionsJson from identity_roles where Id = ?', (role_key,), 'seed role')
+    after = {'userRoleIds': decode_identity_set(role_ids), 'userDirectPermissions': decode_identity_set(direct),
+             'membershipRoleIds': decode_identity_set(member_roles), 'membershipDirectPermissions': decode_identity_set(member_permissions),
+             'seedRolePermissions': decode_identity_set(role_permissions)}
+    if after != {'userRoleIds': [], 'userDirectPermissions': sorted(permissions), 'membershipRoleIds': [], 'membershipDirectPermissions': [], 'seedRolePermissions': []}:
+        raise RuntimeError(f'Restricted grants did not persist: {after}')
+    return {'tenant': decode_identity_text(tenant), 'subject': decode_identity_text(subject), 'userName': user, 'seedRole': role, 'before': before, 'after': after,
+            'authority': 'real Workbench first-boot seeder, then grant columns narrowed in the owned store before the acceptance boot',
+            # The generated password stays out of this receipt and report.json; Playwright traces still record the sign-in.
+            'passwordInReceipt': False}
+
+
 def source_state(root):
     sha = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     dirty = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'status', '--porcelain'], cwd=root, text=True).strip()
@@ -295,11 +457,12 @@ def run(output, journey=None, studio_root=None):
     studio_root = (studio_root or ROOT).resolve()
     sha, dirty = source_state(ROOT)
     studio_sha, studio_dirty = source_state(studio_root)
+    selected = {journey} if journey else set(JOURNEYS)
     head = os.environ.get('UX_PR_HEAD_SHA', sha)
     report = {'sourceSha': sha, 'headSha': head, 'dirty': bool(dirty),
               'kind': 'composed-source', 'studioSourceSha': studio_sha, 'studioDirty': bool(studio_dirty), 'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
               'status': 'failed', 'stage': 'build', 'visualApproval': 'requires independent review',
-              'journeys': [journey] if journey else sorted(JOURNEYS)}
+              'journeys': sorted(selected)}
     try:
         if dirty or studio_dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
@@ -327,38 +490,58 @@ def run(output, journey=None, studio_root=None):
         command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
-            backend, studio = data / 'workbench', data / 'studio'
-            prepare_host(backend_project, backend)
-            prepare_host(studio_project, studio)
-            backend_url = f'http://localhost:{free_port()}'
-            studio_url = f'http://localhost:{free_port()}'
-            # Preserve normal module composition; only local origin routing changes in private copies.
-            settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
-            settings['Cors']['AllowedOrigins'] = [studio_url]
-            shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
-            identity = shells['CShells']['Shells']['default']['Features']['FoundationIdentityAspNetCoreIdentity']
-            identity['AllowedReturnUrlOrigins'] = [studio_url]
-            configure_dashboard_qualification(settings, shells)
-            (backend / 'appsettings.json').write_text(json.dumps(settings))
-            (backend / 'shells.json').write_text(json.dumps(shells))
             env = dict(clean_environment(), HOME=str(data / "home"), DOTNET_CLI_HOME=str(data / "home"),
                        **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
             (data / "home").mkdir()
-            report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url,
+            # The combined composition serves every ordinary journey; subsets get their own owned hosts and stores.
+            compositions = [('combined', ())] + [(name, tuple(item['remove'])) for name, item in SUBSET_COMPOSITIONS.items() if item['journeys'] & selected]
+            hosts = []
+            for name, remove in compositions:
+                prefix = '' if name == 'combined' else f'{name}-'
+                backend, studio = data / f'{prefix}workbench', data / f'{prefix}studio'
+                prepare_host(backend_project, backend)
+                prepare_host(studio_project, studio)
+                backend_url = f'http://localhost:{free_port()}'
+                studio_url = f'http://localhost:{free_port()}'
+                write_overlay(backend_project, backend, studio_url, remove)
+                hosts.append({'name': name, 'prefix': prefix, 'backend': backend, 'studio': studio, 'backendUrl': backend_url, 'studioUrl': studio_url, 'removedFeatures': list(remove)})
+            combined = hosts[0]
+            report.update(stage='host-start', studioUrl=combined['studioUrl'], backendUrl=combined['backendUrl'],
                           hostProfile='ElsaDashboardQualification=true; private native principals; Copilot disabled',
-                          modelEvidence='Native browser Weaver message submissions only; physical SDK calls not measured')
-            with host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env):
-                with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
-                          dict(env, Studio__BackendBaseUrl=backend_url)):
-                    report['stage'] = 'journeys'
-                    browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
-                                       ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
-                                       UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha)
-                    browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
-                    if journey:
-                        browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
-                    command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
-                    report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, [journey] if journey else None)
+                          modelEvidence='Native browser Weaver message submissions only; physical SDK calls not measured',
+                          compositions={item['name']: {key: item[key] for key in ('backendUrl', 'studioUrl', 'removedFeatures')} for item in hosts})
+            browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=combined['studioUrl'],
+                               ELSA_WORKBENCH_URL=combined['backendUrl'], UX_BACKEND_URL=combined['backendUrl'],
+                               UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha)
+            for item in hosts[1:]:
+                variable = item['name'].split('-')[0].upper()
+                browser_env.update({f'UX_{variable}_STUDIO_URL': item['studioUrl'], f'UX_{variable}_BACKEND_URL': item['backendUrl']})
+            if RESTRICTED_JOURNEY in selected:
+                # A first boot of the owned combined store seeds only the reader through the real seeder; after it
+                # stops, the reader's grants are narrowed, and the acceptance boot seeds the ordinary admin beside it.
+                report['stage'] = 'restricted-identity'
+                password = f'Ux-{secrets.token_urlsafe(18)}-9a'
+                seed = {'user': RESTRICTED_USER, 'password': password, 'role': RESTRICTED_SEED_ROLE}
+                write_overlay(backend_project, combined['backend'], combined['studioUrl'], seed=seed)
+                with host(combined['backend'], 'Elsa.Workbench.dll', combined['backendUrl'], '/health/ready', output / 'backend-restricted-seed.log', env):
+                    pass
+                receipt = restrict_seeded_reader(combined['backend'])
+                (output / 'restricted-identity.json').write_text(json.dumps(receipt, indent=2) + '\n')
+                report['restrictedIdentity'] = receipt
+                write_overlay(backend_project, combined['backend'], combined['studioUrl'])
+                browser_env.update(UX_RESTRICTED_USER=RESTRICTED_USER, UX_RESTRICTED_PASSWORD=password, UX_RESTRICTED_SUBJECT=receipt['subject'])
+                report['stage'] = 'host-start'
+            with ExitStack() as owned:
+                for item in hosts:
+                    owned.enter_context(host(item['backend'], 'Elsa.Workbench.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", env))
+                    owned.enter_context(host(item['studio'], 'Elsa.Studio.Web.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
+                                             dict(env, Studio__BackendBaseUrl=item['backendUrl'])))
+                report['stage'] = 'journeys'
+                browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
+                if journey:
+                    browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ').replace(r'\-', '-')])
+                command(browser_command, output / 'journeys.log', cwd=studio_root / 'Studio', env=browser_env)
+                report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, [journey] if journey else None)
         if (sha, dirty) != source_state(ROOT) or (studio_sha, studio_dirty) != source_state(studio_root):
             raise ValueError('Source changed during acceptance; rerun the exact committed revision')
         if dirty or studio_dirty:
@@ -377,7 +560,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--studio-root', type=Path, help='Optional clean committed Studio checkout; both frontend/backend revisions are recorded and fenced')
-    parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one complete journey across all four projects; the default still requires every journey')
+    parser.add_argument('--journey', choices=sorted(JOURNEYS), help='Run one complete journey across every project that owns it; the default still requires every journey')
     args = parser.parse_args()
     def terminate(_signum, _frame):
         raise InterruptedError('Acceptance interrupted; owned hosts will be stopped')

@@ -1162,7 +1162,7 @@ jobs:
     needs: plan-scope
     if: needs.plan-scope.outputs.studio-heavy == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1178,15 +1178,19 @@ jobs:
       - name: Verify acceptance tooling and gate failure controls
         run: |
           python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
+          node --test tools/ux-acceptance/*.test.mjs
           python3 -m unittest discover -s tools/ci -p 'test_studio_gate.py'
       - name: Exercise real composed hosts with disposable stores
+        id: composed-ux
         env:
           UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/ux-acceptance"
       - name: Qualify shared decision execution and runtime-only restart
         run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
+      # Job timeouts are cancelled outcomes too; retain their partial evidence without accepting it.
+      # Restrict uploads to an attempted producer, so setup failures do not create empty artifacts.
       - name: Retain reviewable success and failure evidence
-        if: ${{ !cancelled() }}
+        if: ${{ always() && (steps.composed-ux.outcome == 'success' || steps.composed-ux.outcome == 'failure' || steps.composed-ux.outcome == 'cancelled') }}
         uses: actions/upload-artifact@v4
         with:
           name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}

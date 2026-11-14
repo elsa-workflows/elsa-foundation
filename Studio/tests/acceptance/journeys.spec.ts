@@ -24,6 +24,14 @@ import { phoneContentJourney } from "./phoneContentJourney";
 async function capture(page: Page, info: TestInfo, name: string) {
   await assertToastPlacementHolds(page);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const viewportWidth = page.viewportSize()?.width ?? await page.evaluate(() => innerWidth);
+  if (viewportWidth <= 1024) {
+    const overlaps = await page.locator(".sidebar .nav-section a, .sidebar .nav-group-toggle").evaluateAll(nodes => {
+      const bounds = nodes.map(node => ({ label: node.textContent?.trim(), box: node.getBoundingClientRect() })).filter(item => item.box.width > 0 && item.box.height > 0).sort((a, b) => a.box.left - b.box.left);
+      return bounds.slice(1).flatMap((item, index) => item.box.left < bounds[index].box.right - 1 ? [`${bounds[index].label} overlaps ${item.label}`] : []);
+    });
+    expect(overlaps, "Horizontal navigation destinations must not overlap").toEqual([]);
+  }
   const screenshot = info.outputPath(`${name}.png`);
   await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
   await info.attach(`${name}.png`, { path: screenshot, contentType: "image/png" });
@@ -55,6 +63,7 @@ const browserErrors = new WeakMap<Page, string[]>();
 type CreatedWorkflow = { url: string; authorization?: string; id: string };
 const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
+const designerDefinitions = new WeakMap<Page, string[]>();
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
@@ -76,56 +85,51 @@ test("structured logs readability and recovery", async ({ page }, info) => struc
 test("phone authoring and settings content priority", async ({ page }, info) => phoneContentJourney(page, info, capture));
 
 test.afterEach(async ({ page, playwright }, info) => {
-  try { await cleanupDashboardJourney(page); }
-  finally { await releaseToastPlacementHolds(page); }
+  const failures: string[] = [];
+  // Auxiliary releases fail independently so every owned record still receives cleanup.
+  try { await cleanupDashboardJourney(page); } catch { failures.push("dashboard-cleanup-failed"); }
+  try { await releaseToastPlacementHolds(page); } catch { failures.push("toast-release-failed"); }
   const creations = createdWorkflows.get(page) ?? [];
-  const failures: Error[] = [];
-  const outcomes: Array<{ id: string; url: string; status?: number; error?: string }> = [];
-  let cleanup: APIRequestContext | undefined;
-  // Journeys that create their own records register a bounded cleanup; each one runs even if an earlier one fails.
-  // They run first, so an open task is closed while its workflow definition still exists.
-  for (const ownedCleanup of ownedCleanups.get(page) ?? []) {
-    try { await ownedCleanup(); }
-    catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
+  const designerIds = designerDefinitions.get(page) ?? [];
+  const base = process.env.ELSA_WORKBENCH_URL!;
+  const owned: CreatedWorkflow[] = [
+    ...creations,
+    ...designerIds.map(id => ({ id, url: `${base}/design/workflows/definitions` }))
+  ];
+  // Close journey-owned records before deleting their workflow definitions.
+  for (const cleanup of ownedCleanups.get(page) ?? []) {
+    try { await cleanup(); } catch { failures.push("request-failed"); }
   }
-  // This hook and request context outlive a timed-out body. Delete only registered, case-owned IDs.
+  const receipts: Array<{ id: string; status?: number; error?: string }> = [];
+  let context: APIRequestContext | undefined;
   try {
-    if (creations.length) {
-      cleanup = await playwright.request.newContext({ storageState: await page.context().storageState(), timeout: 5_000 });
-      for (const creation of creations) {
-        const url = `${creation.url}/${encodeURIComponent(creation.id)}`;
-        try {
-          const removed = await cleanup.delete(url, {
-            timeout: 5_000,
-            headers: creation.authorization ? { Authorization: creation.authorization } : undefined
-          });
-          outcomes.push({ id: creation.id, url, status: removed.status() });
-          if (!removed.ok()) failures.push(new Error(`Cleanup for owned workflow ${creation.id} returned HTTP ${removed.status()}`));
-        } catch (error) {
-          const details = String(error);
-          const message = creation.authorization ? details.replaceAll(creation.authorization, "[redacted]") : details;
-          outcomes.push({ id: creation.id, url, error: message });
-          failures.push(new Error(`Cleanup for owned workflow ${creation.id} failed: ${message}`, { cause: error }));
-        }
+    if (owned.length) context = await playwright.request.newContext({ storageState: await page.context().storageState(), timeout: 5_000 });
+    for (const item of owned) {
+      try {
+        const removed = await context!.delete(`${item.url}/${encodeURIComponent(item.id)}`, {
+          timeout: 5_000,
+          headers: item.authorization ? { Authorization: item.authorization } : undefined
+        });
+        receipts.push({ id: item.id, status: removed.status() });
+      } catch {
+        receipts.push({ id: item.id, error: "request-failed" });
       }
     }
-  } catch (error) {
-    failures.push(new Error(`Could not initialize cleanup for owned workflows ${creations.map(item => item.id).join(", ")}`, { cause: error }));
+  } catch {
+    receipts.push(...owned.map(item => ({ id: item.id, error: "request-failed" })));
   } finally {
-    if (cleanup) {
-      try { await cleanup.dispose(); }
-      catch (error) { failures.push(new Error("Could not dispose the workflow cleanup request context", { cause: error })); }
+    if (context) {
+      try { await context.dispose(); } catch { failures.push("request-failed"); }
     }
   }
-  if (creations.length) {
-    try {
-      await info.attach("workflow-cleanup.json", { body: JSON.stringify({ requestTimeoutMs: 5_000, ownedIds: creations.map(item => item.id), primaryErrors: info.errors, outcomes }, null, 2), contentType: "application/json" });
-    } catch (error) { failures.push(new Error("Could not retain the workflow cleanup results", { cause: error })); }
+  try {
+    await info.attach("owned-definition-cleanup", { body: JSON.stringify({ ownedIds: owned.map(item => item.id), receipts }), contentType: "application/json" });
+  } catch {
+    failures.push("receipt-attachment-failed");
   }
-  try { expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]); }
-  catch (error) { failures.push(error instanceof Error ? error : new Error(String(error))); }
-  // Playwright retains the body failure separately; cleanup failures must also fail the case.
-  if (failures.length) throw new AggregateError(failures, failures.map(error => error.message).join("; "));
+  expect(receipts.filter(item => item.error || !item.status || item.status < 200 || item.status >= 300), "Every owned definition cleanup succeeds").toEqual([]);
+  expect(failures, "Journey cleanup").toEqual([]);
+  expect(browserErrors.get(page), "Uncaught browser errors").toEqual([]);
 });
 
 test.beforeEach(async ({ page }, info) => {
@@ -136,6 +140,7 @@ test.beforeEach(async ({ page }, info) => {
     localStorage.setItem("elsa-studio-workspace-style", reportedAppearance ? "minimal" : "linen");
     localStorage.setItem("elsa-studio-theme-mode", mode);
   }, { mode: info.project.use.colorScheme ?? "light", reportedAppearance });
+  designerDefinitions.set(page, []);
   const errors: string[] = [];
   browserErrors.set(page, errors);
   ownedCleanups.set(page, []);
@@ -148,7 +153,17 @@ test.beforeEach(async ({ page }, info) => {
     await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
     await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
   }
-  await expect(page.getByRole("heading", { name: /^No active workflow definitions in All workflows$/ })).toBeVisible();
+  const main = page.getByRole("main");
+  await expect(page).toHaveURL(url => url.pathname === "/workflows/definitions");
+  const empty = main.getByRole("heading", { name: "No active workflow definitions in All workflows", exact: true });
+  const populated = main.getByRole("table", { name: "Workflow definitions", exact: true });
+  await expect(empty.or(populated)).toBeVisible();
+  if (await populated.isVisible()) {
+    await expect(populated).toHaveAttribute("aria-busy", "false");
+    expect(await populated.getByRole("row").count(), "Populated readiness includes a real data row").toBeGreaterThan(1);
+  }
+  // This first journey in each serial project still owns the strict empty-store fixture proof.
+  if (info.title === "user tasks inbox and response") await expect(empty).toBeVisible();
   await capture(page, info, "reference");
 });
 
@@ -209,6 +224,9 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
 
 test("collections and connection creation", async ({ page }, info) => {
   const stamp = `${info.project.name}-${Date.now()}`;
+  await page.goto("/workflows/activity-definitions");
+  await expect(page.getByRole("table", { name: "Activity Definitions", exact: true }).or(page.getByRole("heading", { name: "No designed activities yet", exact: true }))).toBeVisible();
+  await capture(page, info, "library-initial");
   await page.goto("/security/connections");
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
@@ -255,8 +273,9 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(rotate).toBeHidden();
 
   // Follow the shell navigation so notification history stays in the same mounted host session.
-  const moreTools = page.getByRole("button", { name: "More tools", exact: true });
-  if (await moreTools.getAttribute("aria-expanded") === "false") await moreTools.press("Enter");
+  const integrations = page.locator(".sidebar").getByRole("button", { name: "Integrations", exact: true });
+  await expect(integrations).toBeVisible();
+  if (await integrations.getAttribute("aria-expanded") === "false") await integrations.press("Enter");
   await page.getByRole("link", { name: "Connections", exact: true }).press("Enter");
   const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
   await expect(openConnection).toBeEnabled();
@@ -480,12 +499,318 @@ test("agent authoring and navigation", async ({ page }, info) => {
   if ((info.project.use.viewport?.width ?? 0) >= 1440) {
     for (const [label, icon] of [["Agents", "bot"], ["Secrets", "key-round"], ["Connections", "cable"]]) {
       const entry = page.getByRole("link", { name: label, exact: true });
-      if (!await entry.isVisible()) await page.getByRole("button", { name: /More tools/ }).click();
+      if (!await entry.isVisible()) await page.getByRole("button", { name: label === "Agents" ? "Build" : "Integrations", exact: true }).click();
       await expect(entry.locator(`svg.lucide-${icon}`)).toBeVisible();
     }
   }
   await outcome.getByText("Emitted", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "completed");
+});
+
+test("grouped navigation and moved destinations", async ({ page }, info) => {
+  const sidebar = page.locator(".sidebar");
+  const navLink = (name: string) => sidebar.getByRole("link", { name, exact: true });
+  const desktop = (info.project.use.viewport?.width ?? 0) >= 1025;
+  for (const name of ["Build", "Operate", "Integrations"]) await expect(sidebar.getByRole("button", { name, exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(sidebar.getByRole("button", { name: "More tools" })).toHaveCount(0);
+  await navLink("Connections").click();
+  await expect(navLink("Connections")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
+  await capture(page, info, "groups");
+  await sidebar.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+  await page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true }).click();
+  await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/\/workflows\/executables(?:\?|$)/);
+  await expect(page.getByRole("navigation", { name: "Workflows views" }).getByRole("link", { name: "Executables", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("heading", { name: "Executables", level: 2, exact: true })).toBeVisible();
+  const executableList = page.getByRole("table", { name: "Workflow executables", exact: true });
+  const emptyExecutables = page.getByRole("heading", { name: "No workflow executables", exact: true });
+  await expect(executableList.or(emptyExecutables)).toBeVisible();
+  await capture(page, info, "executables-list");
+  await page.evaluate(() => localStorage.setItem("elsa-studio.ui.nav.groups", JSON.stringify({ build: false })));
+  await page.goto("/workflows/tags");
+  const build = sidebar.getByRole("button", { name: "Build", exact: true });
+  await expect(build).toHaveAttribute("aria-expanded", "true");
+  await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("heading", { name: "Workflow tags", exact: true })).toBeVisible();
+  await capture(page, info, "tags-list");
+  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await expect(page).toHaveURL(/\/workflows\/tags\/new(?:\?|$)/);
+  await page.reload();
+  await expect(build).toHaveAttribute("aria-expanded", "true");
+  await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("heading", { name: "Create workflow tag", exact: true })).toBeVisible();
+  await capture(page, info, "tags-create");
+  await page.getByRole("textbox", { name: "Tag name", exact: true }).fill(`navigation-${info.project.name}-${Date.now()}`);
+  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  // A real saved tag bookmark must also reveal the group after a fresh document load.
+  await page.reload();
+  await expect(build).toHaveAttribute("aria-expanded", "true");
+  await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  const tagUrl = page.url();
+  const tagDocument = await page.evaluate(() => performance.timeOrigin);
+  await build.click();
+  await expect(build).toHaveAttribute("aria-expanded", "false");
+  await navLink("Home").click();
+  await expect(navLink("Home")).toHaveAttribute("aria-current", "page");
+  await page.goBack();
+  await expect(page).toHaveURL(tagUrl);
+  await expect(build).toHaveAttribute("aria-expanded", "true");
+  await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
+  const tagTabId = await page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true }).getAttribute("id");
+  expect(tagTabId).toBeTruthy();
+  await build.click();
+  await expect(build).toHaveAttribute("aria-expanded", "false");
+  await navLink("Home").click({ modifiers: ["Alt"] });
+  await expect(navLink("Home")).toHaveAttribute("aria-current", "page");
+  await page.locator(`[id="${tagTabId}"]`).click();
+  await expect(page).toHaveURL(tagUrl);
+  await expect(build).toHaveAttribute("aria-expanded", "true");
+  await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(tagDocument);
+  // Restore the open preference through the UI before the later disclosure/rail exercise.
+  await build.click();
+  await expect(build).toHaveAttribute("aria-expanded", "false");
+  await build.click();
+  await expect(build).toHaveAttribute("aria-expanded", "true");
+  await capture(page, info, "tags-edit");
+  await navLink("Library").click();
+  const libraryViews = page.getByRole("navigation", { name: "Library views" });
+  await libraryViews.getByRole("link", { name: "Templates", exact: true }).click();
+  await expect(navLink("Library")).toHaveAttribute("aria-current", "page");
+  await libraryViews.getByRole("link", { name: "Activity definitions", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Activity Definitions", exact: true }).or(page.getByRole("heading", { name: "No designed activities yet", exact: true }))).toBeVisible();
+  await capture(page, info, "library");
+  const screens = page.getByRole("tablist", { name: "Open screens", exact: true });
+  const previousScreenCount = await screens.getByRole("tab").count();
+  await page.locator(".studio-library-header").getByRole("link", { name: "Activity availability", exact: true }).click({ modifiers: ["Alt"] });
+  await expect(screens.getByRole("tab")).toHaveCount(previousScreenCount + 1);
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+  const settingsSections = page.getByRole("navigation", { name: "Settings sections", exact: true });
+  const settingsSelect = page.getByRole("combobox", { name: "Settings section", exact: true });
+  const compactSettings = (page.viewportSize()?.width ?? 0) <= 800;
+  if (compactSettings) {
+    await expect(settingsSelect).toBeVisible();
+    await expect(settingsSelect.locator('optgroup[label="Workflow authoring"]')).toHaveCount(1);
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Activity availability");
+  } else await expect(settingsSections).toContainText("Workflow authoring");
+  await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("Loading availability…", { exact: true })).toHaveCount(0);
+  await capture(page, info, "workflow-authoring-settings");
+  const sectionTabCount = await screens.getByRole("tab").count();
+  const settingsDocument = await page.evaluate(() => performance.timeOrigin);
+  if (compactSettings) {
+    const backendBefore = new URL(page.url()).searchParams.get("backend");
+    await settingsSelect.selectOption({ label: "Runtime evidence settings" });
+    await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+    await settingsSelect.selectOption({ label: "Activity availability" });
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Activity availability");
+    expect(new URL(page.url()).searchParams.get("backend")).toBe(backendBefore);
+    await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+  } else {
+    await settingsSections.getByRole("link", { name: "Runtime evidence settings", exact: true }).click({ modifiers: ["Alt"] });
+    await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+    await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+    const originalSettingsUrl = page.url();
+    const nativeSectionPage = page.context().waitForEvent("page");
+    await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click({ modifiers: ["ControlOrMeta"] });
+    const nativePage = await nativeSectionPage;
+    try {
+      await expect(nativePage).toHaveURL(/\/settings\/workflows-activity-availability(?:\?|$)/);
+      await expect(nativePage.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+      await expect(page).toHaveURL(originalSettingsUrl);
+      await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+    } finally { await nativePage.close(); }
+    await settingsSections.getByRole("link", { name: "Activity availability", exact: true }).click();
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
+    await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
+  }
+  // Existing bookmarked routes must resolve to their new Settings surface as well.
+  await page.goto("/workflows/runtime-diagnostics");
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  if (compactSettings) await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+  else await expect(settingsSections).toContainText("Runtime");
+  await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
+  await capture(page, info, "runtime-settings");
+  await navLink("Diagnostics").click();
+  const diagnostics = page.getByRole("navigation", { name: "Diagnostics views" });
+  for (const name of ["Console", "Structured logs", "OpenTelemetry"]) {
+    await diagnostics.getByRole("link", { name, exact: true }).click();
+    await expect(navLink("Diagnostics")).toHaveAttribute("aria-current", "page");
+    await expect(diagnostics.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByText("This route is unavailable.", { exact: true })).toHaveCount(0);
+  }
+  await capture(page, info, "diagnostic-views");
+  const search = sidebar.getByRole("searchbox", { name: "Search Studio", exact: true });
+  await search.fill("templates");
+  await expect(navLink("Templates")).toBeVisible();
+  await capture(page, info, "search");
+  await search.press("Escape");
+  // Search must enter host configuration through native SPA navigation, as integrations do.
+  const documentEpoch = await page.evaluate(() => performance.timeOrigin);
+  await search.fill("Features");
+  await page.getByRole("navigation", { name: /^(Settings|Search results)$/ }).getByRole("link", { name: "Features", exact: true }).filter({ visible: true }).click();
+  await expect(page).toHaveURL(/\/features(?:\?|$)/);
+  await search.fill("");
+  await page.getByRole("tab", { name: "Studio", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "Filter features", exact: true })).toBeVisible();
+  await expect(page.locator(".feature-management-list")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByRole("switch").first()).toBeVisible();
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentEpoch);
+  await capture(page, info, "features-navigation");
+  if (desktop) {
+    await sidebar.getByRole("button", { name: "Build", exact: true }).click();
+    await expect(navLink("Agents")).toBeHidden();
+    await page.reload();
+    await expect(sidebar.getByRole("button", { name: "Build", exact: true })).toHaveAttribute("aria-expanded", "false");
+    await sidebar.getByRole("button", { name: "Build", exact: true }).press("Enter");
+    await sidebar.getByRole("button", { name: "Collapse navigation", exact: true }).click();
+    await expect(navLink("Library")).toBeVisible();
+    await sidebar.getByRole("button", { name: "Expand navigation", exact: true }).click();
+  }
+  await navLink("Connections").click();
+  await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
+  await capture(page, info, "completed");
+  // Verify the same real module composition through the alternate navigation and contrast axes.
+  await page.goto("/settings/appearance");
+  await page.getByRole("radiogroup", { name: "Navigation", exact: true }).getByRole("radio", { name: "Top", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-nav-mode", "top");
+  const topSearch = sidebar.getByRole("searchbox", { name: "Search Studio", exact: true });
+  const topFrame = () => sidebar.evaluate(node => {
+    const topbar = document.querySelector(".topbar"), content = document.querySelector(".content");
+    if (!topbar || !content) throw new Error("The composed shell frame is missing");
+    return { stripHeight: node.getBoundingClientRect().height, topbarTop: topbar.getBoundingClientRect().top, contentTop: content.getBoundingClientRect().top };
+  });
+  await expect(topSearch).toHaveValue("");
+  const ordinaryTopFrame = await topFrame();
+  const assertTopFrame = async () => {
+    await expect.poll(async () => {
+      const current = await topFrame();
+      return Math.max(...Object.keys(ordinaryTopFrame).map(key => Math.abs(current[key as keyof typeof current] - ordinaryTopFrame[key as keyof typeof ordinaryTopFrame])));
+    }, { message: "Search and dismissal must preserve the ordinary navigation height and composed frame position" }).toBeLessThanOrEqual(1);
+  };
+  await topSearch.fill("templates");
+  const topResults = page.getByRole("navigation", { name: "Search results", exact: true });
+  const templateResult = topResults.getByRole("link", { name: "Templates", exact: true });
+  await expect(templateResult).toBeInViewport({ ratio: 1 });
+  await expect(templateResult.locator(".nav-label")).toBeInViewport({ ratio: 1 });
+  expect(await templateResult.evaluate(node => {
+    const label = document.createRange(); label.selectNodeContents(node.querySelector(".nav-label")!);
+    const box = label.getBoundingClientRect();
+    return box.left >= 0 && box.right <= innerWidth && node.contains(document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2));
+  })).toBe(true);
+  await assertTopFrame();
+  await capture(page, info, "top-search");
+  await topSearch.press("Escape");
+  await expect(topResults).toBeHidden();
+  await expect(topSearch).toBeFocused();
+  await assertTopFrame();
+  await topSearch.fill("");
+  const headerHeight = await sidebar.evaluate(node => node.getBoundingClientRect().height);
+  const absentDestination = "no-such-navigation-acceptance-long-unbroken-destination";
+  await topSearch.fill(absentDestination);
+  const topNoMatch = topResults.getByRole("status");
+  const assertNoMatch = async () => {
+    await expect(topNoMatch).toHaveText(`No destinations match "${absentDestination}".`);
+    await expect(topResults).toBeVisible();
+    await expect(topNoMatch).toBeInViewport({ ratio: 1 });
+    expect(await topNoMatch.evaluate(node => {
+      const range = document.createRange(); range.selectNodeContents(node);
+      const surface = node.closest(".nav-search-results")!.getBoundingClientRect();
+      return Array.from(range.getClientRects()).every(rect => rect.left >= 0 && rect.right <= innerWidth &&
+        rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= surface.left && rect.right <= surface.right &&
+        rect.top >= surface.top && rect.bottom <= surface.bottom &&
+        node.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))) &&
+        node.scrollWidth <= node.clientWidth + 1;
+    }), "The complete no-match message must wrap inside the visible search surface").toBe(true);
+  };
+  await assertNoMatch();
+  expect(Math.abs(await sidebar.evaluate(node => node.getBoundingClientRect().height) - headerHeight), "No-match feedback must not shift the navigation strip").toBeLessThanOrEqual(1);
+  await assertTopFrame();
+  await capture(page, info, "top-search-no-match");
+  await topSearch.press("Escape");
+  await expect(topResults).toBeHidden();
+  await expect(topNoMatch).toBeHidden();
+  await expect(topSearch).toBeFocused();
+  await expect(topSearch).toHaveValue(absentDestination);
+  await assertTopFrame();
+  await capture(page, info, "top-search-no-match-dismissed");
+  // An edit releases dismissal even when a later edit restores the previously dismissed query.
+  await topSearch.fill("templates");
+  await expect(templateResult).toBeInViewport({ ratio: 1 });
+  await expect(topSearch).toBeFocused();
+  await assertTopFrame();
+  await capture(page, info, "top-search-query-edited");
+  await topSearch.fill(absentDestination);
+  await assertNoMatch();
+  await expect(topSearch).toBeFocused();
+  await assertTopFrame();
+  await capture(page, info, "top-search-query-returned");
+  await topSearch.press("Escape");
+  await expect(topResults).toBeHidden();
+  await expect(topNoMatch).toBeHidden();
+  await expect(topSearch).toBeFocused();
+  await expect(topSearch).toHaveValue(absentDestination);
+  await assertTopFrame();
+  // Input-to-outside keyboard traversal must dismiss without stealing outside focus.
+  await topSearch.fill(absentDestination + "-tab");
+  await expect(topNoMatch).toBeVisible();
+  await topSearch.press("Tab");
+  const afterTab = await page.evaluateHandle(() => document.activeElement);
+  expect(await afterTab.evaluate(node => node instanceof HTMLElement && node !== document.querySelector('input[aria-label="Search Studio"]') && !node.closest(".nav-search-results"))).toBe(true);
+  await expect(topResults).toBeHidden();
+  await expect(topSearch).toHaveValue(absentDestination + "-tab");
+  await page.keyboard.press("Escape");
+  expect(await afterTab.evaluate(node => node === document.activeElement)).toBe(true);
+  await afterTab.dispose();
+  await capture(page, info, "top-search-tab-dismissed");
+  await topSearch.fill("templates");
+  await expect(templateResult).toBeVisible();
+  await topSearch.press("Shift+Tab");
+  const beforeSearch = await page.evaluateHandle(() => document.activeElement);
+  expect(await beforeSearch.evaluate(node => node instanceof HTMLElement && node !== document.querySelector('input[aria-label="Search Studio"]') && !node.closest(".nav-search-results"))).toBe(true);
+  await expect(topResults).toBeHidden();
+  await expect(topSearch).toHaveValue("templates");
+  await page.keyboard.press("Escape");
+  expect(await beforeSearch.evaluate(node => node === document.activeElement)).toBe(true);
+  await beforeSearch.dispose();
+  await capture(page, info, "top-search-shift-tab-dismissed");
+  await topSearch.fill("");
+  await topSearch.fill("templates");
+  await topSearch.press("Tab");
+  await expect(templateResult).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(topSearch).toBeFocused();
+  await expect(topResults).toBeVisible();
+  await topSearch.press("Escape");
+  await expect(topResults).toBeHidden();
+  await expect(topSearch).toBeFocused();
+  await topSearch.fill("");
+  await sidebar.getByRole("button", { name: "Build", exact: true }).click();
+  await sidebar.getByRole("navigation", { name: "Build", exact: true }).getByRole("link", { name: "Library", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Activity Definitions", exact: true })).toBeVisible();
+  await capture(page, info, "top-navigation");
+  await page.goto("/settings/appearance");
+  await page.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "High contrast", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "high-contrast");
+  await sidebar.getByRole("button", { name: "Integrations", exact: true }).click();
+  await sidebar.getByRole("navigation", { name: "Integrations", exact: true }).getByRole("link", { name: "Connections", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
+  await sidebar.getByRole("button", { name: "Integrations", exact: true }).click();
+  await capture(page, info, "high-contrast");
+  await page.keyboard.press("Escape");
 });
 
 test("publication blockers explain how to correct agent settings", async ({ page }, info) => {
@@ -648,7 +973,7 @@ test("workflow template metadata defaults", async ({ page }, info) => {
 });
 
 test("executable designer parity", async ({ page }, info) => {
-  await executableDesignerJourney(page, info, capture);
+  await executableDesignerJourney(page, info, capture, id => designerDefinitions.get(page)!.push(id));
 });
 
 test("choose data for activity outputs", async ({ page }, info) => {

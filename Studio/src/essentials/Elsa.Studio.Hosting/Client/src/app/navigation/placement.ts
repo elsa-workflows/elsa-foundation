@@ -1,14 +1,18 @@
 import {
   defaultStudioNavigationOrder,
-  defaultStudioNavigationPlacement,
   type StudioNavigationContribution,
   type StudioNavigationPlacement,
   type StudioNavigationRequirement,
   type StudioNavigationSection
 } from "../../sdk";
 
-/** Browser key for the More tools disclosure. Same `elsa-studio.ui.*` namespace as the disclosure plan. */
-export const moreToolsStorageKey = "elsa-studio.ui.nav.more";
+export const navigationGroups = [
+  { id: "build", label: "Build" },
+  { id: "operate", label: "Operate" },
+  { id: "integrations", label: "Integrations" }
+] as const;
+export type NavigationGroupId = typeof navigationGroups[number]["id"];
+export const navigationGroupsStorageKey = "elsa-studio.ui.nav.groups";
 
 const hostAdminPaths = new Set(["/modules", "/theme-builder", "/package-feeds", "/features"]);
 const hostAdminIds = new Set(["modules", "theme-builder", "package-feeds", "feature-management"]);
@@ -56,32 +60,26 @@ type NavigationPlacementFields = Pick<StudioNavigationContribution, "id" | "path
  * own admin paths stay under Administration so modules that have not declared placement keep working.
  * A child with no placement inherits its parent when `navigation` is supplied, so it does not vanish.
  * A child that declares a different placement is listed under that placement. Top-level items with
- * no placement default to More tools.
+ * no placement are route-only; no catch-all section is created.
  */
-export function getNavigationPlacement(item: NavigationPlacementFields): StudioNavigationPlacement {
+export function getNavigationPlacement(item: NavigationPlacementFields): StudioNavigationPlacement | undefined {
   return resolveNavigationPlacement(item);
 }
 
 export function resolveNavigationPlacement(
   item: NavigationPlacementFields,
   navigation: readonly NavigationPlacementFields[] = []
-): StudioNavigationPlacement {
-  if (item.placement) {
-    return item.placement;
+): StudioNavigationPlacement | undefined {
+  const visited = new Set<string>();
+  let current: NavigationPlacementFields | undefined = item;
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    if (current.placement) return current.placement;
+    if (getNavigationSection(current) === "settings") return "admin";
+    const parentId: string | undefined = current.parentId;
+    current = parentId ? navigation.find(candidate => candidate.id === parentId) : undefined;
   }
-
-  if (getNavigationSection(item) === "settings") {
-    return "admin";
-  }
-
-  if (item.parentId) {
-    const parent = navigation.find(candidate => candidate.id === item.parentId);
-    if (parent && parent.id !== item.id) {
-      return resolveNavigationPlacement({ ...parent, parentId: undefined }, navigation);
-    }
-  }
-
-  return defaultStudioNavigationPlacement;
+  return undefined;
 }
 
 export function getNavigationOrder(item: Pick<StudioNavigationContribution, "order">): number {
@@ -136,7 +134,14 @@ export function filterAccessibleNavigation(
   const allowed = navigation.filter(item => isNavigationItemAccessible(item, access, navigation));
   const allowedIds = new Set(allowed.map(item => item.id));
   const originalById = new Map(navigation.map(item => [item.id, item]));
-  return allowed.filter(item => ancestorsAreAccessible(item, allowedIds, originalById));
+  const visible = allowed.filter(item => ancestorsAreAccessible(item, allowedIds, originalById));
+  // View-only parents link to their first accessible view, never a hidden child's route.
+  // Keep the default view's wider route ownership only while that view remains accessible.
+  return visible.flatMap(item => {
+    if (item.childDisplay !== "views" || item.viewLabel) return [item];
+    const first = getChildNavigationItems(visible, item).sort(compareNavigationItems)[0];
+    return first ? [{ ...item, path: first.path, activePathPrefix: first.path === item.path ? item.activePathPrefix : undefined }] : [];
+  });
 }
 
 function ancestorsAreAccessible(
@@ -203,23 +208,19 @@ export function compareNavigationItems(
   return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
 }
 
-export function readMoreToolsOpen(storage: PreferenceStorage | undefined = defaultStorage(), fallback = false): boolean {
-  if (!storage) {
-    return fallback;
-  }
-
+export function readNavigationGroups(storage: PreferenceStorage | undefined = defaultStorage()): Partial<Record<NavigationGroupId, boolean>> {
   return safely(() => {
-    const value = storage.getItem(moreToolsStorageKey);
-    return value === null ? fallback : value === "true";
-  }, fallback);
+    const stored: unknown = JSON.parse(storage?.getItem(navigationGroupsStorageKey) ?? "{}");
+    if (!stored || typeof stored !== "object") return {};
+    return Object.fromEntries(navigationGroups.flatMap(({ id }) => {
+      const value = (stored as Record<string, unknown>)[id];
+      return typeof value === "boolean" ? [[id, value]] : [];
+    }));
+  }, {});
 }
 
-export function writeMoreToolsOpen(open: boolean, storage: PreferenceStorage | undefined = defaultStorage()) {
-  if (!storage) {
-    return;
-  }
-
-  safely(() => storage.setItem(moreToolsStorageKey, String(open)), undefined);
+export function writeNavigationGroups(groups: Partial<Record<NavigationGroupId, boolean>>, storage: PreferenceStorage | undefined = defaultStorage()) {
+  safely(() => Object.keys(groups).length ? storage?.setItem(navigationGroupsStorageKey, JSON.stringify(groups)) : storage?.removeItem(navigationGroupsStorageKey), undefined);
 }
 
 interface PreferenceStorage {
