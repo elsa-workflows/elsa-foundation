@@ -48,7 +48,7 @@ Owner reads are cancelled on component/route teardown and bound to the current i
 
 User goal: from the effects page, request each classed change or a check, inspect the shared server-owned requirements/review, and independently distinguish saved visibility, a check that ran, a failed business condition, and missing confirmation. Reference: the existing Acme settings/results and shared Weaver review; the new page reuses their CSS/ordinary controls and checkbox geometry.
 
-The existing external author has SDK typecheck/build scripts and no component-test runner. This change adds no test framework or source-SDK test shortcut. Its typecheck/build and every native journey remain **UNRUN** until the authorized qualification lane executes the packed author against the retained SDK archive. Backend fixture component cases are unaffected (217 source-authored cases at this source; no execution claim). T037/T038/T039 retain ownership of driver, restart and final roster changes.
+The existing external author has SDK typecheck/build scripts and no component-test runner. This change adds no test framework or source-SDK test shortcut. Its typecheck/build and every native journey remain **UNRUN** until the authorized qualification lane executes the packed author against the retained SDK archive. The backend fixture has233 source-authored cases, including16 preparation-observation controls; this is no execution claim. T037/T038/T039 retain ownership of driver, restart and final roster changes.
 
 Required native cases on both actual opaque provider adapters:
 
