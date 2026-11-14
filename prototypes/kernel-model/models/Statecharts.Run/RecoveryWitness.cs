@@ -9,14 +9,15 @@ using Kernel.Statecharts.Native;
 
 internal static class RecoveryWitness
 {
-    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from n in new[] { false, true } from p in new[] { "entry", "exit", "action" }
-        select $"chart-recovery:{m},nested={n},phase={p}";
+    private static string[] Cuts => ["steady", "lost-before-apply", "lost-answer", "cancel-fault", "terminate-staged"];
+    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from n in new[] { false, true } from p in new[] { "entry", "exit", "action" } from cut in Cuts
+        select $"chart-recovery:{m},nested={n},phase={p},cut={cut}";
     internal static void Run(bool baseline = false)
     {
-        if (baseline) { Run(Modes.Balanced, true, "entry", true); return; }
-        foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var n in new[] { false, true }) foreach (var p in new[] { "entry", "exit", "action" }) Run(m, n, p, false);
+        if (baseline) { Run(Modes.Balanced, true, "entry", true, "steady"); return; }
+        foreach (var m in new[] { Modes.Balanced, Modes.Durable }) foreach (var n in new[] { false, true }) foreach (var p in new[] { "entry", "exit", "action" }) foreach (var cut in Cuts) Run(m, n, p, false, cut);
     }
-    private static void Run(string mode, bool nested, string phase, bool baseline)
+    private static void Run(string mode, bool nested, string phase, bool baseline, string cut)
     {
         ChartDependency.Calls.Clear(); ChartMark.Calls.Clear();
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true }; var target = InstanceRef.In(0, "chart-recovery"); var owner = 0;
@@ -63,20 +64,63 @@ internal static class RecoveryWitness
         var before = Json.Read<MachineState>(Json.Write(state.Frames[machineFrame!.Id].State)); var scope = Json.Write(state.LexicalScopes); var marks = ChartMark.Calls.ToArray();
         Check(before.Pending is not null && before.Progress!.Running.ContainsKey(source!.Id) && source.RecoveryInputs?["Local"]?.ToString() == "17" && source.LexicalScope is not null,
             "R45: phase intervention lost its exact child, source values or pinned inputs");
+        void Cancel(bool staged)
+        {
+            Apply(new("add", M: new("cancel", target, staged ? Kinds.Terminate : NativeKinds.Cancel, TargetCreation: 1))); Drain();
+            Check(world.Store.Instances[target.Id].Status == InstanceStatus.Cancelled && ChartDependency.Calls.Count == (staged ? 2 : 1),
+                "R56: phase cancellation changed normal wake order or resurrected failed work");
+            var history = Json.Write(State().Retries); NativeWorkflows.Registry.Remove(wf.Id);
+            Apply(new("add", M: new("query", target, ReceiptQuery.Kind, Json.Write(new ReceiptQuery(machineFrame.Id, "unknown")), ReplyTo: ReplyTo.Of("outside", "query", world.Time + 120_000), TargetCreation: 1))); Drain();
+            Check(Json.Write(State().Retries) == history && world.Deliveries.Select(d => d.Reply.Item).OfType<Admission>().LastOrDefault()?.Result == "UnknownInvocation",
+                "R56: phase terminal metadata hydrated authored material or rewrote history");
+            Console.WriteLine($"PASS chart-recovery:{mode},nested={nested},phase={phase},cut={cut}");
+        }
+        if (cut == "cancel-fault") { Cancel(false); return; }
         wf.InterventionRequested = false; Reload();
         var retry = new NativeRetry("repair", source!.Id, source.Intervention!.Id, "repair phase dependency");
-        Apply(new("add", M: new("repair", target, NativeRetry.Kind, Json.Write(retry), TargetCreation: 1))); Drain(retry.Id);
+        Apply(new("add", M: new("repair", target, NativeRetry.Kind, Json.Write(retry), TargetCreation: 1)));
+        if (cut.StartsWith("lost-", StringComparison.Ordinal))
+        {
+            var prepared = false;
+            for (var i = 0; i < 100 && !prepared; i++)
+            {
+                var a = Actor(); Apply(new("poll", a.Id)); if (a.Worker.NeedsLoad) Apply(new("load", a.Id));
+                if (a.Worker.Ready.Contains(target.Id)) Apply(new("turn", a.Id, S: target.Id));
+                prepared = a.Worker.Queued > 0 && a.Worker.Messages.Any(m => m.Id == "repair" && m.Taken);
+                if (!prepared && a.Worker.NeedsFlush) Apply(new("flush", a.Id)); if (!prepared && a.Worker.NeedsMeet) Apply(new("meet", a.Id));
+            }
+            Check(prepared, "R57: phase uncertainty missed control preparation"); var row = world.Store.Instances[target.Id];
+            world.Auto = false; var a = Actor(); var call = a.Calls.Count; Apply(new("flush", a.Id));
+            Check(a.Calls.Count == call + 1 && a.Calls[call].Kind == "commit", "R57: phase uncertainty missed physical commit");
+            Apply(new(cut == "lost-answer" ? "exec" : "lose", a.Id, call));
+            Check(cut == "lost-answer" ? State().Retries?.Count == 1 : world.Store.Instances[target.Id] == row, "R57: phase uncertainty crossed wrong physical boundary");
+            Apply(new("answer", a.Id, call, Flag: true)); Check(ChartDependency.Calls.Count == 1, "R57: unknown commit answer executed fresh phase work");
+            world.Auto = true; Reload();
+        }
+        else Drain(retry.Id);
         var work = State().Agenda.SingleOrDefault(w => !w.Resume && w.Node == "dependency");
-        Check(work is not null, "R46: phase repair did not stage its fresh child obligation");
-        var expected = Json.Read<MachineState>(Json.Write(before)); var index = expected.Progress!.Running[source.Id]; expected.Progress.Running.Remove(source.Id); expected.Progress.Running.Add(work!.Frame, index);
-        Check(Json.Write(expected) == Json.Write(State().Frames[machineFrame.Id].State) && Json.Write(State().LexicalScopes) == scope && marks.SequenceEqual(ChartMark.Calls) && ChartDependency.Calls.Count == 1 && work.LexicalScope == source.LexicalScope,
+        var successor = State().Retries![retry.Id].Successor;
+        Check(cut.StartsWith("lost-", StringComparison.Ordinal) || work is not null && work.Frame == successor && ChartDependency.Calls.Count == 1,
+            "R46: phase repair did not stage its fresh child obligation");
+        var expected = Json.Read<MachineState>(Json.Write(before)); var index = expected.Progress!.Running[source.Id]; expected.Progress.Running.Remove(source.Id); expected.Progress.Running.Add(successor, index);
+        Check(Json.Write(expected) == Json.Write(State().Frames[machineFrame.Id].State) && Json.Write(State().LexicalScopes) == scope && marks.SequenceEqual(ChartMark.Calls),
             "R46: phase retry changed completed work, plan, visits or scope instead of only rebinding its child");
+        if (cut == "terminate-staged") { Cancel(true); return; }
+        Reload(); var repeated = State().Frames.Values.Single(f => f.Node == "dependency");
+        Check(repeated.Id == successor && repeated.Intervention is not null && ChartDependency.Calls.Count == 2,
+            "R58: repeated phase fault lost its continuing physical obligation");
+        var second = new NativeRetry("repair-2", repeated.Id, repeated.Intervention!.Id, "second phase repair");
+        Apply(new("add", M: new("repair-2", target, NativeRetry.Kind, Json.Write(second), TargetCreation: 1))); Drain(second.Id);
+        var next = State().Agenda.Single(w => !w.Resume && w.Node == "dependency");
+        expected.Progress.Running.Remove(successor); expected.Progress.Running.Add(next.Frame, index);
+        Check(Json.Write(expected) == Json.Write(State().Frames[machineFrame.Id].State) && Json.Write(State().LexicalScopes) == scope && marks.SequenceEqual(ChartMark.Calls) && next.LexicalScope == repeated.LexicalScope,
+            "R58: repeated repair reset completed phases, visits or source resources");
         Reload(); if (phase == "entry") Signal();
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && (!nested || State().Variables.GetValueOrDefault("returned")?.ToString() == "true") && State().LexicalScopes is null &&
-            ChartDependency.Calls.Count == 2 && ChartDependency.Calls[0].Frame != ChartDependency.Calls[1].Frame && ChartDependency.Calls.Select(c => c.Operation).Distinct().Count() == 1 && ChartDependency.Calls.All(c => c.Local == 17) &&
+            ChartDependency.Calls.Count == 3 && ChartDependency.Calls.Select(c => c.Frame).Distinct().Count() == 3 && ChartDependency.Calls.Select(c => c.Operation).Distinct().Count() == 1 && ChartDependency.Calls.All(c => c.Local == 17) &&
             ChartMark.Calls.Where(c => c.Name != "final").All(c => c.Local == 17) && ChartMark.Calls.Single(c => c.Name == "final").Local == 99 && ChartMark.Calls.GroupBy(c => c.Name).All(g => g.Count() == 1),
             "R47: phase recovery repeated completed work, lost source/target values or failed normal completion");
-        Console.WriteLine($"PASS chart-recovery:{mode},nested={nested},phase={phase}");
+        Console.WriteLine($"PASS chart-recovery:{mode},nested={nested},phase={phase},cut={cut}");
     }
 }
 internal sealed class ChartDependency : Kernel.Native.Activity<int>
@@ -85,7 +129,7 @@ internal sealed class ChartDependency : Kernel.Native.Activity<int>
     [Input] public int Local { get; set; }
     internal static readonly List<(string Frame, string Operation, int Local)> Calls = [];
     protected override ValueTask<Transition> ExecuteAsync(ActivityContext c)
-    { Calls.Add((c.FrameId, c.OperationKey, Local)); return ValueTask.FromResult(Calls.Count == 1 ? Fault("dependency", "repair") : Complete(Local)); }
+    { Calls.Add((c.FrameId, c.OperationKey, Local)); return ValueTask.FromResult(Calls.Count <= 2 ? Fault("dependency", "repair") : Complete(Local)); }
 }
 internal sealed class ChartMark : Kernel.Native.Activity<int>
 {
