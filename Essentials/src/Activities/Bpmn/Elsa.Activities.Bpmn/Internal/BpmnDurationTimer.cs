@@ -66,7 +66,7 @@ internal sealed class BpmnDurationTimerDelivery(BpmnNativeWorkBoundary sources, 
     internal async ValueTask ValidateAsync(RuntimeModelExecutionState model, RuntimeModelExecutionCommand command, CancellationToken cancellationToken)
     {
         var timer = command.Payload.Deserialize<BpmnDurationTimer>(Web) ?? throw new BpmnModelValidationException("The duration timer address is missing.");
-        access.Current.EnsureScope(model.Scope); access.Current.EnsureTenantScope(model.TenantId);
+        BpmnIngressScope.Require(access, model);
         if (!timer.Matches(model) || command.InputId != timer.InputId)
             throw new BpmnModelValidationException("The duration timer does not address this exact model invocation.");
         var source = await outbox.FindDurableAsync(timer.SourceOutboxItemId, cancellationToken)
@@ -101,7 +101,7 @@ internal sealed class BpmnDurationTimerDelivery(BpmnNativeWorkBoundary sources, 
         if (timer.SourceOutboxItemId != source.SourceOutboxItemId || source.Scope != model.Scope)
             throw new BpmnModelValidationException("The duration timer delivery has a different physical source.");
         var command = new RuntimeModelExecutionCommand(model.Executable, model.MaterialIncarnationId, timer.InputId,
-            "timer-elapsed", payload, model.Authority, model.TenantId);
+            "timer-elapsed", payload, model.Authority, model.TenantId) { IngressOrigin = model.IngressOrigin };
         await ValidateAsync(model, command, cancellationToken);
         var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeModelInput(command);
         if (await reader.FindInputAsync(model.ExecutionId, timer.InputId, cancellationToken) is { } receipt)

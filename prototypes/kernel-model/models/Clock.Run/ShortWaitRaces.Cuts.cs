@@ -108,7 +108,9 @@ internal static partial class ShortWaitRaces
             long clock = 100; var store = new InMemoryStore(1, () => clock); var id = InstanceRef.In(0, "cut-recall");
             string control = id.Id + "#1.0000";
             store.Partitions[0].Epoch = 1; store.Instances[id.Id] = new InstanceRow(id.Id, "cut-recall", "trial", InstanceStatus.Running, Json.Write(new List<string> { control }), 1, null);
-            await store.AddAsync(new(control, id, Kinds.Terminate, Due: 150));
+            // The actor can recall its issued timer. An ordinary input with the same text has its own identity.
+            var command = new Message(control, id, Kinds.Terminate, Due: 150).AsIssued();
+            store.Messages.Add(command.InboxKey, new InMemoryStore.MessageRow(command, 0, 0));
             await store.AddAsync(new("recall-suspect", id, "work")); store.Messages["recall-suspect"].Seen = 1;
             var worker = new Worker("cut-recall-owner", 0, store, new WorkflowInstance([new CutRecall()]), new WorkerOptions { Monotonic = () => clock, Horizon = TimeSpan.FromMilliseconds(100) });
             await new DurableHost([worker]).ActivateAsync(0); await worker.PollAsync(); await worker.LoadAsync(); await worker.FlushAsync();
@@ -116,7 +118,7 @@ internal static partial class ShortWaitRaces
             await store.AddAsync(new("recall-late", id, "late")); await worker.PollAsync(); await worker.FlushAsync();
             for (var i = 0; i < 8; i++) { await worker.PollAsync(); await worker.RunAsync(); }
             var row = store.Instances[id.Id];
-            Need(row.Status == InstanceStatus.Running && Json.Read<List<string>>(row.State).SequenceEqual([control, "work", "late"]) && !store.Messages.ContainsKey(control), "recalled command left a stale cut: " + row.State);
+            Need(row.Status == InstanceStatus.Running && Json.Read<List<string>>(row.State).SequenceEqual([control, "work", "late"]) && !store.Messages.ContainsKey(command.InboxKey), "recalled command left a stale cut: " + row.State);
             await worker.DisposeAsync();
         });
         foreach (var (timerDue, wake, commandAfterTimer, timerExpected) in new[]
