@@ -161,6 +161,7 @@ describe("user access page", () => {
     click(await button(host.container, "Attach identity"));
     await vi.waitFor(() => expect(host.container.textContent).toContain("Attachment could not be confirmed"));
     expect(field(host.container, "External subject").value).toBe(" Exact Subject "); expect((await button(host.container, "Attach identity")).closest("fieldset")!.disabled).toBe(true);
+    await vi.waitFor(() => expect(document.activeElement).toBe(host.container.querySelector("[role=alert]")));
     expect(host.container.textContent).not.toContain("secret-canary");
     click(await button(host.container, "Refresh user access"));
     await vi.waitFor(() => expect((field(host.container, "External subject").closest("fieldset")!).disabled).toBe(false));

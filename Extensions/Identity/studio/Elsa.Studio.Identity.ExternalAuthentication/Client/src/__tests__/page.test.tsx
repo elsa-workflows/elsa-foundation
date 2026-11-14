@@ -151,6 +151,7 @@ describe("connection administration page", () => {
       ? Promise.reject({ status: 503 }) : original(path));
     click(await button(host.container, "Save changes"));
     await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(host.container.querySelector("[role=alert]")));
     expect(host.container.textContent).toContain("saved, but the current configuration could not be read");
     expect(host.container.textContent).not.toContain("sign-in chooser uses the current effective configuration");
     expect(field(host.container, "Display name").value).toBe("Saved company");
@@ -175,6 +176,7 @@ describe("connection administration page", () => {
       ? Promise.reject({ status }) : original(path, body));
     click(await button(host.container, "Save changes"));
     await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(host.container.querySelector("[role=alert]")));
     expect(field(host.container, "Display name").value).toBe("Preserved draft");
     expect((await button(host.container, "Save changes")).disabled).toBe(true);
     expect((await button(host.container, "Refresh")).disabled).toBe(false);
@@ -185,6 +187,26 @@ describe("connection administration page", () => {
     await vi.waitFor(() => expect(field(host.container, "Display name").matches(":disabled")).toBe(false));
     expect(field(host.container, "Display name").value).toBe(connectionDocument.displayName);
     expect((await button(host.container, "Test configuration")).disabled).toBe(false);
+  });
+
+  it("preserves explicit focus in another task when an in-flight save fails", async () => {
+    const host = harness();
+    await vi.waitFor(() => expect(host.container.querySelector(".external-auth-row")).not.toBeNull());
+    click(host.container.querySelector(".external-auth-row")!);
+    await vi.waitFor(() => expect(field(host.container, "Display name")).toBeTruthy());
+    type(field(host.container, "Display name"), "Preserved draft");
+    const original = host.postJson.getMockImplementation()!;
+    let reject!: (cause: unknown) => void;
+    host.postJson.mockImplementation((path: string, body: ConnectionCommand) => path.endsWith("/commands")
+      ? new Promise((_resolve, rejectRequest) => { reject = rejectRequest; }) : original(path, body));
+    click(await button(host.container, "Save changes"));
+    await vi.waitFor(() => expect(reject).toBeTypeOf("function"));
+    const otherTask = document.createElement("input"); document.body.appendChild(otherTask); cleanup.add(() => otherTask.remove());
+    otherTask.focus(); reject({ status: 503 });
+    await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
+    await vi.waitFor(async () => expect((await button(host.container, "Refresh")).disabled).toBe(false));
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    expect(document.activeElement).toBe(otherTask);
   });
 
   it.each([false, true])("reconciles repaired readiness after a configuration test, refusing stale observations (%s)", async stale => {

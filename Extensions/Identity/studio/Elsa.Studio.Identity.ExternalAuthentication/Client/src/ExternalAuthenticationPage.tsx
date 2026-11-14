@@ -8,6 +8,7 @@ import { connectionChanges, ExternalAuthenticationClient, ExternalAuthentication
 import { connectionState, previewCurrent, previewDescription, readinessDescription, sourceEffect, testDescription, testSucceeded } from "./presentation";
 import { cleanPreviewUrl, preparePreviewReturn, takePreviewReturn } from "./previewReturn";
 import { useCancelledActionFocus } from "./useCancelledActionFocus";
+import { useActionFeedbackFocus } from "./useActionFeedbackFocus";
 
 export function ExternalAuthenticationPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const client = useMemo(() => new ExternalAuthenticationClient(context.http, context.baseUrl), [context]);
@@ -46,6 +47,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   const liveTest = testSucceeded(test, selected);
   const livePreview = previewCurrent(preview, selected);
   const configurationReady = readiness?.value?.ready === true;
+  const feedback = useActionFeedbackFocus(error, notice, Boolean(busy) || loading, client);
 
   const clearProtectedState = useCallback(() => {
     ++readinessRequest.current;
@@ -254,8 +256,8 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   return <StudioPage className="external-auth-shell">
     <StudioPageHeader title="External sign-in" headingLevel={2} description="Connect identity providers while Elsa keeps control of its users, roles and permissions."
       actions={<><StudioButton onClick={() => { void refresh(); }} disabled={pending}>Refresh</StudioButton><StudioButton variant="primary" disabled={!writable || locked} onClick={() => { void create(); }}>Add connection</StudioButton></>} />
-    {error ? <div role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh connections before another change." : ""}<StudioButton disabled={pending} onClick={() => { void refresh(); }}>Refresh connections</StudioButton></div> : null}
-    {notice ? <p role="status" className="external-auth-notice">{notice}</p> : null}
+    {error ? <div ref={feedback.errorRef} tabIndex={-1} role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh connections before another change." : ""}<StudioButton disabled={pending} onClick={() => { void refresh(); }}>Refresh connections</StudioButton></div> : null}
+    {notice ? <p ref={feedback.noticeRef} tabIndex={-1} role="status" className="external-auth-notice">{notice}</p> : null}
     {busy ? <p role="status">{busy}…</p> : null}
     {loading && !visible ? <p role="status">Loading external sign-in connections…</p> : null}
     {visible ? <>

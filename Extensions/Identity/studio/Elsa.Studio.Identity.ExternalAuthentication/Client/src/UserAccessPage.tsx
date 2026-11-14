@@ -6,6 +6,7 @@ import { ExternalAuthenticationClient, identityAccessError, type IdentityLink, t
   type IdentitySession, type IdentitySessions, type IdentityUser, type IdentityUsers } from "./sdk";
 
 import { useCancelledActionFocus } from "./useCancelledActionFocus";
+import { useActionFeedbackFocus } from "./useActionFeedbackFocus";
 
 const pageSize = 25;
 function date(value: string | null) { return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Not recorded"; }
@@ -34,6 +35,7 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   const target = visible ? selected : null;
   const dirty = connection !== "" || subject !== "";
   const locked = Boolean(busy || loadingUsers || loadingAccess || needsRefresh || reauthenticate);
+  const feedback = useActionFeedbackFocus(error, notice, Boolean(busy || loadingUsers || loadingAccess), client);
 
   const loadUsers = useCallback(async (query: string, skip: number) => {
     const request = ++directoryRequest.current; setLoadingUsers(true); setDirectoryError("");
@@ -186,8 +188,8 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   return <StudioPage className="external-auth-shell"><StudioPageHeader title="User access" headingLevel={2} description="Inspect linked identities and sessions. These actions preserve saved Elsa role assignments."
     actions={<StudioButton onClick={() => void refresh()} disabled={Boolean(busy || loadingUsers || reauthenticate)}>Refresh user access</StudioButton>} />
     {directoryError ? <p role="alert" className="external-auth-error">{directoryError}</p> : null}
-    {error ? <p role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh user access before another change." : ""}</p> : null}
-    {notice ? <p role="status" className="external-auth-notice">{notice}</p> : null}
+    {error ? <p ref={feedback.errorRef} tabIndex={-1} role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh user access before another change." : ""}</p> : null}
+    {notice ? <p ref={feedback.noticeRef} tabIndex={-1} role="status" className="external-auth-notice">{notice}</p> : null}
     {loadingUsers && !visible ? <p role="status">Loading users…</p> : null}
     {visible ? <><div className="external-auth-workspace"><section className="external-auth-list" aria-label="Users">
       <form onSubmit={event => { event.preventDefault(); if (!busyRef.current) void loadUsers(search, 0); }}>
