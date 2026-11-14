@@ -501,11 +501,20 @@ public sealed class MongoStore : IKernelStore
                 return false;
             }
             var models = new List<BulkWriteModel>();
-            foreach (var view in rows.Where(r => r.Revision > 0).GroupBy(r => r.Instance))
-                models.Add(new BulkWriteUpdateOneModel<BsonDocument>(_views.CollectionNamespace, new BsonDocument("_id", view.Key),
-                    new BsonDocument { { "$set", new BsonDocument("partition", partition) }, { "$max", new BsonDocument("revision", view.Max(r => r.Revision)) }, { "$inc", new BsonDocument("commits", view.Count()) } }, isUpsert: true));
-            foreach (var deleted in rows.Where(r => r.Revision < 0))
-                models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_views.CollectionNamespace, new BsonDocument("_id", deleted.Instance)));
+            foreach (var change in ViewChange.From(rows))
+            {
+                var key = new BsonDocument("_id", change.Instance);
+                if (change.Commits == 0)
+                    models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_views.CollectionNamespace, key));
+                else
+                {
+                    var fields = new BsonDocument { { "partition", partition }, { "revision", change.Revision } };
+                    var update = new BsonDocument("$set", fields);
+                    if (change.Reset) fields["commits"] = change.Commits;
+                    else update["$inc"] = new BsonDocument("commits", change.Commits);
+                    models.Add(new BulkWriteUpdateOneModel<BsonDocument>(_views.CollectionNamespace, key, update, isUpsert: true));
+                }
+            }
             if (models.Count > 0) await _client.BulkWriteAsync(session, models, new ClientBulkWriteOptions { IsOrdered = true }, cancellationToken);
             await session.CommitTransactionAsync(cancellationToken);
             return true;
