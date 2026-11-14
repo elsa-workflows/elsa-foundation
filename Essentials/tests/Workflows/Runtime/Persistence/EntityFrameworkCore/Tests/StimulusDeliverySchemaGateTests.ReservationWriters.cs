@@ -96,15 +96,7 @@ public sealed partial class StimulusDeliverySchemaGateTests
     public async Task Actually_admitted_v1_writer_refuses_updates_and_deletes_after_quiescent_finalization_and_refresh(string family)
     {
         await using var fixture = await Fixture.CreateReservationHolds();
-        var current = fixture.Gate.Families;
-        var declarations = current.Chains.Select(chain => current.DeclarationOf(chain.Family)).Select(declaration =>
-            declaration.Name is StandaloneTriggersEfModule.SchemaFamily or RuntimeTriggerBindingEfModule.SchemaFamily
-                ? declaration with { CurrentVersion = "1.0.0", Upcasters = [] } : declaration);
-        var oldGate = new EfSchemaModuleGate(EfSchemaModuleFamilies.FromDeclarations(current.Module, declarations), fixture.Fleet,
-            new EfSchemaFinalizationObservations(), new());
-        var oldGates = new EfSchemaFinalizationGates(); using var oldServices = new ServiceCollection().AddSingleton(oldGates).BuildServiceProvider();
-        await using var old = fixture.OpenWith(oldServices);
-        await oldGate.ActivateAsync(old); oldGates.Register(typeof(RuntimeDbContext), oldGate);
+        await using var predecessor = await fixture.AdmitPredecessor(); var old = predecessor.Context; var oldGate = predecessor.Gate;
         Assert.NotNull(oldGate.DatabaseIdentity); Assert.Equal("1.0.0", oldGate.StateOf(family)!.WriteVersion);
         Assert.Equal(["1.0.0"], oldGate.StateOf(family)!.ReadableVersions);
         var access = new Accessor(); var scope = new TriggerScope(Scope, Scope.Value);
@@ -140,6 +132,28 @@ public sealed partial class StimulusDeliverySchemaGateTests
         Assert.Equal(1, (await verify.WorkflowTriggerBindings.AsNoTracking().SingleAsync()).Revision);
     }
 
+    [Theory]
+    [InlineData(StandaloneTriggersEfModule.SchemaFamily)] [InlineData(RuntimeTriggerBindingEfModule.SchemaFamily)]
+    public async Task Admitted_predecessor_dormancy_refuses_fresh_ingress_while_existing_resource_bytes_remain_readable(string family)
+    {
+        await using var fixture = await Fixture.CreateReservationHolds(); await using var predecessor = await fixture.AdmitPredecessor();
+        using var metadata = new NativeTargetMetadataFixture(); var context = predecessor.Context;
+        var prepared = await PrepareGatedIngressAsync(context, metadata.Publisher);
+        Assert.True(prepared.Ingress.SupportsAdmission);
+        await prepared.Source.CommitAsync(prepared.Scope, prepared.Activation, []);
+        Assert.Equal("1.0.0", (await context.StandaloneTriggers.AsNoTracking().SingleAsync()).SchemaVersion);
+        await fixture.Finalize(family); await predecessor.Gate.RefreshAsync(context);
+        Assert.True(predecessor.Gate.StateOf(family)!.WritesRefused);
+        var other = family == StandaloneTriggersEfModule.SchemaFamily ? RuntimeTriggerBindingEfModule.SchemaFamily : StandaloneTriggersEfModule.SchemaFamily;
+        Assert.False(predecessor.Gate.StateOf(other)!.WritesRefused);
+        Assert.NotNull(await prepared.Resources.FindAsync(prepared.Scope, prepared.Activation.Trigger.Id));
+        await Assert.ThrowsAsync<NotSupportedException>(() => prepared.Ingress.AdmitAsync(prepared.Request).AsTask());
+        Assert.False(prepared.Ingress.SupportsAdmission);
+        Assert.Empty(await context.RuntimePostCommitOutbox.AsNoTracking().ToArrayAsync());
+        Assert.Empty(await context.SchedulerWorkItems.AsNoTracking().ToArrayAsync());
+        Assert.Empty(await context.WorkflowExecutableRootWriteLeases.AsNoTracking().ToArrayAsync());
+    }
+
     private static StandaloneTrigger WriterResource(long revision) => new("schema-resource", "Schema resource", "event", 1,
         JsonSerializer.SerializeToElement(new { eventName = "orders" }), revision, 1, revision, TriggerDesiredState.Paused,
         new(TriggerManagementKind.Studio), Now, Now, "creator", tenantId: Scope.Value);
@@ -156,8 +170,27 @@ public sealed partial class StimulusDeliverySchemaGateTests
         public bool Conflicts(RuntimeIngressReservationDescriptor first, RuntimeIngressReservationDescriptor second) =>
             throw new InvalidOperationException("Readiness discovery must not execute a source policy.");
     }
+    private sealed class AdmittedPredecessor(RuntimeSqliteDbContext context, EfSchemaModuleGate gate, ServiceProvider services) : IAsyncDisposable
+    {
+        internal RuntimeSqliteDbContext Context => context;
+        internal EfSchemaModuleGate Gate => gate;
+        public async ValueTask DisposeAsync() { await context.DisposeAsync(); await services.DisposeAsync(); }
+    }
     private sealed partial class Fixture
     {
+        internal async Task<AdmittedPredecessor> AdmitPredecessor()
+        {
+            var current = Gate.Families;
+            var declarations = current.Chains.Select(chain => current.DeclarationOf(chain.Family)).Select(declaration =>
+                declaration.Name is StandaloneTriggersEfModule.SchemaFamily or RuntimeTriggerBindingEfModule.SchemaFamily
+                    ? declaration with { CurrentVersion = "1.0.0", Upcasters = [] } : declaration);
+            var oldGate = new EfSchemaModuleGate(EfSchemaModuleFamilies.FromDeclarations(current.Module, declarations), Fleet,
+                new EfSchemaFinalizationObservations(), new());
+            var registry = new EfSchemaFinalizationGates(); var services = new ServiceCollection().AddSingleton(registry).BuildServiceProvider();
+            var context = OpenWith(services);
+            try { await oldGate.ActivateAsync(context); registry.Register(typeof(RuntimeDbContext), oldGate); return new(context, oldGate, services); }
+            catch { await context.DisposeAsync(); await services.DisposeAsync(); throw; }
+        }
         internal static async Task<Fixture> CreateReservationHolds()
         {
             var fixture = new Fixture(StandaloneTriggersEfModule.SchemaFamily); await fixture.connection.OpenAsync();
