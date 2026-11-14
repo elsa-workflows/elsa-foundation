@@ -24,6 +24,7 @@ def records(recipe, phase="mutated"):
         "r15-bare-disclosure": "Assert.Single() Failure: The collection did not contain a matching item",
         "r15-optional-representation": 'Assert.Null() Failure: Value is not null\nValue: WeaverError { Code = "weaver.proposal.expired" }',
         "copilot-external-constructor-auth": "System.ArgumentException : GitHubToken and UseLoggedInUser cannot be combined with RuntimeConnection.ForUri (the existing runtime manages its own auth). (Parameter 'options')",
+        "active-route-admission": "System.Collections.Generic.KeyNotFoundException : The given key was not present in the dictionary.",
     }
     def message(name):
         if recipe.id == "copilot-external-auth-mode":
@@ -39,9 +40,9 @@ def records(recipe, phase="mutated"):
 
 
 class VerdictControls(unittest.TestCase):
-    def test_the_eleven_concrete_contracts_accept_only_their_declared_triplet(self):
-        self.assertEqual(len(proof.RECIPES), 11)
-        self.assertEqual(len({recipe.id for recipe in proof.RECIPES}), 11)
+    def test_the_twelve_concrete_contracts_accept_only_their_declared_triplet(self):
+        self.assertEqual(len(proof.RECIPES), 12)
+        self.assertEqual(len({recipe.id for recipe in proof.RECIPES}), 12)
         for recipe in proof.RECIPES:
             with self.subTest(recipe=recipe.id):
                 proof.assess(recipe, "baseline", 0, records(recipe, "baseline"))
@@ -86,6 +87,33 @@ class VerdictControls(unittest.TestCase):
             for rows in ([], records(recipe)[:-1], [{**row, "name": "Foreign.test"} for row in records(recipe)]):
                 with self.subTest(recipe=recipe.id, rows=len(rows)), self.assertRaises(proof.ProofFailure):
                     proof.assess(recipe, "mutated", 1, rows)
+
+    def test_active_route_control_requires_the_missing_json_property_at_the_mapped_lookup(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "active-route-admission")
+        for change in (
+                lambda row: row.update(message="Assert.Equal() Failure: Values differ\nExpected: 200\nActual: 400"),
+                lambda row: row.update(message="System.InvalidOperationException : The given key was not present in the dictionary."),
+                lambda row: row.update(message="System.Collections.Generic.KeyNotFoundException : An unrelated lookup failed."),
+                lambda row: row.update(message="System.InvalidOperationException : wrapped\n---> " + row["message"]),
+                lambda row: row.update(stack=row["stack"].replace(":line 86", ":line 85")),
+                lambda row: row.update(stack=row["stack"].replace(":line 86", ":line 860")),
+                lambda row: row.update(status="passed")):
+            with self.subTest(change=change):
+                rows = records(recipe)
+                change(rows[0])
+                with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 1, rows)
+
+    def test_active_route_control_rejects_incomplete_foreign_duplicate_or_skipped_encoding_rows_and_setup_exits(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "active-route-admission")
+        for rows in ([], records(recipe)[:-1], records(recipe) + [records(recipe)[0]],
+                [{**row, "name": "Foreign.test"} for row in records(recipe)],
+                [{**row, "name": recipe.test + '(encoding: "unknown")'} for row in records(recipe)],
+                [{**row, "status": "skipped"} for row in records(recipe)]):
+            with self.subTest(rows=len(rows)), self.assertRaises(proof.ProofFailure):
+                proof.assess(recipe, "mutated", 1, rows)
+        for code in (0, 2):
+            with self.subTest(exit=code), self.assertRaises(proof.ProofFailure):
+                proof.assess(recipe, "mutated", code, records(recipe))
 
     def test_wrong_cause_wrong_frame_and_wrong_theory_row_never_count_as_a_bite(self):
         recipe = proof.RECIPES[0]

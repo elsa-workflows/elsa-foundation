@@ -1,11 +1,11 @@
-"""Eleven concrete, serial source controls for #3831/T044. Not a consumer witness.
+"""Twelve concrete, serial source controls for #3831/T044. Not a consumer witness.
 
 Run only in a disposable clean checkout with its .NET graph restored and Studio
 dependencies installed. Raw reports/logs are private evidence; no environment
 values are recorded. Each recipe builds/runs baseline, mutation, and restoration.
 The normalization control covers ordinal declared-code identity only; it does not
 qualify every owner callback, forwarding/retention path, or typed channel.
-The two Copilot auth controls are source-authored; their causal runtime evidence
+The two Copilot auth controls and current-route control are source-authored; their causal runtime evidence
 must be established separately on the exact candidate, within the same budgets.
 """
 from __future__ import annotations
@@ -85,6 +85,7 @@ COPILOT_AUTH_ROWS = (
     '(external: False, providerAuth: "environment", expectedMode: "environment")',
     '(external: False, providerAuth: "logged-in", expectedMode: "logged-in-user")',
 )
+ACTIVE_ROUTE_ROWS = tuple(f'(encoding: "{encoding}")' for encoding in ("plain", "unicode", "html"))
 
 # These are exact source fragments, exact selected rows, and the intended assertion.
 # A moved assertion/changed test contract requires source review and a recipe update.
@@ -164,6 +165,14 @@ RECIPES = (
         'Assert.Equal(expectedMode == "environment" ? "environment:" + environmentName : expectedMode, diagnostics.Metadata["authMode"]);',
         r'Assert\.Equal\(\).*Expected:\s*"external-runtime".*Actual:\s*"(?:configured-token"|environment:|logged-in-user")',
         owner_dll="Elsa.Weaver.GitHubCopilot.dll"),
+    Recipe("active-route-admission", "dotnet", "Extensions/Weaver/src/Api/Services/HostSupportContextSource.cs",
+        "value = value with { ActiveRoute = PathRoute(route) ? route : null };",
+        "value = value with { ActiveRoute = null };",
+        "Elsa.Weaver.Tests.HostSupportContextTests.Actual_mapped_prompt_admits_typed_client_claim_and_native_session_policy_separately",
+        ACTIVE_ROUTE_ROWS, ACTIVE_ROUTE_ROWS, TESTS + "HostSupportContextTests.cs", 86,
+        'Assert.Equal(route, Element(browser).GetProperty("activeRoute").GetString());',
+        r"^\s*System\.Collections\.Generic\.KeyNotFoundException\s*:\s*The given key was not present in the dictionary\.",
+        owner_dll="Elsa.Weaver.Api.dll"),
 )
 
 
