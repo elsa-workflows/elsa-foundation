@@ -92,7 +92,7 @@ export async function activityDataMembersJourney(page: Page, info: TestInfo, cap
       }
       await s.codeApply(created); await expect(s.reference()).toContainText("customerId");
       await capture(page, info, "customer-code-reopened");
-      await s.assertComposition();
+      await s.assertComposition("Activity output member");
       await s.publishRun(created, "cust-1042", {}, true);
 
       // Current unsaved snapshot must refuse the deleted producer without discarding the existing authored value.

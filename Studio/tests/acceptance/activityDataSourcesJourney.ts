@@ -52,7 +52,7 @@ export async function activityDataSourcesJourney(page: Page, info: TestInfo, cap
   await s.trigger().click(); await variables().getByRole("option").filter({ hasText: "Sequence" }).press("Enter"); await literal(); await chooseCurrent(created, inner);
   await s.history(created, null, inner); await s.codeApply(created);
   await expect(s.reference()).toContainText("Sequence"); await expect(s.reference()).toContainText('"a.b"'); await expect(s.reference()).toContainText('""');
-  await capture(page, info, "variable-reference"); await s.assertComposition(); await s.publishRun(created, "inner-id");
+  await capture(page, info, "variable-reference"); await s.assertComposition("Variable member"); await s.publishRun(created, "inner-id");
   await s.replace().click(); await variables().getByRole("option").filter({ hasText: "Workflow" }).press("Enter"); await literal(); await chooseCurrent(created, outer);
   await s.open(created); await expect(s.reference()).toContainText("Workflow"); await capture(page, info, "outer-variable-reference");
   await s.publishRun(created, "outer-id");

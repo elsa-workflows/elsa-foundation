@@ -357,19 +357,27 @@ class CompositionTests(unittest.TestCase):
             {'id': 'JavaScriptJintEngine', 'enabled': False, 'runtimeAvailable': True, 'dependencies': []}],
             'mandatoryClosure': ['WorkflowDesignValidations', 'WorkflowsPublishing', 'WorkflowsPublishingApi'],
             'expressionTypes': ['Literal', 'Object'], 'syntaxChoices': ['Literal', 'Activity output…']}
-        acceptance.validate_minimal_composition(observation)
-        for change in ('empty', 'dependency', 'unresolved', 'descriptors', 'empty-menu', 'optional-menu'):
-            with self.subTest(change=change):
-                broken = copy.deepcopy(observation)
-                if change == 'empty': broken['features'] = []
-                if change == 'dependency':
-                    broken['features'][1]['dependencies'] = [{'id': 'JavaScriptJintEngine', 'optional': False}]
-                    broken['mandatoryClosure'].append('JavaScriptJintEngine'); broken['mandatoryClosure'].sort()
-                if change == 'unresolved': broken['features'][1]['runtimeAvailable'] = False
-                if change == 'descriptors': broken['expressionTypes'].append('JavaScript')
-                if change == 'empty-menu': broken['syntaxChoices'] = []
-                if change == 'optional-menu': broken['syntaxChoices'].append('Liquid')
-                with self.assertRaises(ValueError): acceptance.validate_minimal_composition(broken)
+        for title, native_syntax in [('choose nested activity data', 'Activity output member'),
+                                     ('choose declared and scoped activity data', 'Variable member'),
+                                     ('choose data for activity outputs', 'Activity output…')]:
+            current = copy.deepcopy(observation)
+            current['syntaxChoices'] = ['Literal', native_syntax]
+            acceptance.validate_minimal_composition(current, title)
+            for change in ('empty', 'dependency', 'unresolved', 'descriptors', 'empty-menu', 'optional-menu', 'wrong-native-menu', 'missing-literal-menu'):
+                with self.subTest(title=title, change=change):
+                    broken = copy.deepcopy(current)
+                    if change == 'empty': broken['features'] = []
+                    if change == 'dependency':
+                        broken['features'][1]['dependencies'] = [{'id': 'JavaScriptJintEngine', 'optional': False}]
+                        broken['mandatoryClosure'].append('JavaScriptJintEngine'); broken['mandatoryClosure'].sort()
+                    if change == 'unresolved': broken['features'][1]['runtimeAvailable'] = False
+                    if change == 'descriptors': broken['expressionTypes'].append('JavaScript')
+                    if change == 'empty-menu': broken['syntaxChoices'] = []
+                    if change == 'optional-menu': broken['syntaxChoices'].append('Liquid')
+                    if change == 'wrong-native-menu': broken['syntaxChoices'] = ['Literal', 'Input member']
+                    if change == 'missing-literal-menu': broken['syntaxChoices'].remove('Literal')
+                    with self.assertRaises(ValueError): acceptance.validate_minimal_composition(broken, title)
+        with self.assertRaises(ValueError): acceptance.validate_minimal_composition(observation, 'unknown journey')
 
 
 class SourcePairTests(unittest.TestCase):

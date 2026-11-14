@@ -268,7 +268,7 @@ export async function activityDataCapabilityControl(page: Page, info: TestInfo, 
   await capture(page, info, "capability-control");
   await page.keyboard.press("Escape"); await expect(support.chooser()).toHaveCount(0); await expect(support.trigger()).toBeFocused();
   expect(await support.stored(capable)).toBeNull();
-  await support.assertComposition();
+  await support.assertComposition("Activity output…");
   const retained = await support.saved(capable);
   retained.state.rootActivity.structure!.payload.activities[1].inputs = [{ referenceKey: "text", value: memberBinding }];
   await support.api(`/design/workflows/drafts/${capable.draftId}`, "PUT", retained);

@@ -209,7 +209,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
     await select(); await expect(replace()).toBeVisible();
     expect(await stored(created), "Publication/runtime did not change the authored input").toEqual(authoredBinding);
   }
-  async function assertComposition() {
+  async function assertComposition(expectedNativeSyntax: "Activity output member" | "Variable member" | "Activity output…") {
     await Promise.all(pending);
     expect(contexts.some(item => item.response.analysis?.memberReadsEnabled === (composition !== "default-off")), "Measured member capability").toBe(true);
     if (composition === "minimal") {
@@ -224,7 +224,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
       await page.getByRole("button", { name: /^Text expression syntax/ }).click();
       const options = page.getByRole("listbox").getByRole("option"); await expect(options.first()).toBeVisible();
       const syntaxChoices = await options.allTextContents();
-      expect(syntaxChoices.length).toBeGreaterThan(0); expect(syntaxChoices.some(text => /Activity output/i.test(text))).toBe(true);
+      expect(syntaxChoices).toContain("Literal"); expect(syntaxChoices).toContain(expectedNativeSyntax);
       expect(syntaxChoices.some(text => /JavaScript|Liquid/i.test(text))).toBe(false); await page.keyboard.press("Escape");
       expect(scripts.filter(url => /expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression/i.test(url))).toEqual([]);
       compositionObservation = { features, mandatoryClosure, expressionTypes, syntaxChoices };

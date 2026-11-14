@@ -238,7 +238,7 @@ def validate_activity_admission(selection):
         raise ValueError('Selection lacks its supported pre-edit admission; post-edit provenance is not admission')
 
 
-def validate_minimal_composition(observation):
+def validate_minimal_composition(observation, title):
     features = observation.get('features', [])
     by_id = {feature['id']: feature for feature in features}
     if not features or len(by_id) != len(features):
@@ -267,7 +267,10 @@ def validate_minimal_composition(observation):
     if reached & optional or sorted(reached) != observation.get('mandatoryClosure'):
         raise ValueError('Minimal resolved graph retains optional backend features or mismatches its closure')
     syntaxes, choices = observation.get('expressionTypes', []), observation.get('syntaxChoices', [])
-    if 'Literal' not in syntaxes or not choices or not any(re.search('Activity output', choice, re.I) for choice in choices) or \
+    native_syntax = {'choose nested activity data': 'Activity output member',
+                     'choose declared and scoped activity data': 'Variable member',
+                     'choose data for activity outputs': 'Activity output…'}.get(title)
+    if native_syntax is None or 'Literal' not in syntaxes or 'Literal' not in choices or native_syntax not in choices or \
             any(re.search('JavaScript|Liquid', name, re.I) for name in [*syntaxes, *choices]):
         raise ValueError('Minimal backend descriptors or installed Studio menu are missing/optional')
 
@@ -285,7 +288,7 @@ def activity_data_verdict(title, attachments, composition):
                                         for url in proof.get('scripts', [])):
         raise ValueError('Optional expression editor script requested in minimal composition')
     if composition == 'minimal':
-        validate_minimal_composition(proof.get('compositionObservation') or {})
+        validate_minimal_composition(proof.get('compositionObservation') or {}, title)
     selections = proof.get('selections', [])
     if any(item.get('binding') != item.get('offered') or not item.get('binding') for item in selections):
         raise ValueError('Selected binding differs from actual server offer')
