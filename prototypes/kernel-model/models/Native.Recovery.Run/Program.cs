@@ -5,6 +5,7 @@ using Kernel.Sim;
 using Kernel.Sim.Native;
 
 if (args is ["--retry-minimal"]) { RetryWitness.Run(); return; }
+if (args is ["--retry"]) { RetryWitness.Run(full: true); return; }
 if (args is ["--list"]) { Console.WriteLine("recovery:ordinary-child-intervention-minimal"); foreach (var name in InterventionWitness.Names.Concat(RecoveryReader.Names).Concat(RetryWitness.Names)) Console.WriteLine(name); return; }
 if (args.Length != 0 && args is not ["--minimal"]) throw new ArgumentException("Use --list, --minimal or no argument.");
 

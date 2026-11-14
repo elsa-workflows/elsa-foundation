@@ -6,26 +6,28 @@ using Kernel.Sim.Native;
 
 internal static class RetryWitness
 {
-    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } select $"recovery:fresh-successor-minimal,{m},parallel-parent={d}";
-    internal static void Run()
+    private static string[] Cuts => ["steady", "reload-before", "reload-staged", "lost-before-apply", "lost-answer"];
+    internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from d in new[] { false, true } from c in Cuts select $"recovery:successor,{m},parallel-parent={d},cut={c}";
+    internal static void Run(bool full = false)
     {
-        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var direct in new[] { false, true }) Run(mode, direct);
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var direct in new[] { false, true }) foreach (var cut in full ? Cuts : ["steady"]) Run(mode, direct, cut);
     }
-    private static void Run(string mode, bool direct)
+    private static void Run(string mode, bool direct, string cut)
     {
         RetryLeaf.Invocations.Clear();
         var world = new World(new Config(2, 1, Flaw.None, Native: true)) { Auto = true };
-        var target = InstanceRef.In(0, "successor"); var actor = world.Of(0, 0);
-        var leaf = Wf.Node<RetryLeaf>("leaf", ("Value", Binding.Literal(17)));
+        var target = InstanceRef.In(0, "successor"); var owner = 0; Actor Actor() => world.Of(owner, 0);
+        var leaf = Wf.Node<RetryLeaf>("leaf", ("Value", Binding.Var("sourceValue")));
         var workflow = Wf.Workflow("successor", Wf.Node<AbsorbRecoveryFault>("outer").With(Wf.Parallel("parallel", null,
             direct ? leaf : Wf.Sequence("sequence", Wf.Set("before", "before", 1), leaf, Wf.Set("after", "after", 1)),
-            Wf.Event("sibling", "finish"))));
+            Wf.Sequence("sibling", Wf.Event("change", "change"), Wf.Set("mutate", "sourceValue", 99), Wf.Event("finish", "finish")))), ("sourceValue", 17));
         workflow.InterventionRequested = true; NativeWorkflows.Registry.Add(workflow);
         void Apply(Act a) { world.Apply(a); if (world.Check() is { } error) throw new InvalidOperationException("Kernel: " + error); }
         void Drain(bool cut = false)
         {
             for (var i = 0; i < 100; i++)
             {
+                var actor = Actor();
                 Apply(new("poll", actor.Id)); if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
                 if (actor.Worker.Ready.Contains(target.Id)) Apply(new("turn", actor.Id, S: target.Id));
                 else if (!actor.Worker.NeedsFlush && !actor.Worker.NeedsMeet) return;
@@ -40,19 +42,57 @@ internal static class RetryWitness
         }
         NativeState State() => Json.Read<NativeState>(world.Store.Instances[target.Id].State);
         void Check(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
-        Apply(new("take", actor.Id)); Apply(new("add", M: new("start", target, Kinds.Start,
+        void Reload() { Apply(new("crash", owner)); Apply(new("tick", 20_000)); owner = 1 - owner; Apply(new("take", Actor().Id)); }
+        Apply(new("take", Actor().Id)); Apply(new("add", M: new("start", target, Kinds.Start,
             Start: NativeModel.Spec(workflow.Id, mode) with { Creation = new(1, 0, "successor-proof") }))); Drain();
         var source = State().Frames.Values.Single(f => f.Node == "leaf");
         Check(source.Intervention is not null && RetryLeaf.Invocations.Count == 1, "R12: retry witness did not begin with an ordinary intervention");
-        Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(new NativeRetry("operator-1", source.Id, source.Intervention!.Id, "dependency repaired")), ReplyTo: ReplyTo.Of("outside", "retry", world.Time + 30_000), TargetCreation: 1))); Drain(cut: true);
-        var checkpoint = State();
-        Check(checkpoint.Agenda.Any(w => w.Node == "leaf" && w.Frame != source.Id && w.Parent == source.Parent) && !checkpoint.Frames.ContainsKey(source.Id) && RetryLeaf.Invocations.Count == 1,
+        var wait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:change");
+        Apply(new("add", M: Events.Deliver(new("event:change", "change", null, world.Time + 120_000), wait))); Drain();
+        Check(State().Variables["sourceValue"]!.ToString() == "99", "R15: pinned-input witness did not change its source value");
+        if (cut == "reload-before") { Reload(); Drain(); }
+        var request = new NativeRetry("operator-1", source.Id, source.Intervention!.Id, "dependency repaired");
+        Apply(new("add", M: new("retry", target, NativeRetry.Kind, Json.Write(request), ReplyTo: ReplyTo.Of("outside", "retry", world.Time + 120_000), TargetCreation: 1)));
+        NativeState checkpoint;
+        if (cut.StartsWith("lost-", StringComparison.Ordinal))
+        {
+            var prepared = false;
+            for (var i = 0; i < 100 && !prepared; i++)
+            {
+                var actor = Actor(); Apply(new("poll", actor.Id)); if (actor.Worker.NeedsLoad) Apply(new("load", actor.Id));
+                if (actor.Worker.Ready.Contains(target.Id)) Apply(new("turn", actor.Id, S: target.Id));
+                prepared = actor.Worker.Queued > 0 && actor.Worker.Messages.Any(m => m.Id == "retry" && m.Taken);
+                if (!prepared && actor.Worker.NeedsFlush) Apply(new("flush", actor.Id));
+                if (!prepared && actor.Worker.NeedsMeet) Apply(new("meet", actor.Id));
+            }
+            Check(prepared, "R16: uncertainty witness missed its actual retry turn");
+            var row = world.Store.Instances[target.Id]; var replies = world.Deliveries.Count(d => d.Reply.Item is NativeRetryResult);
+            world.Auto = false; var old = Actor(); var call = old.Calls.Count; Apply(new("flush", old.Id));
+            Check(old.Calls.Count == call + 1 && old.Calls[call].Kind == "commit", "R16: uncertainty witness missed its actual retry commit");
+            Apply(new(cut == "lost-answer" ? "exec" : "lose", old.Id, call));
+            Check(cut == "lost-answer" ? State().Retries?.Count == 1 : world.Store.Instances[target.Id] == row, "R16: retry cut crossed the wrong physical application boundary");
+            if (cut == "lost-answer") Check(State().Agenda.Any(w => w.Node == "leaf" && w.Frame != source.Id) && !State().Frames.ContainsKey(source.Id),
+                "R13: retry did not durably stage a fresh successor before executing it");
+            Apply(new("answer", old.Id, call, Flag: true));
+            Check(world.Deliveries.Count(d => d.Reply.Item is NativeRetryResult) == replies && RetryLeaf.Invocations.Count == 1, "R16: unknown retry acknowledgement released a receipt or ran a successor");
+            checkpoint = State();
+            world.Auto = true; Reload(); Drain();
+        }
+        else { Drain(cut: true); checkpoint = State(); }
+        Check(cut.StartsWith("lost-", StringComparison.Ordinal) || checkpoint.Agenda.Any(w => w.Node == "leaf" && w.Frame != source.Id && w.Parent == source.Parent) && !checkpoint.Frames.ContainsKey(source.Id) && RetryLeaf.Invocations.Count == 1,
             "R13: retry did not durably stage a fresh successor before executing it; " + world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().LastOrDefault()?.Result);
+        if (cut == "reload-staged") Reload();
         Drain(); var next = State();
         Check(RetryLeaf.Invocations.Count == 2 && RetryLeaf.Invocations[1].Frame != source.Id && RetryLeaf.Invocations[1].Operation == source.OperationKey && RetryLeaf.Invocations[1].Value == 17 &&
             (direct || next.Variables["before"]!.ToString() == "1" && next.Variables["after"]!.ToString() == "1") && world.Store.Instances[target.Id].Status == InstanceStatus.Running,
             "R14: successor lost pinned identity/input or ordinary parent completion routing");
-        Console.WriteLine($"PASS recovery:fresh-successor-minimal,{mode},parallel-parent={direct}");
+        var accepted = next.Retries![request.Id]; var count = RetryLeaf.Invocations.Count;
+        foreach (var retry in new[] { request, request with { Reason = "different content" }, request with { Id = "stale-source" } })
+        { Apply(new("add", M: new("delivery-" + retry.Id + retry.Reason, target, NativeRetry.Kind, Json.Write(retry), ReplyTo: ReplyTo.Of("outside", retry.Id + retry.Reason, world.Time + 120_000), TargetCreation: 1))); Drain(); }
+        Check(RetryLeaf.Invocations.Count == count && State().Retries!.Count == 1 && State().Retries![request.Id].Successor == accepted.Successor &&
+            world.Deliveries.Select(d => d.Reply.Item).OfType<NativeRetryResult>().TakeLast(3).Select(r => r.Result).SequenceEqual(new[] { "Duplicate", "Conflict", "NotEligible" }),
+            "R17: replay, conflict or stale source created another successor or changed its receipt");
+        Console.WriteLine($"PASS recovery:successor,{mode},parallel-parent={direct},cut={cut}");
     }
 }
 internal sealed class RetryLeaf : Kernel.Native.Activity<int>
