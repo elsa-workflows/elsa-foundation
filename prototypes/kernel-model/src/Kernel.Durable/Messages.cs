@@ -16,7 +16,7 @@ public enum History { Full, State, Minimal }
 public sealed record CreationStart(long Generation, long Previous, string Intent);
 
 public sealed record StartSpec(string Model, string Definition, string? Input = null, string? Parent = null, bool Ephemeral = false, History History = History.Full,
-    CreationStart? Creation = null, long ParentCreation = 0);
+    CreationStart? Creation = null, long ParentCreation = 0, TimeSpan? ShortWait = null);
 
 public sealed record SendOptions(TimeSpan? Delay = null, StartSpec? Start = null, long? TargetCreation = null);
 

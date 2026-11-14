@@ -3682,7 +3682,9 @@ describe("workflows module", () => {
 
     await waitForText(container, "Pinned Runtime executable");
     await waitForText(container, "Open definition");
-    expect(container.textContent).toContain("Run");
+    await waitForText(container, "Run · Order fulfillment");
+    expect(container.querySelector(".studio-page-header h2")?.textContent).toBe("Run · Order fulfillment");
+    expect(container.querySelector(".studio-page-header h2")?.getAttribute("title")).toBe("Run · Order fulfillment");
     expect(container.textContent).toContain("Workflow Instance ID");
     expect(container.querySelector(".studio-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
     const runInspector = container.querySelector(".wf-instance-inspector");

@@ -1,7 +1,7 @@
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 
-namespace Elsa.Integrations.Sdk.Harness;
+namespace Elsa.Integrations.Sdk.Testing;
 
 /// <summary>
 /// Fake <see cref="ISecretValueResolver"/> for tests. Each resolve is counted so callers can prove
