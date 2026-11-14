@@ -1,4 +1,4 @@
-# External authentication protocol and connection API
+# External authentication and identity administration API
 
 This optional package connects the managed flow service to the backend-owned login chooser and canonical
 ASP.NET Core Identity cookie/session authority. Register `AddFoundationExternalAuthenticationApi` and map
@@ -83,10 +83,48 @@ proof, resolve secret values into responses or establish recovery evidence. Unkn
 visible as source metadata without an arbitrary settings/secret dump. Deployment-only catalog reads continue
 to avoid the optional provider-configuration database.
 
+## Link and selected-session administration
+
+These routes use the same `/_elsa/identity/external-connections` base. They check current saved grants and canonical
+eligibility independently of endpoint metadata. Directory access does not require provider-management permission.
+
+| Method and suffix | Permission and result |
+|---|---|
+| `GET /users` | User read; bounded directory, ownership, independent panel grants and module-availability metadata. |
+| `GET /users/{userId}/links` | User read plus link read; exact provider/issuer/subject metadata, current revisions and guarded action choices. |
+| `GET /users/{userId}/sessions` | User read plus session read; safe current/active/inactive/expired/revoked session metadata. |
+| `POST /users/{userId}/links/attach` | User read plus link manage and antiforgery; explicit guarded attachment to an existing user. |
+| `POST /users/{userId}/links/remove` | User read plus link manage and antiforgery; exact revision-bound removal with recovery checks. |
+| `POST /users/{userId}/sessions/{sessionId}/revoke` | User read plus session manage and antiforgery; compare-and-set revocation of that session only. |
+
+Link and session read/manage permissions are separate entries owned by the existing Identity permission catalog.
+Directory capabilities report current independent panel grants and unavailable adapters. Bounded pages reject
+replacement stores that return another tenant/user or exceed the requested page size. Responses omit passwords,
+security stamps, protected payloads and credential bindings.
+
+Attachment receives an existing user's revision, selected connection/source revision and raw subject. The server
+validates the issuer through the selected installed protocol, rechecks after metadata work and captures current
+owner/delegation/membership/role authority. It does not accept client-selected roles or rebind another owner.
+Qualified removal requires exact tenant, provider, issuer and case-sensitive subject, plus current user/link/catalog
+revisions. The live recovery service must prove the user's remaining path and administrative recovery. Unqualified
+legacy links remain inspectable but have no removal affordance or fabricated issuer. Missing/stale authority,
+changed ownership, failed coordination and concurrent final-path attempts refuse the mutation. Provider/IAM CAS
+and guard checks share their existing owned atomic transaction; unsupported authorities report unavailable.
+
+Session inspection and revocation require the selected durable session authority and the host's ownership
+capabilities. Revocation is idempotent for an already-revoked session, uses its stored revision and never rotates
+unrelated sessions or account stamps. Subsequent cookie/access/refresh validation observes the committed result.
+Provider failures and uncertain link-removal outcomes return failure/unavailable; refresh current state before
+another attempt rather than claiming an unacknowledged commit succeeded.
+
+Security events use closed action/result categories, the canonical actor, target user and permitted session ID.
+They omit external authorization codes, browser state, secrets and private credential/recovery bindings. Sink
+failure is contained after a committed operation and cannot undo it or expose its exception through the API.
+
 ## Source-preparation boundary
 
-This prefix contains protocol/chooser/preview, canonical session integration and connection administration.
-User, link and selected-session administration routes follow in their owning later slice. It does
+This prefix contains protocol/chooser/preview, canonical session integration, connection management and
+link/selected-session administration. It does
 not enable Workbench or provide a Studio administration module.
 
 Controlled-provider HTTP regression source covers the composed contracts, including prior protected sessions

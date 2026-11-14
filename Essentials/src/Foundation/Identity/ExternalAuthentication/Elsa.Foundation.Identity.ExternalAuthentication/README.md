@@ -100,3 +100,9 @@ lookups, read-only assessment, protocol tests and guarded lifecycle commands. It
 installed with those routes. Current permissions, antiforgery, source/catalog revisions, role delegation and
 coordinated final-path recovery remain server-owned checks. This does not install a Studio editor or qualify
 provider, browser, restart or multi-node behavior.
+
+The same optional API supplies a bounded user directory and separately authorized link/session panels. Exact
+qualified link mutations retain owner/delegation/recovery and revision guards; selected-session revocation uses
+its durable store revision without changing another session. The Identity permission catalog contributes the
+separate panel grants. These source capabilities still require composed provider, store, HTTP, Studio and
+package qualification before delivery.
