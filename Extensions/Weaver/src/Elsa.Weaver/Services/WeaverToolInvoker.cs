@@ -23,7 +23,6 @@ internal sealed class DefaultWeaverToolInvoker(
     {
         var tool = await registry.FindAsync(invocation.ToolName, cancellationToken);
         var declaring = tool?.Descriptor.ModuleCodes is not null;
-        var effectsAdmitted = false;
         if (tool is null)
             return await DeniedAsync("weaver.tool.not_found", "The tool is not installed.", 404);
         var session = await sessions.FindAsync(invocation.SessionId, cancellationToken);
@@ -94,7 +93,6 @@ internal sealed class DefaultWeaverToolInvoker(
 
                 if (await effects.CheckPreparationAsync(descriptor, cancellationToken) is { } preparationVeto)
                     return await DenyErrorAsync(preparationVeto);
-                effectsAdmitted = true;
 
                 WeaverResult<WeaverToolPreparation> preparation;
                 try
@@ -248,7 +246,9 @@ internal sealed class DefaultWeaverToolInvoker(
             {
                 // A legacy/held store cannot represent the new result member. Return its existing typed
                 // gate error instead; the foreground boundary stops through the ordinary error lifecycle.
-                var unavailable = effectsAdmitted ? null : await effects.CheckAsync(cancellationToken);
+                // Module preparation/execution can await. The earlier admission no longer establishes
+                // whether this new result representation may be retained at the refusal boundary.
+                var unavailable = await effects.CheckResultAsync(cancellationToken);
                 if (unavailable is not null) error = unavailable;
                 else result = new(invocation.ToolCallId, invocation.ToolName, false, error.Message) { Error = error };
             }

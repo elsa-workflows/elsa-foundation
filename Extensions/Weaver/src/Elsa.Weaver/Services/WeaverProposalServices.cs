@@ -869,8 +869,9 @@ internal sealed class InMemoryWeaverProposalService(
                 : null);
         // This optional new outcome representation depends on the selected store's admitted effects contract,
         // not on fixture classes or a live module lookup. The approval decision itself remains core-only.
-        // A held/legacy store keeps the original representation; the actual write still checks its own attempt.
-        if (outcome.Error is { } typedError && result is not null && await effects.CheckAsync(CancellationToken.None) is null)
+        // The shared I/O-free observation may enrich it; it never refreshes or delays the core decision.
+        // A held/unknown/legacy store keeps the original representation; the actual write still checks its own attempt.
+        if (outcome.Error is { } typedError && result is not null && effects.CanRepresentOptionalTypedResult())
             result = result with { Error = typedError };
         await TransitionAsync(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload },
             version, result, outcome, acknowledgement?.Invoke(outcome));
@@ -991,7 +992,7 @@ internal sealed class InMemoryWeaverProposalService(
         WeaverToolResult? result = null;
         WeaverResult<WeaverProposalExecutionResult>? execution = null;
         IReadOnlyDictionary<string, string> metadata = PreDispatchExpiry;
-        if (proposal.PreparedInvocation is { } prepared && await effects.CheckAsync(CancellationToken.None) is null)
+        if (proposal.PreparedInvocation is { } prepared && effects.CanRepresentOptionalTypedResult())
         {
             execution = Expired<WeaverProposalExecutionResult>();
             result = DefaultWeaverActionProposalExecutor.LifecycleResult(prepared, "refused",

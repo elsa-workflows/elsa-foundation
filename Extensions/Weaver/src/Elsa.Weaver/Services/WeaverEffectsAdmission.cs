@@ -71,6 +71,32 @@ internal sealed class WeaverEffectsAdmission(WeaverRegistrationValidator registr
         catch (Exception) { }
     }
 
+    /// <summary>A result boundary owns cancellation and domain localization independently of a replaced observer.</summary>
+    internal async ValueTask<WeaverError?> CheckResultAsync(CancellationToken cancellationToken = default)
+    {
+        Task<WeaverError?>? pending = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            pending = CheckAsync(cancellationToken).AsTask();
+            var refusal = await pending.WaitAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return refusal;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (WeaverContributionException) { throw; }
+        catch (Exception cause)
+        {
+            throw new WeaverContributionException("Weaver effects admission could not be established.", cause);
+        }
+        finally
+        {
+            if (pending is not null) _ = ObserveLateAdmissionAsync(pending);
+        }
+    }
+
+    // Context collection, provider discovery and privilege admission keep their existing caller-owned
+    // optional/required exception policies around this shared evaluation. Result boundaries use CheckResultAsync.
     internal async ValueTask<WeaverError?> CheckAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -79,12 +105,30 @@ internal sealed class WeaverEffectsAdmission(WeaverRegistrationValidator registr
             return new("weaver.effects.not_enabled", "The selected host has not enabled the generic effects contract.", 409);
         if (selection.Requirements.Count == 0) return null;
 
-        // Resolving the shared checker only when required keeps memory-only hosts observation-free.
         var checks = services.GetServices<ISchemaDormancyCheck>().Take(2).ToArray();
         var availability = checks.Length == 1
             ? await checks[0].EvaluateAsync(selection.Requirements, cancellationToken)
             : SchemaDormancyRule.Evaluate(selection.Requirements, _ => null);
         return availability.IsAvailable ? null : new("schema-version-not-finalized", availability.Reason, 409);
+    }
+
+    /// <summary>Optional result enrichment must never refresh external observation or prevent a core settlement.</summary>
+    internal bool CanRepresentOptionalTypedResult()
+    {
+        try
+        {
+            var selection = registrations.GetEffectsSelection();
+            if (selection is null) return false;
+            if (selection.Requirements.Count == 0) return true;
+            var checks = services.GetServices<ISchemaDormancyCheck>().Take(2).ToArray();
+            // Evaluate is the existing shared, I/O-free observation contract. Unknown or broken observation
+            // keeps the old result representation; this is neither approval authority nor write admission.
+            return checks.Length == 1 && checks[0].Evaluate(selection.Requirements).IsAvailable;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     internal static void Register(IServiceCollection services, Type featureType)
