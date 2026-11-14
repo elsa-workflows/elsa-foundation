@@ -173,6 +173,11 @@ public static class ParkChecks
                 await Case($"held metadata job has a pure unique snapshot (sqlite={sqlite}, qualified={qualified})",
                     () => ParkTicketChecks.HoldAsync(sqlite, qualified));
             }
+        foreach (var mode in new[] { "normal", "refused", "throw", "running", "finished" })
+            foreach (var qualified in new[] { false, true })
+                foreach (var history in Enum.GetValues<History>())
+                    await Case($"metadata failure/status (mode={mode}, qualified={qualified}, history={history})",
+                        () => ParkMetadataFailureChecks.RunAsync(mode, qualified, history));
         await Case("suspension preserves the wait", async () =>
         {
             var world = new World();

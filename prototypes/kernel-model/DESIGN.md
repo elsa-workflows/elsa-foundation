@@ -272,6 +272,9 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   not only the payload's logical job key; a separately sent raw job with that key cannot retire the genuine ticket.
   The held-job snapshot is a pure read: a held completion contributes one key, and consuming it later removes that
   key with its ticket. Supported metadata queries on an ended instance preserve its status and original fault.
+  A failed metadata edit retains that checkpoint and records the late-input failure according to its history policy;
+  genuine results consumed in the same turn still retire their exact tickets. A successful metadata handler cannot
+  change the terminal status sent to its caller independently of the retained row: the committed status is reported.
   Other later arrivals do not execute the model. Suspension preserves subscriptions;
   a future explicit recovery operation must restore waits, with kept-event semantics needed for events in the gap.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
