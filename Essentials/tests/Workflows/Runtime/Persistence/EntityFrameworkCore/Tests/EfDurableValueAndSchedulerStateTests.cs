@@ -22,6 +22,42 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfDurableValueAndSchedulerStateTests
 {
     [Fact]
+    public async Task Cleared_identity_values_survive_persisted_reads_and_a_fresh_context()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = DateTimeOffset.UtcNow;
+        var cleared = RuntimeWorkflowStateSeed.BuildIdentityChanges("workflow-null", true, null, true, null, now);
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            foreach (var change in cleared)
+                await fixture.Values.SaveAsync(change.State!);
+
+            var page = await fixture.Values.ListPageAsync(new DurableValueStatePageQuery("workflow-null", 10));
+            Assert.Equal(2, page.Items.Count);
+            Assert.All(page.Items, state =>
+            {
+                Assert.True(state.InlineValue.HasValue);
+                Assert.Equal(JsonValueKind.Null, state.InlineValue.Value.ValueKind);
+            });
+        }
+
+        await using var reopened = database.Open("tenant-a");
+        foreach (var change in cleared)
+        {
+            var stored = await reopened.Values.FindAsync("workflow-null", change.State!.DurableValueId);
+            Assert.NotNull(stored);
+            Assert.True(stored.InlineValue.HasValue);
+            Assert.Equal(JsonValueKind.Null, stored.InlineValue.Value.ValueKind);
+        }
+
+        // Updating also reads the previous persisted state before replacing it.
+        var assigned = Assert.Single(RuntimeWorkflowStateSeed.BuildIdentityChanges("workflow-null", true, "restored", false, null, now.AddSeconds(1)));
+        await reopened.Values.SaveAsync(assigned.State!);
+        var updated = await reopened.Values.FindAsync("workflow-null", assigned.State!.DurableValueId);
+        Assert.Equal("restored", updated!.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
     public async Task Durable_values_are_scoped_stable_and_restartable()
     {
         await using var database = await TestDatabase.CreateAsync();

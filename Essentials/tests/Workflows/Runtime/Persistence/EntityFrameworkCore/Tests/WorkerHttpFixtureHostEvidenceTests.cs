@@ -215,9 +215,10 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
             File.Delete(path);
     }
 
-    private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false)
+    private async Task<WorkerHttpHost> StartHostAsync(bool standaloneHttp = false, bool automaticResumption = true, double? responseTimeoutSeconds = null, bool suppressHttpPrompt = false)
     {
-        var selectedFeatures = standaloneHttp ? SelectedFeatureIds.Concat(["FoundationIdentityAbstractions", "ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : SelectedFeatureIds;
+        var baseFeatures = SelectedFeatureIds.Where(id => automaticResumption || id != "WorkflowsRuntimeResumption").ToArray();
+        var selectedFeatures = standaloneHttp ? baseFeatures.Concat(["FoundationIdentityAbstractions", "ActivitiesHttp", "StandaloneHttpTriggerAuthoring", "WorkflowsRuntimeRecurringTriggers"]).ToArray() : baseFeatures;
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -227,11 +228,14 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
                 [$"ConnectionStrings:{ResourceName}"] = ConnectionString,
                 [$"CShells:Shells:{ShellName}:Configuration:WebRouting:Path"] = "",
                 [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
-                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey
+                [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey,
             }.Concat(selectedFeatures.Select(id => KeyValuePair.Create(
                 $"CShells:Shells:{ShellName}:Features:{id}",
                 (string?)null))))
             .Build();
+        if (standaloneHttp)
+            configuration[$"CShells:Shells:{ShellName}:Features:ActivitiesHttp:SyncRequestTimeout"] =
+                TimeSpan.FromSeconds(responseTimeoutSeconds ?? 30).ToString("c", System.Globalization.CultureInfo.InvariantCulture);
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -244,6 +248,7 @@ public sealed partial class WorkerHttpFixtureHostEvidenceTests : IDisposable
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IConfiguration>(configuration);
         builder.Services.AddEfPersistenceResources(configuration, typeof(WorkerHttpFixtureHostEvidenceTests).Assembly);
+        if (suppressHttpPrompt) DeferHttpPrompt(builder.Services);
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(
                 typeof(PrimitivesFeature).Assembly,

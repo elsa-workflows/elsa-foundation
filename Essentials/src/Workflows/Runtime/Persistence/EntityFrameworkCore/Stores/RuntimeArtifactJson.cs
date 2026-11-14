@@ -12,7 +12,7 @@ internal static class RuntimeArtifactJson
     private static readonly JsonSerializerOptions Options = CreateOptions();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, JsonSerializerOptions> BoundedOptions = new();
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
-    public static T Deserialize<T>(string value) => JsonSerializer.Deserialize<T>(value, Options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
+    public static T Deserialize<T>(string value) => Deserialize<T>(value, Options);
     public static T DeserializeBounded<T>(string value, int maximumDepth)
     {
         var options = BoundedOptions.GetOrAdd(maximumDepth, depth =>
@@ -21,7 +21,7 @@ internal static class RuntimeArtifactJson
             bounded.PropertyNameCaseInsensitive = false; // Current owner producer spelling; case aliases cannot overwrite a known field.
             return bounded;
         });
-        var result = JsonSerializer.Deserialize<T>(value, options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
+        var result = Deserialize<T>(value, options);
         // Current source profile must preserve every stored field. Constructor defaults, computed aliases and
         // normalized collections cannot silently replace a persisted source body with a different export.
         using var output = new BoundedSnapshotStream(Encoding.UTF8.GetByteCount(value));
@@ -33,6 +33,43 @@ internal static class RuntimeArtifactJson
             throw new InvalidDataException("The persisted Runtime JSON payload is not lossless in the bounded current-schema profile.");
         return result;
     }
+
+    private static T Deserialize<T>(string value, JsonSerializerOptions options)
+    {
+        if (typeof(T) != typeof(DurableValueState))
+            return JsonSerializer.Deserialize<T>(value, options) ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
+
+        // JsonElement? treats a JSON null token as nullable absence. Inline state instead
+        // requires a present value, including JSON null; an omitted member must still fail.
+        // Read only this state's member as JsonElement so Undefined retains that distinction.
+        var payload = JsonSerializer.Deserialize<DurableValueStatePayload>(value, options)
+            ?? throw new InvalidDataException("The persisted Runtime JSON payload was empty.");
+        JsonElement? inlineValue = payload.InlineValue.ValueKind switch
+        {
+            JsonValueKind.Undefined => null,
+            JsonValueKind.Null when payload.Storage != DurableValueStorage.Inline => null,
+            _ => payload.InlineValue
+        };
+        var state = new DurableValueState(
+            payload.DurableValueId, payload.WorkflowExecutionId, payload.ValueId, payload.Type,
+            payload.Lifecycle, payload.Storage, inlineValue, payload.ExternalReference,
+            payload.SourceActivityExecutionId, payload.CapturedAt, payload.Metadata);
+        return (T)(object)state;
+    }
+
+    private sealed record DurableValueStatePayload(
+        string DurableValueId,
+        string WorkflowExecutionId,
+        string ValueId,
+        RuntimeValueTypeDescriptor Type,
+        DurableValueLifecycle Lifecycle,
+        DurableValueStorage Storage,
+        JsonElement InlineValue,
+        DurableValueExternalReference? ExternalReference,
+        string? SourceActivityExecutionId,
+        DateTimeOffset CapturedAt,
+        IReadOnlyDictionary<string, string> Metadata);
+
     private static JsonSerializerOptions CreateOptions(bool bounded = false)
     {
         var resolver = new DefaultJsonTypeInfoResolver();
