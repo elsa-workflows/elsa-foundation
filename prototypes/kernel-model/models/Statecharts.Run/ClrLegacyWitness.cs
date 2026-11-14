@@ -7,10 +7,10 @@ internal static class ClrLegacyWitness
 {
     internal static void Run()
     {
-        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var kind in new[] { "activation", "leaf", "start", "resume" })
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var kind in new[] { "activation", "leaf", "start", "resume", "external" })
         {
             ClrWork.Reset(kind); var h = new MachineInboxHarness();
-            var dependency = new Node("dependency", kind is "start" or "resume" ? typeof(ClrWait) : typeof(ClrDependency)); dependency.Inputs["Local"] = Binding.Literal(17);
+            var dependency = new Node("dependency", kind == "external" ? typeof(ClrExternal) : kind is "start" or "resume" ? typeof(ClrWait) : typeof(ClrDependency)); dependency.Inputs["Local"] = Binding.Literal(17);
             var wf = Wf.Workflow("machine-inbox", Wf.Sequence("sequence", Wf.Event("gate", "gate"), dependency)); wf.InterventionRequested = true;
             Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
             var old = h.State; old.InterventionPolicy = 4;

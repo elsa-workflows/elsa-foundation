@@ -35,3 +35,12 @@ internal sealed class ClrWait : StatefulActivity<int, int, JsonNode?>
         ClrWork.Record(c, c.State, "resume"); ClrWork.Fail("resume"); return new(Complete(c.State));
     }
 }
+
+[External]
+internal sealed class ClrExternal : Kernel.Native.Activity<int>
+{
+    public ClrExternal() { }
+    [Input] public int Local { get; set; }
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext c)
+    { ClrWork.Record(c, Local, "external"); ClrWork.Fail("external"); return new(Complete(Local)); }
+}

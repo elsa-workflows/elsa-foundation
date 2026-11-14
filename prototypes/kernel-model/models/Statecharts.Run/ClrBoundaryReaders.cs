@@ -10,7 +10,7 @@ internal static class ClrBoundaryReaders
 {
     internal static void Run()
     {
-        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var kind in new[] { "cancel", "owner" })
+        foreach (var mode in new[] { Modes.Balanced, Modes.Durable }) foreach (var kind in new[] { "cancel", "owner", "diagnostic" })
         {
             var registry = new WorkflowRegistry(); var node = Wf.Node<ClrBoundaryLeaf>("boundary", ("Kind", Binding.Literal(kind)));
             var wf = Wf.Workflow("boundary", node); wf.InterventionRequested = true; registry.Add(wf);
@@ -19,7 +19,8 @@ internal static class ClrBoundaryReaders
             try { new NativeModel(registry).TurnAsync(proxy, token).AsTask().GetAwaiter().GetResult(); }
             catch (OperationCanceledException) when (kind == "cancel") { observed = true; }
             catch (InvalidOperationException e) when (kind == "owner" && e.Message == "owner boundary sentinel") { observed = true; }
-            Check(observed && setup.Native.Frames.Values.All(f => f.Intervention is null), "X20: runtime cancellation/owner failure was captured as an authored incident: " + kind);
+            if (kind == "diagnostic") observed = setup.Native.Frames.Values.SingleOrDefault()?.Intervention is { Fault.Code: "exception", Fault.Message.Length: 2048 };
+            Check(observed && (kind == "diagnostic" || setup.Native.Frames.Values.All(f => f.Intervention is null)), "X20: runtime cancellation/owner failure was captured as an authored incident: " + kind);
             Console.WriteLine($"PASS clr-model-boundary-fixture:{mode},kind={kind}");
         }
         foreach (var policy in Enumerable.Range(0, 5))
@@ -37,7 +38,12 @@ internal sealed class ClrBoundaryLeaf : Kernel.Native.Activity
 {
     public ClrBoundaryLeaf() { }
     [Input] public string Kind { get; set; } = "";
-    protected override ValueTask<Transition> ExecuteAsync(ActivityContext c) => Kind == "cancel" ? throw new OperationCanceledException(c.CancellationToken) : new(Complete().With(new EmitEffect("owner", null)));
+    protected override ValueTask<Transition> ExecuteAsync(ActivityContext c) => Kind switch
+    {
+        "cancel" => throw new OperationCanceledException(c.CancellationToken),
+        "diagnostic" => throw new InvalidOperationException(new string('x', 4096)),
+        _ => new(Complete().With(new EmitEffect("owner", null)))
+    };
 }
 // DispatchProxy requires an inheritable accessible proxy type; this is test-only and nonpackable.
 public class ClrBoundaryTurn : DispatchProxy

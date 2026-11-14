@@ -8,7 +8,7 @@ using static MachineInboxHarness;
 internal static class ClrFaultWitness
 {
     private static string[] Places => ["root", "sequence", "parallel", "entry", "exit", "action", "nested-entry", "nested-exit", "nested-action"];
-    private static string[] FaultKinds => ["activation", "leaf", "start", "resume"];
+    private static string[] FaultKinds => ["activation", "leaf", "start", "resume", "external"];
     private static string[] Cuts => ["steady", "lost-before", "lost-answer", "cancel"];
     internal static IEnumerable<string> Names => from m in new[] { Modes.Balanced, Modes.Durable } from p in Places from k in FaultKinds from c in Cuts select $"clr-recovery:{m},place={p},kind={k},cut={c}";
     internal static void Run()
@@ -20,7 +20,7 @@ internal static class ClrFaultWitness
     {
         ClrWork.Reset(kind); ChartMark.Calls.Clear(); var h = new MachineInboxHarness();
         var phase = place.Replace("nested-", "", StringComparison.Ordinal); var chart = phase is "entry" or "exit" or "action";
-        var dependency = new Node("dependency", kind is "start" or "resume" ? typeof(ClrWait) : typeof(ClrDependency));
+        var dependency = new Node("dependency", kind == "external" ? typeof(ClrExternal) : kind is "start" or "resume" ? typeof(ClrWait) : typeof(ClrDependency));
         dependency.Inputs["Local"] = chart ? Binding.Var("local") : Binding.Literal(17);
         Node Mark(string id) => Wf.Node<ChartMark>(id, ("Name", Binding.Literal(id)), ("Local", chart ? Binding.Var("local") : Binding.Literal(17)));
         Node root;
