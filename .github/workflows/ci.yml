@@ -74,10 +74,17 @@ jobs:
       studio: ${{ steps.scope.outputs.studio }}
       studio-heavy: ${{ steps.scope.outputs.studio-heavy }}
       heavy: ${{ steps.scope.outputs.heavy }}
+      skip-draft: ${{ steps.scope.outputs.skip-draft }}
       published-images: ${{ steps.scope.outputs.published-images }}
       studio-order: ${{ steps.scope.outputs.studio-order }}
       backend-source: ${{ steps.scope.outputs.backend-source }}
     steps:
+      # Debounce: a push to a ready PR waits before it starts any real work. A newer push to the same PR cancels this run
+      # while it is still waiting (the concurrency group above), so a burst of pushes pays for one run, not one each.
+      # Drafts, the opening and ready transitions, pushes to main and the merge queue start at once.
+      - name: Debounce pushes to a ready pull request
+        if: ${{ github.event_name == 'pull_request' && github.event.action == 'synchronize' && !github.event.pull_request.draft }}
+        run: sleep 90
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -90,7 +97,8 @@ jobs:
 
   # Python only, so the shards start within a minute: the change scope, the cheap guards, and the shard matrix.
   plan-tiers:
-    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci')
+    needs: plan-scope
+    if: (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') && needs.plan-scope.outputs.skip-draft != 'true'
     name: Plan tiers
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -309,6 +317,7 @@ jobs:
         run: python3 tools/ci/studio_gate.py
       - name: Verify the PR tier passed
         env:
+          SKIP_DRAFT: ${{ needs.plan-scope.outputs.skip-draft }}
           PLAN: ${{ needs.plan-tiers.result }}
           DOCS_ONLY: ${{ needs.plan-tiers.outputs.docs_only }}
           SHARDS: ${{ needs.pr-shard.result }}
@@ -316,6 +325,9 @@ jobs:
           ARCHITECTURE: ${{ needs.architecture-guards.result }}
           CORE: ${{ needs.core-only.result }}
         run: |
+          if [[ "$SKIP_DRAFT" == true ]]; then
+            echo "Draft: the PR tier is skipped. It runs when the pull request is marked ready, or on a draft with the \`ci\` label (from the next push) or via \`gh workflow run ci.yml --ref <branch> -f tier=pr\`."; exit 0
+          fi
           if [[ "$PLAN" != success ]]; then
             echo "::error::Plan tiers did not succeed ($PLAN)."; exit 1
           fi
