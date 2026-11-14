@@ -1457,7 +1457,8 @@ This slice activates no Testing library, public runner, Studio or headless surfa
 helper used by normal `ActivityCompletionProjector` and native fixture preparation. It is an integration
 utility, not a replacement contract. It remains public because `Activities` and `Workflows/Runtime` are
 distinct domains: [framework §2.23.3](../../../../../.specify/memory/constitution-framework.md)
-forbids a production `InternalsVisibleTo` grant across that boundary. It preserves completion selection: `$` selects the whole value;
+forbids a production `InternalsVisibleTo` grant across that boundary.
+It preserves completion selection: `$` selects the whole value;
 an exact top-level name wins over interpreting dots as nested navigation; nested segments are trimmed
 and case-sensitive. It checks every declared persistable projection and every required missing/null
 value before any completion storage write or selected-start admission.
