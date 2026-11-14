@@ -16,8 +16,9 @@ import zipfile
 from consumers import (COMMON_EFFECTS_FEATURE, DURABLE_EFFECTS_FEATURE, DURABLE_STORE_FEATURE, backend_features,
                        consumer_binary_provenance)
 from upgrade_distribution import (BASELINE_SOURCE, BASELINE_TREE, JOURNAL_HEADER, RESOURCE_FEATURE,
-                                  SOURCE_FETCH_TIMEOUT_SECONDS, _ensure_product_source, _source_identity,
-                                  prepare_upgrade_content_root, prepare_upgrade_distributions, select_upgrade_generation)
+                                  OPERATOR_ASSEMBLY, SOURCE_FETCH_TIMEOUT_SECONDS, _ensure_product_source, _source_identity,
+                                  prepare_upgrade_content_root, prepare_upgrade_distributions, select_upgrade_generation,
+                                  upgrade_operator_command)
 
 
 class PinnedSourceAcquisitionTests(unittest.TestCase):
@@ -196,6 +197,51 @@ class UpgradeConfigurationTests(unittest.TestCase):
     def test_original_default_feature_selection_remains_memory_effects(self):
         self.assertIn(COMMON_EFFECTS_FEATURE, backend_features(self.root))
         self.assertNotIn(COMMON_EFFECTS_FEATURE, backend_features(self.root, effects=False))
+
+    def operator(self, name="old"):
+        self.run.dotnet = "/explicit-fixture-dotnet"
+        published = self.root / (name + "-operator-published"); published.mkdir()
+        record = {"assembly": OPERATOR_ASSEMBLY, "published": str(published),
+                  "commandPrefix": [self.run.dotnet, str(published / OPERATOR_ASSEMBLY)], "publishedFiles": {"test": name}}
+        self.prepared[name]["operator"] = record
+        return record
+
+    def test_operator_command_selects_its_own_generation_without_launch_or_database_access(self):
+        selected = self.prepare()
+        database = Path(selected["database"]); database.write_bytes(b"not a SQLite database; command construction must not open it")
+        for name in ("old", "current"):
+            record = self.operator(name)
+            with patch("runtime.published_files", side_effect=self.manifest, create=True), patch("subprocess.Popen", side_effect=AssertionError("No operator launch during preparation")):
+                command = upgrade_operator_command(self.run, self.prepared, name, database)
+            self.assertEqual([*record["commandPrefix"], "--owned-root", str(self.content), "--database", str(database)], command)
+
+    def test_operator_command_refuses_foreign_database_and_symlink(self):
+        self.prepare(); self.operator()
+        foreign = self.root / "foreign.db"; foreign.write_bytes(b"outside shared runtime")
+        with self.assertRaisesRegex(RuntimeError, "owned runtime database"):
+            upgrade_operator_command(self.run, self.prepared, "old", foreign)
+        target = self.content / "state/real.db"; target.write_bytes(b"metadata only")
+        alias = self.content / "state/alias.db"; alias.symlink_to(target)
+        with self.assertRaisesRegex(RuntimeError, "owned runtime database"):
+            upgrade_operator_command(self.run, self.prepared, "old", alias)
+
+    def test_operator_command_refuses_changed_binary_manifest_or_substituted_command(self):
+        selected = self.prepare(); record = self.operator()
+        database = Path(selected["database"]); database.write_bytes(b"metadata only")
+        with patch("runtime.published_files", return_value={"different": "bytes"}, create=True):
+            with self.assertRaisesRegex(RuntimeError, "published inputs changed"):
+                upgrade_operator_command(self.run, self.prepared, "old", database)
+        record["commandPrefix"] = ["unowned-command"]
+        with self.assertRaisesRegex(RuntimeError, "exact owned prepared"):
+            upgrade_operator_command(self.run, self.prepared, "old", database)
+
+    def test_operator_publish_cannot_overlap_runtime_content(self):
+        selected = self.prepare(); record = self.operator()
+        database = Path(selected["database"]); database.write_bytes(b"metadata only")
+        record["published"] = str(self.content)
+        record["commandPrefix"] = [self.run.dotnet, str(self.content / OPERATOR_ASSEMBLY)]
+        with self.assertRaisesRegex(RuntimeError, "must not overlap"):
+            upgrade_operator_command(self.run, self.prepared, "old", database)
 
 
 class PublishedDependencyProvenanceTests(unittest.TestCase):
