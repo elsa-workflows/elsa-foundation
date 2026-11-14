@@ -74,6 +74,7 @@ export async function activityDataSupport(page: Page, info: TestInfo, registerCl
   const contextResponses = createActivityDataResponseCollector(`${base}/design/workflows/activity-data/context`, contexts, transportControls);
   let compositionObservation: { features: FeatureFact[]; mandatoryClosure: string[]; expressionTypes: string[]; syntaxChoices: string[] } | undefined;
   let writes = 0;
+  page.on("requestfailed", request => contextResponses.requestFailed(request));
   page.on("response", response => {
     if (response.url().includes("/design/workflows/activity-data/context") && response.ok()) {
       contextResponses.observe(response);

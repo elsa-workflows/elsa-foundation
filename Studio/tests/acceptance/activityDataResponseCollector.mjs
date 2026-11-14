@@ -5,6 +5,8 @@ export function createActivityDataResponseCollector(contextUrl, contexts, transp
   const endpoint = new URL(contextUrl);
   const pending = [];
   const failures = [];
+  const failedRequests = new WeakMap();
+  const observedFailures = new WeakSet();
   const fail = category => failures.push(new Error(category));
 
   function owns(request) {
@@ -20,7 +22,13 @@ export function createActivityDataResponseCollector(contextUrl, contexts, transp
       const request = response.request();
       if (!owns(request)) return;
       const requestBody = request.postDataJSON();
-      const completionError = await response.finished();
+      // Playwright emits requestfailed without resolving Response.finished() on abort.
+      // Register this exact Request before yielding; unrelated failures cannot release it.
+      const failed = new Promise(resolve => { failedRequests.set(request, resolve); });
+      let completionError;
+      try {
+        completionError = request.failure() || observedFailures.has(request) ? true : await Promise.race([response.finished(), failed]);
+      } finally { failedRequests.delete(request); }
       const failure = request.failure()?.errorText;
       if (failure === "net::ERR_ABORTED") {
         transportControls.push({ kind: "cancelled-context-response", request: requestBody, failure });
@@ -51,5 +59,10 @@ export function createActivityDataResponseCollector(contextUrl, contexts, transp
     if (failures.length) throw new AggregateError(failures, "Activity data response evidence incomplete");
   }
 
-  return { observe, settle };
+  function requestFailed(request) {
+    observedFailures.add(request);
+    failedRequests.get(request)?.(true);
+  }
+
+  return { observe, requestFailed, settle };
 }

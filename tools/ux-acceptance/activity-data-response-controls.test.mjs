@@ -66,3 +66,35 @@ test("all started observations settle before sticky failure is reported without 
   assert.equal(f.contexts.length, 1);
   await assert.rejects(f.collector.settle(), /response evidence incomplete/);
 });
+
+test("a later matching failed request releases an unfinished response; a different request cannot", { timeout: 1000 }, async () => {
+  const f = fixture(); let failure = null;
+  const request = { url: () => endpoint, method: () => "POST", postDataJSON: () => packet,
+    failure: () => failure ? { errorText: failure } : null };
+  f.collector.observe({ request: () => request, finished: () => new Promise(() => {}),
+    body: async () => { throw new Error("An aborted body must not be read"); } });
+  let settled = false; const drain = f.collector.settle().then(() => { settled = true; });
+  f.collector.requestFailed({ ...request, failure: () => ({ errorText: "net::ERR_ABORTED" }) });
+  await setImmediate(); assert.equal(settled, false);
+  failure = "net::ERR_ABORTED";
+  f.collector.requestFailed(request);
+  await drain;
+  assert.deepEqual(f.contexts, []);
+  assert.deepEqual(f.transport, [{ kind: "cancelled-context-response", request: packet, failure: "net::ERR_ABORTED" }]);
+});
+
+test("failed events without a diagnostic stay fatal, including events already observed", async () => {
+  for (const alreadyFailed of [false, true]) {
+    const f = fixture(); const result = response(); const request = result.request();
+    result.finished = () => new Promise(() => {});
+    result.body = async () => { throw new Error("Failed transport must not supply a body"); };
+    if (alreadyFailed) f.collector.requestFailed(request);
+    f.collector.observe(result);
+    if (!alreadyFailed) f.collector.requestFailed(request);
+    await assert.rejects(f.collector.settle(), error => {
+      assert.deepEqual(error.errors.map(item => item.message), ["activity-data-context-transport-failed"]);
+      return true;
+    });
+    assert.deepEqual(f.contexts, []); assert.deepEqual(f.transport, []);
+  }
+});
