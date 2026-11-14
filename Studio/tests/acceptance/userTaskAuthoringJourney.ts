@@ -124,11 +124,13 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const added = await outputSave; expect(added.status()).toBe(200);
   expect(added.request().postDataJSON().state.outputs[0].isNullable).toBe(false);
   await page.getByLabel("Output name", { exact: true }).fill("ReviewData");
-  await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
+  // A remounted editor briefly uses the text fallback while its descriptor catalog loads.
+  // This composed host provides the catalog; wait for its native picker before selecting JSON.
+  await page.getByRole("combobox", { name: "Output type", exact: true }).selectOption(jsonAlias);
   await editorViews.getByRole("tab", { name: "Variables", exact: true }).click();
   await page.getByRole("button", { name: "Add variable", exact: true }).click();
   await page.getByLabel("Variable name", { exact: true }).fill("Review data");
-  await page.getByLabel("Variable type", { exact: true }).selectOption(jsonAlias);
+  await page.getByRole("combobox", { name: "Variable type", exact: true }).selectOption(jsonAlias);
   await page.getByLabel("Variable storage driver", { exact: true }).selectOption("elsa.json");
   await page.getByLabel("Variable default value", { exact: true }).fill("{}");
   await expect(page.getByLabel("Variable type", { exact: true })).toHaveValue(jsonAlias);
@@ -156,7 +158,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await page.getByRole("button", { name: "Add output", exact: true }).click();
   await page.getByLabel("Output name", { exact: true }).fill("RenamedData");
-  await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
+  await page.getByRole("combobox", { name: "Output type", exact: true }).selectOption(jsonAlias);
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
   await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
