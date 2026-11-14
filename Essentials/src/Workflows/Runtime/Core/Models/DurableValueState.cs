@@ -21,6 +21,12 @@ public sealed record DurableValueState
         DateTimeOffset capturedAt,
         IReadOnlyDictionary<string, string> metadata)
     {
+        // System.Text.Json deserializes JSON null into JsonElement? as C# null, not JsonValueKind.Null.
+        // Inline storage's explicit clear is a JSON-null payload (Correlate/SetName emptying identity), so
+        // restore that payload before validation instead of treating the round-trip as a missing value.
+        if (storage == DurableValueStorage.Inline && !inlineValue.HasValue)
+            inlineValue = JsonSerializer.SerializeToElement<object?>(null);
+
         Validate(lifecycle, storage, inlineValue, externalReference);
 
         DurableValueId = durableValueId;
