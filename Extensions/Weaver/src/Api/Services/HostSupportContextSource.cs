@@ -30,7 +30,8 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
         cancellationToken.ThrowIfCancellationRequested();
         if (request.CallerAttachments.Count != 1) return Refused("weaver.context.support_invalid");
         var caller = request.CallerAttachments.Single();
-        if (caller.ModuleId != ModuleId || caller.ContentType != Kind || caller.SchemaVersion != "1" || !TryStudio(caller.Content, out var studio))
+        if (caller.ModuleId != ModuleId || caller.ContentType != Kind || caller.SchemaVersion != "1"
+            || !TryStudio(caller.Content, out var studio, request.Inputs.GetValueOrDefault("route"), useCurrentRoute: true))
             return Refused("weaver.context.support_invalid");
         var session = await CurrentSessionAsync(request.SessionId, cancellationToken);
         if (session is null) return Refused("weaver.context.support_denied");
@@ -155,7 +156,7 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
         catch (JsonException) { return false; }
     }
 
-    private static bool TryStudio(object? content, out JsonElement projected)
+    private static bool TryStudio(object? content, out JsonElement projected, string? route = null, bool useCurrentRoute = false)
     {
         projected = default;
         if (content is not JsonElement { ValueKind: JsonValueKind.Object } original || original.GetRawText().Length > MaxContentLength
@@ -163,7 +164,12 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
         try
         {
             var value = original.Deserialize(SupportContextJson.Default.StudioSupportView);
+            // Only the collector's current surface supplies this claim. Nested caller data may be stale;
+            // disclosure validation instead preserves the exact already-admitted historical route.
+            if (value is not null && useCurrentRoute)
+                value = value with { ActiveRoute = PathRoute(route) ? route : null };
             if (value is null || value.Side != "studio" || !value.ClientAsserted
+                || value.ActiveRoute is not null && !PathRoute(value.ActiveRoute)
                 || value.Completeness is not ("complete" or "incomplete" or "unknown" or "unavailable")
                 || value.RegistrationCompleteness is not ("complete" or "incomplete")
                 || value.Modules is null || value.Loader is null || value.Registrations is null
@@ -249,6 +255,17 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
         && Regex.IsMatch(value, @"^@?[A-Za-z0-9_-]+(?:[./:][A-Za-z0-9_-]+)*$");
     private static bool Label(string? value) => value is { Length: > 0 and <= 256 } && !string.IsNullOrWhiteSpace(value)
         && !value.Any(character => character <= 0x1f || character == 0x7f);
+    private static bool PathRoute(string? value)
+    {
+        // Keep route spelling as data, never infer a module/target or normalize a URI. Check escaped
+        // delimiters too so query, fragment, authority and control data cannot hide in an encoded path.
+        if (value is not { Length: > 0 and <= 2048 } || value[0] != '/' || value.StartsWith("//", StringComparison.Ordinal)
+            || value.Any(character => char.IsControl(character) || char.IsWhiteSpace(character) || character is '\\' or '?' or '#')
+            || Regex.IsMatch(value, "%(?![A-Fa-f0-9]{2})")) return false;
+        var decoded = Uri.UnescapeDataString(value);
+        return !decoded.StartsWith("//", StringComparison.Ordinal)
+            && !decoded.Any(character => char.IsControl(character) || character is '\\' or '?' or '#');
+    }
     private static bool HasDuplicateProperties(JsonElement value)
     {
         if (value.ValueKind == JsonValueKind.Object)
@@ -265,7 +282,10 @@ internal sealed class HostSupportContextSource(IServiceProvider services, IHttpC
 
 internal sealed record StudioSupportView(string? Side, bool ClientAsserted, string? Completeness,
     IReadOnlyList<StudioSupportModule>? Modules, string? RegistrationCompleteness,
-    IReadOnlyList<StudioSupportLoader>? Loader, IReadOnlyList<StudioSupportRegistration>? Registrations);
+    IReadOnlyList<StudioSupportLoader>? Loader, IReadOnlyList<StudioSupportRegistration>? Registrations)
+{
+    public string? ActiveRoute { get; init; }
+}
 internal sealed record StudioSupportModule(string? Id, string? DisplayName, string? Status);
 internal sealed record StudioSupportLoader(string? ModuleId, string? Status);
 internal sealed record StudioSupportRegistration(string? Kind, string? Id, string? OriginModuleId, string? DeclaredModuleId,
