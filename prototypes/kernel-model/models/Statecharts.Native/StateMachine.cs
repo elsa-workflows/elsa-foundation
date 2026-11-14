@@ -131,7 +131,7 @@ internal sealed partial class StateMachine : CompositeActivity, ISignalledCompos
     // Reader compatibility for the prototype's serial cursor. Conversion is pure during CanAccept probing;
     // its completed prefix and exact pending child are committed by the next ordinary model checkpoint.
     internal static MachineState Restore(MachineState state, Chart chart) => Restore(state, chart.Compiled, "literal-reader");
-    private static MachineState Restore(MachineState state, SelectionChart chart, string frame)
+    internal static MachineState Restore(MachineState state, SelectionChart chart, string frame)
     {
         var oldVersion = state.Version;
         if (oldVersion < 3 && (state.Visits is not null || state.PlannedVisits is not null || state.VisitSerial != 0 || state.Selection is not null || state.LegacyPending))

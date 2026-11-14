@@ -7,8 +7,8 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
-if (args is ["--scopes-list"]) { foreach (var name in ScopedWorkflows.Names) Console.WriteLine(name); return; }
-if (args is ["--scopes"]) { ScopedWorkflows.Run(); return; }
+if (args is ["--scopes-list"]) { foreach (var name in ScopedWorkflows.Names.Concat(ScopedReaders.Names)) Console.WriteLine(name); return; }
+if (args is ["--scopes"]) { ScopedWorkflows.Run(); ScopedReaders.Run(); return; }
 if (args is ["--scopes-red"]) { ScopedWitness.Red(); return; }
 if (args is ["--native-graph-list"]) { foreach (var name in NativeGraphWitness.Names) Console.WriteLine(name); return; }
 if (args is ["--native-graph"]) { NativeGraphWitness.Run(); return; }
