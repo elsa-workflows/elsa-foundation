@@ -69,18 +69,25 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     public ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken cancellationToken) => _models[model].ExecuteJobAsync(job, cancellationToken);
 
-    /// <summary>Park: retain the committed checkpoint, fault the instance, consume its deliveries and remove its active waits.</summary>
-    public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error)
+    /// <summary>Park: the instance becomes faulted with the error, the messages are consumed, the partition goes on.</summary>
+    public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error) =>
+        Park(row, actor, taken, spec, error, null);
+
+    public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error, object? pending)
     {
         var next = row is { } r ? r with { Status = InstanceStatus.Faulted, Revision = r.Revision + 1, Fault = error }
             : spec is null ? null
             : new InstanceRow(actor, spec.Model, spec.Definition, InstanceStatus.Faulted, "null", 1, spec.Parent, error, History: spec.History,
                 Creation: spec.Creation?.Generation ?? 0, ParentCreation: spec.ParentCreation); // owner binds its staged start envelope, even when the model held all input
         if (next is not null && row is not { Status: not InstanceStatus.Running }) next = WorkflowCommitClock.End(next);
-        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Spec = spec, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, ["parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
+        var unit = new TurnOutcome(actor) { Row = next, Expected = row?.Revision, Spec = spec, Consumed = [.. taken], Journal = next is null ? null : Journal(next.History, [.. pending as List<object> ?? [], "parked: " + error]), Status = next?.Status, Unsubscribe = next is not null };
         if (next?.Parent is not null) unit.Sent.Add(Finished(next, null));
         return unit;
     }
+
+    /// <summary>Decision 4: an instance kept in memory past its short wait is written as it is, at the revision it has.</summary>
+    public TurnOutcome Write(InstanceRow row, object? state, object? pending) =>
+        new(row.Id) { Row = row, State = state, Status = row.Status, Revision = row.Revision, Journal = Journal(row.History, [.. pending as List<object> ?? [], "written"]) };
 
     /// <summary>The instance's own turn: suspend, resume, terminate or delete. A message that changes nothing is consumed and dropped.</summary>
     private object ReadState(InstanceRow row, IExecutionModel model, ITurnServices services) =>
