@@ -17,32 +17,80 @@ not another physical schema.
 
 ## Physical records
 
-EF Core uses nine **tables**. MongoDB uses ten **collections**: the extra `clocks` collection allocates order keys
+EF Core maps nine **model tables**. Initialization also creates allocator and serialization objects described below:
+SQLite has ten physical tables, MySQL eleven, PostgreSQL and SQL Server nine. MongoDB uses ten **collections**:
+the extra `clocks` collection allocates order keys
 for outside message insertion without writing the owner's partition document.
 Capitalization below is physical: `Messages` is an EF table; `messages` is a MongoDB collection.
 Column types follow each SQL provider's EF mappings; the lists below name columns, not a portable SQL DDL script.
-Optional logical `InstanceRow.CommitTimes` metadata is not an EF column or MongoDB field; its provider boundary is
-listed under [optional commit-time facts](#optional-commit-time-facts).
+Logical creation headers, retired high-water marks, pending-start identity and `InstanceRow.CommitTimes` are not
+EF columns or MongoDB fields. Their capabilities remain in-memory only; unsupported physical writes are refused.
+The timestamp boundary is detailed under [optional commit-time facts](#optional-commit-time-facts).
 MongoDB `_id` is a scalar or an embedded key document as shown. Other listed fields are top-level fields.
 
 | Purpose | EF Core table and columns | MongoDB collection and document fields |
 |---|---|---|
-| Partition ownership and journal allocation | `Partitions`: `Id`, `Owner`, `Epoch`, `LeaseUntil`, `Position`, `Died`. Key: `Id`. | `partitions`: `_id` (partition), `owner`, `epoch`, `leaseUntil`, `position`, `died`, `clock`, `now`. |
+| Partition ownership and journal allocation | `Partitions`: `Id`, `Owner`, `Epoch`, `LeaseUntil`, `Position`, `Died`, nullable `WindowStart`, `WindowEnd`. Key: `Id`. | `partitions`: `_id` (partition), `owner`, `epoch`, `leaseUntil`, `position`, `died`, `clock`, `now`. |
 | Outside inbox order-key allocation | No table: engine-generated `Messages.Seq`, or SQLite's allocation under its write transaction. | `clocks`: `_id` (target partition), `clock`. |
 | Runtime membership | `Nodes`: `Id`, `SeenAt`. Key: `Id`. | `nodes`: `_id` (node/process name), `seenAt`. |
-| Instance checkpoint | `Instances`: `Id`, `Partition`, `Model`, `Definition`, `Status`, `State`, `Jobs`, `Revision`, `Parent`, `Fault`, `History`, `Suspended`, `Children`, `StateVersion`. Key: `Id`. | `instances`: `_id` (instance), `partition`, `model`, `definition`, `status`, `state`, `jobs`, `revision`, `parent`, `fault`, `history`, `suspended`, `children`, `stateVersion`. |
-| Durable inbox, including job and timer tickets | `Messages`: `Id`, `Seq`, `Partition`, `Target`, `Kind`, `Payload`, `Sender`, `Start`, `Due`, `Seen`, `Attempts`, `Trial`, `KeepUntil`, `Done`, `ReplyTo`. Key: `Id`. | `messages`: `_id` (message), `seq`, `partition`, `target`, `kind`, `payload`, `sender`, `start`, `due`, `seen`, `attempts`, `trial`, `keepUntil`, `done`, `replyTo`. |
+| Instance checkpoint | `Instances`: `Id`, `Partition`, `Model`, `Definition`, `Status`, `State`, `Jobs`, `Revision`, `Parent`, `Fault`, `History`, `Suspended`, `Children`, `StateVersion`, `CustomHandles`. Key: `Id`. | `instances`: `_id` (instance), `partition`, `model`, `definition`, `status`, `state`, `jobs`, `revision`, `parent`, `fault`, `history`, `suspended`, `children`, `stateVersion`, `customHandles`. |
+| Durable inbox, including job and timer tickets | `Messages`: `Id`, `InboxScope`, `EventMatch`, `Seq`, `Partition`, `Target`, `Kind`, `Payload`, `Sender`, `Start`, `Due`, `Seen`, `Attempts`, `Trial`, `KeepUntil`, `Done`, `ReplyTo`; SQL Server/MySQL also map `IssuedWire`. Key: `(Id, InboxScope)` on PostgreSQL/SQLite, `(Id, InboxScope, IssuedWire)` on SQL Server/MySQL. | `messages`: `_id: {id: wire, scope: Int64, match?: encodedMatch}`, plus `seq`, `partition`, `target`, `kind`, `payload`, `sender`, `start`, `due`, `seen`, `attempts`, `trial`, `keepUntil`, `done`, `replyTo`. An unpaired-surrogate issued wire uses binary `id`. |
 | Instance wait or start subscription | `Subscriptions`: `Key`, `Instance`, `Wait`, `Partition`, `Start`. Key: `(Key, Instance, Wait)`. | `subscriptions`: `_id: {k: key, i: instance, w: wait}`, plus `key`, `instance`, `wait`, `partition`, `start`. |
 | Kept published event | `Events`: `Key`, `Id`, `Payload`, `KeepUntil`. Key: `(Key, Id)`. | `events`: `_id: {k: key, id: id}`, plus `key`, `id`, `payload`, `keepUntil`. |
 | Committed history | `Journal`: `Partition`, `Position`, `Instance`, `Revision`, `Entries`. Key: `(Partition, Position)`. | `journal`: `_id: {p: partition, n: position}`, plus `partition`, `position`, `instance`, `revision`, `entries`. |
 | Projector cursor | `Projections`: `Partition`, `Position`. Key: `Partition`. | `projections`: `_id` (partition), `position`. |
 | Projected instance summary | `Views`: `Instance`, `Partition`, `Revision`, `Commits`. Key: `Instance`. | `views`: `_id` (instance), `partition`, `revision`, `commits`. |
 
+### Allocators and serialization objects
+
+Event starts receive a physical address when the store accepts their match. The retained delivery is also the
+acceptance receipt: a repeat returns its original target. These objects support that operation; they are not jobs tables.
+
+| Provider | Additional physical objects |
+|---|---|
+| PostgreSQL | `kernel_event_actor` sequence and `kernel_insert_event` function. A transaction advisory lock serializes inserts for the same wire ID. A lock-key hash collision only shares the lock; exact event-match bytes decide identity. |
+| SQLite | `EventActorCounter(CounterId, LastIssued)`, initialized with one row, and `increment_event_actor` trigger. The event insert runs under its write transaction. |
+| SQL Server | `kernel_event_actor` sequence; event insertion uses a transaction-owned application lock. The inbox primary key is nonclustered. |
+| MySQL | `EventActorCounter(CounterId, LastIssued)`, one row; `EventInsertLocks(Bucket)`, 64 fixed rows; `kernel_insert_event` procedure. Provider-equivalent wire IDs share an insertion stripe under the database collation. |
+
+The allocator/stripe objects are installed by store initialization and are not swept. Consuming a sequence value
+does not itself establish a retained receipt. The initializers create fresh schemas; they do not migrate an old
+database's message primary key, backfill scoped identity or qualify old/new reader coexistence.
+Source: [EventInsert](../../prototypes/kernel-model/ef/Kernel.EntityFramework/EventInsert.cs) and the provider initializers.
+
+### Inbox identity and public names
+
+The opaque wire ID is only part of a durable inbox identity. Ordinary `AddAsync` strips any supplied origin scope;
+scope zero preserves store-wide ordinary deduplication under the provider's existing text equality. Private issued
+sends, job tickets, custom handles, child creators and event matches occupy separate identity domains. A public
+caller cannot select an issued domain through ordinary add or post.
+
+An event match encodes the complete stored tuple `(subscription key, event ID, instance, wait, creation)`.
+The publisher and catch-up paths select canonical persisted events and subscriptions using provider equality;
+they do not build identity or payload from a retried caller's replacement values. SQL insertion assigns a negative
+scope within the wire ID and compares exact `EventMatch` bytes. MongoDB keeps the match in its composite `_id`.
+SQL row mutations also check the expected match, so a reused physical scope cannot silently mutate another tuple.
+
+| Boundary | Representation and limit |
+|---|---|
+| Public actor names | Canonical spelling comes from the stored row. SQL Server/MySQL resolve equality with the database, including its configured case, accent and padding behavior; other providers use ordinal equality. A missing equivalent batch uses its first requested spelling. |
+| Private issued IDs on SQL Server/MySQL | Raw big-endian UTF-16 in `IssuedWire`, with empty text `Id`; ordinary/event IDs retain native text. Declared binary limits are 900/1,020 bytes respectively; ordinary IDs retain 450 UTF-16 units on SQL Server and 255 Unicode scalar values on MySQL. This is not an unbounded-key guarantee. |
+| Private issued IDs on PostgreSQL/SQLite | NUL or unpaired UTF-16 units use reversible binary/base64 encoding with a distinct scope. Representable issued IDs retain text. No ordinary caller prefix is reserved by this encoding. |
+| Opaque keys in JSON | `DurableKeyJson` preserves unsupported UTF-16 units and escapes tagged property names. It applies to annotated framework keys and registries, not every application state field. |
+
+Child addresses are bounded issuer identities containing destination partition, issuer partition, fenced epoch
+and checked ordinal. They do not recursively concatenate their parent's address. Event starts use a provider
+sequence/counter. The associated creator message handle still has the provider's own key-width limit.
+See [Messages](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs),
+[IssuedMailKey](../../prototypes/kernel-model/ef/Kernel.EntityFramework/IssuedMailKey.cs),
+[DurableKeyJson](../../prototypes/kernel-model/src/Kernel.Durable/DurableKeyJson.cs) and
+[ChildIssuer](../../prototypes/kernel-model/src/Kernel.Durable/ChildIssuer.cs).
+
 ### Values and embedded shape
 
 The two physical providers store the same opaque `State` content. MongoDB does **not** turn the execution model's
 state into indexed BSON properties: `state` is a JSON **string**, as `State` is a SQL text value.
-Likewise `jobs`, `children`, `start` and `entries` are serialized JSON strings, not nested MongoDB arrays or documents.
+Likewise `jobs`, `children`, `customHandles`, `start` and `entries` are serialized JSON strings, not nested MongoDB arrays or documents.
 The embedded MongoDB documents in the inventory are the composite `_id` keys.
 
 | Field group | Stored meaning and shape |
@@ -50,7 +98,7 @@ The embedded MongoDB documents in the inventory are the composite `_id` keys.
 | Instance identity | `Id` / `_id` is a string; `Partition` / `partition` is an integer routing key. `Model` and `Definition` identify the execution model and its definition. |
 | Checkpoint | `State` is opaque model JSON; `StateVersion` is its integer version. `Revision` is a 64-bit optimistic concurrency value. |
 | Instance lifecycle | `Status` and `History` are stored enum values; `Suspended` is Boolean. `Parent` and `Fault` are nullable strings. |
-| Work in flight | `Jobs` is a nullable JSON array of job keys. `Children` is a nullable JSON array of child instance IDs. Job arguments and durable job tickets live in `Messages`, not in a separate jobs table. |
+| Work in flight | `Jobs` is a nullable serialized list of job keys; opaque keys can use the framework codec. `Children` is a nullable JSON array of child instance IDs. `CustomHandles` is the nullable serialized registry of composed recallable handles; it can retain handles after remote consumption. Job arguments and durable job tickets live in `Messages`, not in a separate jobs table. |
 | Message envelope | `Target`, `Kind` and optional `Sender` are strings. `Payload` is an optional opaque string, commonly serialized JSON. `Start` is an optional serialized `StartSpec`, including model, definition, input and execution options. |
 | Message scheduling | `Seq`, `Due`, `Seen`, `Trial` and non-null `KeepUntil` are 64-bit numbers; `Attempts` is an integer and `Done` is Boolean. Stored `Due=0` means immediately due. |
 | Reply address | `ReplyTo` is a nullable string carrying node, absolute deadline, request ID and an optional early-output flag. It is not a durable response receipt. |
@@ -94,9 +142,22 @@ later commit; the workflow owner separately keeps `workflow:end` when an opted-i
 terminal checkpoint, including control and parking paths. Removing the instance removes its facts. Resolving a
 reference only reads already-loaded metadata; it neither creates a fact nor adds a journal or clock query. Ordinary models retain null metadata.
 
-This optional fact-storage contract is distinct from the Jobs proposal's `SupportsCommitWindow` guard: immutable
+This optional fact-storage contract is distinct from the `SupportsCommitWindow` guard: immutable
 past timestamps do not authorize job effects or enforce an authority window at commit. Neither feature selects a
 product provider profile, retention duration, key-reuse rule or default.
+
+### Optional commit window
+
+A guarded batch can require a closed-open database-time interval, `[from, until)`. The memory store supports it;
+the bounded PostgreSQL experiment supports it only when explicitly installed with the in-batch fence.
+Other physical providers refuse a requested window. Normal commits carry no window and keep their existing path.
+
+EF maps nullable `WindowStart` and `WindowEnd` on every engine, even with enforcement disabled. A guarded PostgreSQL
+fence explicitly updates them. A deferred constraint trigger checks database time as COMMIT processes that trigger;
+an expired interval rolls the transaction back with the distinct `WindowExpired` outcome. The worker then resets
+and rereads under a new take, rather than retrying the same time-dependent decision. The stored bounds are not
+immutable commit timestamps. This experiment does not qualify portable clock facts, exactly-once external effects,
+or a standalone job-actor budget. See [PgCommitWindow](../../prototypes/kernel-model/ef/Kernel.EntityFramework/PgCommitWindow.cs).
 
 ## Record lifecycles
 
@@ -112,6 +173,8 @@ product provider profile, retention duration, key-reuse rule or default.
 | Journal | A commit with non-null journal content appends at the partition's allocated positions. Full stores history entries; State stores `[]`; ordinary Minimal turns omit a journal row. | Explicit instance delete removes its positive-revision history. Deletion markers and other non-positive rows remain. No age-based journal sweep exists here. |
 | Projection cursor | Initialized to zero per partition. A projector moves it with a compare-and-set against its previous position. | Not swept; advancing it is atomic with the corresponding view writes. |
 | View | Projector creates or updates the instance summary from positive journal rows and removes it for a deletion marker. | Removal is projector work, so it can lag the instance delete. Views have no independent TTL. |
+| Custom-handle registry | The checkpoint commit records composed recallable sends and creator handles with their private origin identity. | A successful commit can remove a locally consumed matching custom entry or a recalled extant unfinished delivery. Remote consumption does not update the sender checkpoint. Recalling an already-removed delivery can fail the required row-count check and roll back the registry update; stale entries can remain until instance deletion. No registry TTL or sweeper is configured. |
+| Event-start allocator and insertion stripes | Initialization creates the fixed objects. Accepted event starts advance the provider sequence/counter. | Counters, sequences and the fixed MySQL stripe rows are not swept. The delivery's retention boundary determines its acceptance receipt's lifetime. |
 
 ### Message transition details
 
@@ -148,22 +211,24 @@ is which operation is authorized to write which records. An outside insert canno
 
 | Operation / caller | Reads and conditions | Writes |
 |---|---|---|
-| Store initialization | Existing tables/collections and partition initialization | Partitions and projection cursors; MongoDB also initializes clocks. Creates declared indexes. |
+| Store initialization | Existing tables/collections and partition initialization | Partitions and projection cursors; MongoDB also initializes clocks. Creates declared indexes and the provider allocator/serialization objects. Optional PostgreSQL window enforcement is installed separately by explicit opt-in. |
 | Take / runtime activation | Partition free, expired (`LeaseUntil < now`), or already held by this process name | Owner, epoch, lease and death flag; only a take from another process's expired lease increments attempts of the previous epoch's unfinished trial messages, in the same transaction. A free-partition take or same-process retake does not. |
 | Release / runtime | Matching partition epoch | Clears owner; does not record a death or delete instances. |
 | Heartbeat / runtime membership | Database time, live node count and free/expired partitions | Upserts the node's heartbeat. |
 | Commit / partition owner | Expected partition epoch and position; expected instance revision; required message affected-row counts | Checkpoints, inbox changes, outgoing inbox rows, waits and journal; partition lease and journal allocation. All-or-none transaction. |
 | Poll / owner | Partition, unseen epoch, unfinished messages, due horizon and limit | None. Returns database time even when no messages qualify. |
-| Load / owner | Instance ID set | None; reads checkpoint rows by key. |
-| Add / external API, publisher or registrar | Unique message ID | Inserts one inbox row unless its ID exists. MongoDB first advances its separate inbox clock. |
-| Publish / event publisher | Event key and ID | Inserts the kept event; the publisher then finds subscriptions and adds delivery messages as separate operations. |
+| Load / owner | Requested actor IDs under provider equality | None; returns canonical names and checkpoints. A cold SQL Server/MySQL lookup combines these in its existing query; equivalent hot aliases share the cached slot. |
+| Add / external API | Ordinary scope-zero message identity | Inserts one inbox row unless its ordinary ID exists; supplied private scope is stripped. MongoDB first advances its separate inbox clock. |
+| AddEvent / publisher or registrar | Exact stored event/subscription match and existing receipt | Inserts a private matched delivery or returns the prior accepted target. A new event start also allocates its physical address. SQL serialization and insertion are one transaction. |
+| Publish / event publisher | Event key and ID | Inserts the kept event; the publisher selects canonical persisted event/subscription matches and adds their delivery messages as separate operations. |
 | Register start subscription / registrar | Subscription identity | Upserts/inserts the subscription; catch-up reads kept events and adds deliveries separately. |
 | Project / projector | Journal page and cursor; cursor must still equal `from` | Moves projection cursor and writes/removes view rows in its own transaction, separate from owner commits. |
-| Viewer/API reads | Projection cursor, journal pages and instance view keys | None. No owner commit is forced by these reads. |
+| Viewer/API reads | Projection cursor, instance views and a consistent per-instance journal tail | None. No owner commit is forced by these reads. |
 | Sweep / maintenance | Database time and expiry predicates | Deletes handled expired inbox rows and expired events; no checkpoint, subscription, node, view or journal TTL cleanup. |
 
 Clock-bearing writes add the optional metadata validation/stamping described above to the same in-memory commit;
 there is no separate clock writer or transaction. EF/Mongo refuse those writes rather than silently omit the facts.
+Guarded-window writes and exact inbox identities do not grant those unsupported clock/creation capabilities.
 
 The separate checked fence runs before the data writes. The batch path includes the partition update among the writes. In the PostgreSQL trace, the subscription insert followed the fence. Both paths check the affected-row count before COMMIT.
 SQL Server defaults to a checked fence; PostgreSQL, SQLite and MySQL default to the batch fence.
@@ -215,7 +280,7 @@ engine-generated index names. All MongoDB collections have the ordinary unique `
 
 | Query path | EF Core declaration | MongoDB declaration |
 |---|---|---|
-| Poll messages in partition order | Secondary `(Partition, Seq)`; message key `(Id)` | Named `poll`: `(partition, done, seq, _id)`; `_id` unique |
+| Poll messages in partition order | Secondary `(Partition, Seq)`; composite inbox primary key as listed above | Named `poll`: `(partition, done, seq, _id)`; composite `_id` unique |
 | Charge attempts at takeover | SQL Server/MySQL additionally declare `(Partition, Trial)` | Named `trial`: `(partition, trial)` |
 | Sweep handled inbox | No additional sweep index declared | Named `sweep`: `(done, keepUntil)` |
 | Load/update/delete one instance | Key `(Id)`; revision is a concurrency predicate, not a declared extra index | `_id`; replace/delete also matches `revision` |
@@ -231,6 +296,13 @@ engine-generated index names. All MongoDB collections have the ordinary unique `
 MySQL also declares `Messages.Seq` as an alternate key so its auto-increment column leads a key.
 PostgreSQL and SQL Server configure sequence/identity generation; SQLite supplies the value in the store.
 No additional due-time, seen-epoch, instance-suspension, job-state, event-expiry or membership-expiry index is declared.
+`EventMatch` and `Done` participate in SQL concurrency predicates; that does not create secondary indexes.
+Canonical event lookups join stored event/subscription keys. Exact matched insertion looks within a wire's inbox
+range under serialization. The poll returns the scoped identity and match as well as the unchanged eligibility
+fields; no new poll predicate selects a private domain. The dated run's retained PostgreSQL plan captured a drained
+inbox: a sequential scan removed 1,106 rows by filter, with no qualifying message. That is a drained query-shape
+observation, not a representative backlog plan. Loaded-workload plans and isolated wider-key cost remain unmeasured;
+the [run provenance](../../prototypes/kernel-model/measurements/write-cost-2026-11-14/provenance.json) identifies the retained capture.
 The current EF/Mongo implementations have no index or lookup query for a stored commit-time reference.
 No EF foreign-key relationships are declared between these tables. Target, parent and instance references are
 application fields; a durable message may target an instance that has not been created or has already ended.
@@ -252,12 +324,13 @@ The [qualification findings](../../prototypes/kernel-model/FINDINGS.md) retain k
   Allocation is contiguous inside the committing batch and commits atomically with those rows. A committed position
   at or below the partition high-water mark is not awaiting a later insert; an absent positive row was explicitly deleted.
   Current journal rows need not be contiguous after deletion. Minimal commits can leave the position unchanged.
-- **Message identity:** `Id` / `_id` is unique across the store, not just within a partition. `AddAsync` refuses an
-  existing ID. A consumed row's removal, or a handled row's eventual sweep, ends that particular deduplication record.
-  No permanent delivery-receipt table is supplied by these providers.
+- **Message identity:** ordinary scope-zero IDs deduplicate across the store, not just within a partition.
+  Private identities additionally contain origin scope and, for events, exact match. Equal wire text in different
+  domains does not deduplicate. A consumed row's removal, or a handled row's eventual sweep, ends that particular
+  deduplication record. The matched row is the retained event-start acceptance receipt; no permanent receipt table is supplied.
 - **Event and subscription identity:** events are keyed by `(Key, Id)`; subscriptions by `(Key, Instance, Wait)`.
-  These are separate identities from a generated delivery message ID. Do not assume a provider key repairs a
-  collision in a caller's derived message or instance IDs.
+  Delivery identity retains the complete canonical match, so ambiguous derived wire text does not collapse
+  different matches. Ordinary caller IDs and generated actor addresses remain different namespaces.
 - **Order:** `Seq` is an order key, not a gapless commit counter. PostgreSQL sequence allocation can leave gaps;
   MongoDB can have equal order keys from its separate allocation clocks and therefore sorts by ID as well.
 - **Optional clock facts:** an enabled store must commit each requested stamp atomically with its row, preserve
@@ -266,15 +339,17 @@ The [qualification findings](../../prototypes/kernel-model/FINDINGS.md) retain k
 - **Projection:** advancing the projector cursor and changing its views is atomic and conditional on the old cursor.
   The cursor does not participate in the owner's checkpoint fence.
 
-### Viewer read proposed beyond this schema baseline
+### Viewer read
 
-The existing store exposes journal pages, projection positions and views. The reviewed viewer change (#4359),
-implementing the [proposal's viewer path](../reports/clean-slate-kernel/design-sketch-draft-5.md), adds a required
-`ReadJournalOfAsync(partition, instance, after)` query returning one committed per-instance snapshot.
-That addition is not in the source baseline described above. Its proposed viewer reads cursor, view and the
-instance's tail, then merges in memory; paging unrelated snapshots can race a deletion and lose both history and
-its later marker. The proposal uses a consistent provider query and explicit snapshot/locking semantics where needed.
-It reuses the journal's partition/instance access path and does not add a table, collection or owner hot-path write.
+The [viewer](../../prototypes/kernel-model/src/Kernel.Durable/Viewer.cs) reads the projection cursor, the instance's
+projected view, then `ReadJournalOfAsync(partition, instance, after)` for a consistent per-instance journal tail.
+These are three logical store reads. A projector round can commit between them; the in-memory merge ignores
+revisions already represented in the view, applies deletion markers and resets the previous run's view and count.
+
+The tail query returns its rows from one committed snapshot. Paging across unrelated snapshots can race a deletion
+and lose both history and its later marker, so providers must preserve this consistency across any cursor batches.
+Snapshot and locking mechanisms, and therefore physical round trips, depend on the provider. The query reuses the
+journal's partition/instance access path and adds no table, collection or owner hot-path write.
 
 ## Growth, retention and measurement limits
 
@@ -285,6 +360,7 @@ Logical row growth and physical write amplification are different quantities.
 | Checkpoints | One current row/document per instance; explicit delete | Finished instances remain until deleted. Rewriting growing state causes database version/TOAST churn even without logical row growth. |
 | Ordinary inbox traffic | Consumption deletes the input | Insert/mark/delete writes and dead tuples still cost space and WAL. A pending or held backlog has no automatic age-based removal. |
 | Retained input IDs | `Done` plus non-null `KeepUntil`, then sweep | Deduplication lasts while that row remains; the window is not a permanent receipt. |
+| Private inbox identity and recall registry | Scoped keys/match bytes live with inbox rows; `CustomHandles` is checkpoint metadata, separate from inbox-row lifetime | Remote consumption need not prune the sender registry, and a later recall can fail when its row is absent. Stale handles can accumulate and enlarge checkpoint writes; the registry is not bounded by the current inbox. Allocator and lock objects have separate costs. |
 | Events | Kept until expiry, then sweep | Event volume and window length determine the retained set; lookup and removal are separate operations. |
 | Subscriptions | Explicit unsubscribe or instance-wide removal | Waits and start subscriptions need their owning lifecycle; sweep does not age them out. |
 | Journal | History level and explicit removal of positive rows on instance delete | Full/State append with history-bearing commits; deletion markers and other non-positive rows remain. No default journal-retention policy is implemented here. |
@@ -292,8 +368,10 @@ Logical row growth and physical write amplification are different quantities.
 | Partition metadata | Fixed partition count | One ownership/cursor record per partition, plus MongoDB's outside-add clock per partition. |
 | Optional commit facts, in-memory prototype only | Retained in the logical instance row; model-owned references can be released in a later commit | Unreleased captures grow the metadata map. The workflow-owned terminal fact remains until instance removal. No EF/Mongo column, TTL or measured WAL cost follows from this probe. |
 
-The [PostgreSQL write-volume measurement](../../prototypes/kernel-model/WRITES.md) supplies the following observations,
-not provider-independent capacity promises. The measurement used PostgreSQL 17.11, a checked fence, three nodes and
+The [PostgreSQL write-volume measurement](../../prototypes/kernel-model/WRITES.md) supplies the following historical observations,
+not provider-independent capacity promises. It predates the scoped inbox keys, exact match, allocator objects and
+custom-handle registry described above; it does not measure that newer physical shape.
+The measurement used PostgreSQL 17.11, a checked fence, three nodes and
 two kernel partitions for the stress runs, with outside traffic and killed sessions included as documented there.
 
 | Measured workload | WAL per landed instance commit |
@@ -316,13 +394,41 @@ The 4 KiB-pad runs still grew the checkpoint TOAST table to 36–39 MB for about
 space after vacuum rather than returning it. Setting fill factor to 70 on both Instances and Messages helped the
 burst workload; the same two-table experiment's roughly 4% improvement in the stress comparison was below the
 measurement's resolution. None is a selected host default.
-The report did not establish MongoDB/oplog volume, SQL Server/MySQL/SQLite write amplification, production capacity,
-WAL savings from the subsequently built external-values witness, or the size/write amplification of immutable
-commit-time facts. The clock probe has no qualified physical-provider mapping, so these older byte counts must not
-be presented as measurements of clock-bearing rows.
+The 13 November report did not establish MongoDB/oplog volume, SQL Server/MySQL/SQLite write amplification, production capacity,
+WAL savings from the subsequently built external-values witness, or the size/write amplification of scoped/private
+inbox identity, event allocators, custom handles, guarded windows or immutable commit-time facts. The clock probe
+has no qualified physical-provider mapping. Further measurements must isolate new identity domains, sequence/lock work and contention, and separate baseline
+from guarded-window runs; the updated baseline below does not isolate every such cost.
 
-Partitioning the PostgreSQL inbox by kernel partition was probed, not adopted: global message-ID uniqueness conflicts
-with a partitioned unique key that omits the partition column. Adding that column would change the deduplication
-scope and store operations. Lazy/delta snapshots, segmented checkpoints, completed-instance retirement and durable
+The [14 November scoped-inbox measurement](../../prototypes/kernel-model/WRITES.md#14-november-scoped-inbox-foundation)
+uses the current provider shape at kernel source `1b101defd87ae0275f0e2c2762ee317315a881e3`, PostgreSQL 17.11 and
+an in-batch fence. It runs the existing cost harness on four fresh databases: Full, State, Minimal and Full with a
+4 KiB incompressible pad. Each finishes with 2,215 instances, none unfinished and no unconsumed messages.
+This is a bounded cost/burst sample, separate from the earlier checked-fence chaos and checkpoint experiments.
+
+| Current-shape Full-history case | WAL | Denominator |
+|---|---:|---|
+| Ten durable no-op turns on the owner | 919 B | Per landed instance commit |
+| 1,000 balanced starts on the owner | 711 B | Per landed instance commit |
+| 1,000 starts arriving by poll, commit window | 1,953 B | Per landed instance commit, truncated |
+| Outside inserts for those polled starts | 612.256 B | Per start, separate setup window |
+| Same polled starts, setup plus commits | 2,566.024 B | Per start |
+| Same combined case with the 4 KiB pad | 7,104.464 B | Per start |
+
+The 16-case matrix per variant includes child creation, event-start acceptance, projection and membership. It is
+not a separate stress test of every private identity domain or allocator contention. No guarded commit window or
+physical commit-time facts are enabled. WAL windows include transaction/alignment, catalog and background work;
+State/Minimal windows show catalog activity, so cross-run differences do not identify a causal cost of one field,
+fence or worker change. Driver command and transaction counters are retained; physical wire trips were not measured.
+
+In the padded database, checkpoint TOAST live bytes remained 9,496,302. Dead TOAST bytes fell from 141,939 to zero
+after an unforced 70-second interval, while total instance relation size remained 12,877,824 bytes. Some unpadded
+relations still had dead tuples. Reclaiming tuples need not shrink files, and a wait does not guarantee vacuum.
+These samples do not establish sustained vacuum capacity, production sizing, tuning defaults or steady-state bloat.
+The linked report retains the complete case data, tuple observations and source/provenance limits.
+
+Partitioning the PostgreSQL inbox by kernel partition was probed, not adopted: global ordinary-ID uniqueness still
+conflicts with a partitioned unique key that omits the partition column. Adding that column to scoped keys would
+change deduplication scope and store operations. Lazy/delta snapshots, segmented checkpoints, completed-instance retirement and durable
 response receipts are not added to this provider contract by this page. Candidate retention/receipt designs require
 separate approval and qualification; the current tables and sweep predicates above remain the reference.

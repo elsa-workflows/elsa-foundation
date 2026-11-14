@@ -7,6 +7,24 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--internal"]) { InternalProgressWitness.Run(); return; }
+if (args is ["--internal-list"]) { foreach (var n in InternalProgressWitness.Names.Concat(InternalProgressWitness.ReaderNames)) Console.WriteLine(n); return; }
+if (args is ["--clr-readers"]) { ClrBoundaryReaders.Run(); ClrLegacyWitness.Run(); return; }
+if (args is ["--clr"]) { ClrFaultWitness.Run(); return; }
+if (args is ["--clr-list"]) { foreach (var n in ClrFaultWitness.Names) Console.WriteLine(n); return; }
+if (args is ["--clr-red"]) { ClrFaultWitness.Red(); return; }
+if (args is ["--inbox-signal"]) { SignalReceiverWitness.Run(); return; }
+if (args is ["--inbox-settings"]) { MachineInboxSettingsWitness.Run(); return; }
+if (args is ["--inbox"]) { MachineInboxWitness.Run(); return; }
+if (args is ["--regional-recovery"]) { RegionalRecovery.Run(); return; }
+if (args is ["--recovery-refusals"]) { RecoveryRefusals.Run(); return; }
+if (args is ["--recovery-red"]) { RecoveryWitness.Run(baseline: true); return; }
+if (args is ["--recovery-list"]) { foreach (var n in RecoveryWitness.Names.Concat(RecoveryRefusals.Names).Concat(RegionalRecovery.Names)) Console.WriteLine(n); return; }
+if (args is ["--recovery"]) { RecoveryWitness.Run(); return; }
+if (args is ["--scopes-context"]) { ScopedContextReaders.Run(); return; }
+if (args is ["--scopes-list"]) { foreach (var name in ScopedWorkflows.Names.Concat(ScopedReaders.Names).Concat(ScopedContextReaders.Names)) Console.WriteLine(name); return; }
+if (args is ["--scopes"]) { ScopedWorkflows.Run(); ScopedReaders.Run(); ScopedContextReaders.Run(); return; }
+if (args is ["--scopes-red"]) { ScopedWitness.Red(); return; }
 if (args is ["--native-graph-list"]) { foreach (var name in NativeGraphWitness.Names) Console.WriteLine(name); return; }
 if (args is ["--native-graph"]) { NativeGraphWitness.Run(); return; }
 if (args is ["--selection-list"]) { foreach (var name in SelectionWitness.Names) Console.WriteLine(name); return; }
