@@ -312,7 +312,8 @@ public sealed partial class StandaloneTriggerManagementTests
         Assert.Equal(0, fixture.Store.Writes);
     }
 
-    private static Fixture HttpPreviewFixture(ReservationReader? reader)
+    private static Fixture HttpPreviewFixture(IRuntimeIngressReservationReader? reader, IEnumerable<IIngressReservationPolicy>? policies = null,
+        IWorkflowTriggerBindingStore? bindings = null, IEnumerable<ITriggerReservationPlanner>? planners = null)
     {
         var fixture = new Fixture(new RuntimeCapability(true, true), reservations: reader, planners: planners ?? [new ReservationPlanner()], policies: policies, bindings: bindings);
         var grant = new TriggerInvocationGrant("grant", "trigger-a", "subscription-a", "definition-a", "default", "native", "http", 1,

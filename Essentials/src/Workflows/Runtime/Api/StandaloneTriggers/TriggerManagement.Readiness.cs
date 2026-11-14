@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 using Elsa.Workflows.Runtime.Services.Triggers;
 
@@ -61,12 +62,20 @@ internal sealed partial class TriggerManagement
         } while (after is not null);
         if (triggerBindings is null)
             throw new TriggerOperationException("unavailable", "Published source routes cannot be inspected in this composition.");
-        foreach (var binding in await triggerBindings.ListAllByStimulusTypeAsync(descriptor.StimulusType, ct))
+        IReadOnlyList<WorkflowTriggerBinding> active;
+        try { active = await triggerBindings.ListAllByStimulusTypeAsync(descriptor.StimulusType, ct); }
+        catch (NotSupportedException exception)
+        { throw new TriggerOperationException("unavailable", "Published source routes cannot be inspected in this composition.", innerException: exception); }
+        foreach (var binding in active)
         {
             // Native legacy bindings predate scoped reservations. Preserve original bindings and exclude a known
             // foreign publication before interpreting its route metadata, as the physical publication writer does.
-            if (binding.ActivationId is { } activation && triggerSources is not null &&
-                (await triggerSources.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), ct))?.PublicationScope is { } physical && physical != access.Scope.Persistence) continue;
+            if (binding.ActivationId is { } activation && triggerSources is not null)
+            {
+                var source = await triggerSources.FindAsync(WorkflowActivationReferenceIdentity.Create(activation), ct);
+                if (source is not null && source.ActivationId == activation && source.SlotId == binding.SlotId &&
+                    source.ArtifactId == binding.ArtifactId && source.PublicationScope is { } physical && physical != access.Scope.Persistence) continue;
+            }
             if (policy.Conflicts(descriptor, new(binding.StimulusType, binding.StimulusHash, binding.Metadata)))
                 throw new TriggerOperationException("route-conflict", "This source route is already owned by a published workflow.");
         }
