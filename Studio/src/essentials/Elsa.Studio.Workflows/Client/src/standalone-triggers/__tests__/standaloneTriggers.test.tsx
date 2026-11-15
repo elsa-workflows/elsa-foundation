@@ -216,11 +216,29 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     flushSync(() => button(container, "Apply reviewed change").click());
     await vi.waitFor(() => expect(container.textContent).toContain("Your edits are retained"));
     expect(saved).not.toHaveBeenCalled();
+    expect(button(container, "Apply reviewed change").disabled).toBe(true);
+    vi.mocked(client.read).mockRejectedValueOnce(new StudioHttpError(503, "Reload unavailable"));
+    flushSync(() => button(container, "Reload and review current state").click());
+    await vi.waitFor(() => expect(container.textContent).toContain("Reload unavailable"));
+    expect(button(container, "Apply reviewed change").disabled).toBe(true);
+    expect(client.apply).toHaveBeenCalledTimes(1);
     flushSync(() => button(container, "Reload and review current state").click());
     await vi.waitFor(() => expect(client.preview).toHaveBeenLastCalledWith("trigger-1", 2, { kind: "PauseSubscription", subscriptionId: "sub-1", expectedSubscriptionRevision: 4 }, expect.any(AbortSignal)));
     await vi.waitFor(() => expect(button(container, "Apply reviewed change")?.disabled).toBe(false));
     flushSync(() => button(container, "Apply reviewed change").click());
     await vi.waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+  });
+  it("allows the same reviewed request to be retried after an unconfirmed transient failure", async () => {
+    const client = { preview: vi.fn(async () => preview), apply: vi.fn().mockRejectedValueOnce(new StudioHttpError(503, "Response unavailable")).mockResolvedValue({ requestId: "retry", disposition: "AlreadyApplied", revision: 2 }) } as unknown as TriggerClient;
+    const saved = vi.fn();
+    const { container } = mount(<ChangeReview api={apiStub()} client={client} trigger={trigger()} command={{ kind: "PauseTrigger" }} onCancel={vi.fn()} onApplied={saved} />);
+    await vi.waitFor(() => expect(button(container, "Apply reviewed change")?.disabled).toBe(false));
+    flushSync(() => button(container, "Apply reviewed change").click());
+    await vi.waitFor(() => expect(container.textContent).toContain("Response unavailable"));
+    expect(button(container, "Apply reviewed change").disabled).toBe(false);
+    flushSync(() => button(container, "Apply reviewed change").click());
+    await vi.waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(client.apply).mock.calls[1]).toEqual(vi.mocked(client.apply).mock.calls[0]);
   });
   it("edits one canonical association from the trigger surface and reloads the same state in workflow context", async () => {
     let current = subscription();

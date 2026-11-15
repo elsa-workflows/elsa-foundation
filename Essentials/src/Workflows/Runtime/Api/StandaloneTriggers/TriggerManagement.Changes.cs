@@ -28,9 +28,12 @@ internal sealed partial class TriggerManagement
             await AddScheduleImpactAsync(aggregate, proposed, impact, ct);
             foreach (var row in aggregate.Subscriptions.Concat(proposed.Subscriptions).DistinctBy(row => row.Id))
             {
-                impact.Add(await CanReadTargetAsync(row.DefinitionId, row.SlotName, ct)
-                    ? new("Target", Description: $"{row.DefinitionId} / {row.SlotName}")
-                    : new("Restricted workflow", Description: "The resource change preserves restricted workflow details."));
+                if (await CanReadTargetAsync(row.DefinitionId, row.SlotName, ct))
+                {
+                    impact.Add(new("Target", Description: $"{row.DefinitionId} / {row.SlotName}",
+                        Target: new(row.DefinitionId, row.SlotName)));
+                }
+                else impact.Add(new("Restricted workflow", Description: "The resource change preserves restricted workflow details."));
             }
             impact.Add(new("Accepted work", Description: "Existing accepted deliveries and executions remain retained. This change does not cancel them."));
         }
