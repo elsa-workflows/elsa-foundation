@@ -452,6 +452,30 @@ public sealed class EfRuntimeModelCheckpointTests
     }
 
     [Fact]
+    public async Task A_model_worker_first_fault_cannot_drop_its_physical_parent_condition()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = WithOrigin(await PrepareAdmissionAsync(database));
+        var worker = admission.StateChanges.WorkflowExecution!;
+        var envelope = new WorkflowExecutionCommandEnvelope("start-envelope", worker.State.WorkflowExecutionId,
+            new("start-command", worker.State.WorkflowExecutionId, WorkflowExecutionCommandKind.Start, Now, null, new Dictionary<string, string>()),
+            "start-key", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now);
+        var work = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, envelope.WorkflowExecutionId, envelope.Command.CommandId, envelope.Command.Kind,
+            envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, envelope.EnqueuedAt);
+        var fault = new RuntimeInitialStartFault(work, new(worker.State.WorkflowExecutionId, "start-envelope", WorkflowExecutionCommandKind.Start,
+            "WorkflowStartSchedulerWorkHandler", new("Exception", "first checkpoint failed"), 1, RuntimeSchedulerPoisonDisposition.Poisoned, Now, Now, null));
+        var candidate = admission with
+        {
+            Checkpoint = admission.Checkpoint with { Name = RuntimeCheckpointNames.WorkflowFaulted },
+            StateChanges = new(worker with { State = worker.State with { Status = WorkflowExecutionStatus.Faulted, CompletedAt = Now } }, null, [], [], [], [], []),
+            PostCommitIntents = [], ExpectedInitialStartFault = fault, ExpectedModelExecution = null
+        };
+        await using var context = database.Open();
+        await Assert.ThrowsAsync<NotSupportedException>(() => Store(context).CommitAsync(candidate, Immediate).AsTask());
+        Assert.Empty(await context.WorkflowExecutionStates.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Model_owned_native_work_cannot_drop_its_address_or_terminal_result_responsibility()
     {
         await using var database = await CreateDatabaseAsync();

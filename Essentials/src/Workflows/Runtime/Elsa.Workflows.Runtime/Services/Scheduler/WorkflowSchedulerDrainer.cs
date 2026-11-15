@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
@@ -660,6 +661,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
 
         var metadata = BuildPoisonMetadata(workItem, existing, decision, exception);
+        metadata.Remove(InitialStartFaultAuthority.WorkSnapshotMetadata);
+        try
+        {
+            if (InitialStartFaultAuthority.CaptureWork(workItem) is { } initialStart)
+                metadata[InitialStartFaultAuthority.WorkSnapshotMetadata] = initialStart;
+        }
+        catch (Exception unreadable) when (unreadable is System.Text.Json.JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            // Malformed work must still retain its original poison decision. It grants no synthesized start authority.
+        }
         if (policyFailure is not null)
         {
             metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode] = "PolicyFailed";
