@@ -12426,3 +12426,9 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.Conflic
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.TriggerTypeKey.get -> string?
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerSourceResourceCommitStore.SupportsActivatedType(string! typeKey) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceComparer.MatchesPublication(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! reference, Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot! slot, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string? tenantId, System.DateTimeOffset now, Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSource? expectedOwner = null) -> bool
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.StandaloneTriggerResourceCommitted(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! triggerId, string! typeKey, long revision) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.TriggerId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.TypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.Revision.get -> long
