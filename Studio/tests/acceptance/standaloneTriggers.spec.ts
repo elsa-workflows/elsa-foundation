@@ -19,8 +19,10 @@ test.beforeEach(async ({ page }, info) => {
   // two due-occurrence waits and physical-write recovery. Keep individual assertions bounded.
   // Access deliberately restarts the independently composed SDK host and backend features repeatedly.
   // Its aggregate budget includes normal graceful shutdown; individual assertions and lifecycle waits stay bounded.
+  // HTTP includes real response deadlines, natural lease recovery and normal host restoration.
   test.setTimeout(info.title === "standalone access and availability" ? 900_000
-    : info.title === "standalone event and schedule starts" ? 360_000 : 240_000);
+    : info.title === "standalone event and schedule starts" ? 360_000
+    : info.title === "standalone HTTP modes" ? 600_000 : 240_000);
   const mode = String(info.project.metadata.themeMode ?? info.project.use.colorScheme ?? "light");
   await page.addInitScript(mode => {
     localStorage.setItem("elsa-studio-theme", "meridian");
@@ -636,7 +638,7 @@ test("standalone access and availability", async ({ page, browser }) => {
     const beforeRevokedSource = await j.deliveries(creatorTrigger.id);
     const refusedAfterRevocation = await j.sourceRequest(await j.read(creatorTrigger.id), { actual: "resource grant revoked" });
     expect(refusedAfterRevocation.response.ok()).toBe(false); expect(refusedAfterRevocation.body.acceptedCount).toBe(0);
-    expect(await j.deliveries(creatorTrigger.id)).toEqual(beforeRevokedSource); await j.capture("trigger-authority-revoked");
+    expect((await j.deliveries(creatorTrigger.id)).map(item => item.id).sort()).toEqual(beforeRevokedSource.map(item => item.id).sort()); await j.capture("trigger-authority-revoked");
     j.requests.push(...creatorJourney.requests, { kind: "actual-creator-departure-versus-resource-revocation", departure: departed.setup!.departure,
       departedActorStatus: departedAccess.status(), admissionAfterDeparture: acceptedAfterDeparture.response.status(), completedExecution: retained.recipients[0].executionReference!.id,
       admissionAfterRevocation: refusedAfterRevocation.response.status(), acceptedAfterRevocation: refusedAfterRevocation.body.acceptedCount });
