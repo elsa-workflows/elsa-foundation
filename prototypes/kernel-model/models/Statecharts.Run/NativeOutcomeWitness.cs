@@ -47,7 +47,11 @@ internal static class NativeOutcomeWitness
     private static void Run(string mode, string final, bool nested, bool retry, string cut, bool mapped)
     {
         ChartMark.Calls.Clear(); ChartDependency.Calls.Clear(); var h = new MachineInboxHarness(); var machine = Machine(retry, mapped);
-        var wf = Wf.Workflow("machine-inbox", Root(machine, nested)); wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
+        var wf = Wf.Workflow("machine-inbox", Root(machine, nested)); wf.InterventionRequested = true; using var registration = Register(wf);
+        try { h.Start(mode); }
+        catch (InvalidOperationException e) when (mapped && e.Message.StartsWith("Kernel: I14 ", StringComparison.Ordinal) &&
+            e.Message.Contains("Invalid statechart final-outcome mapping.", StringComparison.Ordinal))
+        { throw new InvalidOperationException("NOC6: a valid hierarchical top-level final mapping was refused", e); }
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         Check(Chart().Version == (mapped ? 7 : 6) && (Chart().FinalOutcomes is not null) == mapped,
