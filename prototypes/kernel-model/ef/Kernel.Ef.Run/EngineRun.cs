@@ -363,6 +363,8 @@ static class EngineRun
             counter.Reset();
             (opens.Count, saves.Set, saves.Released, locks.Largest) = (0, 0, 0, "");
             var trips = target.Proxy?.Trips ?? 0;
+            var groups = target.Proxy?.ProtocolRequests ?? 0;
+            var pgBefore=(target.Proxy?.Flushes??0,target.Proxy?.Executes??0,target.Proxy?.LimitedExecutes??0,target.Proxy?.NamedExecutes??0);
             var kinds = await target.WireByKindAsync();
             var wire = await target.WireAsync();
             var (walFrom, units) = target.Writes is { } w ? (await w.TakeAsync(), tally!.Units) : (null, 0);
@@ -374,6 +376,7 @@ static class EngineRun
             var sent = counter.Commands + counter.Transactions.Ended + target.BeginTrips * counter.Transactions.Begun + target.OpenTrips * opens.Count + target.SaveTrips * (saves.Set + saves.Released);
             var tcp = target.Proxy is { } proxy ? (proxy.Trips - trips).ToString() : "";
             Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8} {tcp,6}");
+            if(target.Engine=="postgres" && target.Proxy is {} pg)Console.WriteLine($"    PostgreSQL frames (groups include pipelined BEGIN, not RTT): groups={pg.ProtocolRequests-groups}, Flush={pg.Flushes-pgBefore.Item1}, Execute={pg.Executes-pgBefore.Item2}, nonzero-limit={pg.LimitedExecutes-pgBefore.Item3}, named-portal={pg.NamedExecutes-pgBefore.Item4}");
             if (locks.Largest != "") Console.WriteLine("    locks held at the largest commit: " + locks.Largest);
             if (walLine is not null) Console.WriteLine(walLine);
             if (setupLine is not null) Console.WriteLine(setupLine);
