@@ -14,6 +14,15 @@ export type DispatchBoundary = {
   acceptanceReceipt?: { kind: string; evidenceId: string; sealFingerprint: string };
   cohortRecipients: { recipientId: string; subscriptionId: string; plannedExecutionId: string; capturedTarget: Record<string, unknown>; phase: string }[];
 };
+export type CheckpointCut = {
+  processId: number; bootId: string; sourceRevision: string; sourceOutboxItemId: string;
+  cut: "BeforeInitialCheckpoint" | "AfterInitialCheckpointCommit"; workflowExecutionId: string;
+  origin: { sourceOutboxItemId: string; recipientId: string; sourceFingerprint: string; selectionFingerprint: string };
+  commitId: string | null; durableQueueBeforeCheckpoint: { workItemId: string; commandKind: string; claimToken: number }[];
+  checkpointTransactionCommitted: boolean; acknowledgementReturned: boolean;
+};
+export type CheckpointSnapshot = { sourceExecutionIds: string[]; workflowExecutionId: string; stateCount: number; origins: CheckpointCut["origin"][];
+  commitIds: string[]; queuedCommands: { workItemId: string; commandKind: string }[] };
 type HostReceipt = {
   action: string; previousProcessId: number | null; processId: number | null; generation: number; sourceSha: string; storePreserved: boolean;
   setup?: { sourceOwnedTriggerId: string; composition?: { processId: number; sourceSha: string; shape: string; runtimeProcessor: boolean; ingressFactory: boolean; deliveryStore: boolean; designStore: boolean; services: string[] }; departure?: { creator: string; membershipStatus: string; triggerId: string; triggerRevision: number; grantRevision: number; grantState: string; resourceUnchanged: boolean } };
@@ -22,6 +31,8 @@ type HostReceipt = {
   scopePeer?: { url: string; processId: number; runtimeAndDesignStoresIsolated: boolean; identityStoreSharedWithOwnedPrimary: boolean; sourceSha: string };
   concurrent?: { primaryProcessId: number | null; peerProcessId: number | null; primaryAlive: boolean; peerAlive: boolean; peerUrl: string | null;
     sourceSha: string; runtimeAndDesignStoresShared: boolean; primaryBoundary: DispatchBoundary | null; peerBoundary: DispatchBoundary | null };
+  checkpoint?: { cut: CheckpointCut; physicalAfterDeath?: CheckpointSnapshot; physicalAfterRecovery?: CheckpointSnapshot;
+    stopSignal?: string; naturalLeaseWaitSeconds?: number; leaseMutated?: boolean; clockChanged?: boolean };
   fault?: TriggerFault;
 };
 export type TriggerFault = { processId: number; nodeIdentity: string; bootId: string; sourceRevision: string; triggerId: string;
@@ -123,7 +134,7 @@ export class TriggerJourney {
     }) });
   }
   gap(state: string, reason: string) { this.unverified.push({ state, reason }); }
-  async host(action: "pause" | "resume" | "stop" | "start" | "restart" | "setup-access" | "cleanup-access" | "depart-creator" | "design-only" | "runtime-only" | "combined-probe" | "without-schedule-module" | "without-trigger-capability" | "unsupported-trigger-contract" | "restore-features" | "without-optional-editor" | "restore-studio-features" | "arm-dispatch-boundary" | "await-dispatch-boundary" | "recover-on-peer" | "inspect-dispatch-boundary" | "start-scope-peer" | "stop-scope-peer" | "arm-trigger-fault" | "inspect-trigger-fault" | "release-trigger-fault" | "start-concurrent-node" | "inspect-concurrent-node" | "release-dispatch-boundary" | "stop-concurrent-node", options?: { triggerId?: string; faultMode?: "SourceWriteRefused" | "DispatchShed" | "ResponseWriteFailed"; subscriptionId?: string; requestPath?: string }) {
+  async host(action: "arm-checkpoint-crash" | "recover-checkpoint-crash" | "inspect-checkpoint-recovery" | "pause" | "resume" | "stop" | "start" | "restart" | "setup-access" | "cleanup-access" | "depart-creator" | "design-only" | "runtime-only" | "combined-probe" | "without-schedule-module" | "without-trigger-capability" | "unsupported-trigger-contract" | "restore-features" | "without-optional-editor" | "restore-studio-features" | "arm-dispatch-boundary" | "await-dispatch-boundary" | "recover-on-peer" | "inspect-dispatch-boundary" | "start-scope-peer" | "stop-scope-peer" | "arm-trigger-fault" | "inspect-trigger-fault" | "release-trigger-fault" | "start-concurrent-node" | "inspect-concurrent-node" | "release-dispatch-boundary" | "stop-concurrent-node", options?: { sourceKey?: string; checkpointCut?: CheckpointCut["cut"]; triggerId?: string; faultMode?: "SourceWriteRefused" | "DispatchShed" | "ResponseWriteFailed"; subscriptionId?: string; requestPath?: string }) {
     const directory = process.env.UX_HOST_CONTROL, token = process.env.UX_HOST_CONTROL_TOKEN;
     if (!directory || !token) throw new Error("The owned runner must provide host lifecycle control");
     const key = randomUUID(), request = join(directory, `${key}.request.json`), response = join(directory, `${key}.response.json`);
@@ -380,7 +391,7 @@ export class TriggerJourney {
   async sourceRequest(trigger: TriggerView, data: unknown, expectedStatus?: number, headers: Record<string, string> = {}): Promise<{ response: APIResponse; body: Record<string, unknown> }> {
     const route = String(trigger.configuration.path).replace(/^\/+/, "");
     const path = `/workflows/http/${route}`;
-    const sourceKey = randomUUID();
+    const sourceKey = headers["Idempotency-Key"] ?? randomUUID();
     const response = await this.page.request.fetch(`${this.base}${path}`, { method: String(trigger.configuration.method), data, headers: { "Idempotency-Key": sourceKey, ...headers } });
     let body: Record<string, unknown>; try { body = await response.json(); } catch { body = { text: await response.text() }; }
     this.requests.push({ kind: "actual-http-source", method: trigger.configuration.method, path, sourceKey, request: safe(data), status: response.status(), result: safe(body) });

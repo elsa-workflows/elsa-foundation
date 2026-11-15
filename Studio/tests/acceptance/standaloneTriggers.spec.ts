@@ -1,3 +1,4 @@
+import { verifyInitialCheckpointCrashRecovery } from "./standaloneTriggerCheckpointCases";
 import { verifyHostComposition } from "./standaloneTriggerCompositionCases";
 import { delayNextTriggerRead } from "./standaloneRequestDelay";
 import { verifyDefaultAndNullWorkerEditor, verifyExactWorkerCollectionMapping } from "./standaloneBpmnEditorCases";
@@ -22,7 +23,8 @@ test.beforeEach(async ({ page }, info) => {
   // HTTP includes real response deadlines, natural lease recovery and normal host restoration.
   test.setTimeout(info.title === "standalone access and availability" ? 900_000
     : info.title === "standalone event and schedule starts" ? 360_000
-    : info.title === "standalone HTTP modes" ? 600_000 : 240_000);
+    : info.title === "standalone HTTP modes" ? 600_000
+    : info.title === "standalone delivery lifecycle and recovery" ? 900_000 : 240_000);
   const mode = String(info.project.metadata.themeMode ?? info.project.use.colorScheme ?? "light");
   await page.addInitScript(mode => {
     localStorage.setItem("elsa-studio-theme", "meridian");
@@ -474,6 +476,7 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     await j.host("restore-features");
   }
   await verifyConcurrentNodeClaims(j);
+  await verifyInitialCheckpointCrashRecovery(j);
   j.observed.push("The HTTP journey separately retains the successful-recipient versus shed-recipient retry suppression witness with exact source/root/checkpoint identities");
 });
 
