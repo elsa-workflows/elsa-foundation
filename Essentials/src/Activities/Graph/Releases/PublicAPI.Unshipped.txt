@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Activities.Graph.Releases.GraphActivitiesReleaseVerificationFeature
+Elsa.Activities.Graph.Releases.GraphActivitiesReleaseVerificationFeature.GraphActivitiesReleaseVerificationFeature() -> void
+virtual Elsa.Activities.Graph.Releases.GraphActivitiesReleaseVerificationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

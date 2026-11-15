@@ -37,6 +37,8 @@ export { bpmnStructureKind } from "./bpmn/bpmnStructure";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
+  /** The label came from explicit saved presentation rather than a catalog/type fallback. */
+  hasAuthoredLabel?: boolean;
   activityVersionId: string;
   activityTypeKey?: string;
   category?: string;
@@ -569,7 +571,8 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
   };
 }
 
-function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+/** Declared physical slots, without a designer's additional navigation projections. */
+export function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
   const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
@@ -741,9 +744,9 @@ export function updateScopeActivities(root: ActivityNode, frames: ScopeFrame[], 
 
 // Replaces the resolved owner node itself with `owner`. frames=[] replaces the root. Intermediate hops
 // locate the child in whichever slot contains it; the leaf hop swaps that child for `owner`.
-export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner: ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {
+export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner: ActivityNode, catalog?: ActivityCatalogLookup, options?: { preserveAncestorStart?: boolean }): ActivityNode {
   if (frames.length === 0) return owner;
-  return updateScopeAtFrames(root, frames, catalog, () => owner);
+  return updateScopeAtFrames(root, frames, catalog, () => owner, true, !options?.preserveAncestorStart);
 }
 
 // Shared recursive walk for the update helpers: descends through the frames (finding each frame's
@@ -754,25 +757,26 @@ function updateScopeAtFrames(
   frames: ScopeFrame[],
   catalog: ActivityCatalogLookup,
   apply: (owner: ActivityNode) => ActivityNode,
-  atRoot = true
+  atRoot = true,
+  normalizeAncestorStart = true
 ): ActivityNode {
   if (frames.length === 0) return apply(root);
 
   const [frame, ...rest] = frames;
   if (frame.kind === "root") {
     if (!atRoot || frame.ownerNodeId !== root.nodeId || !getChildSlots(root, catalog).some(slot => slot.id === frame.slotId)) return root;
-    return updateScopeAtFrames(root, rest, catalog, apply, false);
+    return updateScopeAtFrames(root, rest, catalog, apply, false, normalizeAncestorStart);
   }
   const located = locateChildSlot(root, frame.ownerNodeId, catalog);
   if (!located) return root;
 
-  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply, false);
+  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply, false, normalizeAncestorStart);
   if (updatedChild === located.child) return root;
 
   const updatedActivities = located.slot.activities.map(activity =>
     activity.nodeId === frame.ownerNodeId ? updatedChild : activity);
 
-  return replaceSlotActivities(root, located.slot, updatedActivities);
+  return replaceSlotActivities(root, located.slot, updatedActivities, normalizeAncestorStart);
 }
 
 export function updateActivity(root: ActivityNode, nodeId: string, update: (activity: ActivityNode) => ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {
@@ -817,8 +821,10 @@ export function hasSwitchCaseOutgoingConnections(root: ActivityNode, activity: A
   return getChildSlots(root, catalog).some(slot => slot.activities.some(child => hasSwitchCaseOutgoingConnections(child, activity, index, catalog)));
 }
 
-export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
+export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[], normalizeStart = true): ActivityNode {
   if (!activity.structure) return activity;
+  // Pure scoped refactorings preserve unrelated ancestor routing, including legacy implicit starts.
+  const finish = normalizeStart ? normalizeFlowchartStartNode : (value: ActivityNode) => value;
   if (activity.structure.kind === compensationScopeStructureKind && !slot.collectionProperty)
     return replaceCompensationScopeActivities(activity, activities);
   const nextValue = slot.cardinality === "single" ? activities[0] ?? null : activities;
@@ -839,7 +845,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
       [slot.childProperty]: nextValue
     };
 
-    return normalizeFlowchartStartNode({
+    return finish({
       ...activity,
       structure: {
         ...activity.structure,
@@ -851,7 +857,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
     });
   }
 
-  return normalizeFlowchartStartNode({
+  return finish({
     ...activity,
     structure: {
       ...activity.structure,
@@ -972,6 +978,7 @@ function createWorkflowNode(
         catalogItem,
         catalogItem?.activityTypeKey ?? activity.activityVersionId
       ),
+      hasAuthoredLabel: !!presentation?.displayName?.trim(),
       activityVersionId: activity.activityVersionId,
       activityTypeKey: catalogItem?.activityTypeKey,
       category: catalogItem?.category,
@@ -1136,7 +1143,11 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
     .filter(edge => edge !== null);
 }
 
+/** Complete terminates the nearest reusable graph boundary, regardless of legacy catalog Done metadata. */
+export const graphBoundaryCompleteTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
+
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  if (catalogItem?.activityTypeKey === graphBoundaryCompleteTypeKey) return [];
   // Executable inspection supplies its immutable contract; never recompute it from today's catalog defaults.
   const pinned = readStringList(activity.executableOutcomes);
   if (Array.isArray(activity.executableOutcomes)) return pinned.map(name => ({ name, displayName: name }));

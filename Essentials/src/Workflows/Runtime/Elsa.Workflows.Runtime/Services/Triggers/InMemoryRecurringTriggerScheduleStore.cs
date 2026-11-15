@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// to make recurring schedules survive restarts.
 /// </summary>
 [RuntimeDefaultRegistration]
-public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore, IInMemoryActivationProjection
+public sealed partial class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore, IInMemoryActivationProjection
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string ProjectionName = "recurring-schedule";
@@ -28,6 +28,8 @@ public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProv
     public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(schedule);
+        if (schedule.FailureReason is { } reason && (schedule.Resource is null || !Enum.IsDefined(reason)))
+            throw new ArgumentException("A schedule admission failure requires a defined resource-owned reason.", nameof(schedule));
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
@@ -276,7 +278,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProv
             if (!TryGetCurrent(claim, out _))
                 return new ValueTask<bool>(false);
 
-            _schedules[claim.Schedule.ScheduleId] = claim.Schedule with { NextOccurrence = nextOccurrence };
+            _schedules[claim.Schedule.ScheduleId] = claim.Schedule with { NextOccurrence = nextOccurrence, FailureReason = null };
             _claims.Remove(claim.Schedule.ScheduleId);
             return new ValueTask<bool>(true);
         }
@@ -285,7 +287,19 @@ public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProv
     public ValueTask<bool> ReleaseClaimAsync(
         RecurringTriggerOccurrenceClaim claim,
         DateTimeOffset visibleAt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) => ReleaseClaimAsync(claim, visibleAt, null, cancellationToken);
+
+    public ValueTask<bool> ReleaseClaimWithFailureAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt,
+        RecurringTriggerScheduleFailureReason failureReason, CancellationToken cancellationToken = default)
+    {
+        if (!Enum.IsDefined(failureReason)) throw new ArgumentOutOfRangeException(nameof(failureReason));
+        ArgumentNullException.ThrowIfNull(claim);
+        if (claim.Schedule.Resource is null) throw new ArgumentException("An admission failure reason requires a resource-owned schedule.", nameof(claim));
+        return ReleaseClaimAsync(claim, visibleAt, failureReason, cancellationToken);
+    }
+
+    private ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt,
+        RecurringTriggerScheduleFailureReason? failureReason, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(claim);
         cancellationToken.ThrowIfCancellationRequested();
@@ -295,13 +309,15 @@ public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProv
             if (!TryGetCurrent(claim, out var state))
                 return new ValueTask<bool>(false);
 
+            var failureCount = checked(state.FailureCount + 1);
+            _schedules[claim.Schedule.ScheduleId] = claim.Schedule with { FailureReason = failureReason };
             _claims[claim.Schedule.ScheduleId] = state with
             {
                 OwnerId = null,
                 Revision = ++_lastRevision,
                 ClaimedAt = null,
                 VisibleAfter = visibleAt,
-                FailureCount = checked(state.FailureCount + 1)
+                FailureCount = failureCount
             };
             return new ValueTask<bool>(true);
         }

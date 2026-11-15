@@ -101,3 +101,17 @@ it("two queued acknowledgements of one snapshot do not create another edit", asy
   await settle(); expect(history.canRedoNow).toBe(true);
   flushSync(() => history.redo()); expect(firstStep()).toBe("block");
 });
+
+it("an ordinary reviewed edit remains atomic when an immediate inspector edit follows, without a Weaver save hold", () => {
+  const before = doc.state.draft!;
+  const next = { ...structuredClone(before), activityPresentation: [{ nodeId: "child", displayName: "Named step" }] };
+  flushSync(() => { history.recordEdit(next); doc.editDraft(() => next); });
+  expect(history.lineageHold.held).toBe(false);
+  flushSync(() => doc.editDraft(({ draft }) => ({ ...draft!, activityPresentation: [{ nodeId: "child", displayName: "Inspector edit" }] })));
+  flushSync(() => history.undo());
+  expect(doc.state.draft!.activityPresentation?.[0].displayName).toBe("Named step");
+  flushSync(() => history.undo());
+  expect(doc.state.draft!.activityPresentation).toEqual([]);
+  flushSync(() => history.redo());
+  expect(doc.state.draft!.activityPresentation?.[0].displayName).toBe("Named step");
+});

@@ -159,7 +159,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
       <StudioTabPanel baseId={hostTabsBaseId} index={hostTabs.findIndex(item => item.id === activeHostId)} className="modules-tab-panel">
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
-      {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
+      {activeStatus ? <StudioAlert tone="info">{activeStatus}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
         <SummaryItem label="Rows" value={rows.length} />

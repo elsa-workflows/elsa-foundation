@@ -1206,6 +1206,14 @@ export interface StudioExpressionSourceRenderer {
 
 export interface StudioExpressionEditorContribution extends StudioBackendAwareContribution {
   id: string;
+  /** Language-owned proof that adding an unrelated lexical variable preserves this authored expression. */
+  variableAdditionPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
+  /** The inline editor presents its descriptor caption in its own shared field. */
+  presentsField?: boolean;
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;

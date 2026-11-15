@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// transitions use the row revision for optimistic CAS, while consumption deliberately fences on owner and token so
 /// a renewal remains consumable by its original claimant.
 /// </remarks>
-public sealed class EfSchedulerWorkQueueStore(
+public sealed partial class EfSchedulerWorkQueueStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowSchedulerWorkQueue, IWorkflowSchedulerWorkClaimInspection,
@@ -146,7 +146,8 @@ public sealed class EfSchedulerWorkQueueStore(
             select new { Root = root, Ownership = ownership })
             .SingleAsync(cancellationToken);
         var state = EfWorkflowExecutionStateStore.ReadChecked(execution.Root, scope, workflowExecutionId);
-        accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+        if (!EfWorkflowExecutionStateStore.HasBoundIngressScope(state, scope))
+            accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
         return EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(
             execution.Ownership,
             scope,

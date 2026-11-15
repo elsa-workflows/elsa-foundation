@@ -72,6 +72,10 @@ contract, event/trigger lifetime and matching, complete hierarchical/parallel se
 data/outcomes/versioning, Studio journeys and saga composition. The program issue owns the evolving decision
 register; the accepted product direction does not by itself approve an internal engine design.
 
+The proposed [source-wave work unit](../../specs/1210-state-machine/source-wave-plan.md) advances shared-publication
+membership and native readiness. Its source/continuation/provider evidence remains planned; the separate draft
+identity review and all production architecture/Studio/saga gates remain intact.
+
 The program completes only when the accepted first-release requirements have actual native/Studio authoring,
 execution and persistence evidence, appropriate reviewed/merged changes and resulting-main qualification.
 A planning PR, flat-only runtime, hierarchy alone, attractive editor or closed child issues is insufficient.

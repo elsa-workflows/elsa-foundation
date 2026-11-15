@@ -31,11 +31,11 @@ public sealed class EfSchedulerStateStore(
             x.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId),
             cancellationToken);
         if (row is null)
-            context.SchedulerStates.Add(ToEntity(state, scope, id, 1));
+            context.SchedulerStates.Add(ToEntity(context, state, scope, id, 1));
         else
         {
             _ = Read(row, scope, state.WorkflowExecutionId);
-            Copy(row, state, scope, checked(row.Revision + 1));
+            Copy(context, row, state, scope, checked(row.Revision + 1));
         }
         try
         {
@@ -93,17 +93,17 @@ public sealed class EfSchedulerStateStore(
     }
 
     // Internal checkpoint staging reuses the direct store's provider-neutral projection.
-    internal static SchedulerStateEntity ToEntity(SchedulerState state, string scope, string id, long revision) => new()
+    internal static SchedulerStateEntity ToEntity(RuntimeDbContext context, SchedulerState state, string scope, string id, long revision) => new()
     {
         Id = id, ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope), ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
         WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId), WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(state.WorkflowExecutionId), WorkflowExecutionIdOrderKey = EfRuntimeOperationalStoreSupport.Order(state.WorkflowExecutionId), Collection = Collection,
-        ContentJson = EfSchedulerStateJson.Serialize(state), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = revision
+        ContentJson = EfSchedulerStateJson.Serialize(state), SchemaVersion = RuntimeSchemaWriteVersion.Operational(context), Revision = revision
     };
 
-    internal static void Copy(SchedulerStateEntity row, SchedulerState state, string scope, long revision)
+    internal static void Copy(RuntimeDbContext context, SchedulerStateEntity row, SchedulerState state, string scope, long revision)
     {
-        var replacement = ToEntity(state, scope, row.Id, revision);
-        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.Collection = replacement.Collection; row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; row.Revision = revision;
+        var replacement = ToEntity(context, state, scope, row.Id, revision);
+        row.ScopeKey = replacement.ScopeKey; row.ScopeKeyHash = replacement.ScopeKeyHash; row.WorkflowExecutionId = replacement.WorkflowExecutionId; row.WorkflowExecutionIdHash = replacement.WorkflowExecutionIdHash; row.WorkflowExecutionIdOrderKey = replacement.WorkflowExecutionIdOrderKey; row.Collection = replacement.Collection; row.ContentJson = replacement.ContentJson; row.SchemaVersion = RuntimeSchemaWriteVersion.Operational(context, row.SchemaVersion); row.Revision = revision;
     }
 
     // #2108: the version check must run before EfSchedulerStateJson.Deserialize ever sees this row's

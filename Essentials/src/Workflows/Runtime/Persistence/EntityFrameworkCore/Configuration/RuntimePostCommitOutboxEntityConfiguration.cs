@@ -18,9 +18,12 @@ public sealed class RuntimePostCommitOutboxEntityConfiguration : IEntityTypeConf
         // The logical outbox ID has no enforced length bound: sorting its full ordinal projection cannot use a
         // narrow-provider composite index. Filter by the bounded candidate/time indexes and sort before Take.
         b.Property(x => x.OutboxItemIdOrderKey).IsRequired();
-        b.Property(x => x.WorkflowExecutionId).IsRequired();
-        b.Property(x => x.WorkflowExecutionIdHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.WorkflowExecutionIdOrderKey).HasMaxLength(RuntimePostCommitOutboxEfModule.PhysicalIdentityOrderKeyMaximumLength).IsRequired();
+        b.Property(x => x.WorkflowExecutionId).IsRequired(false);
+        b.Property(x => x.WorkflowExecutionIdHash).HasMaxLength(64).IsRequired(false);
+        b.Property(x => x.WorkflowExecutionIdOrderKey).HasMaxLength(RuntimePostCommitOutboxEfModule.PhysicalIdentityOrderKeyMaximumLength).IsRequired(false);
+        b.Property(x => x.SourceId).HasMaxLength(RuntimePostCommitOutboxEfModule.PhysicalIdentityMaximumLength * 4);
+        b.Property(x => x.TriggerIdHash).HasMaxLength(64);
+        b.Property(x => x.SourceKeyHash).HasMaxLength(64);
         b.Property(x => x.IntentKind).HasMaxLength(230).IsRequired();
         b.Property(x => x.IntentKindHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
@@ -31,5 +34,7 @@ public sealed class RuntimePostCommitOutboxEntityConfiguration : IEntityTypeConf
         b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.DeliverableAtUtcTicks, x.RecordedAtUtcTicks });
         b.HasIndex(x => new { x.ScopeKeyHash, x.IntentKindHash, x.DeliverableAtUtcTicks, x.RecordedAtUtcTicks });
         b.HasIndex(x => new { x.ScopeKeyHash, x.ClaimableIsEligible, x.ClaimableAtUtcTicks, x.RecordedAtUtcTicks });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.TriggerIdHash, x.SourceKeyHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.SourceKind });
     }
 }

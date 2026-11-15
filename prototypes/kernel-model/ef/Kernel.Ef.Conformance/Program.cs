@@ -38,6 +38,7 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
         + (flags.Contains("--m5") ? ", M5 MUTATION" : "") + (engine == "sqlserver" ? flags.Contains("--rcsi-off") ? ", locking" : ", RCSI" : "")
         + (engine == "mysql" ? flags.Contains("--rc") ? ", READ COMMITTED" : ", REPEATABLE READ" : "");
 
+    private bool CaseEquivalentTopic => engine is "mysql" or "sqlserver";
     private bool Pg => engine == "postgres";
     private string Engine => engine;
 
@@ -106,6 +107,16 @@ sealed class EfProvider(string engine, string? server, string[] flags) : IStoreP
     private sealed class Provided(EfProvider provider, EfStore store, EfStore outside, string admin, string? file, Counting? counter) : ProvidedStore
     {
         public override IKernelStore Store => store;
+        public override bool ProbeUnpairedTopicUnits => provider.Engine == "sqlserver";
+        public override bool CaseEquivalentTopic => provider.CaseEquivalentTopic;
+        public override bool LargeEventKey => provider.Pg;
+        public override string? LargestInboxId => provider.Engine switch
+        {
+            "sqlserver" => "0/a!" + new string('界', 446),
+            "mysql" => "0/a!" + string.Concat(Enumerable.Repeat("🌐", 251)),
+            _ => null
+        };
+        public override string MissingConsumeOutcome => "not landed";
         public override IKernelStore NewClient() => outside;
         public override ICostCounter? Counter => counter;
 

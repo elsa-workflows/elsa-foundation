@@ -59,7 +59,7 @@ export function ConnectionPickerEditor({
   const selectionDisabled = !!disabled || visibleState.status !== "ready";
 
   return (
-    <div className="connection-picker-editor"><StudioField controlId={selectId} label="Connection">
+    <div className="connection-picker-editor"><StudioField controlId={selectId} label={descriptor.displayName || descriptor.name}>
 
       <select
         ref={selectRef}

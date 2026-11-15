@@ -1,4 +1,4 @@
-import { StudioField } from "./ui/forms/Field";
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   readActivityInputOptionsProvider,

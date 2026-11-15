@@ -14,6 +14,14 @@ internal sealed class ReleaseBundleCodec : IReleaseBundleCodec
         return Capture(manifestUtf8, blobs, new Dictionary<string, ReadOnlyMemory<byte>>(), Limits(limits));
     }
 
+    public IReleaseBundleTransport ValidateParts(ReadOnlyMemory<byte> manifestUtf8,
+        IReadOnlyDictionary<string, ReadOnlyMemory<byte>> blobs, IReadOnlyDictionary<string, ReadOnlyMemory<byte>> attachments,
+        ReleaseBundleLimits? limits)
+    {
+        ArgumentNullException.ThrowIfNull(blobs); ArgumentNullException.ThrowIfNull(attachments);
+        return Capture(manifestUtf8, blobs, attachments, Limits(limits));
+    }
+
     public async ValueTask<IReleaseBundleTransport> ReadZipAsync(Stream input, ReleaseBundleLimits? limits = null,
         CancellationToken cancellationToken = default)
     {
@@ -194,7 +202,7 @@ internal sealed class ReleaseBundleCodec : IReleaseBundleCodec
         return new CapturedTransport(HashManifest(manifest), manifest, members, manifestBytes, blobs, attachments);
     }
 
-    private static ReleaseBundleLimits Limits(ReleaseBundleLimits? limits)
+    internal static ReleaseBundleLimits Limits(ReleaseBundleLimits? limits)
     {
         var value = limits ?? new();
         if (value.MaxManifestBytes <= 0 || value.MaxBlobBytes <= 0 || value.MaxExpandedBytes <= 0 || value.MaxArchiveBytes <= 0 ||

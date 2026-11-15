@@ -1,3 +1,4 @@
+import { holdToastForPlacement } from "../acceptance/toastPlacementControl";
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
@@ -48,6 +49,38 @@ for (const width of [320, 768, 1024, 1440]) {
   });
 }
 
+test("search waits for initial collection readiness and then accepts Enter", async ({ page }) => {
+  const queries: string[] = [];
+  let releaseDescriptors!: () => void;
+  const descriptorsReady = new Promise<void>(resolve => { releaseDescriptors = resolve; });
+  await page.route("**/connections?*", route => {
+    const query = new URL(route.request().url()).searchParams.get("search") ?? "";
+    queries.push(query);
+    return route.fulfill({ json: { items: query ? [] : [connection] } });
+  });
+  await page.route("**/connections/descriptors", async route => {
+    await descriptorsReady;
+    await route.fulfill({ json: descriptors });
+  });
+  try {
+    await page.goto("/?mode=connections");
+    const search = page.getByRole("searchbox", { name: "Search connections", exact: true });
+    const submit = page.getByRole("button", { name: "Search", exact: true });
+    await expect(submit).toBeDisabled();
+    await expect.poll(() => queries).toEqual([""]);
+    await search.fill("absent");
+    await search.press("Enter");
+    expect(queries).toEqual([""]);
+    releaseDescriptors();
+    await expect(submit).toBeEnabled();
+    await search.press("Enter");
+    await expect(page.getByRole("button", { name: "Clear search", exact: true })).toBeVisible();
+    expect(queries).toEqual(["", "absent"]);
+  } finally {
+    releaseDescriptors();
+  }
+});
+
 test("creating a Connection preserves the accepted search and leaves absent results unselected", async ({ page }) => {
   const listQueries: string[] = [];
   const created = { ...connection, name: "billing-api", displayName: "Billing API" };
@@ -78,7 +111,8 @@ test("creating a Connection preserves the accepted search and leaves absent resu
   await expect(dialog).toHaveCount(0);
   await expect(search).toHaveValue("customer");
   await expect.poll(() => listQueries).toEqual(["", "customer", "customer"]);
-  await expect(page.getByRole("status")).toContainText("Connection 'billing-api' created.");
+  await expect(page.locator(".studio-toast")).toContainText("Connection 'billing-api' created.");
+  await expect(page.locator(".connections-notice")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
@@ -315,5 +349,36 @@ for (const width of [320, 1440]) {
     await create.click();
     await expect(dialog).toHaveCount(0);
     expect(attempts).toBe(2);
+  });
+}
+
+
+for (const controlled of [false, true]) {
+  test(`real Connection confirmation across a slow refresh: placement control ${controlled}`, async ({ page }) => {
+    let created = false;
+    const value = { ...connection, name: controlled ? "placement-held" : "placement-unheld", secretFieldNames: [] };
+    await page.route("**/connections?*", async route => {
+      // Deliberately put a real read response beyond the unchanged 8s notice lifetime; this is the causal control.
+      if (created) await new Promise(resolve => setTimeout(resolve, 9000));
+      await route.fulfill({ json: { items: created ? [value] : [] } });
+    });
+    await page.route("**/connections/descriptors", route => route.fulfill({ json: descriptors }));
+    await page.route("**/connections", async route => { created = true; await route.fulfill({ status: 201, json: value }); });
+    await page.goto("/?mode=connections");
+    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
+    const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+    await dialog.getByLabel("Name", { exact: true }).fill(value.name);
+    const refresh = page.waitForResponse(response => new URL(response.url()).pathname === "/connections" && response.request().method() === "GET");
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
+    const confirmation = page.locator(".studio-toast").filter({ hasText: `Connection '${value.name}' created.` });
+    await expect(confirmation).toBeVisible();
+    const hold = controlled ? await holdToastForPlacement(page, confirmation) : undefined;
+    try {
+      await refresh;
+      await expect(page.getByRole("table", { name: "Connections", exact: true }).getByRole("row").filter({ hasText: value.name })).toBeVisible();
+      if (hold) { await hold.assertCurrent(); await expect(confirmation).toBeVisible(); }
+      else await expect(confirmation).toHaveCount(0);
+    } finally { await hold?.release(); }
   });
 }

@@ -110,9 +110,11 @@ public sealed record ActivityChildProjection(
 }
 
 /// <summary>
-/// Physical ownership for retaining per-node authoring metadata, independent of lexical visibility.
-/// Activities are real native roots whose ownership can be traversed recursively. Additional node IDs
-/// name owned headers without inventing activity bodies. Neither collection establishes execution order.
+/// Physical ownership for retaining per-node authoring metadata and structural source/admission
+/// validation, independent of lexical visibility. Activities are real physically owned native roots
+/// whose ownership can be traversed recursively. Additional node IDs are presentation identities for
+/// owned headers only, without activity bodies to traverse or validate. Neither collection establishes
+/// lexical scope, data flow or execution order.
 /// </summary>
 public sealed record ActivityOwnershipProjection(
     IReadOnlyCollection<ActivityNode> Activities,

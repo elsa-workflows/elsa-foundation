@@ -39,6 +39,25 @@ public sealed class ModuleMigrationTests : IDisposable
         }
     }
 
+    // The no-op qualified-link migration shares the issuer migration's frozen target model.
+    // Compare EF's actual initialized metadata, including provider annotations and SQL types.
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void The_latest_IAM_migration_retains_the_complete_IAM_schema(string provider)
+    {
+        var type = Assert.Single(ModuleContextCatalog.Contexts(provider),
+            context => context.Name.StartsWith("IdentityIam", StringComparison.Ordinal));
+        using var context = ModuleContextCatalog.Create(type, ModuleContextCatalog.PlaceholderConnection(provider));
+        var migrations = context.GetService<IMigrationsAssembly>();
+        var latest = migrations.Migrations.Last();
+        var target = migrations.CreateMigration(latest.Value, context.Database.ProviderName!).TargetModel;
+        var initialized = context.GetService<IModelRuntimeInitializer>().Initialize(target, designTime: true);
+        var current = context.GetService<IDesignTimeModel>().Model;
+        Assert.False(context.GetService<IMigrationsModelDiffer>().HasDifferences(
+                initialized.GetRelationalModel(), current.GetRelationalModel()),
+            $"{type.Name}: {latest.Key} does not describe the complete IAM schema.");
+    }
+
     // A snapshot can merge cleanly while a concurrent incremental migration still describes the old schema.
     // Future migration safety checks read that migration's target model, so it must retain the complete schema.
     [Theory]

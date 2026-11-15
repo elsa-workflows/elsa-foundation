@@ -1,0 +1,5 @@
+#nullable enable
+Elsa.Workflows.Publishing.Releases.Runtime.WorkflowReleaseRuntimeFeature
+Elsa.Workflows.Publishing.Releases.Runtime.WorkflowReleaseRuntimeFeature.WorkflowReleaseRuntimeFeature() -> void
+virtual Elsa.Workflows.Publishing.Releases.Runtime.WorkflowReleaseRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Workflows.Publishing.Releases.Runtime.WorkflowReleaseRuntimeFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

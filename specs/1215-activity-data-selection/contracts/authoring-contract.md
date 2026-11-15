@@ -77,7 +77,10 @@ explicitly exposed by the owning structure. Identity is independent of the displ
   `ActivityData/UnsupportedMemberBinding` and returns no source, and a source that has no member read (a scoped
   result read, a legacy dotted request read) reports `ActivityData/InvalidSource`. Every analysis carries
   `memberReadsEnabled`; a client offers member selection only when it is `true`, and an answer without it reads as
-  `false`.
+  `false`. The flag is meaningful only on a current `supported` or `empty` answer. Clients must not learn or
+  update it from an `invalid` answer, including the activity owner's `document-invalid` analysis, which may carry
+  the default `false`. A focused member response is selectable only when its canonical role, literal path and
+  source identity match the request; a whole binding is never a fallback for a member choice.
 - Workflow inputs retain their stable input identity; display-name edits do not rebind them.
 - Variables retain declaration identity and lexical scope; same-name/shadowed variables remain distinct.
 - Current item is a structure-owned projection of an existing value role with iteration scope. The
@@ -147,7 +150,9 @@ authored documents or source text.
 
 A refused source or target is answered with state `invalid` and the analysis that refused it, so its findings
 (code and consuming input path) can explain the refusal. That answer passes the same authorization, catalog and
-base rechecks as a supported one before disclosure.
+base rechecks as a supported one before disclosure. A client may read its safe findings but must not offer sources
+from an `invalid` answer, even when its analysis carries candidates. It does not use that analysis to update member
+capability or target facts.
 
 The Foundation leaf does not adapt expression-shaped host metadata filters into neutral policy. When
 either `IExpressionAuthoringContextFilter` or `IExpressionAuthoringSymbolFilter` is configured, both

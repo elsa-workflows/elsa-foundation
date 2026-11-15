@@ -4,6 +4,15 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 public interface IRuntimeCheckpointCommitStore
 {
+    /// <summary>Whether a first fault atomically validates its accepted source, parked decision and ownership.</summary>
+    bool SupportsInitialStartFaultAdmission => false;
+
+    /// <summary>Whether history, its sequence head and lifecycle projections share the checkpoint's atomic boundary.</summary>
+    bool SupportsHistory => false;
+
+    /// <summary>Qualifies the actual scoped reader used by this atomic history writer, including shared backend/context/state ownership.</summary>
+    bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => false;
+
     /// <summary>Whether model state and accepted input share this checkpoint's atomic authority.</summary>
     bool SupportsModelCheckpoint => false;
 
@@ -33,5 +42,11 @@ public interface IRuntimeCheckpointCommitStore
     /// new commit, <see cref="RuntimeCheckpointCommit.ExpectedFence"/> must be validated atomically with every state
     /// change, outbox item, and create-only marker; stale fences expose no partial checkpoint outcome.
     /// </summary>
+    /// <remarks>
+    /// A non-null <see cref="RuntimeCheckpointCommit.ExpectedInitialStartFault"/> requires the actual parked initial work,
+    /// accepted source and live ownership fence to be validated atomically with the first terminal state and incident.
+    /// The default capability is false; unsupported providers must refuse this condition without writing.
+    /// </remarks>
+    /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.RuntimeCheckpointCommitValidationException">The conditional first fault does not match its physical source or parked decision. The exception retains the cause and execution, work and commit identities.</exception>
     ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default);
 }

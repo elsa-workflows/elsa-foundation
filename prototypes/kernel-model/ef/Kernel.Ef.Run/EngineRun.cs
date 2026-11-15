@@ -25,12 +25,21 @@ static class EngineRun
 {
     public static async Task<int> RunAsync(string[] args)
     {
+        if (args is ["size-check"]) return await StateSizeChecks.RunAsync();
         if (args.Length < 3) return 2;
-        var target = new Target(args[1], args[2], args.Skip(3).Select(a => a.Split('=', 2)).ToDictionary(a => a[0], a => a.Length > 1 ? a[1] : "1"));
+        var options = args.Skip(3).Select(a => a.Split('=', 2)).ToDictionary(a => a[0], a => a.Length > 1 ? a[1] : "1");
+        int[]? sizes = null;
+        if (args[0] == "cost")
+        {
+            try { sizes = StateSizeBenchmark.ParseSizes(options.GetValueOrDefault("sizes", "1,10,100,1000")); }
+            catch (ArgumentException error) { Console.Error.WriteLine(error.Message); return 2; }
+        }
+        // Validate every size before constructing Target (which can start a proxy), opening a database or resetting it.
+        var target = new Target(args[1], args[2], options);
         return args[0] switch
         {
             "stress" => await Stress(target),
-            "cost" => await Cost(target),
+            "cost" => await Cost(target, sizes!),
             "probe" => await Probe(target),
             "block" => await Block(target),
             "definite" => await Definite(target),
@@ -40,7 +49,7 @@ static class EngineRun
     }
 
     private static IExecutionModel[] Models() =>
-        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { }), new OnEvent()];
+        [new Counter(), new Parent(), new Child(), new Waiter(), new Sequence(), new Correlation(), new CWaiter(2), new Runner((_, _) => new ValueTask<object?>((object?)null)), new Fragile(() => { }), new OnEvent(), new Blob()];
 
     // A host that runs passes of one scope until two in a row find nothing to do.
     private static async Task Drain(IScopeActivation scope, bool poll)
@@ -192,11 +201,13 @@ static class EngineRun
                         // Round 3: an instance started by an event, the subscription registered before or after the publish.
                         var start = new SubscriptionRow("on" + n, "", "s", OnEvent.Spec("o"));
                         var published = new EventRow("on" + n, "f" + n, "f" + n, keep);
-                        onEvents.Add(Events.Deliver(published, start, partitions).Target.Id);
+                        string? matchedTarget = null;
+                        void Matched(EventRoute _, EventAcceptance receipt) => matchedTarget = receipt.Target.Id;
                         var first = random.Next(2) == 0;
-                        if (first) await Retry(() => Events.SubscribeAsync(outside, start, partitions));
-                        await Retry(() => Events.PublishAsync(outside, published, partitions));
-                        if (!first) await Retry(() => Events.SubscribeAsync(outside, start, partitions));
+                        if (first) await Retry(() => Events.SubscribeAsync(outside, start, partitions, matched: Matched));
+                        await Retry(() => Events.PublishAsync(outside, published, partitions, matched: Matched));
+                        if (!first) await Retry(() => Events.SubscribeAsync(outside, start, partitions, matched: Matched));
+                        onEvents.Add(matchedTarget ?? throw new InvalidOperationException("Neither side accepted the start match."));
                         break;
                     default:
                         var count = random.Next(1, 6);
@@ -323,14 +334,14 @@ static class EngineRun
 
     // ---- what a run costs ----------------------------------------------------------------------------------------------
 
-    private static async Task<int> Cost(Target target)
+    private static async Task<int> Cost(Target target, int[] sizes)
     {
         var counter = new Counting();
         var (locks, opens, saves) = (new Locks(target), new Opens(), new Saves());
         var create = target.Has("locks") ? target.Workers(counter, counter.Transactions, opens, saves, locks) : target.Workers(counter, counter.Transactions, opens, saves);
         await target.ResetAsync(2);
-        var tally = target.Writes is null ? null : new Tally(target.Store(create));     // in process: it adds no round trip
-        IKernelStore store = tally ?? (IKernelStore)target.Store(create);
+        var tally = new Tally(target.Store(create));     // also proves each size trial landed ten commits; no round trip
+        IKernelStore store = tally;
         // A cost run counts the work, not the lease's upkeep: with an hour's lease no pass renews it inside a row, however slow the engine.
         var owner = new Worker("owner", 0, store, target.Actors(Models()), new WorkerOptions { PollLimit = 5000, MaxBatch = 5000, Lease = TimeSpan.FromHours(1) });
         await new DurableHost([owner]).ActivateAsync(owner.Partition);
@@ -352,6 +363,8 @@ static class EngineRun
             counter.Reset();
             (opens.Count, saves.Set, saves.Released, locks.Largest) = (0, 0, 0, "");
             var trips = target.Proxy?.Trips ?? 0;
+            var groups = target.Proxy?.ProtocolRequests ?? 0;
+            var pgBefore=(target.Proxy?.Flushes??0,target.Proxy?.Executes??0,target.Proxy?.LimitedExecutes??0,target.Proxy?.NamedExecutes??0);
             var kinds = await target.WireByKindAsync();
             var wire = await target.WireAsync();
             var (walFrom, units) = target.Writes is { } w ? (await w.TakeAsync(), tally!.Units) : (null, 0);
@@ -363,6 +376,7 @@ static class EngineRun
             var sent = counter.Commands + counter.Transactions.Ended + target.BeginTrips * counter.Transactions.Begun + target.OpenTrips * opens.Count + target.SaveTrips * (saves.Set + saves.Released);
             var tcp = target.Proxy is { } proxy ? (proxy.Trips - trips).ToString() : "";
             Console.WriteLine($"{name,-58} {counter.Commands,8} {counter.Transactions.Begun,6} {counter.Transactions.Ended,6} {opens.Count,6} {saves.Set + saves.Released,6} {counted,8} {sent,6} {(wire < 0 ? "" : wire.ToString()),8} {tcp,6}");
+            if(target.Engine=="postgres" && target.Proxy is {} pg)Console.WriteLine($"    PostgreSQL frames (groups include pipelined BEGIN, not RTT): groups={pg.ProtocolRequests-groups}, Flush={pg.Flushes-pgBefore.Item1}, Execute={pg.Executes-pgBefore.Item2}, nonzero-limit={pg.LimitedExecutes-pgBefore.Item3}, named-portal={pg.NamedExecutes-pgBefore.Item4}");
             if (locks.Largest != "") Console.WriteLine("    locks held at the largest commit: " + locks.Largest);
             if (walLine is not null) Console.WriteLine(walLine);
             if (setupLine is not null) Console.WriteLine(setupLine);
@@ -416,6 +430,28 @@ static class EngineRun
             {
                 for (var i = 0; i < many; i++) await store.AddAsync(Start(Sequence.Balanced) with { KeepUntil = keep });
             });
+
+        // Decision 10: what a commit costs as the state grows. Every turn rewrites the whole state, so the round trips stay
+        // the same and the bytes, and the time, grow with it. sizes= in kilobytes; each size runs three times.
+        Console.WriteLine("\nstate size (decision 10): an instance that commits at every turn (Durable-shaped), its whole state each time, ten verified commits; seeded random lowercase letters, compression not measured");
+        Console.WriteLine($"{"state",10} {"chars per commit",17} {"counted per commit",19} {"ms per commit, median of 3",27}");
+        foreach (var bytes in sizes)
+        {
+            var (times, counted, chars) = (new List<double>(), 0L, 0);
+            for (var run = 0; run < 3; run++)
+            {
+                counter.Reset();
+                var clock = Stopwatch.StartNew();
+                var start = new Message($"m{++n}", InstanceRef.In(0, $"blob{n}"), Kinds.Start, Start: Blob.Spec(bytes, StateSizeBenchmark.Turns));
+                chars = await StateSizeBenchmark.TrialAsync(owner, tally, start, bytes, target.Shaper?.Level ?? start.Start!.History, () => Drain(owner, poll: false), () =>
+                {
+                    clock.Stop();
+                    counted = counter.Commands + counter.Transactions.Ended + (target.Engine == "postgres" ? 0 : counter.Transactions.Begun);
+                });
+                times.Add(clock.Elapsed.TotalMilliseconds / StateSizeBenchmark.Turns);
+            }
+            Console.WriteLine($"{bytes / 1024 + " KB",10} {chars,17} {counted / (double)StateSizeBenchmark.Turns,19:F1} {times.Order().ElementAt(1),27:F1}");
+        }
 
         await using var check = create();
         var unfinished = await check.Instances.CountAsync(i => i.Status != InstanceStatus.Finished && i.Status != InstanceStatus.Cancelled);
@@ -775,73 +811,6 @@ sealed class Target(string engine, string connection, Dictionary<string, string>
     }
 }
 
-/// <summary>
-/// A TCP proxy in front of the database that counts round trips: a round trip begins each time the client sends after
-/// the server last spoke on that connection (or for the first time). Requests the driver pipelines without waiting
-/// for an answer count as one. Connection handshakes count too. Admin connections do not go through it.
-/// </summary>
-sealed class Wire
-{
-    private readonly System.Net.Sockets.TcpListener _listener = new(System.Net.IPAddress.Loopback, 0);
-    private readonly string _host;
-    private readonly int _port;
-    private long _trips;
-
-    private Wire(string host, int port) => (_host, _port) = (host, port);
-
-    public long Trips => Interlocked.Read(ref _trips);
-
-    public static Wire Start(string engine, string connection)
-    {
-        var match = engine == "sqlserver"
-            ? System.Text.RegularExpressions.Regex.Match(connection, @"Server=([^,;]+),(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            : System.Text.RegularExpressions.Regex.Match(connection, @"(?:Host|server)=([^;]+);.*?Port=(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        var wire = new Wire(match.Groups[1].Value, int.Parse(match.Groups[2].Value));
-        wire._listener.Start();
-        _ = Task.Run(wire.AcceptAsync);
-        return wire;
-    }
-
-    public string Rewrite(string connection)
-    {
-        var port = ((System.Net.IPEndPoint)_listener.LocalEndpoint).Port;
-        return System.Text.RegularExpressions.Regex.Replace(connection, @"(Server=[^,;]+,)\d+|(Port=)\d+", m => (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) + port, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-    }
-
-    private async Task AcceptAsync()
-    {
-        while (true)
-        {
-            var client = await _listener.AcceptTcpClientAsync();
-            _ = Task.Run(async () =>
-            {
-                using var server = new System.Net.Sockets.TcpClient();
-                using var _ = client;
-                client.NoDelay = true;
-                server.NoDelay = true;
-                await server.ConnectAsync(_host, _port);
-                var serverSpoke = 1;     // so the client's first send is a round trip
-                async Task Pump(System.Net.Sockets.NetworkStream from, System.Net.Sockets.NetworkStream to, bool fromClient)
-                {
-                    var buffer = new byte[65536];
-                    try
-                    {
-                        for (int read; (read = await from.ReadAsync(buffer)) > 0;)
-                        {
-                            if (fromClient) { if (Interlocked.Exchange(ref serverSpoke, 0) == 1) Interlocked.Increment(ref _trips); }
-                            else Interlocked.Exchange(ref serverSpoke, 1);
-                            await to.WriteAsync(buffer.AsMemory(0, read));
-                        }
-                    }
-                    catch (Exception) { }
-                    finally { client.Close(); server.Close(); }
-                }
-                await Task.WhenAll(Pump(client.GetStream(), server.GetStream(), true), Pump(server.GetStream(), client.GetStream(), false));
-            });
-        }
-    }
-}
-
 /// <summary>Counts connections taken from the pool.</summary>
 sealed class Opens : DbConnectionInterceptor
 {
@@ -910,6 +879,10 @@ sealed class Locks(Target target) : DbTransactionInterceptor
 /// <summary>Counts what every store call came to: landed, fenced, or failed and with which of the engine's errors.</summary>
 sealed class Tally(IKernelStore inner) : IKernelStore
 {
+    public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
+    public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly ConcurrentDictionary<string, int> _counts = new();
     private readonly ConcurrentDictionary<string, string> _samples = new();
     private readonly ConcurrentDictionary<string, ConcurrentBag<double>> _times = new();
@@ -973,7 +946,7 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     {
         // A batch that names one message twice is the worker's doing, not the engine's: say which lists it is in.
         var named = batch.Seen.Select(id => (id, list: "seen"))
-            .Concat(batch.Turns.SelectMany(s => s.Consumed.Select(id => (id, list: "consumed")).Concat(s.Done.Select(id => (id, list: "done"))).Concat(s.Sent.Select(m => (id: m.Id, list: "sent")))))
+            .Concat(batch.Turns.SelectMany(s => s.Consumed.Select(id => (id, list: "consumed")).Concat(s.Done.Select(id => (id, list: "done"))).Concat(s.Sent.Select(m => (id: m.InboxKey, list: "sent")))))
             .GroupBy(x => x.id).Where(g => g.Count() > 1).ToList();
         if (named.Count > 0)
         {
@@ -988,11 +961,17 @@ sealed class Tally(IKernelStore inner) : IKernelStore
 
     public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) => Call("poll", () => inner.PollAsync(partition, epoch, horizon, limit, cancellationToken));
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => Call("add", () => inner.AddAsync(message, cancellationToken));
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => Call("add", () => inner.AddEventAsync(delivery, cancellationToken));
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call("load", () => inner.LoadAsync(ids, cancellationToken));
+    public bool HasActorAliases => inner.HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) => Call("load", () => inner.LoadActorsAsync(ids, cancellationToken));
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => await Call("publish", async () => { await inner.PublishAsync(@event, cancellationToken); return 0; });
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => Call("find", () => inner.FindSubscriptionsAsync(key, cancellationToken));
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) => Call("events", () => inner.FindEventsAsync(keys, cancellationToken));
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) => Call("events", () => inner.PublishedMatchesAsync(published, cancellationToken));
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) => Call("events", () => inner.KeptMatchesAsync(waits, cancellationToken));
     public ValueTask<IReadOnlyList<JournalRow>> ReadJournalAsync(int partition, long after, int take, CancellationToken cancellationToken = default) => inner.ReadJournalAsync(partition, after, take, cancellationToken);
+    public ValueTask<IReadOnlyList<JournalRow>> ReadJournalOfAsync(int partition, string instance, long after, CancellationToken cancellationToken = default) => inner.ReadJournalOfAsync(partition, instance, after, cancellationToken);
     public ValueTask<int> SweepAsync(CancellationToken cancellationToken = default) => inner.SweepAsync(cancellationToken);
     public ValueTask<IReadOnlyList<ViewRow>> ReadViewsAsync(IReadOnlyCollection<string> instances, CancellationToken cancellationToken = default) => inner.ReadViewsAsync(instances, cancellationToken);
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default) => await Call("release", async () => { await inner.ReleaseAsync(partition, epoch, cancellationToken); return 0; });
@@ -1000,4 +979,36 @@ sealed class Tally(IKernelStore inner) : IKernelStore
     public async ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => await Call("subscribe", async () => { await inner.SubscribeAsync(subscription, cancellationToken); return 0; });
     public ValueTask<Projection> ProjectedAsync(int partition, CancellationToken cancellationToken = default) => Call("projected", () => inner.ProjectedAsync(partition, cancellationToken));
     public ValueTask<bool> ProjectAsync(int partition, long from, long to, IReadOnlyList<JournalRow> rows, CancellationToken cancellationToken = default) => Call("project", () => inner.ProjectAsync(partition, from, to, rows, cancellationToken));
+}
+
+/// <summary>Decision 10's benchmark: an instance whose state is <c>Size</c> characters, changed and committed at each of <c>Turns</c> turns.</summary>
+public sealed class BlobState
+{
+    public string Data { get; set; } = "";
+    public int Left { get; set; }
+}
+
+public sealed record BlobInput(int Size, int Turns);
+
+public sealed class Blob : Model<BlobState>
+{
+    public override string Key => "blob";
+    public static StartSpec Spec(int size, int turns) => new("blob", "b", Json.Write(new BlobInput(size, turns)));
+
+    public override object CreateState(StartSpec start) => Json.Read<BlobInput>(start.Input!) is var input ? new BlobState { Data = Letters(input.Size, input.Size), Left = input.Turns } : null!;
+
+    /// <summary>Lowercase letters from a fixed seed. Their compression ratio has not been measured.</summary>
+    public static string Letters(int size, int seed)
+    {
+        var random = new Random(seed);
+        return string.Create(size, random, (span, r) => { for (var i = 0; i < span.Length; i++) span[i] = (char)('a' + r.Next(26)); });
+    }
+
+    protected override void Turn(ITurn turn, BlobState state)
+    {
+        // One change per turn, so every commit writes a different state; a message to itself ends the turn (a commit each).
+        state.Data = (char)('a' + state.Left % 26) + state.Data[1..];
+        if (--state.Left > 0) turn.Send(turn.Instance.Ref, "continue");
+        else turn.SetStatus(InstanceStatus.Finished);
+    }
 }

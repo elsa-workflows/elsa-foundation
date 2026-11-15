@@ -1,0 +1,10 @@
+.wf-block-backdrop{position:fixed;inset:0;z-index:1000;background:color-mix(in srgb, var(--studio-text) 38%, transparent);display:grid;place-items:center;padding:1rem}
+.wf-block-commands{display:flex;flex-wrap:wrap;gap:var(--wf-space-2,.5rem);padding:.5rem 1rem}
+.wf-block-commands button,.wf-block-dialog-actions button{border:1px solid var(--wf-border);border-radius:var(--wf-radius-md,.5rem);background:var(--wf-surface);color:var(--wf-text);padding:.4rem .65rem;font:inherit}
+.wf-block-commands button:disabled,.wf-block-dialog-actions button:disabled{opacity:.5;cursor:not-allowed}
+.wf-block-dialog{background:var(--wf-surface);color:var(--wf-text);border:1px solid var(--wf-border);border-radius:var(--wf-radius-md,.5rem);width:min(54rem,calc(100vw - 2rem));max-height:calc(100dvh - 2rem);overflow:auto;padding:1.25rem}
+.wf-block-dialog input,.wf-block-dialog textarea,.wf-block-dialog select{width:100%;color:inherit;background:var(--wf-surface);border:1px solid var(--wf-border);border-radius:.4rem;padding:.5rem;font:inherit}
+.wf-block-dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+.wf-block-preview pre{max-height:18rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.75rem}
+
+.wf-block-command-notice{margin:0;padding:0 1rem .5rem;font-size:var(--wf-text-sm)}

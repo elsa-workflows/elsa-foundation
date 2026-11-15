@@ -30,12 +30,13 @@
     <li><a href="#tradeoffs">Trade-offs and defaults</a></li>
     <li><a href="#open">Open and not built</a></li>
   </ol>
+  <p style="margin:14px 0 0;font-size:13px"><a href="kernel-in-motion.html">The kernel in motion ↗</a><br><span style="color:var(--muted)">one workflow animated through every part, the three persistence modes, faults, and the fence lab</span></p>
 </nav>
 <main>
 <header class="top">
   <div class="eyebrow">Design draft 5 · 12 November 2026 · prototypes/kernel-model</div>
   <h1>How the clean-slate Elsa kernel fits together</h1>
-  <p class="lede">A walk through the new execution kernel, from the three layers down to the rows a commit writes. The diagrams with step buttons can be played through; every step is also written out beside them.</p>
+  <p class="lede">A walk through the new execution kernel, from the three layers down to the rows a commit writes. The diagrams with step buttons can be played through; every step is also written out beside them. New to the words used here? Start with the companion <a href="kernel-in-motion.html">The kernel in motion</a>, which follows one order workflow through every part, with a visual glossary and a lab for the fence.</p>
   <div class="chips">
     <span class="chip">Standalone model, not product code</span>
     <span class="chip warn">Design not yet approved</span>
@@ -250,6 +251,7 @@
   <div class="num">04</div>
   <h2>What is stored</h2>
   <p>Eight record kinds, shown as tables; a document store keeps the same records as documents. The instance row is the truth about the present, the journal the truth about the past. There is no outbox, dispatcher, scheduler queue, per-run lease, commit marker or timer table. Click a table.</p>
+  <p class="note">These eight cards use the sketch's proposed record names. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md">Storage model reference</a> maps the physical EF tables and MongoDB collections, with lifecycles, writers, indexes and retention costs.</p>
   <div class="picker" id="data-picker" data-default="message">
   <figure>
     <div class="fig">
@@ -280,14 +282,14 @@
     <figcaption>Arrows point from a row to the row it refers to. The partition row is the hottest row in the system: every commit of the partition updates it, which is what makes it the fence. This is the proposed shape; its DESIGN.md gives the prototype's schema in "Data".</figcaption>
   </figure>
   <div class="grid">
-    <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p></div>
-    <div class="card" data-pick-card="node"><h4>node</h4><div class="mono">id, seen_at</div><p>A heartbeat, so nodes can count each other and take a fair share of partitions. Liveness only, never correctness.</p></div>
-    <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. Lists and counts read this row directly.</p></div>
-    <div class="card l2" data-pick-card="message"><h4>message</h4><div class="mono">seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done</div><p>The inbox. <code>seq</code> from the database gives the order; the unique <code>id</code> makes adding idempotent; a future <code>due</code> makes it a timer or a retry; <code>start</code> creates the target if missing.</p></div>
-    <div class="card" data-pick-card="subscription"><h4>subscription</h4><div class="mono">key, instance, wait, partition, kind</div><p>Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start).</p></div>
-    <div class="card" data-pick-card="event"><h4>event</h4><div class="mono">key, id, payload, keep_until</div><p>A published event. By default it reaches only waits committed before it; a wait that asks for kept events also gets events published within their window before it.</p></div>
-    <div class="card" data-pick-card="journal"><h4>journal</h4><div class="mono">partition, position, instance, entries</div><p>One row per instance commit, written in that commit, according to the history level (Full by default). At Minimal no row is written.</p></div>
-    <div class="card" data-pick-card="projection"><h4>projection</h4><div class="mono">partition, position</div><p>How far the projector has got. Its own row, so the projector never touches the fence row and never slows a commit.</p></div>
+    <div class="card st" data-pick-card="partition"><h4>partition</h4><div class="mono">id, owner, epoch, lease_until, position</div><p>The fence. <code>epoch</code> changes only on a take; <code>position</code> counts journal rows. Times are in milliseconds; under the default fence <code>lease_until</code> is written from the owner's clock and compared with database time at a take.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: partition lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="node"><h4>node</h4><div class="mono">id, seen_at</div><p>A heartbeat, so nodes can count each other and take a fair share of partitions. Liveness only, never correctness.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: node lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card l3" data-pick-card="instance"><h4>instance</h4><div class="mono">id, partition, model, definition, status, sub_status, state, state_version, jobs, revision, parent, root, correlation, tenant, created, updated</div><p><code>state</code> is opaque, owned by the model. <code>jobs</code> lists background jobs in flight. Lists and counts read this row directly.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: instance lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card l2" data-pick-card="message"><h4>message</h4><div class="mono">seq, id, partition, target, kind, payload, headers, sender, reply_to, start, due, seen, trial, attempts, keep_until, done</div><p>The inbox. <code>seq</code> from the database gives the order; the unique <code>id</code> makes adding idempotent; a future <code>due</code> makes it a timer or a retry; <code>start</code> creates the target if missing.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: message lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="subscription"><h4>subscription</h4><div class="mono">key, instance, wait, partition, kind</div><p>Routes external events to waiting instances (kind wait) or to a definition that starts one (kind start).</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: subscription lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="event"><h4>event</h4><div class="mono">key, id, payload, keep_until</div><p>A published event. By default it reaches only waits committed before it; a wait that asks for kept events also gets events published within their window before it.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: event lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="journal"><h4>journal</h4><div class="mono">partition, position, instance, entries</div><p>One row per instance commit, written in that commit, according to the history level (Full by default). At Minimal no row is written.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: journal lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
+    <div class="card" data-pick-card="projection"><h4>projection</h4><div class="mono">partition, position</div><p>How far the projector has got. Its own row, so the projector never touches the fence row and never slows a commit.</p><p class="note"><a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md#record-lifecycles" aria-label="Storage model: projection lifecycle and provider reference">Lifecycle and provider reference ↗</a></p></div>
   </div>
   </div>
 </section>
@@ -346,20 +348,20 @@
 <section class="ch" id="commit">
   <div class="num">06</div>
   <h2>The commit</h2>
-  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Two ways to send it were built and measured; switch between them.</p>
+  <p>The owner of partition <i>p</i> at epoch <i>e</i>, which believes the position is <i>n</i>, commits a batch of instance turns in one transaction, <i>k</i> of which write a journal row. Switch between the two PostgreSQL paths. The list groups possible writes by table. Their order can vary with the operations in the batch.</p>
   <div class="seg" role="group" aria-label="How the fence is sent">
     <button type="button" data-mode="tok" aria-pressed="true">Fence in the batch (2 round trips)</button>
     <button type="button" data-mode="first" aria-pressed="false">Fence first (3 round trips)</button>
   </div>
   <ol class="stmts" id="stmts">
-    <li class="fence" data-o-tok="7" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
+    <li class="fence" data-o-tok="6" data-o-first="1" data-rt-tok="RT 1" data-rt-first="RT 1"><span class="rt"></span><span><b>Fence.</b> <code>UPDATE partition SET position = n + k, lease_until = … WHERE id = p AND epoch = e AND position = n</code>. Also renews the lease, so a busy partition needs no heartbeat.</span></li>
     <li class="check" data-o-tok="8" data-o-first="2" data-rt-tok="check" data-rt-first="check"><span class="rt"></span><span><b>Exactly one row changed?</b> If not, roll back and reset. This check must come before COMMIT is sent.</span></li>
     <li data-o-tok="1" data-o-first="3" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert or update the instance rows the batch changed, each update <code>WHERE revision = r</code>.</span></li>
-    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
-    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
-    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. Each id is derived from the sender and its revision, with a fixed-width ordinal, so a repeat is refused and order holds.</span></li>
-    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
-    <li data-o-tok="6" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
+    <li data-o-tok="3" data-o-first="5" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Delete the consumed messages, or mark them <code>done</code> when they carry <code>keep_until</code>. Check the count.</span></li>
+    <li data-o-tok="4" data-o-first="6" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Mark <code>seen = e</code> on messages held in memory and not consumed.</span></li>
+    <li data-o-tok="5" data-o-first="7" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert the sent messages. <code>Send</code> derives IDs from the sender, revision and ordinal; repeats are refused. Its fixed-width ordinal orders sends within one revision. The provider must preserve send order across revisions too.</span></li>
+    <li data-o-tok="7" data-o-first="8" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert and delete subscriptions.</span></li>
+    <li data-o-tok="2" data-o-first="4" data-rt-tok="RT 1" data-rt-first="RT 2"><span class="rt"></span><span>Insert <i>k</i> journal rows at positions <i>n</i> + 1 … <i>n</i> + <i>k</i>.</span></li>
     <li class="commitrow" data-o-tok="9" data-o-first="9" data-rt-tok="RT 2" data-rt-first="RT 3"><span class="rt"></span><span><b>COMMIT.</b></span></li>
   </ol>
   <p id="commit-note" class="note"></p>

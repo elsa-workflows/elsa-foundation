@@ -224,3 +224,202 @@ describe("bounded whole-document native identity transform", () => {
     expect(() => remapBpmnDocumentNativeIdentities(original, mapping, [writeLine, sequenceActivity])).toThrow(/exact catalog contract/);
   });
 });
+
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "../intrinsicActivities";
+
+function r7ExpandedIntrinsic(kind: "Set" | "SetOutput", expressionType: string, expressionValue: unknown) {
+  const original = owner(), descriptor = readIntrinsicDescriptor({ ...writeLine, intrinsic: { kind, valueInputKey: "value", variableInputKey: kind === "Set" ? "variable" : null, outputNameInputKey: kind === "SetOutput" ? "name" : null } })!;
+  const intrinsic = buildIntrinsicWireBlock(descriptor);
+  if (kind === "Set") intrinsic.variable = { referenceKey: "target", declaringScopeId: "P" };
+  nodes(original)[1] = { nodeId: "listener", activityVersionId: kind === "Set" ? "elsa.intrinsic.set@1" : "elsa.intrinsic.set-output@1", intrinsic,
+    inputs: [...(kind === "SetOutput" ? [arg("Literal", "result", "name")] : []), arg(expressionType, expressionValue, "value")], outputs: [],
+    moduleData: { value: { expression: { type: "VendorReference", value: { declaringScopeId: "P", producerNodeId: "other-work" } } } } };
+  const originalBefore = structuredClone(original), expanded = expandStateFromWire({ rootActivity: original }).rootActivity!;
+  expect(original).toEqual(originalBefore);
+  expect(nodes(expanded)[1].inputs).toEqual([]);
+  expect(nodes(expanded)[1].value).toMatchObject({ expression: { type: expressionType, value: expressionValue } });
+  expect(catalog.some(item => item.activityVersionId === nodes(expanded)[1].activityVersionId)).toBe(false);
+  return expanded;
+}
+function r7WireValue(node: ActivityNode, referenceKey: string): unknown {
+  const inputs = node.inputs as { referenceKey: string; value: unknown }[];
+  return inputs.find(input => input.referenceKey === referenceKey)!.value;
+}
+function r7IntrinsicWire(kind: "Set" | "SetOutput", expressionType: string, value: unknown) {
+  const expanded = r7ExpandedIntrinsic(kind, expressionType, value), before = structuredClone(expanded);
+  const remapped = remapBpmnDocumentNativeIdentities(expanded, map(expanded), catalog);
+  expect(expanded).toEqual(before);
+  const wire = canonicalizeStateForWire({ rootActivity: remapped }).rootActivity!, intrinsic = nodes(wire)[1];
+  expect(intrinsic.nodeId).toBe("copy:listener");
+  if (kind === "Set") expect(intrinsic.intrinsic!.variable!.declaringScopeId).toBe("copy:P");
+  else expect(r7WireValue(intrinsic, "name")).toEqual({ expressionType: "Literal", value: "result" });
+  expect(intrinsic.moduleData).toEqual(nodes(expanded)[1].moduleData);
+  expect(wire.structure!.payload.documentXml).toBe(source);
+  return intrinsic;
+}
+function r7ExpectUnknownIntrinsicRefused(kind: "Set" | "SetOutput") {
+  const expanded = r7ExpandedIntrinsic(kind, "VendorReference", { declaringScopeId: "P", producerNodeId: "other-work" }), before = structuredClone(expanded);
+  expect(() => {
+    try { remapBpmnDocumentNativeIdentities(expanded, map(expanded), catalog); }
+    finally { expect(expanded).toEqual(before); }
+  }).toThrow(/qualified reference transform/);
+}
+
+describe("R7 expanded intrinsic native reference regressions", () => {
+  it("persists the remapped Variable value of catalogless expanded Set", () => {
+    const intrinsic = r7IntrinsicWire("Set", "Variable", { referenceKey: "value", declaringScopeId: "P" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Variable", value: { referenceKey: "value", declaringScopeId: "copy:P" } });
+  });
+  it("persists the remapped ActivityResult value of catalogless expanded Set", () => {
+    const intrinsic = r7IntrinsicWire("Set", "ActivityResult", { producerNodeId: "other-work", producerScopeId: "scope-other", projectionKey: "$result" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "ActivityResult", value: { producerNodeId: "copy:other-work", producerScopeId: "copy:scope-other", projectionKey: "$result" } });
+  });
+  it("persists the remapped Variable value of catalogless expanded SetOutput", () => {
+    const intrinsic = r7IntrinsicWire("SetOutput", "Variable", { referenceKey: "value", declaringScopeId: "P" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Variable", value: { referenceKey: "value", declaringScopeId: "copy:P" } });
+  });
+  it("persists the remapped ActivityResult value of catalogless expanded SetOutput", () => {
+    const intrinsic = r7IntrinsicWire("SetOutput", "ActivityResult", { producerNodeId: "other-work", producerScopeId: "scope-other", projectionKey: "$result" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "ActivityResult", value: { producerNodeId: "copy:other-work", producerScopeId: "copy:scope-other", projectionKey: "$result" } });
+  });
+  it("refuses unknown expanded Set expression dialects atomically without an intrinsic catalog", () => { r7ExpectUnknownIntrinsicRefused("Set"); });
+  it("refuses unknown expanded SetOutput expression dialects atomically without an intrinsic catalog", () => { r7ExpectUnknownIntrinsicRefused("SetOutput"); });
+  it("preserves literal and nested vendor reference lookalikes in catalogless expanded Set", () => {
+    const opaque = { declaringScopeId: "P", producerNodeId: "other-work", expressionType: "VendorReference" }, intrinsic = r7IntrinsicWire("Set", "Literal", opaque);
+    const encoded = r7WireValue(intrinsic, "value") as { expressionType: string; value: string };
+    expect(encoded).toEqual({ expressionType: "Object", value: JSON.stringify(opaque) });
+    expect(JSON.parse(encoded.value)).toEqual(opaque);
+  });
+  it("preserves literal and nested vendor reference lookalikes in catalogless expanded SetOutput", () => {
+    const opaque = { declaringScopeId: "P", producerNodeId: "other-work", expressionType: "VendorReference" }, intrinsic = r7IntrinsicWire("SetOutput", "Literal", opaque);
+    const encoded = r7WireValue(intrinsic, "value") as { expressionType: string; value: string };
+    expect(encoded).toEqual({ expressionType: "Object", value: JSON.stringify(opaque) });
+    expect(JSON.parse(encoded.value)).toEqual(opaque);
+  });
+});
+
+describe("R8 qualified inventory metadata boundary", () => {
+  it("leaves node-shaped projected-view metadata outside an unqualified native inventory", () => {
+    const original = owner(), snapshot: ActivityNode = { nodeId: "metadata-only-scope", activityVersionId: "snapshot-version", inputs: [], outputs: [], structure: { kind: "elsa.bpmn.scope-view", schemaVersion: "1.0.0", payload: {} } };
+    nodes(original)[0].structure = { kind: "vendor.opaque", schemaVersion: "1", payload: { metadata: [snapshot] } };
+    const before = structuredClone(original);
+    let observed: ReturnType<typeof inventoryBpmnDocument> | undefined, failure: unknown;
+    try { observed = inventoryBpmnDocument(original, catalog); } catch (error) { failure = error; }
+    expect(original).toEqual(before);
+    expect(failure).toBeUndefined();
+    expect(observed!.nativeNodes.has("metadata-only-scope")).toBe(false);
+    expect(observed!.unqualifiedStructures).toMatchObject([{ nodeId: "native-body" }]);
+    expect(() => remapBpmnDocumentNativeIdentities(original, map(original), catalog)).toThrow("unqualified native ownership");
+    expect(original).toEqual(before);
+  });
+});
+
+
+import { applyBpmnDocumentTransaction } from "../bpmn/bpmnDocument";
+import { planBpmnDocumentSyntaxChange } from "../bpmn/bpmnDocumentSyntaxChange";
+
+const r9CompensationActivity: ActivityCatalogItem = { ...writeLine, activityVersionId: "exact-compensation-scope", designFacets: [{
+  kind: "elsa.compensation-scope.structure", schemaVersion: "1.0.0", payload: {
+    mode: "compensation", supportsScopedVariables: true, initialPayload: { steps: [] }, slots: [
+      { name: "CompensationScope.Step", property: "steps", displayName: "Steps", cardinality: "single", collectionProperty: "steps", childProperty: "activity", labelProperty: "name", slotNameTemplate: "CompensationScope.Step[{name}]" },
+      { name: "CompensationScope.Compensation", property: "steps", displayName: "Compensations", cardinality: "single", collectionProperty: "steps", childProperty: "compensation", labelProperty: "name", slotNameTemplate: "CompensationScope.Compensation[{name}]" }
+    ]
+  }
+}] };
+const r9Catalog = [...catalog, r9CompensationActivity];
+function r9CompensationOwner(withHandler = true): ActivityNode {
+  const original = owner();
+  original.structure!.payload.activities = [{ nodeId: "compensation", activityVersionId: r9CompensationActivity.activityVersionId, inputs: [], outputs: [], structure: {
+    kind: "elsa.compensation-scope.structure", schemaVersion: "1.0.0", payload: {
+      steps: [{ name: "Keep authored name", activity: leaf("forward"), ...(withHandler ? { compensation: leaf("handler") } : {}) }], opaqueMetadata: { nodeId: "not-owned" }
+    }
+  } }];
+  original.structure!.payload.bindings = [{ elementId: "Task", childNodeId: "compensation" }];
+  original.structure!.payload.scopeHeaders = [];
+  return original;
+}
+function r9Compensation(value: ActivityNode) { return nodes(value)[0]; }
+function r9CompensationIds(withHandler: boolean) { return ["P", "compensation", "forward", ...(withHandler ? ["handler"] : [])]; }
+function r9InventoryCompensation(withHandler: boolean) {
+  const original = r9CompensationOwner(withHandler), before = structuredClone(original);
+  expect(readBpmnDocument(original, r9Catalog).payload.bindings).toEqual([{ elementId: "Task", childNodeId: "compensation" }]);
+  let observed: ReturnType<typeof inventoryBpmnDocument> | undefined, failure: unknown;
+  try { observed = inventoryBpmnDocument(original, r9Catalog); } catch (error) { failure = error; }
+  expect(original).toEqual(before);
+  expect(failure).toBeUndefined();
+  expect([...observed!.nativeNodes.keys()]).toEqual(r9CompensationIds(withHandler));
+  expect(observed!.unqualifiedStructures).toEqual([]);
+  expect(observed!.nativeNodes.get("forward")).toMatchObject({ parentNodeId: "compensation", documentOwnerNodeId: "P" });
+}
+function r9DeleteCompensation(withHandler: boolean) {
+  const original = r9CompensationOwner(withHandler), before = structuredClone(original);
+  expect(readBpmnDocument(original, r9Catalog).byId.has("Task")).toBe(true);
+  let plan: ReturnType<typeof planBpmnDocumentSyntaxChange> | undefined, failure: unknown;
+  try { plan = planBpmnDocumentSyntaxChange(original, [{ kind: "remove", target: { elementId: "Task" } }], r9Catalog); } catch (error) { failure = error; }
+  expect(original).toEqual(before);
+  expect(failure).toBeUndefined();
+  expect(plan!.removedNodeIds).toEqual(r9CompensationIds(withHandler).slice(1));
+  expect(plan!.unqualifiedOwnershipIds).toEqual([]);
+  const next = applyBpmnDocumentTransaction(original, plan!.transaction, r9Catalog), parsed = readBpmnDocument(next, r9Catalog);
+  expect(parsed.byId.has("Task")).toBe(false);
+  expect(parsed.byId.has("NestedTask")).toBe(true);
+  expect(parsed.payload.activities).toEqual([]);
+  expect(parsed.payload.bindings).toEqual([]);
+  expect(original).toEqual(before);
+}
+function r9RefuseCompensationRemap(withHandler: boolean) {
+  const original = r9CompensationOwner(withHandler), before = structuredClone(original);
+  const mapping = new Map(r9CompensationIds(withHandler).map(id => [id, `copy:${id}`]));
+  expect(() => remapBpmnDocumentNativeIdentities(original, mapping, r9Catalog)).toThrow("requires a qualified reference transform");
+  expect(original).toEqual(before);
+}
+function r9MalformedCompensation(steps: unknown, absent = false) {
+  const original = r9CompensationOwner();
+  if (absent) delete r9Compensation(original).structure!.payload.steps;
+  else r9Compensation(original).structure!.payload.steps = steps;
+  const before = structuredClone(original);
+  expect(() => inventoryBpmnDocument(original, r9Catalog)).toThrow("malformed");
+  expect(original).toEqual(before);
+}
+
+describe("R9 physical Compensation Scope ownership", () => {
+  it("inventories a forward activity and compensation handler exactly once", () => { r9InventoryCompensation(true); });
+  it("inventories a forward-only compensation step exactly once", () => { r9InventoryCompensation(false); });
+  it("plans bound compensation deletion including its forward activity and handler", () => { r9DeleteCompensation(true); });
+  it("plans bound compensation deletion including a forward-only step", () => { r9DeleteCompensation(false); });
+  it("reaches the explicit bounded transform refusal for a forward activity and handler", () => { r9RefuseCompensationRemap(true); });
+  it("reaches the explicit bounded transform refusal for a forward-only step", () => { r9RefuseCompensationRemap(false); });
+  it("refuses a missing declared compensation collection atomically", () => { r9MalformedCompensation(undefined, true); });
+  it("refuses a nonarray declared compensation collection atomically", () => { r9MalformedCompensation({ unrelated: true }); });
+  it("refuses primitive null and array compensation collection rows atomically", () => {
+    for (const row of [1, null, []]) r9MalformedCompensation([row]);
+  });
+  it("refuses a malformed populated physical compensation child atomically", () => {
+    r9MalformedCompensation([{ name: "Invalid", activity: { unrelated: true }, compensation: null }]);
+  });
+  it("refuses a repeated activity through two physical compensation steps", () => {
+    const original = r9CompensationOwner(false), child = leaf("repeated");
+    r9Compensation(original).structure!.payload.steps = [{ name: "First", activity: child }, { name: "Second", activity: child }];
+    expect(() => inventoryBpmnDocument(original, r9Catalog)).toThrow("repeated ownership");
+  });
+  it("refuses duplicated identities across physical compensation steps", () => {
+    const original = r9CompensationOwner(false);
+    r9Compensation(original).structure!.payload.steps = [{ name: "First", activity: leaf("duplicate") }, { name: "Second", activity: leaf("duplicate") }];
+    expect(() => inventoryBpmnDocument(original, r9Catalog)).toThrow("duplicated");
+  });
+  it("refuses cyclic ownership through a physical compensation step", () => {
+    const original = r9CompensationOwner(false), scope = r9Compensation(original);
+    scope.structure!.payload.steps = [{ name: "Cycle", activity: scope }];
+    expect(() => inventoryBpmnDocument(original, r9Catalog)).toThrow("cyclic ownership");
+  });
+  it("accepts an empty declared compensation collection without invented native children", () => {
+    const original = r9CompensationOwner(false), before = structuredClone(original);
+    r9Compensation(original).structure!.payload.steps = [];
+    const prepared = structuredClone(original), inventory = inventoryBpmnDocument(original, r9Catalog);
+    expect([...inventory.nativeNodes.keys()]).toEqual(["P", "compensation"]);
+    expect(inventory.unqualifiedStructures).toEqual([]);
+    expect(original).toEqual(prepared);
+    expect(before.structure!.payload.bindings).toEqual(original.structure!.payload.bindings);
+  });
+});

@@ -24,7 +24,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 /// Contract-level behavior for the EF authority and relationship stores. The tests resolve only
 /// provider-neutral IAM interfaces so they remain useful when the concrete EF store wiring evolves.
 /// </summary>
-public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
+public sealed partial class IdentityAuthorityEntityFrameworkCoreBehaviorTests
 {
     [Fact]
     public async Task User_and_role_records_round_trip_lossless_fields_after_a_store_reopen()
@@ -655,8 +655,10 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         }
     }
 
-    [Fact]
-    public async Task External_identity_revision_write_can_rebind_to_another_existing_user()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task External_identity_revision_write_can_rebind_to_another_existing_user(bool qualified)
     {
         var databasePath = TemporaryDatabasePath();
         try
@@ -664,13 +666,16 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
             var originalOwner = User("tenant-a", "user-a", "Ada", "ada@example.test");
             var newOwner = User("tenant-a", "user-b", "Grace", "grace@example.test");
-            var external = ExternalIdentity("tenant-a", originalOwner.Id, "google", "subject-a");
+            var external = ExternalIdentity("tenant-a", originalOwner.Id, "google", "subject-a") with
+            { Issuer = qualified ? "https://issuer.example" : null };
             await scope.Users.SaveAsync(originalOwner);
             await scope.Users.SaveAsync(newOwner);
             await scope.ExternalIdentities.SaveAsync(external);
 
-            var current = await scope.RevisionExternalIdentities.FindBySubjectWithRevisionAsync(
-                external.TenantId, external.Provider, external.ProviderSubject);
+            var before = await scope.Context.Users.AsNoTracking().ToDictionaryAsync(row => row.UserId, row => row.SecurityStamp);
+            var current = qualified
+                ? await scope.RevisionExternalIdentities.FindByKeyWithRevisionAsync(new(external.TenantId, external.Provider, external.Issuer!, external.ProviderSubject))
+                : await scope.RevisionExternalIdentities.FindBySubjectWithRevisionAsync(external.TenantId, external.Provider, external.ProviderSubject);
             Assert.NotNull(current);
             var result = await scope.RevisionExternalIdentities.SaveWithRevisionAsync(
                 external with { UserId = newOwner.Id }, current!.Revision);
@@ -678,6 +683,17 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
             Assert.Empty(await scope.ExternalIdentities.ListForUserAsync(external.TenantId, originalOwner.Id));
             Assert.Equal(newOwner.Id, Assert.Single(await scope.ExternalIdentities.ListForUserAsync(external.TenantId, newOwner.Id)).UserId);
+            var after = await scope.Context.Users.AsNoTracking().ToDictionaryAsync(row => row.UserId, row => row.SecurityStamp);
+            Assert.All(before, pair => Assert.NotEqual(pair.Value, after[pair.Key]));
+            Assert.All(after.Values, stamp => Assert.False(string.IsNullOrWhiteSpace(stamp)));
+
+            // A stale ownership attempt and an ordinary same-owner metadata update must not
+            // rotate either account again. Neither is a successful credential ownership change.
+            Assert.Equal(IamRevisionSaveStatus.Conflict, (await scope.RevisionExternalIdentities.SaveWithRevisionAsync(external, current.Revision)).Status);
+            Assert.Equal(IamRevisionSaveStatus.Saved, (await scope.RevisionExternalIdentities.SaveWithRevisionAsync(
+                external with { UserId = newOwner.Id, LastSeenAt = external.LinkedAt.AddMinutes(1) }, result.Revision)).Status);
+            var final = await scope.Context.Users.AsNoTracking().ToDictionaryAsync(row => row.UserId, row => row.SecurityStamp);
+            Assert.All(after, pair => Assert.Equal(pair.Value, final[pair.Key]));
         }
         finally
         {

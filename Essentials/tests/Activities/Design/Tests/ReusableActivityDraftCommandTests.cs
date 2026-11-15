@@ -1,3 +1,6 @@
+using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using System.Text.Json;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Handlers;
@@ -20,6 +23,58 @@ namespace Elsa.Activities.Design.Tests;
 
 public sealed class ReusableActivityDraftCommandTests
 {
+    [Theory]
+    [InlineData(false, "validated")]
+    [InlineData(true, "invalid")]
+    public async Task Candidate_validation_uses_normal_validator_without_writing_resource_or_validation_receipt(bool invalid, string state)
+    {
+        ActivityDraftValidationRequest? validated = null;
+        var harness = new Harness(invalidValidation: invalid, candidateCatalog: new(), candidateValidation: value => validated = value);
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
+        var result = await harness.Service.ValidateCandidateAsync(new(draft.DraftId, draft.Revision, draft.Contract,
+            Harness.Manifest("{\"candidate\":true}"), draft.Layout), default);
+        Assert.Equal(state, result.State);
+        Assert.NotNull(validated);
+        Assert.True(validated.State.Provider.Payload.GetProperty("candidate").GetBoolean());
+        var after = await harness.Service.GetDraftViewAsync(draft.DraftId, default);
+        Assert.Equal(draft.Revision, after.Revision);
+        Assert.Equal(draft.Provider.Payload!.Value.GetRawText(), after.Provider.Payload!.Value.GetRawText());
+        Assert.Null(after.Validation);
+    }
+
+    [Theory]
+    [InlineData("catalog", "stale")]
+    [InlineData("permission", "denied")]
+    public async Task Candidate_validation_rechecks_authority_after_the_normal_validator(string change, string state)
+    {
+        var catalog = new CandidateCatalog();
+        Harness? harness = null;
+        harness = new Harness(candidateCatalog: catalog, candidateValidation: _ => {
+            if (change == "permission") harness!.RevokeManagement();
+            else catalog.Entries = [new("other", "other", "1", "Other", null, null, true, null, [])];
+        });
+        var created = await harness.Service.CreateDefinitionAsync(harness.CreateDefinitionCommand(), default);
+        var draft = await harness.Service.GetDraftViewAsync(created.Draft.DraftId, default);
+        var result = await harness.Service.ValidateCandidateAsync(new(draft.DraftId, draft.Revision, draft.Contract, Harness.Manifest("{}"), draft.Layout), default);
+        Assert.Equal(state, result.State);
+        Assert.Null(result.Validation);
+        Assert.Null((await harness.Service.GetDraftViewAsync(draft.DraftId, default)).Validation);
+    }
+
+    [Fact]
+    public async Task Candidate_validation_refuses_a_source_owned_draft_before_the_normal_validator()
+    {
+        var calls = 0;
+        var harness = new Harness(candidateCatalog: new(), candidateValidation: _ => calls++);
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+        var draft = Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(source.DefinitionId, default));
+        var view = await harness.Service.GetDraftViewAsync(draft.Id, default);
+        var failure = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.ValidateCandidateAsync(new(view.DraftId, view.Revision, view.Contract, Harness.Manifest("{}"), view.Layout), default));
+        Assert.Equal(0, calls);
+        Assert.Equal(409, failure.StatusCode);
+    }
+
     [Fact]
     public async Task Node_presentation_survives_omitted_replacement_and_conflict_copy_but_explicit_empty_clears_it()
     {
@@ -1108,7 +1163,9 @@ public sealed class ReusableActivityDraftCommandTests
             string? authorizationProfile = null,
             Func<ISaveActivityForkCandidateCommand, ISaveActivityForkCandidateCommand>? decorateSaveCommand = null,
             Func<IApplyActivityForkCandidateCommand, IApplyActivityForkCandidateCommand>? decorateApplyCommand = null,
-            IActivityProvider? targetProvider = null)
+            IActivityProvider? targetProvider = null,
+            CandidateCatalog? candidateCatalog = null,
+            Action<ActivityDraftValidationRequest>? candidateValidation = null)
         {
             _ids = new(tenantId ?? "global");
             _context = new(tenantId, canReadProviderPayload, canAuthorProvider, actorId, authorizationProfile);
@@ -1134,12 +1191,15 @@ public sealed class ReusableActivityDraftCommandTests
                 Stores,
                 Stores,
                 registry,
-                new StubValidator(_time, invalidValidation),
+                new StubValidator(_time, invalidValidation, candidateValidation),
                 new ActivityContractAuthoringValidator(contractCapabilities),
                 typeKeyPolicy ?? new DefaultActivityTypeKeyPolicy(),
                 _ids,
                 _time,
-                _context);
+                _context,
+                candidateCatalog is null ? [] : [candidateCatalog],
+                [new CandidateProjector()],
+                new DefaultActivityStructureService([]));
             Proposals = new(Stores, Stores, registry, Stores, new ActivityContractAuthoringValidator(contractCapabilities), Service, _context);
             Forks = new(
                 Stores,
@@ -1166,6 +1226,8 @@ public sealed class ReusableActivityDraftCommandTests
         public ReusableActivityAuthoringService Service { get; }
         public ActivityContractProposalService Proposals { get; }
         public ActivityForkService Forks { get; }
+
+        public void RevokeManagement() => _context.AllowManage = false;
 
         public void Advance(TimeSpan duration) => _time.Advance(duration);
 
@@ -1352,13 +1414,14 @@ public sealed class ReusableActivityDraftCommandTests
         string actorId,
         string? authorizationProfile) : IActivityAuthoringContextAsync
     {
+        public bool AllowManage { get; set; } = true;
         public string? TenantId => tenantId;
         public string ActorId => actorId;
         public string AuthorizationProfile => authorizationProfile ?? $"{tenantId ?? "global"}/{canReadProviderPayload}/{canAuthorProvider}";
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
         public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(canAuthorProvider);
         public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(canReadProviderPayload);
-        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AllowManage);
     }
 
     private sealed class EmptyCapabilityCatalog : IActivityContractCapabilityCatalog
@@ -1451,10 +1514,24 @@ public sealed class ReusableActivityDraftCommandTests
         }
     }
 
-    private sealed class StubValidator(TimeProvider timeProvider, bool invalid) : IActivityDraftValidator
+    private sealed class CandidateCatalog : IActivityAuthoringCatalog
+    {
+        public bool Allowed = true;
+        public IReadOnlyList<ActivityAuthoringCatalogEntry> Entries = [];
+        public ValueTask<bool> CanReadAsync(CancellationToken ct = default) => ValueTask.FromResult(Allowed);
+        public ValueTask<ActivityAuthoringCatalogResult> ListAsync(CancellationToken ct = default) => ValueTask.FromResult(new ActivityAuthoringCatalogResult(Allowed, Entries));
+    }
+    private sealed class CandidateProjector : IActivityDataSelectionDocumentProjector
+    {
+        public ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(ActivityProviderManifest manifest, ActivityContract contract, string resourceId, string contractRevision, CancellationToken ct = default) =>
+            ValueTask.FromResult<ActivityDataSelectionDocument?>(new("ActivityDefinition", resourceId, contractRevision, null, [], [], []));
+    }
+
+    private sealed class StubValidator(TimeProvider timeProvider, bool invalid, Action<ActivityDraftValidationRequest>? callback = null) : IActivityDraftValidator
     {
         public ValueTask<ActivityDraftValidation> ValidateAsync(ActivityDraftValidationRequest request, CancellationToken cancellationToken = default)
         {
+            callback?.Invoke(request);
             IReadOnlyList<ActivityDiagnostic> diagnostics = invalid
                 ? [new("activity.test.invalid", ActivityDiagnosticSeverity.Error, "Invalid for test.", new("ActivityDraft", request.DraftId), Metadata: new Dictionary<string, string>())]
                 : [];

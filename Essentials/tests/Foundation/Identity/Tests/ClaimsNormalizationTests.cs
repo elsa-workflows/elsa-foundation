@@ -72,6 +72,14 @@ public sealed class ClaimsNormalizationTests
             new(IdentityClaimTypes.UserId.ToUpperInvariant(), "user-forged-upper"),
             new(IdentityClaimTypes.SubjectProvider, "idp-forged"),
             new(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "idp-forged-upper"),
+            new(IdentityClaimTypes.SubjectIssuer, "forged-internal"),
+            new(IdentityClaimTypes.SubjectIssuer.ToUpperInvariant(), "forged-internal"),
+            new(IdentityClaimTypes.ExternalSubject, "forged-internal"),
+            new(IdentityClaimTypes.ExternalSubject.ToUpperInvariant(), "forged-internal"),
+            new(IdentityClaimTypes.TokenSubjectKey, "forged-internal"),
+            new(IdentityClaimTypes.TokenSubjectKey.ToUpperInvariant(), "forged-internal"),
+            new(IdentityClaimTypes.SessionId, "forged-internal"),
+            new(IdentityClaimTypes.SessionId.ToUpperInvariant(), "forged-internal"),
             new(ClaimTypes.Role, "external-role"),
             new("groups", "admins")
         ]));
@@ -98,6 +106,10 @@ public sealed class ClaimsNormalizationTests
         // Stripped case-insensitively, as FindAll and FindFirstValue read claim types downstream.
         Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.UserId, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.SubjectProvider, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.SubjectIssuer, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.ExternalSubject, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.TokenSubjectKey, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result.Principal.Claims, x => string.Equals(x.Type, IdentityClaimTypes.SessionId, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

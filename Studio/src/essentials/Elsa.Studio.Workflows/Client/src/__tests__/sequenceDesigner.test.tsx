@@ -1,4 +1,4 @@
-import React, { createRef } from "react";
+import React, { createRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -23,6 +23,23 @@ afterEach(() => {
 });
 
 describe("SequenceDesigner", () => {
+  it.each([
+    { previous: "four", restored: ["one", "two"], primary: "two", key: "ArrowDown", expected: ["one", "two", "three"] },
+    { previous: "one", restored: ["two", "three"], primary: "two", key: "ArrowUp", expected: ["one", "two", "three"] }
+  ])("extends the host-restored range from $primary using $key instead of the abandoned pointer anchor", ({ previous, restored, primary, key, expected }) => {
+    const host = mountRangeHost();
+    flushSync(() => stepButton(previous).click());
+    flushSync(() => host.restore(restored, primary));
+    flushSync(() => stepButton(primary).dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey: true, bubbles: true })));
+    expect(host.selected()).toEqual(expected);
+  });
+  it("retains a modifier-click anchor while extending its own range", () => {
+    const host = mountRangeHost();
+    flushSync(() => stepButton("one").click());
+    flushSync(() => stepButton("three").dispatchEvent(new MouseEvent("click", { ctrlKey: true, bubbles: true })));
+    flushSync(() => stepButton("four").dispatchEvent(new MouseEvent("click", { shiftKey: true, bubbles: true })));
+    expect(host.selected()).toEqual(["three", "four"]);
+  });
   it("offers a workflow-start toggle only on editable trigger steps", () => {
     const onSetWorkflowStart = vi.fn();
     const trigger = workflowNode("endpoint", "Http Endpoint", { workflowStartEnabled: true });
@@ -55,6 +72,35 @@ describe("SequenceDesigner", () => {
     expect(container.querySelector(".wf-sequence-summary")?.textContent).toBe("Runs first");
     expect(container.querySelector(".wf-sequence-step[data-id='second']")?.getAttribute("data-graph-node-id")).toBe("second");
     expect(ref.current).toBe(container.querySelector(".wf-sequence-designer"));
+  });
+
+  it("hides a version-hash type caption and keeps the catalog name as the card title", () => {
+    mount([workflowNode("event", "Event", {
+      activityTypeKey: undefined,
+      activityVersionId: "1.0.0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5",
+      summary: '"ux-qa-wait-2"'
+    })]);
+
+    expect(container.querySelector(".wf-sequence-title")?.textContent).toBe("Event");
+    expect(container.querySelector(".wf-sequence-type")).toBeNull();
+    expect(container.querySelector(".wf-sequence-summary")?.textContent).toBe('"ux-qa-wait-2"');
+    expect(container.textContent).not.toContain("0+e26c11bd");
+  });
+
+  it("replaces a GUID card title with the catalog type name", () => {
+    mount([workflowNode("event", "0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5", {
+      activityTypeKey: "Elsa.Event",
+      activityVersionId: "1.0.0+e26c11bd94bc7a99d6cd0c522ada89961ef72aa5"
+    })]);
+
+    expect(container.querySelector(".wf-sequence-title")?.textContent).toBe("Event");
+    expect(container.querySelector(".wf-sequence-type")).toBeNull();
+    expect(container.textContent).not.toContain("0+e26c11bd");
+  });
+
+  it.each(["3fa85f64-5717-4562-b3fc-2c963f66afa6", "deadbeefdeadbeef", "2026111400000001"])("keeps the explicitly authored card title %s", label => {
+    mount([workflowNode("named", label, { activityTypeKey: "Elsa.Sequence", hasAuthoredLabel: true })]);
+    expect(container.querySelector(".wf-sequence-title")?.textContent).toBe(label);
   });
 
   it("keeps insertion boundaries and connectors in place when a card is selected", () => {
@@ -388,4 +434,22 @@ function drop(target: HTMLButtonElement, dataTransfer: DataTransfer) {
   const event = new Event("drop", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
   flushSync(() => target.dispatchEvent(event));
+}
+
+function mountRangeHost() {
+  let restore!: (ids: string[], primary: string) => void;
+  let selected: string[] = [];
+  const canvasRef = createRef<HTMLDivElement>();
+  const initial = ["one", "two", "three", "four"].map(id => workflowNode(id, id));
+  function Host() {
+    const [selection, setSelection] = useState({ ids: [] as string[], primary: null as string | null });
+    selected = selection.ids;
+    restore = (ids, primary) => setSelection({ ids, primary });
+    return <SequenceDesigner nodes={initial.map(node => ({ ...node, selected: selection.ids.includes(node.id) }))}
+      selectedNodeId={selection.primary} canvasRef={canvasRef} onSelect={() => {}}
+      onSelectMany={(ids, primary) => setSelection({ ids, primary: ids.includes(primary) ? primary : ids.at(-1) ?? null })}
+      readOnly onOpenSlot={() => {}} />;
+  }
+  flushSync(() => root.render(<Host />));
+  return { restore: (ids: string[], primary: string) => restore(ids, primary), selected: () => selected };
 }

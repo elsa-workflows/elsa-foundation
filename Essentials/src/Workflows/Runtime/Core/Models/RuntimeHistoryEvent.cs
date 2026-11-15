@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -45,6 +46,30 @@ public sealed class RuntimeHistoryEvent
     public string HistoryEventId { get; }
     public string WorkflowExecutionId { get; }
     public long Sequence { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CheckpointOrdinal { get; init; }
+    public int SchemaVersion { get; init; } = 1;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public RuntimeHistoryAuthority Authority { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BookmarkId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AttemptId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ParentActivityExecutionId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ActivityAncestryKnown { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExecutionScopeId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? IterationId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeHistoryCausation? Causation { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PhysicalCommitId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? RecordedAt { get; init; }
+
     public RuntimeHistoryEventCategory Category { get; }
     public string Name { get; }
     public DateTimeOffset OccurredAt { get; }
@@ -166,7 +191,8 @@ public enum RuntimeHistoryEventCategory
     ValueLifecycle,
     IncidentLifecycle,
     SchedulerLifecycle,
-    OperationalLifecycle
+    OperationalLifecycle,
+    DeliveryObservation
 }
 
 public enum RuntimeDiagnosticSeverity
