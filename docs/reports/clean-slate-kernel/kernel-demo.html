@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elsa's new kernel: a demo</title>
+<link rel="icon" href="data:,">
+<style>
+/* Design tokens and the scene's styles: copied from kernel-in-motion.html, which copies them from the walkthrough.
+   Layer colours: --l1 the actor runtime, --accent the durable layer, --l3 actor types, --st storage, --hot highlights.
+   Chart colours (--s1..--s3): categorical slots 1 to 3 of the dataviz reference palette, validated on these surfaces. */
+:root {
+  --bg: #f3f5f7; --surface: #ffffff; --ink: #16202a; --muted: #5b6875; --line: #d6dde4; --line-strong: #9aa7b4;
+  --accent: #2f5bd3; --accent-soft: #e6ecfb; --hot: #a4441b; --hot-soft: #fbe9e0;
+  --l1: #64748b; --l1-soft: #eef1f5; --l3: #1d7f55; --l3-soft: #e3f3eb; --st: #93650a; --st-soft: #f8f0dc;
+  --code-bg: #eef1f5; --grid: #e4e8ec;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --display: "Avenir Next Condensed", "Arial Narrow", system-ui, sans-serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bar: 3.2rem; --notes: 0px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1318; --surface: #151c23; --ink: #e2e8ee; --muted: #93a1ae; --line: #26313b; --line-strong: #4f5e6c;
+    --accent: #5a86f0; --accent-soft: #1b2944; --hot: #d46a35; --hot-soft: #3a2218;
+    --l1: #8b9aab; --l1-soft: #1b232c; --l3: #45b884; --l3-soft: #16302a; --st: #d3a23f; --st-soft: #33290f;
+    --code-bg: #1b232c; --grid: #243039; --s1: #3987e5; --s2: #d95926; --s3: #199e70; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1318; --surface: #151c23; --ink: #e2e8ee; --muted: #93a1ae; --line: #26313b; --line-strong: #4f5e6c;
+  --accent: #5a86f0; --accent-soft: #1b2944; --hot: #d46a35; --hot-soft: #3a2218;
+  --l1: #8b9aab; --l1-soft: #1b232c; --l3: #45b884; --l3-soft: #16302a; --st: #d3a23f; --st-soft: #33290f;
+  --code-bg: #1b232c; --grid: #243039; --s1: #3987e5; --s2: #d95926; --s3: #199e70; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { font-size: clamp(13px, min(1.05vw, 1.75vh), 22px); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .scene, .scene * { animation: none !important; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 1rem/1.5 var(--sans); overflow: hidden; height: 100vh; }
+body.notes-on { --notes: 13rem; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+code { background: var(--code-bg); padding: .05em .35em; border-radius: 4px; }
+h1 { font: 600 4.6rem/1.02 var(--display); margin: 0 0 1.1rem; letter-spacing: -.01em; }
+h2 { font: 600 2.5rem/1.08 var(--display); margin: 0; text-wrap: balance; }
+h3 { font: 600 1.4rem/1.25 var(--display); margin: 0 0 .4rem; letter-spacing: .01em; }
+p { margin: 0 0 .6rem; }
+.muted { color: var(--muted); }
+.tech { font: 500 .82rem/1.35 var(--mono); color: var(--muted); }
+
+/* the deck */
+#deck { position: fixed; top: 0; left: 0; right: 0; bottom: calc(var(--bar) + var(--notes)); }
+.slide { position: absolute; inset: 0; display: none; flex-direction: column; gap: 1rem; padding: 2rem 3rem 1.2rem; }
+.slide.current { display: flex; }
+.slide > header .eyebrow { font: 500 .9rem var(--mono); color: var(--accent); margin-bottom: .25rem; }
+.slide > header .sub { font-size: 1.2rem; color: var(--muted); margin: .35rem 0 0; max-width: 70ch; }
+.fill { flex: 1; min-height: 0; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 19rem; grid-template-rows: minmax(0, 1fr); gap: 1.4rem; }
+.scenebox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .4rem; min-height: 0; display: flex; }
+.scenebox svg { display: block; width: 100%; height: 100%; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 0 10px 10px 0; padding: 1.1rem 1.3rem; overflow: auto; min-height: 0; }
+.panel .say { font-size: 1.25rem; line-height: 1.45; }
+.panel .stepno { font: 500 .85rem var(--mono); color: var(--muted); margin-bottom: .3rem; }
+.panel .tech { margin-top: .8rem; }
+.panel.l1 { border-left-color: var(--l1); } .panel.l3 { border-left-color: var(--l3); }
+.terms { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .65rem; }
+.terms li b { display: block; font-size: 1.08rem; }
+.terms li span { display: block; font-size: 1.02rem; line-height: 1.4; }
+.terms li .tech { margin: .1rem 0 0; }
+.wf { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .7rem; }
+.wf h4 { margin: 0 0 .3rem; font: 600 .95rem var(--sans); color: var(--muted); }
+.wf ol { list-style: none; margin: 0; padding: 0; font: .92rem/1.5 var(--mono); }
+.wf li { padding: 1px 6px; border-radius: 5px; }
+.wf li.on { background: var(--accent-soft); color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+
+/* slide 1 */
+.title { justify-content: center; }
+.title .lede { font-size: 1.6rem; max-width: 46ch; margin: 0 0 2rem; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.2rem; max-width: 72rem; }
+.card { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 10px; padding: 1.1rem 1.3rem 1.2rem; }
+.card h3 { font-size: 1.7rem; }
+.card p { font-size: 1.18rem; line-height: 1.42; }
+.card.c1 { border-top-color: var(--l1); } .card.c3 { border-top-color: var(--l3); }
+.chips { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.6rem; }
+.chip { font: 500 .95rem/1 var(--sans); padding: .45rem .8rem; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); background: var(--surface); }
+.chip.ok { border-color: var(--l3); color: var(--l3); } .chip.warn { border-color: var(--hot); color: var(--hot); }
+.words { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem 1.4rem; margin-top: 1.6rem; max-width: 72rem; font-size: 1rem; color: var(--muted); }
+.words b { color: var(--ink); }
+
+/* slide 4 */
+.foot { font-size: .95rem; color: var(--muted); margin: 0; }
+.narrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1.2rem; align-items: start; }
+
+/* slide 5: the chart */
+.vizrow { display: flex; flex-wrap: wrap; gap: .8rem 1.4rem; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+button { font: 500 1rem var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 7px; padding: .4rem .85rem; cursor: pointer; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button[disabled] { opacity: .4; cursor: default; }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line-strong); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+button.tog[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: .4rem 1.6rem; font-size: 1.3rem; }
+.legend span { display: inline-flex; align-items: center; gap: .5rem; }
+.sw { width: 1.1rem; height: 1.1rem; border-radius: 3px; display: inline-block; }
+.s-elsa3 { background: var(--s1); } .s-elsa4 { background: var(--s2); } .s-kernel { background: var(--s3); }
+.hatch { background: repeating-linear-gradient(45deg, var(--s1) 0 2px, transparent 2px 7px); }
+.vizbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.2rem 1.6rem 1rem; display: flex; flex-direction: column; justify-content: safe center; position: relative; overflow: auto; min-height: 0; }
+.chart { display: grid; grid-template-columns: 19rem minmax(0, 1fr); row-gap: clamp(.6rem, 2.2vh, 1.6rem); position: relative; }
+.glabel { grid-column: 1; padding-right: 1rem; align-self: center; }
+.glabel b { display: block; font: 600 1.55rem/1.2 var(--sans); }
+.glabel span { display: block; font-size: 1.1rem; color: var(--muted); line-height: 1.3; }
+.c2 { grid-column: 2; margin-right: 6.5rem; position: relative; }
+.gridl { grid-row: 1 / span 3; pointer-events: none; }
+.gridl i { position: absolute; top: -.5rem; bottom: -.5rem; width: 1px; background: var(--grid); }
+.gridl i.base { background: var(--line-strong); }
+.gbars { display: grid; gap: 2px; z-index: 1; }
+.brow { position: relative; height: max(24px, 1.65rem); display: flex; align-items: center; cursor: default; border-radius: 4px; }
+.brow:focus-visible { outline-offset: 0; }
+.mark { height: clamp(16px, 1.5rem, 24px); border-radius: 0 4px 4px 0; min-width: 2px; transition: width .5s cubic-bezier(.4, 0, .2, 1); }
+.brow:hover .mark, .brow:focus-visible .mark { filter: brightness(1.12); }
+.val { position: absolute; top: 50%; transform: translateY(-50%); font: 600 1.6rem/1 var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; transition: left .5s cubic-bezier(.4, 0, .2, 1); }
+.val.pend { font-weight: 500; color: var(--muted); font-size: 1.25rem; }
+.axis { grid-column: 2; height: 1.8rem; font-size: 1.15rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.axis span { position: absolute; transform: translateX(-50%); top: .1rem; }
+.axtitle { grid-column: 2; margin-right: 6.5rem; text-align: center; }
+.axtitle b { display: block; font-size: 1.55rem; line-height: 1.25; }
+.axtitle { margin-top: -.6rem; }
+.counted { font-size: .98rem; color: var(--muted); margin: 0; max-width: 110ch; }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; padding: .5rem .7rem; box-shadow: 0 4px 16px rgba(0,0,0,.14); max-width: 26rem; font-size: .95rem; }
+.tip strong { display: block; font-size: 1.4rem; }
+.tip .key { display: inline-block; width: 1rem; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: .4rem; }
+.tip .src { color: var(--muted); font-size: .8rem; margin-top: .3rem; }
+table.data { border-collapse: collapse; font-size: 1.2rem; width: 100%; }
+table.data th, table.data td { padding: .45rem .8rem; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data caption { text-align: left; color: var(--muted); font-size: 1rem; margin-bottom: .5rem; }
+#tiles .say { font-size: 1.5rem; margin-bottom: 1.2rem; }
+#tiles > .tech { margin-top: 1rem; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.4rem; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 1.2rem 1.4rem; background: var(--bg); }
+.tile .lbl { font-size: 1.25rem; }
+.tile .big { font: 600 4.2rem/1.1 var(--sans); margin: .4rem 0 .2rem; }
+.tile .big small { font-size: 1.4rem; font-weight: 500; color: var(--muted); }
+
+/* slide 6 */
+.two { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 2.4rem; align-items: start; }
+.two h3 { font-size: 1.8rem; }
+.two .scenebox { display: block; }
+.two .scenebox svg { height: auto; }
+.big-line { font-size: 1.45rem; line-height: 1.4; margin: 1rem 0 0; }
+.next { font-size: 1.3rem; line-height: 1.45; padding-left: 1.3rem; margin: .5rem 0 1.4rem; }
+.next li { margin-bottom: .55rem; }
+.next .tech { display: block; }
+
+/* the bar and the speaker notes */
+.bar { position: fixed; left: 0; right: 0; bottom: 0; height: var(--bar); display: flex; align-items: center; gap: .6rem; padding: 0 1rem; background: var(--surface); border-top: 1px solid var(--line); z-index: 10; }
+.bar button { padding: .25rem .65rem; font-size: .92rem; }
+.bar .grow { flex: 1; }
+.bar .where { font: 500 .88rem var(--mono); color: var(--muted); white-space: nowrap; }
+.dots { display: flex; gap: .3rem; }
+.dots button { width: 2rem; padding: .2rem 0; font: 500 .85rem var(--mono); }
+.dots button[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+#notes { position: fixed; left: 0; right: 0; bottom: var(--bar); height: var(--notes); overflow: auto; display: none; padding: .7rem 1.4rem; background: var(--code-bg); border-top: 1px solid var(--line-strong); z-index: 9; font-size: 1.02rem; }
+body.notes-on #notes { display: block; }
+@media (min-width: 761px) { body.notes-on .slide > header .sub, body.notes-on .counted, body.notes-on .words { display: none; } }
+/* with the notes open the slides are shorter: tighten the side panels and the chart */
+body.notes-on .terms { gap: .3rem; } body.notes-on .terms li span { font-size: .86rem; line-height: 1.28; } body.notes-on .terms li .tech { font-size: .74rem; }
+body.notes-on .panel .say { font-size: 1.08rem; } body.notes-on .wf { margin-top: .6rem; padding-top: .4rem; } body.notes-on .wf ol { font-size: .82rem; line-height: 1.35; }
+body.notes-on .chart { row-gap: .6rem; }   /* room for the notes: the lead line and the footnote are in them */
+#notes .nh { font: 500 .8rem var(--mono); color: var(--muted); }
+#notes p { margin: .15rem 0; max-width: 140ch; }
+
+/* the scene: the walkthrough's schematic language, plus moving parts */
+.dg { color: var(--ink); }
+.dg text { fill: currentColor; font: 12px var(--sans); }
+.dg text.tt { font: 600 13px var(--sans); }
+.dg text.ts { fill: var(--muted); font-size: 11px; }
+.dg text.tm { font: 10.5px var(--mono); fill: var(--muted); }
+.dg text.band-title { font: 600 13px var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.dg text.big { font: 600 22px var(--mono); }
+.dg rect.box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+.dg rect.b1 { fill: var(--l1-soft); stroke: var(--l1); stroke-width: 1.2; }
+.dg rect.b2 { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.dg rect.b3 { fill: var(--l3-soft); stroke: var(--l3); stroke-width: 1.2; }
+.dg rect.bs { fill: var(--st-soft); stroke: var(--st); stroke-width: 1.2; }
+.dg .dashed { stroke-dasharray: 5 4; }
+.dg .edge { fill: none; stroke: var(--muted); stroke-width: 1.6; marker-end: url(#ah); }
+.dg text.acc { fill: var(--accent); font-weight: 600; }
+.dg text.hot { fill: var(--hot); font-weight: 600; }
+.dg text.l1 { fill: var(--l1); } .dg text.l3 { fill: var(--l3); } .dg text.st { fill: var(--st); }
+.dg .ico { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+marker path.n { fill: var(--muted); }
+.scene { --k: 1; }
+.scene .gone { opacity: 0; pointer-events: none; }
+.scene [data-part] { transition: opacity .3s; }
+.scene .lit > .pf { stroke: var(--accent); stroke-width: 2.6; }
+.scene .lit > text.tt { fill: var(--accent); }
+.scene .layer { transition: transform .8s cubic-bezier(.4, 0, .2, 1); }
+.scene.exploded .up { transform: translateY(-130px); }
+.scene.exploded .down { transform: translateY(130px); }
+.scene.exploded .chassis { opacity: 0; }
+.scene .band { opacity: 0; transition: opacity .3s; pointer-events: none; }
+.scene.seams .band { opacity: 1; }
+.scene .band rect { stroke-width: 1.4; stroke-dasharray: 6 4; }
+.scene .band.l1 rect { fill: var(--l1); fill-opacity: .09; stroke: var(--l1); }
+.scene .band.l2 rect { fill: var(--accent); fill-opacity: .07; stroke: var(--accent); }
+.scene .band.l3 rect { fill: var(--l3); fill-opacity: .08; stroke: var(--l3); }
+.scene .bandlabel { opacity: 0; transition: opacity .3s; }
+.scene.seams .bandlabel, .scene.exploded .bandlabel { opacity: 1; }
+.scene .seam { display: none; }
+.scene.seams .seam.on { display: inline; }
+.scene .seam rect, .scene .seam2 rect { fill: var(--surface); stroke: var(--hot); stroke-width: 1.4; }
+.scene .seam text, .scene .seam2 text { fill: var(--hot); font: 600 10.5px var(--mono); }
+.scene .card-ghost > rect.pf { fill: none; stroke-dasharray: 5 4; }
+.scene .card-ghost text { opacity: .65; }
+.scene .card-done > rect.pf { fill: var(--surface); }
+.scene .act text.st8 { font: 600 10px var(--mono); }
+.scene .act.done text.lbl, .scene .act.done text.st8 { fill: var(--l3); }
+.scene .act.wait text.lbl, .scene .act.wait text.st8 { fill: var(--accent); font-weight: 600; }
+.scene #ptr1, .scene #ptr1-b, .lanes .lptr { transition: transform .45s ease-out; }
+.scene .badge rect { fill: var(--accent); }
+.scene .badge text { fill: #fff; font: 600 10px var(--sans); }
+.scene .msg rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.3; }
+.scene .msg path { fill: none; stroke: var(--accent); stroke-width: 1.2; }
+.scene .msg text { font: 500 10.5px var(--sans); }
+.scene .msg.ticket rect { stroke-dasharray: 4 3; }
+.scene .msg.result rect { stroke-width: 2.2; fill: var(--accent-soft); }
+.scene .env > rect.pf { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; }
+.scene .env path.flap { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+.scene .stamp rect { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 1.4; }
+.scene .stamp text { fill: var(--hot); font: 700 10.5px var(--mono); }
+.scene .token > rect.pf { fill: var(--surface); stroke: var(--accent); stroke-width: 1.4; }
+.scene .token.resp > rect.pf { stroke: var(--l3); }
+.scene .jobbox > rect.pf { fill: var(--accent); stroke: var(--accent); }
+.scene .jobbox text { fill: #fff; font: 600 10.5px var(--sans); }
+.scene .leasefill { fill: var(--l1); transform-box: fill-box; transform-origin: left center; transition: transform .6s; }
+.scene .scanbeam { fill: var(--l1); opacity: .16; }
+.scene .scanbar { fill: var(--l1); }
+.scene .row rect { fill: transparent; }
+.scene .row text { font: 10.5px var(--sans); }
+.scene .row text.c0 { font: 10.5px var(--mono); }
+.scene .row.fresh rect { fill: var(--l3-soft); }
+.scene .row.fresh text.tag { fill: var(--l3); }
+.scene .row.del text { fill: var(--hot); text-decoration: line-through; }
+.scene .row.del text.tag { text-decoration: none; }
+.scene .row text.chg { fill: var(--accent); font-weight: 700; }
+.scene .row text.tag { font: 700 9.5px var(--mono); fill: var(--accent); }
+.scene .sline { font: 11px var(--sans); }
+.scene.animate .row.fresh { animation: rowin .7s var(--fd, 0ms) both; }
+.scene.animate .row.del { animation: rowdel .7s var(--fd, 0ms) both; }
+.scene.animate .row text.chg, .scene.animate .row.chgrow text.tag { animation: flash 1s var(--fd, 0ms) both; }
+.scene.animate .receipt:not(.gone) { animation: rowin .5s var(--fd, 0ms) both; }
+.scene.animate .sline.new { animation: rowin .5s both; }
+@keyframes rowin { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes rowdel { from { opacity: 1; } 40% { opacity: 1; } to { opacity: .6; } }
+@keyframes flash { 0%, 30% { opacity: 0; } 60% { opacity: 1; } 75% { opacity: .35; } 100% { opacity: 1; } }
+/* slides 2 and 3: the scene's text about 15 % larger than kernel-in-motion's, so it reads on a projector */
+:is(#scene, #scene-b) text { font-size: 14px; }
+:is(#scene, #scene-b) text.tt { font-size: 15px; }
+:is(#scene, #scene-b) text.ts { font-size: 12.5px; }
+:is(#scene, #scene-b) text.tm, :is(#scene, #scene-b) .row text, :is(#scene, #scene-b) .msg text, :is(#scene, #scene-b) .stamp text, :is(#scene, #scene-b) .jobbox text { font-size: 12px; }
+:is(#scene, #scene-b) .row text.tag { font-size: 10.5px; }
+:is(#scene, #scene-b) text.band-title { font-size: 15px; }
+:is(#scene, #scene-b) text.big { font-size: 25px; }
+:is(#scene, #scene-b) .badge text, :is(#scene, #scene-b) .act text.st8 { font-size: 11.5px; }
+:is(#scene, #scene-b) .sline { font-size: 12.5px; }
+:is(#scene, #scene-b) .seam text, :is(#scene, #scene-b) .seam2 text { font-size: 12px; }
+/* slide 2: one layer lit, the rest dimmed */
+#scene-b [data-l] { transition: opacity .35s; }
+#scene-b.on1 [data-l]:not([data-l="1"]), #scene-b.on2 [data-l]:not([data-l="2"]):not([data-l="s"]), #scene-b.on3 [data-l]:not([data-l="3"]) { opacity: .1; }
+#scene-b .seam2 { display: none; }
+#scene-b.on4 .seam2 { display: inline; }
+/* the three lanes */
+.lanes .lanebg { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.lanes text.mode { font: 600 19px var(--display); }
+.lanes text.mid { font: 600 15px var(--mono); }
+.lanes text.nt { fill: var(--ink); }
+.lanes .cyl { fill: var(--st-soft); stroke: var(--st); stroke-width: 1.3; }
+.lanes .mini rect { fill: var(--surface); stroke: var(--accent); stroke-width: 1.3; }
+.lanes .mini path { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+/* slide 6: the fence, static */
+.fence text.row { font: 600 20px var(--mono); }
+.fence .rej rect { fill: var(--hot-soft); stroke: var(--hot); stroke-width: 2.2; }
+.fence .rej text { fill: var(--hot); }
+
+/* phone width: the slides as one vertical scroll */
+@media (max-width: 760px) {
+  html { font-size: 14px; }
+  body { overflow-x: hidden; overflow-y: auto; height: auto; padding-bottom: calc(var(--bar) + var(--notes)); }
+  #deck { position: static; }
+  .slide, .slide.current { display: flex; position: relative; inset: auto; padding: 1.6rem 1rem; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 2.6rem; }
+  h2 { font-size: 1.8rem; }
+  .split, .two, .narrow, .cards, .words, .tiles { grid-template-columns: minmax(0, 1fr); }
+  .scenebox { overflow-x: auto; display: block; }
+  .scenebox svg { height: auto; min-width: 640px; }
+  .chart { grid-template-columns: 8.5rem minmax(0, 1fr); }
+  .c2, .axtitle { margin-right: 3.5rem; }
+  .glabel b { font-size: 1rem; } .val { font-size: 1rem; }
+  .bar .where { display: none; }
+  .bar { gap: .35rem; padding: 0 .5rem; }
+  #fstog { display: none; }
+  .dots button { width: 1.7rem; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="n" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+</svg>
+<main id="deck">
+
+<!-- 1 · title ─────────────────────────────────────────────────────── -->
+<section class="slide title" id="s1" aria-label="Slide 1: Elsa's new kernel">
+  <div class="eyebrow tech">Elsa · team demo · 16 November 2026</div>
+  <h1>Elsa's new kernel</h1>
+  <p class="lede">A clean-slate core for running workflows: correct under failure, few database calls, any execution model.</p>
+  <div class="cards">
+    <div class="card c1"><h3>Correct</h3><p>If a server dies, its workflows carry on from their last save on another server, and a server that is no longer the owner can never write.</p><p class="tech">one writer per partition, fenced in the database</p></div>
+    <div class="card"><h3>Lean</h3><p>One save carries many workflows, and a workflow kept in memory runs its next step without reading the database.</p><p class="tech">a turn reads nothing; one commit carries many instances</p></div>
+    <div class="card c3"><h3>Open</h3><p>Different kinds of workflow plug in: Elsa's own workflows, BPMN, and more.</p><p class="tech">execution models: native (Flowchart and StateMachine are its containers, each on its own engine), BPMN, …</p></div>
+  </div>
+  <div class="words" aria-label="Words used on these slides">
+    <div><b>Partition:</b> a fixed group of workflows; one server owns each group.</div>
+    <div><b>Turn:</b> one burst of work by one workflow, run in memory.</div>
+    <div><b>Commit:</b> one save to the database, in one transaction.</div>
+    <div><b>Fence:</b> a check inside every save that refuses a server which is no longer the owner.</div>
+  </div>
+  <div class="chips"><span class="chip ok">Proposed design, prototype on main</span><span class="chip warn">Not product code yet</span></div>
+</section>
+
+<!-- 2 · the structure ─────────────────────────────────────────────── -->
+<section class="slide" id="s2" aria-label="Slide 2: the structure, three layers">
+  <header><div class="eyebrow">02 · The structure</div><h2>Three layers: where it runs, what it guarantees, what runs</h2></header>
+  <div class="split fill">
+    <div class="scenebox" id="scenebox-b"></div>
+    <div class="panel" id="p2" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- 3 · one request ───────────────────────────────────────────────── -->
+<section class="slide" id="s3" aria-label="Slide 3: how it works, one request">
+  <header><div class="eyebrow">03 · How it works</div><h2>One order, from the request to its history</h2></header>
+  <div class="split fill">
+    <div class="scenebox">
+    <svg id="scene" class="dg scene seams" viewBox="0 0 1200 720" role="img" aria-labelledby="scene-title scene-desc">
+      <title id="scene-title">The kernel drawn as a machine</title>
+      <desc id="scene-desc">On the left an HTTP client and an SMTP server. In the middle Node A, holding partition 17 with the instances order #1 and order #7, and Node B, holding partition 42 with order #3. Each instance card sits on its inbox tray, which sits on the partition shelf. On the right the database with the partition, instance, message and journal tables, and below it the projector and the Studio run view. The panel beside the scene says what each step shows.</desc>
+
+      <!-- Layer 1, back: node chassis, partition shelves, leases, the wake signal -->
+      <g id="g-l1" class="layer down" data-l="1">
+        <g class="chassis" data-part="nodeA"><rect class="b1 pf" x="175" y="60" width="400" height="528" rx="10"/><text class="tt" x="187" y="80">Node A (a server process)</text></g>
+        <g class="chassis" data-part="nodeB"><rect class="b1 pf" x="590" y="60" width="180" height="528" rx="10"/><text class="tt" x="602" y="80">Node B</text></g>
+        <g class="band l1"><rect x="172" y="482" width="604" height="112" rx="6"/></g>
+        <g class="bandlabel"><rect x="2" y="490" width="4" height="92" fill="var(--l1)"/><text class="band-title l1" x="12" y="502">Layer 1</text><text class="ts" x="12" y="517">actor runtime:</text><text class="ts" x="12" y="531">where things run</text><text class="tm" x="12" y="549">IActorRuntime</text><text class="tm" x="12" y="563">IScopeActivation</text><text class="tm" x="24" y="577">.RunAsync (a pass)</text></g>
+        <g data-part="shelf17">
+          <rect class="b1 pf" x="185" y="486" width="380" height="12" rx="3" style="fill:var(--l1)"/>
+          <text class="tt" x="189" y="518">partition 17</text><text class="ts" x="282" y="518">on Node A · epoch 8</text>
+          <g data-part="lease17"><text class="ts" x="189" y="541">lease: 10 s</text><rect class="box pf" x="252" y="533" width="160" height="9" rx="3"/><rect class="leasefill" id="lf17" x="252" y="533" width="160" height="9" rx="3"/><text class="tm" id="lt17" x="420" y="541"></text></g>
+        </g>
+        <g data-part="shelf42">
+          <rect class="b1 pf" x="600" y="486" width="160" height="12" rx="3" style="fill:var(--l1)"/>
+          <text class="tt" x="604" y="518">partition 42</text><text class="ts" x="604" y="534">on Node B · epoch 5</text>
+          <g data-part="lease42"><text class="ts" x="604" y="554">lease: 10 s</text><rect class="box pf" x="604" y="561" width="120" height="9" rx="3"/><rect class="leasefill" id="lf42" x="604" y="561" width="120" height="9" rx="3"/><text class="tm" id="lt42" x="604" y="583"></text></g>
+        </g>
+        <g data-part="wake"><path class="edge dashed" d="M545,590 C556,628 630,628 640,592"/><path class="ico" d="M596,602 l-7,11 h6 l-3,9 l9,-12 h-6 z" style="stroke:var(--l1)"/><text class="ts" x="592" y="644" text-anchor="middle">wake signal (a hint)</text></g>
+      </g>
+
+      <!-- Layer 2: inbox trays, fence records, the committer lane, the projector -->
+      <g id="g-l2" class="layer" data-l="2">
+        <g class="band l2"><rect x="172" y="334" width="604" height="148" rx="6"/></g>
+        <g class="bandlabel"><rect x="2" y="360" width="4" height="106" fill="var(--accent)"/><text class="band-title acc" x="12" y="372">Layer 2</text><text class="ts" x="12" y="387">durable actors:</text><text class="ts" x="12" y="401">every guarantee</text><text class="ts" x="12" y="419">inbox · commit · fence</text><text class="ts" x="12" y="433">timers · jobs · journal</text><text class="tm" x="12" y="451">IKernelStore</text><text class="ts" x="12" y="464">(the storage contract)</text></g>
+        <g data-part="tray1"><rect class="b2 pf" x="185" y="338" width="212" height="36" rx="5"/><text class="ts" x="191" y="360">inbox</text><g id="chips1"></g></g>
+        <g data-part="tray7"><rect class="b2 pf" x="407" y="338" width="158" height="36" rx="5"/><text class="ts" x="413" y="360">inbox</text><g id="chips7"></g></g>
+        <g data-part="tray3"><rect class="b2 pf" x="600" y="338" width="160" height="36" rx="5"/><text class="ts" x="606" y="360">inbox</text><text class="ts" x="644" y="360">empty</text></g>
+        <g data-part="fence17"><rect class="b2 pf" x="427" y="382" width="138" height="30" rx="5"/><text class="tm" x="435" y="394">fence: epoch 8</text><text class="tm" id="pos17" x="435" y="407"></text></g>
+        <g data-part="fence42"><rect class="b2 pf" x="600" y="382" width="160" height="30" rx="5"/><text class="tm" x="608" y="394">fence: epoch 5</text><text class="tm" x="608" y="407">position 311</text></g>
+        <g data-part="lane"><rect class="box dashed pf" x="185" y="380" width="236" height="96" rx="6"/><text class="ts" id="lanehint" x="303" y="432" text-anchor="middle">committer: one flush at a time</text><g id="lanelines"></g></g>
+        <g data-part="projector">
+          <rect class="b2 pf" x="790" y="482" width="190" height="230" rx="9"/>
+          <text class="tt" x="802" y="502">projector</text><text class="ts" x="882" y="502">layer 2</text><text class="ts" x="802" y="518">a background worker,</text><text class="ts" x="802" y="532">off the hot path</text>
+          <rect class="box" x="802" y="542" width="166" height="50" rx="6"/><text class="ts" x="810" y="558">cursor (its projection row)</text><text class="big" id="pcur" x="810" y="584">1204</text>
+          <g id="plines"></g>
+        </g>
+      </g>
+
+      <!-- Layer 3, front: the instance cards with the native model -->
+      <g id="g-l3" class="layer up" data-l="3">
+        <g class="band l3"><rect x="172" y="88" width="604" height="246" rx="6"/></g>
+        <g class="bandlabel"><rect x="2" y="64" width="4" height="78" fill="var(--l3)"/><text class="band-title l3" x="12" y="76">Layer 3</text><text class="ts" x="12" y="91">actor types:</text><text class="ts" x="12" y="105">what runs</text><text class="tm" x="12" y="123">IExecutionModel</text><text class="tm" x="24" y="137">.TurnAsync</text></g>
+        <g data-part="card1" id="card1" class="gone">
+          <rect class="b3 pf" x="185" y="92" width="212" height="238" rx="8"/>
+          <text class="tt" x="197" y="112">order #1</text>
+          <g class="badge gone" id="turn1"><rect x="306" y="100" width="82" height="17" rx="8"/><text x="347" y="112" text-anchor="middle">turn running</text></g>
+          <text class="ts" x="197" y="128">workflow instance · Order</text>
+          <text class="ts" data-part="mode1" x="197" y="143">persistence mode: Balanced</text>
+          <g data-part="model1">
+            <rect class="box pf" x="193" y="151" width="196" height="146" rx="6"/>
+            <text class="tm" x="201" y="166">native model</text><text class="ts" x="383" y="166" text-anchor="end" style="font-size:11px">execution model</text>
+            <g data-part="acts1" id="acts1"></g>
+            <path id="ptr1" class="gone" d="M200,175 l7,4.5 l-7,4.5 z" style="fill:var(--accent)"/>
+          </g>
+          <text class="ts" id="s1t" x="197" y="317"></text>
+        </g>
+        <g data-part="card7" id="card7">
+          <rect class="b3 pf" x="407" y="92" width="158" height="160" rx="8"/>
+          <text class="tt" x="419" y="112">order #7</text>
+          <g class="badge gone" id="turn7"><rect x="480" y="100" width="78" height="17" rx="8"/><text x="519" y="112" text-anchor="middle">turn running</text></g>
+          <text class="ts" x="419" y="128">instance · Order</text>
+          <text x="419" y="154" id="c7a">Running</text><text class="ts" x="419" y="170" id="c7b">waiting: timer</text>
+          <text class="ts" x="419" y="219">same partition, so its</text><text class="ts" x="419" y="232">turns share order #1's</text><text class="ts" x="419" y="245">commits</text>
+        </g>
+        <g data-part="card3">
+          <rect class="b3 pf" x="600" y="92" width="160" height="160" rx="8"/>
+          <text class="tt" x="612" y="112">order #3</text>
+          <text class="ts" x="612" y="128">instance · Order</text>
+          <text x="612" y="154">Running</text><text class="ts" x="612" y="170">waiting: event</text>
+          <text class="ts" x="612" y="232">idle: nothing is due</text><text class="ts" x="612" y="245">owner: Node B</text>
+        </g>
+      </g>
+
+      <!-- Layer 1, front: the pass scanner and the placement arrow, drawn over the cards -->
+      <g id="g-l1b" class="layer down" data-l="1">
+        <g data-part="scanner" id="scanner" class="gone">
+          <rect class="scanbeam chassis" x="176" y="92" width="16" height="400"/>
+          <rect class="scanbar chassis" x="182" y="92" width="4" height="400"/>
+          <rect class="scanbar" x="179" y="480" width="10" height="24" rx="2"/>
+          <text class="tt l1" x="184" y="476" text-anchor="middle">pass</text>
+        </g>
+        <g data-part="placement" id="placement" class="gone"><path class="edge chassis" d="M168,212 C200,236 222,290 236,334" style="stroke:var(--l1)"/></g>
+      </g>
+
+      <!-- outside the kernel: the clock, the HTTP client, the SMTP server -->
+      <g data-part="clock" data-l="0"><rect class="box pf" x="1040" y="4" width="150" height="28" rx="6"/><text class="ts" x="1046" y="22">scene clock</text><text class="tt" id="clock" x="1124" y="22">t = 0.0 s</text></g>
+      <g data-part="caller" data-l="0">
+        <rect class="box pf" x="8" y="148" width="138" height="76" rx="8"/>
+        <rect class="ico" x="52" y="158" width="50" height="32" rx="3"/><path class="ico" d="M44,196 h66 l-6,6 h-54 z"/>
+        <text class="tt" x="77" y="218" text-anchor="middle">HTTP client</text>
+      </g>
+      <g data-part="smtp" data-l="0">
+        <rect class="box pf" x="8" y="262" width="58" height="58" rx="6"/>
+        <rect class="ico" x="18" y="272" width="38" height="10" rx="2"/><rect class="ico" x="18" y="287" width="38" height="10" rx="2"/><rect class="ico" x="18" y="302" width="38" height="10" rx="2"/>
+        <text class="ts" x="8" y="336">SMTP server (external)</text>
+      </g>
+
+      <!-- the database (storage, behind IKernelStore) -->
+      <g data-part="vault" data-l="s">
+        <rect class="bs pf" x="790" y="40" width="400" height="432" rx="10"/>
+        <text class="tt st" x="802" y="60">Database</text><text class="ts" x="878" y="60">the vault: one shared store behind IKernelStore</text>
+        <text class="ts" id="dockhint" x="914" y="128" text-anchor="middle">commits land here</text>
+        <g class="receipt gone" id="receipt"><rect class="box" x="1036" y="78" width="150" height="88" rx="6"/><text class="tt l3" id="rc0" x="1046" y="97"></text><text class="ts" id="rc1" x="1046" y="115"></text><text class="ts" id="rc2" x="1046" y="130"></text><text class="ts" id="rc3" x="1046" y="145"></text><text class="ts" id="rc4" x="1046" y="160"></text></g>
+        <g data-part="t-partition" id="t-partition"></g>
+        <g data-part="t-instance" id="t-instance"></g>
+        <g data-part="t-message" id="t-message"></g>
+        <g data-part="t-journal" id="t-journal"></g>
+      </g>
+
+      <!-- Studio, which reads the projected history -->
+      <g data-part="studio" data-l="0">
+        <rect class="b3 pf" x="995" y="482" width="195" height="230" rx="9"/>
+        <rect x="995.6" y="482.6" width="193.8" height="22" rx="8" style="fill:var(--l3);opacity:.25"/>
+        <text class="tt" x="1005" y="498">Studio run view</text>
+        <text class="ts" x="1005" y="522">order #1 · history</text>
+        <g id="slines"></g>
+        <text class="ts" x="1005" y="702">reads committed history only</text>
+      </g>
+
+      <!-- moving tokens, drawn on top of everything -->
+      <g id="g-tokens" data-l="0">
+        <g data-part="req" id="req" class="token gone"><rect class="pf" x="0" y="0" width="138" height="24" rx="5"/><path class="ico" d="M8,6 h18 v12 h-18 z M8,7 l9,6 l9,-6" style="stroke:var(--accent)"/><text x="32" y="16">POST /orders</text></g>
+        <g data-part="resp" id="resp" class="token resp gone"><rect class="pf" x="0" y="0" width="156" height="26" rx="5"/><text id="resptext" class="tt" x="8" y="17">202 Accepted · held</text></g>
+        <g data-part="job" id="job" class="jobbox gone"><rect class="pf" x="0" y="0" width="76" height="22" rx="5"/><text x="38" y="15" text-anchor="middle">job: email</text></g>
+        <g data-part="envelope" id="env" class="env gone">
+          <rect class="pf" x="0" y="0" width="228" height="96" rx="5"/><path class="flap" d="M0,0 L114,22 L228,0"/>
+          <text class="tt" x="8" y="15" style="font-size:11.5px">commit · one transaction</text>
+          <text class="ts" id="el0" x="8" y="32"></text><text class="ts" id="el1" x="8" y="45"></text><text class="ts" id="el2" x="8" y="58"></text><text class="ts" id="el3" x="8" y="71"></text>
+          <g class="stamp" id="stamp"><rect x="2" y="77" width="224" height="17" rx="3"/><text id="stamptext" x="114" y="89.5" text-anchor="middle"></text></g>
+        </g>
+        <g id="rowtoken" opacity="0"><rect x="0" y="0" width="94" height="20" rx="4" style="fill:var(--surface);stroke:var(--st);stroke-width:1.4"/><text class="tm" x="47" y="14" text-anchor="middle" style="fill:var(--st)">journal rows</text></g>
+        <g id="ghosts"></g>
+      </g>
+
+      <!-- seam markers: the interface a step crosses -->
+      <g id="g-seams" data-l="0">
+        <g class="seam" data-seam="place"><rect x="230" y="474" width="292" height="17" rx="4"/><text x="376" y="486" text-anchor="middle">seam · IActorRuntime: partitions Node A hosts</text></g>
+        <g class="seam" data-seam="pass"><rect x="250" y="474" width="252" height="17" rx="4"/><text x="376" y="486" text-anchor="middle">seam · IScopeActivation.RunAsync (a pass)</text></g>
+        <g class="seam" data-seam="turn"><rect x="190" y="326" width="200" height="17" rx="4"/><text x="290" y="338" text-anchor="middle">seam · IExecutionModel.TurnAsync</text></g>
+        <g class="seam" data-seam="store"><rect x="598" y="440" width="190" height="17" rx="4"/><text x="693" y="452" text-anchor="middle">seam · IKernelStore.CommitAsync</text></g>
+        <g class="seam" data-seam="projector"><rect x="794" y="462" width="300" height="17" rx="4"/><text x="944" y="474" text-anchor="middle">seam · IKernelStore: ReadJournalAsync, ProjectAsync</text></g>
+      </g>
+    </svg>
+    </div>
+    <div class="panel" id="p3" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- 4 · persistence modes ─────────────────────────────────────────── -->
+<section class="slide" id="s4" aria-label="Slide 4: persistence modes">
+  <header><div class="eyebrow">04 · Persistence modes</div><h2>You choose where a workflow saves</h2>
+    <p class="sub">The same workflow three times, one instance per mode, stepping together. Each saved envelope is one commit.</p></header>
+  <div class="scenebox fill">
+  <svg id="lanes" class="dg scene lanes" viewBox="0 0 1200 546" role="img" aria-labelledby="lanes-title lanes-desc">
+    <title id="lanes-title">Three persistence modes running the same workflow</title>
+    <desc id="lanes-desc">Three lanes, Ephemeral, Balanced and Durable. Each lane shows its HTTP caller, its instance card with the activity list and a pointer, a database that keeps one envelope per commit, a commit counter, a counter of database round trips on PostgreSQL, and notes. The text under the lanes says what each step shows.</desc>
+    <g><text class="ts" x="18" y="26">persistence mode</text><text class="ts" x="168" y="26">its caller</text><text class="ts" x="300" y="26">the instance, inline on Node A</text><text class="ts" x="700" y="26">the database</text><text class="ts" x="800" y="26">what it costs</text><text class="ts" x="996" y="26">notes</text></g>
+  </svg>
+  </div>
+  <div class="narrow">
+    <div aria-live="polite"><h3 id="n4t"></h3><p class="say" id="n4" style="font-size:1.2rem;margin:0"></p></div>
+    <p class="foot" style="max-width:36rem">Ephemeral writes nothing while it sends nothing to others and its waits are short enough to stay in memory: up to the request's timeout, else 5 s (the prototype's short wait, FINDINGS 25.6). A longer wait commits like Balanced. Round trips: the prototype's PostgreSQL counts with the fence in the batch.</p>
+  </div>
+</section>
+
+<!-- 5 · database commands ─────────────────────────────────────────── -->
+<section class="slide" id="s5" aria-label="Slide 5: database commands">
+  <header><div class="eyebrow">05 · Database commands</div><h2 id="h5">How many database commands one workflow run costs</h2>
+    <p class="sub" id="sub5">Same three workflows, same kind of count. In the default mode the new kernel issues far fewer commands for the straight run and the request, even adding the few it spends later writing history; for the fork and resume it is about level with Elsa 3 once its history is added — and every save is one atomic, fenced transaction.</p></header>
+  <div class="vizrow" id="viz-controls">
+    <span class="seg" role="group" aria-label="When the workflow saves">
+      <button data-mode="balanced" aria-pressed="true">Default (Balanced)</button>
+      <button data-mode="durable" aria-pressed="false">Save after every activity (Durable)</button>
+    </span>
+    <button class="tog" id="tabletog" aria-pressed="false">Table view</button>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="vizbox fill" id="vizbox">
+    <div id="chart" class="chart" role="figure" aria-label="Bar chart: database commands per workflow run, by workflow and system"></div>
+    <div id="tablebox" hidden></div>
+    <div id="tiles" hidden></div>
+  </div>
+  <p class="counted" id="counted"><b>What is counted:</b> the run's own EF Core commands (reader, non-query, scalar) on SQLite (for Elsa 3, background queue polls excluded). Elsa 4: its runtime database context; Elsa 3: both of its contexts. Elsa 3 writes its history during the run, and it is counted: 25 of 29, 11 of 15 and 12 of 25 commands in the default mode; how much of Elsa 4's count is history is not broken out here; the kernel writes one journal row in the commit and expands it later, off the hot path, which is not counted. Kernel: the prototype's native model, not product code. Commands, not time.</p>
+</section>
+
+<!-- 6 · why it is safe, and next ──────────────────────────────────── -->
+<section class="slide" id="s6" aria-label="Slide 6: why it is safe, and what is next">
+  <header><div class="eyebrow">06 · Safe, and next</div><h2>A server that is no longer the owner cannot write</h2>
+    <p class="sub">If a server pauses and another takes over its workflows, the database refuses the paused server's late save. Two servers never both write the same workflows.</p></header>
+  <div class="two">
+    <div>
+      <div class="scenebox">
+      <svg class="dg fence" viewBox="0 0 640 330" role="img" aria-labelledby="fence-title fence-desc">
+        <title id="fence-title">The fence refusing a stale commit</title>
+        <desc id="fence-desc">Node A paused past its lease and still believes it owns partition 17 at epoch 8. Node B took the partition and raised the epoch to 9. Node A's commit, fenced on epoch 8 and position 1204, reaches the partition row, which says owner B, epoch 9: it changes 0 rows and is rolled back.</desc>
+        <rect class="b1" x="12" y="10" width="290" height="64" rx="9"/><text class="tt" x="26" y="33">Node A · paused past its lease</text><text class="ts" x="26" y="52">still believes: I own 17 · epoch 8</text><text class="ts" x="26" y="66">position 1204</text>
+        <rect class="b1" x="338" y="10" width="290" height="64" rx="9"/><text class="tt" x="352" y="33">Node B · took partition 17</text><text class="ts" x="352" y="52">its take raised the epoch: 8 → 9</text>
+        <rect class="box" x="26" y="92" width="380" height="58" rx="6" style="stroke:var(--accent);stroke-width:1.6"/>
+        <text class="tt" x="38" y="110">A's commit · one transaction</text>
+        <text class="tm" x="38" y="126" style="fill:var(--ink)">UPDATE partition SET position = 1206 …</text>
+        <text class="tm" x="38" y="141" style="fill:var(--ink)">WHERE id = 17 AND epoch = 8 AND position = 1204</text>
+        <path class="edge" d="M200,152 C200,170 200,178 200,196"/>
+        <g class="rej"><rect x="430" y="98" width="190" height="48" rx="6" transform="rotate(-5 525 122)"/><text class="tt" x="525" y="118" text-anchor="middle" transform="rotate(-5 525 122)">0 rows</text><text class="ts" x="525" y="136" text-anchor="middle" transform="rotate(-5 525 122)" style="fill:var(--hot)">rolled back: nothing lands</text></g>
+        <path class="edge" d="M330,220 C390,200 430,176 470,150" style="stroke:var(--hot)"/>
+        <rect class="bs" x="12" y="200" width="616" height="118" rx="10"/>
+        <text class="tt st" x="26" y="222">Database · the partition row</text>
+        <text class="tm" x="40" y="252">id</text><text class="tm" x="140" y="252">owner</text><text class="tm" x="260" y="252">epoch</text><text class="tm" x="400" y="252">position</text>
+        <text class="row" x="40" y="282">17</text><text class="row" x="140" y="282">B</text><text class="row hot" x="260" y="282" style="fill:var(--hot)">9</text><text class="row" x="400" y="282">1204</text>
+        <text class="ts" x="40" y="306">the row says epoch 9, not 8: the fence matches nothing</text>
+      </svg>
+      </div>
+      <p class="big-line"><b>Leases decide who should write. The fence decides who can.</b></p>
+    </div>
+    <div>
+      <h3>Next</h3>
+      <ul class="next">
+        <li>Round 5, hardening before the proposal<span class="tech">range-owned virtual partitions · hand-owned commit SQL per provider · a stable effect key per activity attempt</span></li>
+        <li>The design proposal, and the architecture docs</li>
+        <li>Release 1</li>
+      </ul>
+      <p style="font-size:1.15rem"><a href="kernel-in-motion.html">The kernel in motion</a>: the full interactive explainer, the fence lab included.<br><a href="walkthrough.html">The walkthrough</a>: the design record.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="tip" id="tip" role="tooltip" hidden></div>
+<div id="notes" aria-live="polite"></div>
+<nav class="bar" aria-label="Slides">
+  <button id="prev" aria-label="Back">⟨</button>
+  <div class="dots" id="dots"></div>
+  <button id="next" aria-label="Next">⟩</button>
+  <span class="where" id="where"></span>
+  <span class="grow"></span>
+  <button class="tog" id="notestog" aria-pressed="false" title="Speaker notes (N)">Notes</button>
+  <button id="themetog" title="Dark mode (D)">Dark</button>
+  <button id="fstog" title="Fullscreen (F)">Fullscreen</button>
+</nav>
+
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const $ = id => document.getElementById(id);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const motionOn = () => !reduced.matches;
+const EASE = 'cubic-bezier(.45,0,.2,1)';
+function svg(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  return e;
+}
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const tr = ([x, y]) => `translate(${x}px, ${y}px)`;
+const at = (e, xy) => { e.style.transform = tr(xy); };
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// ==== slide 5's data: every value with its source, so it can be filled in and audited ===================================
+// n: null would be a value still being measured; it renders as a hatched "pending" bar.
+const E4 = (wf, mode, n) => ({ n, src: `Elsa 4 today: main, Essentials/tests/Activities/Http/IntegrationTests/CommandBudgets/ef-command-budgets.json ("${wf}"."${mode}": ${n}; last changed by ae248a69a, 12 November). Every reader, non-query and scalar command of the runtime's EF context, fresh SQLite database.` });
+const KN = (row, n) => ({ n, src: `Kernel prototype: prototypes/kernel-model/NATIVE.md section 5, SQLite table, ${row}: commands only, the number in brackets (${n}).` });
+const E3SRC = 'Elsa 3.10.1 measured 15 Nov 2026, receipt docs/reports/clean-slate-kernel/evidence/elsa3-cost/RECEIPT.md';
+const E3 = (n, how) => ({ n, src: `${E3SRC}. ${how}; EF Core SQLite, both of Elsa 3's contexts; reader, non-query and scalar commands on the run's own flow, which here equals the until-return rule exactly; 3 runs on fresh databases, identical counts. Background bookmark-queue polls after the call returns (+4 per commit burst) are excluded.` });
+const E3D = (n, how) => ({ n, src: `${E3SRC}. ${how}; EF Core SQLite, both of Elsa 3's contexts; reader, non-query and scalar commands on the run's own flow (the receipt's workflow-flow column, identical in 3 runs on fresh databases); Elsa 3's background bookmark-queue polls are excluded, including the 2 to 4 that land before the call returns.` });
+const DATA = {
+  unit: 'EF Core commands per workflow run, SQLite',
+  systems: [
+    { key: 'elsa3', name: 'Elsa 3 (3.10.1)', cls: 's-elsa3' },
+    { key: 'elsa4', name: 'Elsa 4 today (main)', cls: 's-elsa4' },
+    { key: 'kernel', name: 'New kernel (prototype)', cls: 's-kernel' },
+  ],
+  modes: { balanced: 'default (Balanced; Elsa 3: its default, state saved when a burst ends)', durable: 'save after every activity (Durable; Elsa 3: "commit after each activity")' },
+  workflows: [
+    { key: 'writeline-sequence', what: 'ten WriteLines' },
+    { key: 'http-reference', what: 'POST → Set via JavaScript → response' },
+    { key: 'fork-join-resume', what: 'Parallel with a WriteLine and an Event; start and resume' },
+  ],
+  values: {
+    'writeline-sequence': {
+      elsa3: { balanced: E3(29, 'default: state saved when a burst ends (≈ Balanced)'), durable: E3D(64, '"commit after each activity" (≈ Durable)') },
+      elsa4: { balanced: E4('writeline-sequence', 'Balanced', 64), durable: E4('writeline-sequence', 'Durable', 221) },
+      kernel: { balanced: KN('"writeline-sequence, 5 / 10 / 20 / 40 | Balanced": 5 (3) for every length', 3),
+                durable: KN('"writeline-sequence, 5 / 10 / 20 / 40 | Durable": 85 (63) for ten', 63) },
+    },
+    'http-reference': {
+      elsa3: { balanced: E3(15, 'default: state saved when a burst ends (≈ Balanced)'), durable: E3D(29, '"commit after each activity" (≈ Durable)') },
+      elsa4: { balanced: E4('http-reference', 'Balanced', 83), durable: E4('http-reference', 'Durable', 149) },
+      kernel: { balanced: KN('"http-reference | Ephemeral / Balanced / Durable": 0 / 5 (3) / 29 (21), Balanced', 3),
+                durable: KN('"http-reference | Ephemeral / Balanced / Durable": 0 / 5 (3) / 29 (21), Durable', 21) },
+    },
+    'fork-join-resume': {
+      elsa3: { balanced: E3(25, 'default: state saved when a burst ends (≈ Balanced), start 13 + resume 12'), durable: E3D(42, '"commit after each activity" (≈ Durable), start and resume') },
+      elsa4: { balanced: E4('fork-join-resume', 'Balanced', 131), durable: E4('fork-join-resume', 'Durable', 194) },
+      kernel: { balanced: KN('"fork-join-resume, direct resume | Balanced": 26 (18)', 18),
+                durable: KN('"fork-join-resume, direct resume | Durable": 42 (30)', 30) },
+    },
+  },
+  // "One commit, many instances": PostgreSQL, not SQLite; the unit as WRITES.md names it.
+  many: {
+    unit: 'driver commands and transaction ends (actual driver interception counters; not wire counts), PostgreSQL 17, fence in the batch, Full history',
+    rows: [
+      { label: '100 Balanced instances started at once', commands: 1, ends: 1, src: 'prototypes/kernel-model/measurements/write-cost-2026-11-14/cost-cases.jsonl, variant "full", case "100 balanced instances started at once": commands 1, commit 1' },
+      { label: '1,000 Balanced instances started at once', commands: 3, ends: 1, src: 'prototypes/kernel-model/WRITES.md, "14 November: scoped-inbox foundation": "1,000 owner starts use 3 + 1 = 4"; cost-cases.jsonl, variant "full": commands 3, commit 1' },
+    ],
+  },
+};
+
+// ==== the scene: copied from kernel-in-motion, act two and the controls cut ==============================================
+// Slide 2 draws on a copy of the scene: the same parts, with "-b" on every id. Copied before any part is filled in.
+const sceneB = $('scene').cloneNode(true);
+sceneB.querySelectorAll('[id]').forEach(e => { e.id += '-b'; });
+sceneB.id = 'scene-b';
+sceneB.setAttribute('aria-labelledby', 'scene-title-b scene-desc-b');
+sceneB.classList.add('exploded');
+sceneB.setAttribute('viewBox', '0 -76 1200 862');
+$('scenebox-b').append(sceneB);
+$('scene-title-b').textContent = 'The kernel pulled apart into its three layers';
+$('scene-desc-b').textContent = 'The same machine in an exploded view: layer 3, the instance cards, lifted to the top; layer 2, the inboxes, fences and committer, in the middle; layer 1, the partition shelves, leases and the pass, at the bottom; the database on the right. Each step lights one layer and dims the rest.';
+
+const POS = {
+  reqCaller: [8, 228], reqNode: [150, 196], respHeld: [427, 418], respCaller: [8, 228],
+  envLane: [189, 380], envVault: [800, 76], jobHome: [427, 452], jobSmtp: [72, 268],
+  rowsJournal: [900, 400], rowsProjector: [840, 600],
+};
+const COLS = {
+  partition: { y: 184, x: [876, 916, 966, 1036], head: ['id', 'epoch', 'position', 'lease_until'] },
+  instance: { y: 240, x: [876, 946, 1016], head: ['id', 'status', 'sub_status'] },
+  message: { y: 311, x: [876, 986, 1046, 1134], head: ['id', 'target', 'kind', 'due'] },
+  journal: { y: 367, x: [876, 938, 1000], head: ['position', 'instance', 'entries'] },
+};
+const RECEIPT = ['✓ commit landed', 'about 2 round trips on', 'PostgreSQL, with the', 'fence in the batch', '(the default)'];
+const ACTS = ['trigger: POST /orders', '1 Save order', '2 Respond 202', '3 Wait 5 s', '4 Send confirmation', '5 Done'];
+const START = { id: 'start', label: 'start', kind: 'start' };
+const T7 = { id: 't7', label: 'timer (due)', kind: 'timer' };
+const T1 = { id: 't1', label: 'timer 5 s · due 5.0', kind: 'timer' };
+const C1 = ['instances: order #1 (new), order #7', 'consumed: order #7\'s timer (delete)', 'sent: timer 5 s → order #1 (insert)', 'journal: 2 rows, at 1205 and 1206'];
+const C3 = ['instance row: order #1, Finished', 'result consumed: ticket row deleted', 'sent: nothing', 'journal: 1 row, at 1208'];
+
+// Every state is a patch over the previous one's lasting fields (BASE); fields in TRANSIENT hold for one step only.
+//   acts: one letter per row of order #1's native model (trigger, 1 to 5): . idle, d done, w waiting. ptr: its pointer.
+const BASE = {
+  t: '0.0', db: null, req: 'none', resp: 'none', card1: 'hidden', acts: '......', ptr: -1, s1: '',
+  card7: 'live', c7: ['Running', 'waiting: timer'], turn1: false, turn7: false,
+  tray1: [], tray7: [T7], lane: null, env: null, job: 'none', lease: [0.74, 0.89], cursor: 1204,
+  proj: ['idle: nudged after commits', 'and on a timer'], studio: [],
+};
+const TRANSIENT = { lit: [], seams: [], scan: false, receipt: null, motion: [] };
+const build = (base, steps) => {
+  const out = [];
+  steps.reduce((prev, patch) => { const s = { ...prev, ...TRANSIENT, ...patch }; out.push(s); return s; }, base);
+  return out;
+};
+const DB0 = {
+  partition: [['17', '8', '1204', '7.4'], ['42', '5', '311', '8.9']],
+  instance: [['order #3', 'Running', 'event'], ['order #7', 'Running', 'timer']],
+  message: [['o7:r2:00', 'order #7', 'native.timer', '0.0']],
+  journal: [['1204', 'order #7', 'Delay: waiting']],
+};
+const DB1 = {
+  partition: [['17', '8', '1206', '10.0'], ['42', '5', '311', '8.9']],
+  instance: [['order #3', 'Running', 'event'], ['order #7', 'Finished', '—'], ['order #1', 'Running', 'timer 5 s']],
+  message: [['o1:r1:00', 'order #1', 'native.timer', '5.0']],
+  journal: [['1204', 'order #7', 'Delay: waiting'], ['1205', 'order #1', 'start · Save · Respond · Wait'], ['1206', 'order #7', 'timer · Done · Finished']],
+};
+const DB3 = {
+  partition: [['17', '8', '1208', '15.8'], ['42', '5', '311', '12.0']],
+  instance: [['order #3', 'Running', 'event'], ['order #7', 'Finished', '—'], ['order #1', 'Finished', '—']],
+  message: [],
+  journal: [...DB1.journal, ['1207', 'order #1', 'timer · job email started'], ['1208', 'order #1', 'job-finished · Done · Finished']],
+};
+
+// Slide 3: kernel-in-motion's act one, picked and merged into eight steps. say: on the slide; notes: for the speaker.
+const ACT = [
+  { title: 'A request arrives', layer: 'the host on Node A, before the kernel (its HTTP route table)',
+    say: 'A customer\'s POST /orders arrives on a server, Node A. It knows which workflow to run from memory: nothing is read from the database.',
+    notes: ['An HTTP client sends POST /orders. Node A looks the route up in its in-memory route table, built when definitions are published, so routing reads nothing from the database.', 'The route maps the request to the workflow "Order": save the order, respond 202, wait 5 seconds, send a confirmation email.'],
+    db: DB0, req: 'node', lit: ['caller', 'req', 'nodeA'], motion: [{ fly: 'req', from: POS.reqCaller, to: POS.reqNode }] },
+  { title: 'It stays on this server', layer: 'layer 1 places · layer 2 owns the partition',
+    say: 'Node A puts the new workflow in a group it owns, partition 17, and runs it right here, with no hop to another server. Nothing is written yet.',
+    notes: ['The start has no caller key, so Node A places the new instance in a partition it owns: partition 17.', 'The start is handed over in memory as a "start" message: no row is written until the instance commits.', 'Layer 1 decides which partitions Node A hosts; layer 2 owns the partition and its inbox.'],
+    req: 'none', card1: 'ghost', s1: 'placed here · in memory · no row', tray1: [START],
+    lit: ['placement', 'card1', 'tray1', 'shelf17'], seams: ['place'], motion: [{ chip: 'start', from: POS.reqNode }] },
+  { title: 'The work runs in memory', layer: 'layer 1 calls the pass · layer 2 runs it',
+    say: 'The server runs every workflow in the partition that has work due. It keeps them in memory, so it reads nothing first.',
+    notes: ['The runtime calls partition 17 for a pass (IScopeActivation.RunAsync); a pass runs every instance that has work due and commits their turns in batches.', 'The owner keeps the state of its active instances in memory: a turn reads nothing.', 'Order #1 has its start message, with no database row yet. Order #7, already on this shelf, has a timer that is due.'],
+    card1: 'live', s1: 'start message due', c7: ['Running', 'timer due'], scan: true,
+    lit: ['scanner', 'shelf17', 'tray1', 'tray7'], seams: ['pass'], motion: [{ sweep: true }] },
+  { title: 'The reply is held back', layer: 'layer 3, the native model inside the turn',
+    say: 'The workflow saves the order and writes its "202 Accepted" reply. The reply is held until the work is safely saved.',
+    notes: ['Order #1 takes its turn: the workflow instance hands its inbox to the native model (IExecutionModel.TurnAsync), which runs "Save order", then "Respond 202".', 'The response is emitted on the live channel but held: it is released only after the commit of the turn that wrote it.', 'Order #7 takes its own turn in the same pass.'],
+    tray1: [], tray7: [], acts: 'ddd...', ptr: 2, s1: 'turn running', turn1: true, turn7: true, c7: ['turn running', ''], resp: 'held',
+    lit: ['card1', 'model1', 'card7', 'resp'], seams: ['turn'] },
+  { title: 'The turn ends at a wait', layer: 'layer 3 returns its outcome · layer 2 holds it',
+    say: '"Wait 5 s" is a wait, so this turn ends here. Still nothing has touched the database.',
+    notes: ['In Balanced mode a turn runs until all its work waits or ends.', 'The model hands back its outcome: the new state, one message sent to itself (a timer due in 5 s) and the journal entries. Nothing has touched the database yet.'],
+    acts: 'dddw..', ptr: 3, s1: 'turn ended at a wait', turn1: false,
+    lane: ['outcome of order #1\'s turn:', 'new state: waiting at "Wait 5 s"', 'sent: timer 5 s → itself', 'journal entries · the held response'],
+    lit: ['card1', 'model1', 'lane'], seams: ['turn'] },
+  { title: 'One save for both workflows', layer: 'layer 2, through IKernelStore',
+    say: 'Order #1 and order #7 go to the database together, in one transaction: their state, the timer and the history record. The fence checks that Node A still owns the partition.',
+    notes: ['Both turns go into one commit envelope; the partition\'s one committer writes the turns of many instances in one transaction.', 'The envelope is stamped "epoch 8 · position 1204 → 1206". The partition row\'s update is the fence: it lands only if the epoch is still 8 and the position still 1204, and it renews the lease.', 'Order #7\'s consumed timer is deleted, order #1\'s timer is inserted and two journal rows are written. With the fence in the batch, the default, that is 2 round trips on PostgreSQL.'],
+    turn7: false, lane: null, env: { id: 'c1', at: 'vault', lines: C1, stamp: 'epoch 8 · position 1204 → 1206' }, db: DB1,
+    card7: 'done', c7: ['Finished', ''], s1: 'Running · waiting: timer 5 s', tray1: [T1], lease: [1, 0.89], receipt: true,
+    lit: ['envelope', 'fence17', 't-partition', 't-instance', 't-message', 't-journal'], seams: ['store'] },
+  { title: 'Then the reply goes out', layer: 'layer 2 releases the live output',
+    say: 'The save landed, so Node A sends "202 Accepted". A caller never gets a reply for work that was then lost.',
+    notes: ['Writing the response does not end the workflow: order #1 goes on waiting for its timer.', 'The timer waits as a row in the message table. The owner also holds it in memory on a monotonic clock, so it wakes the instance on time without reading the table.'],
+    env: null, resp: 'sent', lit: ['resp', 'caller'], motion: [{ fly: 'resp', from: POS.respHeld, to: POS.respCaller }] },
+  { title: 'Five seconds later: the rest, and the history', layer: 'layer 1 calls the passes · layer 3 runs the turns · layer 2 commits and projects',
+    say: 'The timer wakes the workflow; the email goes out as a background job, and two more saves finish the order. History for Studio is filled in afterwards, off the hot path.',
+    notes: ['At 5 s a pass picks order #1 with its due timer. "Send confirmation" is marked Background, so it runs as a background job outside the turn; the instance could take a cancel or a timer meanwhile.', 'The job\'s result comes back as a message, and the last turn finishes the instance. Each of the two commits is fenced: positions 1207 and 1208.', 'In the background, in its own transaction, the projector reads the journal rows past its cursor and writes the history rows Studio reads. Studio never shows uncommitted state.'],
+    t: '6.1', db: DB3, card1: 'done', acts: 'dddddd', ptr: 5, s1: 'Finished', tray1: [], lease: [0.97, 0.59],
+    env: { id: 'c3', at: 'vault', lines: C3, stamp: 'epoch 8 · position 1207 → 1208' }, receipt: true, cursor: 1208,
+    proj: ['read journal 1205 to 1208', 'wrote the view rows of', 'order #1 and order #7'],
+    studio: ['1205 · started: POST /orders', '› Save order', '› Respond 202', '› Wait 5 s (timer)', '1207 · timer fired', '› job "email" started', '1208 · job finished', '› Send confirmation, Done', 'status: Finished'],
+    lit: ['envelope', 'projector', 'studio', 't-journal'], seams: ['projector'], motion: [{ clock: [0, 6.1] }, { rows: true }, { studio: true }] },
+];
+const STATES = build(BASE, ACT);
+const PREV0 = { ...BASE, ...TRANSIENT, db: DB0, tray7: [] };
+
+function view(svgEl, sfx) {
+  const cache = new Map();
+  const v = { svg: svgEl, renders: 0 };
+  v.el = id => { if (!cache.has(id)) cache.set(id, document.getElementById(id + sfx)); return cache.get(id); };
+  v.actRows = ACTS.map((label, i) => {
+    const g = svg('g', { class: 'act' }), y = 183 + i * 18;
+    g.append(svg('text', { class: 'lbl', x: 212, y }, label), svg('text', { class: 'st8', x: 383, y, 'text-anchor': 'end' }, ''));
+    v.el('acts1').append(g);
+    return g;
+  });
+  return v;
+}
+const A1 = view($('scene'), ''), A2 = view(sceneB, '-b');
+
+function renderTable(v, name, c, rows, prevRows) {
+  const g = v.el('t-' + name);
+  g.textContent = '';
+  g.append(svg('text', { class: 'tt', x: 800, y: c.y + 11, style: 'font-size:11.5px' }, name));
+  c.head.forEach((h, i) => g.append(svg('text', { class: 'tm', x: c.x[i], y: c.y + 11 }, h)));
+  g.append(svg('line', { x1: 800, x2: 1180, y1: c.y + 15, y2: c.y + 15, stroke: 'var(--st)', 'stroke-width': 0.8 }));
+  const prevByKey = new Map(prevRows.map(r => [r[0], r]));
+  const keys = new Set(rows.map(r => r[0]));
+  const shown = [...rows.map(r => ({ r, kind: prevByKey.has(r[0]) ? 'keep' : 'fresh' })),
+                 ...prevRows.filter(r => !keys.has(r[0])).map(r => ({ r, kind: 'del' }))];
+  shown.forEach(({ r, kind }, i) => {
+    const y = c.y + 16 + i * 15, old = prevByKey.get(r[0]);
+    const changed = kind === 'keep' && r.some((val, j) => val !== old[j]);
+    const row = svg('g', { class: 'row' + (kind === 'keep' ? '' : ' ' + kind) + (changed ? ' chgrow' : '') });
+    row.append(svg('rect', { x: 798, y, width: 384, height: 15, rx: 2 }));
+    r.forEach((val, j) => row.append(svg('text', { class: (j === 0 ? 'c0' : '') + (changed && val !== old[j] ? ' chg' : ''), x: c.x[j], y: y + 11 }, val)));
+    const tag = kind === 'fresh' ? 'new' : kind === 'del' ? 'deleted' : changed ? 'changed' : '';
+    if (tag && name !== 'journal') row.append(svg('text', { class: 'tag', x: 870, y: y + 11, 'text-anchor': 'end' }, tag));   // journal rows are only ever new: the highlight says so
+    g.append(row);
+  });
+}
+function chipNodes(chips, x0, y) {
+  let x = x0;
+  return chips.map(c => {
+    const w = Math.round(c.label.length * 6.4 + 30);
+    const g = svg('g', { class: 'msg ' + c.kind });
+    g.append(svg('rect', { x, y, width: w, height: 24, rx: 5 }),
+             svg('path', { d: `M${x + 7},${y + 6} h14 v11 h-14 z M${x + 7},${y + 7} l7,5 l7,-5` }),
+             svg('text', { x: x + 25, y: y + 16 }, c.label));
+    g.dataset.id = c.id; g.dataset.x = x;
+    x += w + 6;
+    return g;
+  });
+}
+// A message that arrives drops in (or flies from where it came from); one that leaves rises into its card.
+function renderTray(v, id, x0, y, chips, prevChips, anim, delay, from) {
+  const g = v.el(id);
+  g.textContent = '';
+  const nodes = chipNodes(chips, x0, y);
+  nodes.forEach(node => g.append(node));
+  if (!anim) return;
+  nodes.forEach(node => {
+    const f = from[node.dataset.id];
+    if (!f && prevChips.some(c => c.id === node.dataset.id)) return;
+    const start = f ? `translate(${f[0] - node.dataset.x}px, ${f[1] - y}px)` : 'translate(0px, -34px)';
+    node.animate([{ transform: start, opacity: f ? 1 : 0 }, { transform: 'translate(0px, 0px)', opacity: 1 }],
+                 { duration: 700, delay, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'backwards' });
+  });
+  chipNodes(prevChips.filter(c => !chips.some(q => q.id === c.id)), x0, y).forEach(node => {
+    v.el('ghosts').append(node);
+    node.animate([{ transform: 'translate(0px, 0px)', opacity: 1 }, { transform: 'translate(0px, -90px)', opacity: 0 }],
+                 { duration: 700, easing: 'ease-in', fill: 'forwards' }).onfinish = () => node.remove();
+  });
+}
+
+// Draws state s alone; the previous state p only shapes the motion into it and the new/changed/deleted row tags.
+function drawScene(v, s, p, anim) {
+  const E = v.el, sc = v.svg, motion = anim ? s.motion : [];
+  v.renders++;
+  E('ghosts').textContent = '';
+  sc.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  sc.classList.toggle('animate', anim);
+  sc.querySelectorAll('[data-part]').forEach(e => e.classList.toggle('lit', s.lit.includes(e.dataset.part)));
+  sc.querySelectorAll('.seam').forEach(e => e.classList.toggle('on', s.seams.includes(e.dataset.seam)));
+
+  E('clock').textContent = `t = ${s.t} s`;
+  E('lf17').style.transform = `scaleX(${s.lease[0]})`;
+  E('lf42').style.transform = `scaleX(${s.lease[1]})`;
+  E('lt17').textContent = `${(s.lease[0] * 10).toFixed(1)} s left`;
+  E('lt42').textContent = `${(s.lease[1] * 10).toFixed(1)} s left`;
+  E('pos17').textContent = `position ${s.db.partition.find(r => r[0] === '17')[2]}`;
+
+  const c1 = E('card1');
+  c1.classList.toggle('gone', s.card1 === 'hidden');
+  c1.classList.toggle('card-ghost', s.card1 === 'ghost');
+  c1.classList.toggle('card-done', s.card1 === 'done');
+  v.actRows.forEach((g, j) => {
+    const st = s.acts[j];
+    g.setAttribute('class', 'act' + (st === 'd' ? ' done' : st === 'w' ? ' wait' : ''));
+    g.lastChild.textContent = st === 'd' ? '✓' : st === 'w' ? 'waiting' : '';
+  });
+  E('ptr1').classList.toggle('gone', s.ptr < 0);
+  E('ptr1').style.transform = `translateY(${Math.max(s.ptr, 0) * 18}px)`;
+  E('s1t').textContent = s.s1;
+  E('turn1').classList.toggle('gone', !s.turn1);
+  E('card7').classList.toggle('card-done', s.card7 === 'done');
+  E('c7a').textContent = s.c7[0]; E('c7b').textContent = s.c7[1];
+  E('turn7').classList.toggle('gone', !s.turn7);
+
+  // the committer lane: a turn's outcome waiting to be enveloped
+  const lane = E('lanelines');
+  lane.textContent = '';
+  (s.lane || []).forEach((t, j) => lane.append(svg('text', { class: j ? 'ts' : 'tt', x: 193, y: 398 + j * 16, style: j ? '' : 'font-size:11.5px' }, t)));
+  E('lanehint').classList.toggle('gone', !!s.lane);
+  if (anim && s.lane && !p.lane) lane.animate([{ opacity: 0, transform: 'translate(0px, -40px)' }, { opacity: 1, transform: 'translate(0px, 0px)' }], { duration: 600, easing: 'ease-out', fill: 'backwards' });
+
+  // the commit envelope: assembled in the lane, stamped with the fence and flown to the vault
+  let fd = 0;                                   // when the envelope reaches the vault: rows and receipts change then
+  const env = E('env'), e = s.env || { lines: C1, stamp: null, at: 'lane' };
+  e.lines.forEach((t, j) => { E('el' + j).textContent = t; });
+  E('stamp').classList.toggle('gone', !e.stamp);
+  E('stamptext').textContent = e.stamp || '';
+  env.classList.toggle('gone', !s.env);
+  at(env, e.at === 'vault' ? POS.envVault : POS.envLane);
+  E('dockhint').classList.toggle('gone', !!s.env);
+  if (anim && s.env) {
+    const fresh = !p.env || p.env.id !== s.env.id;
+    const appear = fresh ? 600 : 0, stampAt = appear + 150, fly = 1100, flyAt = stampAt + 500;
+    if (fresh) env.animate([{ opacity: 0, transform: tr(POS.envLane) }, { opacity: 1, transform: tr(POS.envLane) }], { duration: appear, fill: 'backwards' });
+    E('stamp').animate([{ opacity: 0, transform: 'scale(1.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 350, delay: stampAt, easing: 'ease-out', fill: 'backwards' });
+    env.animate([{ transform: tr(POS.envLane) }, { transform: tr(POS.envVault) }], { duration: fly, delay: flyAt, easing: EASE, fill: 'backwards' });
+    fd = flyAt + fly;
+  }
+  sc.style.setProperty('--fd', fd + 'ms');
+  const rc = s.receipt ? RECEIPT : null;
+  E('receipt').classList.toggle('gone', !rc);
+  for (let j = 0; j < 5; j++) E('rc' + j).textContent = rc ? rc[j] : '';
+
+  for (const name of Object.keys(COLS)) renderTable(v, name, COLS[name], s.db[name], p.db[name]);
+
+  const from = {};
+  for (const m of motion) if (m.chip) from[m.chip] = m.from;
+  renderTray(v, 'chips1', 224, 344, s.tray1, p.tray1, anim, fd, from);
+  renderTray(v, 'chips7', 446, 344, s.tray7, p.tray7, anim, 0, from);
+
+  E('req').classList.toggle('gone', s.req === 'none');
+  at(E('req'), POS.reqNode);
+  E('resp').classList.toggle('gone', s.resp === 'none');
+  at(E('resp'), s.resp === 'sent' ? POS.respCaller : POS.respHeld);
+  E('resptext').textContent = s.resp === 'sent' ? '202 Accepted ✓' : '202 Accepted · held';
+  E('job').classList.toggle('gone', s.job === 'none');
+  at(E('job'), POS.jobHome);
+
+  E('scanner').classList.toggle('gone', !s.scan);
+  E('scanner').style.transform = 'translateX(378px)';
+  E('placement').classList.toggle('gone', s.card1 !== 'ghost');
+
+  E('pcur').textContent = s.cursor;
+  E('plines').textContent = '';
+  s.proj.forEach((t, j) => E('plines').append(svg('text', { class: 'ts', x: 802, y: 614 + j * 15 }, t)));
+  E('plines').append(svg('text', { class: 'ts', x: 802, y: 686 }, 'prototype: one set-based'), svg('text', { class: 'ts', x: 802, y: 700 }, 'write per round'));
+  const sl = E('slines');
+  sl.textContent = '';
+  const lines = s.studio.length ? s.studio : ['no history projected yet'];
+  lines.forEach((t, j) => {
+    const line = svg('text', { class: 'sline' + (s.studio.length ? '' : ' ts') + (anim && s.studio.length && !p.studio.length ? ' new' : ''), x: t.startsWith('›') ? 1015 : 1005, y: 542 + j * 15 }, t);
+    line.style.animationDelay = (fd + j * 220) + 'ms';
+    sl.append(line);
+  });
+
+  for (const m of motion) {
+    if (m.fly) E(m.fly).animate([{ transform: tr(m.from) }, { transform: tr(m.to) }], { duration: 1000, easing: EASE, fill: 'backwards' });
+    if (m.sweep) E('scanner').animate([{ transform: 'translateX(0px)' }, { transform: 'translateX(378px)' }], { duration: 1100, easing: 'ease-in-out' });
+    if (m.clock) tick(v, m.clock[0], m.clock[1], 1600);
+    if (m.rows) {
+      E('rowtoken').animate([{ opacity: 0, transform: tr(POS.rowsJournal) }, { opacity: 1, offset: .15 }, { opacity: 1, offset: .85 }, { opacity: 0, transform: tr(POS.rowsProjector) }], { duration: 1300, delay: fd, easing: 'ease-in-out' });
+      E('pcur').animate([{ opacity: .2 }, { opacity: .2, offset: .8 }, { opacity: 1 }], { duration: 1300, delay: fd, fill: 'backwards' });
+    }
+  }
+}
+// The scene clock counts up during a step; a later render stops it.
+function tick(v, from, to, duration) {
+  const t0 = performance.now(), id = v.renders, clock = v.el('clock');
+  const frame = now => {
+    if (id !== v.renders) return;
+    const f = Math.min(1, (now - t0) / duration);
+    clock.textContent = `t = ${(from + (to - from) * f).toFixed(1)} s`;
+    if (f < 1) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+// Seam markers: size each box to its text (12 px monospace is about 7.2 px a character).
+const fitSeam = m => { const t = m.querySelector('text'), r = m.querySelector('rect'), w = t.textContent.length * 7.2 + 14, x = +t.getAttribute('x');
+  r.setAttribute('x', t.getAttribute('text-anchor') === 'middle' ? x - w / 2 : x - 7); r.setAttribute('width', w); };
+[$('scene'), sceneB].forEach(sc => sc.querySelectorAll('.seam').forEach(fitSeam));
+
+// ==== slide 2: the exploded scene, one layer at a time ====================================================================
+// The static picture is slide 3's "work runs in memory" moment: cards, inboxes, shelves and the pass all showing.
+sceneB.classList.add('seams');
+drawScene(A2, { ...STATES[2], lit: [], seams: [] }, { ...STATES[2] }, false);
+// Seam labels placed for the exploded view (layer 3 is lifted 130, layer 1 dropped 130).
+const SEAMS2 = [[200, 548, 'IActorRuntime'], [330, 548, 'IScopeActivation.RunAsync (a pass)'], [250, 268, 'IExecutionModel.TurnAsync (a turn)'], [560, 300, 'IKernelStore']];
+SEAMS2.forEach(([x, y, t]) => {
+  const g = svg('g', { class: 'seam2' }), w = t.length * 7.2 + 14;
+  g.append(svg('rect', { x, y: y - 12, width: w, height: 17, rx: 4 }), svg('text', { x: x + 7, y }, t));
+  if (t === 'IKernelStore') g.append(svg('path', { class: 'edge', d: `M${x + w + 4},${y - 4} H786`, style: 'stroke:var(--hot)' }));
+  sceneB.append(g);
+});
+// Plain words first; the technical name second. The glossary sentences of kernel-in-motion are in the notes.
+const LAYERS = [
+  { cls: 'l1', head: 'Where things run', tech: 'Layer 1 · the actor runtime · replaceable: the prototype also runs on Orleans', terms: [
+    ['Node: a server running the kernel. Servers share the partitions between them.', 'node', 'Node: a server process that runs the kernel and hosts the partitions it owns; nodes count each other by heartbeats to share partitions fairly.'],
+    ['Partition: a fixed group of workflows. One server owns each group and is the only one that writes it.', 'partition', 'Partition: a fixed bucket of instances (64 on server databases, 1 on SQLite) whose owner is the only node that writes its instances.'],
+    ['Lease: how long an owner may stay silent before another server may take over: 10 seconds.', 'lease', 'Lease: how long the owner may hold a partition without writing (10 s): it decides who should write, and the fence decides who can.'],
+    ['Pass: the server runs whatever is due in a partition, then saves it in batches.', 'pass', 'Pass: the runtime\'s call into a partition it hosts, which runs the turns that are due and commits them in batches; one pass holds many turns.'],
+  ] },
+  { cls: '', head: 'Every guarantee', tech: 'Layer 2 · durable actors · the same on any runtime', terms: [
+    ['Inbox: each workflow\'s messages, kept in the database.', 'inbox and message', 'Inbox and message: a message is a row in the inbox table (target, kind, payload, an order key, optionally a due time and a start spec); the outbox is the recipient\'s inbox.'],
+    ['Commit: one save that writes everything that changed, for many workflows at once.', 'commit (batch)', 'Commit (batch): one transaction that writes everything the turns changed (state, consumed and sent messages, journal rows), for many instances at once.'],
+    ['Fence: a check inside every save. A server that lost ownership cannot write.', 'fence', 'Fence: the conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.'],
+    ['Timers and background jobs: waits, and slow work such as sending email.', 'timer · background job', 'Timer: a message with a future due time, held in memory by the owner and found by polling by a new owner. Background job: slow work a turn starts; its ticket is committed, the kernel runs it outside the turn, and its result is applied once.'],
+    ['Journal: the record of what happened, for history.', 'journal', 'Journal: one compact row per instance commit, written in the commit: the record of what happened, from which the viewer\'s tables are built.'],
+    ['One storage contract: EF Core is one provider, MongoDB another.', 'IKernelStore', 'IKernelStore: the one storage contract the kernel depends on, stated by guarantees, not SQL; a provider (EF Core, MongoDB) is correct when it passes the store conformance suite.'],
+  ] },
+  { cls: 'l3', head: 'What runs', tech: 'Layer 3 · actor types · extended by adding execution models', terms: [
+    ['Workflow instance: one running workflow.', 'workflow instance', 'Workflow instance: the actor type that holds what all workflows share (definition and version, status, parent and children, the history envelope) and runs an execution model for the rest.'],
+    ['Execution model: the engine for a kind of workflow, such as Elsa\'s own or BPMN.', 'execution model', 'Execution model: a plug-in that turns an instance\'s state and incoming messages into new state and outgoing messages (TurnAsync).'],
+    ['Turn: one burst of work by one workflow, in memory; what it changed is saved when it ends.', 'turn', 'Turn: an instance\'s turn to run: it takes the messages in its inbox, runs as many activities as its persistence mode allows, changes its state and sends messages; one turn is not one activity.'],
+    ['Persistence mode: the workflow\'s author chooses where it saves.', 'persistence mode', 'Persistence mode: where a workflow ends its turns: Ephemeral, Balanced (at each wait), Durable (after each activity); chosen per workflow.'],
+  ] },
+  { cls: '', head: 'All three, and where they meet', tech: 'four seams', terms: [
+    ['Which servers host which partitions.', 'IActorRuntime', 'Layer 1 decides which partitions a node hosts; layer 2 owns the partition and its inbox.'],
+    ['Run what is due in a partition.', 'IScopeActivation.RunAsync · a pass', 'A pass: the runtime\'s call into a partition it hosts.'],
+    ['Let a workflow take its turn.', 'IExecutionModel.TurnAsync · a turn', 'A turn: the workflow instance hands its inbox to its execution model.'],
+    ['Save it, through one contract.', 'IKernelStore', 'Every write goes through IKernelStore: the commit, the take, the journal and the projector.'],
+  ] },
+];
+const S2NOTES = [
+  ['The actor runtime decides where things run: nodes host partitions, a lease says how long an owner may hold one without writing, and the runtime calls into a partition for a pass.', 'It is replaceable: the prototype has an Orleans adapter that hosts each partition as a grain.'],
+  ['The durable layer makes every guarantee: the inbox, the atomic commit, the fence, timers, background jobs and the journal.', 'It works over one storage contract, IKernelStore; EF Core is one provider and MongoDB another. The layer is not replaceable; its storage is.'],
+  ['A workflow instance is one actor type: it holds what all workflows share and runs an execution model for the rest.', 'The execution model is the only extension point. Native is one; BPMN is another; Flowchart and StateMachine are containers inside native, each on its own engine.'],
+  ['Four seams hold it together: IActorRuntime places partitions on nodes, a pass is IScopeActivation.RunAsync, a turn is IExecutionModel.TurnAsync, and every write goes through IKernelStore.', 'Layer 1 only decides where an actor runs and wakes it up; every guarantee comes from layer 2, which works the same on any runtime.'],
+];
+function renderS2(i) {
+  const L = LAYERS[i], p = $('p2');
+  ['on1', 'on2', 'on3', 'on4'].forEach((c, j) => sceneB.classList.toggle(c, j === i));
+  p.className = 'panel ' + L.cls;
+  p.textContent = '';
+  p.append(el('div', 'stepno', `Step ${i + 1} of 4`), el('h3', '', L.head), el('p', 'tech', L.tech));
+  const ul = el('ul', 'terms');
+  L.terms.forEach(([plain, name]) => { const li = el('li'); li.append(el('span', '', plain), el('p', 'tech', name)); ul.append(li); });
+  p.append(ul);
+}
+
+// ==== slide 3: one request ================================================================================================
+function renderS3(i, prev, anim) {
+  drawScene(A1, STATES[i], i ? STATES[i - 1] : PREV0, anim);
+  const s = ACT[i], p = $('p3');
+  p.textContent = '';
+  p.append(el('div', 'stepno', `Step ${i + 1} of ${ACT.length}`), el('h3', '', s.title), el('p', 'say', s.say), el('p', 'tech', 'Layer: ' + s.layer));
+  const wf = el('div', 'wf'), ol = el('ol');
+  wf.append(el('h4', '', 'The workflow "Order" · Balanced'));
+  ['▸ HTTP POST /orders', '1 Save order', '2 Respond 202', '3 Wait 5 s', '4 Send confirmation (a background job)', '5 Done']
+    .forEach((t, j) => { const li = el('li', j === STATES[i].ptr || (STATES[i].ptr < 0 && j === 0) ? 'on' : '', t); ol.append(li); });
+  wf.append(ol);
+  p.append(wf);
+}
+
+// ==== slide 4: three persistence modes, the plain workflow, no crash ======================================================
+const LS = $('lanes');
+const LY = [40, 208, 376];                    // the top of each lane; a lane is 160 high
+const MODES = [
+  { key: 'E', name: 'Ephemeral', sub: ['writes nothing when it', 'ends in its first turn', 'and sent nothing'] },
+  { key: 'B', name: 'Balanced', sub: ['the default: a turn', 'ends when everything', 'waits or ends'] },
+  { key: 'D', name: 'Durable', sub: ['a turn ends after', 'every activity'] },
+];
+const QROWS = [['▸', 'POST /quote'], ['1', 'Compute quote'], ['2', 'Save quote'], ['3', 'Respond 200'], ['4', 'Done']];
+const LNOTES = {
+  E: ['Ends in its first turn and', 'sends nothing, so the kernel', 'writes nothing at all. The', 'response is released when', 'the turn ends: there was', 'nothing to write.'],
+  B: ['One turn until everything', 'waits or ends: one commit.', 'With the fence in the batch,', 'the default: 2 round trips', '(3 with the fence apart).'],
+  D: ['After every activity the', 'turn ends and sends itself', 'a "continue" message,', 'handed over in memory: a', 'commit each time, each', 'about 2 round trips (fence', 'in the batch).'],
+};
+// One beat is one moment of all three lanes. done: rows done; ends: lanes whose turn ends; commits: lanes that commit; emit: the response is written.
+const BEATS = [
+  { done: 0, ptr: 0, ends: '', commits: '', title: 'Three requests arrive',
+    say: 'The same request reaches the server three times, one workflow per mode. Watch where each one saves: that is all a mode decides.',
+    notes: ['The three workflows are identical but for the persistence mode their author chose; the deployment never changes it.', 'Each request places a new instance in a partition Node A owns and runs it inline, with the start handed over in memory: no row yet.'] },
+  { done: 1, ptr: 0, ends: 'D', commits: 'D', title: 'The trigger runs',
+    say: 'Durable saves after every activity, so its first save goes to the database. Ephemeral and Balanced run on.',
+    notes: ['Each instance takes its first turn, and the trigger hands it the request.', 'Durable ends its turn after every activity: it sends itself a "continue" message, handed over in memory, and the turn commits.'] },
+  { done: 2, ptr: 1, ends: 'D', commits: 'D', title: 'Compute quote',
+    say: 'Durable saves again. Ephemeral and Balanced have still written nothing.',
+    notes: ['SetVariable computes the quote. Durable ends another turn and commits again.', 'Ephemeral and Balanced are still in their first turn and have written nothing.'] },
+  { done: 3, ptr: 2, ends: 'D', commits: 'D', title: 'Save quote',
+    say: 'Durable saves a third time. More saves means less to redo after a crash, at more database work.',
+    notes: ['WriteLine saves the quote. If saving had an effect outside Elsa, all three lanes have now caused it once.', 'Activity code runs at least once; Durable narrows the window, but effects that must not repeat need idempotency keys.'] },
+  { done: 5, ptr: 4, ends: 'EBD', commits: 'BD', emit: true, title: 'Respond 200, then Done',
+    say: 'All three reply and finish. Ephemeral wrote nothing at all and replies at once; Balanced saves once; Durable a fourth time.',
+    notes: ['Ephemeral ended in its first turn and sent nothing, so the kernel writes nothing, and the response is released at once.', 'Balanced ends its one turn and commits once; Durable commits its fourth envelope. Both hold the response until their commit lands.'] },
+  { done: 5, ptr: 4, ends: '', commits: '', title: 'The saves land, and the replies go out',
+    say: 'Balanced and Durable send their replies only now: a caller never gets a reply for work that was then lost.',
+    notes: ['On PostgreSQL, Ephemeral cost no round trips; Balanced 2 with the fence in the batch, the default, or 3 with the fence apart; Durable about 2 per commit.', 'Durable is drawn with a commit after the trigger and after each activity; the prototype also ends a turn after the root Sequence, so it makes one commit more: it measured 4 for http-reference.'] },
+];
+function cost(key, commits) {
+  if (key === 'D') return { rt: commits ? '≈ 2 per commit' : '0', rtn: 'fence in the batch' };
+  return { rt: String(commits * 2), rtn: key === 'B' ? 'fence in the batch' : 'nothing to write' };
+}
+function laneAt(b, m) {
+  const key = m.key, cur = BEATS[b];
+  let commits = 0, ends = 0;
+  BEATS.slice(0, b + 1).forEach((x, i) => { if (x.commits.includes(key)) commits++; if (i < b && x.ends.includes(key)) ends++; });
+  const e = BEATS.findIndex(x => x.emit);
+  const resp = b < e ? 'none' : b === e && BEATS[e].commits.includes(key) ? 'held' : 'sent';
+  const finished = cur.done === QROWS.length;
+  return {
+    acts: QROWS.map((_, r) => r < cur.done ? 'd' : '.'), ptr: finished ? -1 : cur.ptr,
+    badge: b === 0 ? '' : finished ? 'finished' : `turn ${ends + 1}`,
+    status: b === 0 ? 'start in memory · no row yet' : finished ? (commits ? `Finished · ${plural(commits, 'commit')}` : 'Finished · nothing written')
+      : commits ? `running · ${plural(commits, 'commit')} landed` : 'running · nothing written yet',
+    commits, resp, call: resp === 'sent' ? ['got 200 OK', ''] : b === 0 ? ['sent POST /quote', ''] : ['waiting for', 'the response'],
+    notes: LNOTES[key], ...cost(key, commits),
+  };
+}
+const LSTEPS = BEATS.map((beat, b) => ({ row: beat.ptr, lanes: MODES.map(m => laneAt(b, m)) }));
+const LANE = MODES.map((m, j) => {
+  const y = LY[j], g = svg('g', { class: 'lane' }), L = { y };
+  LS.append(g);
+  const add = (parent, tag, attrs, text) => { const e = svg(tag, attrs, text); parent.append(e); return e; };
+  const T = (cls, x, dy, text, more) => add(g, 'text', { class: cls, x, y: y + dy, ...more }, text);
+  const mid = { 'text-anchor': 'middle' };
+  add(g, 'rect', { class: 'lanebg', x: 4, y, width: 1192, height: 160, rx: 9 });
+  add(g, 'rect', { x: 4, y: y + 12, width: 4, height: 136, style: 'fill:var(--l3)' });
+  T('mode', 18, 30, m.name);
+  m.sub.forEach((t, i) => T('ts', 18, 50 + i * 14, t));
+  add(g, 'rect', { class: 'box', x: 168, y: y + 14, width: 122, height: 132, rx: 7 });
+  add(g, 'rect', { class: 'ico', x: 207, y: y + 24, width: 44, height: 28, rx: 3 });
+  add(g, 'path', { class: 'ico', d: `M200,${y + 58} h58 l-5,5 h-48 z` });
+  T('tt', 229, 82, 'HTTP caller', mid);
+  L.c0 = T('ts', 229, 100, '', mid); L.c1 = T('ts', 229, 114, '', mid);
+  L.card = add(g, 'g', {});
+  add(L.card, 'rect', { class: 'b3 pf', x: 300, y: y + 8, width: 240, height: 146, rx: 8 });
+  add(L.card, 'text', { class: 'tt', x: 312, y: y + 27 }, `quote · ${m.name}`);
+  L.badge = add(L.card, 'g', { class: 'badge' });
+  add(L.badge, 'rect', { x: 452, y: y + 15, width: 80, height: 17, rx: 8 });
+  L.badgeT = add(L.badge, 'text', { x: 492, y: y + 27, 'text-anchor': 'middle' }, '');
+  L.rows = QROWS.map(([n, label], r) => {
+    const a = add(L.card, 'g', { class: 'act' }), yy = y + 48 + r * 16;
+    add(a, 'text', { class: 'lbl', x: 324, y: yy }, r === 0 ? `trigger: ${label}` : `${n} ${label}`);
+    add(a, 'text', { class: 'st8', x: 532, y: yy, 'text-anchor': 'end' });
+    return a;
+  });
+  L.ptr = add(L.card, 'path', { class: 'lptr', d: `M312,${y + 40} l7,4.5 l-7,4.5 z`, style: 'fill:var(--accent)' });
+  L.status = add(L.card, 'text', { class: 'ts', x: 312, y: y + 146 });
+  add(g, 'path', { class: 'cyl', d: `M700,${y + 34} v62 a40,10 0 0 0 80,0 v-62` });
+  add(g, 'ellipse', { class: 'cyl', cx: 740, cy: y + 34, rx: 40, ry: 10 });
+  L.pile = add(g, 'g', {});
+  L.vt = T('ts', 740, 128, '', mid); T('ts', 740, 143, 'database', mid);
+  add(g, 'rect', { class: 'box', x: 800, y: y + 12, width: 188, height: 136, rx: 7 });
+  T('ts', 812, 32, 'commits'); L.n = T('big', 812, 60, '0');
+  T('ts', 812, 82, 'database round trips'); T('ts', 812, 95, '(PostgreSQL)');
+  L.rt = T('big', 812, 123, '0'); L.rtn = T('ts', 812, 140, '');
+  add(g, 'rect', { class: 'box', x: 996, y: y + 12, width: 196, height: 136, rx: 7 });
+  L.notes = [0, 1, 2, 3, 4, 5, 6, 7].map(i => T('ts nt', 1006, 30 + i * 15, ''));
+  L.resp = add(g, 'g', { class: 'token resp gone' });
+  add(L.resp, 'rect', { class: 'pf', x: 0, y: 0, width: 96, height: 20, rx: 5 });
+  L.respT = add(L.resp, 'text', { class: 'tt', x: 7, y: 14, style: 'font-size:11.5px' }, '');
+  return L;
+});
+function miniEnv(x, y) {
+  const g = svg('g', { class: 'mini' });
+  g.append(svg('rect', { x, y, width: 36, height: 20, rx: 3 }), svg('path', { d: `M${x},${y} l18,9 l18,-9` }));
+  return g;
+}
+function renderS4(i, prev, anim) {
+  const s = LSTEPS[i], p = LSTEPS[prev == null ? i : prev];
+  LS.getAnimations({ subtree: true }).forEach(a => a.cancel());
+  s.lanes.forEach((ls, j) => {
+    const L = LANE[j], pl = p.lanes[j], y = L.y;
+    L.c0.textContent = ls.call[0]; L.c1.textContent = ls.call[1];
+    L.badge.classList.toggle('gone', !ls.badge);
+    L.badgeT.textContent = ls.badge;
+    L.rows.forEach((g, r) => { g.setAttribute('class', 'act' + (ls.acts[r] === 'd' ? ' done' : '')); g.lastChild.textContent = ls.acts[r] === 'd' ? '✓' : ''; });
+    L.ptr.classList.toggle('gone', ls.ptr < 0);
+    L.ptr.style.transform = `translateY(${Math.max(ls.ptr, 0) * 16}px)`;
+    L.status.textContent = ls.status;
+    L.pile.textContent = '';
+    for (let e = 0; e < Math.min(ls.commits, 7); e++) {
+      const env = miniEnv(722, y + 84 - e * 8);
+      L.pile.append(env);
+      if (anim && e >= pl.commits) env.animate([{ opacity: 0, transform: 'translate(-180px, 14px)' }, { opacity: 1, offset: .2 }, { opacity: 1, transform: 'translate(0px, 0px)' }], { duration: 1000, delay: 200, easing: EASE, fill: 'backwards' });
+    }
+    L.vt.textContent = !ls.commits ? 'nothing written' : ls.resp === 'held' ? `${plural(ls.commits, 'commit')}, 1 in flight` : `${plural(ls.commits, 'commit')} landed`;
+    L.n.textContent = ls.commits;
+    L.rt.textContent = ls.rt;
+    L.rt.setAttribute('class', ls.rt.length > 4 ? 'mid' : 'big');
+    L.rtn.textContent = ls.rtn;
+    L.notes.forEach((t, k) => { t.textContent = ls.notes[k] || ''; });
+    L.resp.classList.toggle('gone', ls.resp === 'none');
+    L.respT.textContent = { held: '200 · held', sent: '200 OK ✓' }[ls.resp] || '';
+    const held = [546, y + 122], caller = [181, y + 122];
+    at(L.resp, ls.resp === 'sent' ? caller : held);
+    if (anim && ls.resp === 'sent' && pl.resp !== 'sent') L.resp.animate([{ transform: tr(held) }, { transform: tr(caller) }], { duration: 1000, delay: 300, easing: EASE, fill: 'backwards' });
+  });
+  $('n4t').textContent = `${i + 1}. ${BEATS[i].title}`;
+  $('n4').textContent = BEATS[i].say;
+}
+
+// ==== slide 5: the chart, the table view, and "one commit, many instances" ==============================================
+const AXMAX = 250, TICKS = [0, 50, 100, 150, 200, 250];          // one fixed linear axis for both modes
+let tableOn = false, s5mode = 'balanced';
+const pct = n => (n / AXMAX * 100) + '%';
+DATA.systems.forEach(sy => {
+  const pending = DATA.workflows.some(w => ['balanced', 'durable'].some(m => DATA.values[w.key][sy.key][m].n == null));
+  const s = el('span'), sw = el('i', 'sw ' + (pending ? 'hatch' : sy.cls));
+  s.append(sw, document.createTextNode(pending ? `${sy.name} (being measured)` : sy.name));
+  $('legend').append(s);
+});
+function chartRows() {                          // build the bars once; a mode switch only moves them
+  const c = $('chart');
+  const grid = el('div', 'c2 gridl');
+  grid.style.gridRow = `1 / span ${DATA.workflows.length}`;
+  TICKS.forEach(t => { const i = el('i', t ? '' : 'base'); i.style.left = pct(t); grid.append(i); });
+  c.append(grid);
+  DATA.workflows.forEach((wf, g) => {
+    const lab = el('div', 'glabel');
+    lab.style.gridRow = String(g + 1);
+    lab.append(el('b', '', wf.key), el('span', '', wf.what));
+    const bars = el('div', 'c2 gbars');
+    bars.style.gridRow = String(g + 1);
+    DATA.systems.forEach(sy => {
+      const row = el('div', 'brow'), bar = el('div', 'mark'), val = el('span', 'val');
+      row.tabIndex = 0;
+      row.dataset.wf = wf.key; row.dataset.sys = sy.key;
+      row.append(bar, val);
+      bars.append(row);
+      row.addEventListener('pointerenter', () => showTip(row));
+      row.addEventListener('pointermove', () => showTip(row));
+      row.addEventListener('pointerleave', hideTip);
+      row.addEventListener('focus', () => showTip(row));
+      row.addEventListener('blur', hideTip);
+    });
+    c.append(lab, bars);
+  });
+  const axis = el('div', 'c2 axis');
+  axis.style.gridRow = String(DATA.workflows.length + 1);
+  TICKS.forEach(t => { const s = el('span', '', String(t)); s.style.left = pct(t); axis.append(s); });
+  const title = el('div', 'axtitle');
+  title.style.gridRow = String(DATA.workflows.length + 2);
+  title.append(el('b', '', 'Database commands per workflow run'), el('span', 'tech', DATA.unit));
+  c.append(axis, title);
+}
+chartRows();
+function drawChart(mode) {
+  document.querySelectorAll('#chart .brow').forEach(row => {
+    const sy = DATA.systems.find(x => x.key === row.dataset.sys), v = DATA.values[row.dataset.wf][sy.key][mode];
+    const bar = row.firstChild, val = row.lastChild, pending = v.n == null;
+    bar.className = 'mark ' + (pending ? 'hatch' : sy.cls);
+    bar.style.width = pending ? '6%' : pct(v.n);
+    val.className = 'val' + (pending ? ' pend' : '');
+    val.textContent = pending ? 'pending' : String(v.n);
+    val.style.left = `calc(${pending ? '6%' : pct(v.n)} + .5rem)`;
+    row.setAttribute('aria-label', `${sy.name}, ${row.dataset.wf}, ${mode === 'balanced' ? 'Balanced' : 'Durable'}: ${pending ? 'being measured' : v.n + ' commands'}`);
+  });
+  drawTable(mode);
+}
+function showTip(row) {
+  const sy = DATA.systems.find(x => x.key === row.dataset.sys), v = DATA.values[row.dataset.wf][sy.key][s5mode];
+  const tip = $('tip'), r = row.getBoundingClientRect();
+  tip.textContent = '';
+  const key = el('span', 'key ' + (v.n == null ? 'hatch' : sy.cls));
+  tip.append(el('strong', '', v.n == null ? 'pending: being measured' : `${v.n} commands`));
+  const who = el('div');
+  who.append(key, document.createTextNode(`${sy.name} · ${row.dataset.wf} · ${s5mode === 'balanced' ? 'Balanced' : 'Durable'}`));
+  tip.append(who, el('div', 'src', v.src));
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight, room = innerHeight - $('notes').offsetHeight - document.querySelector('.bar').offsetHeight;
+  tip.style.left = Math.max(8, Math.min(r.left + r.width * .35, innerWidth - w - 8)) + 'px';
+  tip.style.top = (r.bottom + 6 + h > room ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';   // flip above the row near the bottom
+}
+function hideTip() { $('tip').hidden = true; }
+function drawTable(mode) {
+  const box = $('tablebox');
+  box.textContent = '';
+  const t = el('table', 'data');
+  const cap = el('caption', '', `Database commands per workflow run (${DATA.unit}); ${DATA.modes[mode]}.`);
+  const head = el('tr');
+  head.append(el('th', '', 'Workflow'), ...DATA.systems.map(s => el('th', '', s.name)));
+  t.append(cap, head);
+  DATA.workflows.forEach(wf => {
+    const tr2 = el('tr');
+    const th = el('td'); th.append(el('b', '', wf.key), el('div', 'muted', wf.what));
+    tr2.append(th);
+    DATA.systems.forEach(s => { const v = DATA.values[wf.key][s.key][mode], td = el('td', '', v.n == null ? 'pending' : String(v.n)); td.title = v.src; tr2.append(td); });
+    t.append(tr2);
+  });
+  box.append(t);
+}
+function drawTiles() {
+  const box = $('tiles');
+  box.textContent = '';
+  box.append(el('p', 'say', 'When many workflows start at the same moment on one server, one transaction saves them all.'));
+  const tiles = el('div', 'tiles');
+  DATA.many.rows.forEach(r => {
+    const t = el('div', 'tile'), big = el('div', 'big');
+    big.append(document.createTextNode(String(r.commands)), el('small', '', ` ${r.commands === 1 ? 'command' : 'commands'} · ${r.ends} transaction end`));
+    t.title = r.src;
+    t.append(el('div', 'lbl', r.label), big);
+    tiles.append(t);
+  });
+  box.append(tiles, el('p', 'tech', 'Unit: ' + DATA.many.unit + '. Kernel prototype, 14 November write-cost run. PostgreSQL, so not comparable with the SQLite chart.'));
+}
+drawTiles();
+function renderS5(i) {
+  const many = i === 2;
+  if (!many) s5mode = i === 0 ? 'balanced' : 'durable';
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === s5mode)));
+  $('viz-controls').style.visibility = many ? 'hidden' : '';
+  $('counted').style.visibility = many ? 'hidden' : '';
+  $('h5').textContent = many ? 'One save carries many workflows' : 'How many database commands one workflow run costs';
+  $('sub5').hidden = many;
+  $('sub5').textContent = s5mode === 'balanced' ? SUB5.balanced : SUB5.durable;
+  drawChart(s5mode);
+  $('chart').hidden = many || tableOn;
+  $('tablebox').hidden = many || !tableOn;
+  $('tiles').hidden = !many;
+  hideTip();
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => go(4, b.dataset.mode === 'balanced' ? 0 : 1, true)));
+$('tabletog').addEventListener('click', () => {
+  tableOn = !tableOn;
+  $('tabletog').setAttribute('aria-pressed', String(tableOn));
+  renderS5(step[4]);
+});
+const SUB5 = {
+  balanced: 'Same three workflows, same kind of count. In the default mode the new kernel issues far fewer commands for the straight run and the request, even adding the few it spends later writing history; for the fork and resume it is about level with Elsa 3 once its history is added — and every save is one atomic, fenced transaction.',
+  durable: 'Saving after every activity: the new kernel is about level with Elsa 3, and far below Elsa 4 today.',
+};
+const S5NOTES = [
+  ['Caveats first: these are commands, not time, on SQLite, and the kernel is the prototype, not product code. The kernel\'s history projector is not in its bars; one projector round adds about 4 to 5 commands on SQLite (the prototype\'s cost gate measured 7 engine calls, BEGIN and COMMIT included), and a run that commits at two moments, like the fork and resume, may take two rounds. Much of Elsa 3\'s count is history (25 of 29, 11 of 15, 12 of 25): without it Elsa 3 would be 4, 4 and 13, so on fork-join the kernel\'s 18 is close, not ahead. Elsa 3 saves in separate writes, with no single transaction around them, and guards an instance with a file lock, not a database fence.',
+   'Even so, in the default mode the kernel issues far fewer commands than Elsa 3 and Elsa 4 for the straight run and the request, and for the fork and resume is about level with Elsa 3 once its history is added, and every save is one atomic, fenced transaction.'],
+  ['Saving after every activity, the kernel is about level with Elsa 3, 63 against 64 on writeline-sequence; adding a projector round, it is a little above. It is far below Elsa 4 today.',
+   'Elsa 3\'s bars are the run\'s own commands; its background bookmark-queue polls are excluded, including the 2 to 4 that land before the call returns.',
+   'Two asymmetries: Elsa 4\'s gate counts only its runtime database context while Elsa 3\'s count covers both of its contexts, and Elsa 3 reads workflow definitions from the database each run (2, 1 and 3 SELECTs) while Elsa 4\'s gate runs a published executable in the same host.'],
+  ['On PostgreSQL 17, 100 Balanced instances started at once cost 1 driver command and 1 transaction end; 1,000 cost 3 commands and 1 end.', 'These are driver interception counters from the 14 November write-cost run, not wire counts, and this is PostgreSQL, not the SQLite chart, so the two do not compare.'],
+];
+
+// ==== the deck ============================================================================================================
+const SLIDES = [
+  { title: 'Elsa\'s new kernel', steps: 1, render: () => {},
+    notes: () => ['This is the clean-slate kernel: a proposed design, with a prototype on main that was built, measured and attacked by a deterministic simulation. It is not product code yet.', 'Three things to take away: it stays correct when servers fail, it makes few database calls, and different kinds of workflow plug in.'] },
+  { title: 'The structure: three layers', steps: 4, render: renderS2,
+    notes: i => S2NOTES[i] },
+  { title: 'How it works: one request', steps: ACT.length, render: renderS3, notes: i => ACT[i].notes },
+  { title: 'Persistence modes', steps: BEATS.length, render: renderS4, notes: i => BEATS[i].notes },
+  { title: 'Database commands', steps: 3, render: renderS5, notes: i => S5NOTES[i] },
+  { title: 'Why it is safe, and what is next', steps: 1, render: () => {},
+    notes: () => ['The fence is the conditional update inside every save: it lands only while the epoch and position are still the ones the owner expects.', 'Here Node A paused past its lease, Node B took the partition and raised the epoch to 9, so Node A\'s stale save changes 0 rows, rolls back, and nothing from it lands.', 'Next: round 5\'s hardening, then the design proposal with the architecture docs, then release 1.'] },
+];
+const slideEls = SLIDES.map((_, j) => $('s' + (j + 1)));
+const step = SLIDES.map(() => 0);
+let cur = 0;
+const phone = matchMedia('(max-width: 760px)');
+SLIDES.forEach((s, j) => {
+  const b = el('button', '', String(j + 1));
+  b.title = s.title;
+  b.setAttribute('aria-label', `Slide ${j + 1}: ${s.title}`);
+  b.addEventListener('click', () => go(j, 0, false));
+  $('dots').append(b);
+});
+function go(s, i, anim) {
+  s = Math.max(0, Math.min(SLIDES.length - 1, s));
+  i = Math.max(0, Math.min(SLIDES[s].steps - 1, i));
+  const prev = s === cur ? step[s] : null;
+  const changed = s !== cur;
+  cur = s; step[s] = i;
+  hideTip();
+  slideEls.forEach((e, j) => e.classList.toggle('current', j === s));
+  SLIDES[s].render(i, prev, !!anim && motionOn() && !changed);
+  [...$('dots').children].forEach((d, j) => { if (j === s) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); });
+  $('where').textContent = `Slide ${s + 1} of ${SLIDES.length}` + (SLIDES[s].steps > 1 ? ` · step ${i + 1} of ${SLIDES[s].steps}` : '');
+  $('prev').disabled = s === 0 && i === 0;
+  $('next').disabled = s === SLIDES.length - 1 && i === SLIDES[s].steps - 1;
+  const n = $('notes');
+  n.textContent = '';
+  n.append(el('div', 'nh', `Notes · slide ${s + 1}` + (SLIDES[s].steps > 1 ? `, step ${i + 1}` : '')));
+  SLIDES[s].notes(i).forEach(t => n.append(el('p', '', t)));
+  const h = `#slide-${s + 1}/step-${i + 1}`;
+  if (location.hash !== h) history.replaceState(null, '', h);
+  if (phone.matches && changed) slideEls[s].scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'start' });
+}
+const next = () => step[cur] < SLIDES[cur].steps - 1 ? go(cur, step[cur] + 1, true) : go(cur + 1, 0, false);
+const back = () => step[cur] > 0 ? go(cur, step[cur] - 1, false) : cur > 0 && go(cur - 1, SLIDES[cur - 1].steps - 1, false);
+$('next').addEventListener('click', next);
+$('prev').addEventListener('click', back);
+
+const root = document.documentElement, darkOS = matchMedia('(prefers-color-scheme: dark)');
+const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : darkOS.matches;
+const themeLabel = () => { $('themetog').textContent = isDark() ? 'Light' : 'Dark'; };
+const toggleTheme = () => { root.dataset.theme = isDark() ? 'light' : 'dark'; themeLabel(); };
+const toggleNotes = () => { const on = document.body.classList.toggle('notes-on'); $('notestog').setAttribute('aria-pressed', String(on)); };
+const canFs = !!(document.fullscreenEnabled && root.requestFullscreen);
+const toggleFs = () => { if (!canFs) return; if (document.fullscreenElement) document.exitFullscreen(); else root.requestFullscreen().catch(() => {}); };
+$('themetog').addEventListener('click', toggleTheme);
+$('notestog').addEventListener('click', toggleNotes);
+$('fstog').addEventListener('click', toggleFs);
+$('fstog').disabled = !canFs;
+darkOS.addEventListener('change', themeLabel);
+themeLabel();
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  if (k === 'ArrowRight' || k === ' ' || k === 'PageDown') next();
+  else if (k === 'ArrowLeft' || k === 'PageUp') back();
+  else if (k === 'Home') go(0, 0, false);
+  else if (k === 'End') go(SLIDES.length - 1, 0, false);
+  else if (/^[1-6]$/.test(k)) go(+k - 1, 0, false);
+  else if (k === 'n' || k === 'N') toggleNotes();
+  else if (k === 'd' || k === 'D') toggleTheme();
+  else if (k === 'f' || k === 'F') toggleFs();
+  else return;
+  e.preventDefault();
+});
+function fromHash() {
+  const m = /^#slide-(\d+)(?:\/step-(\d+))?$/.exec(location.hash);
+  if (m) go(+m[1] - 1, (+m[2] || 1) - 1, false);
+  else go(0, 0, false);
+}
+window.addEventListener('hashchange', fromHash);
+// Every slide starts at its first step, so the phone layout shows them all; then the deep link, if any.
+SLIDES.forEach((s, j) => { cur = j; s.render(0, null, false); });
+cur = 0;
+fromHash();
+reduced.addEventListener('change', () => go(cur, step[cur], false));
+})();
+</script>
+</body>
+</html>
