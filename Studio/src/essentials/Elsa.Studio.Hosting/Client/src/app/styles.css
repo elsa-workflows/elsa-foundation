@@ -3056,10 +3056,6 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
     display: none;
   }
 
-  html[data-nav-mode="left"] .sidebar-footer {
-    display: none;
-  }
-
   html[data-nav-mode="left"] .topbar-actions .user-menu {
     display: flex;
   }
