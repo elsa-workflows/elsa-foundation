@@ -310,7 +310,17 @@ export class TriggerJourney {
           ? mapping.binding.value : JSON.stringify(mapping.binding.value);
         await field.fill(text);
       }
-      if (mapping.binding.kind === "SourceField") await this.page.getByLabel(`Source field for ${mapping.inputName}`, { exact: true }).selectOption(JSON.stringify(mapping.binding.path));
+      if (mapping.binding.kind === "SourceField") {
+        const selector = this.page.getByLabel(`Source field for ${mapping.inputName}`, { exact: true });
+        const selectedPath = JSON.stringify(mapping.binding.path);
+        const predefined = await selector.locator("option").evaluateAll(options => options.map(option => option.getAttribute("value")));
+        if (predefined.includes(selectedPath)) await selector.selectOption(selectedPath);
+        else {
+          await selector.selectOption("custom");
+          const pointer = mapping.binding.path.map(part => part.replace(/~/g, "~0").replace(/\//g, "~1")).join("/");
+          await this.page.getByLabel(`Source path for ${mapping.inputName}`, { exact: true }).fill(`/${pointer}`);
+        }
+      }
     }
     for (const name of ["Authorize this shared trigger to invoke the workflow", "Enable this subscription"]) {
       const checkbox = this.page.getByRole("checkbox", { name, exact: true });
