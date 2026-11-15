@@ -226,7 +226,9 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
     await other.getByRole("button", { name: "Review changes", exact: true }).click(); await concurrent.review(); j.requests.push(...concurrent.requests);
     const conflict = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/changes/apply"));
     await page.getByRole("button", { name: "Apply reviewed change", exact: true }).click(); expect((await conflict).status()).toBe(409);
-    await expect(page.getByText(/changed|conflict|stale/i).first()).toBeVisible(); await j.capture("subscription-conflict");
+    await expect(page.getByText(/changed|conflict|stale/i).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Apply reviewed change", exact: true })).toBeDisabled();
+    await j.capture("subscription-conflict");
     await page.getByRole("button", { name: "Back to editing", exact: true }).click(); await expect(page.getByLabel("Trigger description", { exact: true })).toHaveValue("Local edit retained after conflict");
   } finally { await other.close(); }
   await page.goto("/workflows/triggers?backend=acceptance-primary");

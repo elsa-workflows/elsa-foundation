@@ -87,10 +87,16 @@ export async function verifyOptionalInputSemantics(j: TriggerJourney) {
   j.observed.push("An omitted optional input consumed its declared workflow default; explicit null consumed null through an actual Event and SetOutput", "A custom nested payload path with dots, slash and tilde was authored, corrected, saved and reopened through UI, then consumed by the actual business workflow", "All three admissions retained the same trigger-free business graph");
 }
 
-async function editSchedule(j: TriggerJourney, id: string, fields: Record<string, string>, capture?: string) {
+async function editSchedule(j: TriggerJourney, id: string, fields: Record<string, string>, capture?: string, targets: EchoTarget[] = []) {
   await j.open(id); await j.page.getByRole("button", { name: "Edit configuration", exact: true }).click();
   for (const [label, value] of Object.entries(fields)) await j.page.getByLabel(label, { exact: true }).fill(value);
-  await j.page.getByRole("button", { name: "Review changes", exact: true }).click(); await j.review(capture);
+  await j.page.getByRole("button", { name: "Review changes", exact: true }).click();
+  for (const target of targets) {
+    const impact = j.page.getByRole("region", { name: "Change impact", exact: true });
+    await expect(impact).toContainText(target.authored.definition.name);
+    await expect(impact).toContainText(`${target.authored.definition.id} / default`);
+  }
+  await j.review(capture);
 }
 
 export async function verifyScheduledRetention(j: TriggerJourney, targets: EchoTarget[], actions: ScheduleActions) {
@@ -110,7 +116,7 @@ export async function verifyScheduledRetention(j: TriggerJourney, targets: EchoT
     expect(held.recipients.every(item => !item.executionReference)).toBe(true);
     await j.inspectDelivery(held, "schedule-delivery");
     await actions.pause(timer.id, "trigger-paused");
-    await editSchedule(j, timer.id, { Interval: "PT30S" }, "shared-change-review");
+    await editSchedule(j, timer.id, { Interval: "PT30S" }, "shared-change-review", targets);
     for (const target of targets) {
       const replacement = structuredClone(target.state);
       (replacement.rootActivity.structure!.payload.activities as { inputs: unknown[] }[])[0].inputs = [{ referenceKey: "name", value: { expressionType: "Literal", value: "message" } }, { referenceKey: "value", value: { expressionType: "Literal", value: "New serving version must not replace the accepted due input" } }];
@@ -132,7 +138,9 @@ export async function verifyScheduledRetention(j: TriggerJourney, targets: EchoT
       expect(Date.parse(String(businessOutput(result.outputs.message)))).toBe(Date.parse(armed.schedule!.nextDueUtc!));
     }
     expect((await j.read(timer.id)).configuration.interval).toBe("PT30S"); expect((await j.read(timer.id)).desiredState).toBe("Paused");
-    await j.page.reload(); await j.capture("subscriber-runs");
+    await j.inspectDelivery(completed);
+    await expect(j.page.getByRole("link", { name: "Inspect actual run", exact: true })).toHaveCount(completed.acceptedCount);
+    await j.capture("subscriber-runs");
     j.requests.push({ kind: "actual-scheduled-accepted-capture-retained-after-configuration-and-serving-change", triggerId: timer.id, originalDueUtc: armed.schedule!.nextDueUtc, deliveryId: held.id, originalRecipients: held.recipients, completedRecipients: completed.recipients });
     j.observed.push("A real timer due occurrence accepted two roots; one was held after the physical dispatch seal and the other was still pending", "Pause preceded the reviewed interval edit and serving replacements; actual peer recovery completed both original captured versions and original due-time business outputs");
   } finally { await j.host("restore-features"); }
@@ -247,7 +255,11 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   await j.api(`/publishing/workflows/${targets[1].authored.definition.id}/slots/default/restore`, "POST", {});
   const repaired = await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${partial.id}`);
   expect(repaired.acceptedCount).toBe(1); expect(repaired.refusedCount).toBe(1);
-  expect(repaired.recipients.find(item => item.id === refused.id)).toEqual(refused);
+  const { currentVersion: beforeServing, ...frozenRefusal } = refused;
+  const { currentVersion: restoredServing, ...retainedRefusal } = repaired.recipients.find(item => item.id === refused.id)!;
+  expect(retainedRefusal).toEqual(frozenRefusal);
+  // The old refusal remains final; only the separately labelled live serving projection changes after restoration.
+  expect(restoredServing).toBeTruthy(); expect(restoredServing).not.toBe(beforeServing);
   expect(repaired.recipients.map(item => item.id)).toEqual(started.recipients.map(item => item.id));
   await j.open(timer.id); await j.page.reload();
   expect((await j.read(timer.id)).schedule?.isActive).toBe(false);
