@@ -236,6 +236,38 @@ public sealed class RuntimeHistoryCandidateTests
         else await fixture.Capture.ValidateFinalAsync(captured);
     }
 
+    [Theory]
+    [InlineData("metadata")] [InlineData("activities")]
+    public async Task Equivalent_logical_retries_preserve_history_inclusive_replay_identity(string reordered)
+    {
+        using var fixture = await Fixture.Create(Policy("ActivityStarted"));
+        var one = Activity(ActivityExecutionStatus.Running);
+        var two = one with { Execution = one.Execution with
+            { ActivityExecutionId = "other", ExecutableNodeId = "other-node", AuthoredActivityId = "other-authored" } };
+        var first = Commit("canonical-retry", RuntimeCheckpointNames.ActivityStarted, activity: one);
+        var second = first;
+        if (reordered == "metadata")
+        {
+            first = first with { Metadata = new Dictionary<string, string> { ["first"] = "one", ["second"] = "two" } };
+            second = second with { Metadata = new Dictionary<string, string> { ["second"] = "two", ["first"] = "one" } };
+        }
+        else
+        {
+            var a = new RuntimeStateChange<ActivityExecutionState>("activity", RuntimeStateChangeOperation.Upsert, one, new Dictionary<string, string>());
+            var b = new RuntimeStateChange<ActivityExecutionState>("other", RuntimeStateChangeOperation.Upsert, two, new Dictionary<string, string>());
+            first = first with { StateChanges = new(null, null, [a, b], [], [], [], []) };
+            second = second with { StateChanges = new(null, null, [b, a], [], [], [], []) };
+        }
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(second));
+        var capturedFirst = await fixture.Capture.EnrichAsync(first);
+        var capturedSecond = await fixture.Capture.EnrichAsync(second);
+        await fixture.Capture.ValidateFinalAsync(capturedFirst);
+        await fixture.Capture.ValidateFinalAsync(capturedSecond);
+        Assert.Equal(Assert.Single(capturedFirst.HistoryBatches!).Candidates.Select(RuntimeHistoryIdentity.Compute),
+            Assert.Single(capturedSecond.HistoryBatches!).Candidates.Select(RuntimeHistoryIdentity.Compute));
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(capturedFirst), RuntimeCheckpointCommitFingerprint.Compute(capturedSecond));
+    }
+
     [Fact]
     public async Task An_undeclared_kind_or_different_selected_source_bridge_cannot_qualify_capture()
     {

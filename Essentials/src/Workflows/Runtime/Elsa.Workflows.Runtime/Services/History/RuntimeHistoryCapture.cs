@@ -25,7 +25,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
 
     internal static readonly string[] Version2Kinds = ["BookmarkSuperseded", "DurableStateRecorded", "DurableStateRemoved"];
 
-    public int Order => 2000;
+    // Observe the completed semantic envelope after every native owner has contributed.
+    public int Order => int.MaxValue;
 
     public bool CanCapture(RuntimeHistoryCapturePolicy policy)
     {
@@ -409,6 +410,6 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         }
     }
 
-    private static string SourceFingerprint(RuntimeCheckpointCommit commit) => RuntimeHistorySourceIdentity.Compute(
+    private static string SourceFingerprint(RuntimeCheckpointCommit commit) => RuntimeCheckpointCommitFingerprint.ComputeHistorySource(
         commit with { HistoryBatches = null });
 }
