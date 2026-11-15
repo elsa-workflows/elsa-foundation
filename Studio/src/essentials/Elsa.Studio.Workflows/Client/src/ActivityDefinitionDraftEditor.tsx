@@ -673,8 +673,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
             mode="toolbar"
             triggerRef={publicationToolbarRef}
           />
-          {draft.validation || validationFailure || codeBufferState.dirty ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure ? " needs-attention" : ""}`} aria-controls={draftDiagnosticsId} onClick={viewDraftDiagnostics}>
-            {draftErrorCount || validationFailure ? <AlertTriangle size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />} {validationFailure ? "View validation problem" : draftErrorCount ? `View ${draftErrorCount} draft error${draftErrorCount === 1 ? "" : "s"}` : "View draft diagnostics"}
+          {draft.validation || validationFailure || codeBufferState.dirty ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure || codeBufferState.dirty ? " needs-attention" : ""}`} aria-controls={draftDiagnosticsId} onClick={viewDraftDiagnostics}>
+            {draftErrorCount || validationFailure || codeBufferState.dirty ? <AlertTriangle size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />} {codeBufferState.dirty ? "View draft diagnostics" : validationFailure ? "View validation problem" : draftErrorCount ? `View ${draftErrorCount} draft error${draftErrorCount === 1 ? "" : "s"}` : "View draft diagnostics"}
           </button> : null}
           <button type="button" onClick={() => setTestRunOpen(true)} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button>
           <button type="button" className="ad-primary-action" onClick={saveNow} disabled={!draftIsActive || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</button>
