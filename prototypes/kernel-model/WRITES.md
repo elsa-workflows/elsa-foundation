@@ -373,3 +373,43 @@ checks before the harness's existing `EnsureDeleted`. An existing populated targ
 DDL logs recorded **zero DROP DATABASE**. Only the exact newly owned container was stopped after checking
 ID and labels; all four databases remain retained. Reproduction must refuse existing targets, preserve
 credentials privately, and retain databases. No earlier retained container or database was reset or deleted.
+
+
+## 15 November: Card4 physical identity experiment on landed Park
+
+The local Card4 experiment composes on actual main `76a15f71b59940299625ab7f7244f1d49ce57901`.
+These are authored prototype measurements, not architecture/product acceptance or a budget/default choice.
+[RECREATE.md](models/Recreate.Run/RECREATE.md) defines its explicit terminal profiles and supported boundary.
+The normal logical retirement marker is payload-free and permanent; the caller-key reuse window is separate.
+Markers, bindings and receipts are retained without expiry in this experiment. Storage therefore grows
+with retired physical runs and accepted operations; no erasure, tenant or production retention policy is selected.
+
+Relational storage adds a non-null Retired boolean (one-byte PostgreSQL datum). All accepted new rows are
+active, and normal INSERTs omit the known false value using a database false default, ValueGeneratedNever
+and BeforeSave Ignore. No generated-value SELECT is requested. Invalid first-retired inserts, including
+alias/creator/identity-only/keyed-Ephemeral forms, are atomically refused; retirement UPDATEs still persist
+true. A rejected variant sent the extra false INSERT parameter and crossed SQL Server batching thresholds:
+100/1000 owner starts measured 5/14 TCP edges against actual-main 4/13. The faithful omission restores all 16
+reference driver-command/TCP rows to main, including 1000 polled starts 24. The internal server-statement
+counter is separately +1 for one terminate-child case because of retirement enforcement; this is real
+additional database work even though driver commands and TCP boundaries match.
+
+An otherwise unwritten keyed terminal identity has logical State null (four UTF-8 bytes), but its active
+physical State-cell control envelope occupies 29 bytes. A typed value-metadata checkpoint sample uses 11 bytes.
+Ordinary reserved-prefix states escape losslessly; future controls refuse rather than being parsed as state.
+The isolated PostgreSQL 17.11 retirement sample used 4 observed TCP edges for raw delete and retirement each,
+with 512/656 WAL bytes and a retained marker pg_column_size 101 bytes. Earlier 632-byte retirement samples
+remain separate observations, not a causal ratio. This excludes index/page overhead from tuple size.
+The owned isolation fixture disabled autovacuum only for the finite WAL sample, not as a provider default.
+
+Exact encoded UTF-16 key/operation storage uses full values plus fixed hash-bucket indexes. One 4096-unit
+sample used 11008/10924 encoded octets, pg_column_size(binding/receipt) 11096/22120 bytes and 36624 WAL bytes;
+its one observed TCP edge is a bounded sample. Cumulative relation allocations are reported separately
+from datum sizes. Padding, TOAST, WAL/page boundaries, retained receipts and repeated turnover affect costs.
+No production write-volume, sustained vacuum, failover or contended-latency qualification follows.
+
+MySQL's conditional alias-insert guard uses read-only DO/IF with actual indexed Id-column equality and
+no result set. The rejected same-value UPDATE alternative fired an extra update trigger; DO fires none.
+Both supported fence modes and default/non-strict/matched/changed-row profiles retain command/TCP
+boundaries. Those conditional indexed reads are real work. PostgreSQL bulk TCP-edge variation remains
+explicitly distinct from equal commands and Sync/Query/Flush/Execute frames; equal groups do not prove RTT.
