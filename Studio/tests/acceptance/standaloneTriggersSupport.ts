@@ -374,9 +374,20 @@ export class TriggerJourney {
     this.requests.push({ kind: "delivery-exact-identity-copy", deliveryId: delivery.id, studioUrl: this.page.url() });
     if (capture) await this.capture(capture);
   }
+  async findInstance<T>(executionId: string): Promise<T | undefined> {
+    const path = `/runtime/workflows/instances/${encodeURIComponent(executionId)}`;
+    const response = await this.page.request.get(`${this.base}${path}`);
+    const text = await response.text();
+    let result: unknown;
+    try { result = text ? JSON.parse(text) : null; } catch { result = { body: "Non-JSON response omitted" }; }
+    this.requests.push({ kind: "execution-inspection", method: "GET", path, status: response.status(), result: safe(result) });
+    if (response.status() === 404) return undefined; // A requested native worker may still await admission.
+    expect(response.ok(), `GET ${path}: ${response.status()} ${text.slice(0, 1500)}`).toBe(true);
+    return result as T;
+  }
   async outputs(executionId: string, values: Record<string, unknown>) {
     let instance: { instance: { status: string }; outputs: Record<string, { value?: { preview?: unknown; value?: unknown } }> } | undefined;
-    await expect.poll(async () => { instance = await this.api(`/runtime/workflows/instances/${encodeURIComponent(executionId)}`); return instance!.instance.status; }, { timeout: 45_000 }).toBe("Completed");
+    await expect.poll(async () => { instance = await this.findInstance(executionId); return instance?.instance.status ?? "NotYetAdmitted"; }, { timeout: 45_000 }).toBe("Completed");
     for (const [name, expected] of Object.entries(values)) {
       const output = instance!.outputs[name]?.value;
       expect(output, `Actual ${executionId} consumed ${name}`).toBeTruthy();
