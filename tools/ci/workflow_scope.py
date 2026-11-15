@@ -23,6 +23,21 @@ TIER_FILES = frozenset({
     'tools/ci/test-tiers.json', 'tools/ci/test_tiers.py', 'tools/ci/test_results.py', 'tools/ci/run_shard.py',
     '.github/workflows/ci.yml', 'tools/ci/workflow_scope.py', 'tools/ci/workflow-paths.json'})
 FULL_TIER_LABEL = 'full-tier'
+DRAFT_CI_LABEL = 'ci'
+
+
+def skip_draft(event_name: str, event: dict, changed: list[str] | None) -> bool:
+    """A draft pull request skips the PR tier and the focused proofs; the ready transition runs them all on the same
+    head. A draft runs them when it carries the `ci` label (read at each push), when it changes the tiers or the
+    validation routing, or when the diff is unreadable. A manual run (`gh workflow run ci.yml --ref <branch>`) is
+    never a pull_request event and so is never skipped."""
+    if event_name != 'pull_request':
+        return False
+    pull_request = event.get('pull_request', {})
+    if not pull_request.get('draft', False):
+        return False
+    labels = {label.get('name') for label in pull_request.get('labels', [])}
+    return not (DRAFT_CI_LABEL in labels or changed is None or any(path in TIER_FILES for path in changed))
 
 
 def heavy_now(event_name: str, event: dict, changed: list[str] | None, every_push: bool = False) -> bool:
@@ -54,6 +69,8 @@ def select(event_name: str, event: dict, changed: list[str] | None, patterns: di
         result['studio-order'] = True
         return result
     if event_name not in {'push', 'pull_request', 'merge_group'}:
+        return result
+    if skip_draft(event_name, event, changed):
         return result
     # A merge-queue entry is validated as a pull request that just received a push: same scope, same proofs.
     pr_like = event_name in {'pull_request', 'merge_group'}
@@ -108,6 +125,7 @@ def main() -> None:
         for name, enabled in selected.items():
             output.write(f'{name}={str(enabled).lower()}\n')
         # Not a proof to select: whether this run carries the ready-PR heavy proofs (read by plan-full).
+        output.write(f'skip-draft={str(skip_draft(event_name, event, changed)).lower()}\n')
         output.write(f'heavy={str(heavy_now(event_name, event, changed, every_push)).lower()}\n')
     print(json.dumps(selected, sort_keys=True))
 
