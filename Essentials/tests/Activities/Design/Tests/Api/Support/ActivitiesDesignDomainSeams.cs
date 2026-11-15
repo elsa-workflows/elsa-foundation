@@ -54,6 +54,7 @@ internal abstract class ActivitiesDesignDomainSeamsBase :
     public Task<ReusableActivityDraftView> CreateConflictCopyAsync(CreateReusableActivityDraftConflictCopy command, CancellationToken cancellationToken) => CommandAsync<ReusableActivityDraftView>(command, cancellationToken);
     public Task<ReusableActivityDraftView> MigrateDraftAsync(MigrateReusableActivityDraft command, CancellationToken cancellationToken) => CommandAsync<ReusableActivityDraftView>(command, cancellationToken);
     public Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken) => OnVoidCommandAsync(command, cancellationToken);
+    public Task<ActivityCandidateValidationView> ValidateCandidateAsync(ValidateReusableActivityCandidate command, CancellationToken cancellationToken) => CommandAsync<ActivityCandidateValidationView>(command, cancellationToken);
     public Task<ActivityDraftValidationView> ValidateDraftAsync(ValidateReusableActivityDraft command, CancellationToken cancellationToken) => CommandAsync<ActivityDraftValidationView>(command, cancellationToken);
     public Task<ReusableActivityDraftView> GetDraftAsync(GetReusableActivityDraft request, CancellationToken cancellationToken) => RequestAsync<ReusableActivityDraftView>(request, cancellationToken);
     public Task<ReusableActivityVersionView> GetVersionAsync(GetReusableActivityVersion request, CancellationToken cancellationToken) => RequestAsync<ReusableActivityVersionView>(request, cancellationToken);

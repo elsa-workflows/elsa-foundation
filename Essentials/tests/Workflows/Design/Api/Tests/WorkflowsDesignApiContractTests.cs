@@ -85,7 +85,7 @@ public sealed class WorkflowsDesignApiContractTests
         """;
 
     [Fact]
-    public void Mapper_registers_exactly_the_56_owned_operations_with_stable_metadata()
+    public void Mapper_retains_the_56_owned_operations_and_two_additive_candidate_validation_routes()
     {
         using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
@@ -93,8 +93,10 @@ public sealed class WorkflowsDesignApiContractTests
         Elsa.Workflows.Design.Api.WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(56, endpoints.Length);
-        Assert.Equal(56, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId).Distinct().Count() == 1 ? endpoints.Length : 0);
+        Assert.Equal(58, endpoints.Length);
+        Assert.Equal(56, endpoints.Count(endpoint => !endpoint.RoutePattern.RawText!.EndsWith("/candidate-validation", StringComparison.Ordinal)));
+        Assert.Equal(2, endpoints.Count(endpoint => endpoint.RoutePattern.RawText!.EndsWith("/candidate-validation", StringComparison.Ordinal)));
+        Assert.Equal(58, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId).Distinct().Count() == 1 ? endpoints.Length : 0);
 
         foreach (var endpoint in endpoints)
         {
@@ -134,6 +136,8 @@ public sealed class WorkflowsDesignApiContractTests
         var manageRoutes = new HashSet<string>(StringComparer.Ordinal)
         {
             "POST design/workflows/templates",
+            "POST design/workflows/templates/{templateId}/candidate-validation",
+            "POST design/workflows/drafts/{draftId}/candidate-validation",
             "PUT design/workflows/templates/{templateId}",
             "POST design/workflows/templates/{templateId}/delete",
             "POST design/workflows/definitions",
@@ -163,7 +167,7 @@ public sealed class WorkflowsDesignApiContractTests
             ["PUT design/workflows/tags/{tagId}"] = WorkflowDesignPermissions.ManageTags
         };
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(56, endpoints.Length);
+        Assert.Equal(58, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             var method = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single();
