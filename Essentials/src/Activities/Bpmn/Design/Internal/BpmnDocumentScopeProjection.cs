@@ -167,7 +167,7 @@ internal static class BpmnDocumentScopeProjection
 
     internal static ActivityNode Write(ActivityNode owner, BpmnAuthoredDocument source)
     {
-        var payload = JsonSerializer.SerializeToNode(source with { AdditionalProperties = null }, Json)!.AsObject();
+        var payload = JsonSerializer.SerializeToNode(source, Json)!.AsObject();
         if (source.ScopeHeaders.Count == 0 && !owner.Structure!.Payload.TryGetProperty("scopeHeaders", out _)) payload.Remove("scopeHeaders");
         var result = owner with { Structure = new(BpmnActivityIdentities.StructureKind, BpmnAuthoredDocument.SchemaVersion, JsonSerializer.SerializeToElement(payload, Json)) };
         BpmnDocumentStructureHandler.Read(result);
