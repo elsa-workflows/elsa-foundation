@@ -9,6 +9,7 @@ export type Published = { artifactId: string; sourceReferenceId: string };
 export type DispatchBoundary = {
   processId: number; nodeIdentity: string; bootId: string; sourceRevision: string; deliveryId: string; recipientId: string;
   plannedExecutionId: string; capturedTarget: { artifactId: string; artifactVersion: string; definitionId: string; definitionVersionId: string; artifactHash: string };
+  sourceProvenance: { sourceReferenceId: string; definitionId: string; definitionVersionId: string; artifactVersion: string };
   sourceFingerprint: string; selectionFingerprint: string; sealFingerprint: string; phase: string; recordedAt: string;
   claimExpiresAt?: string; claimOwnerId?: string; claimFencingToken?: number; blockAfterFirstSeal: boolean;
   acceptanceReceipt?: { kind: string; evidenceId: string; sealFingerprint: string };
