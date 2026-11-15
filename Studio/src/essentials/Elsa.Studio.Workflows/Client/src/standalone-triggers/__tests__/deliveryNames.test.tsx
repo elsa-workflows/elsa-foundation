@@ -17,9 +17,9 @@ const recipient: RecipientView = { id: "recipient", revision: 1, target: { defin
 function client(selected = recipient): TriggerClient { return { delivery: vi.fn().mockResolvedValue({ id: "delivery", revision: 1, triggerId: "trigger", triggerRevision: 1, admission: "Accepted", acceptedCount: 1, refusedCount: 0, recipients: [selected], findings: [] } satisfies DeliveryView) } as unknown as TriggerClient; }
 const details = (name: string) => ({ definition: { id: "opaque-workflow", name } } as Awaited<ReturnType<typeof getDefinition>>);
 
-it("resolves the actual authorized Design name when the Runtime label is its opaque identity", async () => {
+it.each(["Accepted", "Refused"] as const)("resolves the actual authorized Design name for %s when the Runtime label is its opaque identity", async admission => {
   vi.mocked(getDefinition).mockResolvedValue(details("Reconcile Accounts")); const context = api();
-  const { container } = mount(<DeliveryDetails api={context} client={client()} deliveryId="delivery" navigate={vi.fn()} />);
+  const { container } = mount(<DeliveryDetails api={context} client={client({ ...recipient, admission })} deliveryId="delivery" navigate={vi.fn()} />);
   await vi.waitFor(() => expect(container.querySelector("h3")?.textContent).toBe("Reconcile Accounts"));
   expect(getDefinition).toHaveBeenCalledWith(context.backend, "opaque-workflow", expect.any(AbortSignal));
   expect(container.querySelector('[aria-label="Workflow definition ID: opaque-workflow"]')).not.toBeNull();
@@ -32,8 +32,8 @@ it("retains execution evidence and the exact identity when Design is unavailable
   expect(container.textContent).toContain("1 accepted"); expect(container.textContent).toContain("Queued");
   expect(container.querySelector('[aria-label="Workflow definition ID: opaque-workflow"]')).not.toBeNull();
 });
-it("does not query definition metadata when the delivery redacts its target", async () => {
-  const { container } = mount(<DeliveryDetails api={api()} client={client({ ...recipient, target: undefined, targetDisplayName: undefined })} deliveryId="delivery" navigate={vi.fn()} />);
+it.each(["Accepted", "Refused"] as const)("does not query definition metadata when a %s delivery redacts its target", async admission => {
+  const { container } = mount(<DeliveryDetails api={api()} client={client({ ...recipient, admission, target: undefined, targetDisplayName: undefined })} deliveryId="delivery" navigate={vi.fn()} />);
   await vi.waitFor(() => expect(container.querySelector("h3")?.textContent).toBe("recipient"));
   expect(getDefinition).not.toHaveBeenCalled(); expect(container.textContent).not.toContain("opaque-workflow");
 });
