@@ -1,8 +1,8 @@
 /* Workspace tab strip: one strip for every Studio screen, between the top bar and the content area. */
 .studio-workspace-tabs {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto minmax(max-content, 1fr);
   align-items: stretch;
   min-width: 0;
   border-bottom: 1px solid var(--studio-edge-subtle);
@@ -11,7 +11,6 @@
 
 .studio-workspace-tablist {
   display: flex;
-  flex: 0 1 auto;
   min-width: 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -187,7 +186,7 @@
 
 .studio-workspace-notice {
   display: flex;
-  flex: 1 0 100%;
+  grid-column: 1 / -1;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
