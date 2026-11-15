@@ -338,6 +338,10 @@ export class TriggerJourney {
     return trigger;
   }
   async open(id: string) { await this.page.goto(triggerPath(id)); await expect(this.page.getByRole("button", { name: "Edit configuration", exact: true })).toBeVisible(); }
+  workflowSubscriptionRow(definitionId: string) {
+    return this.page.getByRole("region", { name: "Workflow subscriptions", exact: true }).getByRole("row")
+      .filter({ has: this.page.getByTitle(definitionId, { exact: true }) });
+  }
   async openInstalledConfigurationEditor(open: () => Promise<void>, expectedTopic?: string) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const asset = this.page.waitForResponse(response => new URL(response.url()).pathname ===

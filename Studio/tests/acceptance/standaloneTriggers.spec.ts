@@ -197,7 +197,7 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   const disabled = (await j.subscriptions(trigger.id)).find(item => item.target.definitionId === unpublished.definition.id)!;
   expect(disabled).toBeTruthy(); expect(disabled.enabled).toBe(false); expect(disabled.serving).toBeFalsy();
   await page.reload();
-  const disabledRow = page.getByRole("row").filter({ hasText: unpublished.definition.id });
+  const disabledRow = j.workflowSubscriptionRow(unpublished.definition.id);
   await expect(disabledRow).toContainText(unpublished.definition.name); await expect(disabledRow).toContainText("Not serving"); await j.capture("subscription-unpublished");
   await disabledRow.getByRole("button", { name: "Remove", exact: true }).click(); await j.review();
   await page.getByRole("button", { name: "Add workflow", exact: true }).click();
@@ -212,14 +212,14 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   page.on("request", watch);
   const firstSubscription = await j.add(trigger.id, first.authored.definition.id, [source("message", ["metadata", "eventName"]), configured("count", 7)]);
   await j.open(trigger.id); await page.reload();
-  await expect(page.getByRole("region", { name: "Workflow subscriptions", exact: true })).toContainText(first.authored.definition.id);
+  await expect(j.workflowSubscriptionRow(first.authored.definition.id).getByLabel(`Workflow definition ID: ${first.authored.definition.id}`, { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Workflow subscriptions", exact: true })).toContainText(first.authored.definition.name);
   await j.capture("trigger-subscriptions");
   await page.goto(definitionPath(first.authored.definition.id)); await j.openWorkflowTriggers();
   await expect(page.getByRole("region", { name: "Workflow subscriptions", exact: true })).toContainText(trigger.name); await j.capture("workflow-live-triggers");
   await j.add(trigger.id, second.authored.definition.id, [configured("message", "Independent mapping"), configured("amount", 7.25)], true);
   await j.open(trigger.id); await page.reload(); expect(await j.subscriptions(trigger.id)).toHaveLength(2);
-  const row = page.getByRole("row").filter({ hasText: first.authored.definition.id }); await row.getByRole("button", { name: "Edit", exact: true }).click();
+  const row = j.workflowSubscriptionRow(first.authored.definition.id); await row.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByText("Preview with sample data", { exact: true }).click();
   await page.getByLabel("Sample source envelope", { exact: true }).fill(JSON.stringify({ payload: { actual: "synthetic preview only" }, metadata: { eventName: "Sample source name" } }));
   const runsBefore = await j.deliveries(trigger.id);
@@ -725,16 +725,16 @@ test("standalone access and availability", async ({ page, browser }) => {
     const retained = await j.started(await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${acceptedAfterDeparture.body.deliveryId}`));
     expect(retained.acceptedCount).toBe(1); await j.outputs(retained.recipients[0].executionReference!.id, { message: "Shared authority survives departure", count: 7 });
     await j.open(creatorTrigger.id);
-    await expect(page.getByRole("row").filter({ hasText: creatorTarget.authored.definition.id })).toContainText("Invocation: Granted");
-    await j.capture("trigger-creator-departed", page.getByRole("row").filter({ hasText: creatorTarget.authored.definition.id }));
-    await page.getByRole("row").filter({ hasText: creatorTarget.authored.definition.id }).getByRole("button", { name: "Revoke authority", exact: true }).click(); await j.review();
+    await expect(j.workflowSubscriptionRow(creatorTarget.authored.definition.id)).toContainText("Invocation: Granted");
+    await j.capture("trigger-creator-departed", j.workflowSubscriptionRow(creatorTarget.authored.definition.id));
+    await j.workflowSubscriptionRow(creatorTarget.authored.definition.id).getByRole("button", { name: "Revoke authority", exact: true }).click(); await j.review();
     expect((await j.subscriptions(creatorTrigger.id))[0].invocationGrant.state).toBe("Revoked");
     const beforeRevokedSource = await j.deliveries(creatorTrigger.id);
     const refusedAfterRevocation = await j.sourceRequest(await j.read(creatorTrigger.id), { actual: "resource grant revoked" });
     expect(refusedAfterRevocation.response.ok()).toBe(false); expect(refusedAfterRevocation.body.acceptedCount).toBe(0);
     expect((await j.deliveries(creatorTrigger.id)).map(item => item.id).sort()).toEqual(beforeRevokedSource.map(item => item.id).sort());
-    await expect(page.getByRole("row").filter({ hasText: creatorTarget.authored.definition.id })).toContainText("Invocation: Revoked");
-    await j.capture("trigger-authority-revoked", page.getByRole("row").filter({ hasText: creatorTarget.authored.definition.id }));
+    await expect(j.workflowSubscriptionRow(creatorTarget.authored.definition.id)).toContainText("Invocation: Revoked");
+    await j.capture("trigger-authority-revoked", j.workflowSubscriptionRow(creatorTarget.authored.definition.id));
     j.requests.push(...creatorJourney.requests, { kind: "actual-creator-departure-versus-resource-revocation", departure: departed.setup!.departure,
       departedActorStatus: departedAccess.status(), admissionAfterDeparture: acceptedAfterDeparture.response.status(), completedExecution: retained.recipients[0].executionReference!.id,
       admissionAfterRevocation: refusedAfterRevocation.response.status(), acceptedAfterRevocation: refusedAfterRevocation.body.acceptedCount });
