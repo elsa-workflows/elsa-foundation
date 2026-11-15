@@ -1,4 +1,5 @@
 import type { ActivityCatalogItem, ActivityNode, VariableDefinition } from "../workflowTypes";
+import { readNodeIntrinsicDescriptor } from "../intrinsicActivities";
 import { getChildSlots, readStructureDesignFacet, sequenceStructureKind, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
 import { bpmnDocumentSchemaVersion, readBpmnDocument, type BpmnScopeHeader, type ParsedBpmnDocument } from "./bpmnDocument";
 import { bpmnStructureKind } from "./bpmnTypes";
@@ -178,12 +179,20 @@ export function remapBpmnDocumentNativeIdentities(owner: ActivityNode, remap: Re
   function expanded(node: ActivityNode): ActivityNode {
     const item = catalogItem(node, catalog);
     let result = node;
-    for (const descriptor of item?.inputs ?? []) {
-      if (!record(descriptor) || typeof descriptor.referenceKey !== "string") continue;
-      const value = node[descriptor.referenceKey];
+    const inputKeys = new Set<string>();
+    for (const descriptor of item?.inputs ?? [])
+      if (record(descriptor) && typeof descriptor.referenceKey === "string") inputKeys.add(descriptor.referenceKey);
+    const intrinsic = readNodeIntrinsicDescriptor(node, item);
+    if (node.intrinsic && !intrinsic) fail("the intrinsic argument contract requires a qualified reference transform");
+    if (intrinsic) {
+      inputKeys.add(intrinsic.valueInputKey);
+      if (intrinsic.outputNameInputKey) inputKeys.add(intrinsic.outputNameInputKey);
+    }
+    for (const key of inputKeys) {
+      const value = node[key];
       if (!record(value) || !record(value.expression)) continue;
       const mapped = argument({ expressionType: value.expression.type, value: value.expression.value });
-      result = { ...result, [descriptor.referenceKey]: { ...value, expression: { ...value.expression, value: (mapped as Record<string, unknown>).value } } };
+      result = { ...result, [key]: { ...value, expression: { ...value.expression, value: (mapped as Record<string, unknown>).value } } };
     }
     for (const descriptor of item?.outputs ?? []) {
       if (!record(descriptor) || typeof descriptor.referenceKey !== "string") continue;

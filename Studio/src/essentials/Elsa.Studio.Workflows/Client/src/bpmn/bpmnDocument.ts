@@ -410,7 +410,7 @@ const modelReferenceAttributes: Readonly<Record<string, readonly string[]>> = {
   dataObjectReference: ["itemSubjectRef", "dataObjectRef"], dataStoreReference: ["itemSubjectRef", "dataStoreRef"],
   error: ["structureRef"], errorEventDefinition: ["errorRef"], escalation: ["structureRef"], escalationEventDefinition: ["escalationRef"],
   extension: ["definition"], group: ["categoryValueRef"], interface: ["implementationRef"],
-  inputOutputBinding: ["operationRef", "inputDataRef", "outputDataRef"], itemDefinition: ["structureRef"], lane: ["partitionElementRef"],
+  ioBinding: ["operationRef", "inputDataRef", "outputDataRef"], itemDefinition: ["structureRef"], lane: ["partitionElementRef"],
   message: ["itemRef"], messageEventDefinition: ["messageRef"], messageFlow: ["sourceRef", "targetRef", "messageRef"],
   messageFlowAssociation: ["innerMessageFlowRef", "outerMessageFlowRef"], multiInstanceLoopCharacteristics: ["oneBehaviorEventRef", "noneBehaviorEventRef"],
   operation: ["implementationRef"], participant: ["processRef"], process: ["definitionalCollaborationRef"], property: ["itemSubjectRef"],
@@ -437,12 +437,22 @@ function standardReferenceContext(element: Element) {
   }
   return true;
 }
+// These local properties are directly declared tFormalExpression by the pinned BPMN schema.
+// A condition under conditionalEventDefinition is tExpression until explicitly xsi-typed.
+const formalExpressionParents: Readonly<Record<string, readonly string[]>> = {
+  condition: ["complexBehaviorDefinition"], dataPath: ["correlationPropertyBinding"],
+  messagePath: ["correlationPropertyRetrievalExpression"],
+  transformation: ["dataAssociation", "dataInputAssociation", "dataOutputAssociation"]
+};
 function standardReferenceAttribute(element: Element, attribute: Attr) {
   if (attribute.namespaceURI) return false;
   if (element.namespaceURI === bpmnNamespaces.diagram) return diagramReferenceAttributes[element.localName]?.includes(attribute.localName) ?? false;
   if (element.namespaceURI !== bpmnNamespaces.model) return false;
   if (attribute.localName === "default" && defaultFlowOwners.has(element.localName)) return true;
   if (attribute.localName === "evaluatesToTypeRef") {
+    const parent = element.parentElement;
+    if (element.localName === "formalExpression" || parent?.namespaceURI === bpmnNamespaces.model
+      && formalExpressionParents[element.localName]?.includes(parent.localName)) return true;
     const type = element.getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")?.split(":");
     if (type?.at(-1) === "tFormalExpression" && element.lookupNamespaceURI(type.length === 2 ? type[0] : null) === bpmnNamespaces.model) return true;
   }
