@@ -2,6 +2,7 @@ import { verifyHostComposition } from "./standaloneTriggerCompositionCases";
 import { delayNextTriggerRead } from "./standaloneRequestDelay";
 import { verifyDefaultAndNullWorkerEditor, verifyExactWorkerCollectionMapping } from "./standaloneBpmnEditorCases";
 import { randomUUID } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { expect, test, type Page } from "@playwright/test";
 import { TriggerJourney, configured, definitionPath, input, literal, source, triggerPath, type Authored, type DispatchBoundary, type WorkflowState } from "./standaloneTriggersSupport";
 import { verifyBpmnInputRefusals, verifyCronAndOverdueRecovery, verifyOptionalInputSemantics, verifyJsonLiteralPersistenceAndConsumption, verifyScheduledRetention } from "./standaloneTriggerOrdinaryCases";
@@ -279,8 +280,12 @@ test("standalone HTTP modes", async ({ page }) => {
   await j.api(`/publishing/workflows/${healthy.authored.definition.id}/slots/default`, "DELETE");
   const zero = await j.sourceRequest(http, { actual: "No eligible subscribers" }); expect(zero.response.ok()).toBe(false); expect(zero.body.acceptedCount).toBe(0);
   await j.open(http.id); await j.capture("http-zero-accepted");
-  await j.sourceRequest(http, "{malformed", 400, { "Content-Type": "application/json" }); await j.capture("http-rejected");
   await j.api(`/publishing/workflows/${healthy.authored.definition.id}/slots/default/restore`, "POST", {});
+  const beforeMalformed = new Set((await j.deliveries(http.id)).map(item => item.id));
+  // Bytes bypass the request client's JSON serialization of string data: the wire body must be malformed.
+  await j.sourceRequest(http, Buffer.from("{malformed", "utf8"), 400, { "Content-Type": "application/json" });
+  expect(new Set((await j.deliveries(http.id)).map(item => item.id))).toEqual(beforeMalformed);
+  await j.capture("http-rejected");
   const conflict = await j.create("http", "Conflicting endpoint", { route: String(http.configuration.path) });
   await j.add(conflict.id, healthy.authored.definition.id, [configured("message", "conflict"), configured("count", 7)]);
   await j.open(conflict.id); await page.getByRole("button", { name: "Enable trigger", exact: true }).click();
