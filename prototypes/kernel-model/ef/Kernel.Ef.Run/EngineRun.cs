@@ -878,6 +878,7 @@ sealed class Tally(IKernelStore inner) : IKernelStore
 {
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     private readonly ConcurrentDictionary<string, int> _counts = new();
     private readonly ConcurrentDictionary<string, string> _samples = new();
