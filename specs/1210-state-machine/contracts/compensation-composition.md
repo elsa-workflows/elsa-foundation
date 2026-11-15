@@ -41,7 +41,7 @@ forward slot, with no Sequence, Flowchart or other wrapper around it.
 
 | Business path | Required effect/journal observation | Scope outcome |
 |---|---|---|
-| Approved | Reservation stays present; Reserve is confirmed; no release handler runs. | `Compensated` |
+| Approved | Reservation stays present; Reserve is confirmed; no release handler runs. | `Compensated` (no handler runs) |
 | Withdrawn or expired | Unconfirmed reservation is released using its exact forward operation key. | `Compensated` |
 
 `Compensated` reports completion of the explicitly requested recovery. The chart's business disposition and
@@ -50,7 +50,9 @@ that every path undid an effect. Do not add an empty handler to suppress an unce
 
 ## Why the direct step and active lifetime matter
 
-At source basis `21ceeea309fedfed1b3074506758cd0503fe00aa`,
+The claims below were checked at source basis `21ceeea309fedfed1b3074506758cd0503fe00aa`.
+Source links follow the current branch; refresh that comparison if the linked implementation changes.
+At that basis,
 [CompensationScope](../../../Essentials/src/Activities/Compensation/Activities/CompensationScope.cs)
 handles a request whose notifying child is the direct forward child as an already-completing `Compensate`:
 there is no stopped wrapper to journal as uncertain. A request from inside a running composite instead stops
