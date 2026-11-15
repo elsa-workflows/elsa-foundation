@@ -78,7 +78,12 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
       const panel = rootRef.current;
       if (!panel) return;
       const pathKey = packet ? JSON.stringify([packet.source.id, packet.selection.path]) : "sources";
-      if (focusedPath.current === pathKey && panel.contains(panel.ownerDocument.activeElement)) return;
+      // Source rows can receive explicit focus before this deferred frame runs. Keep that choice
+      // so Enter cannot be redirected to the first source while the listing settles.
+      if (panel.contains(panel.ownerDocument.activeElement) && (pathKey === "sources" || focusedPath.current === pathKey)) {
+        focusedPath.current = pathKey;
+        return;
+      }
       focusedPath.current = pathKey;
       (panel.querySelector<HTMLElement>("[role='option']:not([aria-disabled='true'])") ?? panel.querySelector<HTMLElement>("input:not(:disabled)") ?? panel.querySelector<HTMLElement>("button:not(:disabled)"))?.focus();
     });
