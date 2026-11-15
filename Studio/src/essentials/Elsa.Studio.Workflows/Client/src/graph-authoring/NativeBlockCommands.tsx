@@ -46,12 +46,12 @@ export function NativeBlockCommands(props: {
   const reportFailure = (error: unknown, applying = false) => {
     const failure = describeWorkflowError(error, "The validation request could not be completed.");
     setPlan(null); setRetryValidation(true);
-    setMessages([applying ? "The apply request failed. Check the resource before previewing again." : "Could not validate this change. Your document has not changed.",
+    setMessages(Array.from(new Set([applying ? "The apply request failed. Check the resource before previewing again." : "Could not validate this change. Your document has not changed.",
       failure.message, failure.detail, failure.status !== undefined ? `HTTP ${failure.status}` : undefined,
       failure.code ? `Code: ${failure.code}` : undefined, failure.traceId ? `Trace: ${failure.traceId}` : undefined,
       failure.status === 401 || failure.status === 403 ? "Check your sign-in and access, then retry validation." :
         failure.status === 409 ? "Refresh the resource to load its current revision, then preview again." : "Retry validation when the service is available."]
-      .filter((message): message is string => Boolean(message)));
+      .filter((message): message is string => Boolean(message)))));
   };
   const scope = resolveScope(props.context.document.rootActivity, props.context.scope, props.context.catalog);
   const selected = scope?.slot.activities.find(node => props.selectedNodeIds.length === 1 && node.nodeId === props.selectedNodeIds[0]);

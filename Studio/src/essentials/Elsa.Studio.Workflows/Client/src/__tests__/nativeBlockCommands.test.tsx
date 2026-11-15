@@ -161,12 +161,13 @@ it("creates at the host's free position and refuses a changed placement before c
 
 it("shows safe request details, focuses Retry and validates again without duplicate commits", async () => {
   const before = structuredClone(context.document);
-  validate.mockRejectedValueOnce(Object.assign(new Error("Validation service unavailable"), {
+  validate.mockRejectedValueOnce(Object.assign(new Error("The validation service is restarting."), {
     status: 503, payload: { detail: "The validation service is restarting.", errorCode: "validation.unavailable", traceId: "request-123", credentials: "must-not-render" }
   }));
   click("Extract block…"); name("Review"); click("Preview change"); await settle();
   const alert = container.querySelector('[role="alert"]')!;
   expect(alert.textContent).toContain("The validation service is restarting.");
+  expect(alert.textContent?.match(/The validation service is restarting\./g)).toHaveLength(1);
   expect(alert.textContent).toContain("HTTP 503");
   expect(alert.textContent).toContain("validation.unavailable");
   expect(alert.textContent).toContain("request-123");
