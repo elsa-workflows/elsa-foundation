@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
@@ -29,7 +28,7 @@ public static class RuntimeChainId
     /// Number of hex characters retained from the SHA-256 of the parent id. 16 hex chars = 64 bits, which keeps the
     /// per-hop id short while making an accidental collision within a single execution's id tree negligible.
     /// </summary>
-    public const int FingerprintLength = 16;
+    public const int FingerprintLength = RuntimeChainIdentity.FingerprintLength;
 
     /// <summary>
     /// Derives a bounded successor id of the form <c>{Fingerprint(parentId)}:{step}</c>. Deterministic and stable:
@@ -37,21 +36,11 @@ public static class RuntimeChainId
     /// </summary>
     /// <param name="parentId">The parent chain id to fold into a fixed-length fingerprint.</param>
     /// <param name="step">The readable, per-hop discriminator to append (e.g. <c>invoke:{activityExecutionId}</c>).</param>
-    public static string Derive(string parentId, string step)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(parentId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(step);
-        return $"{Fingerprint(parentId)}:{step}";
-    }
+    public static string Derive(string parentId, string step) => RuntimeChainIdentity.Derive(parentId, step);
 
     /// <summary>
     /// Returns a fixed-length (<see cref="FingerprintLength"/> hex chars), stable fingerprint of <paramref name="value"/>:
     /// the leading hex characters of its SHA-256 digest. Deterministic across processes and runs.
     /// </summary>
-    public static string Fingerprint(string value)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value);
-        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(value));
-        return Convert.ToHexStringLower(digest)[..FingerprintLength];
-    }
+    public static string Fingerprint(string value) => RuntimeChainIdentity.Fingerprint(value);
 }

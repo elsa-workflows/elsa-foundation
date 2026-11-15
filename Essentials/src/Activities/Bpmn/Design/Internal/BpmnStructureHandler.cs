@@ -101,6 +101,9 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
         ActivityNodeStructure structure,
         IReadOnlyDictionary<string, string> authoredToExecutableNodeIds)
     {
+        if (structure.Kind != BpmnProcessActivity.StructureKind || structure.SchemaVersion != BpmnProcessActivity.StructureSchemaVersion)
+            throw new InvalidOperationException("Legacy BPMN executable remapping requires the exact kind and schema 1.0.0 before typed deserialization.");
+        RejectCompleteSourceAuthority(structure.Payload, $"executable remapping of '{structure.Kind}@{structure.SchemaVersion}'");
         var executable = structure.Payload.Deserialize<BpmnStructure>(SerializerOptions)
                          ?? throw new InvalidOperationException("BPMN executable structure payload is invalid.");
         var remapped = new BpmnStructure(
@@ -134,9 +137,19 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
     {
         if (activity.Structure is null)
             return new BpmnAuthoredStructure();
+        if (activity.Structure.Kind != BpmnProcessActivity.StructureKind || activity.Structure.SchemaVersion != BpmnProcessActivity.StructureSchemaVersion)
+            throw new InvalidOperationException("Legacy BPMN authoring requires the exact kind and schema 1.0.0 before typed deserialization.");
 
+        RejectCompleteSourceAuthority(activity.Structure.Payload, $"activity '{activity.NodeId}'");
         return activity.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)
                ?? new BpmnAuthoredStructure();
+    }
+
+    private static void RejectCompleteSourceAuthority(JsonElement payload, string context)
+    {
+        try { BpmnLegacyStructureGuard.RejectCompleteSourceFields(payload); }
+        catch (JsonException exception)
+        { throw new BpmnDocumentSourceException($"Invalid legacy BPMN {context}: {exception.Message}", exception); }
     }
 
     private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>

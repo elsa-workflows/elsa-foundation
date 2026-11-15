@@ -13,6 +13,7 @@ internal static class SavedStimulusCheckpointAuthority
     internal static void ValidateInitial(RuntimeCheckpointCommit commit, RuntimePostCommitOutboxItem source, PersistenceScope scope, WorkflowExecutable material)
     {
         var state = commit.StateChanges.WorkflowExecution?.State ?? throw new InvalidDataException("Saved stimulus admission needs workflow state.");
+        var firstFault = commit.ExpectedInitialStartFault is not null;
         NativeIngressCheckpointAuthority.ValidateOriginShape(state);
         var origin = state.StimulusDeliveryOrigin ?? throw new InvalidDataException("The saved stimulus scope origin is missing.");
         var cohort = source.RecipientSnapshot ?? throw new InvalidDataException("The actual saved source has no immutable cohort.");
@@ -30,8 +31,9 @@ internal static class SavedStimulusCheckpointAuthority
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, state.PinnedExecutable) || state.PinnedSource != recipient.SourceProvenance ||
             state.TenantId != cohort.Scope.TenantId || state.Partition != cohort.Scope.Partition || state.Partition?.Value != scope.Value ||
             state.RunKind != WorkflowRunKind.PublishedRun || state.ParentWorkflowExecutionId is not null || state.TestScope is not null ||
-            state.IngressOrigin is not null || state.ModelWorkOrigin is not null || commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
-            state.Status != WorkflowExecutionStatus.Running || state.StartedAt != state.CreatedAt)
+            state.IngressOrigin is not null || state.ModelWorkOrigin is not null ||
+            commit.Checkpoint.Name != (firstFault ? RuntimeCheckpointNames.WorkflowFaulted : RuntimeCheckpointNames.WorkflowStarted) ||
+            state.Status != (firstFault ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Running) || state.StartedAt != state.CreatedAt)
             throw new InvalidDataException("The initial saved start changed its exact target identity, material or captured scope.");
         var envelope = SavedStimulusStartSeal.Read(source, state.WorkflowExecutionId);
         var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
@@ -40,6 +42,11 @@ internal static class SavedStimulusCheckpointAuthority
             state.DispatchNestingDepth != start.DispatchNestingDepth || state.CreatedAt != envelope.EnqueuedAt || state.StartedAt != envelope.EnqueuedAt ||
             state.PinnedSource != start.PinnedSource || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(state.PinnedExecutable, start.PinnedExecutable))
             throw new InvalidDataException("The saved start changed its physically accepted command authority or execution context.");
+        if (firstFault)
+        {
+            InitialStartFaultAuthority.RequireSameStart(commit, envelope, material);
+            return;
+        }
         var rootIntent = commit.PostCommitIntents.SingleOrDefault() ?? throw new InvalidDataException("A saved start requires exactly its root continuation.");
         var root = rootIntent.Payload?.Deserialize<RuntimeSchedulerWorkItem>() ?? throw new InvalidDataException("The saved root continuation is invalid.");
         var original = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, envelope.WorkflowExecutionId, envelope.Command.CommandId,

@@ -18,6 +18,7 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 public sealed class InMemoryWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoisonStore, ISchedulerPoisonFenceCapability
 {
     private readonly object _syncRoot = new();
+    private readonly SemaphoreSlim _decisionGate = new(1, 1);
     private readonly Dictionary<PoisonRecordKey, RuntimeSchedulerPoisonRecord> _records = new();
     private readonly Lazy<InMemoryExecutionLivenessStateStore?> _ownershipStateStore;
     private readonly TimeProvider _timeProvider;
@@ -54,15 +55,37 @@ public sealed class InMemoryWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoi
     /// <inheritdoc />
     public bool CanRecordFenced => _ownershipStateStore.Value is not null;
 
+    internal bool CoordinatesOwnership(IExecutionLivenessStateStore? ownership) =>
+        ownership is not null && ReferenceEquals(_ownershipStateStore.Value, ownership);
+
+    internal async ValueTask<T> WithDecisionAsync<T>(RuntimeSchedulerPoisonRecord expected,
+        Func<CancellationToken, ValueTask<T>> write, CancellationToken ct)
+    {
+        await _decisionGate.WaitAsync(ct);
+        try
+        {
+            var actual = await FindAsync(expected.WorkflowExecutionId, expected.WorkItemId, ct);
+            if (actual is null || !Elsa.Workflows.Runtime.Services.Triggers.NativeIngressTargetEvidence.Equal(actual, expected))
+                throw new InvalidDataException("The parked scheduler failure changed before its first fault checkpoint.");
+            return await write(ct);
+        }
+        finally { _decisionGate.Release(); }
+    }
+
     internal void DeleteForWorkflowExecution(string workflowExecutionId)
     {
-        lock (_syncRoot)
+        _decisionGate.Wait();
+        try
         {
-            foreach (var key in _records.Keys
-                         .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
-                         .ToArray())
-                _records.Remove(key);
+            lock (_syncRoot)
+            {
+                foreach (var key in _records.Keys
+                             .Where(key => StringComparer.Ordinal.Equals(key.WorkflowExecutionId, workflowExecutionId))
+                             .ToArray())
+                    _records.Remove(key);
+            }
         }
+        finally { _decisionGate.Release(); }
     }
 
     public ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(RuntimeSchedulerPoisonRecord record, CancellationToken cancellationToken = default)
@@ -70,12 +93,17 @@ public sealed class InMemoryWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoi
         ArgumentNullException.ThrowIfNull(record);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        _decisionGate.Wait(cancellationToken);
+        try
         {
-            var key = new PoisonRecordKey(record.WorkflowExecutionId, record.WorkItemId);
-            _records[key] = record;
-            return new ValueTask<RuntimeSchedulerPoisonRecord>(record);
+            lock (_syncRoot)
+            {
+                var key = new PoisonRecordKey(record.WorkflowExecutionId, record.WorkItemId);
+                _records[key] = record;
+                return new ValueTask<RuntimeSchedulerPoisonRecord>(record);
+            }
         }
+        finally { _decisionGate.Release(); }
     }
 
     /// <inheritdoc />

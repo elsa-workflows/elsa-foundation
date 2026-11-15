@@ -7,9 +7,10 @@ namespace Kernel.Durable;
 /// updates are honoured, keys are create-only. It also keeps <see cref="Ghost"/>: things a correct kernel never does,
 /// seen from the one place that sees every write.
 /// </summary>
-public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
+public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
 {
     public bool CommitClockAvailable { get; set; } = true;
+    public bool PhysicalRetirementAvailable => true;
     public bool CreationIdentityAvailable { get; set; } = true;
 
     public sealed class PartitionRow
@@ -67,7 +68,8 @@ public sealed class InMemoryStore(int partitions, Func<long> clock, Flaw flaws =
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
+        StoreBatchRules.Validate(batch);
+        if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
         {

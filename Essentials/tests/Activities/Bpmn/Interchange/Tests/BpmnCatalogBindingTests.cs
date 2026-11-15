@@ -52,6 +52,28 @@ public sealed class BpmnCatalogBindingTests
         Assert.IsType<JsonException>(failure.InnerException);
     }
 
+    [Theory]
+    [InlineData("documentXml")]
+    [InlineData("processId")]
+    [InlineData("bindings")]
+    [InlineData("scopeHeaders")]
+    public async Task Registered_binder_cannot_relabel_complete_source_as_a_legacy_process(string field)
+    {
+        foreach (var spelling in new[] { field, field.ToUpperInvariant() })
+        {
+            var services = new ServiceCollection();
+            services.AddScoped<IActivityDefinitionLookup>(_ => new Catalog("available"));
+            services.AddScoped<IBpmnWorkBinder>(_ => new RelabelledBinder(spelling));
+            new ActivitiesBpmnInterchangeFeature().ConfigureServices(services);
+            using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            var importer = scope.ServiceProvider.GetRequiredService<IBpmnDocumentImporter>();
+            var failure = await Assert.ThrowsAsync<BpmnInterchangeException>(() => importer.ImportAsync(Document));
+            Assert.Contains("node-wait", failure.Message, StringComparison.Ordinal);
+            Assert.Contains(spelling, Assert.IsType<JsonException>(failure.InnerException).Message, StringComparison.Ordinal);
+        }
+    }
+
     private const string Document = """
         <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="defs" targetNamespace="urn:test">
           <process id="p" isExecutable="true"><startEvent id="start"/>
@@ -110,6 +132,14 @@ public sealed class BpmnCatalogBindingTests
         public BpmnWorkBindingResult Bind(BpmnWorkBindingRequest request) => new(new ActivityNode(request.BindingRef, "Elsa.BpmnProcess", [], [],
             new ActivityNodeStructure(Activities.BpmnProcess.StructureKind, Activities.BpmnProcess.StructureSchemaVersion,
                 JsonDocument.Parse("{\"activities\":42}").RootElement.Clone())), BpmnImportCapabilityAvailability.Available, "Malformed provider result");
+    }
+
+    private sealed class RelabelledBinder(string field) : IBpmnWorkBinder
+    {
+        public BpmnWorkBindingResult Bind(BpmnWorkBindingRequest request) => new(new ActivityNode(request.BindingRef, "Elsa.BpmnProcess", [], [],
+            new(Activities.BpmnProcess.StructureKind, Activities.BpmnProcess.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new Dictionary<string, object?> { [field] = "retained source authority" }))),
+            BpmnImportCapabilityAvailability.Available, "Relabelled complete source");
     }
 
     private sealed class IntrinsicBinder : IBpmnWorkBinder

@@ -100,16 +100,21 @@ public sealed record BpmnImportResult(
 
 public sealed record BpmnExportOptions
 {
-    /// <summary>The BPMN process id to emit; defaults to the node id of the exported process.</summary>
+    /// <summary>
+    /// The BPMN process id to emit; legacy graph export defaults to the exported node id.
+    /// Complete-source export retains the authored process id and refuses an implicit rename.
+    /// </summary>
     public string? ProcessId { get; init; }
 }
 
-/// <summary>The exported document and every task binding left out of it, each with why.</summary>
+/// <summary>The exported document and each native binding or invocation configuration left out of it, with why.</summary>
 public sealed record BpmnExportResult(string Xml, IReadOnlyList<BpmnExportOmission> Omissions);
 
 /// <summary>
 /// A task binding export did not carry. <see cref="Code"/> is one of <c>catalog-unavailable</c>, <c>unresolvable-version</c>,
 /// <c>unresolvable-input</c>, <c>duplicate-input</c>, <c>sensitive-input</c>, <c>non-literal-input</c>, <c>unsupported-input-setting</c>,
 /// <c>unsupported-output</c>, <c>structured-child</c>, <c>oversized-binding</c> or <c>ambiguous-element</c>; <see cref="ReferenceKey"/> names the input when one input decided it.
+/// Complete-source export reports <c>native-configuration-not-exported</c>, <c>scope-configuration-not-exported</c>
+/// and <c>process-configuration-not-exported</c> for configuration kept outside the canonical XML.
 /// </summary>
 public sealed record BpmnExportOmission(string ElementId, string Code, string Message, string? ReferenceKey = null);
