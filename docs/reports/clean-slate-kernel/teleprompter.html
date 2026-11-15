@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teleprompter: Elsa's new kernel</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;color:#f4f4f0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;overflow-x:hidden}
+body{display:flex;flex-direction:column}
+header{padding:.5rem 1rem;border-bottom:1px solid #333;display:flex;flex-wrap:wrap;gap:.4rem 1rem;align-items:center;font-size:.95rem;color:#aaa}
+header b{color:#fff;font-size:1.05rem}
+header .sp{flex:1}
+button{font:inherit;background:#222;color:#eee;border:1px solid #555;border-radius:6px;padding:.25rem .7rem;cursor:pointer}
+button:hover{background:#333}
+#status{font-size:.85rem}
+#status.f{color:#6f6}
+main{flex:1;overflow-y:auto;padding:1.2rem 1.5rem}
+#wrap{max-width:62rem;margin:0 auto;transition:transform .1s}
+body.mirror #wrap{transform:scaleX(-1)}
+#st{color:#8ab;font-size:.55em;margin:0 0 .6em}
+#cur p{margin:0 0 .8em;line-height:1.38;overflow-wrap:anywhere}
+#next{margin-top:1.2em;padding-top:.6em;border-top:1px solid #333;color:#999;font-size:.5em;line-height:1.4;overflow-wrap:anywhere}
+footer{padding:.4rem 1rem;border-top:1px solid #333;color:#888;font-size:.8rem;display:flex;flex-wrap:wrap;gap:.3rem 1rem}
+#clock{font-variant-numeric:tabular-nums;color:#ddd}
+.cue{display:block;font-size:.5em;font-style:italic;opacity:.6;letter-spacing:.02em;margin:.2em 0 .5em;padding:.15em .5em;border-left:3px solid currentColor;line-height:1.3}
+</style></head><body>
+<header>
+<b id="pos"></b><span id="title"></span><span class="sp"></span>
+<span id="status">manual</span>
+<button id="open">Open the demo window</button>
+<button id="minus" title="Smaller">A&minus;</button><button id="plus" title="Larger">A+</button>
+</header>
+<main id="m"><div id="wrap"><div id="st"></div><div id="cur"></div><div id="next"></div></div></main>
+<footer><span>&larr; &rarr; step &middot; Home start &middot; T clock &middot; Shift+T reset &middot; M mirror &middot; +/&minus; size</span><span class="sp" style="flex:1"></span><span>Clock <span id="clock">0:00</span></span></footer>
+<script>
+const DATA=[{"slide":1,"step":1,"slideTitle":"Elsa's new kernel","stepTitle":"","notes":["This is a prototype and a proposed design, not a shipped product. It is a new engine core for Elsa, the part that runs your business processes.","Three things to take away. Work is not lost when a server fails. Customers get an answer only once their work is safely saved. And it asks the database to do much less work."]},{"slide":2,"step":1,"slideTitle":"The structure: three layers","stepTitle":"","notes":["Point at the top layer. This layer decides which server looks after which group of work.","If a server stops, another one can take over its groups. This layer can be swapped for other products that do the same job."]},{"slide":2,"step":2,"slideTitle":"The structure: three layers","stepTitle":"","notes":["Point at the middle layer. This is where the promises are kept: nothing is lost, and nothing is saved twice or by the wrong server.","It stores everything through one simple storage door. Different databases can sit behind that door, so you are not locked into one."]},{"slide":2,"step":3,"slideTitle":"The structure: three layers","stepTitle":"","notes":["Point at the bottom layer. Every process, such as an order, is handled the same basic way.","What differs is the style of process. This design can plug in several styles, like flowcharts, state machines and business process diagrams. That means it handles more kinds of processes."]},{"slide":2,"step":4,"slideTitle":"The structure: three layers","stepTitle":"","notes":["Point at the lines between the layers. Each layer has a small, clear job and talks to the next one in a fixed way.","The top layer only decides where work runs. All the safety promises come from the middle layer, whatever sits on top."]},{"slide":3,"step":1,"slideTitle":"How it works: one request","stepTitle":"A request arrives","notes":["Point at the customer on the left, then the server called Node A. A customer sends in an order.","Node A already knows which process handles orders, so it does not need to ask the database. The process saves the order, replies, waits five seconds, and sends a confirmation email."]},{"slide":3,"step":2,"slideTitle":"How it works: one request","stepTitle":"It stays on this server","notes":["Point at partition 17. A partition is a group of work that one server is responsible for.","Node A puts the new order into its own group. Nothing is written to the database yet."]},{"slide":3,"step":3,"slideTitle":"How it works: one request","stepTitle":"The work runs in memory","notes":["Point at the shelf inside Node A. The server keeps the orders it is working on in memory, like papers on its desk. That is why it does not need to read the database for each step.","Order number 1 is new. Order number 7 is waiting for its timer, and it is due now."]},{"slide":3,"step":4,"slideTitle":"How it works: one request","stepTitle":"The reply is held back","notes":["Point at order number 1. It saves the order and prepares a reply to the customer.","The reply is held back. It is only released once the work is safely saved. Order number 7 gets its turn in the same round."]},{"slide":3,"step":5,"slideTitle":"How it works: one request","stepTitle":"The turn ends at a wait","notes":["Point at order number 1 again. It has done what it can for now and must wait five seconds.","It notes down what happened and sets itself a timer. The database has still not been touched."]},{"slide":3,"step":6,"slideTitle":"How it works: one request","stepTitle":"One save for both workflows","notes":["Point at the database on the right. Both orders are saved together, in one go. Saving is all or nothing.","This save carries a check. It stops a server that has been replaced from saving anything. If this server is still the right one, the save goes through.","For the database, that is a small amount of work for two orders."]},{"slide":3,"step":7,"slideTitle":"How it works: one request","stepTitle":"Then the reply goes out","notes":["Point at the customer. Now that the order is safely saved, the reply goes out.","The order itself carries on, waiting for its timer. If the server failed now, another server could pick it up from what was saved."]},{"slide":3,"step":8,"slideTitle":"How it works: one request","stepTitle":"Five seconds later: the rest, and the history","notes":["Five seconds later, the confirmation email is sent, and the order is finished. Each step is saved, with the same check.","Separately, in the background, the history that people see in the Studio screen is written afterwards. People never see work that was not saved."]},{"slide":4,"step":1,"slideTitle":"Persistence modes","stepTitle":"Three requests arrive","notes":["Three requests arrive. They run the same steps. The only difference is how often the author chose to save.","The three modes are: no saving, save once at the end, and save after every activity."]},{"slide":4,"step":2,"slideTitle":"Persistence modes","stepTitle":"The trigger runs","notes":["Point at the three lanes. Each starts its work.","The lane that saves after every activity saves right now. The other two carry on."]},{"slide":4,"step":3,"slideTitle":"Persistence modes","stepTitle":"Compute quote","notes":["A small calculation happens. The save-every-activity lane saves again. The others have written nothing yet."]},{"slide":4,"step":4,"slideTitle":"Persistence modes","stepTitle":"Save quote","notes":["Point at the step that records the result. All three have now done it once.","If something outside Elsa happens in a step, such as sending an email, it can happen twice after a failure. So those actions should be safe to repeat."]},{"slide":4,"step":5,"slideTitle":"Persistence modes","stepTitle":"Respond 200, then Done","notes":["Point at the first lane. It needs no saving at all, so the customer is answered at once.","The other two hold the reply until their save is done. The customer only gets an answer once the work is safe."]},{"slide":4,"step":6,"slideTitle":"Persistence modes","stepTitle":"The saves land, and the replies go out","notes":["Point at the database. The first lane did no database work. The middle one did a small amount. The save-every-activity lane did the most, since it saves most often.","So you choose between safety and cost for each process."]},{"slide":5,"step":1,"slideTitle":"Database commands","stepTitle":"","notes":["These numbers count database commands for one run of a process. They are not time. Please do not read them as speed.","For simple runs and requests, the new kernel needs far less database work than both Elsa 3 and today's Elsa 4. For the fork-and-wait case, it is about level with Elsa 3 once its later history writing is included.","Elsa 3 needs fewer steps than today's Elsa 4 partly because it protects less: its saves aren't all-or-nothing. Also, part of the new kernel's history-keeping happens later and isn't counted here."]},{"slide":5,"step":2,"slideTitle":"Database commands","stepTitle":"","notes":["Now the mode that saves after every activity. Here the new kernel is about level with Elsa 3, and far below today's Elsa 4.","Again these are database commands, not time, and the history work that happens later isn't counted."]},{"slide":5,"step":3,"slideTitle":"Database commands","stepTitle":"","notes":["Point at the big-batch numbers. When many orders start at the same moment, the new kernel groups them into very few database commands.","This is a different database and a different test from the previous chart, so please do not compare the two."]},{"slide":6,"step":1,"slideTitle":"Why it is safe, and what is next","stepTitle":"","notes":["Point at the check that stops a replaced server. Imagine Server A freezes. Server B takes over its work. Then A wakes up and tries to save.","The check notices A is out of date, and A's save is refused. Nothing from it lands. That is how work stays safe.","Remember, this is a prototype and a proposed design. Next come more hardening, a written proposal with documentation, and then a first release.","One option for later: because every save goes through one narrow door and each group of work has a single writer, the engine could keep its running work in its own replicated log, the way Camunda's Zeebe does, instead of in a separate database. Screens and reports would still read from a separate store. That option is planned, not designed yet."]},{"slide":7,"step":1,"slideTitle":"Q&A: how I used AI","stepTitle":"In one breath","notes":["I worked with AI coding agents as a team. I set the goals and made every design decision.","The agents drafted the design, built and tested the prototype, measured the numbers, and reviewed each other's work.","Nothing in this demo is a guess: every figure comes from a measurement you can rerun."]},{"slide":7,"step":2,"slideTitle":"Q&A: how I used AI","stepTitle":"The short version","notes":["I used AI agents, mainly Claude Code with Codex alongside, as a small engineering team, with me as the architect and decision maker.","I set the direction: a clean-slate core, correctness first, then fewer database calls.","The agents wrote the design, built a working prototype, and tested it with a simulation that throws crashes, frozen servers and lost connections at it, 200,000 runs at a time.","Every real choice came back to me as a short list of options with a recommendation, and I decided.","Each change was reviewed by two independent AI reviewers until neither found a problem. Those reviews caught real mistakes, including claims in this demo that sounded better than the evidence.","For today's chart, an agent installed Elsa 3, ran the same three workflows, and counted every database command. The receipt is in the repository.","The AI made us much faster. The judgement and the responsibility stayed with me."]},{"slide":7,"step":3,"slideTitle":"Q&A: how I used AI","stepTitle":"Follow-up: did AI write all the code? Can we trust it?","notes":["All the code? Most of the prototype and these pages, yes. But it is a prototype and a proposed design, not shipped product code. Turning it into the product goes through the same reviews and decisions.","Trust? A simulation checks the core rules after every single action. Mutation tests break one rule at a time and prove each is caught. And every change is reviewed twice. Where the AI was wrong, those checks found it."]},{"slide":7,"step":4,"slideTitle":"Q&A: how I used AI","stepTitle":"Follow-up: made things up? Your role? Again?","notes":["Made things up? That is the risk, so we built against it: numbers need a measurement with a source, and claims are checked against the design and the code. That is why the slides say database commands, not faster.","My role? Architect and product owner: I chose what to build and the trade-offs, approved each design decision, and pushed back when something did not feel right, for example asking to rethink the core from scratch and to compare honestly against Elsa 3.","Again? Yes. It compressed weeks of design, prototyping and measurement into days. It works best when you are very clear about what you want, and strict about evidence.","Tip: show the Elsa 3 receipt on GitHub, docs/reports/clean-slate-kernel/evidence/elsa3-cost/RECEIPT.md."]}]
+;
+const $=id=>document.getElementById(id);
+let idx=0,win=null,lastHash=null,fs=40;
+try{const v=parseInt(localStorage.getItem('tp-fs'),10);if(v>=16&&v<=120)fs=v}catch(e){}
+function setFs(v){fs=Math.max(16,Math.min(120,v));$('m').style.fontSize=fs+'px';try{localStorage.setItem('tp-fs',fs)}catch(e){}}
+function render(){
+ const d=DATA[idx],k=DATA.filter(x=>x.slide===d.slide).length;
+ $('pos').textContent=(d.slide>6?'After the demo':'Slide '+d.slide+'/6')+' · step '+d.step+'/'+k;
+ $('title').textContent=d.slideTitle;
+ $('st').textContent=d.stepTitle;$('st').style.display=d.stepTitle?'':'none';
+ const c=$('cur');c.textContent='';
+ d.notes.forEach(t=>{const p=document.createElement('p');t.split(/(?<=[.!?])\s+/).forEach(x=>{const m=/^Point at (.+?)\.?$/.exec(x),tip=/^Tip:\s*(.+)$/.exec(x);if(m||tip){const q=document.createElement('span');q.className='cue';q.textContent=(m?'\u{1F449} ':'\u{1F4A1} ')+(m?m[1]:tip[1]);p.appendChild(q)}else{p.appendChild(document.createTextNode((p.lastChild&&p.lastChild.nodeType===3?' ':'')+x))}});c.appendChild(p)});
+ const n=DATA[idx+1];
+ if(n){const f=n.notes.join(' ').split(/(?<=[.!?])\s+/).filter(x=>!/^(Point at|Tip:)/.test(x)).join(' ')||n.notes[0];$('next').textContent='Next: '+(f.length>180?f.slice(0,177)+'…':f)}else $('next').textContent='Next: (end)';
+ $('m').scrollTop=0;
+}
+function go(i){idx=Math.max(0,Math.min(DATA.length-1,i));render()}
+function fromHash(h){
+ const m=/^#slide-(\d+)(?:\/step-(\d+))?$/.exec(h||'');
+ const s=m?+m[1]:1,t=m&&m[2]?+m[2]:1;
+ const i=DATA.findIndex(x=>x.slide===s&&x.step===t);
+ if(i>=0&&i!==idx)go(i);
+}
+function poll(){
+ let following=false;
+ try{
+  if(win&&!win.closed){following=true;const h=win.location.hash;if(h!==lastHash){lastHash=h;fromHash(h)}}
+  else win=null;
+ }catch(e){win=null}
+ const s=$('status');s.textContent=following?'following the demo window':'manual';s.className=following?'f':'';
+}
+setInterval(poll,250);
+$('open').onclick=()=>{win=window.open('kernel-demo.html','kernel-demo');lastHash=null};
+$('plus').onclick=()=>setFs(fs+4);$('minus').onclick=()=>setFs(fs-4);
+let t0=0,acc=0,run=false;
+function tick(){const ms=acc+(run?Date.now()-t0:0),s=Math.floor(ms/1000);$('clock').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+setInterval(tick,250);
+addEventListener('keydown',e=>{
+ if(e.metaKey||e.ctrlKey||e.altKey)return;
+ const k=e.key;
+ if(k==='ArrowRight'||k==='PageDown'||k===' '){go(idx+1);e.preventDefault()}
+ else if(k==='ArrowLeft'||k==='PageUp'){go(idx-1);e.preventDefault()}
+ else if(k==='Home'){go(0);e.preventDefault()}
+ else if(k==='End'){go(DATA.length-1)}
+ else if(k==='T'){acc=0;run=false;tick()}
+ else if(k==='t'){if(run){acc+=Date.now()-t0;run=false}else{t0=Date.now();run=true}tick()}
+ else if(k==='m'||k==='M'){document.body.classList.toggle('mirror')}
+ else if(k==='+'||k==='='){setFs(fs+4)}
+ else if(k==='-'){setFs(fs-4)}
+});
+setFs(fs);render();
+</script></body></html>
