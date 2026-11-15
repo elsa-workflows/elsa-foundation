@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.StandaloneTriggers;
 
 namespace Elsa.Workflows.Runtime.Api.StandaloneTriggers;
 
-internal sealed record TriggerExecutionReference(string Id, string Kind, string? Status, DateTimeOffset ObservedAt, string? InspectionPath = null);
+internal sealed record TriggerExecutionReference(string Id, string Kind, string? Status, DateTimeOffset ObservedAt, string? InspectionPath = null, string? CleanupStatus = null);
 internal sealed record TriggerRecipientView(string Id, long Revision, string? SubscriptionId, TriggerTargetSelector? Target,
     string? CapturedVersion, string? CurrentVersion, string Admission, string Dispatch, string? PlannedExecutionIdentity,
     TriggerExecutionReference? ExecutionReference, IReadOnlyList<TriggerFinding> Findings, IReadOnlyList<TriggerAction> Actions,
