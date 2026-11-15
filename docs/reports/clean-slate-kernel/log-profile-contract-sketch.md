@@ -10,7 +10,7 @@ Release 1 remains Embedded and Cluster, with the same Native structured containe
 
 The prototype's [IKernelStore](../../../prototypes/kernel-model/src/Kernel.Durable/Store.cs) combines commit, lease ownership, inbox/event routing, membership and projection operations. [IActorRuntime](../../../prototypes/kernel-model/src/Kernel.Runtime/Seam.cs) places and activates scopes. EF Core and MongoDB implement the current store; see [Storage model](../../architecture/storage-model.md) for the physical inventory and [Ownership and fencing](../../architecture/ownership-and-fencing.md) for its protocol. Those remain the as-built references.
 
-The proposed separation is by guarantees, not SQL statements. It does not rename or split either prototype interface. A relational provider can implement all four contracts in one provider family, sharing transactions where available.
+The proposed separation is by guarantees, not SQL statements. It does not rename or split either prototype interface. A storage provider implements the four logical contracts as a whole unit, not four independent systems of authoritative state. A relational provider can implement all four in one provider family, sharing transactions where available.
 
 | Proposed contract | Responsibility | Relational implementation | Log profile direction — planned, not designed |
 |---|---|---|---|
@@ -20,6 +20,14 @@ The proposed separation is by guarantees, not SQL statements. It does not rename
 | Read models | Serve all non-owner queries, including lists, counts and run inspection, from committed read models; state any lag/currentness contract. | Projected rows and a committed journal tail where required. | An exporter reads committed log records into queryable views. |
 
 The two integration seams remain **IKernelStore** for persistence and **ownership in IActorRuntime** for placement/activation. Moving ownership from leases to leadership crosses both. The exact future API boundaries and their conformance suites are still to be designed.
+
+## Extensibility boundary
+
+The owner's 15 November principle is **“Replace whole layers and edges, never pieces of the commit.”** The [design sketch's seam table](design-sketch-draft-5.md#extensibility-boundary-owner-principle-15-november) is the proposal's canonical boundary. Timers, messages, events and subscriptions stay inside committed append, including provider-owned correlation-key state. The four-way logical split does not authorize an external scheduler as the kernel timer engine, an external broker as the core inbox or broker-owned subscriptions/bookmarks outside the fence.
+
+Ingress adapters may accept broker/webhook events or Quartz.NET/TickerQ schedule events as idempotent message inserts using the source's event ID, scoped by source where needed. Egress uses jobs or outbox obligations recorded in the owning atomic fenced batch, delivered at least once with stable effect keys; round 5 C propagation remains planned, not implemented here. This retains the accepted sender-atomic outbox rule below and makes no exactly-once external-effect promise. These are adapter directions, not built adapters or API changes.
+
+Wake notification remains a hint: database profiles recover through store polling; planned Log consumes its authoritative committed log without inbox polling. Test-clock injection does not replace the store's production ownership-time checks or fence. Storage is replaceable as a whole, alongside actor runtimes, execution models and actor types; splitting commit-owned authority across stores would reintroduce lost/ghost timers and unfenced coordination complexity.
 
 ## Sends: recorded once, delivered later
 

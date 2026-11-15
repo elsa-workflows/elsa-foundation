@@ -57,6 +57,24 @@ The prototype's implementation coverage and limits are recorded in its [README](
 
 Why the durable layer is ours whatever the runtime: Orleans grain calls are at most once, a grain saves its state on its own with an ETag, and saving state and sending a message are never one atomic act; Orleans can also briefly run two activations of one grain when the network splits. Proto.Actor's persistence is event sourcing per actor, and its messages are not durable. So layer 1 only decides where an actor runs and wakes it up; every guarantee comes from layer 2, which works the same on any runtime.
 
+### Extensibility boundary (owner principle, 15 November)
+
+**“Replace whole layers and edges, never pieces of the commit.”** This is an input to the design proposal; it does not approve the design or implement adapters.
+
+Timers, messages, events and subscriptions remain inside the committed-append contract. A storage provider is replaced as a whole unit implementing the four logical contracts in the [round 5 H paper](log-profile-contract-sketch.md#extensibility-boundary); those contracts are not four independent systems of authoritative state. Commit-owned changes remain under the provider's fenced atomic batch in their owning partition, including correlation-key event/subscription state. Neither an external broker as the core inbox nor Quartz.NET or TickerQ as the kernel timer engine is a supported seam.
+
+| Seam | Allowed replacement or edge — adapter direction, not newly built |
+|---|---|
+| Storage unit | Replace the whole provider while preserving committed append, ownership, delivery and read-model guarantees. Log remains planned, not designed. |
+| Actor runtime | Replace placement, activation and transport through the runtime seam, while retaining the durable layer's authority checks. |
+| Execution models and actor types | Add or replace what actors do; their state changes and durable obligations still cross the commit boundary. |
+| Ingress | Brokers, webhooks, Quartz.NET or TickerQ may supply external events or schedules. Each event becomes an idempotent message insertion keyed by the source's event ID, scoped by source where needed; no new wire encoding is defined here. |
+| Egress | External delivery uses a job or outbox obligation recorded in the fenced commit before delivery. It is at least once with a stable effect key; round 5 C's effect-key propagation is planned, not implemented here. External exactly-once effects are not promised. |
+| Wake notification | A pluggable between-node notifier is only a hint. Current database profiles rely on store polling; planned Log relies on authoritative committed-log consumption, not notification. |
+| Test clock | Controlled clocks support tests. Injection does not replace the store's production ownership-time checks or atomic fence with untrusted wall-clock decisions. |
+
+Splitting authoritative timers, inboxes or subscriptions across external stores would leave them outside the commit's fence, reintroducing lost or ghost timers and coordination/outbox complexity. H's accepted outbox is different: the owning fenced batch atomically records the obligation, then delivery may follow with deduplication. It does not delegate timer, message or subscription authority to an external scheduler or broker. The held ADR proposal will carry this principle when the post-hardening design packet is prepared.
+
 ### The seam between layers 1 and 2
 
 Layer 2 hands the runtime a set of **ownership scopes**, one per partition, and the runtime decides which node hosts each one. A scope is a partition of many actors: one conditional update fences them all, one poll covers their inboxes, and the commits of many actors go in one transaction, which is why 100 instances commit in 2 round trips on PostgreSQL. Every runtime works this way; Orleans hosts each partition as a grain.
