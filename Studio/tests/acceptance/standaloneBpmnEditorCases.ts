@@ -33,11 +33,16 @@ async function savePublishAndConsume(j: TriggerJourney, authored: Authored, expe
     new URL(response.url()).pathname.endsWith(`/design/workflows/drafts/${encodeURIComponent(authored.draftId)}`));
   await save.press("Enter"); const response = await completedSave;
   expect(response.ok(), await response.text()).toBe(true); await response.finished();
-  const saved = await j.api<{ state: WorkflowState }>(`/design/workflows/drafts/${authored.draftId}`);
-  const binding = (saved.state.rootActivity.structure!.payload.elements as { elementId: string; properties?: Record<string, string> }[])
-    .find(element => element.elementId === "service")?.properties?.["elsa.direct.binding"];
-  expect(binding, "The committed draft retains the worker binding before promotion").toBeTruthy();
-  expect(JSON.parse(binding!).formatVersion).toBe(2);
+  let saved: { state: WorkflowState } | undefined;
+  const bindingOf = (state: WorkflowState) =>
+    (state.rootActivity.structure!.payload.elements as { elementId: string; properties?: Record<string, string> }[])
+      .find(element => element.elementId === "service")?.properties?.["elsa.direct.binding"];
+  // A PUT already in flight may finish before the newly applied mapping's autosave. Promote only the real committed binding.
+  await expect.poll(async () => {
+    saved = await j.api<{ state: WorkflowState }>(`/design/workflows/drafts/${authored.draftId}`);
+    return bindingOf(saved.state);
+  }, { timeout: 45_000, message: "The committed draft retains the applied worker binding before promotion" }).toBeTruthy();
+  expect(JSON.parse(bindingOf(saved!.state)!).formatVersion).toBe(2);
   const version = await j.api<{ id: string }>(`/design/workflows/drafts/${authored.draftId}/promote`, "POST", { operationKey: randomUUID() });
   await j.api(`/interchange/bpmn/versions/${version.id}/publish-direct`, "POST", { requestId: randomUUID() });
   const trigger = await j.create("event", "Saved BPMN mapping consumer");
@@ -49,7 +54,7 @@ async function savePublishAndConsume(j: TriggerJourney, authored: Authored, expe
   await businessOutputs(j, run!.attempts[0].workerExecutionId, expected);
   await expect.poll(async () => (await j.api<{ execution: { status: string } }>(`/bpmn/executions/${id}/inspection`)).execution.status,
     { timeout: 45_000 }).toBe("TerminalSettled");
-  return saved.state;
+  return saved!.state;
 }
 
 export async function verifyDefaultAndNullWorkerEditor(j: TriggerJourney) {
