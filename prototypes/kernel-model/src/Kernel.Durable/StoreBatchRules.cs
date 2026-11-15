@@ -33,6 +33,8 @@ public static class StoreBatchRules
 
     public static void ValidateIdentity(InstanceRow row)
     {
+        if (row.IdentityMetadataRequired && !row.IdentityOnly)
+            throw new StoreException(Failure.Definite,"A terminal metadata protocol requires an identity-only row.");
         if (row is { IdentityOnly:true } identity && (identity.Retired || identity.Status==InstanceStatus.Running || identity.Creation!=0 || identity.Parent is not null ||
             identity.State!="null" || !CreationProtocol.IsPhysicalAddress(identity.Id) || !identity.Id.Contains("/key/",StringComparison.Ordinal)))
             throw new StoreException(Failure.Definite,"Identity-only rows must be state-free ended keyed runs.");
