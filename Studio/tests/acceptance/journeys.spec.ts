@@ -636,6 +636,19 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   await expect(name).toBeFocused();
   await name.press("Tab");
   await expect(description).toBeFocused();
+  for (const control of [startingPoint, name, description]) {
+    await control.focus();
+    const frame = control.locator("xpath=ancestor::fieldset[1]");
+    const focus = await frame.evaluate(element => {
+      const style = getComputedStyle(element);
+      const probe = document.createElement("span"); probe.style.color = "var(--studio-focus-ring-solid, var(--studio-accent))";
+      element.append(probe); const color = getComputedStyle(probe).color; probe.remove();
+      return { border: style.borderColor, focus: color, outline: style.outlineStyle };
+    });
+    expect(focus.border).toBe(focus.focus);
+    expect(focus.outline).toBe("none");
+  }
+  await capture(page, info, "create-focused-description");
   await page.keyboard.press("Escape");
   await expect(open).toBeFocused();
   await open.click();

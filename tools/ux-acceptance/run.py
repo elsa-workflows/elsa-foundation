@@ -36,7 +36,7 @@ CAPTURES = {
     'collections and connection creation': ['reference', 'no-matches', 'connections-list', 'secret-create', 'secret-list', 'secret-detail', 'secret-duplicate', 'invalid-name', 'completed', 'secret-created-toast', 'secret-dialog-over-toast', 'primary-action-with-toasts', 'toasts-above-expanded-dock', 'toasts-over-maximized-dock', 'notification-history'],
     'publication blockers explain how to correct agent settings': ['reference', 'blocked', 'instructions-focused', 'model-blocked', 'model-focused', 'completed'],
     'save template toast': ['reference', 'save-form', 'saved-toast', 'template-list', 'reopened-template'],
-    'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
+    'workflow template metadata defaults': ['reference', 'create-focused-description', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
     'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control', 'capability-reference'],
