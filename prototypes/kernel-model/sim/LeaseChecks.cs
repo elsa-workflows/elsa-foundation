@@ -7,6 +7,7 @@ public static class LeaseChecks
     {
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
+        await CheckConcurrentProcessDeaths(Check);
         const string id = "0/subject";
         long time = 100;
         var store = new InMemoryStore(1, () => time);
@@ -224,6 +225,30 @@ public static class LeaseChecks
         await Drain(replacement, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
         Check(oldJobs == 1 && oldEffects == 1 && newJobs == 1, "an already-running external effect can finish after expiry and overlap recovery");
         return failures == 0 ? 0 : 1;
+    }
+
+    private static async Task CheckConcurrentProcessDeaths(Action<bool, string> check)
+    {
+        var world = new World(new Config(2, 2, Flaw.None)) { Auto = true };
+        var owners = new[] { world.Of(0, 0), world.Of(1, 1) };
+        foreach (var actor in owners)
+        {
+            await actor.Runtime.ActivateAsync(actor.Partition);
+            var target = InstanceRef.In(actor.Partition, "fatal");
+            world.Apply(new("add", M: new($"birth-{actor.Node}", target, "dierun", Start: Fragile.Spec)));
+            await actor.Worker.PollAsync();
+            await actor.Worker.LoadAsync();
+            await actor.Worker.FlushAsync();
+            actor.Worker.RunTurn(target.Id);
+        }
+        // Both acknowledgements start their lethal jobs before the next public simulation action.
+        foreach (var actor in owners) await actor.Worker.FlushAsync();
+        world.Apply(new("tick", A: 1));
+        foreach (var survivor in owners.Where(a => !a.Dead)) await survivor.Worker.RunAsync();
+        var stopped = owners.All(a => a.Dead) && world.Store.Instances.Values.All(row => row.Revision == 1);
+        var result = world.Settle();
+        check(stopped && result is null && world.Store.Instances.Values.All(row => row.Status == InstanceStatus.Faulted),
+            $"both lethal-job owners stop before a completion can advance either row: stopped={stopped}, settlement={result ?? "healthy"}");
     }
 }
 
