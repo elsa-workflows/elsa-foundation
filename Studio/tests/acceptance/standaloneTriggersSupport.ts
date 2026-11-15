@@ -70,11 +70,26 @@ export class TriggerJourney {
   readonly profileLimitations: { state: string; reason: string; qualificationScope: string; evidence: string[] }[] = [];
   readonly hostLifecycle: HostReceipt[] = [];
   private pendingResponses: Promise<void>[] = [];
+  private editorUnavailableEpisodes = 0;
   constructor(readonly page: Page, readonly info: TestInfo) {
     if (!this.base || process.env.UX_ACCEPTANCE_OWNED !== "1" || !process.env.UX_SOURCE_SHA) throw new Error("Use the owned committed-source runner");
     this.stamp = `${info.project.name}-${randomUUID().slice(0, 8)}`;
     page.on("response", response => {
       const path = new URL(response.url()).pathname;
+      if (path === "/_content/Acme.TriggerEditor/studio/modules/acceptance-trigger-editor/module.js") {
+        this.pendingResponses.push((async () => {
+          let reason: string | undefined, error: string | undefined;
+          if (response.status() >= 400) {
+            try {
+              const body = await response.json() as { reason?: unknown; error?: unknown };
+              if (typeof body.reason === "string") reason = body.reason;
+              if (typeof body.error === "string") error = body.error;
+            } catch { /* Browser import failures may not retain a readable response body. */ }
+          }
+          this.requests.push({ kind: "optional-editor-asset", path, status: response.status(), reason, error,
+            retryAfter: response.headers()["retry-after"] });
+        })());
+      }
       if (!path.includes("/standalone-trigger")) return;
       this.pendingResponses.push((async () => {
         let result: unknown;
@@ -323,6 +338,33 @@ export class TriggerJourney {
     return trigger;
   }
   async open(id: string) { await this.page.goto(triggerPath(id)); await expect(this.page.getByRole("button", { name: "Edit configuration", exact: true })).toBeVisible(); }
+  async openInstalledConfigurationEditor(open: () => Promise<void>, expectedTopic?: string) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const asset = this.page.waitForResponse(response => new URL(response.url()).pathname ===
+        "/_content/Acme.TriggerEditor/studio/modules/acceptance-trigger-editor/module.js");
+      try { await open(); }
+      catch (error) { await asset.catch(() => undefined); throw error; }
+      const response = await asset;
+      if (response.status() !== 503) {
+        expect([200, 304]).toContain(response.status());
+        const editor = this.page.getByLabel("Acme topic", { exact: true });
+        await expect(editor).toBeVisible();
+        if (expectedTopic !== undefined) await expect(editor).toHaveValue(expectedTopic);
+        if (attempt) this.requests.push({ kind: "optional-editor-protected-read-recovered", failedAttempts: attempt,
+          status: response.status(), savedTopicPreserved: expectedTopic === undefined ? null : true });
+        return;
+      }
+      await expect(this.page.getByText("The optional configuration editor is unavailable. Your saved values are preserved; use the standard fields below or install the matching editor module.", { exact: true })).toBeVisible();
+      if (expectedTopic !== undefined) await expect(this.page.getByLabel("Topic", { exact: true })).toHaveValue(expectedTopic);
+      this.requests.push({ kind: "optional-editor-protected-read-unavailable", status: 503, attempt: attempt + 1,
+        savedTopicPreserved: expectedTopic === undefined ? null : true, nextAction: "normal full-page navigation", cause: "not inferred from the generic admission reason" });
+      await this.capture(`trigger-optional-editor-protected-read-${++this.editorUnavailableEpisodes}`);
+      expect(attempt, "The installed editor must recover through normal navigation after the observed protected-read refusal").toBeLessThan(2);
+      // Honor this endpoint's bounded Retry-After without changing package admission or the field assertion.
+      expect(response.headers()["retry-after"]).toBe("1");
+      await this.page.waitForTimeout(1_000);
+    }
+  }
   async openAuthoringInspector() {
     const panel = this.page.getByRole("complementary", { name: "Inspector panel", exact: true });
     await expect(panel).toBeVisible({ timeout: 45_000 });
