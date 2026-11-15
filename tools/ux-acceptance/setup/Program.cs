@@ -15,7 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 var request = JsonSerializer.Deserialize<SetupRequest>(await Console.In.ReadToEndAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))
               ?? throw new InvalidOperationException("An owned setup request is required.");
 var root = Path.GetFullPath(request.ContentRoot);
-if (request.Action is not ("seed" or "cleanup")) throw new InvalidOperationException("Unsupported acceptance setup action.");
+if (request.Action is not ("seed" or "cleanup" or "depart-creator")) throw new InvalidOperationException("Unsupported acceptance setup action.");
 var sourceOwnedId = request.ResourceId ?? $"ux-source-owned-{Guid.NewGuid():N}";
 if (!sourceOwnedId.StartsWith("ux-source-owned-", StringComparison.Ordinal) || sourceOwnedId.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-'))
     throw new InvalidOperationException("The source-owned acceptance identity is invalid.");
@@ -41,11 +41,42 @@ services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
 });
 await using var provider = services.BuildServiceProvider();
 var actors = new List<object>();
+if (request.Action == "depart-creator")
+{
+    if (string.IsNullOrWhiteSpace(request.TriggerId)) throw new InvalidOperationException("The exact owned creator trigger is required.");
+    await using var scope = provider.CreateAsyncScope();
+    var sp = scope.ServiceProvider;
+    sp.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
+    var store = sp.GetRequiredService<IStandaloneTriggerStore>();
+    var resourceScope = new TriggerScope(new("default"), "default");
+    var resource = await store.FindAsync(resourceScope, request.TriggerId) ?? throw new InvalidOperationException("The owned creator trigger is absent.");
+    var creator = "ux-acceptance-creator";
+    if (resource.Trigger.CreatedBy != creator || resource.Trigger.DesiredState != TriggerDesiredState.Enabled ||
+        resource.Subscriptions.Count != 1 || resource.Subscriptions[0].Grant?.Status != TriggerGrantStatus.Granted || resource.Subscriptions[0].Grant?.GrantedBy != creator)
+        throw new InvalidOperationException("The real creator and enabled, granted resource must exist before departure.");
+    var memberships = sp.GetRequiredService<IRevisionAwareTenantMembershipStore>();
+    var membership = await memberships.FindWithRevisionAsync("default", creator) ?? throw new InvalidOperationException("The real creator membership is absent.");
+    if (membership.Record.Status != TenantMembershipStatus.Active) throw new InvalidOperationException("The creator is not an active member.");
+    var saved = await memberships.SaveWithRevisionAsync(membership.Record with { Status = TenantMembershipStatus.Suspended }, membership.Revision);
+    if (saved.Status != IamRevisionSaveStatus.Saved) throw new InvalidOperationException("Creator departure revision was refused.");
+    var departed = await memberships.FindWithRevisionAsync("default", creator) ?? throw new InvalidOperationException("Creator membership disappeared.");
+    if (departed.Record.Status != TenantMembershipStatus.Suspended) throw new InvalidOperationException("Creator membership suspension was not retained.");
+    var after = await store.FindAsync(resourceScope, request.TriggerId) ?? throw new InvalidOperationException("The resource disappeared during creator departure.");
+    if (JsonSerializer.Serialize(after) != JsonSerializer.Serialize(resource))
+        throw new InvalidOperationException("Creator departure changed shared-resource authority.");
+    Console.WriteLine(JsonSerializer.Serialize(new { sourceOwnedTriggerId = sourceOwnedId,
+        departure = new { creator, membershipStatus = departed.Record.Status.ToString(), triggerId = after.Trigger.Id,
+            triggerRevision = after.Trigger.Revision, grantRevision = after.Subscriptions[0].Grant!.Revision,
+            grantState = after.Subscriptions[0].Grant!.Status.ToString(), resourceUnchanged = true } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    return;
+}
+
 var actorSpecifications = new[]
 {
     ("acceptance-reader", "default", new[] { "triggers:read", "triggers/deliveries:read" }),
     ("acceptance-denied", "default", Array.Empty<string>()),
-    ("acceptance-other-tenant", "ux-other", new[] { "*" })
+    ("acceptance-other-tenant", "ux-other", new[] { "*" }),
+    ("acceptance-creator", "default", new[] { "*" })
 };
 foreach (var (name, tenant, permissions) in actorSpecifications.Where(_ => request.Action == "seed"))
 {
@@ -109,5 +140,5 @@ await using (var scope = provider.CreateAsyncScope())
 }
 Console.WriteLine(JsonSerializer.Serialize(new { actors, sourceOwnedTriggerId = sourceOwnedId, physicalDatabase = "elsa.db" }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
-internal sealed record SetupRequest(string ContentRoot, string OwnerToken, string Action, string? ResourceId);
+internal sealed record SetupRequest(string ContentRoot, string OwnerToken, string Action, string? ResourceId, string? TriggerId);
 internal sealed record OwnerMarker(string OwnerToken, bool BackendStopped);

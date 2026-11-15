@@ -11,6 +11,7 @@
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj" />
     <None Update="nuplane.json" Pack="true" PackagePath="/" />
   </ItemGroup>
