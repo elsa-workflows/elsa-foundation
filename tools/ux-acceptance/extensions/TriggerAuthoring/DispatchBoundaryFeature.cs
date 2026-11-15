@@ -72,7 +72,7 @@ internal sealed class DispatchBoundaryGate(DispatchBoundaryOptions options, IHos
         {
             processId = Environment.ProcessId, options.NodeIdentity, bootId, sourceRevision = options.SourceRevision,
             deliveryId = item.OutboxItemId, recipientId = recipient.RecipientId, plannedExecutionId = recipient.StartIdentity.WorkflowExecutionId,
-            capturedTarget = recipient.Material, item.SourceFingerprint, selectionFingerprint = item.SubscriptionDelivery!.SelectionFingerprint,
+            capturedTarget = recipient.Material, sourceProvenance = recipient.SourceProvenance, item.SourceFingerprint, selectionFingerprint = item.SubscriptionDelivery!.SelectionFingerprint,
             sealFingerprint = seal.Fingerprint, phase, blockAfterFirstSeal = blocking, recordedAt = DateTimeOffset.UtcNow,
             claimExpiresAt = item.DeliveryVisibleAfter, claimOwnerId = item.DeliveringOwnerId, claimFencingToken = item.DeliveryFencingToken,
             cohortRecipients = item.SubscriptionDelivery.Recipients.Select(selected => new
