@@ -158,19 +158,24 @@ public sealed class EndpointSecurityTests
     }
 
     [Fact]
-    public void Activities_design_minimal_api_declares_39_owned_secure_routes_with_one_catalog_action_each()
+    public void Activities_design_minimal_api_declares_40_owned_secure_routes_with_one_catalog_action_each()
     {
         using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(serviceProvider);
         ActivitiesDesignApi.MapActivitiesDesignApi(routes);
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
 
-        Assert.Equal(39, endpoints.Length);
+        Assert.Equal(40, endpoints.Length);
         var dataContext = Assert.Single(endpoints, endpoint => endpoint.RoutePattern.RawText ==
             "/design/activities/drafts/{draftId}/activity-data/context");
         Assert.Equal([HttpMethods.Post], dataContext.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods);
         var dataPolicy = new PermissionPolicyCodec().Parse(Assert.Single(dataContext.Metadata.GetOrderedMetadata<IAuthorizeData>()).Policy!);
         Assert.Equal([PermissionKey.Normalize(ActivityDesignPermissions.Read)], dataPolicy.Descriptor!.Permissions);
+        var candidate = Assert.Single(endpoints, endpoint => endpoint.RoutePattern.RawText ==
+            "/design/activities/drafts/{draftId}/candidate-validation");
+        Assert.Equal([HttpMethods.Post], candidate.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods);
+        var candidatePolicy = new PermissionPolicyCodec().Parse(Assert.Single(candidate.Metadata.GetOrderedMetadata<IAuthorizeData>()).Policy!);
+        Assert.Equal([PermissionKey.Normalize(ActivityDesignPermissions.Manage)], candidatePolicy.Descriptor!.Permissions);
         foreach (var endpoint in endpoints)
         {
             var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
