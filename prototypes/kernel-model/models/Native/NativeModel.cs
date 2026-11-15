@@ -117,11 +117,11 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 12 gates staged chart evaluation; old recovery policies remain unchanged.</summary>
-    public int StateVersion => 12;
+    /// <summary>Version 13 gates mapped chart completion; old recovery policies remain unchanged.</summary>
+    public int StateVersion => 13;
     public object UpgradeState(string state, int fromVersion)
     {
-        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or 12)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
@@ -129,7 +129,7 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
         if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
         if (fromVersion < 7 && native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
-        if (native.CheckpointControl || native.Inboxes?.Values.Any(i => i.Receipts.Values.Any(r => r.Status == "Evaluating" || r.EvaluationStarted)) == true)
+        if (fromVersion < 12 && (native.CheckpointControl || native.Inboxes?.Values.Any(i => i.Receipts.Values.Any(r => r.Status == "Evaluating" || r.EvaluationStarted)) == true))
             throw new InvalidOperationException("Legacy native state contains unsupported evaluation data.");
         if (native.InterventionPolicy < 0 || native.InterventionPolicy > (fromVersion < 8 ? 2 : fromVersion < 9 ? 3 : fromVersion < 11 ? 4 : 5) ||
             fromVersion < 8 && NativeStatefulRecovery.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported stateful recovery data.");
