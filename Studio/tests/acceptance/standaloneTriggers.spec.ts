@@ -129,9 +129,9 @@ async function inspectActualRun(journey: TriggerJourney, delivery: DeliveryView,
   } else {
     await expect(journey.page.getByRole("group", { name: "Run workspace actions", exact: true })).toContainText(inspection.instance.status);
     await expect(journey.page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
-    await expect(journey.page.getByText("Loading workflow run...", { exact: true })).toHaveCount(0);
-    await expect(journey.page.getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
-    await expect(journey.page.getByText("Some visible execution evidence could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
+    await expect(journey.page.getByRole("tabpanel").getByText("Loading workflow run...", { exact: true })).toHaveCount(0);
+    await expect(journey.page.getByRole("tabpanel").getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
+    await expect(journey.page.getByRole("tabpanel").getByText("Some visible execution evidence could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
   }
   journey.requests.push({ kind: "actual-delivery-inspection-link", backend: "acceptance-primary", backendUrl: response.url(), studioUrl: journey.page.url(), executionId,
     sourceDeliveryId: delivery.id, recipientId, status: response.status() });
@@ -577,7 +577,7 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
       inputs: { message: { kind: "Input", name: "processMessage" }, count: { kind: "Literal", value: 7 } } });
   await page.reload(); await page.locator('.react-flow__node[data-id="service"]').press("Enter");
   await expect(page.getByRole("region", { name: "Saved service input mappings", exact: true })).toContainText("Configured JSON: 7");
-  await expect(page.getByText("Loading published versions…", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tabpanel").getByText("Loading published versions…", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Service publication", { exact: true })).toBeEnabled();
   await j.capture("bpmn-worker-input-reopened");
   const authoredState = await j.api<{ state: WorkflowState }>(`/design/workflows/drafts/${process.draftId}`);
@@ -614,7 +614,7 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
   await workerLink.click();
   await expect(page).toHaveURL(url => url.pathname === `/workflows/instances/${encodeURIComponent(workerId)}` && url.searchParams.get("backend") === "acceptance-primary");
   await expect(page.getByRole("group", { name: "Run workspace actions", exact: true })).toContainText("Completed");
-  await expect(page.getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("tabpanel").getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
   await page.locator('.wf-sequence-step[data-id="echo-message"], .react-flow__node[data-id="echo-message"]').first().press("Enter");
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   const maximize = page.getByRole("button", { name: "Maximize run details panel", exact: true });
