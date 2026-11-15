@@ -141,7 +141,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
   const contractEditorHandle = useRef<ActivityDefinitionContractEditorHandle | null>(null);
   const providerEditorRef = useRef<HTMLElement | null>(null);
   const variablesEditorRef = useRef<HTMLElement | null>(null);
-  const diagnosticsPanelRef = useRef<HTMLDivElement | null>(null);
+  const diagnosticsPanelRef = useRef<HTMLElement | null>(null);
   const providerPublicInterfaceRef = useRef<HTMLElement | null>(null);
   const diagnosticReturnRef = useRef<HTMLButtonElement | null>(null);
   const publicationToolbarRef = useRef<HTMLButtonElement | null>(null);
@@ -634,8 +634,9 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
     const details = panel?.querySelector<HTMLDetailsElement>("details");
     const summary = details?.querySelector<HTMLElement>("summary");
     if (details && !details.open) summary?.click();
-    summary?.focus();
-    panel?.scrollIntoView?.({ block: "center" });
+    const first = panel?.querySelector<HTMLElement>(".ad-diagnostic-item");
+    (first ?? summary)?.focus();
+    (first ?? panel)?.scrollIntoView?.({ block: "center" });
   };
   const draftErrorCount = draft.validation?.diagnostics.filter(item => activityDiagnosticSeverity(item.severity) === "Error").length ?? 0;
 
@@ -792,7 +793,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
         onBufferStateChange={updateCodeBufferState}
       />
     </section>
-    <div ref={diagnosticsPanelRef}><ActivityDefinitionDiagnosticsPanel
+    <ActivityDefinitionDiagnosticsPanel
+      panelRef={diagnosticsPanelRef}
       validation={draft.validation}
       failure={validationFailure}
       localDiagnostics={codeBufferState.dirty ? [{
@@ -806,7 +808,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
       canReturn={Boolean(diagnosticReturnRef.current)}
       onFocus={focusDiagnostic}
       onReturn={returnToDiagnostic}
-    /></div>
+    />
     {revisionSensitiveActionsBlocked && contractLocallyValid && (status === "failed" || status === "offline" || status === "conflict" || codeBufferState.dirty) ? <div className="ad-revision-gate" role="status"><span>Revision-sensitive lifecycle actions and navigation are paused until this exact draft revision is saved.</span><button type="button" onClick={discardLocalChanges} disabled={status === "pending" || status === "saving"}>{status === "pending" || status === "saving" ? "Waiting for save before navigation" : "Discard local changes and return"}</button></div> : null}
     {migrationOpen ? <ActivityDefinitionProviderMigrationDialog context={context} draft={draft} activityEditors={activityEditors} onClose={() => setMigrationOpen(false)} onCreated={created => { setMigrationOpen(false); onOpenDraft(created.definitionId, created.draftId); }} /> : null}
     {testRunOpen ? <Suspense fallback={<div className="ad-dialog-backdrop" role="presentation"><section className="ad-dialog" role="status">Loading the Activity Definition Test Run workbench…</section></div>}><ActivityDefinitionTestRunDialog

@@ -1,5 +1,5 @@
 import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, Info, LocateFixed, Undo2 } from "lucide-react";
 import type {
   StudioActivityDiagnostic,
@@ -24,6 +24,7 @@ export interface ActivityDefinitionLocalDiagnostic {
 
 export function ActivityDefinitionDiagnosticsPanel({
   validation,
+  panelRef,
   failure,
   localDiagnostics = [],
   focusAnnouncement,
@@ -32,6 +33,7 @@ export function ActivityDefinitionDiagnosticsPanel({
   onReturn
 }: {
   validation?: ActivityDraftValidationView | null;
+  panelRef?: RefObject<HTMLElement | null>;
   failure?: ActivityDraftValidationFailure | null;
   localDiagnostics?: ActivityDefinitionLocalDiagnostic[];
   focusAnnouncement?: string | null;
@@ -54,7 +56,7 @@ export function ActivityDefinitionDiagnosticsPanel({
   const counts = countSeverities(diagnostics, localDiagnostics);
   const groups = groupDiagnostics(diagnostics);
 
-  return <section className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
+  return <section ref={panelRef} className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
     <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>
         <h2 id="activity-diagnostics-title"><ChevronRight className="ad-diagnostics-chevron" size={14} aria-hidden />Draft diagnostics</h2>
@@ -134,7 +136,7 @@ function DiagnosticItem({
   const context = diagnosticContext(diagnostic);
   const action = diagnostic.metadata?.actionLabel?.trim();
 
-  return <li className={`ad-diagnostic-item is-${severity}`}>
+  return <li tabIndex={-1} className={`ad-diagnostic-item is-${severity}`}>
     <div className="ad-diagnostic-item-heading">
       <span className="ad-diagnostic-severity">{severityIcon(severity)} {severityLabel(severity)}</span>
       <code className="ad-diagnostic-code">{code}</code>
@@ -144,7 +146,7 @@ function DiagnosticItem({
     <span className="ad-diagnostic-subject">{context}</span>
     <button
       type="button"
-      aria-label={`Focus ${code}`}
+      aria-label={action && action.length <= 80 ? action : `Focus ${code}`}
       onClick={event => void onFocus(diagnostic, event.currentTarget)}
     >
       <LocateFixed size={15} aria-hidden /> {action && action.length <= 80 ? action : "Go to setting"}

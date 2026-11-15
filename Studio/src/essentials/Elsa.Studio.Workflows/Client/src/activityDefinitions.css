@@ -392,6 +392,7 @@
 }
 
 .ad-draft-editor.is-graph-designer .ad-diagnostics-panel {
+  overflow: auto;
   max-height: 35%;
   flex: 0 0 auto;
   margin: 0;

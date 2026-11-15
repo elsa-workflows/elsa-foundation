@@ -913,8 +913,9 @@ describe("Activity Definitions experience", () => {
 
   it.each(["Error", "error"])("blocks applying a fork with migration errors (%s)", async severity => {
     const source = definition({ contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" } }, [{ action: "fork-definition", allowed: true }]);
-    const candidate = forkPreview();
-    candidate.providerMigration.diagnostics = [{ code: "activity.test.invalid", severity: severity as "Error", message: "Correct the conversion.", subject: { kind: "ActivityDefinition", id: "definition-1" }, metadata: {} }];
+    const candidate = { ...forkPreview(), providerMigration: { ...forkPreview().providerMigration,
+      diagnostics: [{ code: "activity.test.invalid", severity, message: "Correct the conversion.", subject: { kind: "ActivityDefinition", id: "definition-1" }, metadata: {} }]
+    } };
     const postJson = vi.fn(async () => candidate);
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities(true, true);

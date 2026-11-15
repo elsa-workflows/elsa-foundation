@@ -44,6 +44,7 @@ describe("ActivityDefinitionDiagnosticsPanel", () => {
     expect(rendered.querySelector('[aria-label="Diagnostic severity counts"]')?.textContent).toBe("1 error");
     expect(rendered.querySelector(".ad-diagnostic-item.is-error")).not.toBeNull();
     expect(rendered.querySelector(".ad-diagnostic-item button")?.textContent).toContain("Edit variable initial value");
+    expect(rendered.querySelector(".ad-diagnostic-item button")?.getAttribute("aria-label")).toBe("Edit variable initial value");
   });
 
   it("does not repeat headings or invent errors for a rejected informational result", () => {

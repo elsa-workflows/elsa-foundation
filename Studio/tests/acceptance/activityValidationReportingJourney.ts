@@ -17,6 +17,8 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   const authorization = response.request().headers().authorization;
   const headers: Record<string, string> = authorization ? { Authorization: authorization } : {};
   await expect(page.locator("#activity-draft-title")).toContainText("Validation guidance");
+  await expect(page.getByRole("region", { name: "Provider implementation editor", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create Sequence block", exact: true })).toBeVisible();
   await capture(page, info, "reference");
 
   const validateSaved = async () => {
@@ -54,6 +56,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   };
   await seed("variable");
   await expect(page.getByText("The variable initial value is not a valid expression.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit variable initial value", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "variable-blocker");
   await page.getByRole("button", { name: "Edit variable initial value", exact: true }).press("Enter");
   await expect(page.getByRole("tab", { name: "Variables", exact: true })).toHaveAttribute("aria-selected", "true");
@@ -64,6 +67,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
 
   await seed("output");
   await expect(page.getByText("The output value source is missing or is not a valid expression.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Edit output value source", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "output-blocker");
   await page.getByRole("button", { name: "Edit output value source", exact: true }).press("Enter");
   await expect(page.getByRole("tab", { name: "Outputs (2)", exact: true })).toHaveAttribute("aria-selected", "true");
