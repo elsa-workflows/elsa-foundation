@@ -30,7 +30,8 @@ write gates. The Runtime EF writer compares the actual poison row, accepted sour
 fence in the same transaction as the first faulted execution, blocking incident and replay marker;
 model-owned workers also require the actual live parent decision and retained model-work source.
 A condition carries the actual failed initial scheduler work retained by the drainer in poison
-metadata. That evidence proposes a fault; it grants no independent start authority. Both writers
+metadata. Its full payload is excluded from incident/checkpoint diagnostic metadata and remains
+private to the parked decision and admission proof. That evidence proposes a fault; it grants no independent start authority. Both writers
 check its exact source-bound pin, input lineage, scope and authority and refuse unrelated effects.
 Only an authorized typed model result may accompany a model worker's first fault.
 

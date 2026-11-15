@@ -574,6 +574,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     private static Dictionary<string, string> NewMetadata(string incidentId, RuntimeSchedulerPoisonRecord record)
     {
         var metadata = record.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        // Retained command inputs authorize the physical fault; they are not diagnostic/value-capture metadata.
+        metadata.Remove(Elsa.Workflows.Runtime.Services.Triggers.InitialStartFaultAuthority.WorkSnapshotMetadata);
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         metadata[RuntimeMetadataKeys.CheckpointReason] = IncidentFailureType;
         metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;

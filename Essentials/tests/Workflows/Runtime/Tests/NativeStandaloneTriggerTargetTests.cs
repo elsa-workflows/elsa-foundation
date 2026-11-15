@@ -70,6 +70,23 @@ public sealed class NativeStandaloneTriggerTargetTests
     }
 
     [Fact]
+    public async Task Retained_initial_work_remains_private_to_admission_and_is_absent_from_incident_diagnostics()
+    {
+        const string sentinel = "private-initial-input-3582-sentinel";
+        using var fixture = await Fixture.CreateAsync(inputValue: sentinel);
+        var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
+        var envelope = NativeIngressTargetEvidence.ReadEnvelope(seal);
+        var commit = await AssertProtectedFirstFaultAsync(fixture, envelope, false);
+        Assert.Contains(sentinel, commit.ExpectedInitialStartFault!.Poison.Metadata[InitialStartFaultAuthority.WorkSnapshotMetadata]);
+        var incident = Assert.Single(await fixture.Incidents.ListAsync(envelope.WorkflowExecutionId));
+        var view = Elsa.Workflows.Runtime.Api.Models.IncidentStateView.From(incident, canInspectSensitiveValues: true);
+        Assert.DoesNotContain(InitialStartFaultAuthority.WorkSnapshotMetadata, commit.Metadata.Keys);
+        Assert.DoesNotContain(InitialStartFaultAuthority.WorkSnapshotMetadata, incident.Metadata.Keys);
+        Assert.DoesNotContain(InitialStartFaultAuthority.WorkSnapshotMetadata, view.Metadata.Keys);
+        Assert.DoesNotContain(sentinel, string.Join(" ", view.Metadata.Values));
+    }
+
+    [Fact]
     public async Task An_unsupported_initial_origin_cannot_prevent_the_original_poison_record()
     {
         using var fixture = await Fixture.CreateAsync();
@@ -476,7 +493,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         new(new(state.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>()),
             null, [], [], [], [], [], null, null, null, null, null, consumed), [], new Dictionary<string, string>());
 
-    private static async Task AssertProtectedFirstFaultAsync(Fixture fixture, WorkflowExecutionCommandEnvelope envelope, bool failStart)
+    private static async Task<RuntimeCheckpointCommit> AssertProtectedFirstFaultAsync(Fixture fixture, WorkflowExecutionCommandEnvelope envelope, bool failStart)
     {
         var id = envelope.WorkflowExecutionId;
         var ownership = Assert.IsType<InMemoryExecutionLivenessStateStore>(fixture.Executions.ExecutionLivenessStateStore);
@@ -548,6 +565,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.Empty((await fixture.Queue.ListAsync(new(id))).Items);
         Assert.DoesNotContain(fixture.Executions.CheckpointState.OutboxItems.Values,
             item => item.Intent?.WorkflowExecutionId == id && item.Intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
+        return candidate;
     }
 
     private sealed class UnsupportedFaultStore : IRuntimeCheckpointCommitStore
@@ -594,7 +612,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         internal RuntimeCoalescingSession CurrentSession => coalescingAccessor.Current!;
         internal IDisposable BeginCheckpoint(string executionId) => coalescingAccessor.Push(new RuntimeCoalescingSession(executionId, Queue, new PersistenceModeOptions()));
         private Fixture() => Actors = new(Executor);
-        internal static async Task<Fixture> CreateAsync(string tenant = "tenant", bool coalescing = false)
+        internal static async Task<Fixture> CreateAsync(string tenant = "tenant", bool coalescing = false, string inputValue = "business-value")
         {
             var fixture = new Fixture();
             var contract = new WorkflowExecutableInputContract(1, [new("AccountId", new("String"), true)]);
@@ -605,7 +623,7 @@ public sealed class NativeStandaloneTriggerTargetTests
                 new Dictionary<string, string>(), contract, [], IncidentStrategyBuiltIns.FaultReference));
             var scope = new PersistenceScope("tenant"); var partition = new WorkflowExecutionPartition("tenant");
             var schema = new ValueTypeDescriptor("Test.Payload", schemaVersion: 1);
-            var payload = JsonSerializer.SerializeToElement(new { payload = new { account = "business-value" } });
+            var payload = JsonSerializer.SerializeToElement(new { payload = new { account = inputValue } });
             var authority = new WorkflowExecutionAuthoritySnapshot("standalone-trigger", "source-actor");
             var fingerprint = RuntimeStandaloneIngressSource.ComputeRequestFingerprint(scope, tenant, "trigger", "test", "occurrence", schema, payload, authority);
             var source = new RuntimeStandaloneIngressSource(1, "admission", "dispatch", Now, scope, tenant, partition,
@@ -613,7 +631,7 @@ public sealed class NativeStandaloneTriggerTargetTests
             fixture.Recipient = new("recipient", "subscription", 1, 1, "definition", "native", "slot", 1, "activation", identity,
                 new("reference", "Published", "publication", "1", "definition", "version", "1", "activation", "slot"),
                 RuntimeIngressAdmission.ComputeInputContractFingerprint(contract), 1, 1,
-                new Dictionary<string, JsonElement> { ["AccountId"] = JsonSerializer.SerializeToElement("business-value") }, authority,
+                new Dictionary<string, JsonElement> { ["AccountId"] = JsonSerializer.SerializeToElement(inputValue) }, authority,
                 tenant, partition, new(1, scope, source.OutboxItemId, "subscription"));
             var delivery = new RuntimeSubscriptionDelivery(1, source.OutboxItemId, source.Fingerprint, scope, [fixture.Recipient], [],
                 [new(fixture.Recipient.RecipientId, RuntimeRecipientPhase.Pending)]);
