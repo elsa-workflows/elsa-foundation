@@ -107,8 +107,9 @@ internal sealed class CheckpointCrashObservation(CheckpointCrashSettings options
             var persisted = await context.WorkflowExecutionStates.AsNoTracking().AnyAsync(item => item.Id == row.Id, ct);
             if (persisted || commits != 0 || queued.Length == 0)
                 throw new InvalidOperationException("The crash witness requires a durable native queue before its first checkpoint.");
-            if (!queued.Any(item => item.CommandKind == "Checkpoint"))
-                throw new InvalidOperationException("The durable initial checkpoint command must have entered the native queue.");
+            logger.LogInformation("Owned checkpoint witness observed committed native queue kinds {QueueKinds}", string.Join(",", queued.Select(item => item.CommandKind)));
+            if (!queued.Any(item => item.CommandKind is "Start" or "Checkpoint"))
+                throw new InvalidOperationException("The durable native Start or its checkpoint continuation must remain in the queue before its first commit.");
             var snapshot = new CheckpointCut(EfRelationalIdentity.Decode(row.WorkflowExecutionId),
                 new OriginCut(Decode(origin, "sourceOutboxItemId"), Decode(origin, "recipientId"), Decode(origin, "sourceFingerprint"),
                     Decode(origin, "selectionFingerprint")), queued, null);
