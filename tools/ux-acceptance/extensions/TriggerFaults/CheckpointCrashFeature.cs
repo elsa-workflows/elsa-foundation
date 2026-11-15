@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Acme.TriggerFaults;
 
@@ -48,7 +49,11 @@ internal sealed class CheckpointSaveObserver(CheckpointCrashObservation observat
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData data,
         InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
-        if (data.Context is RuntimeSqliteDbContext context) await observation.BeforeSaveAsync(context, cancellationToken);
+        if (data.Context is RuntimeSqliteDbContext context)
+        {
+            try { await observation.BeforeSaveAsync(context, cancellationToken); }
+            catch (Exception exception) { observation.RecordFailure(exception); throw; }
+        }
         return result;
     }
 }
@@ -59,15 +64,27 @@ internal sealed class CheckpointTransactionObserver(CheckpointCrashObservation o
         CancellationToken cancellationToken = default) => observation.AfterCommitAsync(data.TransactionId, cancellationToken);
 }
 
-internal sealed class CheckpointCrashObservation(CheckpointCrashSettings options, IHostEnvironment environment)
+internal sealed class CheckpointCrashObservation(CheckpointCrashSettings options, IHostEnvironment environment, ILogger<CheckpointCrashObservation> logger)
 {
     private readonly ConcurrentDictionary<Guid, CheckpointCut> pending = new();
     private readonly string bootId = Guid.NewGuid().ToString("N");
     private int selected;
+    private int observations;
+
+    public void RecordFailure(Exception exception) => logger.LogError(exception, "Owned checkpoint crash witness failed before its gate");
 
     public async Task BeforeSaveAsync(RuntimeSqliteDbContext context, CancellationToken ct)
     {
         var transaction = context.Database.CurrentTransaction;
+        foreach (var entry in context.ChangeTracker.Entries<WorkflowExecutionStateEntity>().Where(e => e.State is EntityState.Added or EntityState.Modified))
+        {
+            if (Interlocked.Increment(ref observations) > 32) break;
+            using var body = JsonDocument.Parse(entry.Entity.ContentJson);
+            var actual = body.RootElement.TryGetProperty("ingressOrigin", out var origin) && origin.ValueKind == JsonValueKind.Object
+                ? Decode(origin, "sourceOutboxItemId") : null;
+            logger.LogInformation("Owned checkpoint witness observed state {RowState}, transaction {HasTransaction}, origin {ActualOrigin}, expected {ExpectedOrigin}",
+                entry.State, transaction is not null, actual, options.SourceOutboxItemId);
+        }
         if (transaction is null) return;
         if (pending.TryGetValue(transaction.TransactionId, out var staged))
         {
@@ -114,7 +131,9 @@ internal sealed class CheckpointCrashObservation(CheckpointCrashSettings options
         var selected = context.Database.GetDbConnection();
         var settings = new DbConnectionStringBuilder { ConnectionString = selected.ConnectionString };
         settings["Mode"] = "ReadOnly"; settings["Cache"] = "Private";
-        await using var connection = DbProviderFactories.GetFactory(selected).CreateConnection()
+        var factory = DbProviderFactories.GetFactory(selected)
+            ?? throw new InvalidOperationException("The selected SQLite connection does not expose its public provider factory.");
+        await using var connection = factory.CreateConnection()
             ?? throw new InvalidOperationException("The selected SQLite provider cannot create a read-only observation connection.");
         connection.ConnectionString = settings.ConnectionString;
         await connection.OpenAsync(ct);
