@@ -316,6 +316,7 @@ test("standalone HTTP modes", async ({ page }) => {
 
 test("standalone delivery lifecycle and recovery", async ({ page }) => {
   const j = journeys.get(page)!;
+  await verifyInitialCheckpointCrashRecovery(j);
   const target = await j.echo("Serving slot version changes"); const event = await j.create("event", "Retained delivery");
   await j.add(event.id, target.authored.definition.id, [source("message", ["metadata", "eventName"]), configured("count", 7)]); await j.enable(event.id);
   await j.event(String(event.configuration.eventName)); const initial = await j.waitDelivery(event.id);
@@ -480,7 +481,6 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     await j.host("restore-features");
   }
   await verifyConcurrentNodeClaims(j);
-  await verifyInitialCheckpointCrashRecovery(j);
   j.observed.push("The HTTP journey separately retains the successful-recipient versus shed-recipient retry suppression witness with exact source/root/checkpoint identities");
 });
 

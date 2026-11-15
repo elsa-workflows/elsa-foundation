@@ -53,7 +53,7 @@ export async function verifyInitialCheckpointCrashRecovery(j: TriggerJourney) {
       if (boundary.commitId) expect(physical.commitIds).toContain(boundary.commitId);
       const replay = await j.sourceRequest(trigger, payload, 202, { "Idempotency-Key": sourceKey });
       expect(replay.body).toMatchObject({ deliveryId: boundary.sourceOutboxItemId, replayed: true });
-      expect((await j.deliveries(trigger.id)).map(item => item.id)).toEqual([boundary.sourceOutboxItemId]);
+      expect((await j.deliveries(trigger.id)).map(item => item.id)).toEqual([delivery.id]);
       expect((await j.api<Instance>(path)).activities.filter(item => !item.provenance.parentActivityExecutionId)).toEqual(roots);
       await j.inspectDelivery(delivery, cut === "BeforeInitialCheckpoint" ? "delivery-before-initial-checkpoint-recovered" : "delivery-committed-checkpoint-ack-lost-recovered");
       j.requests.push({ kind: "actual-physical-initial-checkpoint-process-crash", cut, recovery, physical, root: roots[0],
