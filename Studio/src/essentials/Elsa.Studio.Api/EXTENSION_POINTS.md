@@ -44,6 +44,13 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Register: during `register(api)`. A top-level entry without a known placement is route-only. Navigation is discoverability, not an authorization boundary; routes keep their own gates.
 - Known implementations: every first-party Studio module; homes are listed in [Navigation](../../../docs/module-ui.md#navigation).
 
+### Expression scope preservation (SDK — Elsa.Studio.Hosting)
+
+- Kind: Contributor; optional `StudioExpressionEditorContribution.variableAdditionPreservation` on `api.expressionEditors`.
+- Signature: `{ language, revision, allows(expression: Readonly<Record<string, unknown>>): boolean }`.
+- The language owner proves whether introducing an unrelated variable preserves an authored expression. The shared native-block planner receives the verdict through the composing host; Workflows does not parse another module's source language. Missing, duplicate or faulting language support refuses the rewrite. Replacing support or its revision invalidates a preview.
+- Known implementation: JavaScript expression editor (`Extensions/ExpressionEditors.JavaScript`, cross-domain), admitting only its bounded `binding-pure-v1` numeric/declared-argument forms. This support does not validate or execute arbitrary source.
+
 ### Workflow canvas editor contributions (SDK — Elsa.Studio.Hosting)
 
 - Kind: Contributor; optional `workflow.designer.canvas-editors` slot (`api.workflowDesigner.canvasEditors`), owned by the Workflows module.

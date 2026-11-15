@@ -1,4 +1,4 @@
-import React, { createRef } from "react";
+import React, { createRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -23,6 +23,23 @@ afterEach(() => {
 });
 
 describe("SequenceDesigner", () => {
+  it.each([
+    { previous: "four", restored: ["one", "two"], primary: "two", key: "ArrowDown", expected: ["one", "two", "three"] },
+    { previous: "one", restored: ["two", "three"], primary: "two", key: "ArrowUp", expected: ["one", "two", "three"] }
+  ])("extends the host-restored range from $primary using $key instead of the abandoned pointer anchor", ({ previous, restored, primary, key, expected }) => {
+    const host = mountRangeHost();
+    flushSync(() => stepButton(previous).click());
+    flushSync(() => host.restore(restored, primary));
+    flushSync(() => stepButton(primary).dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey: true, bubbles: true })));
+    expect(host.selected()).toEqual(expected);
+  });
+  it("retains a modifier-click anchor while extending its own range", () => {
+    const host = mountRangeHost();
+    flushSync(() => stepButton("one").click());
+    flushSync(() => stepButton("three").dispatchEvent(new MouseEvent("click", { ctrlKey: true, bubbles: true })));
+    flushSync(() => stepButton("four").dispatchEvent(new MouseEvent("click", { shiftKey: true, bubbles: true })));
+    expect(host.selected()).toEqual(["three", "four"]);
+  });
   it("offers a workflow-start toggle only on editable trigger steps", () => {
     const onSetWorkflowStart = vi.fn();
     const trigger = workflowNode("endpoint", "Http Endpoint", { workflowStartEnabled: true });
@@ -417,4 +434,22 @@ function drop(target: HTMLButtonElement, dataTransfer: DataTransfer) {
   const event = new Event("drop", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
   flushSync(() => target.dispatchEvent(event));
+}
+
+function mountRangeHost() {
+  let restore!: (ids: string[], primary: string) => void;
+  let selected: string[] = [];
+  const canvasRef = createRef<HTMLDivElement>();
+  const initial = ["one", "two", "three", "four"].map(id => workflowNode(id, id));
+  function Host() {
+    const [selection, setSelection] = useState({ ids: [] as string[], primary: null as string | null });
+    selected = selection.ids;
+    restore = (ids, primary) => setSelection({ ids, primary });
+    return <SequenceDesigner nodes={initial.map(node => ({ ...node, selected: selection.ids.includes(node.id) }))}
+      selectedNodeId={selection.primary} canvasRef={canvasRef} onSelect={() => {}}
+      onSelectMany={(ids, primary) => setSelection({ ids, primary: ids.includes(primary) ? primary : ids.at(-1) ?? null })}
+      readOnly onOpenSlot={() => {}} />;
+  }
+  flushSync(() => root.render(<Host />));
+  return { restore: (ids: string[], primary: string) => restore(ids, primary), selected: () => selected };
 }
