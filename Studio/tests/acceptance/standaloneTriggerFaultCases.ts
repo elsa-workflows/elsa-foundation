@@ -85,7 +85,9 @@ export async function verifyHttpAdmissionAndQueueFaults(j: TriggerJourney) {
     const successfulBefore = await outputs(j, successfulId, { message: "Durably accepted before actual actor refusal", count: 29 });
     await expect.poll(async () => (await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${shed.deliveryId}`)).transport?.state).toBe("WriteCompleted");
     await j.inspectDelivery(held!);
-    await j.capture("http-accepted-subscriber-owed");
+    const owedRegion = j.page.getByRole("region", { name: `Recipient ${shed.recipientId}`, exact: true });
+    await expect(owedRegion).toContainText("Dispatch Committed"); await expect(owedRegion).toContainText("Not observed");
+    await j.capture("http-accepted-subscriber-owed", owedRegion);
     await pauseThroughUi(j, http.id);
     await j.host("release-trigger-fault"); // Waits the actual normal claim expiry; it changes no clock or stored lease.
     const recovered = await j.started(held!);
@@ -97,7 +99,10 @@ export async function verifyHttpAdmissionAndQueueFaults(j: TriggerJourney) {
     expect(successfulAfter.instance).toEqual(successfulBefore.instance);
     expect((await j.deliveries(http.id)).map(item => item.id).sort()).toEqual([repaired.id, held!.id].sort());
     await j.inspectDelivery(recovered);
-    await j.capture("http-accepted-subscriber-recovered");
+    const recoveredRegion = j.page.getByRole("region", { name: `Recipient ${shed.recipientId}`, exact: true });
+    await expect(recoveredRegion).toContainText("Completed");
+    await expect(recoveredRegion.getByRole("link", { name: "Inspect actual run", exact: true })).toBeVisible();
+    await j.capture("http-accepted-subscriber-recovered", recoveredRegion);
     j.requests.push({ kind: "controlled-public-port-faults-with-real-composed-source-and-ordinary-recovery", storeRefusal: refusal,
       acceptedAfterRepair: repaired, postacceptShed: shed, held, recovered, successfulExecutionBefore: successfulBefore.instance,
       successfulExecutionAfter: successfulAfter.instance, productionDiskFailureClaim: false, productionCapacityLoadClaim: false });
