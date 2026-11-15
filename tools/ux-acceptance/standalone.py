@@ -935,7 +935,7 @@ def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
             raise ValueError('Source changed during acceptance; rerun the exact committed revision')
         if dirty:
             raise ValueError('Dirty source run is preliminary evidence, not final acceptance')
-        report['executed'] = verdict(playwright_report, output, [journey] if journey else None, sha, suite=suite)
+        report['executed'] = verdict(playwright_report, output, [journey] if journey else None, sha, suite=execution_suite)
         report.update(status='passed', stage='complete', functionalAcceptance=True)
     except IncompleteAcceptanceError as error:
         report.update(status='incomplete', error=str(error))
