@@ -415,3 +415,34 @@ no result set. The rejected same-value UPDATE alternative fired an extra update 
 Both supported fence modes and default/non-strict/matched/changed-row profiles retain command/TCP
 boundaries. Those conditional indexed reads are real work. PostgreSQL bulk TCP-edge variation remains
 explicitly distinct from equal commands and Sync/Query/Flush/Execute frames; equal groups do not prove RTT.
+
+
+## 15 November: required metadata protocol and raw Delete repair
+
+The next author candidate composes actual main `dbc716f3994863b64c8344a33a45090d95398367`.
+The closed a991 review pair had two Major findings; a clean individual report did not make the pair clean.
+A required state-free metadata protocol now persists separately from plain keyed identity. The logical
+IdentityMetadataRequired discriminator uses the existing State cell: plain version-2 identity is 29 UTF-8
+bytes, required metadata identity is 33, and logical State remains null (4). There is no new column,
+normal INSERT parameter or lookup. The old ambiguous version-1 identity control refuses and retains
+its exact physical bytes; no automatic old-row conversion or migration guarantee is supplied.
+Ordinary opaque reserved-family values still escape losslessly, including those old control strings.
+
+Cold models missing either metadata interface refuse before query/control/drain and cannot retire a
+protected identity or release its key. Plain no-metadata keyed identity remains deletable. Row-bearing
+Delete is restricted to canonical retirement; trusted raw Delete has Row null and a present Expected
+matching an existing row. Actual stored revisions zero/negative remain exact authority; missing rows
+never become revision zero. Malformed mixed batches refuse without partial row/history/send/wait effects.
+
+Fresh matched SQL Server actual-main/candidate measurements retain all 16 driver/TCP rows (owner100/1000
+4/13, polled1000 24). The terminate-child internal server-statement counter remains 22→23, real retirement
+enforcement work, not a new driver boundary. PostgreSQL retains commands and frontend frame counts;
+observed bulk TCP-edge differences are separately retained and are not hidden as equivalent RTTs.
+The expanded PostgreSQL proof's metadata terminal commit remains 2 observed TCP edges for typed state
+(11 physical bytes) and required state-free metadata (33). Its 172 client calls include additional
+protection-removal controls and intentional rollback, not a per-operation cost increase. A new isolated
+raw-delete/retirement window measured 4 TCP edges each and 512/656 WAL bytes; retained marker tuple101
+and bool datum1. The wide-key datum sizes remain11096/22120 with36624 WAL bytes in that window.
+These are separate bounded samples. Headers, escapes, retained rows/receipts/bindings/indexes/WAL still
+cost storage and retain indefinitely; no universal byte count, expiry/tenant/default/budget or architecture
+adoption follows. The hardening A-F proposal remains held for its separately authorized later stage.
