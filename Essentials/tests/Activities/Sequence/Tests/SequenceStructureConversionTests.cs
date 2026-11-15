@@ -94,6 +94,37 @@ public sealed class SequenceStructureConversionTests
         Assert.Equal("node-placed-write", Assert.Single(document.RootElement.GetProperty("activities").EnumerateArray()).GetString());
     }
 
+    [Theory]
+    [InlineData("""[{"variableKey":"counter","name":"Counter","type":{"alias":"Int32"},"policy":{"isSensitive":true},"initialBinding":{"source":"literal","literal":{"inlineValue":42}},"future":{"nodeId":"write-one"}}]""")]
+    [InlineData("""[{"referenceKey":"counter","name":"Counter","type":{"alias":"Int32"},"default":{"expressionType":"Literal","value":42},"future":{"nodeId":"write-one"}}]""")]
+    [InlineData("""[{"futureDeclaration":{"nodeId":"write-one","policy":{"custom":true}}}]""")]
+    public void RemapExecutableStructure_PreservesCanonicalLegacyAndFutureVariablesWithoutRetyping(string variables)
+    {
+        var payload = JsonSerializer.Deserialize<JsonElement>("""{"activities":["write-one","external"],"variables":__VARIABLES__,"future":{"nodeId":"write-one","nested":[{"child":"write-one"}]}}""".Replace("__VARIABLES__", variables, StringComparison.Ordinal));
+        var original = payload.GetRawText();
+        var structure = new ActivityNodeStructure(SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion, payload);
+
+        var remapped = StructureService().RemapExecutableStructure(structure, new Dictionary<string, string> { ["write-one"] = "placed" });
+
+        Assert.Equal(new[] { "placed", "external" }, remapped.Payload.GetProperty("activities").EnumerateArray().Select(child => child.GetString()));
+        Assert.True(JsonElement.DeepEquals(payload.GetProperty("variables"), remapped.Payload.GetProperty("variables")));
+        Assert.True(JsonElement.DeepEquals(payload.GetProperty("future"), remapped.Payload.GetProperty("future")));
+        Assert.Equal(original, payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("""{"activities":{}}""")]
+    [InlineData("""{"activities":[42]}""")]
+    [InlineData("""{"activities":[null]}""")]
+    [InlineData("""{"activities":[],"variables":{}}""")]
+    public void RemapExecutableStructure_StillRefusesMalformedKnownFields(string json)
+    {
+        var structure = new ActivityNodeStructure(SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion, JsonSerializer.Deserialize<JsonElement>(json));
+        Assert.Throws<InvalidOperationException>(() => StructureService().RemapExecutableStructure(structure,
+            new Dictionary<string, string> { ["write-one"] = "placed" }));
+        Assert.Equal(json, structure.Payload.GetRawText());
+    }
+
     [Fact]
     public void RemapExecutableStructure_FailsSafeWhenNoOwnerIsRegistered()
     {

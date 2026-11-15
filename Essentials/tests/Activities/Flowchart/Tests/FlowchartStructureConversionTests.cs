@@ -119,4 +119,67 @@ public sealed class FlowchartStructureConversionTests
         Assert.Equal("first", connection.Id);
         Assert.Contains("node-first", structure.NodeMetadata.Keys);
     }
+
+    [Theory]
+    [InlineData("""[{"variableKey":"counter","name":"Counter","type":{"alias":"Int32"},"policy":{"isSensitive":true},"initialBinding":{"source":"literal","literal":{"inlineValue":42}},"future":{"nodeId":"first"}}]""")]
+    [InlineData("""[{"referenceKey":"counter","name":"Counter","type":{"alias":"Int32"},"default":{"expressionType":"Literal","value":42},"future":{"nodeId":"first"}}]""")]
+    [InlineData("""[{"futureDeclaration":{"nodeId":"first","policy":{"custom":true}}}]""")]
+    public void RemapExecutableStructure_PreservesVariablesAndOpaqueDataAtEveryRewrittenLevel(string variables)
+    {
+        var payload = JsonSerializer.Deserialize<JsonElement>("""
+            {"connections":[{"id":"first","source":{"nodeId":"first","port":" approved ","future":{"nodeId":"first"}},"target":{"nodeId":"external","future":{"child":"first"}},"future":{"nodeId":"first"}}],
+             "startNodeId":"first","variables":__VARIABLES__,"nodeMetadata":{"first":{"policyKind":" policy ","configuration":{"externalId":"first"},"future":{"nodeId":"first"}}},
+             "connectionMetadata":{"first":{"label":" retained ","future":{"nodeId":"first"}}},"future":{"nodeId":"first"}}
+            """.Replace("__VARIABLES__", variables, StringComparison.Ordinal));
+        var original = payload.GetRawText();
+        var structure = new ActivityNodeStructure(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion, payload);
+
+        var remapped = StructureService().RemapExecutableStructure(structure, new Dictionary<string, string> { ["first"] = "placed" }).Payload;
+
+        Assert.Equal("placed", remapped.GetProperty("startNodeId").GetString());
+        var before = payload.GetProperty("connections")[0]; var after = remapped.GetProperty("connections")[0];
+        Assert.Equal("placed", after.GetProperty("source").GetProperty("nodeId").GetString());
+        Assert.Equal(" approved ", after.GetProperty("source").GetProperty("port").GetString());
+        Assert.True(JsonElement.DeepEquals(before.GetProperty("source").GetProperty("future"), after.GetProperty("source").GetProperty("future")));
+        foreach (var name in new[] { "id", "target", "future" }) Assert.True(JsonElement.DeepEquals(before.GetProperty(name), after.GetProperty(name)));
+        Assert.True(JsonElement.DeepEquals(payload.GetProperty("nodeMetadata").GetProperty("first"), remapped.GetProperty("nodeMetadata").GetProperty("placed")));
+        Assert.False(remapped.GetProperty("nodeMetadata").TryGetProperty("first", out _));
+        foreach (var name in new[] { "variables", "connectionMetadata", "future" }) Assert.True(JsonElement.DeepEquals(payload.GetProperty(name), remapped.GetProperty(name)));
+        Assert.Equal(original, payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("""{"connections":{}}""")]
+    [InlineData("""{"startNodeId":42}""")]
+    [InlineData("""{"nodeMetadata":[]}""")]
+    [InlineData("""{"connectionMetadata":[]}""")]
+    [InlineData("""{"variables":{}}""")]
+    public void RemapExecutableStructure_StillRefusesMalformedKnownFields(string json)
+    {
+        var structure = new ActivityNodeStructure(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion, JsonSerializer.Deserialize<JsonElement>(json));
+        Assert.Throws<InvalidOperationException>(() => StructureService().RemapExecutableStructure(structure,
+            new Dictionary<string, string> { ["first"] = "placed" }));
+        Assert.Equal(json, structure.Payload.GetRawText());
+    }
+
+    [Fact]
+    public void RemapExecutableStructure_StillRefusesAnInvalidEndpointContract()
+    {
+        const string json = """{"connections":[{"source":{"nodeId":" "},"target":{"nodeId":"second"}}]}""";
+        var structure = new ActivityNodeStructure(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion, JsonSerializer.Deserialize<JsonElement>(json));
+        var failure = Record.Exception(() => StructureService().RemapExecutableStructure(structure, new Dictionary<string, string> { ["first"] = "placed" }));
+        Assert.True(failure is ArgumentException or JsonException, failure?.ToString());
+        Assert.Equal(json, structure.Payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(" ")]
+    public void RemapExecutableStructure_StillRefusesAnInvalidPlacedEndpointIdentity(string? placed)
+    {
+        var payload = JsonSerializer.Deserialize<JsonElement>("""{"connections":[{"source":{"nodeId":"first"},"target":{"nodeId":"second"}}]}""");
+        var structure = new ActivityNodeStructure(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion, payload);
+        Assert.ThrowsAny<ArgumentException>(() => StructureService().RemapExecutableStructure(structure,
+            new Dictionary<string, string> { ["first"] = placed! }));
+    }
 }

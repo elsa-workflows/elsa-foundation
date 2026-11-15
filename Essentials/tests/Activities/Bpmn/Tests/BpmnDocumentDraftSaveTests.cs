@@ -73,7 +73,7 @@ public sealed class BpmnDocumentDraftSaveTests
         var id = await new EfCreateDraftCommand(db, accessor, writer, new Identities(), serializer, locks, inline, deferred)
             .Execute(new DesignOperationKey("complete-source-create"), "definition", state);
         var created = Assert.Single(deferred.Events.OfType<DraftValidated>());
-        Assert.Contains(created.Errors, error => error.Type == "Bpmn/ExecutionCapability" && error.Message.Contains("not qualified", StringComparison.Ordinal));
+        Assert.Contains(created.Errors, error => error.Type == "Bpmn/ExecutionCapability" && error.Message.Contains("complexGateway", StringComparison.Ordinal));
         Assert.Equal(Xml, BpmnDocumentStructureHandler.Read(created.Draft.State.RootActivity!).DocumentXml);
 
         var updatedXml = Xml.Replace("name=\"Before\"", "name=\"After\"", StringComparison.Ordinal);

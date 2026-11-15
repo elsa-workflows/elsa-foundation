@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -238,5 +239,62 @@ public sealed class BpmnStructureHandlerTests : IDisposable
         Assert.Equal("node-task", element.ChildNodeId);
         Assert.Equal("node-listener", element.ListenerNodeId);
         Assert.Equal("task-child", element.Properties["externalId"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Remapping_preserves_canonical_or_legacy_variables_and_opaque_fields(bool canonical)
+    {
+        var variables = canonical
+            ? """[{"variableKey":"local","name":"Local","type":{"alias":"Int32"},"policy":{"opaque":"task-child"},"initialBinding":{"literal":{"inlineValue":42}},"future":{"childNodeId":"task-child"}}]"""
+            : """[{"referenceKey":"local","name":"Local","type":{"alias":"Int32"},"storageDriverType":null,"default":{"expressionType":"Literal","value":42},"future":{"childNodeId":"task-child"}}]""";
+        var payload = JsonNode.Parse("""
+            {"elements":[{"elementId":"task-child","elementType":"task","childNodeId":"task-child","listenerNodeId":"listener-child","future":{"childNodeId":"task-child"}}],
+             "sequenceFlows":[{"flowId":"task-child","sourceRef":"task-child","targetRef":"other"}],"isTransaction":true,"opaque":{"childNodeId":"task-child"}}
+            """)!.AsObject();
+        payload["variables"] = JsonNode.Parse(variables);
+        var source = new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(payload, SerializerOptions));
+        var before = source.Payload.GetRawText();
+        var remapped = _handler.RemapExecutableStructure(source, new Dictionary<string, string>
+        { ["task-child"] = "placed-task", ["listener-child"] = "placed-listener" });
+        payload["elements"]![0]!["childNodeId"] = "placed-task";
+        payload["elements"]![0]!["listenerNodeId"] = "placed-listener";
+        Assert.True(JsonElement.DeepEquals(JsonSerializer.SerializeToElement(payload, SerializerOptions), remapped.Payload));
+        Assert.Equal(before, source.Payload.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("{\"elements\":42}")]
+    [InlineData("{\"elements\":[null]}")]
+    [InlineData("{\"elements\":[{\"childNodeId\":42}]}")]
+    [InlineData("{\"variables\":{}}")]
+    [InlineData("{\"sequenceFlows\":42}")]
+    [InlineData("{\"isTransaction\":\"yes\"}")]
+    public void Remapping_still_refuses_malformed_child_reference_shapes(string json)
+    {
+        var structure = new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion,
+            JsonSerializer.Deserialize<JsonElement>(json));
+        var failure = Record.Exception(() => _handler.RemapExecutableStructure(structure,
+            new Dictionary<string, string> { ["child"] = "placed-child" }));
+        Assert.True(failure is JsonException or InvalidOperationException, failure?.ToString());
+    }
+
+    [Fact]
+    public void Remapping_retains_existing_normalization_of_owned_references_only()
+    {
+        var payload = JsonSerializer.Deserialize<JsonElement>("""
+            {"elements":[{"elementId":"Task","elementType":"task","childNodeId":" child ","listenerNodeId":" listener ","future":" child "}],
+             "variables":[{"future":" child "}],"future":" child "}
+            """);
+        var structure = new ActivityNodeStructure(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, payload);
+        var remapped = _handler.RemapExecutableStructure(structure, new Dictionary<string, string> { ["child"] = " placed ", ["listener"] = " " }).Payload;
+        var element = remapped.GetProperty("elements")[0];
+        Assert.Equal("placed", element.GetProperty("childNodeId").GetString());
+        Assert.Equal(JsonValueKind.Null, element.GetProperty("listenerNodeId").ValueKind);
+        Assert.Equal(" child ", element.GetProperty("future").GetString());
+        Assert.True(JsonElement.DeepEquals(payload.GetProperty("variables"), remapped.GetProperty("variables")));
+        Assert.True(JsonElement.DeepEquals(payload.GetProperty("future"), remapped.GetProperty("future")));
     }
 }

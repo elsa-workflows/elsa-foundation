@@ -61,7 +61,7 @@ public sealed class ActivitiesBpmnFeatureTests
         var validators = services.Where(item => item.ServiceType == typeof(Elsa.Workflows.Design.Validations.Core.Contracts.IDraftValidator)).ToArray();
         Assert.Equal(2, validators.Length);
         Assert.All(validators, item => Assert.Equal(ServiceLifetime.Scoped, item.Lifetime));
-        Assert.Single(services, service => service.ServiceType == typeof(IExecutableCompilationSource));
+        Assert.Equal(2, services.Count(service => service.ServiceType == typeof(IExecutableCompilationSource)));
         Assert.DoesNotContain(services, service => service.ServiceType == typeof(IBpmnProcessRuntime));
         Assert.DoesNotContain(typeof(ActivitiesBpmnDesignFeature).Assembly.GetReferencedAssemblies(),
             assembly => assembly.Name is "Elsa.Activities.Bpmn" or "Bpmn.Model" or "Bpmn.Semantics");

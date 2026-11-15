@@ -8,7 +8,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Activities.Bpmn.Internal;
 
-/// <summary>Retention is available before complete-source execution is qualified.</summary>
+/// <summary>Content-derived execution findings leave unsupported complete-source drafts saveable.</summary>
 internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStructureHandler> handlers, IActivityStructureService? structures = null) : IDraftValidator
 {
     private readonly IActivityStructureService _structures = structures ?? new DefaultActivityStructureService(handlers);
@@ -25,8 +25,8 @@ internal sealed class BpmnDocumentAdmissionValidator(IEnumerable<IActivityStruct
             if (activity.Structure is { Kind: BpmnActivityIdentities.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion })
             {
                 var document = BpmnDocumentStructureHandler.Read(activity);
-                errors.Add(new ValidationError(activity.NodeId, "Bpmn/ExecutionCapability",
-                    "Complete-document BPMN execution is not qualified. The complete authored source remains saveable; publication and Test Drive stay closed."));
+                errors.AddRange(BpmnDocumentAdmission.Assess(activity).Select(diagnostic => new ValidationError(activity.NodeId,
+                    "Bpmn/ExecutionCapability", $"{diagnostic.Code} at {diagnostic.SourcePath}: {diagnostic.Message}")));
                 foreach (var child in document.Activities) pending.Push(child);
             }
             else foreach (var child in _structures.ProjectOwnership(activity).Activities) pending.Push(child);

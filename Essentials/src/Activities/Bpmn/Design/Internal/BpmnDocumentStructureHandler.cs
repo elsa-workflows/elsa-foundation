@@ -51,9 +51,13 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
     public Type AuthoredPayloadType => typeof(BpmnAuthoredDocument);
     public bool SupportsScopedVariables => true;
 
-    // Retention and XML routing are not an execution/occurrence proof for this authored schema.
+    // Only admitted raw-source chains supply an execution/occurrence proof for this authored schema.
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
-        new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = null };
+        BpmnDocumentChildResultAnalysis.TryCreate(activity, Read(activity).ProcessId)?.Assess(producerChildNodeId, consumerChildNodeId)
+        ?? new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = null };
+
+    public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>
+        BpmnDocumentChildResultAnalysis.TryCreate(activity, Read(activity).ProcessId)?.CompletedBefore(childNodeId);
 
     /// <exception cref="BpmnDocumentSourceException">Malformed source retains its parser cause and node/process identity.</exception>
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) =>
@@ -85,6 +89,10 @@ internal sealed class BpmnDocumentStructureHandler : IActivityStructureHandler
 
     public ActivityNodeStructure RemapExecutableStructure(ActivityNodeStructure structure, IReadOnlyDictionary<string, string> authoredToExecutableNodeIds) =>
         throw new NotSupportedException("Complete-document BPMN authoring is not an executable structure schema.");
+
+    /// <exception cref="BpmnDocumentSourceException">Malformed source retains its original cause and owning identifiers.</exception>
+    public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity, ActivityStructureCompilationContext context) =>
+        BpmnDocumentResolvedCompilation.Compile(activity, Read(activity).ProcessId, context);
 
     internal static BpmnAuthoredDocument Read(ActivityNode activity)
     {
