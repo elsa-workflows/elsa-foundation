@@ -194,6 +194,11 @@
     <Project Path="tools/studio/HostingReuse.Probe/Runner/HostingReuse.Probe.csproj" />
     <Project Path="tools/studio/HostingReuse.Probe/StorePruning/StorePruning.csproj" />
   </Folder>
+  <Folder Name="/tools/ux-acceptance/">
+    <Project Path="tools/ux-acceptance/extensions/TriggerAuthoring/Acme.TriggerAuthoring.csproj" />
+    <Project Path="tools/ux-acceptance/extensions/TriggerFaults/Acme.TriggerFaults.csproj" />
+    <Project Path="tools/ux-acceptance/setup/Elsa.UxAcceptance.Setup.csproj" />
+  </Folder>
   <Folder Name="/tools/versioning/">
     <Project Path="tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj" />
     <Project Path="tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj" />

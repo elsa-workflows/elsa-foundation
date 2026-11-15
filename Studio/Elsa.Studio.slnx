@@ -44,4 +44,8 @@
     <Project Path="tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj" />
   </Folder>
   <Project Path="../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Elsa.Studio.UserTasks.csproj" />
+  <Folder Name="/tools/ux-acceptance/">
+    <Project Path="../tools/ux-acceptance/extensions/TriggerEditor/Acme.TriggerEditor.csproj" />
+    <Project Path="../tools/ux-acceptance/StudioConsumer/Acme.TriggerStudioConsumer.csproj" />
+  </Folder>
 </Solution>
