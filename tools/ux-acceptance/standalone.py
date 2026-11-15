@@ -799,6 +799,7 @@ def host(directory, dll, url, ready_path, log, env, *, cancelled=None):
 
 def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
     output.mkdir(parents=True, exist_ok=False)
+    execution_suite = ('existing' if journey in JOURNEYS else 'standalone-triggers') if journey else suite
     sha = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'status', '--porcelain'], cwd=ROOT, text=True).strip()
     report = {'sourceSha': sha, 'headSha': os.environ.get('UX_PR_HEAD_SHA', sha), 'dirty': bool(dirty),
@@ -810,14 +811,13 @@ def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
                   and path.name not in {'scaffold-file-hashes.json', 'scaffold-manifest.json'}},
               'sharedHostHelperSha256': hashlib.sha256((ROOT / 'tools/ux-acceptance/run.py').read_bytes()).hexdigest(),
               'startedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-              'status': 'failed', 'stage': 'build', 'suite': suite,
-              'expectedExecutions': len(inventory(suite, [journey] if journey else None)), 'visualApproval': 'requires independent review',
-              'journeys': sorted({title for _, title in inventory(suite, [journey] if journey else None)}),
+              'status': 'failed', 'stage': 'build', 'suite': execution_suite,
+              'expectedExecutions': len(inventory(execution_suite, [journey] if journey else None)), 'visualApproval': 'requires independent review',
+              'journeys': sorted({title for _, title in inventory(execution_suite, [journey] if journey else None)}),
               'studioShape': studio_shape, 'completeSuite': journey is None, 'qualificationScope': 'selected journey' if journey else 'complete suite'}
     try:
         # An existing --journey invocation keeps its ordinary four-project composition. A selected trigger
         # journey uses all seven appearance projects; its report never certifies the other six journeys.
-        execution_suite = ('existing' if journey in JOURNEYS else 'standalone-triggers') if journey else suite
         report['executionSuite'] = execution_suite
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
