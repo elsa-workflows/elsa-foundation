@@ -35,8 +35,9 @@ for (const mode of ["light", "dark"] as const) {
   test(`new tab follows the last tab and stays visible on overflow in ${mode}`, async ({ page }, info) => {
     await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), mode);
     await signIn(page);
-    await page.goto("/workflows/definitions");
-    const tabs = page.getByRole("tablist").getByRole("tab");
+    await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+    const list = page.getByRole("tablist", { name: "Open screens", exact: true });
+    const tabs = list.getByRole("tab");
     const add = page.getByRole("button", { name: "New tab", exact: true });
     const switcher = page.getByRole("button", { name: /^All tabs \(/ });
     await expect(tabs).toHaveCount(1);
@@ -49,7 +50,7 @@ for (const mode of ["light", "dark"] as const) {
     await add.focus();
     await page.keyboard.press("Enter");
     await expect(tabs).toHaveCount(2);
-    await expect(page).toHaveURL(/\/$/);
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/");
     await page.keyboard.press("Alt+Shift+T");
     await expect(tabs).toHaveCount(3);
     await tabs.first().click();
@@ -64,7 +65,6 @@ for (const mode of ["light", "dark"] as const) {
       await add.click();
       await expect(tabs).toHaveCount(count);
     }
-    const list = page.getByRole("tablist");
     await expect.poll(async () => {
       const geometry = await stripGeometry(page);
       return geometry.scrollWidth > geometry.clientWidth;
@@ -94,6 +94,6 @@ for (const mode of ["light", "dark"] as const) {
     await capture(page, info, "narrow-overflow");
     await add.click();
     await expect(tabs).toHaveCount(21);
-    await expect(page).toHaveURL(/\/$/);
+    await expect.poll(() => new URL(page.url()).pathname).toBe("/");
   });
 }
