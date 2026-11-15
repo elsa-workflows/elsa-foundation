@@ -281,7 +281,7 @@ ol.stmts code { font-size: 12.5px; }
   <div class="picker" id="layers-picker" data-default="l2">
   <figure>
     <div class="fig">
-    <svg class="dg" viewBox="0 0 960 470" role="img" aria-label="Three layers: actor types on top of durable actors on top of an actor runtime, with the durable layer using a persistence provider through IKernelStore.">
+    <svg class="dg" viewBox="0 0 960 470" role="img" aria-label="Three layers with persistence through IKernelStore. A dashed later replicated-log profile also connects to layer 1 ownership: leadership replaces leases; planned, not designed.">
       <!-- hosts -->
       <g>
         <rect class="box" x="740" y="20" width="200" height="130" rx="8"/>
@@ -343,8 +343,8 @@ ol.stmts code { font-size: 12.5px; }
       </g>
       <text class="ts" x="840" y="350" text-anchor="middle">correct = passes the store suite</text>
       <!-- planned, not designed: replicated log store -->
-      <g class="planned"><title>A later deployment profile: each partition is an append-only log replicated with Raft, with state kept locally; no external database.</title>
-        <path class="edge dash plain" d="M740,392 L642,392"/>
+      <g class="planned"><title>Planned, not designed: replicated log and local state. The dashed uplink to layer 1 ownership means leadership replaces leases; both IKernelStore and IActorRuntime are involved.</title>
+        <path class="edge dash" d="M740,392 L690,392 L690,370 L642,370"/>
         <rect class="box dashed" x="740" y="364" width="200" height="56" rx="8"/>
         <text class="tt" x="754" y="386">Replicated log (Zeebe-like)</text>
         <text class="ts" x="754" y="406">later · planned, not designed</text>
@@ -361,7 +361,7 @@ ol.stmts code { font-size: 12.5px; }
       <text class="ts" x="840" y="456" text-anchor="middle">runtime conformance suite (planned)</text>
     </svg>
     </div>
-    <figcaption>The dashed box at the bottom right is planned, not designed: a later deployment profile in which each partition is an append-only log replicated with Raft, with state kept locally; no external database. Every guarantee lives in layer 2. Layer 1 only says where an actor runs and wakes it up; layer 3 only says what an actor does with its messages. The two seams and the storage contract are the only ways in. Built in the prototype: the built-in partition runtime, the durable layer, the workflow instance and the native model, with a few of the workflow instance's types and columns still in layer 2 (DESIGN.md lists these seam leaks); the other runtimes, models and actor types shown are planned or samples.</figcaption>
+    <figcaption>The dashed box is planned, not designed: replicated log plus local state. Its uplink reaches layer 1 ownership: leadership replaces leases, involving both IKernelStore and IActorRuntime. Virtual partitions need not map one to one to Raft groups. Every guarantee lives in layer 2; layer 3 says what an actor does. Built in the prototype: the built-in partition runtime, the durable layer, the workflow instance and the native model, with seam leaks recorded in DESIGN.md. This picture is not product or later-profile qualification.</figcaption>
   </figure>
   <div class="grid">
     <div class="card l1" data-pick-card="l1"><h4>1 · Actor runtime</h4>
@@ -880,7 +880,7 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="profiles">
   <div class="num">12</div>
   <h2>Deployment profiles</h2>
-  <p>Three things vary independently, each behind its own seam. There is no fourth "runtime" plug-in: a deployment profile is a named preset of the last two. A workflow behaves the same under every profile, and synchronous HTTP works on all of them. Pick a profile.</p>
+  <p>A deployment profile combines an actor runtime and a persistence provider; persistence mode remains the workflow author's choice. Release 1 adopts Embedded and Cluster with the same Native structured containers, Flowchart and StateMachine. Orleans requires proven demand. Log is later, planned, not designed; equivalent behavior and synchronous HTTP remain requirements for that future design. Pick a profile.</p>
   <div class="seg" role="group" aria-label="Deployment profile" id="profile-seg">
     <button type="button" data-profile="embedded" aria-pressed="false">Embedded</button>
     <button type="button" data-profile="cluster" aria-pressed="true">Cluster</button>
@@ -894,29 +894,29 @@ ol.stmts code { font-size: 12.5px; }
       <span class="opt" data-in="embedded">Built-in, one node, no transport</span>
       <span class="opt" data-in="cluster">Built-in, partitions shared over nodes</span>
       <span class="opt" data-in="orleans">Orleans adapter</span>
-      <span class="opt" data-in="log">Built-in, partitions as replicated-log groups</span></div>
-    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What stores the rows.</p>
+      <span class="opt" data-in="log">Planned: replicated-log leadership</span></div>
+    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What persists the data.</p>
       <span class="opt" data-in="embedded orleans">SQLite (1 partition)</span>
       <span class="opt" data-in="embedded cluster orleans">PostgreSQL</span>
       <span class="opt" data-in="embedded cluster orleans">SQL Server (RCSI on)</span>
       <span class="opt" data-in="embedded cluster orleans">MySQL</span>
       <span class="opt" data-in="embedded cluster orleans">MongoDB 8 (replica set)</span>
-      <span class="opt" data-in="log">A Zeebe-like log provider</span></div>
+      <span class="opt" data-in="log">Planned: replicated log (Zeebe-like)</span></div>
   </div>
   <p id="profile-note"></p>
   <div class="principle"><strong>Log profile: planned, not designed.</strong> What each kernel concept becomes with a replicated log (Zeebe-like):
     <div class="tablewrap"><table>
       <thead><tr><th>Kernel concept</th><th>With a replicated log</th></tr></thead>
       <tbody>
-        <tr><td>Commit</td><td>a fenced batch appended to the partition's Raft-replicated log, acknowledged by a majority</td></tr>
-        <tr><td>Fence and epoch</td><td>the Raft term: a deposed leader's appends are rejected</td></tr>
+        <tr><td>Commit</td><td>a fenced batch appended to the partition's Raft-replicated log, acknowledged after consensus commitment</td></tr>
+        <tr><td>Fence and epoch</td><td>Raft term-based authority, enforced by the commit protocol</td></tr>
         <tr><td>Lease and take</td><td>leader election</td></tr>
         <tr><td>Journal</td><td>the log itself</td></tr>
-        <tr><td>Inbox and polling</td><td>log entries plus local state; no polling</td></tr>
-        <tr><td>Projector</td><td>an exporter that reads the log past its position</td></tr>
+        <tr><td>Inbox and polling</td><td>log entries plus local state; no inbox-table polling</td></tr>
+        <tr><td>Projector</td><td>an exporter that reads committed log records past its position</td></tr>
       </tbody>
     </table></div>
-    It touches two seams: the storage contract (<code>IKernelStore</code>) and ownership in the actor runtime (<code>IActorRuntime</code>), which is why it is a deployment profile rather than only a storage provider.</div>
+    It touches two seams: <code>IKernelStore</code> and ownership in <code>IActorRuntime</code>. The <a href="log-profile-contract-sketch.md">round 5 H paper</a> proposes four contracts before code. The accepted send boundary records sends with sender state and permits deduplicated later delivery; logical per-virtual-partition journal positions remain distinct from physical log indexes.</div>
   <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
 </section>
 
@@ -1253,7 +1253,7 @@ ol.stmts code { font-size: 12.5px; }
     embedded: "Embedded: one node, no transport between nodes. For a Windows service, a desktop app or a single API. Any provider; SQLite is typical.",
     cluster: "Cluster: partitions shared fairly over the nodes, which count each other by heartbeat. For scaling out on a server database.",
     orleans: "Orleans: an adapter for hosts that already run Orleans, written by the integrator; Elsa keeps one in its tests. Any provider. Each partition is a grain, so commits still batch.",
-    log: "Log, later: partitions as replicated-log groups on a Zeebe-like provider, for very high throughput. Synchronous HTTP still works, as Zeebe's create-instance-with-result shows."
+    log: "Log, later — planned, not designed. Replicated log plus local state; leadership replaces leases. No provider, throughput result or synchronous HTTP qualification is claimed."
   };
   const setProfile = p => {
     document.querySelectorAll("#profile-seg [data-profile]").forEach(b => b.setAttribute("aria-pressed", b.dataset.profile === p ? "true" : "false"));

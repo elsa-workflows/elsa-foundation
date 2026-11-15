@@ -453,6 +453,7 @@ marker path.n { fill: var(--muted); }
     <g data-part="vault">
       <rect class="bs pf" x="790" y="40" width="400" height="432" rx="10"/>
       <text class="tt st" x="802" y="60">Database</text><text class="ts" x="866" y="60">the vault: one shared store behind IKernelStore</text>
+      <text class="ts" x="802" y="176">Log later: log + local state; planned, not designed</text>
       <text class="ts" id="dockhint" x="914" y="128" text-anchor="middle">commits land here</text>
       <g class="receipt gone" id="receipt"><rect class="box" x="1036" y="78" width="150" height="88" rx="6"/><text class="tt l3" id="rc0" x="1046" y="97"></text><text class="ts" id="rc1" x="1046" y="115"></text><text class="ts" id="rc2" x="1046" y="130"></text><text class="ts" id="rc3" x="1046" y="145"></text><text class="ts" id="rc4" x="1046" y="160"></text></g>
       <g data-part="t-partition" id="t-partition"></g>
@@ -2072,6 +2073,7 @@ const ICON = {
   suspect: '<rect x="3" y="8" width="26" height="16" rx="2" stroke-dasharray="3 2"/><text x="16" y="20.5" text-anchor="middle">?</text>',
   parked: '<rect x="3" y="9" width="19" height="14" rx="2"/><path d="M3 10 l9.5 7 l9.5 -7"/><circle cx="24" cy="22" r="5.5"/><path d="M21 22 h6"/>',
   store: '<ellipse cx="16" cy="7" rx="11" ry="4"/><path d="M5 7 v18 c0 5 22 5 22 0 v-18 M5 16 c0 5 22 5 22 0"/>',
+  log: '<rect x="3" y="4" width="26" height="24" rx="2" stroke-dasharray="3 2"/><path d="M7 10 h18 M7 16 h18 M7 22 h18"/>',
   instance: '<rect x="4" y="4" width="24" height="24" rx="4"/><path d="M9 11 h14 M9 16 h10 M9 21 h12"/>',
   model: '<circle cx="16" cy="16" r="5"/><path d="M16 3 v5 M16 24 v5 M3 16 h5 M24 16 h5 M7 7 l3.5 3.5 M21.5 21.5 l3.5 3.5 M25 7 l-3.5 3.5 M10.5 21.5 l-3.5 3.5"/>',
   activity: '<path class="f" d="M4 10 l6 4 l-6 4 z"/><path d="M13 9 h15 M13 14 h12 M13 19 h15 M13 24 h9"/>',
@@ -2105,6 +2107,7 @@ const TERMS = [
     ['suspect', 'Suspect and trial', 'A suspect is a message another owner had, so it may have killed that owner; on trial, its turn runs alone, with nothing else in flight in the process.', ['p17b', 't-message'], null, ['b1', 4]],
     ['parked', 'Parked', 'An instance set aside, faulted with the reason, so the rest of its partition goes on: after a definite commit error, a turn that throws, or a message on trial when too many owners died (3 in the prototype).', ['card9', 't-instance', 't-journal'], 'Layer 2 · the instance is layer 3\'s', ['b3', 6]],
     ['store', 'IKernelStore', 'The one storage contract the kernel depends on, stated by guarantees, not SQL; a provider (EF Core, MongoDB) is correct when it passes the store conformance suite.', ['vault']],
+    ['log', 'Log profile (later)', 'Planned, not designed: fenced batches in a Raft-replicated log plus local state; leadership replaces leases, involving IKernelStore and ownership in IActorRuntime. No Log provider is built.', ['vault'], 'Later profile · planned, not designed'],
   ]],
   ['l3', 'Layer 3 · actor types: what runs', [
     ['instance', 'Workflow instance', 'The actor type that holds what all workflows share (definition and version, status, parent and children, the history envelope) and runs an execution model for the rest.', ['card1', 'card7', 'card3', 't-instance']],

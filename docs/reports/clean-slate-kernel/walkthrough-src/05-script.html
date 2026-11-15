@@ -170,7 +170,7 @@
     embedded: "Embedded: one node, no transport between nodes. For a Windows service, a desktop app or a single API. Any provider; SQLite is typical.",
     cluster: "Cluster: partitions shared fairly over the nodes, which count each other by heartbeat. For scaling out on a server database.",
     orleans: "Orleans: an adapter for hosts that already run Orleans, written by the integrator; Elsa keeps one in its tests. Any provider. Each partition is a grain, so commits still batch.",
-    log: "Log, later: partitions as replicated-log groups on a Zeebe-like provider, for very high throughput. Synchronous HTTP still works, as Zeebe's create-instance-with-result shows."
+    log: "Log, later — planned, not designed. Replicated log plus local state; leadership replaces leases. No provider, throughput result or synchronous HTTP qualification is claimed."
   };
   const setProfile = p => {
     document.querySelectorAll("#profile-seg [data-profile]").forEach(b => b.setAttribute("aria-pressed", b.dataset.profile === p ? "true" : "false"));
