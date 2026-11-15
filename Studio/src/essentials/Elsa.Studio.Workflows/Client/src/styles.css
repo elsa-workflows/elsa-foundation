@@ -4154,6 +4154,7 @@
 
   .wf-properties-table tbody > tr {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     padding-block: 12px;
   }
@@ -4164,6 +4165,7 @@
 
   .wf-properties-table td {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
     min-width: 0;
     padding: 0;

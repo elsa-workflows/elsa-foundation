@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { measureDeclarationControl } from "../declarationReadability";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 const jsonAlias = "System.Text.Json.JsonElement";
@@ -36,17 +37,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     const control = page.getByLabel(label, { exact: true });
     await control.scrollIntoViewIfNeeded();
     await expect(control).toBeVisible();
-    await expect.poll(() => control.evaluate(element => {
-      const input = element as HTMLInputElement | HTMLSelectElement;
-      const style = getComputedStyle(input);
-      const context = document.createElement("canvas").getContext("2d");
-      if (!context) throw new Error("Text measurement is unavailable");
-      context.font = style.font;
-      const select = input instanceof HTMLSelectElement;
-      const value = select ? input.selectedOptions[0]?.label ?? "" : input.value;
-      const available = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - (select ? 24 : 0);
-      return value.length > 0 && Math.ceil(context.measureText(value).width) <= Math.floor(available);
-    })).toBe(true);
+    await expect.poll(async () => (await control.evaluate(measureDeclarationControl)).fits).toBe(true);
   };
   const suffix = `${info.project.name}-${Date.now()}`;
   const formId = `approval-${suffix}`;
