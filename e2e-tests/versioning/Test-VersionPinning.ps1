@@ -54,22 +54,11 @@ if (-not ($inst.activities | Where-Object { $_.executableNodeId -eq 'wait' -and 
 }
 Write-Host ("v1 published (artifact {0}); instance {1} suspended at the Event." -f $pub1.artifactId, $wfId)
 
-# 2. WHILE suspended, publish v2 of the same definition. Authoring a v2 via draft-replace -> promote currently
-# fails promote validation for Event/intrinsic graphs (stricter than submit) - tracked by #1058. Treat that as a
-# KNOWN ISSUE (the version-pinning behavior can't be exercised until the v2 can be authored); any OTHER failure is real.
+# 2. WHILE suspended, publish v2 of the same definition. Submit and promote both require draft validation
+# (#2792), so a refused v2 is a real failure rather than a successful tracker result.
 $v2state = @{ variables=@(); inputs=@(); outputs=@(); workflowActivityOptions=$null; strategyOptions=$null; rootActivity=(New-PinRoot $seq $ev $wl $E "ranV2") }
-try {
-    Invoke-RestMethod "$($ctx.BaseUrl)/design/workflows/drafts/$($def.draftId)" -Method Put -WebSession $ctx.Session -ContentType 'application/json' -Body (@{ state = $v2state } | ConvertTo-Json -Depth 40) | Out-Null
-    $prom = Invoke-RestMethod "$($ctx.BaseUrl)/design/workflows/drafts/$($def.draftId)/promote" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body '{}'
-} catch {
-    $status = $_.Exception.Response.StatusCode.value__
-    if ($status -eq 409) {
-        Write-Host ""
-        Write-Host "KNOWN ISSUE #1058 - cannot author v2 of the definition over REST: draft promote (409) rejects the v1-equivalent graph (Event/intrinsic validation is stricter than submit). Version pinning can't be exercised end-to-end until promote and submit validation agree; this tracker runs the full assertion once #1058 is fixed." -ForegroundColor Yellow
-        return
-    }
-    throw
-}
+Invoke-RestMethod "$($ctx.BaseUrl)/design/workflows/drafts/$($def.draftId)" -Method Put -WebSession $ctx.Session -ContentType 'application/json' -Body (@{ state = $v2state } | ConvertTo-Json -Depth 40) | Out-Null
+$prom = Invoke-RestMethod "$($ctx.BaseUrl)/design/workflows/drafts/$($def.draftId)/promote" -Method Post -WebSession $ctx.Session -ContentType 'application/json' -Body '{}'
 $v2VersionId = if ($prom.id) { $prom.id } else { $prom.version.id }
 $pub2 = Invoke-Step "publish v2" { Publish-WorkflowVersion -Ctx $ctx -VersionId $v2VersionId }
 Write-Host ("v2 published (artifact {0}, version {1}); v1 artifact was {2}." -f $pub2.artifactId, $prom.version, $pub1.artifactId)
