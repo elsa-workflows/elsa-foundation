@@ -423,12 +423,11 @@ public sealed partial class StandaloneTriggerManagementTests
     private sealed class FakeDiscovery : IStandaloneTriggerTargetDiscovery
     {
         internal string ContractRevision = "contract-v1";
-        internal string? DisplayName = "Target";
         internal Action? BeforeDescribe;
         public ValueTask<TriggerTargetDescription?> DescribeAsync(TriggerScope scope, string definitionId, string slotName, CancellationToken cancellationToken = default)
         {
             BeforeDescribe?.Invoke();
-            return ValueTask.FromResult<TriggerTargetDescription?>(new(definitionId, slotName, DisplayName, "native", TriggerTargetState.Available,
+            return ValueTask.FromResult<TriggerTargetDescription?>(new(definitionId, slotName, "Target", "native", TriggerTargetState.Available,
                 new(1, []), ContractRevision, "version-1", "1", "publication-1", 1, false, []));
         }
         public async ValueTask<TriggerTargetPage> ListAsync(TriggerScope scope, TriggerTargetQuery query, CancellationToken cancellationToken = default) =>

@@ -30,9 +30,8 @@ internal sealed partial class TriggerManagement
             {
                 if (await CanReadTargetAsync(row.DefinitionId, row.SlotName, ct))
                 {
-                    var target = await targets.DescribeAsync(access.Scope, row.DefinitionId, row.SlotName, ct);
-                    impact.Add(new(string.IsNullOrWhiteSpace(target?.DisplayName) ? "Target" : target.DisplayName,
-                        Description: $"{row.DefinitionId} / {row.SlotName}"));
+                    impact.Add(new("Target", Description: $"{row.DefinitionId} / {row.SlotName}",
+                        Target: new(row.DefinitionId, row.SlotName)));
                 }
                 else impact.Add(new("Restricted workflow", Description: "The resource change preserves restricted workflow details."));
             }
