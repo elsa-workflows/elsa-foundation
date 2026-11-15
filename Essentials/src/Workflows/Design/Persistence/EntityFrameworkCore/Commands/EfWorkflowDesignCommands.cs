@@ -331,7 +331,7 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
                 continue;
             nodeIds.Add(node.NodeId);
             var ownership = activityStructureService.ProjectOwnership(node);
-            nodeIds.UnionWith(ownership.AdditionalNodeIds);
+            // Diagnostic negative control: omit compact physical header presentation identities.
             foreach (var child in ownership.Activities)
                 stack.Push(child);
         }

@@ -24,7 +24,7 @@ public class ActivitiesBpmnDesignFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnDocumentStructureHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStructureHandler, BpmnDocumentScopeViewHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IDraftValidator, BpmnScopeViewSourceValidator>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDraftValidator, BpmnDocumentAdmissionValidator>());
+        // Diagnostic negative control: omit complete-document admission contribution.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnEmbeddingPinSource>());
     }
 }
