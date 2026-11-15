@@ -42,6 +42,8 @@ The separate [ownership projection](../../../Workflows/Design/Api/EXTENSION_POIN
 exposes all physical native roots and compact-header node IDs for presentation retention, including
 independent processes. EF metadata pruning uses that projection without exposing those processes to
 selected-process lexical queries. Removed physical ownership still prunes its presentation records.
+Source/admission validation also traverses real physical roots through the registered structure service,
+falling back to the default handler service; compact-header IDs remain presentation identities only.
 
 Malformed JSON and XML at these parser boundaries throw the existing BPMN Core
 `BpmnDocumentSourceException` with the original `JsonException` / `XmlException` as `InnerException`
