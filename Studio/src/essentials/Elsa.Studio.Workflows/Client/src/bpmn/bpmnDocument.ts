@@ -1,7 +1,8 @@
 import type { ActivityNode, VariableDefinition } from "../workflowTypes";
-import { getChildSlots } from "../workflowAdapter";
+import type { ActivityCatalogLookup } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
 import { serializeBpmnXml } from "./bpmnDocumentXml";
+import { qualifiedBpmnNativeChildSlots } from "./bpmnDocumentOwnership";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
 export const bpmnDocumentSchemaVersion = "2.0.0";
@@ -158,7 +159,7 @@ function validateVariables(variables: VariableDefinition[]) {
   }
 }
 
-function rejectPhysicalScopeViews(activities: ActivityNode[]) {
+function rejectPhysicalScopeViews(activities: ActivityNode[], catalog?: ActivityCatalogLookup) {
   const pending = [...activities], visited = new Set<ActivityNode>();
   while (pending.length) {
     const activity = pending.pop()!;
@@ -166,7 +167,7 @@ function rejectPhysicalScopeViews(activities: ActivityNode[]) {
     visited.add(activity);
     if (activity.structure?.kind === "elsa.bpmn.scope-view") fail("projected scope structures cannot be physically authored");
     // Use native ownership slots, never arbitrary input values or contributed metadata objects.
-    pending.push(...getChildSlots(activity).flatMap(slot => slot.activities));
+    pending.push(...(qualifiedBpmnNativeChildSlots(activity, catalog, { includeReaderForests: true }) ?? []).flatMap(slot => slot.activities));
   }
 }
 
@@ -177,7 +178,7 @@ function hasStandardScopeChain(element: Element, definitions: Element): boolean 
 }
 
 /** Parse without rewriting bytes. Opening, switching or a no-op Save never migrates the source. */
-export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
+export function readBpmnDocument(owner: ActivityNode, catalog?: ActivityCatalogLookup): ParsedBpmnDocument {
   if (owner.structure?.kind !== bpmnStructureKind || owner.structure.schemaVersion !== bpmnDocumentSchemaVersion)
     fail("complete-document authoring version is unavailable");
   const raw = object(owner.structure.payload, "payload");
@@ -202,7 +203,7 @@ export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
     if (activityIds.has(nodeId) || nodeId === owner.nodeId) fail(`activity '${nodeId}' is duplicated`);
     activityIds.add(nodeId);
   }
-  rejectPhysicalScopeViews(activities);
+  rejectPhysicalScopeViews(activities, catalog);
   const headers = raw.scopeHeaders === undefined ? [] : array(raw.scopeHeaders, "scopeHeaders")
     .map(value => object(value, "scope header") as BpmnScopeHeader);
   const headersByScope = new Map<string, BpmnScopeHeader>();
@@ -685,7 +686,7 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
 }
 
 /** Source and native ownership are validated together, before the host admits one history edit. */
-export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: BpmnDocumentTransaction): ActivityNode {
+export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: BpmnDocumentTransaction, catalog?: ActivityCatalogLookup): ActivityNode {
   const commands = transaction.commands ?? [];
   const configuration = transaction.configuration ?? {};
   const configurationKeys = Object.keys(configuration);
@@ -694,7 +695,7 @@ export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: B
   if (configurationKeys.some(key => !Array.isArray(configuration[key as keyof BpmnDocumentConfigurationChange])))
     fail("configuration changes must contain explicit arrays");
   if (!commands.length && !configurationKeys.length) return owner;
-  let parsed = readBpmnDocument(owner);
+  let parsed = readBpmnDocument(owner, catalog);
   const configurationChanged = configurationKeys.some(key => JSON.stringify(configuration[key as keyof BpmnDocumentConfigurationChange]) !== JSON.stringify(parsed.payload[key]));
   // A bound deletion/create can change both ownership lists and XML in this transaction. These
   // intermediate arrays are not projected or persisted; only the final source is admitted below.
@@ -711,13 +712,13 @@ export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: B
   if (documentXml === before && !configurationChanged) return owner;
   const next = { ...owner, structure: { ...owner.structure!, payload: { ...owner.structure!.payload, ...configuration,
     documentXml: documentXml === before ? parsed.payload.documentXml : documentXml } } };
-  readBpmnDocument(next);
+  readBpmnDocument(next, catalog);
   return next;
 }
 
 /** Atomic immutable XML-only transaction. The host owns revisions, history and persistence. */
-export function applyBpmnDocumentCommands(owner: ActivityNode, commands: readonly BpmnDocumentCommand[]): ActivityNode {
-  return applyBpmnDocumentTransaction(owner, { commands });
+export function applyBpmnDocumentCommands(owner: ActivityNode, commands: readonly BpmnDocumentCommand[], catalog?: ActivityCatalogLookup): ActivityNode {
+  return applyBpmnDocumentTransaction(owner, { commands }, catalog);
 }
 
 export interface BpmnDocumentShape {
@@ -777,8 +778,8 @@ function connectionReferences(parsed: ParsedBpmnDocument, element: Element, name
 }
 
 /** Complete DI projection, including pools, lanes, boundary events, data and artifact connections. */
-export function projectBpmnDocumentScene(owner: ActivityNode, diagramId: string): BpmnDocumentScene {
-  const parsed = readBpmnDocument(owner);
+export function projectBpmnDocumentScene(owner: ActivityNode, diagramId: string, catalog?: ActivityCatalogLookup): BpmnDocumentScene {
+  const parsed = readBpmnDocument(owner, catalog);
   const diagram = parsed.byId.get(diagramId);
   if (!diagram || !is(diagram, bpmnNamespaces.diagram, "BPMNDiagram")) fail(`diagram '${diagramId}' is unavailable`);
   const plane = uniqueChild(diagram, bpmnNamespaces.diagram, "BPMNPlane");
