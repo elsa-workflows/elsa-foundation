@@ -74,7 +74,7 @@ internal static class NativeInternalWitness
         var business = Array.FindIndex(trace, p => p[1] == "finish-input" && p[2] == "evaluated");
         Check(automatic >= 0 && completion > automatic && business > completion && trace.Count(p => p[1] == "finish-input" && p[2] == "evaluated") == 1,
             "NI4: queued business input overtook internal progress or evaluation replayed");
-        Check(h.World.Store.Instances[h.Target.Id].StateVersion == 12, "NI5: new internal checkpoint lacks its native host gate");
+        Check(h.World.Store.Instances[h.Target.Id].StateVersion == 13, "NI5: new internal checkpoint lacks its native host gate");
         NativeWorkflows.Registry.Remove(wf.Id);
         h.Send(ReceiptQuery.Kind, new ReceiptQuery(frame, "finish-input")); h.Drain();
         Check(h.Replies.Last() is { Result: "Found", Status: "Completed", Outcome: "handled", EvaluationStarted: true }, "NI3: pure terminal lookup lost evaluation evidence");
