@@ -9,6 +9,7 @@ import {
 import type { ElsaStudioModuleApi, StudioExpressionEditorProps, StudioExpressionSourceRendererProps } from "@elsa-workflows/studio-sdk";
 import { javaScriptToolingProjection } from "./javaScriptToolingProjection";
 import "./styles.css";
+import { preservesJavaScriptWithAddedVariable } from "./variableAdditionPreservation";
 
 const javaScriptSyntax = "JavaScript";
 
@@ -16,6 +17,11 @@ export function register(api: ElsaStudioModuleApi) {
   api.expressionEditors.add({
     id: "elsa.javascript-expression-editor",
     order: 100,
+    variableAdditionPreservation: {
+      language: javaScriptSyntax,
+      revision: "binding-pure-v1.1",
+      allows: preservesJavaScriptWithAddedVariable
+    },
     supports: context => context.syntax === javaScriptSyntax,
     surfaces: {
       inline: JavaScriptInlineEditor,

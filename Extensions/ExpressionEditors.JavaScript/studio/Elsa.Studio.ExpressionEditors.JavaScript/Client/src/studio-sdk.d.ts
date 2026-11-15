@@ -107,6 +107,12 @@ declare module "@elsa-workflows/studio-sdk" {
 
   export interface StudioExpressionEditorContribution {
     id: string;
+  /** Language-owned proof that adding an unrelated lexical variable preserves this authored expression. */
+  variableAdditionPreservation?: {
+    language: string;
+    revision: string;
+    allows(expression: Readonly<Record<string, unknown>>): boolean;
+  };
     order?: number;
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;

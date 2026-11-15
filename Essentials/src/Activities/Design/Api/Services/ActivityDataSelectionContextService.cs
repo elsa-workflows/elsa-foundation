@@ -99,7 +99,7 @@ internal sealed class ActivityDataSelectionContextService(
             }
             if (document is null) return Reply("unavailable", "activity-data.provider-unavailable");
             var visibleVersions = catalogSnapshot.Entries.Select(x => x.ActivityVersionId).ToHashSet(StringComparer.Ordinal);
-            if (!CatalogContains(document.RootActivity, visibleVersions, cancellationToken))
+            if (!CatalogContains(document.RootActivity, visibleVersions, structures, cancellationToken))
                 return Reply("denied", "activity-data.catalog-denied");
             var analysis = await authorities[0].AnalyzeAsync(document, request.Target, request.Query, cancellationToken);
             if (analysis.ContractRevision != snapshotHash) return Reply("unavailable", "activity-data.analysis-invalid");
@@ -151,7 +151,7 @@ internal sealed class ActivityDataSelectionContextService(
 
     private bool Visible(string? tenant) => tenant is null || StringComparer.Ordinal.Equals(tenant, actor.TenantId);
 
-    private bool CatalogContains(ActivityNode? root, IReadOnlySet<string> visibleVersions, CancellationToken cancellationToken)
+    internal static bool CatalogContains(ActivityNode? root, IReadOnlySet<string> visibleVersions, IActivityStructureService structures, CancellationToken cancellationToken)
     {
         if (root is null) return true;
         var pending = new Stack<(ActivityNode Node, int Depth)>();
