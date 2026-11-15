@@ -907,6 +907,7 @@ def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
                 scope_peer = (peer_directory, peer_url)
             env = dict(clean_environment(), DOTNET_CLI_HOME=str(data / "home"),
                        UX_SOURCE_SHA=sha, **{"Logging__LogLevel__Microsoft.Hosting.Lifetime": "Information"})
+            report['dotnetFileWatcher'] = 'polling' if env.get('DOTNET_USE_POLLING_FILE_WATCHER') in ('1', 'true') else 'platform-default'
             (data / "home").mkdir()
             report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url, scopePeerUrl=peer_url)
             with OwnedBackend(backend, backend_url, output, env, setup_dll, scope_peer, studio_dll) as owned_backend:
