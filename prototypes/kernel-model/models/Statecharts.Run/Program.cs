@@ -7,6 +7,10 @@ using Kernel.Sim.Native;
 using Kernel.Statecharts;
 using Kernel.Statecharts.Native;
 
+if (args is ["--outcomes-list"]) { foreach (var n in NativeOutcomeWitness.Names.Concat(NativeOutcomeWitness.LegacyNames).Concat(NativeOutcomeReaders.ReaderNames).Concat(NativeOutcomeReaders.RefusalNames).Concat(NativeOutcomeReaders.TamperNames).Concat(NativeOutcomeGateWitness.Names)) Console.WriteLine(n); return; }
+if (args is ["--outcomes"]) { NativeOutcomeWitness.Run(); NativeOutcomeReaders.Run(); NativeOutcomeGateWitness.Run(); return; }
+if (args is ["--outcome-readers"]) { NativeOutcomeReaders.Run(); return; }
+if (args is ["--outcome-gate"]) { NativeOutcomeGateWitness.Run(); return; }
 if (args is ["--native-guards"]) { NativeGuardWitness.Run(); return; }
 if (args is ["--native-checkpoints"]) { NativeCheckpointWitness.Run(); return; }
 if (args is ["--native-prelude"]) { NativePreludeWitness.Run(); return; }
