@@ -265,6 +265,56 @@ jobs:
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
           --summary "$GITHUB_STEP_SUMMARY"
 
+      - name: Capture whole-project BPMN and design test discovery
+        if: ${{ success() && github.event_name == 'pull_request' }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          shard = Path(os.environ["RUNNER_TEMP"]) / "shard"
+          runs = json.loads((shard / "runs.json").read_text())
+          if not isinstance(runs, list):
+              raise RuntimeError("Expected the shard's recorded run list")
+          projects = {
+              "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+              "Essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
+          }
+          seen = set()
+          failed = False
+          for index, run in enumerate(runs):
+              project = run["project"]
+              if project not in projects:
+                  continue
+              if run.get("filter", "") != "" or run.get("group", "") != "" or project in seen:
+                  raise RuntimeError("Discovery requires one unfiltered whole-project run: " + project)
+              seen.add(project)
+              out = shard / "discovery" / str(index)
+              out.mkdir(parents=True, exist_ok=False)
+              command = ["dotnet", "test", project, "-c", "Release", "--no-build", "--no-restore",
+                         "--list-tests", "-p:WarningsNotAsErrors=NU1603"]
+              metadata = {
+                  "project": project, "runIndex": index, "command": command,
+                  "cwd": os.getcwd(), "githubSha": os.environ["GITHUB_SHA"],
+                  "language": {"DOTNET_CLI_UI_LANGUAGE": "en-US", "VSLANG": "1033"},
+                  "normalTry1": "try1/" + str(index), "normalTry2": "try2/" + str(index),
+                  "exitCode": None,
+              }
+              record = out / "metadata.json"
+              record.write_text(json.dumps(metadata, indent=2) + "\n")
+              with (out / "stdout.log").open("wb") as stdout, (out / "stderr.log").open("wb") as stderr:
+                  result = subprocess.run(command, stdout=stdout, stderr=stderr,
+                                          env={**os.environ, **metadata["language"]}, check=False)
+              metadata["exitCode"] = result.returncode
+              record.write_text(json.dumps(metadata, indent=2) + "\n")
+              print(project + ": raw discovery exit " + str(result.returncode), flush=True)
+              failed = failed or result.returncode != 0
+          if failed:
+              raise SystemExit(1)
+          PY
+
       - name: Upload the shard outcome
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -280,7 +330,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: trx-${{ matrix.shard }}
-          path: ${{ runner.temp }}/shard/try*/**/*.trx
+          path: |
+            ${{ runner.temp }}/shard/try*/**/*.trx
+            ${{ runner.temp }}/shard/discovery/**
           if-no-files-found: ignore
           retention-days: 7
 
