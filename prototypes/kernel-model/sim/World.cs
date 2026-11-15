@@ -92,6 +92,7 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 {
     public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => world.Store.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
     {

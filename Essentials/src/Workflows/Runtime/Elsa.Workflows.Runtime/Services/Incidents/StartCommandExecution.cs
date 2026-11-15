@@ -46,13 +46,17 @@ internal static class StartCommandExecution
         if (payload is null)
             return null;
 
+        var protectedStart = payload.StartAuthority?.StandaloneTrigger is not null ||
+            payload.StartAuthority?.ModelWork is not null || payload.StimulusDeliveryOrigin is not null;
+        var startedAt = protectedStart ? envelope.EnqueuedAt : occurredAt;
+
         return new WorkflowExecutionState(
             workflowExecutionId,
             payload.PinnedExecutable,
             WorkflowExecutionStatus.Running,
             SubStatus: null,
-            CreatedAt: occurredAt,
-            StartedAt: occurredAt,
+            CreatedAt: startedAt,
+            StartedAt: startedAt,
             UpdatedAt: occurredAt,
             CompletedAt: null,
             payload.CorrelationId,
@@ -64,6 +68,9 @@ internal static class StartCommandExecution
             PinnedSource = payload.PinnedSource,
             Partition = payload.Partition,
             Authority = payload.Authority,
+            IngressOrigin = payload.StartAuthority?.StandaloneTrigger,
+            ModelWorkOrigin = payload.StartAuthority?.ModelWork,
+            StimulusDeliveryOrigin = payload.StimulusDeliveryOrigin,
             DispatchNestingDepth = payload.DispatchNestingDepth,
             TestScope = payload.TestScope
         };

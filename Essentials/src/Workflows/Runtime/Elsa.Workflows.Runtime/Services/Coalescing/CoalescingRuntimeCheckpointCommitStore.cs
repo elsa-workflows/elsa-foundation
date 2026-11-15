@@ -57,6 +57,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
 
     private readonly IRuntimeCheckpointCommitStore _inner;
 
+    bool IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission => _inner.SupportsInitialStartFaultAdmission;
     public bool SupportsHistory => _inner.SupportsHistory;
     public bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => _inner.CanCommitHistory(selectedStore);
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
