@@ -19,6 +19,7 @@ public static class WorkflowDesignApiCapabilities
             new("workflow-definition-submit-schema", "design/workflows/definitions/submit/schema"),
             new("activity-structures", "design/workflows/structures"),
             new("workflow-drafts", "design/workflows/drafts/{draftId}", templated: true),
+            new("workflow-draft-candidate-validation", "design/workflows/drafts/{draftId}/candidate-validation", templated: true),
             new("workflow-draft-validations", "design/workflows/drafts/{draftId}/validations", templated: true),
             new("workflow-draft-promote-version-preflight", "design/workflows/drafts/{draftId}/promotion-preflight", templated: true),
             new("workflow-draft-promote-exact-version", "design/workflows/drafts/{draftId}/promote", templated: true),

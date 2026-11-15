@@ -8,7 +8,7 @@ See the [domain-owned API specification](../../../../../specs/220-domain-owned-a
 
 Add `ActivitiesDesignApiFeature` to the active shell together with an Activity Design persistence provider and the reconciliation features that populate its definitions. The feature supplies default availability evaluation, diagnostics projection, and an in-memory availability-settings store; durable hosts should replace that store as appropriate.
 
-The package has no dependency on `Elsa.Workbench`. Custom hosts expose the same routes by composing the feature in their own shell. `ActivitiesDesignApiFeature` calls the public `ActivitiesDesignApi.MapActivitiesDesignApi(IEndpointRouteBuilder)` mapping entry point; all 39 routes are ordinary ASP.NET Core Minimal API endpoints with standard route, authorization, API Explorer, and OpenAPI metadata.
+The package has no dependency on `Elsa.Workbench`. Custom hosts expose the same routes by composing the feature in their own shell. `ActivitiesDesignApiFeature` calls the public `ActivitiesDesignApi.MapActivitiesDesignApi(IEndpointRouteBuilder)` mapping entry point; its routes are ordinary ASP.NET Core Minimal API endpoints with standard route, authorization, API Explorer, and OpenAPI metadata.
 
 The independent activity-data context route adds authorized metadata analysis at
 `POST /design/activities/drafts/{draftId}/activity-data/context`. It requires the shared
@@ -23,6 +23,13 @@ analyzer's separate Prepare-phase check requires exactly one scoped authority. S
 [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for ownership, lifetimes and replacement rules.
 
 API-visible request and response types live in `Elsa.Activities.Design.Api.Core`. The implementation package forwards the former public type names, supplies owner-local source-generated JSON metadata, and keeps providers, stores, handlers, and transport adapters outside endpoint/OpenAPI contract metadata. This separation lets a retired feature generation release its endpoint, DI, serializer, and API-description state.
+
+Complete unsaved graph proposals use `POST /design/activities/drafts/{draftId}/candidate-validation`
+(`activity-draft-candidate-validation`). This request runs the normal contract/provider and shared
+read validators without saving the draft or a validation receipt. It requires the exact active revision,
+design ownership, payload visibility, provider authoring authority and current catalog. Authority and
+revision changes during validation refuse the result. Existing custom authoring-service implementations
+without this optional operation return `unavailable`.
 
 ## Supported route areas
 

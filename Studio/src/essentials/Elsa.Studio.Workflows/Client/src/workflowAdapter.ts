@@ -1142,7 +1142,11 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
     .filter(edge => edge !== null);
 }
 
+/** Complete terminates the nearest reusable graph boundary, regardless of legacy catalog Done metadata. */
+export const graphBoundaryCompleteTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
+
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {
+  if (catalogItem?.activityTypeKey === graphBoundaryCompleteTypeKey) return [];
   // Executable inspection supplies its immutable contract; never recompute it from today's catalog defaults.
   const pinned = readStringList(activity.executableOutcomes);
   if (Array.isArray(activity.executableOutcomes)) return pinned.map(name => ({ name, displayName: name }));

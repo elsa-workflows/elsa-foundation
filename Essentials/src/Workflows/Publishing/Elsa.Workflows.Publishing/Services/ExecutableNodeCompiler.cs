@@ -404,7 +404,8 @@ public sealed class ExecutableNodeCompiler(
                     IsNullable: false,
                     IsRequired: true),
                 authoredInputs[input.Key].Value,
-                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "Variable", StringComparison.OrdinalIgnoreCase)
+                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "Variable", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(authoredInputs[input.Key].Value.ExpressionType, "WorkflowRequest", StringComparison.OrdinalIgnoreCase)
                     ? authoredInputs[input.Key].Conversion
                     : null),
             StringComparer.Ordinal);
