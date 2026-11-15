@@ -649,6 +649,59 @@ public sealed partial class ActivityDataSelectionAnalyzerTests
         Assert.All(results.Take(2), source => Assert.Equal(ActivityChildResultAvailability.Definite, source.Availability));
     }
 
+    [Theory]
+    [InlineData(false, false, "sum")]
+    [InlineData(true, false, "sum")]
+    [InlineData(false, true, "sum")]
+    [InlineData(false, true, "$result")]
+    public async Task Bound_result_preview_and_draft_findings_use_the_stored_mode_and_hide_sensitive_bindings(
+        bool sensitive, bool sensitiveOutput, string projection)
+    {
+        var catalog = new StubActivityCatalog().Add("test", [Definition("CustomerId")],
+            [new("sum", "sum", new("Double"), null, "Sum", null, false)]).Add("sequence");
+        var previewer = new RecordingPreviewer();
+        using var provider = ActivityDataSelectionTestSupport.Provider(catalog, configure: services =>
+        {
+            services.AddSingleton<IActivityBindingConversionPreviewer>(previewer);
+            if (projection == "$result") services.AddSingleton<IActivitySerializedShapeSource>(new FixedShape(Known()));
+        });
+        var input = Input(ScopeFreeResult("producer", projection)) with { Conversion = new(AuthoredValueConversionMode.None), IsSensitive = sensitive };
+        var producer = Node("producer") with { Outputs = [ArgumentState.Null("sum") with { IsSensitive = sensitiveOutput }] };
+        var document = Document(Sequence(producer, Node("consumer", input)));
+        var analyzer = Analyzer(provider);
+        var answer = await analyzer.AnalyzeAsync(document, new("consumer", "CustomerId"),
+            new() { IncludeSources = false, PreviewBindingConversion = true });
+        var draft = await analyzer.AnalyzeAsync(document with { ValidateBindingConversions = true });
+        var publication = await analyzer.AnalyzeAsync(document);
+        Assert.Empty(answer.Sources);
+        Assert.Empty(publication.Findings);
+        if (sensitive || sensitiveOutput)
+        {
+            Assert.Null(answer.BindingConversion);
+            Assert.Empty(draft.Findings);
+            Assert.Empty(previewer.Calls);
+            return;
+        }
+        Assert.Equal("NoneModeContractMismatch", answer.BindingConversion!.ReasonCode);
+        var finding = Assert.Single(draft.Findings);
+        Assert.Equal("consumer/inputs/CustomerId", finding.Path);
+        Assert.Equal("ValueConversion/NoneModeContractMismatch", finding.Type);
+        Assert.Equal(2, previewer.Calls.Count);
+        Assert.All(previewer.Calls, call => Assert.Equal(("Double", ValueRepresentation.TypedValue, "String", AuthoredValueConversionMode.None), call));
+    }
+
+    private sealed class RecordingPreviewer : IActivityBindingConversionPreviewer
+    {
+        public List<(string, ValueRepresentation, string, AuthoredValueConversionMode)> Calls { get; } = [];
+
+        public ActivityBindingConversionPreview Preview(TypeReference sourceType, ValueRepresentation representation,
+            TypeReference targetType, AuthoredValueConversionRequest? conversion)
+        {
+            Calls.Add((sourceType.Alias, representation, targetType.Alias, conversion!.Mode));
+            return new(sourceType, targetType, null, "NoneModeContractMismatch", "None requires matching contracts.");
+        }
+    }
+
     private static IActivityDataSelectionAnalyzer Analyzer(ServiceProvider provider) => provider.GetRequiredService<IActivityDataSelectionAnalyzer>();
     private static ServiceProvider Provider(Action<IServiceCollection>? configure = null) => ActivityDataSelectionTestSupport.Provider(Catalog(), configure: configure);
     private static StubActivityCatalog Catalog(InputDefinition? input = null) => new StubActivityCatalog().Add("test", [input ?? Definition("CustomerId")],

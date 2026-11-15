@@ -36,7 +36,7 @@ public sealed class ValueFlowValidator(
         ValidateConcurrentWrites(graph, errors);
         var analysis = await sourceAnalyzer.AnalyzeAsync(new ActivityDataSelectionDocument(
             "WorkflowDefinition", draft.Id, $"{draft.Id}/{draft.LastModifiedAt:O}", draft.State.RootActivity,
-            [.. draft.State.Inputs], [.. draft.State.Variables], [.. draft.State.Outputs]), cancellationToken: cancellationToken);
+            [.. draft.State.Inputs], [.. draft.State.Variables], [.. draft.State.Outputs]) { ValidateBindingConversions = true }, cancellationToken: cancellationToken);
         errors.AddRange(analysis.Findings);
         ValidateStableCollectionIdentities(graph, errors);
         return errors;

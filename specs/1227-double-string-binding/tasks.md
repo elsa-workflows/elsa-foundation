@@ -1,5 +1,5 @@
 # Delivery tasks
 
-- [ ] Pin and execute NumericToString, including positive, negative and culture coverage.
-- [ ] Show current binding feedback and verify rejection and recovery.
-- [ ] Prove the published Sum caller through the composed host and inspect the UI.
+- [x] Pin and execute NumericToString, including positive, negative and culture coverage.
+- [x] Show current binding feedback and verify rejection and recovery.
+- [x] Add the composed Sum caller journey, run-state evidence and inspector screenshots.

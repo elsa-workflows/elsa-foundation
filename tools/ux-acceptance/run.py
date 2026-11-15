@@ -39,6 +39,7 @@ CAPTURES = {
     'workflow template metadata defaults': ['reference', 'template-defaults', 'template-edits', 'template-catalog-entry', 'template-persisted'],
     'user tasks inbox and response': ['reference', 'tasks-empty', 'tasks-list', 'task-detail', 'task-actions', 'task-history', 'task-forms', 'task-form-versions', 'task-form-editor', 'task-form-actions', 'completed', 'tasks-return', 'task-not-found', 'task-tab-return'],
     'executable designer parity': ['reference', 'definition-sequence', 'executable-sequence', 'nested-sequence', 'draft-sequence', 'empty-sequence', 'compensation', 'flowchart', 'bpmn'],
+    'Double activity output binds to text': ['reference', 'automatic-conversion', 'incompatible-conversion', 'recovered-conversion'],
     'choose data for activity outputs': ['reference', 'choose-data-entry', 'chooser-open', 'output-reference', 'not-selectable', 'replace-chooser', 'chooser-320', 'capability-control', 'capability-reference'],
     'choose nested activity data': ['reference', 'customer-sources', 'customer-members', 'customer-reference', 'customer-code-reopened', 'customer-flowchart', 'customer-held', 'customer-loading', 'customer-retry', 'customer-320'],
     'choose declared and scoped activity data': ['reference', 'source-groups', 'variable-literal', 'variable-empty', 'variable-reference', 'outer-variable-reference', 'declared-reference', 'unsupported-request', 'request-repaired', 'no-request-proposal', 'source-320'],
@@ -99,6 +100,7 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
     **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
+    'Double activity output binds to text': {'numeric-binding-proof.json'},
     'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
@@ -515,7 +517,12 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             report.update(stage='host-start', studioUrl=studio_url, backendUrl=backend_url,
                           hostProfile='ElsaDashboardQualification=true; private native principals; Copilot disabled',
                           modelEvidence='Native browser Weaver message submissions only; physical SDK calls not measured')
-            with host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', env) as backend_process:
+            backend_env = env
+            if selected == {'Double activity output binds to text'}:
+                # The focused conversion proof exercises a worker whose decimal separator is a comma.
+                backend_env = dict(env, LANG='nl_NL.UTF-8', LC_ALL='nl_NL.UTF-8')
+                report['backendLocale'] = backend_env['LC_ALL']
+            with host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / 'backend.log', backend_env) as backend_process:
                 with host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / 'studio.log',
                           dict(env, Studio__BackendBaseUrl=backend_url)) as studio_process:
                     report['ownedPids'] = {'backend': backend_process.pid, 'studio': studio_process.pid}

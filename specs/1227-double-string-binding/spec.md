@@ -1,6 +1,6 @@
 # Automatic Double to String bindings
 
-**Status**: In progress
+**Status**: Implemented
 
 An author selects a reusable activity's Double output for Write Line.Text and publishes the caller. Write Line receives the invariant round-trip text. A second binding to the original output receives the Double. The acceptance example is 19.25 on a Dutch worker.
 
