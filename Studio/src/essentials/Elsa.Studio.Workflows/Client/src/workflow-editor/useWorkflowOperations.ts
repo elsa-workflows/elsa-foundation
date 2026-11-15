@@ -363,7 +363,8 @@ export function useWorkflowOperations({
       setAutosavePaused(false);
     } catch (e) {
       setStatus("");
-      const failureMessage = decorateConversionDiagnostic(e instanceof Error ? e.message : String(e));
+      const failure = describeWorkflowError(e, "Publication failed.");
+      const failureMessage = decorateConversionDiagnostic(failure.detail || failure.message);
       const publicationValidationErrors = extractExpressionValidationDiagnosticMessages(e);
       if (promotedVersionId && isStalePreflightError(e)) {
         setPublicationReview(current => current ? {
@@ -676,7 +677,9 @@ async function preflightSnapshot(
 function isStalePreflightError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const candidate = error as { status?: unknown; statusCode?: unknown; response?: { status?: unknown } };
-  return candidate.status === 409 || candidate.statusCode === 409 || candidate.response?.status === 409;
+  const problem = describeWorkflowError(error, "Publication failed.");
+  const conflict = candidate.status === 409 || candidate.statusCode === 409 || candidate.response?.status === 409 || problem.status === 409;
+  return conflict && (problem.code === "publication_snapshot_stale" || problem.code === "slot_revision_conflict");
 }
 
 /**

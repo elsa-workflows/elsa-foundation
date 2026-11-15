@@ -720,6 +720,28 @@ describe("workflow publication operations", () => {
     expect(fixture.current().publicationReview?.phase).toBe("success");
   });
 
+  it.each(["publication_activation_failed", "slot_owner_conflict", undefined])("preserves the actual conflict detail instead of calling %s a stale review", async errorCode => {
+    const fixture = renderOperations({ publishFailure: Object.assign(new Error("Conflict"), {
+      status: 409, payload: { status: 409, errorCode, detail: "Another source owns an equivalent endpoint reservation." }
+    }) });
+    await prepare(fixture);
+    await publish(fixture);
+    expect(fixture.current().publicationReview).toMatchObject({ phase: "partialFailure", promotedVersionId: "version-2" });
+    expect(fixture.current().publicationReview?.failureMessage).toContain("Another source owns an equivalent endpoint reservation.");
+    expect(fixture.current().publicationReview?.failureMessage).not.toContain("became stale");
+    expect(fixture.current().publicationReview?.preflight).toBeDefined();
+  });
+
+  it("requires a new review for the typed slot revision conflict", async () => {
+    const fixture = renderOperations({ publishFailure: Object.assign(new Error("Conflict"), {
+      status: 409, payload: { status: 409, errorCode: "slot_revision_conflict" }
+    }) });
+    await prepare(fixture);
+    await publish(fixture);
+    expect(fixture.current().publicationReview?.preflight).toBeUndefined();
+    expect(fixture.current().publicationReview?.failureMessage).toContain("review the target again");
+  });
+
   it("requires a fresh authoritative review when the publish token is stale", async () => {
     const fixture = renderOperations({ stalePublishAttempts: 1 });
     await prepare(fixture);
@@ -1096,6 +1118,7 @@ function renderOperations(options: {
   failPromoteAttempts?: number;
   failSnapshotPreflight?: boolean;
   stalePublishAttempts?: number;
+  publishFailure?: Error;
   publishValidationDiagnostics?: unknown[];
   savedValidationErrors?: string[];
   /** Spec 261: entries with a severity the saved draft carries. */
@@ -1205,7 +1228,8 @@ function renderOperations(options: {
     if (url === "/publishing/workflows/version-2/publish") {
       mutationOrder.push("publish");
       publishAttempts += 1;
-      if (publishAttempts <= (options.stalePublishAttempts ?? 0)) throw Object.assign(new Error("preflight token stale"), { status: 409 });
+      if (publishAttempts <= (options.stalePublishAttempts ?? 0)) throw Object.assign(new Error("preflight token stale"), { status: 409, payload: { status: 409, errorCode: "publication_snapshot_stale" } });
+      if (options.publishFailure) throw options.publishFailure;
       if (options.publishValidationDiagnostics) {
         throw Object.assign(new Error("Expression validation rejected publication."), {
           status: 422,
