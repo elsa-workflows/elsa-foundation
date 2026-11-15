@@ -409,6 +409,6 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         }
     }
 
-    private static string SourceFingerprint(RuntimeCheckpointCommit commit) => RuntimeCheckpointCommitFingerprint.Compute(
+    private static string SourceFingerprint(RuntimeCheckpointCommit commit) => RuntimeHistorySourceIdentity.Compute(
         commit with { HistoryBatches = null });
 }

@@ -2,17 +2,17 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Services.Coalescing;
+namespace Elsa.Workflows.Runtime.Services.History;
 
-/// <summary>In-memory preparation proof; historical durable replay fingerprints remain unchanged.</summary>
-internal static class RuntimePreparedFlushIdentity
+/// <summary>In-memory source agreement; historical durable replay fingerprints remain unchanged.</summary>
+internal static class RuntimeHistorySourceIdentity
 {
     private static readonly JsonSerializerOptions Options = CreateOptions();
 
     internal static string Compute(RuntimeCheckpointCommit commit)
     {
         // Bind raw CLR strings before ordinary JSON can replace malformed UTF-16. Refreshable
-        // concurrency conditions belong to a physical attempt, outside this prepared logical payload.
+        // concurrency conditions belong to a physical attempt, outside this logical source payload.
         var logical = commit with { ExpectedFence = null, ExpectedModelExecution = null, ExpectedModelParentWait = null };
         var exact = JsonSerializer.Serialize(logical, Options);
         return RuntimeHistoryIdentity.CreateBinding([RuntimeCheckpointCommitFingerprint.Compute(commit), exact]);

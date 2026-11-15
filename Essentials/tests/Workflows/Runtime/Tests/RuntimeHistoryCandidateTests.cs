@@ -211,6 +211,31 @@ public sealed class RuntimeHistoryCandidateTests
         else await fixture.Capture.ValidateFinalAsync(flush);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Logical_checkpoint_preserves_exact_native_outcome_code_units(bool changed)
+    {
+        var original = new string((char)0xd800, 1);
+        var replacement = new string((char)0xd801, 1);
+        using var fixture = await Fixture.Create(Policy("ActivityCompleted", "ActivityContinuationCompleted"));
+        ActivityCompletion Completion(string outcome) => new("activity", "attempt",
+            ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), outcome, At.AddSeconds(5), "contract");
+        var state = Activity(ActivityExecutionStatus.Completed) with { Completion = Completion(original) };
+        var captured = await fixture.Capture.EnrichAsync(Commit("logical-exact", RuntimeCheckpointNames.ActivityCompleted, activity: state) with
+        {
+            HistorySourceFacts = [new(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, "activity", At.AddSeconds(5),
+                activityExecutionId: "activity", outcomeNames: [original])]
+        });
+        if (changed)
+        {
+            var native = Assert.Single(captured.StateChanges.ActivityExecutions);
+            captured = captured with { StateChanges = new(null, null,
+                [native with { State = native.State with { Completion = Completion(replacement) } }], [], [], [], []) };
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(captured));
+        }
+        else await fixture.Capture.ValidateFinalAsync(captured);
+    }
+
     [Fact]
     public async Task An_undeclared_kind_or_different_selected_source_bridge_cannot_qualify_capture()
     {
