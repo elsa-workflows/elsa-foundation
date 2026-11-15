@@ -1,3 +1,11 @@
+export const declarationThemes = ["light", "dark"] as const;
+export const declarationPanes = [
+  { name: "360", viewport: 360, pane: 244 },
+  { name: "390", viewport: 390, pane: 274 },
+  { name: "constrained-desktop", viewport: 1280, pane: 244 },
+  { name: "wide", viewport: 1440, pane: 1000 }
+] as const;
+
 /** Browser-side measurement shared by the composed journey and isolated regression/control. */
 export function measureDeclarationControl(element: Element) {
   if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) throw new Error("Expected a native declaration control");

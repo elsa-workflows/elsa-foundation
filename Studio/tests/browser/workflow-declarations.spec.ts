@@ -1,17 +1,11 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { measureDeclarationControl } from "../declarationReadability";
+import { declarationPanes, declarationThemes, measureDeclarationControl } from "../declarationReadability";
 
 const surfaces = [
   { region: "Workflow inputs", prefix: "Input", storage: true },
   { region: "Workflow outputs", prefix: "Output", storage: false },
   { region: "Workflow variables", prefix: "Variable", storage: true },
   { region: "Scoped variables", prefix: "Variable", storage: true }
-];
-const sizes = [
-  { name: "360", viewport: 360, pane: 244 },
-  { name: "390", viewport: 390, pane: 274 },
-  { name: "constrained-desktop", viewport: 1280, pane: 244 },
-  { name: "wide", viewport: 1440, pane: 1000 }
 ];
 async function readable(control: Locator) {
   await control.scrollIntoViewIfNeeded();
@@ -20,8 +14,8 @@ async function readable(control: Locator) {
   return control.evaluate(measureDeclarationControl);
 }
 
-for (const theme of ["light", "dark"]) {
-  for (const size of sizes) test(`${theme} declaration editors retain readable values in ${size.name} panes`, async ({ page }, info) => {
+for (const theme of declarationThemes) {
+  for (const size of declarationPanes) test(`${theme} declaration editors retain readable values in ${size.name} panes`, async ({ page }, info) => {
     await page.setViewportSize({ width: size.viewport, height: 1000 });
     await page.goto(`/workflow-declarations.html?theme=${theme}&paneWidth=${size.pane}`);
     for (const surface of surfaces) {
