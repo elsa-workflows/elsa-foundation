@@ -924,11 +924,12 @@ ol.stmts code { font-size: 12.5px; }
 <section class="ch" id="costs">
   <div class="num">13</div>
   <h2>What it costs</h2>
-  <p>PostgreSQL round trips per workflow run: today's core, counted on 11 November, against the native model on the new kernel. Hover a row for both figures.</p>
-  <div class="legend"><span><i style="background:var(--hot)"></i>Today's core</span><span><i style="background:var(--accent)"></i>New kernel, native model</span></div>
+  <p>EF Core commands per workflow run on SQLite, for three systems in one unit: Elsa 3 (3.10.1), Elsa 4 today (main) and the new kernel's native model. Hover a row for the three figures. On PostgreSQL the kernel's Balanced commit is 2 round trips with the fence in the batch, 3 with the checked fence (NATIVE.md section 5).</p>
+  <div class="seg" id="cost-mode" role="group" aria-label="Save mode"><button type="button" data-mode="0" aria-pressed="true">Default (Balanced)</button><button type="button" data-mode="1" aria-pressed="false">Save after every activity (Durable)</button></div>
+  <div class="legend"><span><i style="background:var(--l1)"></i>Elsa 3 (3.10.1)</span><span><i style="background:var(--hot)"></i>Elsa 4 today (main)</span><span><i style="background:var(--accent)"></i>New kernel (prototype)</span></div>
   <figure>
-    <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 424" role="img" aria-label="Round trips per run: today's core needs 48 to 680; the new kernel needs 0 to 123 for the same workflows."></svg></div>
-    <figcaption>Kernel figures are with the fence as its own statement; with the fence in the batch they are lower (2, 8, 2, 22, 8, 82). The fork-join figures are from the merged kernel. The model's history is one journal row per commit; the projector's own writes come on top, and today's figures include its viewer rows.</figcaption>
+    <div class="fig"><svg class="dg" id="cost-svg" viewBox="0 0 960 360" role="img" aria-label="EF Core commands per workflow run on SQLite for Elsa 3, Elsa 4 today and the new kernel, for three workflows; switch between default and save-after-every-activity."></svg></div>
+    <figcaption style="overflow-wrap:anywhere"><b>What is counted:</b> the run's own EF Core commands on SQLite; commands, not time. Elsa 3 (from evidence/elsa3-cost/RECEIPT.md, workflow-flow column): its saves are separate writes with no single transaction, background queue polls are excluded, and the count is largely history (25 of 29, 11 of 15, 12 of 25 in the default mode). Elsa 4 (Essentials/tests/Activities/Http/IntegrationTests/CommandBudgets/ef-command-budgets.json): the gate counts one database context, where Elsa 3's count covers both of its contexts. Kernel (prototypes/kernel-model/NATIVE.md section 5, the SQLite commands in brackets): the history projector is not in its bars (about 4 to 5 SQLite commands per round), so for fork-join the kernel is about level with Elsa 3 once that is added. The kernel is a prototype, not product code.</figcaption>
   </figure>
   <div class="tablewrap"><table>
     <thead><tr><th>Engine</th><th class="n">Balanced run on the owner</th><th>Notes</th></tr></thead>
@@ -1219,37 +1220,43 @@ ol.stmts code { font-size: 12.5px; }
   const showTip = (e, text) => { tip.textContent = text; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; tip.style.opacity = 1; };
   const hideTip = () => { tip.style.opacity = 0; };
   const cs = document.getElementById("cost-svg");
-  const data = [
-    ["HTTP request to response, Ephemeral", 80, 0],
-    ["HTTP request to response, Balanced", 80, 3],
-    ["HTTP request to response, Durable", 153, 12],
-    ["WriteLine sequence, Balanced", 48, 3],
-    ["Ten WriteLines, Durable", 230, 33],
-    ["Fork, wait, resume, join, Balanced", 142, 11],
-    ["Forty WriteLines, Durable", 680, 123]
+  const sys = [["Elsa 3 (3.10.1)", "var(--l1)"], ["Elsa 4 today (main)", "var(--hot)"], ["New kernel (prototype)", "var(--accent)"]];
+  const wfs = [
+    ["Ten WriteLines", [[29, 64], [64, 221], [3, 63]]],
+    ["HTTP request to response", [[15, 29], [83, 149], [3, 21]]],
+    ["Fork, wait, resume, join", [[25, 42], [131, 194], [18, 30]]]
   ];
-  const x0 = 320, k = 0.8, top = 20, rh = 52;
-  for (let v = 0; v <= 700; v += 100) {
-    const x = x0 + v * k;
-    cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + data.length * rh }));
-    cs.appendChild(el("text", { class: "ts", x, y: top + data.length * rh + 18, "text-anchor": "middle" }, String(v)));
-  }
-  cs.appendChild(el("text", { class: "ts", x: x0 + 280, y: top + data.length * rh + 36, "text-anchor": "middle" }, "PostgreSQL round trips per run"));
-  data.forEach(([label, today, model], n) => {
-    const y = top + n * rh;
-    cs.appendChild(el("text", { x: x0 - 14, y: y + 30, "text-anchor": "end" }, label));
-    const tw = Math.max(today * k, 2), mw = Math.max(model * k, 2);
-    const t = el("rect", { x: x0, y: y + 10, width: tw, height: 14, rx: 3 }); t.style.fill = "var(--hot)";
-    const m = el("rect", { x: x0, y: y + 27, width: mw, height: 14, rx: 3 }); m.style.fill = "var(--accent)";
-    cs.appendChild(t); cs.appendChild(m);
-    cs.appendChild(el("text", { class: "ts", x: x0 + tw + 6, y: y + 22 }, String(today)));
-    cs.appendChild(el("text", { class: "ts", x: x0 + mw + 6, y: y + 39 }, String(model)));
-    const hit = el("rect", { x: 0, y: y + 4, width: 960, height: rh - 4, fill: "transparent" });
-    const msg = label + ": today " + today + ", new kernel " + model + " round trips";
-    hit.addEventListener("mousemove", e => showTip(e, msg));
-    hit.addEventListener("mouseleave", hideTip);
-    cs.appendChild(hit);
-  });
+  const x0 = 250, k = 2.6, top = 16, rh = 96;
+  const drawCosts = mode => {
+    cs.replaceChildren();
+    for (let v = 0; v <= 250; v += 50) {
+      const x = x0 + v * k;
+      cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + wfs.length * rh }));
+      cs.appendChild(el("text", { class: "ts", x, y: top + wfs.length * rh + 18, "text-anchor": "middle" }, String(v)));
+    }
+    cs.appendChild(el("text", { class: "ts", x: x0 + 325, y: top + wfs.length * rh + 38, "text-anchor": "middle" }, "EF Core commands per workflow run, SQLite"));
+    wfs.forEach(([label, vals], n) => {
+      const y = top + n * rh;
+      cs.appendChild(el("text", { x: x0 - 14, y: y + 50, "text-anchor": "end" }, label));
+      vals.forEach((pair, i) => {
+        const v = pair[mode], w = Math.max(v * k, 2);
+        const r = el("rect", { x: x0, y: y + 8 + i * 25, width: w, height: 19, rx: 3 }); r.style.fill = sys[i][1];
+        cs.appendChild(r);
+        cs.appendChild(el("text", { class: "ts", x: x0 + w + 6, y: y + 23 + i * 25 }, String(v)));
+      });
+      const hit = el("rect", { x: 0, y: y + 2, width: 960, height: rh - 8, fill: "transparent" });
+      const msg = label + ": Elsa 3 " + vals[0][mode] + ", Elsa 4 today " + vals[1][mode] + ", new kernel " + vals[2][mode] + " commands";
+      hit.addEventListener("mousemove", e => showTip(e, msg));
+      hit.addEventListener("mouseleave", hideTip);
+      cs.appendChild(hit);
+    });
+  };
+  const costBtns = document.querySelectorAll("#cost-mode button");
+  costBtns.forEach(b => b.addEventListener("click", () => {
+    costBtns.forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+    drawCosts(+b.dataset.mode);
+  }));
+  drawCosts(0);
 
   /* deployment profiles */
   const pnotes = {
