@@ -610,8 +610,12 @@ test("standalone access and availability", async ({ page, browser }) => {
     await scopedJourney.capture("triggers-other-tenant");
 
     const creatorTarget = await j.echo("Resource authority survives creator departure");
-    const creatorLogin = await scoped.request.post(`${j.base}/_elsa/identity/login`, { data: { username: "acceptance-creator", password: "Password123!", tenantId: "default" } });
-    expect(creatorLogin.ok()).toBe(true); await scopedPage.goto("/workflows/triggers?backend=acceptance-primary");
+    await scopedPage.getByRole("button", { name: /^Account:/ }).click();
+    await scopedPage.getByRole("menuitem", { name: "Sign out", exact: true }).click();
+    await expect(scopedPage.locator('form[action="/_elsa/identity/login"]')).toBeVisible();
+    await signIn("acceptance-creator");
+    await expect(scopedPage.getByRole("heading", { name: trigger.name, exact: true })).toBeVisible();
+    await scopedPage.goto("/workflows/triggers?backend=acceptance-primary");
     const creatorJourney = new TriggerJourney(scopedPage, j.info);
     const creatorTrigger = await creatorJourney.create("http", "Resource-owned authority after creator departure");
     j.triggers.push(creatorTrigger.id);
