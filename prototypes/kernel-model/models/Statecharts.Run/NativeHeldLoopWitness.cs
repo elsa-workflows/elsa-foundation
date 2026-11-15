@@ -20,7 +20,7 @@ internal static class NativeHeldLoopWitness
             var wf = Wf.Workflow("machine-inbox", Wf.Parallel("parallel", null, machine,
                 Wf.Sequence("repair", Wf.Event("enable-wait", "held-enable"), Wf.Set("enable", "enabled", true),
                     Wf.Event("disable-wait", "held-disable"), Wf.Set("disable", "enabled", false))), ("enabled", false));
-            wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+            wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
             var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
             MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
             NativeGuardWitness.Release(h, "held-enable");
@@ -32,8 +32,11 @@ internal static class NativeHeldLoopWitness
                 Check(progress.Steps == committedSteps,
                     "NHL0: continuation reset the retained semantic counter before explicit recovery");
             };
-            h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain();
-            h.ObserveCommitted = null;
+            try
+            {
+                h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain();
+            }
+            finally { h.ObserveCommitted = null; }
             var held = Chart();
             Check(held is { Evaluating: "go", BusinessReady: false, Settling: { Steps: 4, Block: not null }, Control.Spec.Purpose: ControlPurpose.Loop } &&
                 h.State.Inboxes![frame].Receipts["go"] is { Status: "Evaluating", EvaluationStarted: true }, "NHL1: pre-business loop lost its retained native evaluation");

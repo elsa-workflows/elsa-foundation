@@ -75,7 +75,7 @@ internal static class NativeInternalStructureWitness
             ("InputInbox", Binding.Literal(new MachineInboxSettings(3, 8, 120000))),
             ("InternalExecution", Binding.Literal(new InternalExecutionSettings(16, "internal", conditions)))).With(children.ToArray());
         var wf = Wf.Workflow("machine-inbox", nested ? Wf.Flowchart("flow", [machine, Wf.Set("returned", "returned", true)], [new("machine", "returned")]) : machine);
-        wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
         string Frame() => h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[Frame()].State!.Deserialize<MachineState>()!;
         void Input(string id, string trigger) { h.Send(InvocationInput.Kind, new InvocationInput(Frame(), id, trigger)); h.Drain(); }

@@ -26,7 +26,7 @@ internal static class NativeControlCutWitness
         var changed = purpose == "prelude" ? (object)"wrong-type" : purpose == "loop";
         var wf = Wf.Workflow("machine-inbox", Wf.Parallel("parallel", null, machine,
             Wf.Sequence("repair", Wf.Event("wait", "cut-enable"), Wf.Set("change", "enabled", Binding.Literal(changed)))), ("enabled", false), ("permission", "wrong-type"));
-        wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode); NativeGuardWitness.Release(h, "cut-enable");
+        wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode); NativeGuardWitness.Release(h, "cut-enable");
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain();

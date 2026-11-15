@@ -36,7 +36,7 @@ internal static class NativeInternalRegionalWitness
             .With(Control(), Wf.Event("start", "regional-start"), Wf.Node<ChartDependency>("dependency", ("Local", Binding.Var("local"))),
                 Wf.Sequence("e-work", Wf.Event("wait-e", "regional-e"), Wf.Node<ChartMark>("mark-e", ("Name", Binding.Literal("E")), ("Local", Binding.Var("local")))));
         var wf = Wf.Workflow("machine-inbox", nested ? Wf.Flowchart("flow", [machine, Wf.Set("returned", "returned", true)], [new("machine", "returned")]) : machine);
-        wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         h.Send(InvocationInput.Kind, new InvocationInput(frame, "later", "unknown")); h.Drain(); NativeGuardWitness.Release(h, "regional-start");
