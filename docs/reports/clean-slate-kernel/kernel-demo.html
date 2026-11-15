@@ -329,8 +329,8 @@ marker path.n { fill: var(--muted); }
     <div class="card c3"><h3>Open</h3><p>Different kinds of workflow plug in: Elsa's own workflows, BPMN, and more.</p><p class="tech">execution models: native (Flowchart and StateMachine are its containers, each on its own engine), BPMN, …</p></div>
   </div>
   <div class="words" aria-label="Words used on these slides">
-    <div><b>Partition:</b> a fixed group of workflows; one server owns each group.</div>
-    <div><b>Turn:</b> one burst of work by one workflow, run in memory.</div>
+    <div><b>Partition:</b> a fixed group of actors, the things the kernel runs, such as running workflows; one server owns each group.</div>
+    <div><b>Turn:</b> one burst of work by one actor, run in memory.</div>
     <div><b>Commit:</b> one save to the database, in one transaction.</div>
     <div><b>Fence:</b> a check inside every save that refuses a server which is no longer the owner.</div>
   </div>
@@ -981,12 +981,12 @@ SEAMS2.forEach(([x, y, t]) => {
 const LAYERS = [
   { cls: 'l1', head: 'Where things run', tech: 'Layer 1 · the actor runtime · replaceable: the prototype also runs on Orleans', terms: [
     ['Node: a server running the kernel. Servers share the partitions between them.', 'node', 'Node: a server process that runs the kernel and hosts the partitions it owns; nodes count each other by heartbeats to share partitions fairly.'],
-    ['Partition: a fixed group of workflows. One server owns each group and is the only one that writes it.', 'partition', 'Partition: a fixed bucket of instances (64 on server databases, 1 on SQLite) whose owner is the only node that writes its instances.'],
+    ['Partition: a fixed group of actors (running workflows, for example). One server owns each group and is the only one that writes it.', 'partition', 'Partition: a fixed bucket of instances (64 on server databases, 1 on SQLite) whose owner is the only node that writes its instances.'],
     ['Lease: how long an owner may stay silent before another server may take over: 10 seconds.', 'lease', 'Lease: how long the owner may hold a partition without writing (10 s): it decides who should write, and the fence decides who can.'],
     ['Pass: the server runs whatever is due in a partition, then saves it in batches.', 'pass', 'Pass: the runtime\'s call into a partition it hosts, which runs the turns that are due and commits them in batches; one pass holds many turns.'],
   ] },
   { cls: '', head: 'Every guarantee', tech: 'Layer 2 · durable actors · the same on any runtime', terms: [
-    ['Inbox: each workflow\'s messages, kept in the database.', 'inbox and message', 'Inbox and message: a message is a row in the inbox table (target, kind, payload, an order key, optionally a due time and a start spec); the outbox is the recipient\'s inbox.'],
+    ['Inbox: each actor\'s messages, kept in the database.', 'inbox and message', 'Inbox and message: a message is a row in the inbox table (target, kind, payload, an order key, optionally a due time and a start spec); the outbox is the recipient\'s inbox.'],
     ['Commit: one save that writes everything that changed, for many workflows at once.', 'commit (batch)', 'Commit (batch): one transaction that writes everything the turns changed (state, consumed and sent messages, journal rows), for many instances at once.'],
     ['Fence: a check inside every save. A server that lost ownership cannot write.', 'fence', 'Fence: the conditional update inside every commit: it lands only while the epoch and position are still the ones the owner expects.'],
     ['Timers and background jobs: waits, and slow work such as sending email.', 'timer · background job', 'Timer: a message with a future due time, held in memory by the owner and found by polling by a new owner. Background job: slow work a turn starts; its ticket is committed, the kernel runs it outside the turn, and its result is applied once.'],
@@ -996,7 +996,7 @@ const LAYERS = [
   { cls: 'l3', head: 'What runs', tech: 'Layer 3 · actor types · extended by adding execution models', terms: [
     ['Workflow instance: one running workflow.', 'workflow instance', 'Workflow instance: the actor type that holds what all workflows share (definition and version, status, parent and children, the history envelope) and runs an execution model for the rest.'],
     ['Execution model: the engine for a kind of workflow, such as Elsa\'s own or BPMN.', 'execution model', 'Execution model: a plug-in that turns an instance\'s state and incoming messages into new state and outgoing messages (TurnAsync).'],
-    ['Turn: one burst of work by one workflow, in memory; what it changed is saved when it ends.', 'turn', 'Turn: an instance\'s turn to run: it takes the messages in its inbox, runs as many activities as its persistence mode allows, changes its state and sends messages; one turn is not one activity.'],
+    ['Turn: one burst of work by one actor, in memory; what it changed is saved when it ends.', 'turn', 'Turn: an instance\'s turn to run: it takes the messages in its inbox, runs as many activities as its persistence mode allows, changes its state and sends messages; one turn is not one activity.'],
     ['Persistence mode: the workflow\'s author chooses where it saves.', 'persistence mode', 'Persistence mode: where a workflow ends its turns: Ephemeral, Balanced (at each wait), Durable (after each activity); chosen per workflow.'],
   ] },
   { cls: '', head: 'All three, and where they meet', tech: 'four seams', terms: [
