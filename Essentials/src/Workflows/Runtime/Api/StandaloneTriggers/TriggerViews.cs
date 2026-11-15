@@ -50,7 +50,7 @@ internal sealed record TriggerTypeView(string TypeKey, string SchemaVersion, str
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ConfigurationEditorId { get; init; }
 }
-internal sealed record TriggerImpact(string Label, string? Before = null, string? After = null, string? Description = null);
+internal sealed record TriggerImpact(string Label, string? Before = null, string? After = null, string? Description = null, TriggerTargetSelector? Target = null);
 internal sealed record TriggerPreview(string PreviewId, DateTimeOffset ExpiresAt, long ObservedRevision,
     string CommandFingerprint, bool CanApply, IReadOnlyList<TriggerImpact> Impact, IReadOnlyList<TriggerFinding> Findings);
 internal sealed record TriggerChangeResult(string RequestId, string Disposition, long Revision, TriggerView? Trigger,

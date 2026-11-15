@@ -46,7 +46,7 @@ export type TriggerCommand =
   | { kind: "GrantInvocation" | "RevokeInvocation"; subscriptionId: string; expectedSubscriptionRevision: Revision; expectedGrantRevision: Revision | null }
   | { kind: "EnableTrigger" | "PauseTrigger" | "DeleteTrigger" }
   | { kind: "RetryRecipients" | "CancelPendingRecipients"; deliveryId: string; expectedDeliveryRevision: Revision; recipients: { recipientId: string; expectedRevision: Revision }[] };
-export interface ImpactItem { label: string; before?: string; after?: string; description?: string }
+export interface ImpactItem { label: string; before?: string; after?: string; description?: string; target?: TargetSelector | null }
 export interface ChangePreview { previewId: string; expiresAt: string; observedRevision: Revision; commandFingerprint: string; canApply: boolean; impact: ImpactItem[]; findings: Finding[] }
 export interface ChangeResult { requestId: string; disposition: "Applied" | "AlreadyApplied"; revision: Revision; trigger?: TriggerView; subscription?: SubscriptionView; effects?: { message: string; recipientId?: string; outcome?: string }[] }
 export interface CreateTriggerRequest { requestId: string; name: string; description?: string; typeKey: string; schemaVersion: string; configuration: Record<string, JsonValue>; http?: { mode: HttpMode; admissionPolicy?: AdmissionPolicy } }
