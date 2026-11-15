@@ -21,7 +21,10 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
-    'native BPMN blocks preserve reviewed XML bindings': ['reference'] + [f'{host}-bpmn-{state}' for host in ('workflow', 'activity') for state in ('selection', 'preview', 'nested', 'reopened', 'import-review', 'imported', 'ungrouped')],
+    'native BPMN workflow blocks preserve reviewed XML bindings': ['reference'] + [f'workflow-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
+    'native BPMN reusable blocks preserve reviewed XML bindings': ['reference'] + [f'activity-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
+    'native BPMN workflow blocks retain authoring boundaries': ['reference'] + [f'workflow-bpmn-{state}' for state in ('empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'readonly')],
+    'native BPMN reusable blocks retain authoring boundaries': ['reference'] + [f'activity-bpmn-{state}' for state in ('empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'readonly')] + ['activity-bpmn-stale'],
     'named blocks preserve declared expression results': ['reference'] + [f'workflow-sequence-{state}' for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped', 'readonly')],
     'named blocks across graph authoring': ['reference'] + [f'{host}-{kind}-{state}' for host in ('workflow', 'activity') for kind in ('sequence', 'flowchart') for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped', 'readonly')] + ['workflow-flowchart-created-repeat', 'activity-flowchart-created-repeat', 'activity-flowchart-terminal-readonly', 'workflow-terminal-refusal'],
     "explicit authored activity names survive publication and execution": ["reference", "authored-definition", "authored-executable", "authored-run"],

@@ -717,6 +717,18 @@ test("named blocks preserve declared expression results", async ({ page }, info)
   await namedBlocksJourney(page, info, capture, "expression-results");
 });
 
-test("native BPMN blocks preserve reviewed XML bindings", async ({ page }, info) => {
-  await bpmnNamedBlocksJourney(page, info, capture);
+test("native BPMN workflow blocks preserve reviewed XML bindings", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "interchange", ["workflow"]);
+});
+
+test("native BPMN reusable blocks preserve reviewed XML bindings", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "interchange", ["activity"]);
+});
+
+test("native BPMN workflow blocks retain authoring boundaries", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "authoring", ["workflow"]);
+});
+
+test("native BPMN reusable blocks retain authoring boundaries", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture, "authoring", ["activity"]);
 });
