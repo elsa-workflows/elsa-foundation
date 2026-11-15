@@ -1,3 +1,4 @@
+import "./RunWorkflowPicker.css";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
