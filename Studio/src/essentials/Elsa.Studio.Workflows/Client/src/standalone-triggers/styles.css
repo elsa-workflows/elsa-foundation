@@ -27,4 +27,6 @@
 /* The shared association surface must keep state and controls visible inside the workflow inspector. */
 .wf-trigger-association-table { min-width: 0; }
 .wf-trigger-association-table th:first-child { width: 40%; }
+.wf-trigger-association-table .studio-copyable-identifier { grid-template-columns: minmax(0, 1fr) max-content; }
+.wf-trigger-association-table .studio-copyable-identifier__label { grid-column: 1 / -1; }
 .wf-trigger-association-table .studio-page-actions { margin-block-start: var(--studio-space-2, 8px); }

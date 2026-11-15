@@ -158,6 +158,22 @@ export class TriggerJourney {
     if (associationCaptures.includes(name)) {
       const rows = this.page.getByRole("region", { name: "Workflow subscriptions", exact: true }).getByRole("row");
       for (let index = 1; index < await rows.count(); index++) {
+        const identity = rows.nth(index).locator(".studio-copyable-identifier");
+        for (let identityIndex = 0; identityIndex < await identity.count(); identityIndex++) {
+          const current = identity.nth(identityIndex);
+          const copy = current.getByRole("button", { name: "Copy Workflow definition ID", exact: true });
+          await copy.scrollIntoViewIfNeeded();
+          await expect(copy).toBeInViewport();
+          await expect.poll(() => current.evaluate(element => {
+            const cell = element.closest("th, td")!.getBoundingClientRect();
+            const value = element.querySelector(".studio-copyable-identifier__value")!.getBoundingClientRect();
+            const button = element.querySelector("button")!;
+            const box = button.getBoundingClientRect();
+            const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+            return value.width >= 16 && value.left >= cell.left && value.right <= cell.right + 1
+              && box.left >= cell.left && box.right <= cell.right + 1 && !!hit && button.contains(hit);
+          }), { message: `Workflow identity and copy action remain visible in ${name}, row ${index}` }).toBe(true);
+        }
         const rowPath = this.info.outputPath(`${name}.association-${index}.png`);
         await rows.nth(index).screenshot({ path: rowPath, animations: "disabled" });
         await this.info.attach(`${name}.association-${index}.png`, { path: rowPath, contentType: "image/png" });
