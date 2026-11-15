@@ -1174,7 +1174,8 @@ jobs:
     if: needs.plan-scope.outputs.studio-heavy == 'true'
     runs-on: ubuntu-latest
     # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
-    timeout-minutes: 90
+    # Standard composed proof has an 80-minute owned envelope; subsequent qualified probes retain their own caps.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1237,6 +1238,15 @@ jobs:
           name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ux-acceptance
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain composed producer command timing log
+        if: ${{ always() && (steps.composed-ux.outcome == 'success' || steps.composed-ux.outcome == 'failure' || steps.composed-ux.outcome == 'cancelled') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-ux-command-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/external-auth-ui-build/studio-build-0.log
+          if-no-files-found: warn
           retention-days: 14
 
   studio-dotnet-build-and-test:

@@ -14,8 +14,8 @@ Controlled fixture credentials in test source are public fixture values, not pro
 
 ## Source and evidence controls
 
-The three control-test sources define thirteen cases: five build-provenance cases, six evidence cases and
-both deadline/cancellation process-cleanup cases. Actual executions belong to their source-bound receipts.
+The three control-test sources cover build provenance, bounded evidence and deadline/cancellation
+process cleanup. Actual counts and executions belong to their source-bound receipts.
 
 - `ui-build-provenance.mjs` binds ordered producer commands, successful acknowledgements, source commit/tree,
   actual tool paths/versions/hashes and output bytes. Clean-source checks disable the shared Git filesystem
@@ -39,11 +39,19 @@ credentials; exchanges by another subject, failed exchanges and direct preview w
 Browser response checks separately require the existing administrator subject. This avoids counting a normal
 exchange in both a database baseline and a later independently sampled browser delta.
 
-The Studio producer has a bounded 65-minute operational ceiling, including queue time. The retained
-171-case composed run 43628431065 took 53 minutes 19 seconds, exceeding the incoming 45-minute wrapper.
-Hosted run 43627566756 was stopped at its former 30-minute ceiling after reaching journey 71 of 104;
-it did not establish acceptance. The longer ceiling changes no case budgets, assertions, producer recipes,
-source/tool identity checks or child-process cleanup. The complete 171-case suite still has to pass.
+The Studio producer has a bounded 80-minute operational ceiling, including queue time. Hosted run
+43649254402 hit the previous 65-minute wrapper limit after starting case 154 of 171; its 153 complete
+traces span 58 minutes 25 seconds after 6 minutes 24 seconds of preparation. Extrapolating that pace
+puts the full producer near 73 minutes, an allocation estimate rather than a successful execution or
+performance guarantee. The interrupted case and 17 not-started cases remain unqualified.
+
+The earlier 171-case run 43628431065 took 53 minutes 19 seconds but retained two failed cases. Hosted
+run 43627566756 was stopped at its former 30-minute ceiling after reaching journey 71 of 104. Neither
+failed run establishes acceptance. The 120-minute enclosing job leaves room for the standard producer,
+subsequent qualification stages and evidence upload. A separate controller-log artifact retains command
+timings without changing the standard evidence archive's root layout. These finite allocations change
+no case budgets, assertions, producer recipes, source/tool identity checks or child-process cleanup.
+The complete 171-case suite still has to pass.
 
 ## Browser and owning dependencies
 
@@ -80,7 +88,10 @@ compilation and NuGet provenance still require actual qualification. Studio pack
 current `tools/ci/studio-package-identities.json` inventory and `verify_studio_nuget_packages.py` pipeline.
 Neither closure has a fixed historical package count.
 
-The CI additions retain existing job selection, required check names, unrelated journeys and time limits.
-They prepare one standard Studio producer, the thirteen controls, the Probe producer and all nine Studio
-profiles. Downloadable outputs are restricted to screenshots and bounded source-bound receipts; private
-credentials, callback material, raw logs and capture custody are excluded. No CI has been dispatched here.
+The CI additions retain existing job selection, required check names, unrelated journeys, and individual
+case, request and cleanup limits. The finite standard-producer and enclosing-job allocations are described
+above. CI prepares one standard Studio producer, the qualification controls, the Probe producer and all
+nine Studio profiles. External sign-in outputs remain restricted to screenshots and bounded source-bound
+receipts. The separate standard-producer controller artifact contains only command timing/status and the
+existing standard report; private credentials, callback material, provider/private raw logs and capture
+custody remain excluded. These recipes do not establish an execution or acceptance result.
