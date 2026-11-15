@@ -111,7 +111,7 @@ try {
     await expect(target).toBeFocused();
     return limit;
   }
-  async function activateOwnedNavigation(group, label, view, checkpoint) {
+  async function activateOwnedNavigation(group, label, view, checkpoint, newWorkspaceTab = false) {
     const navigation = page.getByRole("navigation", { name: group, exact: true });
     await expect(navigation).toBeVisible();
     const trigger = navigation.getByRole("button", { name: group, exact: true });
@@ -127,12 +127,25 @@ try {
     const linkTabs = await tabTo(link);
     expect(linkTabs).toBeGreaterThan(0);
     await expect(link).toBeFocused();
-    await capture(page, checkpoint, { region: `nav.nav-section-group[aria-label="${group}"]`, action: "tab-enter-navigation" });
-    await page.keyboard.press("Enter");
+    await capture(page, checkpoint, { region: `nav.nav-section-group[aria-label="${group}"]`, action: "inspect-focused-navigation" });
+    if (newWorkspaceTab) await link.click({ modifiers: ["Alt"] });
+    else await page.keyboard.press("Enter");
     await expect(page).toHaveURL(expected.href);
     await expect(page.getByRole("heading", { name: label, level: 2, exact: true })).toBeVisible();
+    if (newWorkspaceTab) {
+      const connectionsTab = page.getByRole("tab", { name: "External sign-in", exact: true });
+      const accessTab = page.getByRole("tab", { name: "User access", exact: true });
+      await expect(connectionsTab).toHaveCount(1);
+      await expect(accessTab).toHaveCount(1);
+      await expect(connectionsTab).toBeVisible();
+      await expect(accessTab).toBeVisible();
+      await expect(connectionsTab).toHaveAttribute("aria-selected", "false");
+      await expect(accessTab).toHaveAttribute("aria-selected", "true");
+    }
     navigationEvidence.push({ group, label, href: expected.pathname + expected.search, backend: "owned",
-      activation: "Tab+Enter", triggerTabs, linkTabs, qualifiedUrlMatched: true, headingVisible: true, checkpoint });
+      activation: newWorkspaceTab ? "Tab+Alt+primary-click" : "Tab+Enter", triggerTabs, linkTabs,
+      retainedTabs: newWorkspaceTab ? ["External sign-in", "User access"] : [],
+      qualifiedUrlMatched: true, headingVisible: true, checkpoint });
   }
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -309,7 +322,7 @@ try {
   expect((await (await admin.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(adminSession.subject);
   // The real user-access component uses only its public bounded API and protected commands.
   await page.setViewportSize({ width: 1440, height: 1100 });
-  if (settings.studioUrl) await activateOwnedNavigation("Operate", "User access", "access", "navigation-operate");
+  if (settings.studioUrl) await activateOwnedNavigation("Operate", "User access", "access", "navigation-operate", true);
   else await page.goto(componentUrl("access"));
   await expect(page.getByRole("heading", { name: "User access", level: 2, exact: true })).toBeVisible();
   const directory = await (await admin.request.get(backend + "/_elsa/identity/external-connections/users?take=25")).json();
