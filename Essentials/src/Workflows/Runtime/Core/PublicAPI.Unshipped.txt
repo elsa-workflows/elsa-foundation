@@ -12435,3 +12435,8 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedInitialStartF
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedInitialStartFault.init -> void
 
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission.get -> bool
+
+Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity
+const Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.FingerprintLength = 16 -> int
+static Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.Derive(string! parentId, string! step) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeChainIdentity.Fingerprint(string! value) -> string!

@@ -4,7 +4,6 @@ using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Contracts;
 
 namespace Elsa.Activities.Bpmn.Internal;
@@ -37,9 +36,9 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
                 var initialCheckpoint = fault.Work.CommandKind == WorkflowExecutionCommandKind.Checkpoint;
                 var suffix = "checkpoint:" + RuntimeCheckpointNames.WorkflowStarted;
                 if (fault.Work.WorkflowExecutionId != identity.WorkflowExecutionId || fault.Work.EnvelopeId != identity.EnvelopeId ||
-                    fault.Work.WorkItemId != (initialCheckpoint ? RuntimeChainId.Derive(identity.EnvelopeId, suffix) : identity.EnvelopeId) ||
-                    fault.Work.CommandId != (initialCheckpoint ? RuntimeChainId.Derive(identity.CommandId, suffix) : identity.CommandId) ||
-                    fault.Work.IdempotencyKey != (initialCheckpoint ? RuntimeChainId.Derive(identity.StartKey, suffix) : identity.StartKey) || fault.Work.Sequence is not null)
+                    fault.Work.WorkItemId != (initialCheckpoint ? RuntimeChainIdentity.Derive(identity.EnvelopeId, suffix) : identity.EnvelopeId) ||
+                    fault.Work.CommandId != (initialCheckpoint ? RuntimeChainIdentity.Derive(identity.CommandId, suffix) : identity.CommandId) ||
+                    fault.Work.IdempotencyKey != (initialCheckpoint ? RuntimeChainIdentity.Derive(identity.StartKey, suffix) : identity.StartKey) || fault.Work.Sequence is not null)
                     throw new BpmnModelValidationException("The first native worker fault changed its deterministic accepted start identity.");
             }
         }

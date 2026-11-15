@@ -16,6 +16,10 @@ contracts are Design-free and operate on runtime-owned executable artifacts and 
 
 ## Conditional initial-fault admission
 
+Cross-model contributors use the mechanical `RuntimeChainIdentity` surface in Runtime Core.
+Its frozen UTF-8/SHA-256 successor bytes are shared with the existing `RuntimeChainId`
+compatibility surface in the Runtime implementation; the existing API and persisted ids remain stable.
+
 `IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission` defaults to `false`.
 `RuntimeCheckpointCommitter` refuses a non-null `RuntimeCheckpointCommit.ExpectedInitialStartFault`
 unless the selected writer advertises support; the coalescing decorator forwards that capability
