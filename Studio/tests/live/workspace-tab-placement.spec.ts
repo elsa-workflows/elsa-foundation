@@ -11,7 +11,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
 
 async function stripGeometry(page: Page) {
   return page.locator(".studio-workspace-tabs").evaluate(strip => {
-    const tabs = strip.querySelectorAll('[role="tab"]');
+    const tabs = strip.querySelectorAll('.studio-workspace-tab');
     const list = strip.querySelector('[role="tablist"]')!;
     const add = strip.querySelector('[aria-label="New tab"]')!;
     const switcher = strip.querySelector('[aria-label^="All tabs"]')!;
