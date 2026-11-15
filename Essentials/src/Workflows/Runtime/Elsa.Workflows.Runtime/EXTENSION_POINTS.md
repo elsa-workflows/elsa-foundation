@@ -14,6 +14,30 @@ contracts are Design-free and operate on runtime-owned executable artifacts and 
 > your implementation against the `.Core` contract; the engine package's registrations all use
 > `TryAdd*`.
 
+## Conditional initial-fault admission
+
+`IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission` defaults to `false`.
+`RuntimeCheckpointCommitter` refuses a non-null `RuntimeCheckpointCommit.ExpectedInitialStartFault`
+unless the selected writer advertises support; the coalescing decorator forwards that capability
+and treats the condition as an immediate physical boundary. Replacement writers must not ignore it.
+
+The native in-memory writer joins its selected poison and ownership stores under their common
+write gates. The Runtime EF writer compares the actual poison row, accepted source and ownership
+fence in the same transaction as the first faulted execution, blocking incident and replay marker;
+model-owned workers also require the actual live parent decision and retained model-work source.
+A condition carries the actual failed initial scheduler work retained by the drainer in poison
+metadata. That evidence proposes a fault; it grants no independent start authority. Both writers
+check its exact source-bound pin, input lineage, scope and authority and refuse unrelated effects.
+Only an authorized typed model result may accompany a model worker's first fault.
+
+Invalid conditional admission raises `RuntimeCheckpointCommitValidationException` with the
+original cause and commit, execution and work identities. Requested cancellation propagates.
+The optional condition changes only its own logical fingerprint; absent conditions preserve
+legacy replay identity. Retained poison metadata uses the existing schema family and requires
+no schema migration. Already queued initial checkpoints need no new field: their actual failed
+work is captured when they poison. Historical poison records without captured work are not
+independent authority to synthesize a protected execution.
+
 ## Documented ADR 0033 deviations hosted at the composition root
 
 Two contract-shaped surfaces live in the engine package rather than `.Core`, deliberately:

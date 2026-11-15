@@ -12426,3 +12426,12 @@ Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.Conflic
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.IIngressReservationPolicy.TriggerTypeKey.get -> string?
 Elsa.Workflows.Runtime.Core.StandaloneTriggers.ITriggerSourceResourceCommitStore.SupportsActivatedType(string! typeKey) -> bool
 static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReferenceComparer.MatchesPublication(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableSourceReference! reference, Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSlot! slot, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string? tenantId, System.DateTimeOffset now, Elsa.Workflows.Runtime.Core.Models.WorkflowActivationSource? expectedOwner = null) -> bool
+
+Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault
+Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault.RuntimeInitialStartFault(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! work, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord! poison) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault.Work.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!
+Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault.Poison.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord!
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedInitialStartFault.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedInitialStartFault.init -> void
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission.get -> bool

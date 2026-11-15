@@ -214,8 +214,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
+        var failedInitialWork = Elsa.Workflows.Runtime.Services.Triggers.InitialStartFaultAuthority.ReadWork(record);
+        if (failedInitialWork is not null) envelope = Elsa.Workflows.Runtime.Services.Triggers.InitialStartFaultAuthority.ProjectStart(failedInitialWork);
         var unstartedExecution = await ReadUnstartedExecutionAsync(envelope, workflowExecutionId, occurredAt, cancellationToken);
         var metadata = NewMetadata(incidentId, record);
+        if (unstartedExecution?.StimulusDeliveryOrigin is { } savedOrigin)
+            metadata[Elsa.Workflows.Runtime.Services.Triggers.SavedStimulusStartSeal.OriginMetadata] = System.Text.Json.JsonSerializer.Serialize(savedOrigin);
         var activityExecutionId = ValueOrNull(metadata, RuntimeMetadataKeys.ActivityExecutionId);
         var executableNodeId = ValueOrNull(metadata, RuntimeMetadataKeys.ExecutableNodeId);
         ActivityExecutionState? activityState = null;
@@ -357,7 +361,13 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 operational: [],
                 activityExecutionInspections: activityInspectionChanges),
             PostCommitIntents: [],
-            Metadata: metadata);
+            Metadata: metadata)
+        {
+            ExpectedInitialStartFault = unstartedExecution is { } first &&
+                (first.IngressOrigin is not null || first.ModelWorkOrigin is not null || first.StimulusDeliveryOrigin is not null)
+                && failedInitialWork is not null
+                ? new RuntimeInitialStartFault(failedInitialWork, record) : null
+        };
 
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }

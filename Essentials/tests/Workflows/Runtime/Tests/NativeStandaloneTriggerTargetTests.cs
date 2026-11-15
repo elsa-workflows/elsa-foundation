@@ -16,6 +16,7 @@ using Elsa.Workflows.Runtime.Services.Triggers;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -53,6 +54,50 @@ public sealed class NativeStandaloneTriggerTargetTests
                 JsonDocument.Parse("{\"StartAuthority\":{\"StandaloneTrigger\":{}}}").RootElement.Clone(), new Dictionary<string, string>()),
             "claimed-key", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, Now);
         Assert.ThrowsAny<Exception>(() => NativeIngressTargetEvidence.Origin(envelope));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_accepted_first_checkpoint_fault_remains_reconcilable_without_starting_root_work(bool failStart)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
+        var envelope = NativeIngressTargetEvidence.ReadEnvelope(seal);
+        await AssertProtectedFirstFaultAsync(fixture, envelope, failStart);
+        var receipt = await fixture.Target.ReconcileAsync(fixture.Item, fixture.Recipient, seal);
+        Assert.Equal(envelope.WorkflowExecutionId, receipt!.EvidenceId);
+    }
+
+    [Fact]
+    public async Task An_unsupported_initial_origin_cannot_prevent_the_original_poison_record()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var seal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(seal);
+        var start = StartItem(NativeIngressTargetEvidence.ReadEnvelope(seal));
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(start.Payload!.Value.GetRawText())!;
+        payload["StartAuthority"] = System.Text.Json.Nodes.JsonNode.Parse("{\"Kind\":" + (int)WorkflowExecutableStartAuthorityKind.ModelWork + ",\"ModelWork\":{\"FormatVersion\":999}}");
+        var future = new RuntimeSchedulerWorkItem(start.WorkItemId, start.WorkflowExecutionId, start.CommandId, start.CommandKind,
+            start.EnvelopeId, start.IdempotencyKey, start.EnqueuedAt, start.RecordedAt, start.Sequence,
+            JsonSerializer.SerializeToElement(payload), start.CommandMetadata, start.EnvelopeMetadata);
+        var poison = new InMemoryWorkflowSchedulerPoisonStore();
+        await fixture.Queue.EnqueueAsync(future);
+        var drain = await new WorkflowSchedulerDrainer(fixture.Queue, [fixture.StartHandler], fixture.Executions, poison,
+            new FaultTestPauseGate(), fixture.Clock, retryPolicy: new NoopRuntimeDomainRetryPolicy()).DrainAsync(new(future.WorkflowExecutionId));
+        Assert.True(drain.StoppedOnFault);
+        var record = Assert.Single(await poison.ListAsync(future.WorkflowExecutionId));
+        Assert.Equal(typeof(InvalidOperationException).FullName, record.Fault.ExceptionType);
+        Assert.Equal("Start scheduler work item payload is not a valid start command payload.", record.Fault.Message);
+        Assert.Equal(typeof(NotSupportedException).FullName, record.InnerFault!.ExceptionType);
+        Assert.DoesNotContain(InitialStartFaultAuthority.WorkSnapshotMetadata, record.Metadata.Keys);
+        Assert.Empty((await fixture.Queue.ListAsync(new(future.WorkflowExecutionId))).Items);
+        Assert.Null(await fixture.Executions.FindAsync(future.WorkflowExecutionId));
+    }
+
+    private sealed class FaultTestPauseGate : IWorkflowSchedulerPauseGate
+    {
+        public ValueTask<SchedulerPauseDecision?> EvaluateAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<SchedulerPauseDecision?>(null);
     }
 
     [Fact]
@@ -263,11 +308,13 @@ public sealed class NativeStandaloneTriggerTargetTests
     }
 
     [Theory]
-    [InlineData("tenant", false)]
-    [InlineData("logical-tenant", false)]
-    [InlineData("tenant", true)]
-    [InlineData("logical-tenant", true)]
-    public async Task Native_saved_cohort_start_retains_scope_after_the_source_claim_is_complete(string tenant, bool coalescing)
+    [InlineData("tenant", false, false)]
+    [InlineData("logical-tenant", false, false)]
+    [InlineData("tenant", true, false)]
+    [InlineData("logical-tenant", true, false)]
+    [InlineData("tenant", false, true)]
+    [InlineData("logical-tenant", true, true)]
+    public async Task Native_saved_cohort_start_retains_scope_after_the_source_claim_is_complete(string tenant, bool coalescing, bool firstFault = false)
     {
         using var fixture = await Fixture.CreateAsync(tenant, coalescing);
         var parentSeal = await fixture.Target.PrepareDispatchAsync(fixture.Item, fixture.Recipient); fixture.Seal(parentSeal);
@@ -352,6 +399,11 @@ public sealed class NativeStandaloneTriggerTargetTests
         Assert.NotNull(retried.Item.SavedStimulusStarts);
         Assert.True(JsonElement.DeepEquals(beforeRetry.SavedStimulusStarts![key.WorkflowExecutionId], retried.Item.SavedStimulusStarts![key.WorkflowExecutionId]));
         fixture.Executions.CheckpointState.OutboxItems[sourceId] = retried.Item;
+        if (firstFault)
+        {
+            await AssertProtectedFirstFaultAsync(fixture, sealedStart, false);
+            return;
+        }
         var start = StartItem(sealedStart);
         using var childDrain = fixture.BeginCheckpoint(key.WorkflowExecutionId);
         await fixture.StartHandler.HandleAsync(start);
@@ -424,6 +476,98 @@ public sealed class NativeStandaloneTriggerTargetTests
         new(new(state.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>()),
             null, [], [], [], [], [], null, null, null, null, null, consumed), [], new Dictionary<string, string>());
 
+    private static async Task AssertProtectedFirstFaultAsync(Fixture fixture, WorkflowExecutionCommandEnvelope envelope, bool failStart)
+    {
+        var id = envelope.WorkflowExecutionId;
+        var ownership = Assert.IsType<InMemoryExecutionLivenessStateStore>(fixture.Executions.ExecutionLivenessStateStore);
+        var poison = new InMemoryWorkflowSchedulerPoisonStore(ownership, fixture.Clock);
+        fixture.CheckpointStore.InitialStartFaultPoisonStore = poison;
+        fixture.Clock.Advance(TimeSpan.FromSeconds(10));
+        var lease = await new RuntimeExecutionOwnershipService(ownership, fixture.Clock, new()).AcquireAsync(id);
+        var ambient = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
+        using var owned = ambient.Push(lease);
+        var start = StartItem(envelope);
+        var initial = NativeIngressStartLineage.Build(start, envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!,
+            (await fixture.Executables.FindAsync(envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!.PinnedExecutable.ArtifactId))!.RootActivity.ExecutableNodeId);
+        var work = failStart ? start : initial;
+        // A physical parked-decision fixture follows the same work ids/kinds as the real start/checkpoint handlers.
+        var record = new RuntimeSchedulerPoisonRecord(id, work.WorkItemId, work.CommandKind,
+            failStart ? WorkflowStartSchedulerWorkHandler.HandlerName : WorkflowCheckpointSchedulerWorkHandler.HandlerName,
+            new RuntimeFaultInfo("System.InvalidOperationException", "initial checkpoint failed"), 1,
+            RuntimeSchedulerPoisonDisposition.Poisoned, fixture.Clock.GetUtcNow(), fixture.Clock.GetUtcNow(), null,
+            new Dictionary<string, string> { [InitialStartFaultAuthority.WorkSnapshotMetadata] = JsonSerializer.Serialize(work) });
+        await poison.RecordFencedAsync(record, lease.ToFence());
+        var capture = new FaultCaptureStore();
+        var observer = new PoisonedSchedulerWorkIncidentObserver(poison, fixture.Incidents,
+            new(new CoalescingRuntimeCheckpointPersistencePolicy(), capture, ambient, [], []), fixture.Clock,
+            activityExecutionStateStore: null, inspectionAccumulator: null, activityExecutionInspectionStore: null,
+            workflowExecutionStateStore: fixture.Executions);
+        var drain = new RuntimeSchedulerDrainResult(id, fixture.Clock.GetUtcNow(), fixture.Clock.GetUtcNow(),
+            [new RuntimeSchedulerWorkItemResult(work.WorkItemId, id, work.CommandKind, RuntimeSchedulerWorkItemResultStatus.Faulted,
+                record.HandlerName, fixture.Clock.GetUtcNow(), fixture.Clock.GetUtcNow(), error: "initial checkpoint failed")]);
+        await observer.OnDrainedAsync(envelope, drain);
+        var candidate = Assert.IsType<RuntimeCheckpointCommit>(capture.Commit);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, capture.Decision!.Mode);
+        Assert.NotNull(candidate.ExpectedInitialStartFault);
+        var unsupported = new UnsupportedFaultStore();
+        await Assert.ThrowsAsync<NotSupportedException>(() => new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(),
+            new CoalescingRuntimeCheckpointCommitStore(new(unsupported), new AsyncLocalRuntimeCoalescingSessionAccessor()), ambient, [], [])
+            .CommitAsync(candidate).AsTask());
+        Assert.False(unsupported.Called);
+        var changes = candidate.StateChanges;
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var unwanted = new RuntimePostCommitIntent("unrelated", id, "publish", fixture.Clock.GetUtcNow(), null, "unrelated", JsonSerializer.SerializeToElement("bad"));
+        var extra = RuntimePostCommitOutboxItems.CreatePendingChanges(candidate with { PostCommitIntents = [unwanted] });
+        foreach (var refused in new[]
+        {
+            candidate with { ExpectedInitialStartFault = new(work, new(id, work.WorkItemId, work.CommandKind, record.HandlerName,
+                record.Fault, 2, record.Disposition, record.FirstFailedAt, record.LastFailedAt, null)) },
+            candidate with { StateChanges = new(null, null, [], [], [], [], []) },
+            candidate with { StateChanges = new(changes.WorkflowExecution! with { Operation = RuntimeStateChangeOperation.Delete }, null, [], [], [], changes.Incidents, []) },
+            candidate with { StateChanges = changes.WithPostCommitOutbox(extra) },
+            candidate with { PostCommitIntents = [unwanted], StateChanges = changes.WithPostCommitOutbox(extra) },
+            candidate with { ExpectedFence = null }
+        })
+        {
+            var error = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => fixture.CheckpointStore.CommitAsync(refused, decision).AsTask());
+            Assert.IsType<InvalidDataException>(error.InnerException);
+            Assert.Contains(id, error.Message); Assert.Contains(work.WorkItemId, error.Message);
+            Assert.Null(await fixture.Executions.FindAsync(id)); Assert.Empty(await fixture.Incidents.ListAsync(id));
+            Assert.DoesNotContain(fixture.CheckpointStore.ListCommits(), item => item.Commit.WorkflowExecutionId == id);
+        }
+        await fixture.CheckpointStore.CommitAsync(candidate, decision);
+        await fixture.CheckpointStore.CommitAsync(candidate, decision); // replay after the first fault is durable
+        var state = (await fixture.Executions.FindAsync(id))!;
+        Assert.Equal(WorkflowExecutionStatus.Faulted, state.Status);
+        Assert.Equal(envelope.EnqueuedAt, state.CreatedAt); Assert.Equal(envelope.EnqueuedAt, state.StartedAt);
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.True(NativeIngressTargetEvidence.Equal(payload.StartAuthority?.StandaloneTrigger, state.IngressOrigin));
+        Assert.True(NativeIngressTargetEvidence.Equal(payload.StimulusDeliveryOrigin, state.StimulusDeliveryOrigin));
+        Assert.Equal(payload.PinnedSource, state.PinnedSource);
+        Assert.Single(await fixture.Incidents.ListAsync(id));
+        Assert.Empty((await fixture.Queue.ListAsync(new(id))).Items);
+        Assert.DoesNotContain(fixture.Executions.CheckpointState.OutboxItems.Values,
+            item => item.Intent?.WorkflowExecutionId == id && item.Intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
+    }
+
+    private sealed class UnsupportedFaultStore : IRuntimeCheckpointCommitStore
+    {
+        internal bool Called;
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        { Called = true; return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([])); }
+    }
+
+    private sealed class FaultCaptureStore : IRuntimeCheckpointCommitStore
+    {
+        public bool SupportsInitialStartFaultAdmission => true;
+        internal RuntimeCheckpointCommit? Commit;
+        internal RuntimeCheckpointPersistenceDecision? Decision;
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        { Commit = commit; Decision = decision; return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([])); }
+    }
+
     private static RuntimeSchedulerWorkItem StartItem(WorkflowExecutionCommandEnvelope envelope) => new(envelope.EnvelopeId,
         envelope.WorkflowExecutionId, envelope.Command.CommandId, envelope.Command.Kind, envelope.EnvelopeId,
         envelope.IdempotencyKey, envelope.EnqueuedAt, envelope.EnqueuedAt.AddSeconds(1), envelope.Sequence,
@@ -436,6 +580,7 @@ public sealed class NativeStandaloneTriggerTargetTests
         internal readonly InMemoryWorkflowSchedulerWorkQueue Queue = new();
         internal IWorkflowSchedulerWorkQueue SelectedQueue = null!;
         internal readonly InMemoryWorkflowExecutionStateStore Executions = new();
+        internal readonly InMemoryIncidentStateStore Incidents = new();
         internal readonly WitnessExecutor Executor = new();
         internal readonly FakeIngress Ingress = new();
         internal readonly InProcessWorkflowExecutionActorProvider Actors;
@@ -482,7 +627,7 @@ public sealed class NativeStandaloneTriggerTargetTests
             var activities = new InMemoryActivityExecutionStateStore();
             var checkpointStore = fixture.CheckpointStore = new InMemoryRuntimeCheckpointCommitStore(fixture.Executables,
                 new InMemoryWorkflowExecutableSourceReferenceStore(fixture.Executables, fixture.Clock), fixture.Executions, activities,
-                durableValueStateStore: new InMemoryDurableValueStateStore(), operationalStateStore: fixture.Executions.ExecutionLivenessStateStore,
+                incidentStateStore: fixture.Incidents, durableValueStateStore: new InMemoryDurableValueStateStore(), operationalStateStore: fixture.Executions.ExecutionLivenessStateStore,
                 state: fixture.Executions.CheckpointState, timeProvider: fixture.Clock, persistenceAccessContextAccessor: new Access(scope),
                 schedulerWorkQueue: fixture.Queue,
                 rootWriteLeaseManager: new WorkflowExecutableRootWriteLeaseManager(fixture.Executables,

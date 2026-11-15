@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 internal static class NativeIngressCheckpointAuthority
 {
     internal static bool RequiresInitialPhysicalAdmission(RuntimeCheckpointCommit commit) =>
-        commit.Metadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata) ||
+        commit.ExpectedInitialStartFault is not null || commit.Metadata.ContainsKey(SavedStimulusStartSeal.OriginMetadata) ||
         commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted &&
         commit.StateChanges.WorkflowExecution?.State is { } state &&
         (state.IngressOrigin is not null || state.StimulusDeliveryOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null);
@@ -58,10 +58,16 @@ internal static class NativeIngressCheckpointAuthority
         NativeIngressTargetEvidence.ValidateEnvelope(committed, NativeIngressTargetEvidence.ReadEnvelope(committed.Seal));
         NativeIngressTargetEvidence.ValidateState(committed, state);
         NativeIngressTargetEvidence.ValidateExecutable(committed, executable);
-        if (commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted || state.CreatedAt != committed.Item.RecordedAt ||
-            state.StartedAt != committed.Item.RecordedAt || state.Status != WorkflowExecutionStatus.Running)
+        var firstFault = commit.ExpectedInitialStartFault is not null;
+        if (commit.Checkpoint.Name != (firstFault ? RuntimeCheckpointNames.WorkflowFaulted : RuntimeCheckpointNames.WorkflowStarted) || state.CreatedAt != committed.Item.RecordedAt ||
+            state.StartedAt != committed.Item.RecordedAt || state.Status != (firstFault ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Running))
             throw new InvalidDataException("The initial workflow checkpoint differs from its immutable physical source seal.");
         var envelope = NativeIngressTargetEvidence.ReadEnvelope(committed.Seal);
+        if (firstFault)
+        {
+            InitialStartFaultAuthority.RequireSameStart(commit, envelope, executable);
+            return; // The physical writer has already joined the actual poison decision to this conditional write.
+        }
         var start = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
         var intentId = $"{envelope.EnvelopeId}:postcommit:schedule:root:{executable.RootActivity.ExecutableNodeId}";
         var intent = commit.PostCommitIntents.SingleOrDefault(item => item.IntentId == intentId)

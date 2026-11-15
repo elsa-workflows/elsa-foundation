@@ -10,6 +10,8 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -32,9 +34,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfIngressCheckpointAuthorityTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Physical_ingress_checkpoint_and_claimed_continuation_preserve_tenant_and_immutable_origin(bool distinctTenant)
+    [InlineData(true, "none")]
+    [InlineData(false, "none")]
+    [InlineData(true, "native-fault")]
+    [InlineData(false, "native-fault")]
+    [InlineData(true, "saved-fault")]
+    [InlineData(false, "saved-fault")]
+    public async Task Physical_ingress_checkpoint_and_claimed_continuation_preserve_tenant_and_immutable_origin(bool distinctTenant, string firstFault)
     {
         var now = new DateTimeOffset(2026, 11, 13, 12, 0, 0, TimeSpan.Zero);
         var clock = new FakeTimeProvider(now);
@@ -97,6 +103,12 @@ public sealed class EfIngressCheckpointAuthorityTests
         var handler = new WorkflowCheckpointSchedulerWorkHandler(new EfActivityExecutionStateStore(context, access, new AdmissionCodec()), committer, null, clock,
             executions, materials, null, null, reader);
         var envelope = NativeIngressTargetEvidence.ReadEnvelope(seal);
+        if (firstFault == "native-fault")
+        {
+            await AssertFirstFaultAsync(context, access, clock, materials, executions, queue, checkpoints, reader, envelope);
+            Assert.Equal(envelope.WorkflowExecutionId, (await target.ReconcileAsync(accepted, recipient, seal))!.EvidenceId);
+            return;
+        }
         var start = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, envelope.WorkflowExecutionId, envelope.Command.CommandId,
             envelope.Command.Kind, envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, now, envelope.Sequence,
             envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata);
@@ -177,6 +189,11 @@ public sealed class EfIngressCheckpointAuthorityTests
         Assert.NotNull(downstreamPayload.StimulusDeliveryOrigin);
         await ((IRuntimePostCommitOutboxClaimStore)outbox).RecordDeliveryResultAsync(eventClaim,
             new(eventClaim.OutboxItemId, RuntimePostCommitOutboxStatus.Delivered, now));
+        if (firstFault == "saved-fault")
+        {
+            await AssertFirstFaultAsync(context, access, clock, materials, executions, queue, checkpoints, reader, downstream);
+            return;
+        }
         var startHandler = new WorkflowStartSchedulerWorkHandler(materials, queue, new RuntimeExecutionIdGenerator(clock), clock, executions);
         var childStart = new RuntimeSchedulerWorkItem(downstream.EnvelopeId, downstream.WorkflowExecutionId, downstream.Command.CommandId,
             downstream.Command.Kind, downstream.EnvelopeId, downstream.IdempotencyKey, downstream.EnqueuedAt, now, downstream.Sequence,
@@ -282,6 +299,107 @@ public sealed class EfIngressCheckpointAuthorityTests
     }
     private sealed class Access(PersistenceScope scope) : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(scope); }
+    private static async Task AssertFirstFaultAsync(RuntimeSqliteDbContext context, IPersistenceAccessContextAccessor access,
+        FakeTimeProvider clock, EfWorkflowExecutableStore materials, EfWorkflowExecutionStateStore executions,
+        EfSchedulerWorkQueueStore queue, EfRuntimeCheckpointCommitStore writer, IRuntimeIngressDeliveryStore reader, WorkflowExecutionCommandEnvelope envelope)
+    {
+        var id = envelope.WorkflowExecutionId;
+        clock.Advance(TimeSpan.FromSeconds(10));
+        var ownership = new EfExecutionLivenessStateStore(context, access, new AdmissionCodec());
+        var lease = await new RuntimeExecutionOwnershipService(ownership, clock, new()).AcquireAsync(id);
+        var ambient = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
+        using var owned = ambient.Push(lease);
+        var incidents = new EfIncidentStateStore(context, access);
+        var poison = new EfWorkflowSchedulerPoisonStore(context, access, () => ownership, clock);
+        var start = new RuntimeSchedulerWorkItem(envelope.EnvelopeId, id, envelope.Command.CommandId, envelope.Command.Kind,
+            envelope.EnvelopeId, envelope.IdempotencyKey, envelope.EnqueuedAt, clock.GetUtcNow(), envelope.Sequence,
+            envelope.Command.Payload, envelope.Command.Metadata, envelope.Metadata);
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var initial = NativeIngressStartLineage.Build(start, payload, (await materials.FindAsync(payload.PinnedExecutable.ArtifactId))!.RootActivity.ExecutableNodeId);
+        var failure = new FailInitialCheckpoint();
+        var failedCommitter = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), writer, ambient, [failure], []);
+        var handler = new WorkflowCheckpointSchedulerWorkHandler(new Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionStateStore(),
+            failedCommitter, null, clock, executions, materials, null, null, reader);
+        await queue.EnqueueAsync(initial);
+        var drain = await new Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer(queue, [handler], executions,
+            poison, new NoPauseGate(), clock, retryPolicy: new Elsa.Workflows.Runtime.Services.Incidents.NoopRuntimeDomainRetryPolicy())
+            .DrainAsync(new(id));
+        Assert.True(drain.StoppedOnFault); Assert.True(failure.Fired);
+        var record = Assert.Single(await poison.ListAsync(id));
+        Assert.Equal(initial.WorkItemId, record.WorkItemId); Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Empty((await queue.ListAsync(new(id))).Items); Assert.Null(await executions.FindAsync(id));
+        var capture = new FaultCaptureStore();
+        var observer = new PoisonedSchedulerWorkIncidentObserver(poison, incidents,
+            new(new CoalescingRuntimeCheckpointPersistencePolicy(), capture, ambient, [], []), clock,
+            activityExecutionStateStore: null, inspectionAccumulator: null, activityExecutionInspectionStore: null, workflowExecutionStateStore: executions);
+        // Recovery sends RunSchedulerWork, not the original Start. The actual parked work must retain that start.
+        var recovery = new WorkflowExecutionCommandEnvelope("resumption-envelope", id,
+            new("resumption-command", id, WorkflowExecutionCommandKind.RunSchedulerWork, clock.GetUtcNow(), null, new Dictionary<string, string>()),
+            "resumption-key", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, clock.GetUtcNow());
+        await observer.OnDrainedAsync(recovery, drain);
+        var candidate = Assert.IsType<RuntimeCheckpointCommit>(capture.Commit);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, capture.Decision!.Mode);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var extraIntent = new RuntimePostCommitIntent("forged-effect", id, "publish", clock.GetUtcNow(), null, "forged-effect", JsonSerializer.SerializeToElement("bad"));
+        var extra = RuntimePostCommitOutboxItems.CreatePendingChanges(candidate with { PostCommitIntents = [extraIntent] });
+        var before = await context.RuntimeCheckpointCommits.CountAsync();
+        foreach (var refused in new[]
+        {
+            candidate with { ExpectedInitialStartFault = new(initial, new(id, initial.WorkItemId, initial.CommandKind, record.HandlerName,
+                record.Fault, 2, record.Disposition, record.FirstFailedAt, record.LastFailedAt, null)) },
+            candidate with { ExpectedInitialStartFault = new(new(initial.WorkItemId, id, initial.CommandId, initial.CommandKind,
+                initial.EnvelopeId, initial.IdempotencyKey, initial.EnqueuedAt.AddMinutes(-1), initial.RecordedAt, initial.Sequence,
+                initial.Payload, initial.CommandMetadata, initial.EnvelopeMetadata), record) },
+            candidate with { StateChanges = candidate.StateChanges.WithPostCommitOutbox(extra) },
+            candidate with { PostCommitIntents = [extraIntent], StateChanges = candidate.StateChanges.WithPostCommitOutbox(extra) },
+            candidate with { ExpectedFence = null }
+        })
+        {
+            var error = await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => writer.CommitAsync(refused, decision).AsTask());
+            Assert.IsType<InvalidDataException>(error.InnerException); Assert.Contains(id, error.Message); Assert.Contains(initial.WorkItemId, error.Message);
+            Assert.Null(await executions.FindAsync(id)); Assert.Empty(await incidents.ListAsync(id));
+            Assert.Equal(before, await context.RuntimeCheckpointCommits.CountAsync());
+            Assert.False(await context.RuntimePostCommitOutbox.AnyAsync(row => row.Id == EfRuntimePostCommitOutboxStore.RowId(access.Current.RequireScope().Value, candidate.CommitId + ":forged-effect")));
+        }
+        await writer.CommitAsync(candidate, decision);
+        await writer.CommitAsync(candidate, decision);
+        context.ChangeTracker.Clear();
+        var state = (await executions.FindAsync(id))!;
+        Assert.Equal(WorkflowExecutionStatus.Faulted, state.Status);
+        Assert.Equal(envelope.EnqueuedAt, state.CreatedAt); Assert.Equal(envelope.EnqueuedAt, state.StartedAt);
+        Assert.True(NativeIngressTargetEvidence.Equal(payload.StartAuthority?.StandaloneTrigger, state.IngressOrigin));
+        Assert.True(NativeIngressTargetEvidence.Equal(payload.StimulusDeliveryOrigin, state.StimulusDeliveryOrigin));
+        Assert.Equal(payload.PinnedSource, state.PinnedSource);
+        Assert.Single(await incidents.ListAsync(id)); Assert.Equal(before + 1, await context.RuntimeCheckpointCommits.CountAsync());
+        Assert.Empty((await queue.ListAsync(new(id))).Items);
+    }
+
+    private sealed class FailInitialCheckpoint : IRuntimeCheckpointCommitEnricher
+    {
+        internal bool Fired;
+        public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
+        {
+            if (!Fired && commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted)
+            { Fired = true; throw new InvalidOperationException("Owned first-checkpoint failure before persistence."); }
+            return ValueTask.FromResult(commit);
+        }
+    }
+    private sealed class NoPauseGate : IWorkflowSchedulerPauseGate
+    {
+        public ValueTask<SchedulerPauseDecision?> EvaluateAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<SchedulerPauseDecision?>(null);
+    }
+
+    private sealed class FaultCaptureStore : IRuntimeCheckpointCommitStore
+    {
+        public bool SupportsInitialStartFaultAdmission => true;
+        internal RuntimeCheckpointCommit? Commit;
+        internal RuntimeCheckpointPersistenceDecision? Decision;
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        { Commit = commit; Decision = decision; return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([])); }
+    }
+
     private sealed class PhysicalSealedSourceReader(IPostCommitOutboxLookupStore lookup) : IRuntimeIngressDeliveryStore
     {
         public async ValueTask<RuntimeCommittedRecipient> ReadCommittedRecipientAsync(RuntimeIngressCommandOrigin origin, CancellationToken cancellationToken = default) =>

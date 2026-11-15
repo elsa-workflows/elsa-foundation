@@ -4,6 +4,7 @@ using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Contracts;
 
 namespace Elsa.Activities.Bpmn.Internal;
@@ -21,7 +22,7 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
     {
         if (commit.StateChanges.WorkflowExecution?.State is not { ModelWorkOrigin: { } origin } worker) return commit;
         var prior = await boundary.FindWorkerAsync(origin, cancellationToken);
-        if (commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted && prior is null)
+        if ((commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted || commit.ExpectedInitialStartFault is not null) && prior is null)
         {
             if (await boundary.FindCancellationAsync(origin, cancellationToken) is { } cancelled)
             {
@@ -30,6 +31,17 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
                 return Retire(commit, cancelled.Cancellation, cancelled.Source.Intent.RecordedAt);
             }
             commit = commit with { ExpectedModelExecution = await boundary.RequireLiveAsync(origin, cancellationToken) };
+            if (commit.ExpectedInitialStartFault is { } fault)
+            {
+                var identity = BpmnNativeWorkBoundary.WorkerIdentity(origin.Scope, origin.ExecutionId, origin.InvocationId, origin.AttemptId, origin.WorkerExecutable);
+                var initialCheckpoint = fault.Work.CommandKind == WorkflowExecutionCommandKind.Checkpoint;
+                var suffix = "checkpoint:" + RuntimeCheckpointNames.WorkflowStarted;
+                if (fault.Work.WorkflowExecutionId != identity.WorkflowExecutionId || fault.Work.EnvelopeId != identity.EnvelopeId ||
+                    fault.Work.WorkItemId != (initialCheckpoint ? RuntimeChainId.Derive(identity.EnvelopeId, suffix) : identity.EnvelopeId) ||
+                    fault.Work.CommandId != (initialCheckpoint ? RuntimeChainId.Derive(identity.CommandId, suffix) : identity.CommandId) ||
+                    fault.Work.IdempotencyKey != (initialCheckpoint ? RuntimeChainId.Derive(identity.StartKey, suffix) : identity.StartKey) || fault.Work.Sequence is not null)
+                    throw new BpmnModelValidationException("The first native worker fault changed its deterministic accepted start identity.");
+            }
         }
         if (!worker.Status.IsTerminal() || prior?.Status.IsTerminal() == true) return commit;
         var result = await boundary.CaptureAsync(commit, worker, cancellationToken);
@@ -61,7 +73,7 @@ internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary bo
         }
         if (commit.StateChanges.WorkflowExecution?.State is not { ModelWorkOrigin: { } origin } worker) return;
         var prior = await boundary.FindWorkerAsync(origin, cancellationToken);
-        if (commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted && prior is null &&
+        if ((commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted || commit.ExpectedInitialStartFault is not null) && prior is null &&
             (commit.ExpectedModelExecution is not { } expected || !origin.MatchesModel(expected)))
             throw new BpmnModelValidationException("Initial native worker admission lost its model decision condition.");
         if (!worker.Status.IsTerminal() || prior?.Status.IsTerminal() == true) return;
