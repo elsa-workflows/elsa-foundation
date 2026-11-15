@@ -61,10 +61,10 @@
       <tr><td>SQL Server</td><td class="n">4 (3)</td><td>Needs read-committed snapshot isolation.</td></tr>
       <tr><td>MySQL</td><td class="n">7 (6)</td><td>Oracle's EF provider; upserts and <code>INSERT IGNORE</code>.</td></tr>
       <tr><td>MongoDB 8</td><td class="n">3 (2)</td><td>Needs a replica set for transactions; the store assigns the order key.</td></tr>
-      <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row.</td></tr>
+      <tr><td>SQLite</td><td class="n">5</td><td>Calls into the engine, where EF sends one command per row. This counts BEGIN and COMMIT too, so it is 5 here against the chart's 3 commands.</td></tr>
     </tbody>
   </table></div>
-  <p class="note">Measured by the prototype's own cost runs, as reported in its findings; not re-measured for this record.</p>
+  <p class="note">This table counts a different unit from the chart above: round trips for the server databases, and engine calls (BEGIN and COMMIT included) for SQLite. Measured by the prototype's own cost runs, as reported in its findings; not re-measured for this record.</p>
 </section>
 
 <!-- 14 ─────────────────────────────────────────── -->
