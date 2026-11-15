@@ -66,7 +66,7 @@ internal sealed partial class StateMachine
     private MachineState MaterializeScopes(CompositeContext context, MachineState state)
     {
         if (state.Scopes is not null) return state;
-        var graph = Compile(context);
+        var graph = Compile(context, state.Execution);
         if (!state.LegacyScopes || graph.HasDefaults) throw new InvalidOperationException("Unsupported statechart scope migration.");
         var retired = state.Pending?.Steps.Select((s, i) => (s, i)).Any(p => p.s.Phase == "entry" &&
             (state.Progress!.Done[p.i] || state.Progress.Running.ContainsValue(p.i))) == true;
@@ -88,7 +88,7 @@ internal sealed partial class StateMachine
     {
         var scopes = state.Scopes!;
         if (scopes.Retired) return;
-        var graph = Compile(context);
+        var graph = Compile(context, state.Execution);
         foreach (var step in state.Pending!.Steps.Where(s => s.Phase == "exit").OrderByDescending(s => graph.Depth(s.State)))
         {
             var visit = state.Visits!.Single(v => v.State == step.State);
