@@ -7,6 +7,9 @@ using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.History;
+using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -78,6 +81,63 @@ public sealed class RuntimeHistoryCandidateTests
             changed == "time" ? original.OccurredAt.AddMinutes(1) : changed == "offset" ? original.OccurredAt.ToOffset(TimeSpan.FromHours(1)) : original.OccurredAt,
             changed == "coverage" || original.StartsAtRunStart, original.Candidates) { SourceFingerprint = original.SourceFingerprint };
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(captured with { HistoryBatches = [replacement] }));
+    }
+
+    [Theory]
+    [InlineData("coverage")] [InlineData("missing")] [InlineData("false-marker")]
+    public async Task Unprepared_flush_metadata_cannot_bypass_final_history_proof(string changed)
+    {
+        using var fixture = await Fixture.Create(Policy("ActivityStarted"));
+        var captured = await fixture.Capture.EnrichAsync(Commit("spoofed-flush", RuntimeCheckpointNames.ActivityStarted,
+            activity: Activity(ActivityExecutionStatus.Running)));
+        var original = Assert.Single(captured.HistoryBatches!);
+        var replacement = new RuntimeHistoryBatch(original.Policy, original.LogicalCheckpointId, original.OccurredAt,
+            true, original.Candidates) { SourceFingerprint = original.SourceFingerprint };
+        var metadata = new Dictionary<string, string>(captured.Checkpoint.Metadata)
+            { ["runtime.coalescing.flush"] = changed == "false-marker" ? "false" : "true" };
+        var spoofed = captured with
+        {
+            Checkpoint = captured.Checkpoint with { Metadata = metadata },
+            HistoryBatches = changed == "missing" ? null : [replacement]
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(spoofed));
+    }
+
+    [Theory]
+    [InlineData("valid")] [InlineData("coverage")] [InlineData("missing")]
+    [InlineData("unprepared")] [InlineData("false-marker")]
+    public async Task Prepared_flush_keeps_its_actual_original_history_groups(string changed)
+    {
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        using var fixture = await Fixture.Create(Policy("ActivityStarted"), coalescing: accessor);
+        var logical = await fixture.Capture.EnrichAsync(Commit("buffered", RuntimeCheckpointNames.ActivityStarted,
+            activity: Activity(ActivityExecutionStatus.Running)));
+        var session = new RuntimeCoalescingSession("run", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
+        session.BufferDeferred(logical);
+        var flush = Commit("prepared", RuntimeCoalescingMetadataKeys.FlushCheckpointName) with
+        {
+            StateChanges = session.FoldBufferedStateChanges(),
+            HistoryBatches = session.FoldHistoryBatchesWith()
+        };
+        flush = flush with { Checkpoint = flush.Checkpoint with
+        {
+            Metadata = new Dictionary<string, string> { [RuntimeCoalescingMetadataKeys.CoalescedFlush] = changed == "false-marker" ? "false" : "true" }
+        } };
+        if (changed != "unprepared") session.PrepareQuiescenceFlush(flush.CommitId);
+        using var current = accessor.Push(session);
+        if (changed == "coverage")
+        {
+            var original = Assert.Single(flush.HistoryBatches!);
+            flush = flush with { HistoryBatches = [new RuntimeHistoryBatch(original.Policy, original.LogicalCheckpointId,
+                original.OccurredAt, true, original.Candidates) { SourceFingerprint = original.SourceFingerprint }] };
+        }
+        else if (changed == "missing") flush = flush with { HistoryBatches = null };
+        if (changed == "valid")
+        {
+            Assert.Same(flush, await fixture.Capture.EnrichAsync(flush));
+            await fixture.Capture.ValidateFinalAsync(flush);
+        }
+        else await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(flush));
     }
 
     [Fact]
@@ -351,7 +411,7 @@ public sealed class RuntimeHistoryCandidateTests
         internal RuntimeHistoryCapture Capture => capture;
         public void Dispose() => provider.Dispose();
         internal static async Task<Fixture> Create(RuntimeHistoryCapturePolicy? policy, bool saveNative = true, bool values = true, bool matchedSource = true,
-            IWorkflowExecutionStateStore? executionOverride = null)
+            IWorkflowExecutionStateStore? executionOverride = null, IRuntimeCoalescingSessionAccessor? coalescing = null)
         {
             var executions = executionOverride ?? new InMemoryWorkflowExecutionStateStore();
             if (saveNative) await executions.SaveAsync(Workflow(policy));
@@ -365,7 +425,7 @@ public sealed class RuntimeHistoryCandidateTests
                 new InMemoryActivityExecutionInspectionStore(), executions, new RuntimeHistoryOptions()));
             var provider = services.BuildServiceProvider();
             return new(provider, new RuntimeHistoryCapture(executions,
-                [new(Enum.GetValues<RuntimeHistorySourceFactKind>())], new RuntimeHistoryCaptureCapabilities(provider)));
+                [new(Enum.GetValues<RuntimeHistorySourceFactKind>())], new RuntimeHistoryCaptureCapabilities(provider), coalescing));
         }
     }
     private sealed class UnusedWriter : IRuntimeCheckpointCommitStore

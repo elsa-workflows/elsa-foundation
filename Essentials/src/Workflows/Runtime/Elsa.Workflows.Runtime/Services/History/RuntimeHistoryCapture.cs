@@ -3,13 +3,15 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 
 namespace Elsa.Workflows.Runtime.Services.History;
 
 /// <summary>Captures immutable semantic candidates before coalescing; it never writes a store.</summary>
 internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executions,
-    IEnumerable<RuntimeHistorySourceSupport> sourceSupport, RuntimeHistoryCaptureCapabilities sourceAvailability)
+    IEnumerable<RuntimeHistorySourceSupport> sourceSupport, RuntimeHistoryCaptureCapabilities sourceAvailability,
+    IRuntimeCoalescingSessionAccessor? coalescing = null)
     : IRuntimeCheckpointCommitEnricher, IRuntimeHistoryCaptureSupport
 {
     internal static readonly string[] Kinds =
@@ -126,7 +128,19 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         return true;
     }
 
-    private static bool IsFlush(RuntimeCheckpointCommit commit) => commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
+    private bool IsFlush(RuntimeCheckpointCommit commit)
+    {
+        if (!commit.Checkpoint.Metadata.TryGetValue(RuntimeCoalescingMetadataKeys.CoalescedFlush, out var marker)) return false;
+        var session = coalescing?.Current;
+        if (marker != "true" || commit.Checkpoint.Name != RuntimeCoalescingMetadataKeys.FlushCheckpointName ||
+            session is null || !session.AppliesTo(commit.WorkflowExecutionId) || session.PreparedQuiescenceFlushCommitId != commit.CommitId)
+            throw new InvalidOperationException("History flush validation requires its actual prepared coalescing session.");
+        var expected = session.FoldHistoryBatchesWith();
+        if (RuntimeCheckpointCommitFingerprint.Compute(commit) !=
+            RuntimeCheckpointCommitFingerprint.Compute(commit with { HistoryBatches = expected }))
+            throw new InvalidOperationException("The prepared flush no longer retains its original logical history groups.");
+        return true;
+    }
 
     private static RuntimeHistoryBatch Build(RuntimeCheckpointCommit commit, RuntimeHistoryCapturePolicy policy)
     {
