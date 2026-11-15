@@ -1,3 +1,4 @@
+import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { useWorkflowNativeBlockCommit } from "./useWorkflowNativeBlockCommit";
 import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
 import { presentationScopeFrames } from "../graph-authoring/presentationScopeFrames";
@@ -1043,6 +1044,7 @@ export function WorkflowEditor({
     directHumanClaimsAvailable: directBpmnRoot && directClaimPublisherAvailable,
     directServiceSession: directBpmnRoot && directServicePublisherAvailable ? backendSession : undefined,
     directServiceDocumentId: draft ? `${definitionId}:${draft.id}` : undefined,
+    directServiceModelInputs: readWorkflowInputs(draft?.state.inputs),
     isDecision: isBpmnDecisionType(selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey : undefined),
     conversionBlockedReason: bpmnGatewayConversionBlocker(scopeOwner, selectedBpmnElement),
     onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined

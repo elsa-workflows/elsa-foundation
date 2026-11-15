@@ -182,7 +182,11 @@ public sealed record WorkflowExecutableDeclaredInputView(
     string Name,
     TypeReference Type,
     bool IsRequired,
-    JsonElement? DefaultValue);
+    JsonElement? DefaultValue)
+{
+    /// <summary>Distinguishes a retained JSON-null default from absence.</summary>
+    public bool HasDefaultValue { get; init; }
+}
 
 public sealed record WorkflowExecutableDependencyView(
     string ArtifactId,
@@ -204,6 +208,9 @@ public sealed record WorkflowExecutableDetailsView(
     WorkflowExecutableChosenReferenceView? ChosenReference,
     IReadOnlyCollection<ExecutableSourceReferenceView> References)
 {
+    /// <summary>The immutable producer snapshot used when retaining a native executable dependency.</summary>
+    public WorkflowExecutableIdentity? ProducerIdentity { get; init; }
+
     /// <summary>The immutable versioned workflow-input contract, or <see langword="null"/> for a legacy artifact.</summary>
     public WorkflowExecutableInputContractView? InputContract { get; init; }
 

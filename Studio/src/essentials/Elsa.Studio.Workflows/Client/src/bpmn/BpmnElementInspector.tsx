@@ -1,5 +1,6 @@
 import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useState } from "react";
+import type { WorkflowInput } from "../workflowTypes";
 import type { StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { bpmnElementTypeLabel, isDecisionGatewayType, type BpmnElement, type BpmnSequenceFlow } from "./bpmnTypes";
 import { directBindingProperty, directHumanClaimPatch, directHumanClaimRequired, directHumanMode, directHumanPatch } from "./bpmnDirectBinding";
@@ -18,6 +19,7 @@ interface BpmnElementInspectorProps {
   directHumanClaimsAvailable?: boolean;
   directServiceSession?: StudioBackendSession;
   directServiceDocumentId?: string;
+  directServiceModelInputs?: WorkflowInput[];
   isDecision?: boolean;
   onAddDecision?(): void;
   conversionBlockedReason?: string;
@@ -49,7 +51,7 @@ export function BpmnElementInspector(props: BpmnElementInspectorProps) {
 // Shared with the activity inspector so bound gateways retain both expression and routing editors.
 export function BpmnElementConfiguration({
   element, outboundFlows, onChangeElement, onChangeFlow, onSetDefaultFlow, targetLabelFor,
-  readOnly = false, directHumanAvailable = false, directHumanClaimsAvailable = false, directServiceSession, directServiceDocumentId, isDecision = false, onAddDecision, conversionBlockedReason
+  readOnly = false, directHumanAvailable = false, directHumanClaimsAvailable = false, directServiceSession, directServiceDocumentId, directServiceModelInputs, isDecision = false, onAddDecision, conversionBlockedReason
 }: BpmnElementInspectorProps) {
   const gateway = isDecisionGatewayType(element.elementType);
   const humanMode = directHumanMode(element);
@@ -91,7 +93,7 @@ export function BpmnElementConfiguration({
             : directHumanClaimRequired(element) ? "One authorized person claims this work in BPMN runs; only that person can complete it."
             : "A human wait pauses the published BPMN process until an authorized person completes it from BPMN runs."}</p>
         {directServiceSession && directServiceDocumentId && directHumanAvailable && humanMode !== "native" && humanMode !== "unsupported" ? <>
-          {humanMode === "service" || serviceEditor === element.elementId ? <BpmnServiceBindingEditor session={directServiceSession} documentId={directServiceDocumentId} element={element} readOnly={readOnly}
+          {humanMode === "service" || serviceEditor === element.elementId ? <BpmnServiceBindingEditor session={directServiceSession} documentId={directServiceDocumentId} element={element} readOnly={readOnly} modelInputs={directServiceModelInputs}
             onChange={patch => { if (!readOnly) { onChangeElement(element.elementId, patch); setServiceEditor(null); } }} />
             : <button type="button" disabled={readOnly} onClick={() => setServiceEditor(element.elementId)}>Bind a published service workflow</button>}
           {serviceEditor === element.elementId && humanMode !== "service" ? <button type="button" disabled={readOnly} onClick={() => setServiceEditor(null)}>Cancel service selection</button> : null}

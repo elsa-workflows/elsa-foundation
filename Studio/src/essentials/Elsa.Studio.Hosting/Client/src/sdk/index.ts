@@ -839,6 +839,26 @@ export interface StudioWorkflowRunInputEditorContribution {
   serialize(context: StudioWorkflowRunInputEditorContext): unknown;
 }
 
+/** JSON-only configuration exchanged with a standalone trigger's optional editor. */
+export type StudioTriggerConfigurationValue = null | boolean | number | string | StudioTriggerConfigurationValue[] | { [key: string]: StudioTriggerConfigurationValue };
+export interface StudioTriggerConfigurationFinding { code: string; message: string; field?: string; inputName?: string }
+export interface StudioTriggerConfigurationEditorProps {
+  readonly typeKey: string;
+  readonly schemaVersion: string;
+  readonly configuration: Readonly<Record<string, StudioTriggerConfigurationValue>>;
+  readonly disabled: boolean;
+  readonly findings: readonly StudioTriggerConfigurationFinding[];
+  /** Reports the full configuration; preserved fields must remain in the returned value. */
+  onChange(configuration: Record<string, StudioTriggerConfigurationValue>): void;
+}
+/** Pure configuration authoring only. This contribution supplies no trigger, graph or execution authority. */
+export interface StudioTriggerConfigurationEditorContribution extends StudioBackendAwareContribution {
+  id: string;
+  typeKey: string;
+  schemaVersion: string;
+  component: ComponentType<StudioTriggerConfigurationEditorProps>;
+}
+
 /** A backend-discovered trigger mode available while driving a workflow Test Run. */
 export interface StudioTestRunModeDescriptor extends Record<string, unknown> {
   modeId: string;
@@ -1636,6 +1656,7 @@ export const studioSlotIds = {
   userTaskForms: "user-task.form-renderers",
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
+  triggerConfigurationEditors: "workflow.trigger.configuration-editors",
   workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   workflowRunRelatedLinks: "workflow.run.related-links",
   settingEditors: "studio.setting-editors",
@@ -1730,6 +1751,7 @@ export const studioSlots = {
   propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
+  triggerConfigurationEditors: defineStudioSlot({ id: studioSlotIds.triggerConfigurationEditors, kind: "trigger-configuration-editor", title: "Trigger configuration editors", owner: hostSlotOwner() }),
   workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   workflowRunRelatedLinks: defineStudioSlot({ id: studioSlotIds.workflowRunRelatedLinks, kind: "workflow-run-related-link", title: "Workflow run related links", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
@@ -2051,6 +2073,8 @@ export interface ElsaStudioModuleApi {
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
+  /** Optional on older hosts; generic backend metadata remains the configuration fallback. */
+  readonly triggerConfigurationEditors?: StudioContributionRegistry<StudioTriggerConfigurationEditorContribution>;
   /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
   readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   /** Optional on older hosts. Only authorized matching public state views are supplied to contributors. */

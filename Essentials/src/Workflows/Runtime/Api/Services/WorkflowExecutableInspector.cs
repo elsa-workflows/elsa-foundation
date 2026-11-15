@@ -121,6 +121,7 @@ public sealed class WorkflowExecutableInspector(
                 },
             ordered.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray())
         {
+            ProducerIdentity = executable.Identity,
             InputContract = InputContract(executable.InputContract),
             Dependencies = executable.Dependencies
                 .OrderBy(dependency => dependency.ArtifactId, StringComparer.Ordinal)
@@ -492,7 +493,7 @@ public sealed class WorkflowExecutableInspector(
                         input.Name,
                         input.Type,
                         input.IsRequired,
-                        input.DefaultValue?.Clone()))
+                        input.DefaultValue?.Clone()) { HasDefaultValue = input.DefaultValue.HasValue })
                     .ToArray());
 
     // A member read names its source and then each exact member, so it never reads as a whole-value read.

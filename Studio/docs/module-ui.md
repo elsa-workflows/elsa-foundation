@@ -263,3 +263,19 @@ mappings; retain mounted default editors so tab changes never discard unapplied
 text. Diagnostic links select the matching collection before focusing the exact
 member or field. Provider boundary editors can use the optional `contractSection`
 prop to show the corresponding output or outcome mappings.
+
+## Standalone trigger configuration editors
+
+The Workflows module provides the [standalone trigger collection and association surfaces](../../specs/1217-standalone-triggers/ux-acceptance.md).
+They discover routes and supported types through the selected backend's `elsa.api.standalone-triggers` capability.
+The backend continues to own permissions, protected configuration, revisions, invocation grants and delivery authority.
+
+A module can contribute a `StudioTriggerConfigurationEditorContribution` through the optional
+`api.triggerConfigurationEditors` registry (`workflow.trigger.configuration-editors`). Match the backend's
+`typeKey`, `schemaVersion` and, when supplied, `configurationEditorId`. The component receives JSON configuration,
+validation findings and a disabled state; `onChange` returns the complete configuration, including preserved fields.
+It supplies configuration authoring only. The normal backend preview/apply flow still controls changes.
+
+Without one matching editor, or if an editor throws, Studio uses the backend's generic configuration fields and
+preserves saved values. The registry is optional so modules also work with older hosts. Use the public SDK and
+shared UI components; see the existing [configuration form](../src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/ConfigurationForm.tsx).

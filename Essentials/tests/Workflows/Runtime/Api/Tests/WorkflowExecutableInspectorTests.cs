@@ -165,6 +165,18 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_keeps_the_actual_producer_pin_separate_from_logical_publication_provenance()
+    {
+        var reference = Reference("logical", WorkflowExecutableReferenceScope.Published, _now, "2.0.0") with
+        { DefinitionId = "logical-definition", DefinitionVersionId = "logical-version" };
+        var material = await ActivateAsync(reference);
+        var detail = await _inspector.GetAsync(material.Identity.ArtifactId, reference.SourceReferenceId);
+        Assert.Equal(material.Identity, detail!.ProducerIdentity);
+        Assert.Equal(reference.DefinitionId, Assert.Single(detail.References).DefinitionId);
+        Assert.NotEqual(reference.DefinitionId, detail.ProducerIdentity!.DefinitionId);
+    }
+
+    [Fact]
     public async Task Detail_honors_requested_reference_and_defaults_to_live_published_reference()
     {
         await ActivateAsync(
@@ -1002,6 +1014,20 @@ public sealed class WorkflowExecutableInspectorTests
         var detail = await _inspector.GetAsync("artifact-1");
 
         Assert.Null(detail!.RootActivity.BpmnStructure);
+    }
+
+    [Fact]
+    public async Task Declared_input_inspection_distinguishes_a_null_default_from_no_default_on_the_wire()
+    {
+        var contract = new WorkflowExecutableInputContract(1,
+            [new("missing", new("String"), true), new("null-default", new("String"), true, JsonSerializer.SerializeToElement<string?>(null))]);
+        await _executableStore.SaveAsync(Executable(_now, inputContract: contract));
+        var detail = await _inspector.GetAsync("artifact-1");
+        var json = JsonSerializer.SerializeToElement(detail, WebJson).GetProperty("inputContract").GetProperty("inputs");
+        Assert.False(json.EnumerateArray().Single(input => input.GetProperty("name").GetString() == "missing").GetProperty("hasDefaultValue").GetBoolean());
+        var retained = json.EnumerateArray().Single(input => input.GetProperty("name").GetString() == "null-default");
+        Assert.True(retained.GetProperty("hasDefaultValue").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, retained.GetProperty("defaultValue").ValueKind);
     }
 
     [Fact]
