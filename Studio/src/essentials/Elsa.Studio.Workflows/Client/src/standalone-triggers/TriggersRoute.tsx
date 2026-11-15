@@ -54,7 +54,7 @@ function CreateTrigger({ api, client, actor, navigate }: { api: ElsaStudioModule
   async function create(descriptor: TriggerTypeDescriptor, draft: ConfigurationDraft) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError(undefined);
-    const fingerprint = JSON.stringify({ typeKey: descriptor.typeKey, ...draft });
+    const fingerprint = serializeTriggerPayload({ typeKey: descriptor.typeKey, schemaVersion: descriptor.schemaVersion, ...draft });
     if (request.current?.fingerprint !== fingerprint) request.current = { fingerprint, id: operationId() };
     try {
       const saved = await client.create({ ...draft, typeKey: descriptor.typeKey, schemaVersion: descriptor.schemaVersion, requestId: request.current.id });

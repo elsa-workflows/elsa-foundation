@@ -106,16 +106,17 @@ public sealed class ActivitiesDesignApiContractTests
     };
 
     [Fact]
-    public async Task Real_host_retains_all_38_reviewed_operations_and_the_additive_data_context()
+    public async Task Real_host_retains_all_38_reviewed_operations_and_the_additive_data_context_and_candidate_validation()
     {
         await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
         var endpoints = OwnedEndpoints(host).ToArray();
 
-        Assert.Equal(39, endpoints.Length);
-        Assert.Equal(39, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
+        Assert.Equal(40, endpoints.Length);
+        Assert.Equal(40, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
         Assert.Equal(
             ActivitiesDesignCompatibilityCases.Manifest.Select(route => route.Endpoint)
-                .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/activity-data/context", "POST")).OrderBy(endpoint => endpoint.ToString()),
+                .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/activity-data/context", "POST"))
+                .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/candidate-validation", "POST")).OrderBy(endpoint => endpoint.ToString()),
             endpoints.Select(Identity).OrderBy(endpoint => endpoint.ToString()));
     }
 

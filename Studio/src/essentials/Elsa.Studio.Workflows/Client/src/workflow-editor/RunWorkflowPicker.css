@@ -52,7 +52,7 @@
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius);
   background: var(--studio-surface);
-  box-shadow: var(--studio-shadow-menu, 0 8px 24px rgb(0 0 0 / 18%));
+  box-shadow: var(--studio-shadow-sm);
   color: var(--studio-text);
   font-weight: 400;
 }

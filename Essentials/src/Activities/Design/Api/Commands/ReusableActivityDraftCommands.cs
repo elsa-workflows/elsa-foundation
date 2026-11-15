@@ -201,3 +201,14 @@ public sealed record ListReusableActivityVersions(
     string Sort = "identity-asc") : IRequest<ActivityManagementPageView<ReusableActivityVersionManagementView>>;
 
 public sealed record GetReusableActivityVersion(string VersionId) : IRequest<ReusableActivityVersionView>;
+
+/// <summary>Validates the complete unsaved proposal without writing the draft or a persisted validation receipt.</summary>
+public sealed record ValidateReusableActivityCandidate(
+    [property: JsonIgnore] string DraftId,
+    long ExpectedRevision,
+    ActivityContractView Contract,
+    ActivityProviderManifest Provider,
+    IReadOnlyList<ActivityLayoutRecord> Layout)
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}
