@@ -398,12 +398,14 @@ An otherwise unwritten keyed terminal identity has logical State null (four UTF-
 physical State-cell control envelope occupies 29 bytes. A typed value-metadata checkpoint sample uses 11 bytes.
 Ordinary reserved-prefix states escape losslessly; future controls refuse rather than being parsed as state.
 The isolated PostgreSQL 17.11 retirement sample used 4 observed TCP edges for raw delete and retirement each,
-with 512/656 WAL bytes and a retained marker pg_column_size 101 bytes. Earlier 632-byte retirement samples
-remain separate observations, not a causal ratio. This excludes index/page overhead from tuple size.
+with 512/656 WAL bytes; the actual final tip6 repeat measured 512/632. Both retained marker
+pg_column_size samples were 101 bytes. These are separate windows, not a causal ratio or fixed write cost.
+This excludes index/page overhead from tuple size.
 The owned isolation fixture disabled autovacuum only for the finite WAL sample, not as a provider default.
 
 Exact encoded UTF-16 key/operation storage uses full values plus fixed hash-bucket indexes. One 4096-unit
-sample used 11008/10924 encoded octets, pg_column_size(binding/receipt) 11096/22120 bytes and 36624 WAL bytes;
+sample used 11008/10924 encoded octets and pg_column_size(binding/receipt) 11096/22120 bytes.
+The preparation/final tip6 windows measured 36624/36648 WAL bytes respectively;
 its one observed TCP edge is a bounded sample. Cumulative relation allocations are reported separately
 from datum sizes. Padding, TOAST, WAL/page boundaries, retained receipts and repeated turnover affect costs.
 No production write-volume, sustained vacuum, failover or contended-latency qualification follows.
