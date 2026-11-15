@@ -5,28 +5,30 @@ namespace Kernel.Durable;
 public static class StoredState
 {
     public const string Family="!kernel-state/";
-    public const string Identity="!kernel-state/1:identity-only";
+    public const string Identity="!kernel-state/2:identity-only";
+    public const string MetadataIdentity="!kernel-state/2:identity-metadata";
     public const string Data="!kernel-state/1:data:";
     public static string Encode(InstanceRow row)
     {
         StoreBatchRules.ValidateIdentity(row);
-        return row.IdentityOnly?Identity:row.State.StartsWith(Family,StringComparison.Ordinal)?Data+row.State:row.State;
+        return row.IdentityOnly?(row.IdentityMetadataRequired?MetadataIdentity:Identity):row.State.StartsWith(Family,StringComparison.Ordinal)?Data+row.State:row.State;
     }
     public static InstanceRow Restore(InstanceRow physical)
     {
         var state=Decode(physical.State);
-        if(physical.IdentityOnly && !state.IdentityOnly)
+        if(physical.IdentityOnly && !state.IdentityOnly || physical.IdentityMetadataRequired && !state.IdentityMetadataRequired)
             throw new StoreException(Failure.Definite,"Contradictory logical and physical state-free identity headers.");
-        var row=physical with{State=state.State,IdentityOnly=state.IdentityOnly};
+        var row=physical with{State=state.State,IdentityOnly=state.IdentityOnly,IdentityMetadataRequired=state.IdentityMetadataRequired};
         StoreBatchRules.ValidateIdentity(row);
         return row;
     }
-    public static (string State,bool IdentityOnly) Decode(string stored)
+    public static (string State,bool IdentityOnly,bool IdentityMetadataRequired) Decode(string stored)
     {
-        if(!stored.StartsWith(Family,StringComparison.Ordinal))return(stored,false);
-        if(stored==Identity)return("null",true);
+        if(!stored.StartsWith(Family,StringComparison.Ordinal))return(stored,false,false);
+        if(stored==Identity)return("null",true,false);
+        if(stored==MetadataIdentity)return("null",true,true);
         if(stored.StartsWith(Data,StringComparison.Ordinal) && stored[Data.Length..].StartsWith(Family,StringComparison.Ordinal))
-            return(stored[Data.Length..],false);
+            return(stored[Data.Length..],false,false);
         throw new StoreException(Failure.Definite,"Unsupported or malformed physical state control envelope; original bytes must be retained.");
     }
 }

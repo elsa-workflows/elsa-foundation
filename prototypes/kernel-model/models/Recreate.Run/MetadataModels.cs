@@ -70,3 +70,11 @@ public sealed class NullCheckpointProbe:IExecutionModel,IModelMetadata
     public void TerminateMetadata(object s){}
     public bool ProtectsDeletion(object s,long n,ICommitClock c){TypedCalls++;if(s is not null)throw new InvalidOperationException("ordinary null was reinterpreted");return Protect;}
 }
+
+public sealed class PlainIdentityFacade(IExecutionModel model):IExecutionModel
+{
+    public string Key=>model.Key;public Type StateType=>model.StateType;public int StateVersion=>model.StateVersion;
+    public object CreateState(StartSpec s)=>model.CreateState(s);public object UpgradeState(string s,int v)=>model.UpgradeState(s,v);
+    public ValueTask TurnAsync(ITurn t,CancellationToken c)=>model.TurnAsync(t,c);
+    public ValueTask<object?> ExecuteJobAsync(IJob j,CancellationToken c)=>model.ExecuteJobAsync(j,c);
+}

@@ -8,9 +8,9 @@ internal static class IdentityMetadataChecks
         var serial=200;
         foreach(var history in new[]{History.Full,History.State,History.Minimal})
         foreach(var ephemeral in new[]{false,true})
-        foreach(var profile in new[]{"raw-value","stateful","state-free","null-checkpoint"})
+        foreach(var profile in new[]{"raw-value","stateful","state-free","plain","null-checkpoint"})
         {
-            IExecutionModel model=profile switch {"raw-value"=>new ValueProbe(),"stateful"=>new StatefulValueProbe(),"state-free"=>new StateFreeValueProbe(),_=>new NullCheckpointProbe()};
+            IExecutionModel model=profile switch {"raw-value"=>new ValueProbe(),"stateful"=>new StatefulValueProbe(),"state-free"=>new StateFreeValueProbe(),"plain"=>new PlainIdentityFacade(new ValueProbe()),_=>new NullCheckpointProbe()};
             var id="g0/key/"+(++serial);var start=new StartSpec(model.Key,"terminal",Ephemeral:ephemeral,History:history);
             var lease=await c.Take(0);
             var creator=new Message("creator-"+serial,new(id),Kinds.Start,Start:start).WithInboxScope(long.MaxValue);
@@ -20,8 +20,8 @@ internal static class IdentityMetadataChecks
             async Task Activate(Worker owner){await new DurableHost([owner]).ActivateAsync(0);await owner.PollAsync();}
             async Task Pump(Worker owner){await owner.WokenAsync(null);for(var i=0;i<12;i++)await owner.RunAsync();}
             var owner=Owner(model);await Activate(owner);await Pump(owner);
-            var row=(await c.S.LoadAsync([id])).Single();var stateFree=ephemeral && profile=="state-free";
-            Context.That(row.Status==InstanceStatus.Finished && row.IdentityOnly==stateFree &&
+            var row=(await c.S.LoadAsync([id])).Single();var stateFree=ephemeral && profile is "state-free" or "plain";
+            Context.That(row.Status==InstanceStatus.Finished && row.IdentityOnly==stateFree && row.IdentityMetadataRequired==(ephemeral && profile=="state-free") &&
                 (stateFree || profile=="null-checkpoint"?row.State=="null":Json.Read<ValueState>(row.State).Value==1),"terminal profile payload/discriminator mismatch");
             await new Projector(c.S,0).RoundAsync();var view=(await c.S.ReadViewsAsync([id])).SingleOrDefault();
             Context.That(history==History.Minimal?view is null:view==new ViewRow(id,1,1),"terminal profile projection changed");
@@ -31,7 +31,7 @@ internal static class IdentityMetadataChecks
                 var wire=Guid.NewGuid().ToString("N");
                 await c.S.AddAsync(new(wire,new(id),kind,ReplyTo:ReplyTo.Of("observer",wire,long.MaxValue)));await Pump(owner);
             }
-            if(profile!="raw-value")
+            if(profile is not ("raw-value" or "plain"))
             {
                 await Give(Kinds.Delete);Context.That(!(await c.S.LoadAsync([id])).Single().Retired,"metadata protection bypassed");
                 await Give("query");
@@ -40,12 +40,15 @@ internal static class IdentityMetadataChecks
             if(model is StateFreeValueProbe free && stateFree)
             {
                 await Give("unsupported");Context.That(transport.Items.Any(r=>r.Item is IdentityMetadataUnavailable),"unsupported state-free metadata not refused");
-                await owner.DisposeAsync();owner=Owner(new LegacyIdentityFacade(free));await Activate(owner);
+                foreach(var facade in new IExecutionModel[]{new LegacyIdentityFacade(free),new PlainIdentityFacade(free)})
+                {
+                await owner.DisposeAsync();owner=Owner(facade);await Activate(owner);
                 var previous=transport.Items.Count;
                 await Give(Kinds.Delete);await Give("query");
                 Context.That(transport.Items.Skip(previous).Count(r=>r.Item is IdentityMetadataUnavailable)==2 &&
-                    (await c.S.LoadAsync([id])).Single() is {Retired:false,IdentityOnly:true,State:"null"},"missing state-free capability did not fail closed");
+                    (await c.S.LoadAsync([id])).Single() is {Retired:false,IdentityOnly:true,IdentityMetadataRequired:true,State:"null"},"missing state-free capability did not fail closed");
                 Context.Equal(0,free.TypedCalls,"identity-only path invoked typed state callbacks");
+                }
                 await owner.DisposeAsync();owner=Owner(model);await Activate(owner);
             }
             if(model is NullCheckpointProbe nullModel)nullModel.Protect=false;

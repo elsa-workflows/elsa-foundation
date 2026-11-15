@@ -5,7 +5,7 @@ internal static class StoredStateChecks
     internal static readonly Case Case=new("state envelope: opaque escaping, identity and future refusal",Level.Required,Run);
     private static async Task Run(Context c)
     {
-        var values=new[]{"", "null", "{}",StoredState.Identity,StoredState.Data,StoredState.Data+StoredState.Identity,
+        var values=new[]{"", "null", "{}",StoredState.Identity,StoredState.MetadataIdentity,StoredState.Family+"1:identity-only",StoredState.Data,StoredState.Data+StoredState.Identity,
             StoredState.Family+"2:future/🌐",StoredState.Family+"1:unknown"};
         var lease=await c.Take(0);long position=lease.Position;
         for(var i=0;i<values.Length;i++)
@@ -22,7 +22,7 @@ internal static class StoredStateChecks
         await c.Lands(()=>c.Commit(0,lease.Epoch,position,[Make.Turn(identity.Id,identity)]));
         Context.Equal(identity,(await c.S.LoadAsync([identity.Id])).Single(),"physical identity roundtrip");
         Context.Equal(identity,(await c.S.LoadActorsAsync([identity.Id])).Single().Row,"actor lookup explicit identity roundtrip");
-        foreach(var future in new[]{StoredState.Family,StoredState.Family+"2:identity-only",StoredState.Family+"1:unknown",StoredState.Data+"invalid-escape"})
+        foreach(var future in new[]{StoredState.Family,StoredState.Family+"3:identity-only",StoredState.Family+"1:identity-only",StoredState.Family+"1:unknown",StoredState.Data+"invalid-escape"})
         {
             try{StoredState.Restore(identity with{State=future});throw new ConformanceException("unknown envelope accepted");}
             catch(StoreException e)when(e.Failure==Failure.Definite){}
@@ -32,7 +32,9 @@ internal static class StoredStateChecks
             try{StoredState.Encode(invalid);throw new ConformanceException("invalid identity shape accepted");}
             catch(StoreException e)when(e.Failure==Failure.Definite){}
         }
-        var marker=CreationProtocol.Retire(identity);
-        Context.That(!marker.IdentityOnly && StoredState.Encode(marker)=="null","canonical retirement marker acquired an identity envelope");
+        var required=identity with{IdentityMetadataRequired=true};
+        Context.Equal(required,StoredState.Restore(required with{State=StoredState.Encode(required)}),"required protocol roundtrip");
+        var marker=CreationProtocol.Retire(required);
+        Context.That(!marker.IdentityOnly && !marker.IdentityMetadataRequired && StoredState.Encode(marker)=="null","canonical retirement marker acquired an identity envelope");
     }
 }

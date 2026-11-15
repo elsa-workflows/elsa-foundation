@@ -31,6 +31,10 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     public TurnOutcome? Command(TurnInput input)
     {
         var (row, first) = (input.Row, input.Taken[0]);
+        // The persisted protocol remains authoritative when a cold model drops either metadata interface.
+        // Refuse before controls or the ordinary terminal drain can consume a protected query/Delete.
+        if (row is { IdentityMetadataRequired:true } && _models[row.Model] is not IStateFreeTerminalMetadata)
+            return IdentityMetadataTurn.Unavailable(input);
         if (row is { Creation: > 0 } && first.Message.Kind == WorkflowKinds.ChildFinished)
         {
             try

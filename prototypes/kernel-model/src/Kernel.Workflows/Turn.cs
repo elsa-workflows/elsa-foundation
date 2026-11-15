@@ -104,7 +104,7 @@ internal sealed class Turn : ITurn
             // Metadata is a persistence obligation unless its model explicitly supplies a state-free terminal
             // protocol. Both profiles share the existing durable start-consumption commit.
             if (model is not IModelMetadata || model is IStateFreeTerminalMetadata metadata &&
-                metadata.CanUseIdentityOnly(State,_status,Clock)) row = row with { State = "null", IdentityOnly = true };
+                metadata.CanUseIdentityOnly(State,_status,Clock)) row = row with { State = "null", IdentityOnly = true, IdentityMetadataRequired = model is IStateFreeTerminalMetadata };
         }
         // Decision 4: one that waits only for its own short timers and jobs stays in memory, unwritten, up to its short wait.
         if (unwritten && _status == InstanceStatus.Running)

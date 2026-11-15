@@ -37,12 +37,21 @@ internal static class KeyedMetadataChecks
         var warm=FreeOwner();await new DurableHost([warm]).ActivateAsync(0);await warm.PollAsync();await warm.LoadAsync();await warm.FlushAsync();
         warm.RunTurn(physical);var from=trips?.Invoke();await warm.FlushAsync();var freeTrips=from.HasValue?trips!()-from.Value:(long?)null;
         var freeBytes=storedBytes is null?(int?)null:await storedBytes(physical);
-        Harness.Check((await store.LoadAsync([physical])).Single() is {IdentityOnly:true,State:"null"},"state-free opt-in retained model state");
+        Harness.Check((await store.LoadAsync([physical])).Single() is {IdentityOnly:true,IdentityMetadataRequired:true,State:"null"},"state-free opt-in retained model state");
         await warm.DisposeAsync();await ingress.AcceptAsync(new(requestFree.Key,"delete-guarded",Kinds.Delete));
         var cold=FreeOwner();await new DurableHost([cold]).ActivateAsync(0);await Drain(cold);
         Harness.Check(!(await store.LoadAsync([physical])).Single().Retired && stateFree.TypedCalls==0,"state-free deletion protection ignored or typed state reconstructed");
         await waitUntil(firstFree.KeepUntil!.Value);
         Harness.Check((await ingress.AcceptAsync(requestFree with{Operation="next"})).Outcome=="in-use","protected metadata run displaced");
+        foreach(var facade in new IExecutionModel[]{new LegacyIdentityFacade(stateFree),new PlainIdentityFacade(stateFree)})
+        {
+            await cold.DisposeAsync();cold=new(Guid.NewGuid().ToString("N"),0,store,new WorkflowInstance([facade]));
+            await new DurableHost([cold]).ActivateAsync(0);
+            await ingress.AcceptAsync(new(requestFree.Key,"delete-unsupported-"+facade.GetType().Name,Kinds.Delete));await Drain(cold);
+            Harness.Check((await store.LoadAsync([physical])).Single() is {Retired:false,IdentityMetadataRequired:true},"cold protocol removal retired protected identity");
+            Harness.Check((await ingress.AcceptAsync(requestFree with{Operation="next"})).Outcome=="in-use","cold protocol removal permitted early rebind");
+        }
+        await cold.DisposeAsync();cold=FreeOwner();await new DurableHost([cold]).ActivateAsync(0);
         stateFree.Protect=false;await ingress.AcceptAsync(new(requestFree.Key,"delete-unprotected",Kinds.Delete));await Drain(cold);
         Harness.Check((await store.LoadAsync([physical])).Single().Retired,"state-free metadata did not retire after protection released");
         Harness.Check((await ingress.AcceptAsync(requestFree with{Operation="next"})).Outcome=="accepted" && await ingress.AcceptAsync(requestFree)==firstFree,"state-free metadata rebind/replay");
