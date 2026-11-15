@@ -153,13 +153,24 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
         context.Entry(activityRow).Property(row => row.Revision).IsModified = true;
     }
 
+    bool IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission => true;
+
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        ArgumentNullException.ThrowIfNull(decision);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit.WorkflowExecutionId);
         try { return await CommitCoreAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when (commit.ExpectedInitialStartFault is { } fault &&
+            exception is InvalidDataException or JsonException or ArgumentException)
+        {
+            throw new RuntimeCheckpointCommitValidationException(
+                $"First-fault checkpoint '{commit.CommitId}' for execution '{commit.WorkflowExecutionId}', work '{fault.Poison.WorkItemId}' was refused.", exception);
+        }
         catch (Exception exception) when ((commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null) &&
             (exception is IOException or DbUpdateConcurrencyException or
                 WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
@@ -261,7 +272,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
         // changes: a failed attempt clears the tracker, which would drop what the caller staged. A commit on a
         // context with an open transaction: an attempt cannot begin a transaction of its own there, so it would
         // only fail, after taking a root write lease when the commit needs one.
-        var readsMarkerFirst = commit.ExpectedBookmarkResume is not null || commit.ModelState is not null ||
+        var readsMarkerFirst = commit.ExpectedInitialStartFault is not null || commit.ExpectedBookmarkResume is not null || commit.ModelState is not null ||
             commit.ExpectedModelExecution is not null ||
             context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
             context.Database.GetEnlistedTransaction() is not null || Transaction.Current is not null;
@@ -280,7 +291,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore(
         try
         {
             if (commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is not null &&
-                commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted &&
+                (commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted || commit.ExpectedInitialStartFault is not null) &&
                 commit.ExpectedModelExecution is null)
                 throw new NotSupportedException("Initial native model work requires its authorizing model checkpoint condition.");
 

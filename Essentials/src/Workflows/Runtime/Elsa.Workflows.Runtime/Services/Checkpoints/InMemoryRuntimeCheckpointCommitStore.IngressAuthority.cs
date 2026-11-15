@@ -20,11 +20,21 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
     private async ValueTask ValidateIngressExecutionAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         SavedStimulusStartSeal.ValidateCommitOrigin(commit);
+        if (commit.ExpectedInitialStartFault is not null && commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert })
+            throw new InvalidDataException("A first fault requires its exact initial execution upsert.");
         if (commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert } change) return;
         var proposed = change.State;
         NativeIngressCheckpointAuthority.ValidateOriginShape(proposed);
         var executions = ExactResumeExecutions;
         var prior = executions is null ? null : await executions.FindAsync(proposed.WorkflowExecutionId, cancellationToken);
+        if (commit.ExpectedInitialStartFault is { } firstFault)
+        {
+            if (prior is not null || InitialStartFaultPoisonStore is null)
+                throw new InvalidDataException("A first fault requires a missing execution and its actual parked scheduler failure.");
+            var actual = await InitialStartFaultPoisonStore.FindAsync(commit.WorkflowExecutionId, firstFault.Poison.WorkItemId, cancellationToken)
+                ?? throw new InvalidDataException("The first fault has no parked scheduler failure.");
+            InitialStartFaultAuthority.Validate(commit, actual);
+        }
         if (prior?.StimulusDeliveryOrigin is not null || prior?.IngressOrigin is not null || prior?.ModelWorkOrigin?.IngressOrigin is not null)
         {
             if (!ReferenceEquals(executions!.CheckpointState, _state))
@@ -36,7 +46,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
         {
             if (executions is null || !ReferenceEquals(executions.CheckpointState, _state))
                 throw new NotSupportedException("Saved stimulus starts require their actual native execution writer.");
-            if (prior is not null || commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
+            if (prior is not null || commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted && commit.ExpectedInitialStartFault is null ||
                 _persistenceAccessContextAccessor?.Current.RequireScope() != saved.Scope)
                 throw new InvalidDataException("Saved stimulus scope requires its exact initial physical checkpoint.");
             RuntimePostCommitOutboxItem retained;
@@ -52,7 +62,7 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore
         if (proposed.IngressOrigin is not { } origin) return;
         if (executions is null || !ReferenceEquals(executions.CheckpointState, _state))
             throw new NotSupportedException("Ingress workflow checkpoints require the actual selected native execution writer.");
-        if (prior is not null || commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
+        if (prior is not null || commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted && commit.ExpectedInitialStartFault is null ||
             _persistenceAccessContextAccessor?.Current.RequireScope() != origin.Scope)
             throw new InvalidDataException("Ingress workflow authority requires its exact initial physical checkpoint.");
         RuntimePostCommitOutboxItem source;

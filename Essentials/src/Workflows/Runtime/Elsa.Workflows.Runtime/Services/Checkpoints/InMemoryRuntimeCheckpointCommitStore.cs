@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -172,13 +173,24 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
+    bool IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission => true;
+
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        ArgumentNullException.ThrowIfNull(decision);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit.WorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
         if (commit.ModelState is not null || commit.ExpectedModelExecution is not null)
             throw new NotSupportedException("The in-memory checkpoint writer does not support model decisions or model-owned native worker admission.");
         try { return await CommitWithParticipantsAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when (commit.ExpectedInitialStartFault is { } fault &&
+            exception is InvalidDataException or JsonException or ArgumentException)
+        {
+            throw new RuntimeCheckpointCommitValidationException(
+                $"First-fault checkpoint '{commit.CommitId}' for execution '{commit.WorkflowExecutionId}', work '{fault.Poison.WorkItemId}' was refused.", exception);
+        }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null && exception is
             WorkflowExecutableRootWriteLeaseUnavailableException or WorkflowExecutableRootWriteLeaseLostException)
         {
@@ -245,9 +257,21 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
             }
 
             return await inMemoryOperationalStateStore.ExecuteOwnershipAtomicAsync(
-                token => CommitNewAsync(commit, decision, token),
+                token => CommitWithInitialFaultAsync(commit, decision, token),
                 ct);
         }, cancellationToken);
+    }
+
+    internal IWorkflowSchedulerPoisonStore? InitialStartFaultPoisonStore { private get; set; }
+
+    private ValueTask<RuntimeCheckpointCommitStoreResult> CommitWithInitialFaultAsync(RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision, CancellationToken ct)
+    {
+        if (commit.ExpectedInitialStartFault is not { } expected) return CommitNewAsync(commit, decision, ct);
+        if (InitialStartFaultPoisonStore is not Elsa.Workflows.Runtime.Services.Scheduler.InMemoryWorkflowSchedulerPoisonStore poison ||
+            !poison.CoordinatesOwnership(_operationalStateStore))
+            throw new NotSupportedException("A first fault requires the selected poison and ownership stores in one atomic boundary.");
+        return poison.WithDecisionAsync(expected.Poison, token => CommitNewAsync(commit, decision, token), ct);
     }
 
     private InMemoryWorkflowExecutionStateStore? ExactResumeExecutions => _retentionExecutions ?? _workflowExecutionStateStore as InMemoryWorkflowExecutionStateStore;
