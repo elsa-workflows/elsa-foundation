@@ -520,11 +520,18 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
   await expect(page.getByRole("region", { name: "Saved service input mappings", exact: true })).toContainText("Process input: processMessage");
   // Save valid serving mappings through the editor before the separate crafted publication controls.
   const save = page.getByRole("button", { name: "Save", exact: true }); if (await save.isEnabled()) await save.press("Enter");
-  await expect.poll(async () => JSON.stringify((await j.api<{ state: unknown }>(`/design/workflows/drafts/${process.draftId}`)).state)).toContain('"kind":"Input","name":"processMessage"');
+  const savedBinding = (state: WorkflowState) => {
+    const elements = state.rootActivity.structure!.payload.elements as { elementId: string; properties?: Record<string, string> }[];
+    const raw = elements.find(element => element.elementId === "service")?.properties?.["elsa.direct.binding"];
+    return raw ? JSON.parse(raw) : null;
+  };
+  await expect.poll(async () => savedBinding((await j.api<{ state: WorkflowState }>(`/design/workflows/drafts/${process.draftId}`)).state))
+    .toMatchObject({ formatVersion: 2, kind: "nativeService", sourceReferenceId: worker.published.sourceReferenceId,
+      inputs: { message: { kind: "Input", name: "processMessage" }, count: { kind: "Literal", value: 7 } } });
   await page.reload(); await page.locator('.react-flow__node[data-id="service"]').press("Enter");
   await expect(page.getByRole("region", { name: "Saved service input mappings", exact: true })).toContainText("Configured JSON: 7"); await j.capture("bpmn-worker-input-reopened");
   const authoredState = await j.api<{ state: WorkflowState }>(`/design/workflows/drafts/${process.draftId}`);
-  expect(JSON.stringify(authoredState.state)).toContain('"formatVersion":2');
+  expect(savedBinding(authoredState.state)).toMatchObject({ formatVersion: 2, kind: "nativeService", sourceReferenceId: worker.published.sourceReferenceId });
   const version = await j.api<{ id: string }>(`/design/workflows/drafts/${process.draftId}/promote`, "POST", { operationKey: randomUUID() });
   await j.api(`/interchange/bpmn/versions/${version.id}/publish-direct`, "POST", { requestId: randomUUID() });
   await verifyBpmnInputRefusals(j, process, version.id, authoredState.state);
