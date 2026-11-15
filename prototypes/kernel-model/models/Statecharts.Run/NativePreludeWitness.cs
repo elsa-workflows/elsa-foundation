@@ -43,7 +43,7 @@ internal static class NativePreludeWitness
             .With(Control(), activity, Mark("target"), Mark("business"));
         var wf = Wf.Workflow("machine-inbox", Wf.Parallel("parallel", null, machine,
             Wf.Sequence("repair", Wf.Event("enable-wait", "prelude-enable"), Wf.Set("enable", "permission", true))), ("permission", false));
-        wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         NativeGuardWitness.Release(h, "prelude-enable");
@@ -125,7 +125,7 @@ internal static class NativePreludeWitness
             .With(Control(), Mark("auto-mark"), Mark("business-mark"));
         var wf = Wf.Workflow("machine-inbox", Wf.Parallel("parallel", null, machine, Wf.Sequence("repair", Wf.Event("wait", "repair-both"),
             Wf.Set("change-auto", "automatic", true), Wf.Set("change-business", "business", true))), ("automatic", false), ("business", "wrong-type"));
-        wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain();
         Check(h.State.Frames[frame].State!.Deserialize<MachineState>() is { BusinessReady: true, Evaluating: "go", Control.Spec.Purpose: ControlPurpose.Guard },

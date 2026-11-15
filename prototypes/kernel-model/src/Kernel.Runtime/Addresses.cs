@@ -80,7 +80,7 @@ public enum Flaw : long
     EvictBusy = 1L << 38,          // an instance whose commit is in flight may be evicted
     DeleteLeavesJournal = 1L << 39, // a delete leaves the instance's journal rows
     ProjectorStopsAtGap = 1L << 40, // the projector stops at the first missing position, as in section 10
-    // Bits 43–45 are reserved by the open job-poison and short-wait prototypes.
+    JobPoisonAsError = 1L << 43,   // mutation: a poisoned job becomes an error result instead of parking its instance
     IgnoreJobGeneration = 1L << 46, // mutation: a queued old job may borrow a new generation's lease
     HideDeliveryHistory = 1L << 48,  // mutation: suppress the delivery-history hint
     IgnoreLeaseDeadline = 1L << 47, // mutation: start new work after the local safe deadline

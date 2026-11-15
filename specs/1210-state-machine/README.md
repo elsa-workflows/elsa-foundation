@@ -87,8 +87,11 @@ The private [internal-progress protocol](../../prototypes/kernel-model/models/St
 extends that same compiled selector with explicit automatic/completion categories, once-per-visit local completion,
 phase gates, ready ordering and an experimental sticky causal limit. Its pure configuration/JSON fixtures do not
 qualify actual native internal progress, ordinary guard/loop incidents, recovery or durable restart. Native hydration
-explicitly refuses those new categories until that integration is qualified. This supplies no product limit,
-source-owner agreement, ordinary-trigger rearming or change to the full StateMachine/Studio scope.
+refuses those categories without the explicit opt-in execution profile. The separate bounded
+[native internal driver](../../prototypes/kernel-model/models/Statecharts.Run/README.md#native-internal-driver-private-b7b-profile)
+exercises automatic/completion progress, guard/loop incidents, native recovery and model-store restart with that
+profile. This supplies no product limit, provider durability, source-owner agreement, ordinary-trigger rearming or
+change to Q1/M0 and the full StateMachine/Studio scope.
 
 The bounded [selection reference model](selection-model/README.md) makes candidate and phase-plan rules
 executable. Its tests are algorithm evidence only; actual runtime integration and the remaining Q1 rules stay open.

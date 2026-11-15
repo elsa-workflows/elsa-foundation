@@ -27,7 +27,7 @@ internal static class NativeCheckpointWitness
             .With(Control(), Wf.Node<ChartMark>("action", ("Name", Binding.Literal("action")), ("Local", Binding.Literal(17))));
         var wf = Wf.Workflow("machine-inbox", nested ? Wf.Flowchart("flow", [machine, Wf.Set("returned", "returned", true)], [new("machine", "returned")]) : machine,
             ("permission", stage == "evaluation-fault" ? "wrong-type" : (object)(stage != "evaluation-false")));
-        wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         var visits = Json.Write(Chart().Visits); var scopes = Json.Write(h.State.LexicalScopes);
