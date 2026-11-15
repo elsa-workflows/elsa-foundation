@@ -373,7 +373,7 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     await j.open(recoveryHttp.id); await page.getByRole("button", { name: "Delete trigger", exact: true }).click();
     const deletion = await j.review("delivery-resource-delete-review");
     expect(deletion.revision).toBeGreaterThan(acceptedTriggerRevision!);
-    await expect(page.getByRole("heading", { name: "Triggers", exact: true })).toBeVisible();
+    await expect(page.locator(".wf-trigger-page").getByRole("heading", { name: "Triggers", exact: true })).toBeVisible();
     // Deleted live resources are absent from ordinary reads; retained delivery controls have their own authorized context.
     const livePath = `/runtime/standalone-triggers/${encodeURIComponent(recoveryHttp.id)}`;
     const deleted = await page.request.get(`${j.base}${livePath}`);
