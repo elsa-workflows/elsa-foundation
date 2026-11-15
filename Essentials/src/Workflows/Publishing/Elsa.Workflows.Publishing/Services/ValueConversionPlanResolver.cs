@@ -298,7 +298,10 @@ public enum ValueConversionRejectionReason
     SelectedMemberContractUnknown,
 
     /// <summary>Authored conversion settings require a variable source contract that is not pinned at publication.</summary>
-    VariableSourceContractUnknown
+    VariableSourceContractUnknown,
+
+    /// <summary>Authored conversion settings require a workflow-request source contract not pinned by this compilation boundary.</summary>
+    WorkflowRequestSourceContractUnknown
 }
 
 /// <summary>Publication failure with the complete pinned-contract context needed to fix a binding.</summary>
