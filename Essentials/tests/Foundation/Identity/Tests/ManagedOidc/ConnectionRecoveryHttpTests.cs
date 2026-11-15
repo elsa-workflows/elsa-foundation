@@ -417,12 +417,14 @@ public sealed partial class ExternalAuthenticationHttpTests
         b.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
         var principal = await a.ServiceProvider.GetRequiredService<IPrincipalFactory>().CreateAsync(new("default", actorId));
         var one = catalog.Records.Single(record => record.Key == "company"); var two = catalog.Records.Single(record => record.Key == "partner");
+        using var writesTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var outcomes = await Task.WhenAll(
-            a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, one), principal).AsTask(),
-            b.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, two), principal).AsTask());
+            a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, one), principal, writesTimeout.Token).AsTask(),
+            b.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, two), principal, writesTimeout.Token).AsTask());
         Assert.Single(outcomes, outcome => outcome.Saved);
         Assert.Contains(Assert.Single(outcomes, outcome => !outcome.Saved).Failure, new[] { "revision-conflict", "identity-authority-changed" });
         Assert.Equal(2, barrier.Reads);
+        Assert.Equal(2, barrier.PreparedWrites);
         var latest = await a.ServiceProvider.GetRequiredService<IConnectionCatalogStore>().ReadAsync();
         var remaining = Assert.Single(latest.Records, record => record.Enabled);
         var denied = await a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, latest.Revision, remaining), principal);
@@ -458,7 +460,16 @@ public sealed partial class ExternalAuthenticationHttpTests
     private sealed class RecoveryReadBarrier
     {
         public int Reads;
+        public int PreparedWrites;
         private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource prepared = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task BeforeSave(CancellationToken token)
+        {
+            // Exercise two fully prepared writes at the atomic commit boundary. A read barrier alone
+            // also allows the second request to notice the first commit during its recovery check.
+            if (Interlocked.Increment(ref PreparedWrites) == 2) prepared.TrySetResult();
+            await prepared.Task.WaitAsync(token);
+        }
         public async Task Arrive(CancellationToken token)
         {
             var read = Interlocked.Increment(ref Reads);
@@ -476,6 +487,10 @@ public sealed partial class ExternalAuthenticationHttpTests
             await barrier.Arrive(cancellationToken);
             return snapshot;
         }
-        public ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default) => inner.SaveAsync(catalog, cancellationToken);
+        public async ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default)
+        {
+            await barrier.BeforeSave(cancellationToken);
+            return await inner.SaveAsync(catalog, cancellationToken);
+        }
     }
 }
