@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type TestInfo } from "@playwright/test";
 import { declarationPanes, declarationThemes, measureDeclarationControl } from "../declarationReadability";
 
 const surfaces = [
@@ -14,6 +14,12 @@ async function readable(control: Locator) {
   return control.evaluate(measureDeclarationControl);
 }
 
+async function capture(region: Locator, info: TestInfo, name: string) {
+  const path = info.outputPath(name);
+  await region.screenshot({ path });
+  await info.attach(name, { path, contentType: "image/png" });
+}
+
 for (const theme of declarationThemes) {
   for (const size of declarationPanes) test(`${theme} declaration editors retain readable values in ${size.name} panes`, async ({ page }, info) => {
     await page.setViewportSize({ width: size.viewport, height: 1000 });
@@ -27,13 +33,13 @@ for (const theme of declarationThemes) {
       await name.focus();
       await page.keyboard.press("Tab"); await expect(type).toBeFocused();
       await name.scrollIntoViewIfNeeded();
-      await info.attach(`${surface.region}-top.png`, { body: await region.screenshot(), contentType: "image/png" });
+      await capture(region, info, `${surface.region}-top.png`);
       if (surface.storage) {
         const storage = region.getByLabel(`${surface.prefix} storage driver`, { exact: true });
         await expect(storage).toBeEnabled();
         await expect(storage).toHaveValue("elsa.json");
         await readable(storage);
-        await info.attach(`${surface.region}-storage.png`, { body: await region.screenshot(), contentType: "image/png" });
+        await capture(region, info, `${surface.region}-storage.png`);
       }
       await info.attach(`${surface.region}-geometry`, { body: JSON.stringify(values), contentType: "application/json" });
     }
@@ -65,7 +71,7 @@ for (const theme of declarationThemes) {
     await jsonDefault.fill("{");
     await expect(jsonDefault).toHaveAttribute("aria-invalid", "true");
     await expect(variables.getByRole("alert")).toHaveText("Enter a valid JSON value.");
-    await info.attach("variable-default-error.png", { body: await variables.screenshot(), contentType: "image/png" });
+    await capture(variables, info, "variable-default-error.png");
     await jsonDefault.fill('{"approved":false}');
     await expect(jsonDefault).not.toHaveAttribute("aria-invalid", "true");
     await name.fill("RenamedData");
@@ -94,7 +100,7 @@ for (const theme of declarationThemes) {
         await expect(storage.locator("option").first()).toHaveText("Storage unavailable");
         await readable(storage);
       }
-      await info.attach(`${surface.region}-unavailable.png`, { body: await region.screenshot(), contentType: "image/png" });
+      await capture(region, info, `${surface.region}-unavailable.png`);
     }
     await expect(page.getByRole("region", { name: "Scoped variables", exact: true }).getByLabel("Variable name", { exact: true })).toBeDisabled();
   });
