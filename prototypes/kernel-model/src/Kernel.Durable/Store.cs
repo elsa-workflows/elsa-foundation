@@ -11,7 +11,7 @@ namespace Kernel.Durable;
 /// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false, bool IdentityMetadataRequired = false);
 
 /// <summary>A requested spelling, its stored actor identity (or first equivalent candidate if missing), and its snapshot.</summary>
 public sealed record ActorLookup(string Requested, string Canonical, InstanceRow? Row)
