@@ -12,11 +12,13 @@ internal sealed class MachineInboxHarness
     internal Actor Actor => World.Of(_owner, 0);
     internal NativeState State => Json.Read<NativeState>(World.Store.Instances[Target.Id].State);
     internal Admission[] Replies => World.Deliveries.Select(d => d.Reply.Item).OfType<Admission>().ToArray();
+    internal Action<NativeState>? ObserveCommitted;
     internal string[] History => World.Store.Journal.Values.Where(j => j.Instance == Target.Id).OrderBy(j => j.Position).SelectMany(j => Json.Read<string[]>(j.Entries)).ToArray();
     internal void Apply(Act act)
     {
         World.Apply(act);
         if (World.Check() is { } error) throw new InvalidOperationException("Kernel: " + error);
+        if (ObserveCommitted is { } observe && World.Store.Instances.ContainsKey(Target.Id)) observe(State);
     }
     internal void Start(string mode)
     {

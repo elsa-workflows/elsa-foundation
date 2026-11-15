@@ -216,6 +216,11 @@ public sealed class RuntimeInputBindingCompiler(
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value) =>
         CompileBound(nodeId, inputDefinition, value, DeclaredPolicy(inputDefinition), conversion: null);
 
+    // Intrinsic inputs retain their existing declared policy. Forward whole-variable conversion intent without
+    // applying unrelated authored binding policy or changing conversion handling for other intrinsic source roles.
+    internal RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value, AuthoredValueConversionRequest? conversion) =>
+        CompileBound(nodeId, inputDefinition, value, DeclaredPolicy(inputDefinition), conversion);
+
     /// <summary>
     /// The effective policy of an activity input: its storage policy with the activity's
     /// sensitivity declaration applied, combined with the author's per-binding choice when the input is bound
@@ -448,7 +453,7 @@ public sealed class RuntimeInputBindingCompiler(
             return CompileObjectInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
         if (string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileVariableInput(nodeId, inputDefinition, value, effectivePolicy);
+            return CompileVariableInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
         if (string.Equals(value.ExpressionType, WorkflowRequestExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileWorkflowRequestInput(nodeId, inputDefinition, value, effectivePolicy);
@@ -617,19 +622,48 @@ public sealed class RuntimeInputBindingCompiler(
     /// Compiles the existing authored <c>Variable</c> syntax into the canonical variable-read role.
     /// A missing declaring scope retains the historical workflow-scope meaning.
     /// </summary>
-    private RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy effectivePolicy)
+    private RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy, AuthoredValueConversionRequest? conversion)
     {
         var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        if (!IsOrdinaryVariableAuto(conversion))
+            throw ValueConversionPublicationException.SourceContractUnavailable(
+                $"VF-COER-001: Whole-variable input '{inputDefinition.ReferenceKey}' on node '{nodeId}' requests conversion settings " +
+                $"for target contract '{ValueConversionPublicationException.DescribeContract(targetType)}', but this input compilation " +
+                "does not pin the variable source contract and representation required to honor them.",
+                ValueConversionRejectionReason.VariableSourceContractUnknown,
+                targetType,
+                (ValueConversionMode)conversion!.Mode,
+                AuthoredValueConversionMapper.Profile(conversion),
+                InputBindingContext(nodeId, inputDefinition));
 
         return new RuntimeInputBinding(
             inputKey: inputDefinition.ReferenceKey,
-            targetType: ToValueTypeDescriptor(inputDefinition),
+            targetType: targetType,
             effectivePolicy: effectivePolicy,
             source: RuntimeInputBindingSource.VariableRead,
             variable: new RuntimeVariableReference(
                 reference.ReferenceKey,
                 reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId!),
             metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    // Only settings equivalent to the historical default may be omitted from an unplanned variable read.
+    private static bool IsOrdinaryVariableAuto(AuthoredValueConversionRequest? conversion)
+    {
+        if (conversion is null)
+            return true;
+        if (conversion.Mode != AuthoredValueConversionMode.Auto || conversion.Profile is not null)
+            return false;
+        var defaults = ValueConversionLimits.Default;
+        if (conversion.Limits is { } limits &&
+            ((limits.MaxDepth ?? defaults.MaxDepth) != defaults.MaxDepth ||
+             (limits.MaxCollectionItems ?? defaults.MaxCollectionItems) != defaults.MaxCollectionItems ||
+             (limits.MaxPayloadBytes ?? defaults.MaxPayloadBytes) != defaults.MaxPayloadBytes))
+            return false;
+        return conversion.Options is null or { ValueKind: JsonValueKind.Null } ||
+               conversion.Options is { ValueKind: JsonValueKind.Object } options && !options.EnumerateObject().Any();
     }
 
     private static RuntimeInputBinding CompileWorkflowRequestInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy effectivePolicy)
