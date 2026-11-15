@@ -112,7 +112,7 @@ dotnet build -c Release
 dotnet bin/Release/net10.0/Elsa3Cost.dll --out ./results --provider sqlite --runs 3   # all 3 workflows × 3 configs
 ```
 
-Exit code 0, and no run failed. `results/` keeps the summary and, per case, run 1's counted commands (`window.sql.log`) and `result.json`; runs 2 and 3 were identical.
+Exit code 0, and no run failed. `results/` keeps the summary and, per case, run 1's counted commands (`window.sql`) and `result.json`; runs 2 and 3 were identical.
 
 ## Results (SQLite, commands)
 
@@ -281,7 +281,7 @@ Not run.
 - `Elsa3Cost.csproj`, `NuGet.Config`, `Program.cs` (host, runners, window), `Workflows.cs`, `Capture.cs` (interceptors and recorder), `Report.cs` (SQL statement parsing, categories, summary).
 - `results/summary.md` and `results/summary.json`: every run, every breakdown.
 - `results/<workflow>/<config>/run-<n>/` holds:
-  - `window.sql.log`: only the counted commands, plus SaveChanges and transaction events, each tagged with phase, flow, context and kind, with the full SQL;
+  - `window.sql`: only the counted commands, plus SaveChanges and transaction events, each tagged with phase, flow, context and kind, with the full SQL;
   - `commands.sql.log`: every command, including setup (migrations, publishing) and the outcome checks after the window;
   - `result.json`: that run's counts and breakdowns;
   - `elsa.sqlite.db`: the database the run left.
