@@ -42,6 +42,35 @@ Unknown/unavailable activity types retain their serialized content and diagnosti
 with an empty slot. Unsupported chart content needs an explicit unsupported/read-only state; opening and saving
 must not erase it. No import/export interchange or SCXML support is implied.
 
+### Authoring identity and pending work
+
+A source audit at `926b4c3c00004c3814140cada4d37215b6d6f86b` distinguishes the existing hosts from proposed
+shared seams. These are source observations, not executed StateMachine or composed-host acceptance.
+
+| Current source | Boundary to preserve and qualify |
+|---|---|
+| [Workspace](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/GraphAuthoringWorkspace.tsx) and [document adapter](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/graphDocumentAdapter.ts) | Controlled composition and document translation leave persistence, lifecycle and validation with the resource host. Reusing these primitives does not install a StateMachine designer. |
+| [Workflow editor](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx) and [draft history](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useDraftHistory.ts) | The host owns whole-draft history, pending capture and persistence integration. Chart and slot edits must participate in that ownership, including the history line captured with a saved snapshot. |
+| [Activity Graph editor](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor.tsx), [canvas hook](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/useGraphAuthoringCanvas.ts) and [draft parent](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor.tsx) | The actual caller supplies legacy `onChange`; it does not supply the hook's optional `tryChange` admission path. The parent separately guards draft updates and queues saves. A callback invocation or optimistic child history is not evidence that this parent accepted the exact edit. |
+| [Checkpoint coordinator](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/authoringCheckpoint.ts) and [host interface](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/activityGraphAuthoringHost.ts) | The coordinator has test callers and a type-only host reference, with no production caller found at this source basis. Its interface and pure tests do not establish integrated acknowledgement, action coverage or controller lifetime. |
+| [Canvas compatibility helper](../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/canvasEditors.ts) and [SDK contribution shape](../../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts) | Exact protocol, resource-kind and structure/schema matching is represented, but the helper has no production host caller at this source basis. Declarations and matching tests do not prove actual editor routing, permission checks or StateMachine support. |
+
+The selected implementation must bind an edit to its current resource, scope and host revision or equivalent
+identity. Obtain the actual parent's acceptance before recording accepted child history; a local notification
+cannot attest it. Local canonical admission remains distinct from server persistence: save/publication still
+requires the normal server confirmation, conflict handling and recovery behavior.
+
+Before save, undo/redo, drill-in, scope changes or editor/view switches can consume a document, settle pending
+chart and ordinary-slot work through the chosen host contract. Refused or stale admission must preserve the
+canonical document and unaccepted work with a repairable diagnostic. Detaching or replacing a view must not
+silently discard pending work or let its late callback modify another resource, scope or revision. Keep read-only
+and source-owned guards effective at the parent as well as in the visible controls.
+
+This requires source-grounded integration and adverse-path proof for both workflow and reusable Activity
+Definition hosts. It does not mandate the unused coordinator or a particular acknowledgement API, adopt another
+module's document protocol, or create a second history/persistence owner. Coordinate any required shared-host
+change with its owner; keep that integration outstanding until qualified. Q3/M0 and product approval remain open.
+
 ## Chart and synchronized outline
 
 Render a focused state/transition chart with collapsible compound states and parallel regions, plus a synchronized
@@ -149,6 +178,7 @@ outline/inspector operations must expose the same valid choices even where canva
 |---|---|
 | Root document lifecycle | Create Review/Changes/final states, select initial states and order, edit ordinary slots, save/reload, undo/redo, publish and run the exact version. Revisions re-enter Review with a fresh deadline; old timer evidence cannot advance its replacement visit. |
 | Nested lifecycle | A Flowchart validates input, runs the same machine and branches on declared normal outcomes. Open nested ordinary work and return with chart context retained. Reusable definition ownership/publication/permissions remain normal. |
+| Pending authoring work | Exercise save, undo/redo, drill-in and scope/editor/view changes with pending chart and ordinary-slot edits. Inject delayed, refused or stale parent admission and detach/unavailable-view paths; retain the canonical document, unaccepted work and repair context. Late callbacks cannot write to a replacement identity or bypass read-only/source-owned guards. Prove both resource hosts; local acceptance is not server-save evidence. |
 | Parallel review | Editorial and Legal react compatibly to one logical input; show both regional actions and phase barriers. An explicit containing exit cancels remaining work; conflict order stays stable after moving shapes and reload. |
 | Recovery and queued input | Wait/fail a phase, accept later events up to capacity, inspect exact receipts, restart the real runtime, recover through its ordinary tools and observe preserved successful work plus ordered evaluation. |
 | Two event-input paths | Author a machine-addressed event rule and an ordinary Event activity trigger with the same sample name. During pending Action work, distinguish a retained invocation admission receipt from an ordinary wait delivery; the latter must not be presented as an acknowledged business admission. Inspect the correct input/occurrence evidence after resuming. |
