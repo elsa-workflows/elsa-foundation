@@ -15,13 +15,13 @@ export interface BpmnDocumentSyntaxPlan {
 
 /** Independently derives native deletion policy from actual XML operations, never child claims. */
 export function planBpmnDocumentSyntaxChange(owner: ActivityNode, commands: readonly BpmnDocumentCommand[], catalog?: ActivityCatalogLookup): BpmnDocumentSyntaxPlan {
-  const before = readBpmnDocument(owner);
+  const before = readBpmnDocument(owner, catalog);
   // Parse the proposed standard syntax independently of its disjoint native associations. The real
   // candidate below still goes through the one atomic source/configuration validator.
   const provisional: ActivityNode = { ...owner, structure: { ...owner.structure!, payload: {
     ...before.payload, activities: [], bindings: [], scopeHeaders: []
   } } };
-  const after = readBpmnDocument(applyBpmnDocumentCommands(provisional, commands));
+  const after = readBpmnDocument(applyBpmnDocumentCommands(provisional, commands, catalog), catalog);
   const removedElementIds = [...before.byId].filter(([id, element]) => element.namespaceURI === bpmnNamespaces.model && !after.byId.has(id)).map(([id]) => id);
   const removed = new Set(removedElementIds);
   const bindings = before.payload.bindings.filter(binding => !removed.has(binding.elementId));
@@ -50,6 +50,6 @@ export function planBpmnDocumentSyntaxChange(owner: ActivityNode, commands: read
     ...(hasNativeRemoval ? { configuration: { activities, bindings, ...(before.payload.scopeHeaders !== undefined ? { scopeHeaders } : {}) } } : {}) };
   // Conversion/reparenting never erase incompatible intent or retarget scoped references. The
   // canonical reader either retains that configuration exactly or refuses the whole transaction.
-  applyBpmnDocumentTransaction(owner, transaction);
+  applyBpmnDocumentTransaction(owner, transaction, catalog);
   return { transaction, removedNodeIds: [...removedNodeIds], removedElementIds, unqualifiedOwnershipIds };
 }

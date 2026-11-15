@@ -1,8 +1,9 @@
-import type { ActivityCatalogItem, ActivityNode, VariableDefinition } from "../workflowTypes";
+import type { ActivityNode, VariableDefinition } from "../workflowTypes";
 import { readNodeIntrinsicDescriptor } from "../intrinsicActivities";
-import { getChildSlots, readStructureDesignFacet, sequenceStructureKind, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
+import { sequenceStructureKind, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
 import { bpmnDocumentSchemaVersion, readBpmnDocument, type BpmnScopeHeader, type ParsedBpmnDocument } from "./bpmnDocument";
 import { bpmnStructureKind } from "./bpmnTypes";
+import { bpmnNativeCatalogItem as catalogItem, qualifiedBpmnNativeChildSlots } from "./bpmnDocumentOwnership";
 
 interface Ownership {
   nodeId: string;
@@ -41,20 +42,6 @@ function text(value: unknown, name: string): string {
 function completeSource(node: ActivityNode): boolean {
   return node.structure?.kind === bpmnStructureKind && node.structure.schemaVersion === bpmnDocumentSchemaVersion;
 }
-function catalogItem(node: ActivityNode, catalog: ActivityCatalogLookup): ActivityCatalogItem | undefined {
-  return catalog instanceof Map ? catalog.get(node.activityVersionId) : Array.isArray(catalog)
-    ? catalog.find(item => item.activityVersionId === node.activityVersionId)
-    : catalog?.activityVersionId === node.activityVersionId ? catalog : undefined;
-}
-function qualifiedSlots(node: ActivityNode, catalog: ActivityCatalogLookup): ChildSlot[] | null {
-  if (!node.structure) return [];
-  const facet = readStructureDesignFacet(catalogItem(node, catalog));
-  if (facet) return facet.kind === node.structure.kind && facet.schemaVersion === node.structure.schemaVersion ? getChildSlots(node, catalog) : null;
-  // The exact Sequence ownership contract is known without a catalog. Other fallback heuristics
-  // can mistake arbitrary metadata for a child slot and are not proof of complete ownership.
-  if (node.structure.kind === sequenceStructureKind && node.structure.schemaVersion === "1.0.0") return getChildSlots(node, catalog);
-  return null;
-}
 function validateSlot(owner: ActivityNode, slot: ChildSlot) {
   const payload = owner.structure!.payload;
   const item = slot.collectionProperty ? (payload[slot.collectionProperty] as unknown[])?.[slot.collectionIndex!] : payload;
@@ -88,13 +75,13 @@ export function inventoryBpmnDocument(owner: ActivityNode, catalog?: ActivityCat
     if (node.structure?.kind === "elsa.bpmn.scope-view") fail("a projected scope view cannot be physically owned");
     active.add(node);
     if (completeSource(node)) {
-      const parsed = readBpmnDocument(node);
+      const parsed = readBpmnDocument(node, catalog);
       documents.set(node.nodeId, { owner: node, parsed, xmlIds: new Set(parsed.byId.keys()) });
       for (const [index, header] of (parsed.payload.scopeHeaders ?? []).entries())
         own(header, { nodeId: header.nodeId, parentNodeId: node.nodeId, documentOwnerNodeId: node.nodeId, path: `${path}/scopeHeaders[${index}]` }, "scopeHeader");
       parsed.payload.activities.forEach((child, index) => visit(child, node.nodeId, node.nodeId, `${path}/activities[${index}]`));
     } else {
-      const slots = qualifiedSlots(node, catalog);
+      const slots = qualifiedBpmnNativeChildSlots(node, catalog);
       if (slots === null) unqualifiedStructures.push({ nodeId: node.nodeId, path, reason: "No exact native ownership descriptor is available" });
       else for (const slot of slots) {
         validateSlot(node, slot);
