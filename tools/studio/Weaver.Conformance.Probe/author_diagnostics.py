@@ -47,29 +47,19 @@ def _read(root, path, limit):
         return "unreadable", None
 
 
-def _declarations(root, source):
-    """The current fixtures use one public test class and file-scoped namespace per test file.
-
-    This deliberately is not a C# parser: unsupported declarations yield unavailable
-    identities, never display-name/InlineData fallbacks. Strings in attributes are not names.
-    """
-    declared = {}
+def _source_files(root, source):
+    """Owned materialized source basenames/line bounds only; never inspect C# declarations."""
+    bounds = {}
     files = sorted(Path(source).glob("*.cs"))
-    if len(files) > 64: return declared
+    if len(files) > 64: return bounds
     for path in files:
-        status, data = _read(root, path, SOURCE_LIMIT)
-        if status != "available": continue
-        text = data.decode("utf-8-sig", errors="replace")
-        namespaces = re.findall(r"(?m)^namespace ([A-Za-z_][A-Za-z0-9_.]*);\s*$", text)
-        classes = re.findall(r"(?m)^public (?:sealed )?class ([A-Za-z_][A-Za-z0-9_]*Tests)\b", text)
-        if len(namespaces) != 1 or len(classes) != 1: continue
-        if len(namespaces[0] + "." + classes[0]) > 256: continue
-        for match in re.finditer(r"(?m)^    public (?:async )?(?:Task|ValueTask|void) ([A-Za-z_][A-Za-z0-9_]*)\(", text):
-            if len(match[1]) > 256: continue
-            attributes = text[max(0, match.start() - 8192):match.start()].rsplit("\n\n", 1)[-1]
-            if re.search(r"(?m)^    \[(?:Fact|Theory)(?:\([^\n]*\))?\]\s*$", attributes):
-                declared[(namespaces[0] + "." + classes[0], match[1])] = path.resolve()
-    return declared
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}\.cs", path.name): continue
+        try:
+            status, data = _read(root, path, SOURCE_LIMIT)
+            if status == "available": bounds[path.resolve()] = len(data.decode("utf-8-sig", errors="replace").splitlines())
+        except (OSError, ValueError, RuntimeError):
+            continue
+    return bounds
 
 
 def _command(report, stage, error):
@@ -96,7 +86,8 @@ def _compiler(root, path):
 
 def _trx(root, source, path):
     status, data = _read(root, path, TRX_LIMIT)
-    empty = {"status": status, "counts": None, "failedMethods": [], "unavailableFailedIdentities": 0, "omittedFailedMethods": 0}
+    empty = {"status": status, "counts": None, "failedMethods": [], "unavailableFailedIdentities": 0, "omittedFailedMethods": 0,
+             "identitySource": "observed-untrusted-trx-class-method-metadata"}
     if data is None: return empty
     empty["sha256"] = hashlib.sha256(data).hexdigest()
     try:
@@ -127,21 +118,23 @@ def _trx(root, source, path):
         for unit in units:
             method = unit.find(NAMESPACE + "TestMethod")
             if method is None or not unit.get("id") or unit.get("id") in definitions: raise ValueError()
-            definitions[unit.get("id")] = (method.get("className"), method.get("name"))
+            metadata = [method.get("className"), method.get("name")]
+            definitions[unit.get("id")] = (hashlib.sha256(json.dumps(metadata, separators=(",", ":")).encode()).hexdigest()
+                if all(isinstance(item, str) and item for item in metadata) else None)
         if any(row.get("testId") not in definitions for row in rows): raise ValueError()
     except ET.ParseError:
         return dict(empty, status="malformed")
     except ValueError:
         return dict(empty, status="inconsistent")
-    declared = _declarations(root, source)
+    bounds = _source_files(root, source)
     failures, unavailable = {}, 0
     for row in rows:
         if row.get("outcome") != "Failed": continue
         identity = definitions[row.get("testId")]
-        if identity not in declared:
+        if identity is None:
             unavailable += 1
             continue
-        item = failures.setdefault(identity, {"className": identity[0], "method": identity[1], "executions": 0, "assertionKinds": [], "frames": []})
+        item = failures.setdefault(identity, {"groupSha256": identity, "executions": 0, "assertionKinds": [], "frames": []})
         item["executions"] += 1
         message = row.findtext(NAMESPACE + "Output/" + NAMESPACE + "ErrorInfo/" + NAMESPACE + "Message", "")
         assertion = re.match(r"(?:Xunit\.Sdk\.[A-Za-z]+Exception\s*:\s*)?Assert\.([A-Za-z]+)\(\) Failure\b", message)
@@ -152,7 +145,7 @@ def _trx(root, source, path):
             candidate = Path(filename)
             if not candidate.is_absolute() or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}\.cs", candidate.name) or not 0 < int(number) <= 1000000: continue
             try:
-                if candidate.resolve() not in set(declared.values()): continue
+                if not 0 < int(number) <= bounds.get(candidate.resolve(), 0): continue
                 safe, _ = _read(root, candidate, SOURCE_LIMIT)
                 frame = {"file": candidate.name, "line": int(number)}
                 if safe == "available" and frame not in item["frames"] and len(item["frames"]) < 4: item["frames"].append(frame)
@@ -226,12 +219,12 @@ def load_test_failure(root, reference, source):
             value = json.loads(data, object_pairs_hook=unique)
             # Replay the bounded projection, never trust extra JSON fields or display names.
             if not isinstance(value, dict) or value.get("kind") != "safe-packaged-author-test-failure" or value.get("source") != source or value.get("stage") != stage or value.get("author") != author: return unavailable
-            return _project(value, _declarations(root, Path(root) / ("author-" + author + "-tests")))
+            return _project(value, {path.name: lines for path, lines in _source_files(root, Path(root) / ("author-" + author + "-tests")).items()})
         except (ValueError, UnicodeError, TypeError, AttributeError, OSError): return unavailable
     return unavailable
 
 
-def _project(value, declared):
+def _project(value, source_lines):
     """Safe scalar fields only, including when the retained JSON was extended or malformed."""
     result = {key: value[key] for key in ("kind", "source", "author", "stage")}
     result.update(kind="safe-packaged-author-test-failure", status="failed", diagnosticOnly=True, qualificationComplete=False,
@@ -250,16 +243,17 @@ def _project(value, declared):
     counts = trx.get("counts")
     result["trx"] = {"status": trx.get("status") if trx.get("status") in states | {"valid", "malformed", "inconsistent", "unsupported-encoding"} else "unavailable",
         "counts": {key: number for key, number in counts.items() if key in COUNTERS and type(number) is int and 0 <= number <= 1000000} if isinstance(counts, dict) else None,
-        "failedMethods": [], **{key: trx.get(key) if type(trx.get(key)) is int and 0 <= trx[key] <= 10000 else 0
+        "failedMethods": [], "identitySource": "observed-untrusted-trx-class-method-metadata",
+        **{key: trx.get(key) if type(trx.get(key)) is int and 0 <= trx[key] <= 10000 else 0
                                for key in ("unavailableFailedIdentities", "omittedFailedMethods")}}
     if isinstance(trx.get("sha256"), str) and re.fullmatch(r"[a-f0-9]{64}", trx["sha256"]): result["trx"]["sha256"] = trx["sha256"]
     for row in trx.get("failedMethods", [])[:16]:
-        if not isinstance(row, dict) or (row.get("className"), row.get("method")) not in declared: continue
+        if not isinstance(row, dict) or not isinstance(row.get("groupSha256"), str) or not re.fullmatch(r"[a-f0-9]{64}", row["groupSha256"]): continue
         if type(row.get("executions")) is not int or not 0 < row["executions"] <= 10000: continue
-        result["trx"]["failedMethods"].append({"className": row["className"], "method": row["method"], "executions": row["executions"],
+        result["trx"]["failedMethods"].append({"groupSha256": row["groupSha256"], "executions": row["executions"],
             "assertionKinds": [kind for kind in row.get("assertionKinds", []) if kind in ASSERTIONS | {"Unavailable"}][:4],
             "frames": [{"file": frame["file"], "line": frame["line"]} for frame in row.get("frames", []) if isinstance(frame, dict)
-                       and frame.get("file") in {path.name for path in declared.values()}
+                       and frame.get("file") in source_lines
                        and isinstance(frame.get("file"), str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}\.cs", frame["file"])
-                       and type(frame.get("line")) is int and 0 < frame["line"] <= 1000000][:4]})
+                       and type(frame.get("line")) is int and 0 < frame["line"] <= source_lines[frame["file"]]][:4]})
     return result
