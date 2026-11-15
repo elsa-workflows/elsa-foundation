@@ -20,8 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" />
-    <ProjectReference Include="..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" />
+    <ProjectReference Include="..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" />
+    <ProjectReference Include="..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Api\Elsa.Modularity.Api.csproj" />
     <ProjectReference Include="..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Modularity\Core\Elsa.Modularity.Core.csproj" />

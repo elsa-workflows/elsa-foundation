@@ -50,8 +50,8 @@
     they have to be built first; nothing from the host is loaded into this process.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!--

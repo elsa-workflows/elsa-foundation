@@ -14,6 +14,6 @@
   <ItemGroup>
     <!-- The shared child-process harness; its own build-order reference builds the production Workbench these tests kill. -->
     <ProjectReference Include="../../../../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
-    <ProjectReference Include="../../../../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../../\.\./apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>
