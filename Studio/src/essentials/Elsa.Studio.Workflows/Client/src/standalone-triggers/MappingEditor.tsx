@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StudioAlert, StudioButton, StudioField, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { getWorkflowRunInputControlKind, parseWorkflowRunInputs } from "../workflowRunInputs";
 import { parseLiteralJson, serializeTriggerPayload } from "./json";
@@ -70,6 +70,13 @@ export function MappingEditor({ client, triggerId, triggerRevision, target, cont
   const [previewError, setPreviewError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
   const [previewSignature, setPreviewSignature] = useState("");
+  const root = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!Object.keys(errors).length) return;
+    const reason = root.current?.querySelector<HTMLElement>("[data-mapping-error]");
+    const control = reason?.closest("fieldset")?.querySelector<HTMLElement>('[aria-invalid="true"]');
+    (control ?? reason)?.focus();
+  }, [errors]);
   const complete = useTriggerCompletion();
   const signature = serializeTriggerPayload({ drafts, sample, target: target.contractRevision });
   const inputs = target.inputContract?.inputs ?? [];
@@ -84,7 +91,7 @@ export function MappingEditor({ client, triggerId, triggerRevision, target, cont
       complete(() => { setPreviewSignature(signature); setPreview(result); setBusy(false); });
     } catch (error) { complete(() => { setPreviewError(error); setBusy(false); }); }
   }
-  return <section className="wf-trigger-mappings" aria-label="Workflow input mappings">
+  return <section ref={root} className="wf-trigger-mappings" aria-label="Workflow input mappings">
     <h4>Declared inputs</h4><p>Mapping uses the current serving contract. Preview is advisory; actual admission rechecks the target and inputs.</p>
     <Findings items={target.findings} /><Findings items={context.findings} />
     {target.inputContract === null || target.inputContract === undefined ? <StudioAlert tone="warning">The serving input contract is unavailable. Save this association disabled and publish or select a compatible slot.</StudioAlert> : !inputs.length ? <p>This serving workflow declares no inputs.</p> : null}
@@ -104,7 +111,7 @@ export function MappingEditor({ client, triggerId, triggerRevision, target, cont
           </div>)}
           <StudioButton type="button" onClick={() => update(input.name, { parameters: [...draft.parameters, { name: "", kind: "SourceField", path: [], text: "" }] })}>Add parameter for {input.name}</StudioButton>
         </> : null}
-        {ownError(errors, input.name) ? <p role="alert">{ownError(errors, input.name)}</p> : null}
+        {ownError(errors, input.name) ? <p role="alert" tabIndex={-1} data-mapping-error>{ownError(errors, input.name)}</p> : null}
       </fieldset>;
     })}
     {Object.keys(drafts).filter(name => !inputs.some(input => input.name === name) && drafts[name].kind !== "Omit").map(name => <StudioAlert key={name} tone="warning"><p>{name} is absent from the current serving contract.</p><StudioButton type="button" disabled={disabled} onClick={() => onChange(Object.fromEntries(Object.entries(drafts).filter(([key]) => key !== name)))}>Remove mapping for {name}</StudioButton></StudioAlert>)}
