@@ -57,7 +57,7 @@ export interface RecipientView {
   admission: "Accepted" | "Refused" | "NotAcceptedDueToPolicy";
   dispatch: "NotDispatched" | "DispatchCommitted" | "AdmissionUnknown" | "Queued" | "Started" | "Failed" | "Cancelled";
   plannedExecutionIdentity?: string;
-  executionReference?: { id: string; kind: string; status?: string; observedAt?: string; inspectionPath?: string };
+  executionReference?: { id: string; kind: string; status?: string; observedAt?: string; inspectionPath?: string; cleanupStatus?: string };
   findings: Finding[]; actions: ActionAvailability[]; nextRetryAt?: string; attemptCount?: number;
 }
 export interface DeliveryView {

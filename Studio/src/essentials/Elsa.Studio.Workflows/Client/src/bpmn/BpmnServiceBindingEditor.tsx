@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { qualifyStudioBackendPath, type StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { capabilityIds, hasCapabilityLink } from "../api/capabilities";
@@ -204,8 +204,10 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange, mode
             {Object.hasOwn(inputErrors, input.name) ? <p role="alert">{inputErrors[input.name]}</p> : null}
           </fieldset>; })}
           {Object.entries(inputDrafts).filter(([name, draft]) => draft.kind !== "Omit" && !mappingContract.inputs.some(input => input.name === name)).map(([name]) => <p key={name}>{name} is absent from this service contract. <button type="button" onClick={() => setInputDrafts(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => key !== name)))}>Remove obsolete mapping {name}</button></p>)}
-          <button type="button" disabled={busy} onClick={() => { setMappingContract(undefined); setInputErrors({}); setInputDrafts(savedInputDrafts(current?.formatVersion === 2 ? current.inputs : undefined)); queueMicrotask(() => publicationButton.current?.focus()); }}>Cancel input mapping</button>
-          <button type="button" disabled={busy} onClick={() => void applyPublication(true)}>{busy ? "Validating service inputs…" : "Apply service input mapping"}</button>
+          <div className="studio-page-actions">
+            <StudioButton type="button" disabled={busy} onClick={() => { setMappingContract(undefined); setInputErrors({}); setInputDrafts(savedInputDrafts(current?.formatVersion === 2 ? current.inputs : undefined)); queueMicrotask(() => publicationButton.current?.focus()); }}>Cancel input mapping</StudioButton>
+            <StudioButton type="button" variant="primary" disabled={busy} onClick={() => void applyPublication(true)}>{busy ? "Validating service inputs…" : "Apply service input mapping"}</StudioButton>
+          </div>
         </section> : <p className="wf-muted">Select a publication to inspect its declared inputs. Publications without mapped inputs retain their existing binding format. Retrying may repeat external effects.</p>}
         <button ref={publicationButton} type="button" disabled={!!mappingContract || !slotId || busy || !businessErrorCode.trim() || !Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 32} onClick={() => void applyPublication()}>
           {busy ? "Reading publication…" : "Use this service publication"}

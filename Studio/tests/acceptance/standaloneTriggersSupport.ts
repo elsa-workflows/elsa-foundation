@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { expect, type APIResponse, type Page, type Response, type TestInfo } from "@playwright/test";
+import { expect, type APIResponse, type Locator, type Page, type Response, type TestInfo } from "@playwright/test";
 import type { ChangeResult, DeliveryView, InputMapping, SubscriptionView, TriggerCommand, TriggerView } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/types";
 
 export type Authored = { definition: { id: string; name: string }; draftId: string; version: { id: string } };
@@ -92,7 +92,7 @@ export class TriggerJourney {
     expect(response.ok(), `${method} ${path}: ${response.status()} ${text.slice(0, 1500)}`).toBe(true);
     return result as T;
   }
-  async capture(name: string) {
+  async capture(name: string, focus?: Locator) {
     await expect(this.page.getByText("Loading Studio modules…", { exact: true })).toHaveCount(0);
     if (name === "workflow-live-triggers" || name === "bpmn-workflow-live-triggers") {
       const associations = this.page.getByRole("region", { name: "Workflow subscriptions", exact: true });
@@ -118,10 +118,16 @@ export class TriggerJourney {
       await empty.scrollIntoViewIfNeeded(); await expect(empty).toBeInViewport();
       await expect(this.page.getByRole("button", { name: "Add workflow", exact: true })).toBeInViewport();
     }
+    if (focus) { await expect(focus).toBeVisible(); await focus.scrollIntoViewIfNeeded(); }
     await expect.poll(() => this.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), { message: `Page overflow in ${name}` }).toBe(true);
     const path = this.info.outputPath(`${name}.png`);
     await this.page.screenshot({ path, fullPage: true, animations: "disabled" });
     await this.info.attach(`${name}.png`, { path, contentType: "image/png" });
+    if (focus) {
+      const focusedPath = this.info.outputPath(`${name}.focus.png`);
+      await focus.screenshot({ path: focusedPath, animations: "disabled" });
+      await this.info.attach(`${name}.focus.png`, { path: focusedPath, contentType: "image/png" });
+    }
     const aria = this.info.outputPath(`${name}.aria.yml`);
     writeFileSync(aria, await this.page.locator("body").ariaSnapshot());
     await this.info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
@@ -202,10 +208,10 @@ export class TriggerJourney {
     expect(preview.canApply, `Ordinary server impact review permits ${command.kind}`).toBe(true);
     return this.api<ChangeResult>(`${apiRoot}/${trigger.id}/changes/apply`, "POST", { requestId: randomUUID(), previewId: preview.previewId, expectedRevision: trigger.revision, command });
   }
-  async review(capture?: string) {
+  async review(capture?: string, focus?: Locator) {
     const apply = this.page.getByRole("button", { name: "Apply reviewed change", exact: true });
     await expect(apply).toBeEnabled();
-    if (capture) await this.capture(capture);
+    if (capture) await this.capture(capture, focus);
     const response = this.page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/changes/apply"));
     await apply.press("Enter"); const saved = await response;
     expect(saved.ok(), await saved.text()).toBe(true); await expect(apply).toHaveCount(0);
@@ -352,7 +358,11 @@ export class TriggerJourney {
     expect(added[0].enabled).toBe(true); expect(added[0].invocationGrant.state).toBe("Granted");
     return added[0];
   }
-  async enable(id: string) { await this.open(id); await this.page.getByRole("button", { name: "Enable trigger", exact: true }).press("Enter"); await this.review(); await expect.poll(async () => (await this.read(id)).desiredState).toBe("Enabled"); }
+  async enable(id: string) {
+    await this.open(id); await this.page.getByRole("button", { name: "Enable trigger", exact: true }).press("Enter"); await this.review();
+    await expect.poll(async () => (await this.read(id)).desiredState).toBe("Enabled");
+    await expect(this.page.getByText("Desired state", { exact: true }).locator("xpath=following-sibling::dd[1]")).toHaveText("Enabled");
+  }
   async event(name: string, payload: unknown = { message: "actual Event payload", count: 7 }) {
     const authored = await this.submit("Actual PublishEvent producer", { inputs: [], outputs: [], variables: [], rootActivity: { nodeId: "publish", activityVersionId: await this.version("Elsa.Activities.Primitives.Activities.PublishEvent"), outputs: [], inputs: [literal("EventName", name), literal("Payload", payload), literal("IsLocalEvent", false)] } });
     const published = await this.publish(authored);
@@ -372,7 +382,17 @@ export class TriggerJourney {
     await this.page.getByRole("button", { name: "Copy Delivery ID", exact: true }).click();
     await expect.poll(() => this.page.evaluate(() => navigator.clipboard.readText())).toBe(delivery.id);
     this.requests.push({ kind: "delivery-exact-identity-copy", deliveryId: delivery.id, studioUrl: this.page.url() });
-    if (capture) await this.capture(capture);
+    if (capture) {
+      await this.capture(capture);
+      for (const [index, recipient] of delivery.recipients.entries()) {
+        const region = this.page.getByRole("region", { name: `Recipient ${recipient.id}`, exact: true });
+        await expect(region).toBeVisible();
+        const recipientPath = this.info.outputPath(`${capture}.recipient-${index + 1}.png`);
+        await region.screenshot({ path: recipientPath, animations: "disabled" });
+        await this.info.attach(`${capture}.recipient-${index + 1}.png`, { path: recipientPath, contentType: "image/png" });
+        this.requests.push({ kind: "delivery-recipient-visual-capture", deliveryId: delivery.id, recipientId: recipient.id, attachment: `${capture}.recipient-${index + 1}.png` });
+      }
+    }
   }
   async findInstance<T>(executionId: string): Promise<T | undefined> {
     const path = `/runtime/workflows/instances/${encodeURIComponent(executionId)}`;
