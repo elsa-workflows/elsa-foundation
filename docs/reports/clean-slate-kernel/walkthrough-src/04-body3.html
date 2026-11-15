@@ -172,27 +172,29 @@
       <ul>
         <li>What the store contract says about subscribing twice and removing what is absent</li>
         <li>Tenant and trace headers; <code>Describe</code> for lists</li>
-        <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
+        <li>StateMachine implementation design (#3815); inclusion in both release-one profiles adopted 15 November</li>
         <li>The default join for a Flowchart node with several inbound connections</li>
         <li>BPMN's scope for its first release</li>
       </ul></div>
   </div>
-  <h3>Release 1 scope (decided 12 November)</h3>
+  <h3>Release 1 scope (amended 15 November)</h3>
   <div class="two">
     <div class="card"><h4>In release 1</h4>
       <ul>
         <li>The kernel, the built-in runtime, the Embedded and Cluster profiles</li>
-        <li>The native model: structured containers and the Flowchart on the graph engine</li>
+        <li>The same Native model set in both profiles: structured containers, Flowchart and StateMachine</li>
         <li>Synchronous HTTP</li>
         <li>PostgreSQL, SQL Server and SQLite, tuned; MySQL supported, not tuned</li>
         <li>Studio on the new core</li>
         <li>Basic trace context and metrics, retention and delete, admission control, simple instance migration</li>
-        <li>StateMachine, unless its design milestone is late; then 1.1</li>
+        <li>Parked-work operator tools: inspect, retry and discard</li>
+        <li>Values by reference (decision 10), a release 1 priority</li>
         <li>Agents as native activities, agent calls as background jobs</li>
       </ul></div>
     <div class="card"><h4>After release 1</h4>
       <ul>
-        <li>BPMN, the Orleans adapter and ETL, each proven by a spike now</li>
+        <li>BPMN and ETL, each proven by a spike now</li>
+        <li>Orleans only after proven demand; no automatic product commitment</li>
         <li>MongoDB in 1.1; proven in CI against a replica set from release 1</li>
         <li>The aggregating fan-out pattern, with ETL; release 1 caps a parallel ForEach</li>
         <li>The out-of-process job worker protocol (1.x); its contract designed now</li>
