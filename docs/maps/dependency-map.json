@@ -1122,6 +1122,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "Essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Publishing.Core",
           "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
         },
@@ -12183,6 +12188,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Sequence",
+          "path": "Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Cluster.Readability",
           "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
         },
@@ -12195,6 +12205,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
