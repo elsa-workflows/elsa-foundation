@@ -167,7 +167,13 @@ public sealed partial class World
             }
             if (row.Retired)
             {
-                if (row.Creation <= 0 || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
+                if (_creations.TryGetValue(row.Id, out var observed) && !observed.Retired &&
+                    _known.TryGetValue(row.Id, out var active) && row.Revision <= active.Revision)
+                    return $"I22 {row.Id} retired without advancing observed active revision {active.Revision}";
+                // Generation-zero markers are valid only for generated physical addresses and the exact empty marker shape.
+                var physicalMarker = row.Creation == 0 && CreationProtocol.IsPhysicalAddress(row.Id) &&
+                    row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
+                if (row.Creation <= 0 && !physicalMarker || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
                     row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null || row.PendingStart is not null)
                     return $"I22 {row.Id} has an invalid lifecycle tombstone";
                 _gone.Add(row.Id); _versions.Remove(row.Id);

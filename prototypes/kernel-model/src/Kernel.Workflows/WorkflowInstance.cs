@@ -135,7 +135,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             // Only an ended instance is deleted. What arrives for it afterwards is dropped as for a missing target.
             return row.Status == InstanceStatus.Running || row.StateVersion > _models[row.Model].StateVersion ||
                 (_models[row.Model] is IModelMetadata metadata && metadata.ProtectsDeletion(ReadState(row, _models[row.Model], input.Services), input.Services.Now, new DurableTurn(input).Clock)) ? new TurnOutcome(instance) { Consumed = [item], State = input.State, Status = row.Status }
-                : new TurnOutcome(instance) { Delete = true, Row = row.Creation > 0 ? CreationProtocol.Retire(row) : null,
+                : new TurnOutcome(instance) { Delete = true, Row = row.Creation > 0 || CreationProtocol.IsPhysicalAddress(row.Id) ? CreationProtocol.Retire(row) : null,
                     Expected = row.Revision, Consumed = [item], Unsubscribe = true, Status = row.Status, Journal = Json.Write(new[] { "deleted" }) };
         var suspended = item.Message.Kind == Kinds.Suspend;
         if (row.Status != InstanceStatus.Running) return new TurnOutcome(instance) { Consumed = [item], Status = row.Status };

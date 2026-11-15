@@ -1365,7 +1365,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Committed result;
             try
             {
-                if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch);
+                StoreBatchRules.Validate(batch);
+                StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
+                if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
                 result = await _store.CommitAsync(batch, cancellationToken);
             }
