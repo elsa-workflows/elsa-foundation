@@ -1,0 +1,188 @@
+name: Architecture checkout Windows proof
+
+on:
+  push:
+    branches: [agent/codex/2849-windows-guards]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: architecture-2849-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-proof:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      DOTNET_PROCESSOR_COUNT: 3
+      ARCHITECTURE_BASE: fd0fdb21eacabe690183ff761432746e9c7e680c
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Restore the two reviewed architecture graphs
+        shell: bash
+        run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
+
+      - name: Build the architecture tests
+        shell: pwsh
+        run: dotnet build Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      - name: Prove Windows cleanup and tracked guard coverage
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $project = 'Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj'
+          $output = Join-Path $env:RUNNER_TEMP 'architecture-2849'
+          New-Item -ItemType Directory -Path $output | Out-Null
+          $worktree = '.claude/worktrees/guard-2849'
+          $family = 'Ground' + 'work'
+          $leftovers = "tools/$family"
+          $probeProject = 'tools/WindowsGuard2849'
+          $conditionalDirectory = '.claude/worktrees/tracked-guard-2849'
+          $conditionalProbe = "$conditionalDirectory/Conditional.csproj"
+          $changedTests = @(
+            'Essentials/tests/Architecture/Tests/PackageVersioningPackTests.cs',
+            'Essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs',
+            'Essentials/tests/Architecture/Tests/RetiredPersistenceFamilyGuardTests.cs',
+            'Essentials/tests/Architecture/Tests/RetiredTermEnforcementGuardTests.cs'
+          )
+          $conditional = 'Elsa.Architecture.Tests.EfCoreDependencyGuardTests.First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs'
+          $namedPath = 'Elsa.Architecture.Tests.RetiredPersistenceFamilyGuardTests.No_project_or_directory_is_named_after_a_retired_persistence_family'
+          $retiredSection = 'Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.Every_retired_term_section_matches_production_source'
+          $retiredSeverity = 'Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.No_analyzer_config_lowers_the_retired_term_diagnostics_or_marks_source_as_generated'
+          $packClass = 'Elsa.Architecture.Tests.PackageVersioningPackTests'
+          $existingPackDirectories = @(Get-ChildItem ([IO.Path]::GetTempPath()) -Directory -Filter 'PackageVersioningPackTests*' | ForEach-Object FullName)
+
+          function Test-Run([string] $name, [string] $filter, [bool] $expectedFailure, [string] $failureText = '') {
+            $arguments = @('test', $project, '-c', 'Release', '--no-build', '--no-restore', '--logger', "trx;LogFileName=$name.trx", '--results-directory', $output)
+            if ($filter) { $arguments += @('--filter', $filter) }
+            & dotnet @arguments 2>&1 | Tee-Object (Join-Path $output "$name.log") | Write-Host
+            $code = $LASTEXITCODE
+            [xml] $trx = Get-Content (Join-Path $output "$name.trx") -Raw
+            $counts = $trx.TestRun.ResultSummary.Counters
+            if ([int]$counts.total -eq 0 -or [int]$counts.notExecuted -ne 0) { throw "$name did not execute all selected cases." }
+            if ($expectedFailure) {
+              $failed = @($trx.TestRun.Results.UnitTestResult | Where-Object outcome -eq 'Failed')
+              if ($code -eq 0 -or $failed.Count -eq 0) { throw "$name did not detect its negative control." }
+              if ($failureText -and -not ($failed.Output.ErrorInfo.Message -like "*$failureText*")) { throw "$name failed without the expected diagnostic." }
+            } elseif ($code -ne 0 -or [int]$counts.failed -ne 0 -or [int]$counts.passed -ne [int]$counts.total) {
+              throw "$name did not pass every selected case."
+            }
+            return $trx
+          }
+
+          function Remove-OwnedDirectory([string] $path) {
+            if (Test-Path $path) {
+              Get-ChildItem $path -Recurse -Force -File | ForEach-Object { $_.IsReadOnly = $false }
+              Remove-Item $path -Recurse -Force
+            }
+          }
+
+          if ((Test-Path $worktree) -or (Test-Path $leftovers) -or (Test-Path $probeProject) -or (Test-Path $conditionalDirectory)) { throw 'An owned proof path already exists.' }
+          try {
+            git worktree add --detach $worktree HEAD
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create the ignored Claude worktree.' }
+            Set-Content "$worktree/untracked-2849.globalconfig" "is_global = true`nelsa_naming.retired_terms = Probe=Probe`n"
+            New-Item -ItemType Directory -Path "$leftovers/obj" -Force | Out-Null
+            Set-Content "$leftovers/obj/leftover.txt" 'Untracked build output'
+
+            git restore --source=$env:ARCHITECTURE_BASE --worktree -- @changedTests
+            if ($LASTEXITCODE -ne 0) { throw 'Could not materialize the original test implementations.' }
+            dotnet build $project -c Release --no-restore --no-dependencies -p:WarningsNotAsErrors=NU1603
+            if ($LASTEXITCODE -ne 0) { throw 'The original test implementations did not build.' }
+            $baseline = Test-Run 'baseline' "FullyQualifiedName~$packClass|FullyQualifiedName=$conditional|FullyQualifiedName=$namedPath|FullyQualifiedName=$retiredSection|FullyQualifiedName=$retiredSeverity" $true
+            $baselineFailures = @($baseline.TestRun.Results.UnitTestResult | Where-Object outcome -eq 'Failed')
+            $packFailures = @($baselineFailures | Where-Object testName -like '*PackageVersioningPackTests*')
+            if ($packFailures.Count -ne 6 -or @($packFailures | Where-Object { $_.Output.ErrorInfo.Message -notlike '*UnauthorizedAccessException*' }).Count -ne 0) {
+              throw 'The original six pack tests did not expose native read-only cleanup failures.'
+            }
+            if (@($baselineFailures | Where-Object testName -like '*First_party_dependency_edges_cannot*').Count -ne 1 -or
+                @($baselineFailures | Where-Object testName -like '*No_project_or_directory_is_named*').Count -ne 1 -or
+                @($baselineFailures | Where-Object testName -like '*Every_retired_term_section_matches*').Count -ne 1 -or
+                @($baselineFailures | Where-Object testName -like '*No_analyzer_config_lowers*').Count -ne 1 -or
+                $baselineFailures.Count -ne 10) {
+              throw 'The original guards did not expose the untracked-checkout failures.'
+            }
+
+            git restore --source=HEAD --worktree -- @changedTests
+            dotnet build $project -c Release --no-restore --no-dependencies -p:WarningsNotAsErrors=NU1603
+            if ($LASTEXITCODE -ne 0) { throw 'The corrected architecture tests did not build.' }
+            dotnet test $project -c Release --no-build --no-restore --list-tests 2>&1 | Tee-Object (Join-Path $output 'discovery.log') | Write-Host
+            if ($LASTEXITCODE -ne 0) { throw 'Architecture discovery failed.' }
+            $full = Test-Run 'full' '' $false
+            $listed = @(Get-Content (Join-Path $output 'discovery.log') | Where-Object { $_ -match '^\s+Elsa\.Architecture\.Tests\.' } | ForEach-Object { ($_.Trim() -split '\(')[0] } | Sort-Object -Unique)
+            $executed = @($full.TestRun.TestDefinitions.UnitTest | ForEach-Object {
+              $methodName = ($_.TestMethod.name -split '\(')[0]
+              '{0}.{1}' -f $_.TestMethod.className, $methodName
+            } | Sort-Object -Unique)
+            if ($listed.Count -eq 0 -or @(Compare-Object $listed $executed).Count -ne 0) { throw 'Architecture discovery and executed methods disagree.' }
+            [ordered]@{ source = (git rev-parse HEAD); listedMethods = $listed.Count; executedMethods = $executed.Count; executedCases = [int]$full.TestRun.ResultSummary.Counters.executed } |
+              ConvertTo-Json | Set-Content (Join-Path $output 'architecture-source-and-counts.json')
+
+            New-Item -ItemType Directory -Path $conditionalDirectory | Out-Null
+            Set-Content $conditionalProbe '<Project><ItemGroup Condition="''$(Configuration)'' == ''Debug''"><PackageReference Include="Contoso.Probe" /></ItemGroup></Project>'
+            git add -f -- $conditionalProbe
+            try { $null = Test-Run 'tracked-conditional' "FullyQualifiedName=$conditional" $true 'Conditional.csproj' }
+            finally { git rm --cached -f -- $conditionalProbe; Remove-OwnedDirectory $conditionalDirectory }
+
+            $trackedEditorConfig = "$conditionalDirectory/.editorconfig"
+            New-Item -ItemType Directory -Path $conditionalDirectory | Out-Null
+            Set-Content $trackedEditorConfig "[Missing2849/**.cs]`nelsa_naming.retired_terms = Probe=Probe`n"
+            git add -f -- $trackedEditorConfig
+            try { $null = Test-Run 'tracked-editorconfig' "FullyQualifiedName=$retiredSection" $true 'tracked-guard-2849/.editorconfig' }
+            finally { git rm --cached -f -- $trackedEditorConfig; Remove-OwnedDirectory $conditionalDirectory }
+
+            $trackedGlobalConfig = "$conditionalDirectory/naming.globalconfig"
+            New-Item -ItemType Directory -Path $conditionalDirectory | Out-Null
+            Set-Content $trackedGlobalConfig "is_global = true`nelsa_naming.retired_terms = Probe=Probe`n"
+            git add -f -- $trackedGlobalConfig
+            try { $null = Test-Run 'tracked-globalconfig' "FullyQualifiedName=$retiredSeverity" $true 'is set in a global config' }
+            finally { git rm --cached -f -- $trackedGlobalConfig; Remove-OwnedDirectory $conditionalDirectory }
+
+            $retiredProject = "$probeProject/$family.csproj"
+            New-Item -ItemType Directory -Path $probeProject | Out-Null
+            Set-Content $retiredProject '<Project />'
+            git add -f -- $retiredProject
+            try { $null = Test-Run 'tracked-project-name' "FullyQualifiedName=$namedPath" $true 'project path names a retired persistence family' }
+            finally { git rm --cached -f -- $retiredProject; Remove-OwnedDirectory $probeProject }
+
+            $directoryProbe = "$leftovers/tracked-2849.txt"
+            Set-Content $directoryProbe 'Tracked directory probe'
+            git add -f -- $directoryProbe
+            try { $null = Test-Run 'tracked-directory-name' "FullyQualifiedName=$namedPath" $true 'directory names a retired persistence family' }
+            finally { git rm --cached -f -- $directoryProbe; Remove-Item $directoryProbe -Force }
+
+            $null = Test-Run 'restored-guards' "FullyQualifiedName=$conditional|FullyQualifiedName=$namedPath|FullyQualifiedName=$retiredSection|FullyQualifiedName=$retiredSeverity" $false
+            git diff --exit-code
+            if ($LASTEXITCODE -ne 0) { throw 'The witness left tracked source changes.' }
+            git diff --cached --exit-code
+            if ($LASTEXITCODE -ne 0) { throw 'The witness left staged mutations.' }
+          } finally {
+            git restore --source=HEAD --worktree -- @changedTests
+            if (Test-Path $worktree) { git worktree remove --force $worktree }
+            Remove-OwnedDirectory $leftovers
+            Remove-OwnedDirectory $probeProject
+            Get-ChildItem ([IO.Path]::GetTempPath()) -Directory -Filter 'PackageVersioningPackTests*' |
+              Where-Object { $_.FullName -notin $existingPackDirectories } | ForEach-Object { Remove-OwnedDirectory $_.FullName }
+          }
+
+      - name: Retain the architecture source and test receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows-2849-${{ github.sha }}
+          path: ${{ runner.temp }}/architecture-2849
+          if-no-files-found: error
+          retention-days: 14

@@ -26,7 +26,8 @@ public sealed partial class RetiredTermEnforcementGuardTests
 {
     private const string TermsKey = "elsa_naming.retired_terms";
 
-    private static IReadOnlyList<string> ConfigFiles { get; } = FindConfigFiles(RepoRoot);
+    private static IReadOnlyList<string> ConfigFiles { get; } =
+        FindConfigFiles(RepoRoot, TrackedFiles().Select(path => Path.Join(RepoRoot, path)));
 
     private static IReadOnlyList<string> ProductionSources { get; } = ProductionSourceFiles(RepoRoot);
 
@@ -183,6 +184,40 @@ public sealed partial class RetiredTermEnforcementGuardTests
         Assert.Equal(
             ["Essentials/src/Events/Elsa.Events/Elsa.Events.csproj sets ElsaIsProductionProject, which only the root Directory.Build.props may decide"],
             WiringOverrides(sandbox.Root));
+    }
+
+    [Fact]
+    public void Tracked_config_candidates_ignore_other_checkouts_but_keep_violations_at_ignored_paths()
+    {
+        using var sandbox = new Sandbox();
+        sandbox.File("Essentials/src/Tasks/Elsa.Tasks/Worker.cs", "namespace Elsa.Tasks; internal sealed class Worker { }");
+        sandbox.File(".editorconfig", "root = true\n[Essentials/src/Tasks/**.cs]\nelsa_naming.retired_terms = Pump=Worker\n");
+        sandbox.File(".claude/worktrees/untracked/.editorconfig", "[Missing/**.cs]\nelsa_naming.retired_terms = Pump=Worker\n");
+        sandbox.File(".claude/worktrees/untracked/naming.globalconfig", "is_global = true\nelsa_naming.retired_terms = Pump=Worker\n");
+        var sources = ProductionSourceFiles(sandbox.Root);
+
+        // Sandboxes still discover every config, including a nested checkout's configs.
+        var allConfigs = FindConfigFiles(sandbox.Root);
+        Assert.NotEmpty(UnmatchedSections(sandbox.Root, allConfigs, sources));
+        Assert.NotEmpty(SeverityViolations(sandbox.Root, allConfigs, sources, ["ELSANAME001"]));
+
+        var rootConfig = Path.Join(sandbox.Root, ".editorconfig");
+        var trackedConfigs = FindConfigFiles(sandbox.Root, [rootConfig]);
+        Assert.Empty(UnmatchedSections(sandbox.Root, trackedConfigs, sources));
+        Assert.Empty(SeverityViolations(sandbox.Root, trackedConfigs, sources, ["ELSANAME001"]));
+
+        const string trackedEditorConfig = ".claude/worktrees/tracked/.editorconfig";
+        const string trackedGlobalConfig = ".claude/worktrees/tracked/naming.globalconfig";
+        sandbox.File(trackedEditorConfig, "[Missing/**.cs]\nelsa_naming.retired_terms = Pump=Worker\n");
+        sandbox.File(trackedGlobalConfig, "is_global = true\nelsa_naming.retired_terms = Pump=Worker\n");
+        var violatingConfigs = FindConfigFiles(sandbox.Root,
+            [rootConfig, Path.Join(sandbox.Root, trackedEditorConfig), Path.Join(sandbox.Root, trackedGlobalConfig)]);
+        Assert.Equal(
+            [trackedEditorConfig + " [Missing/**.cs] matches no production source file"],
+            UnmatchedSections(sandbox.Root, violatingConfigs, sources));
+        Assert.Equal(
+            ["elsa_naming.retired_terms is set in a global config, so it applies to every file; activate retired terms per domain in an .editorconfig section"],
+            SeverityViolations(sandbox.Root, violatingConfigs, sources, ["ELSANAME001"]));
     }
 
     /// <summary>
@@ -395,10 +430,10 @@ public sealed partial class RetiredTermEnforcementGuardTests
             .Where(path => !exempt.Any(prefix => Relative(repoRoot, path).StartsWith(prefix, StringComparison.Ordinal)));
     }
 
-    /// <summary>Every .editorconfig and global analyzer config in the repository.</summary>
-    private static IReadOnlyList<string> FindConfigFiles(string repoRoot) =>
+    /// <summary>Analyzer configs among the supplied repository candidates, or every config in a sandbox tree.</summary>
+    private static IReadOnlyList<string> FindConfigFiles(string repoRoot, IEnumerable<string>? candidates = null) =>
     [
-        .. Directory.EnumerateFiles(repoRoot, "*", SearchOption.AllDirectories)
+        .. (candidates ?? Directory.EnumerateFiles(repoRoot, "*", SearchOption.AllDirectories))
             .Where(path => Path.GetFileName(path) == ".editorconfig" || path.EndsWith(".globalconfig", StringComparison.OrdinalIgnoreCase))
             .Where(path => !IsBuildOutput(repoRoot, path) && !IsUnder(path, "node_modules") && !IsUnder(path, ".git"))
             .Order(StringComparer.Ordinal)
