@@ -53,6 +53,7 @@ await KeyedEphemeral.Run("memory", store, store, target => { now=target; return 
 await AdverseChecks.Run("memory", store, store);
 await KeyedMetadataChecks.Run("memory",store,store,target=>{now=target;return Task.CompletedTask;});
 await UnicodeKeys.Run("memory",store,store,waitUntil:target=>{now=Math.Max(now,target);return Task.CompletedTask;});
+if (Environment.GetEnvironmentVariable("KERNEL_RECREATE_PG") is { } pgConnection) await PgWitness.Run(pgConnection);
 
 internal sealed class Harness(InMemoryStore store) : IAsyncDisposable
 {
