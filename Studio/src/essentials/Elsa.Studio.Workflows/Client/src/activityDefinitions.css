@@ -309,6 +309,16 @@
 /* Canvas fill is inherited from the shared .wf-canvas-shell tone; only the host-specific
    sizing/overflow belongs here. */
 .ad-graph-canvas { min-width: 0; padding: 0; overflow: hidden; }
+/* Wrapped block actions and scope labels must not collapse the narrow canvas beneath its sticky
+   heading. Let the owning pane scroll while each native designer retains usable interaction space. */
+@media (max-width: 48rem) {
+  .ad-graph-canvas { overflow-y: auto; }
+  .ad-graph-canvas > .wf-block-commands,
+  .ad-graph-canvas > .wf-block-command-notice { flex-shrink: 0; }
+  .ad-graph-canvas > .wf-canvas,
+  .ad-graph-canvas > .wf-sequence-designer { flex: 1 0 20rem; min-height: 20rem; }
+}
+
 /* Scope navigation is the shared .wf-breadcrumb; only the trailing border that separates it from the
    scope label below is host-specific. */
 .ad-graph-canvas > .wf-breadcrumb { border-bottom: 1px solid var(--wf-border); }

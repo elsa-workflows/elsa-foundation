@@ -358,6 +358,8 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     expect(sealed.executionReference).toBeFalsy(); expect(pending.dispatch).toBe("NotDispatched"); expect(pending.executionReference).toBeFalsy();
     const sealedTarget = recoveryTargets.find(item => item.authored.definition.id === sealed.target!.definitionId)!;
     expect(boundary.capturedTarget.artifactId).toBe(sealedTarget.published.artifactId);
+    expect(boundary.sourceProvenance).toMatchObject({ sourceReferenceId: sealedTarget.published.sourceReferenceId,
+      definitionId: sealedTarget.authored.definition.id, definitionVersionId: sealedTarget.authored.version.id });
     await j.inspectDelivery(held, "delivery-dispatch-committed");
     const sealedFrame = page.getByRole("region", { name: `Recipient ${sealed.id}`, exact: true }).locator("..");
     await expect(sealedFrame.getByRole("button", { name: "Cancel pending recipient", exact: true })).toBeDisabled();
@@ -458,8 +460,10 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     const neverStarted = await page.request.get(`${j.base}/runtime/workflows/instances/${pending.plannedExecutionIdentity}`);
     expect(neverStarted.status()).toBe(404);
     j.requests.push({ kind: "actual-cancelled-root-remains-absent-after-peer-recovery", path: `/runtime/workflows/instances/${pending.plannedExecutionIdentity}`, status: neverStarted.status() });
-    const instance = await j.api<{ instance: { artifactId: string; definitionVersionId: string }; activities: { activityExecutionId: string; firstCheckpointId?: string; lastCheckpointId?: string; provenance: { parentActivityExecutionId?: string | null } }[] }>(`/runtime/workflows/instances/${boundary.plannedExecutionId}`);
-    expect(instance.instance.artifactId).toBe(boundary.capturedTarget.artifactId); expect(instance.instance.definitionVersionId).toBe(boundary.capturedTarget.definitionVersionId);
+    const instance = await j.api<{ instance: { artifactId: string; sourceReferenceId: string; definitionId: string; definitionVersionId: string }; activities: { activityExecutionId: string; firstCheckpointId?: string; lastCheckpointId?: string; provenance: { parentActivityExecutionId?: string | null } }[] }>(`/runtime/workflows/instances/${boundary.plannedExecutionId}`);
+    expect(instance.instance.artifactId).toBe(boundary.capturedTarget.artifactId);
+    expect(instance.instance).toMatchObject({ sourceReferenceId: boundary.sourceProvenance.sourceReferenceId,
+      definitionId: boundary.sourceProvenance.definitionId, definitionVersionId: boundary.sourceProvenance.definitionVersionId });
     const roots = instance.activities.filter(item => !item.provenance.parentActivityExecutionId); expect(roots).toHaveLength(1);
     expect(roots[0].firstCheckpointId).toBeTruthy(); expect(roots[0].lastCheckpointId).toBeTruthy();
     const again = await j.api<typeof instance>(`/runtime/workflows/instances/${boundary.plannedExecutionId}`);
@@ -467,7 +471,7 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     const peer = ((await j.host("inspect-dispatch-boundary")).boundary as { peer: DispatchBoundary }).peer;
     expect(peer).toMatchObject({ nodeIdentity: "B", processId: recovery.processId, sourceRevision: boundary.sourceRevision, deliveryId: boundary.deliveryId,
       recipientId: boundary.recipientId, plannedExecutionId: boundary.plannedExecutionId, sealFingerprint: boundary.sealFingerprint, phase: "TargetAccepted" });
-    expect(peer.bootId).not.toBe(boundary.bootId); expect(peer.capturedTarget).toEqual(boundary.capturedTarget); expect(peer.acceptanceReceipt).toBeTruthy();
+    expect(peer.bootId).not.toBe(boundary.bootId); expect(peer.capturedTarget).toEqual(boundary.capturedTarget); expect(peer.sourceProvenance).toEqual(boundary.sourceProvenance); expect(peer.acceptanceReceipt).toBeTruthy();
     expect(peer.claimOwnerId).not.toBe(boundary.claimOwnerId); expect(peer.claimFencingToken).toBeGreaterThan(boundary.claimFencingToken!);
     await j.inspectDelivery(recovered, "delivery-recovered");
     j.observed.push("A real HTTP 202 durably accepted two native roots; the acceptance-only decorator verified the physical DispatchCommitted seal before enqueue", "UI deletion hid the live trigger while retained delivery reads carried current resource revision; opening/reloading Cancel and Retry reviews made no live trigger GET", "Normal UI review cancelled only the unsealed recipient after deletion; retry of the live claimed sealed recipient truthfully returned AlreadyRequested without changing the resource revision or inventing execution", "A normal attempted committed cancellation returned DispatchCommitted, with no run link before actual target acceptance", "Native Inspect actual run clicked through the selected backend to the exact actual execution", "Pause, deletion, serving-slot replacement and unpublication preserved the captured original material and mapped inputs", "SIGKILL of owned process A followed by a distinct boot/node B over the same stores recovered after a full natural lease interval; original artifact, execution identity, one inspected root and checkpoint identities were retained; cancelled root remained absent");

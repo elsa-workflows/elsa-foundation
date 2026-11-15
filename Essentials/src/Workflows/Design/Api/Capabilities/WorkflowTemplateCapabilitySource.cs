@@ -11,6 +11,7 @@ internal sealed class WorkflowTemplateCapabilitySource(IWorkflowTemplateStore? s
         [new(WorkflowDesignApiCapabilities.CapabilityId, 1,
             [new("workflow-templates", "design/workflows/templates"),
              new("workflow-template", "design/workflows/templates/{templateId}", templated: true),
+             new("workflow-template-candidate-validation", "design/workflows/templates/{templateId}/candidate-validation", templated: true),
              new("workflow-template-delete", "design/workflows/templates/{templateId}/delete", templated: true)],
             "WorkflowsDesignApi.Templates")]);
 }

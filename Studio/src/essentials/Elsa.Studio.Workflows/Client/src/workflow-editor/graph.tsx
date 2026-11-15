@@ -1,3 +1,4 @@
+import { graphBoundaryCompleteTypeKey } from "../workflowAdapter";
 import "@xyflow/react/dist/style.css";
 import "./graphCanvas.css";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -31,7 +32,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const { icon, fallback, tone } = resolveNodeActivityVisual(nodeData);
   const runtime = nodeData.runtime;
   const showFlowPorts = !nodeData.suppressFlowPorts;
-  const sourcePorts = showFlowPorts ? nodeData.sourcePorts : [];
+  const sourcePorts = showFlowPorts && nodeData.activityTypeKey !== graphBoundaryCompleteTypeKey ? nodeData.sourcePorts : [];
   const subtitle = formatNodeSubtitle(nodeData);
   const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
@@ -123,6 +124,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       <div className="wf-node-content">
         <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(icon, fallback)}</span>
         <span className="wf-node-copy">
+          {nodeData.activityTypeKey === graphBoundaryCompleteTypeKey ? <small title="Completes the nearest reusable activity and cancels the rest of its body. No outgoing continuation runs.">Ends reusable activity</small> : null}
           <strong title={nodeData.label}>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}
           {httpResponseBadge ? (

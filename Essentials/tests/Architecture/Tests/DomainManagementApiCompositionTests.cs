@@ -80,6 +80,9 @@ public sealed class DomainManagementApiCompositionTests
     private static readonly EndpointIdentity ActivityDataContextRoute =
         new("/design/activities/drafts/{draftId}/activity-data/context", "POST");
 
+    private static readonly EndpointIdentity ActivityCandidateValidationRoute =
+        new("/design/activities/drafts/{draftId}/candidate-validation", "POST");
+
     private static readonly EndpointIdentity[] ExpectedActivitiesDesignRoutes =
     [
         new("/design/activities/availability/settings", "GET"),
@@ -220,9 +223,9 @@ public sealed class DomainManagementApiCompositionTests
             .ToArray();
         var publishingIdentities = publishing.SelectMany(entry => entry.Identities).ToArray();
 
-        // Retain the reviewed legacy inventory; the context is one explicit additive operation.
+        // Retain the reviewed legacy inventory; classify the context and candidate operations explicitly.
         Assert.Equal(38, ExpectedActivitiesDesignRoutes.Length);
-        var expectedActivities = ExpectedActivitiesDesignRoutes.Append(ActivityDataContextRoute).ToArray();
+        var expectedActivities = ExpectedActivitiesDesignRoutes.Append(ActivityDataContextRoute).Append(ActivityCandidateValidationRoute).ToArray();
         Assert.Equal(expectedActivities.Length, activities.Length);
         Assert.Equal(expectedActivities.Length, identities.Length);
         Assert.Equal(
