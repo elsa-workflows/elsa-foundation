@@ -78,9 +78,10 @@ that call. Confirm, Compensate and journal handover do not acquire cross-boundar
 The actual [Compensate](../../../Essentials/src/Activities/Compensation/Activities/Compensate.cs) and
 [Confirm](../../../Essentials/src/Activities/Compensation/Activities/Confirm.cs) use normal ancestor notifications.
 The private kernel Native prototype currently has no compensation implementation or equivalent ancestor port;
-its [StateMachine final path](../../../prototypes/kernel-model/models/Statecharts.Native/StateMachine.cs)
-still completes with default `Done`. B7b's qualified private driver supplies neither OD45 mapping nor this
-composition. Reuse the authoritative mechanisms on the selected runtime and qualify the bridge before adoption;
+at the stated basis its [StateMachine final path](../../../prototypes/kernel-model/models/Statecharts.Native/StateMachine.cs)
+completed with default `Done`. The later [private mapping profile](../../../prototypes/kernel-model/models/Statecharts.Run/README.md#private-final-outcome-transport)
+proves named single-outcome transport through ordinary Native completion, not the product declared-outcome
+references/publication contract of OD45 or this composition. B7b alone supplies neither. Reuse the authoritative mechanisms on the selected runtime and qualify the bridge before adoption;
 copying a compensation journal/engine into the spike would not prove that integration.
 
 Phase-fault ownership remains an explicit integration gate. Trace the chosen normal runtime's in-chart
