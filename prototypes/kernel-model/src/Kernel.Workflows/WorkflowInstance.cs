@@ -118,7 +118,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     }
 
     // Match the typed ticket of this creation, never an ordinary equal-looking wire ID.
-    private static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
+    internal static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
     {
         if (row.Jobs is null) return null;
         var consumed = taken.Where(i => (i.IsDurableJobTicket || i.IsWorkerJobCompletion) && i.Message.Target.Id == row.Id)

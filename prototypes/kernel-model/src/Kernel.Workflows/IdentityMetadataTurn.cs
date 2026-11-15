@@ -25,7 +25,7 @@ internal sealed class IdentityMetadataTurn(TurnInput input) : IIdentityMetadataT
         _unit.Revision=_durable.Revision;
         // State-free metadata still owns a durable turn: clock changes, handle cleanup and the
         // original committed revision follow the same seal path as ordinary model turns.
-        return _durable.Seal(_unit,row with {Revision=_durable.Revision,Jobs=_durable.Jobs()},null,WorkflowInstance.Journal(row.History,[]));
+        return _durable.Seal(_unit,row with {Revision=_durable.Revision,Jobs=WorkflowInstance.RemainingJobs(row with{Jobs=_durable.Jobs()},input.Taken)},null,WorkflowInstance.Journal(row.History,[]));
     }
     internal static TurnOutcome Unavailable(TurnInput input)
     {
