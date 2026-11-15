@@ -3,7 +3,7 @@
 <section class="ch" id="profiles">
   <div class="num">12</div>
   <h2>Deployment profiles</h2>
-  <p>Three things vary independently, each behind its own seam. There is no fourth "runtime" plug-in: a deployment profile is a named preset of the last two. A workflow behaves the same under every profile, and synchronous HTTP works on all of them. Pick a profile.</p>
+  <p>A deployment profile combines an actor runtime and a persistence provider; persistence mode remains the workflow author's choice. Release 1 adopts Embedded and Cluster with the same Native structured containers, Flowchart and StateMachine. Orleans requires proven demand. Log is later, planned, not designed; equivalent behavior and synchronous HTTP remain requirements for that future design. Pick a profile.</p>
   <div class="seg" role="group" aria-label="Deployment profile" id="profile-seg">
     <button type="button" data-profile="embedded" aria-pressed="false">Embedded</button>
     <button type="button" data-profile="cluster" aria-pressed="true">Cluster</button>
@@ -17,29 +17,29 @@
       <span class="opt" data-in="embedded">Built-in, one node, no transport</span>
       <span class="opt" data-in="cluster">Built-in, partitions shared over nodes</span>
       <span class="opt" data-in="orleans">Orleans adapter</span>
-      <span class="opt" data-in="log">Built-in, partitions as replicated-log groups</span></div>
-    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What stores the rows.</p>
+      <span class="opt" data-in="log">Planned: replicated-log leadership</span></div>
+    <div class="axis-col"><h4>Persistence provider</h4><p class="who">Behind IKernelStore. What persists the data.</p>
       <span class="opt" data-in="embedded orleans">SQLite (1 partition)</span>
       <span class="opt" data-in="embedded cluster orleans">PostgreSQL</span>
       <span class="opt" data-in="embedded cluster orleans">SQL Server (RCSI on)</span>
       <span class="opt" data-in="embedded cluster orleans">MySQL</span>
       <span class="opt" data-in="embedded cluster orleans">MongoDB 8 (replica set)</span>
-      <span class="opt" data-in="log">A Zeebe-like log provider</span></div>
+      <span class="opt" data-in="log">Planned: replicated log (Zeebe-like)</span></div>
   </div>
   <p id="profile-note"></p>
   <div class="principle"><strong>Log profile: planned, not designed.</strong> What each kernel concept becomes with a replicated log (Zeebe-like):
     <div class="tablewrap"><table>
       <thead><tr><th>Kernel concept</th><th>With a replicated log</th></tr></thead>
       <tbody>
-        <tr><td>Commit</td><td>a fenced batch appended to the partition's Raft-replicated log, acknowledged by a majority</td></tr>
-        <tr><td>Fence and epoch</td><td>the Raft term: a deposed leader's appends are rejected</td></tr>
+        <tr><td>Commit</td><td>a fenced batch appended to the partition's Raft-replicated log, acknowledged after consensus commitment</td></tr>
+        <tr><td>Fence and epoch</td><td>Raft term-based authority, enforced by the commit protocol</td></tr>
         <tr><td>Lease and take</td><td>leader election</td></tr>
         <tr><td>Journal</td><td>the log itself</td></tr>
-        <tr><td>Inbox and polling</td><td>log entries plus local state; no polling</td></tr>
-        <tr><td>Projector</td><td>an exporter that reads the log past its position</td></tr>
+        <tr><td>Inbox and polling</td><td>log entries plus local state; no inbox-table polling</td></tr>
+        <tr><td>Projector</td><td>an exporter that reads committed log records past its position</td></tr>
       </tbody>
     </table></div>
-    It touches two seams: the storage contract (<code>IKernelStore</code>) and ownership in the actor runtime (<code>IActorRuntime</code>), which is why it is a deployment profile rather than only a storage provider.</div>
+    It touches two seams: <code>IKernelStore</code> and ownership in <code>IActorRuntime</code>. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/reports/clean-slate-kernel/log-profile-contract-sketch.md">round 5 H paper</a> proposes four contracts before code. The accepted send boundary records sends with sender state and permits deduplicated later delivery; logical per-virtual-partition journal positions remain distinct from physical log indexes.</div>
   <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
 </section>
 
@@ -94,16 +94,17 @@
 <section class="ch" id="tradeoffs">
   <div class="num">15</div>
   <h2>Trade-offs and the chosen defaults</h2>
-  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
+  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. The original 12 November defaults are shown below; the partition experiment was amended on 15 November.</p>
   <div class="chips">
     <span class="chip">Side effects at least once in Balanced</span>
     <span class="chip">History: Full</span>
     <span class="chip">Lease: 10 s</span>
-    <span class="chip">64 partitions, 1 on SQLite</span>
+    <span class="chip">Original prototype: 64 server partitions, 1 on SQLite</span>
     <span class="chip">HTTP response after commit</span>
     <span class="chip">No reads across instances</span>
     <span class="chip">Events not kept unless asked</span>
   </div>
+  <p class="note">Adopted experiment, not implemented: compare 1,024 and 4,096 fixed virtual partitions, provisionally 4,096. Both fence variants retain a gapless ordered journal per virtual partition. Final fence granularity is the owner's decision after measurements; existing diagrams retain the original prototype numbers.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>#</th><th>Gain</th><th>Price</th><th>Lever</th></tr></thead>
     <tbody>
@@ -172,27 +173,29 @@
       <ul>
         <li>What the store contract says about subscribing twice and removing what is absent</li>
         <li>Tenant and trace headers; <code>Describe</code> for lists</li>
-        <li>StateMachine as a native composite: recommended, decided by #3815's design milestone</li>
+        <li>StateMachine implementation design (#3815); inclusion in both release-one profiles adopted 15 November</li>
         <li>The default join for a Flowchart node with several inbound connections</li>
         <li>BPMN's scope for its first release</li>
       </ul></div>
   </div>
-  <h3>Release 1 scope (decided 12 November)</h3>
+  <h3>Release 1 scope (amended 15 November)</h3>
   <div class="two">
     <div class="card"><h4>In release 1</h4>
       <ul>
         <li>The kernel, the built-in runtime, the Embedded and Cluster profiles</li>
-        <li>The native model: structured containers and the Flowchart on the graph engine</li>
+        <li>The same Native model set in both profiles: structured containers, Flowchart and StateMachine</li>
         <li>Synchronous HTTP</li>
         <li>PostgreSQL, SQL Server and SQLite, tuned; MySQL supported, not tuned</li>
         <li>Studio on the new core</li>
         <li>Basic trace context and metrics, retention and delete, admission control, simple instance migration</li>
-        <li>StateMachine, unless its design milestone is late; then 1.1</li>
+        <li>Parked-work operator tools: inspect, retry and discard</li>
+        <li>Values by reference (decision 10), a release 1 priority</li>
         <li>Agents as native activities, agent calls as background jobs</li>
       </ul></div>
     <div class="card"><h4>After release 1</h4>
       <ul>
-        <li>BPMN, the Orleans adapter and ETL, each proven by a spike now</li>
+        <li>BPMN and ETL, each proven by a spike now</li>
+        <li>Orleans only after proven demand; no automatic product commitment</li>
         <li>MongoDB in 1.1; proven in CI against a replica set from release 1</li>
         <li>The aggregating fan-out pattern, with ETL; release 1 caps a parallel ForEach</li>
         <li>The out-of-process job worker protocol (1.x); its contract designed now</li>
