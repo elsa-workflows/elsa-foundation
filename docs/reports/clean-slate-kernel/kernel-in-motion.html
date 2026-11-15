@@ -98,6 +98,7 @@ button[aria-pressed="true"]:not(.primary) { background: var(--accent-soft); bord
 .caption { font-weight: 600; margin: 12px 0 0; }
 .scenebox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px; overflow-x: auto; }
 .scenebox svg { display: block; width: 100%; min-width: 900px; height: auto; }
+#scenebox2 .log-profile-note { display: none; }
 .below { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-top: 14px; align-items: start; }
 .narration { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 9px 9px 0; padding: 14px 18px; min-height: 186px; }
 .narration p { margin: 0 0 8px; }
@@ -453,7 +454,7 @@ marker path.n { fill: var(--muted); }
     <g data-part="vault">
       <rect class="bs pf" x="790" y="40" width="400" height="432" rx="10"/>
       <text class="tt st" x="802" y="60">Database</text><text class="ts" x="866" y="60">the vault: one shared store behind IKernelStore</text>
-      <text class="ts" x="802" y="176">Log later: log + local state; planned, not designed</text>
+      <text class="ts log-profile-note" x="802" y="176">Log later: log + local state; planned, not designed</text>
       <text class="ts" id="dockhint" x="914" y="128" text-anchor="middle">commits land here</text>
       <g class="receipt gone" id="receipt"><rect class="box" x="1036" y="78" width="150" height="88" rx="6"/><text class="tt l3" id="rc0" x="1046" y="97"></text><text class="ts" id="rc1" x="1046" y="115"></text><text class="ts" id="rc2" x="1046" y="130"></text><text class="ts" id="rc3" x="1046" y="145"></text><text class="ts" id="rc4" x="1046" y="160"></text></g>
       <g data-part="t-partition" id="t-partition"></g>
