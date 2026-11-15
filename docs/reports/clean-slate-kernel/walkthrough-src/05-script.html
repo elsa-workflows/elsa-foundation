@@ -133,37 +133,43 @@
   const showTip = (e, text) => { tip.textContent = text; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; tip.style.opacity = 1; };
   const hideTip = () => { tip.style.opacity = 0; };
   const cs = document.getElementById("cost-svg");
-  const data = [
-    ["HTTP request to response, Ephemeral", 80, 0],
-    ["HTTP request to response, Balanced", 80, 3],
-    ["HTTP request to response, Durable", 153, 12],
-    ["WriteLine sequence, Balanced", 48, 3],
-    ["Ten WriteLines, Durable", 230, 33],
-    ["Fork, wait, resume, join, Balanced", 142, 11],
-    ["Forty WriteLines, Durable", 680, 123]
+  const sys = [["Elsa 3 (3.10.1)", "var(--l1)"], ["Elsa 4 today (main)", "var(--hot)"], ["New kernel (prototype)", "var(--accent)"]];
+  const wfs = [
+    ["Ten WriteLines", [[29, 64], [64, 221], [3, 63]]],
+    ["HTTP request to response", [[15, 29], [83, 149], [3, 21]]],
+    ["Fork, wait, resume, join", [[25, 42], [131, 194], [18, 30]]]
   ];
-  const x0 = 320, k = 0.8, top = 20, rh = 52;
-  for (let v = 0; v <= 700; v += 100) {
-    const x = x0 + v * k;
-    cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + data.length * rh }));
-    cs.appendChild(el("text", { class: "ts", x, y: top + data.length * rh + 18, "text-anchor": "middle" }, String(v)));
-  }
-  cs.appendChild(el("text", { class: "ts", x: x0 + 280, y: top + data.length * rh + 36, "text-anchor": "middle" }, "PostgreSQL round trips per run"));
-  data.forEach(([label, today, model], n) => {
-    const y = top + n * rh;
-    cs.appendChild(el("text", { x: x0 - 14, y: y + 30, "text-anchor": "end" }, label));
-    const tw = Math.max(today * k, 2), mw = Math.max(model * k, 2);
-    const t = el("rect", { x: x0, y: y + 10, width: tw, height: 14, rx: 3 }); t.style.fill = "var(--hot)";
-    const m = el("rect", { x: x0, y: y + 27, width: mw, height: 14, rx: 3 }); m.style.fill = "var(--accent)";
-    cs.appendChild(t); cs.appendChild(m);
-    cs.appendChild(el("text", { class: "ts", x: x0 + tw + 6, y: y + 22 }, String(today)));
-    cs.appendChild(el("text", { class: "ts", x: x0 + mw + 6, y: y + 39 }, String(model)));
-    const hit = el("rect", { x: 0, y: y + 4, width: 960, height: rh - 4, fill: "transparent" });
-    const msg = label + ": today " + today + ", new kernel " + model + " round trips";
-    hit.addEventListener("mousemove", e => showTip(e, msg));
-    hit.addEventListener("mouseleave", hideTip);
-    cs.appendChild(hit);
-  });
+  const x0 = 250, k = 2.6, top = 16, rh = 96;
+  const drawCosts = mode => {
+    cs.replaceChildren();
+    for (let v = 0; v <= 250; v += 50) {
+      const x = x0 + v * k;
+      cs.appendChild(el("line", { class: "grid", x1: x, y1: top, x2: x, y2: top + wfs.length * rh }));
+      cs.appendChild(el("text", { class: "ts", x, y: top + wfs.length * rh + 18, "text-anchor": "middle" }, String(v)));
+    }
+    cs.appendChild(el("text", { class: "ts", x: x0 + 325, y: top + wfs.length * rh + 38, "text-anchor": "middle" }, "EF Core commands per workflow run, SQLite"));
+    wfs.forEach(([label, vals], n) => {
+      const y = top + n * rh;
+      cs.appendChild(el("text", { x: x0 - 14, y: y + 50, "text-anchor": "end" }, label));
+      vals.forEach((pair, i) => {
+        const v = pair[mode], w = Math.max(v * k, 2);
+        const r = el("rect", { x: x0, y: y + 8 + i * 25, width: w, height: 19, rx: 3 }); r.style.fill = sys[i][1];
+        cs.appendChild(r);
+        cs.appendChild(el("text", { class: "ts", x: x0 + w + 6, y: y + 23 + i * 25 }, String(v)));
+      });
+      const hit = el("rect", { x: 0, y: y + 2, width: 960, height: rh - 8, fill: "transparent" });
+      const msg = label + ": Elsa 3 " + vals[0][mode] + ", Elsa 4 today " + vals[1][mode] + ", new kernel " + vals[2][mode] + " commands";
+      hit.addEventListener("mousemove", e => showTip(e, msg));
+      hit.addEventListener("mouseleave", hideTip);
+      cs.appendChild(hit);
+    });
+  };
+  const costBtns = document.querySelectorAll("#cost-mode button");
+  costBtns.forEach(b => b.addEventListener("click", () => {
+    costBtns.forEach(o => o.setAttribute("aria-pressed", String(o === b)));
+    drawCosts(+b.dataset.mode);
+  }));
+  drawCosts(0);
 
   /* deployment profiles */
   const pnotes = {
