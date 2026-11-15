@@ -33,7 +33,7 @@ export async function verifyHostComposition(j: TriggerJourney) {
     const disabled = (await authoringJourney.subscriptions(paused.id))[0];
     expect(disabled.enabled).toBe(false); expect(disabled.serving).toBeFalsy(); expect(disabled.target.definitionId).toBe(target.authored.definition.id);
     await j.page.reload(); await expect(j.page.getByRole("button", { name: "Enable trigger", exact: true })).toBeDisabled();
-    const disabledRow = j.page.getByRole("row").filter({ hasText: target.authored.definition.id });
+    const disabledRow = j.workflowSubscriptionRow(target.authored.definition.id);
     await expect(disabledRow).toContainText("Paused");
     await expect(disabledRow).toContainText("Not serving");
     await j.capture("trigger-design-only-composition");

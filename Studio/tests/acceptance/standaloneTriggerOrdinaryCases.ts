@@ -37,7 +37,7 @@ export async function businessOutputs(j: TriggerJourney, executionId: string, ex
 
 async function editSubscription(j: TriggerJourney, triggerId: string, definitionId: string) {
   await j.open(triggerId);
-  await j.page.getByRole("row").filter({ hasText: definitionId }).getByRole("button", { name: "Edit", exact: true }).click();
+  await j.workflowSubscriptionRow(definitionId).getByRole("button", { name: "Edit", exact: true }).click();
   await expect(j.page.getByRole("heading", { name: "Declared inputs", exact: true })).toBeVisible();
 }
 
