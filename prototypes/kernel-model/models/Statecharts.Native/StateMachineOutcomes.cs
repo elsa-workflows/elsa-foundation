@@ -39,6 +39,7 @@ internal sealed partial class StateMachine
 
     private static void CompleteFinal(CompositeContext context, MachineState state, SelectionChart graph)
     {
+        // A valid root configuration has exactly one active top-level final when this path is reached.
         var outcome = state.FinalOutcomes is { } settings
             ? settings.Outcomes[graph.TopFinalStates.Single(state.Active.Contains)] : "Done";
         context.Complete(outcome);

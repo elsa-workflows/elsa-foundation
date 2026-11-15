@@ -67,7 +67,9 @@ Root journeys prove completion timing, not a root named-outcome protocol. A loca
 parent/machine active. Final Entry waits and faults preserve the selected plan, operation keys and queued-tail
 receipts across cold simulation-owner reloads and lost-before-apply/lost-acknowledgement cuts.
 
-Native host schema13 uses the existing outer model-version withholding gate. An actual Worker with a strict
+Native host schema13 applies to every newly written Native row, including unmapped workflows; an older12
+worker withholds all such rows. This private global version bump is not a product rollout policy. It uses
+the existing outer model-version withholding gate. An actual Worker with a strict
 previous-version12 capability facade holds a committed mapped row unchanged, then exercises ordinary opaque
 future-state termination/metadata handling. This is not a historical host binary. Constructed native12 upgrade
 fixtures preserve earlier evaluation/control data; direct CLR-module recovery material remains authoritative,
