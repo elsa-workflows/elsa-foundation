@@ -37,7 +37,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
     // Contract order differs from mapping order, so pointer index 0 must locate Second.
     const output = (key: string) => ({ referenceKey: key.toLowerCase(), name: key, type: { alias: "String", collectionKind: "Single" }, isRequired: false, isNullable: true, storageDriverKey: "elsa.json" });
     const contract = { ...draft.contract, outputs: kind === "output" ? [output("First"), output("Second")] : [] };
-    payload.outputMappings = kind === "output" ? [{ outputReferenceKey: "second", source: null }, { outputReferenceKey: "first", source: { syntax: "Literal", value: "ok" } }] : [];
+    payload.outputMappings = kind === "output" ? [{ outputReferenceKey: "second", source: null }] : [];
     const candidate = { expectedRevision: draft.revision, contract, provider: { ...draft.provider, payload }, layout: draft.layout, activityPresentation: draft.activityPresentation };
     const checked = await page.request.post(`${draftUrl}/candidate-validation`, { headers, data: candidate });
     expect(checked.status()).toBe(200);

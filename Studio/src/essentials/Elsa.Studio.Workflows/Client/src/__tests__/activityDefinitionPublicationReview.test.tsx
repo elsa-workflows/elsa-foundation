@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioActivityDiagnosticFocusResult, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionPublicationReview } from "../ActivityDefinitionPublicationReview";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
@@ -42,6 +42,29 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     click(buttonByText(blockers, "Choose model connection"));
     await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(diagnostic, expect.any(HTMLButtonElement)));
     expect(harness.container.querySelector("[role='dialog']")).toBeNull();
+  });
+
+  it("retains safe structured validation refusals, navigates to the setting, and invalidates on draft edits", async () => {
+    const post = vi.fn(async () => { throw graphRefusal(); });
+    const harness = renderReview({ postJson: post });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.textContent).toContain("The output value source is missing or is not a valid expression."));
+    expect(harness.container.textContent).not.toContain("PRIVATE");
+    expect(harness.container.textContent).not.toContain("could not be confirmed");
+    expect(harness.container.querySelector(".ad-publication-confirmation")).toBeNull();
+    click(buttonByText(harness.container, "Close publication review"));
+    click(buttonByText(harness.container, "Publication blocked — view issues"));
+    expect(post).toHaveBeenCalledTimes(1);
+    click(buttonByText(harness.container, "Edit output value source"));
+    await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(expect.objectContaining({
+      location: { providerKey: "elsa.activity-graph", jsonPointer: "/outputMappings/1/source" },
+      subject: { kind: "ActivityDraft", id: "draft-1", revision: 3 }
+    }), expect.any(HTMLButtonElement)));
+    harness.render(4);
+    await waitFor(() => expect(harness.container.textContent).toContain("Review is out of date"));
+    click(harness.container.querySelector<HTMLButtonElement>(".ad-publication-toolbar-trigger")!);
+    expect(harness.container.textContent).not.toContain("Edit output value source");
+    expect(post).toHaveBeenCalledTimes(1);
   });
 
   it("reopens an existing service failure without clearing it or retrying", async () => {
@@ -251,12 +274,12 @@ function renderReview({
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root: Root = createRoot(container);
-  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionPublicationReview
+  const render = (revision = 3) => flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionPublicationReview
     context={context}
     definitionId="definition-1"
     draftId="draft-1"
-    currentRevision={3}
-    currentSignature="signature-3"
+    currentRevision={revision}
+    currentSignature={`signature-${revision}`}
     disabled={false}
     flushExactSavedRevision={flushExactSavedRevision}
     onPublicationPending={onPublicationPending}
@@ -265,6 +288,7 @@ function renderReview({
     onOpenVersion={vi.fn()}
     mode="toolbar"
   /></QueryClientProvider>));
+  render();
   let mounted = true;
   const unmount = () => {
     if (!mounted) return;
@@ -274,7 +298,7 @@ function renderReview({
     container.remove();
   };
   unmounts.push(unmount);
-  return { container, unmount, onFocusDiagnostic };
+  return { container, unmount, onFocusDiagnostic, render };
 }
 
 function endpoint(postJson: (url: string, body: unknown) => Promise<unknown>, getJson?: (url: string) => Promise<unknown>): StudioEndpointContext {
@@ -397,4 +421,15 @@ async function waitFor(assertion: () => void) {
       await new Promise(resolve => setTimeout(resolve, 10));
     }
   }
+}
+
+function graphRefusal() {
+  return new StudioHttpError(400, "PRIVATE", null, {
+    errorCode: "activity-data.invalid", diagnostics: [{
+      code: "ActivityDataSelection/activity.graph.output.source-invalid", severity: "Error", message: "PRIVATE",
+      subject: { kind: "ActivityDraft", id: "draft-1" },
+      location: { providerKey: "elsa.activity-graph", referenceKey: "PRIVATE" },
+      metadata: { authoredPath: "/outputMappings/1/source", secret: "PRIVATE" }, remediation: "PRIVATE"
+    }]
+  });
 }
