@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "958edde53555828ec4fc0e5e43131e8e1653b088",
+  "last_publish_commit": "ebffada62df93d086b86ca1fc0a8f5c31ca60f70",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -19,13 +19,13 @@
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Design",
-      "version": "4.0.9-preview",
-      "commit": "958edde53555828ec4fc0e5e43131e8e1653b088"
+      "version": "4.0.10-preview",
+      "commit": "ebffada62df93d086b86ca1fc0a8f5c31ca60f70"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
-      "version": "4.0.31-preview",
-      "commit": "958edde53555828ec4fc0e5e43131e8e1653b088"
+      "version": "4.0.32-preview",
+      "commit": "ebffada62df93d086b86ca1fc0a8f5c31ca60f70"
     },
     {
       "package_id": "Elsa.Activities.Compensation",
