@@ -9,6 +9,17 @@ public static class StoreBatchRules
         var rows = new HashSet<string>(StringComparer.Ordinal);
         foreach (var turn in batch.Turns)
         {
+            if (turn.Delete)
+            {
+                if (turn.Expected is not { } expected)
+                    throw new StoreException(Failure.Definite,"Delete requires the existing row's exact revision.");
+                if (turn.Row is { } marker && (!marker.Retired || marker.Creation < 0 ||
+                    marker.Creation == 0 && !CreationProtocol.IsPhysicalAddress(marker.Id) ||
+                    marker.Status == InstanceStatus.Running || expected == long.MaxValue ||
+                    marker != new InstanceRow(marker.Id,"","",marker.Status,"null",expected+1,null,
+                        History:History.Minimal,Creation:marker.Creation,Retired:true)))
+                    throw new StoreException(Failure.Definite,"A row-bearing Delete must be a canonical retirement marker.");
+            }
             if (turn.Row is { } value) ValidateIdentity(value);
             if (turn.Row is { } row && !StringComparer.Ordinal.Equals(turn.Instance,row.Id) &&
                 !(turn.Expected is null?deferInsertAliases:deferUpdateAliases))

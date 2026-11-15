@@ -145,6 +145,7 @@ public static class Semantics
         PhysicalRetirementChecks.Case,
         MarkerInsertChecks.Case,
         BatchIntegrityChecks.Atomic,
+        DeleteShapeChecks.Case,
         AliasMutationChecks.Case,
         AliasInsertChecks.Case,
         BatchIntegrityChecks.Capability,
