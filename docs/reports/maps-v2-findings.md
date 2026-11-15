@@ -6,39 +6,18 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 
 ## Summary
 
-- Domains in domain map: 37
-- Source extension catalogs discovered: 125
+- Domains in domain map: 0
+- Source extension catalogs discovered: 0
 - Source extension catalogs indexed from root: 125
 - Discovered source catalogs not linked from root index: 0
-- Root-indexed catalogs missing on disk: 0
+- Root-indexed catalogs missing on disk: 125
 - Runtime-to-design direct reference signals: 0
-- Design-to-runtime direct reference signals: 22
-- Bridge-like direct reference shapes: 27
+- Design-to-runtime direct reference signals: 0
+- Bridge-like direct reference shapes: 0
 
 ## Reference Signals
 
-- Elsa.Activities.Design.Api -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Activities.Design.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Activities.Design.Reconciliation -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Activities.Design.Reconciliation.Clr -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Activities.DispatchWorkflow.Design -> Elsa.Activities.DispatchWorkflow.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Activities.DispatchWorkflow.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Activities.Graph.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Activities.Graph.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Connections.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Decisions.Workflows.Design -> Elsa.Decisions.Workflows.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Etl.Design.Api -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Etl.Workflows.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Etl.Workflows.Design -> Elsa.Etl.Workflows.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Etl.Workflows.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Rules.Workflows.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Rules.Workflows.Design -> Elsa.Rules.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Rules.Workflows.Design -> Elsa.Rules.Workflows.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Rules.Workflows.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa.Workflows.Design.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa3.Activities.Design.Import -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
-- Elsa3.Activities.Design.Import.Reconciliation -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+No direct design/runtime reference signals were found.
 
 ## Next Map Work
 

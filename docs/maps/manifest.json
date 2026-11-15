@@ -3,11 +3,11 @@
   "generator": "tools/maps/generate-maps",
   "freshness_rule": "Maps are fresh when regenerating them reproduces every committed file byte for byte. Verify with: dotnet run --project tools/maps/Elsa.Maps.Generator -- check.",
   "counts": {
-    "source_projects": 232,
-    "test_projects": 191,
-    "direct_project_references": 2401,
-    "direct_package_references": 1925,
-    "feature_classes": 176,
+    "source_projects": 0,
+    "test_projects": 0,
+    "direct_project_references": 0,
+    "direct_package_references": 0,
+    "feature_classes": 0,
     "specs": 355
   },
   "generated_files": [
