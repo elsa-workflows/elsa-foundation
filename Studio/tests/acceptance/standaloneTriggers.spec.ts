@@ -510,7 +510,7 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
   await j.api(`/interchange/bpmn/versions/${version.id}/publish-direct`, "POST", { requestId: randomUUID() });
   await verifyBpmnInputRefusals(j, process, version.id, authoredState.state);
   const event = await j.create("event", "Start genuine authored process");
-  await j.add(event.id, process.definition.id, [source("processMessage", ["metadata", "eventName"])]); await j.enable(event.id); await j.event(String(event.configuration.eventName));
+  await j.add(event.id, process.definition.id, [source("processMessage", ["metadata", "eventName"])], true); await j.capture("bpmn-workflow-live-triggers"); await j.enable(event.id); await j.event(String(event.configuration.eventName));
   const delivery = await j.started(await j.waitDelivery(event.id)); const recipient = delivery.recipients[0];
   const executionId = recipient.executionReference!.id;
   let inspection: { execution: { status: string }; attempts: { workerExecutionId: string; status: string }[] } | undefined;

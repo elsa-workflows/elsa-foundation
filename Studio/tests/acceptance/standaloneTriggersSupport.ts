@@ -82,6 +82,14 @@ export class TriggerJourney {
   }
   async capture(name: string) {
     await expect(this.page.getByText("Loading Studio modules…", { exact: true })).toHaveCount(0);
+    if (name === "subscription-runtime-targets" || name === "trigger-runtime-only-composition") {
+      const selector = this.page.getByLabel("Workflow and publication slot", { exact: true });
+      await selector.scrollIntoViewIfNeeded(); await expect(selector).toBeInViewport();
+    }
+    if (name === "subscription-workflow-search") {
+      const results = this.page.getByRole("listbox", { name: "Workflow search results", exact: true });
+      await results.scrollIntoViewIfNeeded(); await expect(results).toBeInViewport();
+    }
     if (name === "trigger-details") {
       const edit = this.page.getByRole("button", { name: "Edit configuration", exact: true });
       await expect(edit).toBeVisible(); await edit.scrollIntoViewIfNeeded();
