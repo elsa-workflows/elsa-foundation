@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f8e87d1e28d07c02ca140c37d89db1d19fae8175",
+  "last_publish_commit": "958edde53555828ec4fc0e5e43131e8e1653b088",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -14,18 +14,18 @@
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Core",
-      "version": "4.0.9-preview",
-      "commit": "d2c0d7b14900766c7a26343668a902a8b3478a28"
+      "version": "4.0.10-preview",
+      "commit": "958edde53555828ec4fc0e5e43131e8e1653b088"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Design",
-      "version": "4.0.8-preview",
-      "commit": "d2c0d7b14900766c7a26343668a902a8b3478a28"
+      "version": "4.0.9-preview",
+      "commit": "958edde53555828ec4fc0e5e43131e8e1653b088"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
-      "version": "4.0.30-preview",
-      "commit": "d2c0d7b14900766c7a26343668a902a8b3478a28"
+      "version": "4.0.31-preview",
+      "commit": "958edde53555828ec4fc0e5e43131e8e1653b088"
     },
     {
       "package_id": "Elsa.Activities.Compensation",
@@ -984,8 +984,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Core",
-      "version": "4.0.28-preview",
-      "commit": "e5399c29f51804f00942cf826eb703eefe4b5f97"
+      "version": "4.0.29-preview",
+      "commit": "958edde53555828ec4fc0e5e43131e8e1653b088"
     },
     {
       "package_id": "Elsa.Workflows.Design.JavaScript",
@@ -999,8 +999,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
-      "version": "4.0.37-preview",
-      "commit": "d2c0d7b14900766c7a26343668a902a8b3478a28"
+      "version": "4.0.38-preview",
+      "commit": "958edde53555828ec4fc0e5e43131e8e1653b088"
     },
     {
       "package_id": "Elsa.Workflows.Design.Reconciliation",
