@@ -1269,3 +1269,73 @@ describe("R8 reference qualification controls", () => {
     expect(original).toEqual(before);
   });
 });
+
+
+function r9DocumentOwner(processXml: string): ActivityNode {
+  return { nodeId: "document", activityVersionId: "exact-document", inputs: [], outputs: [], structure: {
+    kind: "elsa.bpmn.structure", schemaVersion: "2.0.0", payload: {
+      documentXml: `<b:definitions xmlns:b="${bpmnNamespaces.model}" xmlns:v="urn:vendor" targetNamespace="urn:r9"><b:process id="Process">${processXml}</b:process></b:definitions>`,
+      processId: "Process", activities: [], bindings: [], variables: []
+    }
+  } };
+}
+function r9Reconnect(original: ActivityNode, sourceRef: string, targetRef: string, endpoint: string, expected: string[]) {
+  const before = structuredClone(original), opened = readBpmnDocument(original);
+  expect(opened.byId.get(endpoint)!.children[0].localName).toBe("documentation");
+  const next = applyBpmnDocumentCommands(original, [{ kind: "reconnect", elementId: "F", sourceRef, targetRef }]);
+  expect(original).toEqual(before);
+  expect([...element(next, endpoint).children].map(child => child.localName)).toEqual(expected);
+  expect(element(next, endpoint).getElementsByTagNameNS(bpmnNamespaces.model, "documentation")[0].textContent).toBe("Keep these docs");
+  expect(element(next, "F").getAttribute("sourceRef")).toBe(sourceRef);
+  expect(element(next, "F").getAttribute("targetRef")).toBe(targetRef);
+}
+function r9BoundVendorOwner(): ActivityNode {
+  const original = r9DocumentOwner('<b:task id="Task"><b:extensionElements><v:config id="Task" value="opaque"/></b:extensionElements></b:task>');
+  original.structure!.payload.activities = [{ nodeId: "native", activityVersionId: "exact-native", inputs: [], outputs: [] }];
+  original.structure!.payload.bindings = [{ elementId: "Task", childNodeId: "native" }];
+  return original;
+}
+function r9RemoveForeign(path: { namespaceURI: string; localName: string }[]) {
+  const original = r9BoundVendorOwner(), before = structuredClone(original), opened = readBpmnDocument(original);
+  expect(opened.byId.get("Task")!.namespaceURI).toBe(bpmnNamespaces.model);
+  expect(opened.document.getElementsByTagNameNS("urn:vendor", "config")[0].getAttribute("id")).toBe("Task");
+  let next: ActivityNode | undefined, failure: unknown;
+  try { next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: { elementId: "Task", path } }]); } catch (error) { failure = error; }
+  expect(original).toEqual(before);
+  expect(failure).toBeUndefined();
+  expect(readBpmnDocument(next!).byId.get("Task")!.namespaceURI).toBe(bpmnNamespaces.model);
+  expect(readBpmnDocument(next!).document.getElementsByTagNameNS("urn:vendor", "config")).toHaveLength(0);
+  expect(next!.structure!.payload.activities).toBe(original.structure!.payload.activities);
+  expect(next!.structure!.payload.bindings).toBe(original.structure!.payload.bindings);
+}
+
+describe("R9 document child order and foreign identity boundaries", () => {
+  it("moves an incoming reference after retained documentation and extensions", () => {
+    const original = r9DocumentOwner('<b:task id="A"><b:outgoing>F</b:outgoing></b:task><b:task id="B"><b:incoming>F</b:incoming></b:task><b:task id="C"><b:documentation>Keep these docs</b:documentation><b:extensionElements/></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "A", "C", "C", ["documentation", "extensionElements", "incoming"]);
+  });
+  it("creates a missing incoming reference after retained documentation", () => {
+    const original = r9DocumentOwner('<b:task id="A"/><b:task id="B"/><b:task id="C"><b:documentation>Keep these docs</b:documentation></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "A", "C", "C", ["documentation", "incoming"]);
+  });
+  it("moves an outgoing reference after retained documentation and extensions", () => {
+    const original = r9DocumentOwner('<b:task id="A"><b:outgoing>F</b:outgoing></b:task><b:task id="B"><b:incoming>F</b:incoming></b:task><b:task id="C"><b:documentation>Keep these docs</b:documentation><b:extensionElements/></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "C", "B", "C", ["documentation", "extensionElements", "outgoing"]);
+  });
+  it("creates self-loop references after documentation with incoming before outgoing", () => {
+    const original = r9DocumentOwner('<b:task id="A"/><b:task id="B"/><b:task id="C"><b:documentation>Keep these docs</b:documentation><b:extensionElements/></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "C", "C", "C", ["documentation", "extensionElements", "incoming", "outgoing"]);
+  });
+  it("removes a foreign config whose ID matches a retained bound task", () => {
+    r9RemoveForeign([{ namespaceURI: bpmnNamespaces.model, localName: "extensionElements" }, { namespaceURI: "urn:vendor", localName: "config" }]);
+  });
+  it("removes an extension wrapper containing a foreign bound-ID lookalike", () => {
+    r9RemoveForeign([{ namespaceURI: bpmnNamespaces.model, localName: "extensionElements" }]);
+  });
+  it("still refuses actual bound task deletion atomically", () => {
+    const original = r9BoundVendorOwner(), before = structuredClone(original);
+    expect(readBpmnDocument(original).payload.bindings).toEqual([{ elementId: "Task", childNodeId: "native" }]);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Task") }])).toThrow("native-binding transformation");
+    expect(original).toEqual(before);
+  });
+});
