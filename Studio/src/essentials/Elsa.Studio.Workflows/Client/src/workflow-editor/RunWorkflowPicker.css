@@ -1,0 +1,88 @@
+.wf-workflow-picker {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  flex: 1 1 260px;
+  min-width: min(100%, 220px);
+  max-width: 440px;
+  gap: 4px 8px;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wf-workflow-picker > label {
+  align-self: start;
+  line-height: 32px;
+}
+
+.wf-workflow-picker-identity,
+.wf-workflow-picker > [role="status"],
+.wf-workflow-picker > .wf-workflow-picker-error {
+  grid-column: 1 / -1;
+}
+
+.wf-workflow-picker-input {
+  display: flex;
+  gap: 6px;
+}
+
+.wf-workflow-picker-input input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font: inherit;
+  font-size: var(--studio-body-size);
+  font-weight: 400;
+  padding: 0 var(--studio-space-2);
+}
+
+.wf-workflow-picker-results {
+  position: absolute;
+  z-index: 20;
+  top: 36px;
+  right: 0;
+  left: 0;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-menu, 0 8px 24px rgb(0 0 0 / 18%));
+  color: var(--studio-text);
+  font-weight: 400;
+}
+
+.wf-workflow-picker-option {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.wf-workflow-picker-option[aria-selected="true"],
+.wf-workflow-picker-option:hover {
+  background: var(--studio-surface-muted);
+}
+
+.wf-workflow-picker-option small,
+.wf-workflow-picker-identity,
+.wf-workflow-picker > [role="status"] {
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.wf-workflow-picker-error {
+  display: flex;
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  color: var(--studio-danger-fg);
+}
+
