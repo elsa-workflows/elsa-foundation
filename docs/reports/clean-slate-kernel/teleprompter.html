@@ -73,6 +73,7 @@ setInterval(tick,250);
 addEventListener('keydown',e=>{
  if(e.metaKey||e.ctrlKey||e.altKey)return;
  const k=e.key;
+ if((k===' '||k==='Enter')&&e.target&&e.target.closest&&e.target.closest('button,a,input,select,textarea'))return; // let a focused control keep its own activation
  if(k==='ArrowRight'||k==='PageDown'||k===' '){go(idx+1);e.preventDefault()}
  else if(k==='ArrowLeft'||k==='PageUp'){go(idx-1);e.preventDefault()}
  else if(k==='Home'){go(0);e.preventDefault()}
