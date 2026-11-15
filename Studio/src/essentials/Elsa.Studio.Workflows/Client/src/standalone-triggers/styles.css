@@ -5,6 +5,9 @@
 .wf-trigger-form textarea, .wf-trigger-mappings textarea { min-height: 100px; resize: vertical; }
 .wf-trigger-form fieldset, .wf-trigger-mapping { margin: 0; min-width: 0; padding: var(--studio-space-3, 12px); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); }
 .wf-trigger-mapping { display: grid; gap: var(--studio-space-3, 12px); }
+/* Keep the wide sample table inside its own scroller rather than widening every mapping control. */
+.wf-trigger-mappings { grid-template-columns: minmax(0, 1fr); }
+.wf-trigger-mappings > details { min-width: 0; }
 .wf-trigger-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--studio-space-3, 12px); }
 .wf-trigger-muted { display: block; color: var(--studio-text-muted); font-weight: normal; overflow-wrap: anywhere; }
 .wf-trigger-findings { padding-inline-start: 20px; margin: 0; overflow-wrap: anywhere; }
