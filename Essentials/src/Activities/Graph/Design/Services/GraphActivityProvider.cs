@@ -31,7 +31,7 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
+    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector, IActivityProviderDiagnosticCatalog
 {
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
@@ -56,6 +56,22 @@ public sealed class GraphActivityProvider(
         ActivityGraphManifest.SchemaVersion,
         ActivityGraphManifest.MultipleOutcomesSchemaVersion
     };
+
+    public IReadOnlyList<ActivityProviderDiagnosticDescriptor> DiagnosticDescriptors { get; } =
+    [
+        new("activity.graph.variable.initial-value-invalid", "The variable initial value is not a valid expression.",
+            "Enter a valid initial value in Variables. For an unused initial value, omit initialValue from the draft JSON.", "/variables", "Edit variable initial value")
+            { JsonPointerPattern = "/variables/{index}/initialValue" },
+        new("activity.graph.output.source-invalid", "The output value source is missing or is not a valid expression.",
+            "Choose an expression type and value for this output in Outputs.", "/outputMappings", "Edit output value source")
+            { JsonPointerPattern = "/outputMappings/{index}/source" },
+        new("activity.graph.manifest.expression-required", "An expression is missing or has an unsupported format.",
+            "Choose an expression type and value for the affected variable or output."),
+        new("activity.graph.manifest.value-required", "The expression value is missing.",
+            "Choose a value for the expression in the activity settings."),
+        new("activity.graph.manifest.string-required", "A required graph setting is missing or has an unsupported format.",
+            "Review the variable and output settings and supply the required value.")
+    ];
 
     public string ProviderKey => Key;
     public string CompilerFingerprint => Fingerprint;
@@ -97,8 +113,17 @@ public sealed class GraphActivityProvider(
         if (graph is not null)
             ValidateGraphNodes(graph, subject, diagnostics);
         if (graph is null || diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+        {
+            // Auxiliary manifest errors can still leave a structurally readable root. Retain only that
+            // request-owned projection so the authoring coordinator can check catalog visibility before
+            // returning sanitized validation diagnostics. Never substitute an empty root on parse failure.
+            ActivityDataSelectionDocument? rejectedDocument = null;
+            if (Schemas.Contains(manifest.SchemaVersion) && manifest.Payload.ValueKind == JsonValueKind.Object &&
+                manifest.Payload.TryGetProperty("rootActivity", out var rootElement) && TryReadRootNode(rootElement, out var rejectedRoot))
+                rejectedDocument = new("ActivityDefinition", resourceId, contractRevision, rejectedRoot, [], [], []);
             throw new ActivityDataSelectionRejectedException(diagnostics.Select(x => new ValidationError(
-                x.Location?.JsonPointer ?? "$activity", "ActivityDataSelection/" + x.Code, x.Message)));
+                x.Location?.JsonPointer ?? "$activity", "ActivityDataSelection/" + x.Code, x.Message))) { Document = rejectedDocument };
+        }
 
         // The provider's parser and structure-owned node projection are the same ones used for compilation.
         // This request-only view creates neither a workflow draft nor a second graph/document owner.

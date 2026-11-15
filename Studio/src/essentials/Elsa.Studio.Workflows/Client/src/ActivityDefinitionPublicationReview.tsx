@@ -304,11 +304,16 @@ export function ActivityDefinitionPublicationReview({
   return <div className="ad-publication-toolbar">
     <button ref={triggerRef} type="button" className="ad-publication-toolbar-trigger" onClick={() => {
       setDialogOpen(true);
-      if (phase === "idle" || phase === "stale" || phase === "failed") void prepare();
+      if (phase === "idle") void prepare();
     }} disabled={disabled && phase === "idle"} aria-haspopup="dialog" aria-expanded={dialogOpen}>
       <GitCompareArrows size={16} aria-hidden /> {publicationTriggerLabel(phase, Boolean(preflight))}
     </button>
-    {phase !== "idle" && !dialogOpen ? <span className="ad-publication-toolbar-status" role="status">{publicationStatusLabel(phase, preflight?.isPublishable)}</span> : null}
+    {phase !== "idle" && !dialogOpen ? <button type="button"
+      className={`ad-publication-toolbar-status${phase === "failed" || phase === "stale" || publicationBlocked ? " needs-attention" : ""}`}
+      onClick={() => setDialogOpen(true)} aria-haspopup="dialog" aria-expanded={dialogOpen}>
+      {phase === "failed" || phase === "stale" || publicationBlocked ? <AlertTriangle size={16} aria-hidden /> : null}
+      <span>{phase === "failed" && !hasBlockingDiagnostics ? "Review could not complete" : hasBlockingDiagnostics && publicationBlocked ? "Publication blocked — view issues" : publicationStatusLabel(phase, preflight?.isPublishable)}</span>
+    </button> : null}
     {dialogOpen ? <PublicationDialog canClose={closeAllowed} onClose={() => closeAllowed && setDialogOpen(false)}>{reviewPanel}</PublicationDialog> : null}
   </div>;
 }

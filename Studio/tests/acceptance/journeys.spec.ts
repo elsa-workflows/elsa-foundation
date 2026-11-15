@@ -1,3 +1,4 @@
+import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
 import { namedBlocksJourney } from "./namedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
@@ -71,6 +72,8 @@ test("user task authoring and workflow result", async ({ page }, info) => {
     creations.push({ url: `${process.env.UX_BACKEND_URL}/design/workflows/definitions`, id });
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
+test("activity validation explains and locates graph settings", async ({ page }, info) => activityValidationReportingJourney(page, info, capture));
+
 test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));
 
 test("business decisions authoring and explanations", async ({ page }, info) => decisionsJourney(page, info, capture));
@@ -543,6 +546,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
   await instructions.press("Tab");
   await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
   await publish.click();
+  await dialog.getByRole("button", { name: /Prepare publication|Check again/, exact: true }).click();
   await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();
   await expect(blockers.getByRole("button", { name: "Edit instructions", exact: true })).toHaveCount(0);
   await capture(page, info, "model-blocked");

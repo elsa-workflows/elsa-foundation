@@ -1,3 +1,4 @@
+import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { useEffect, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, Info, LocateFixed, Undo2 } from "lucide-react";
 import type {
@@ -131,6 +132,7 @@ function DiagnosticItem({
   const code = safeDiagnosticCode(diagnostic.code);
   const severity = safeSeverity(diagnostic.severity);
   const context = diagnosticContext(diagnostic);
+  const action = diagnostic.metadata?.actionLabel?.trim();
 
   return <li className={`ad-diagnostic-item is-${severity}`}>
     <div className="ad-diagnostic-item-heading">
@@ -145,7 +147,7 @@ function DiagnosticItem({
       aria-label={`Focus ${code}`}
       onClick={event => void onFocus(diagnostic, event.currentTarget)}
     >
-      <LocateFixed size={15} aria-hidden /> Focus location
+      <LocateFixed size={15} aria-hidden /> {action && action.length <= 80 ? action : "Go to setting"}
     </button>
   </li>;
 }
@@ -187,8 +189,8 @@ function diagnosticArea(diagnostic: StudioActivityDiagnostic) {
 }
 
 function safeSeverity(severity: string): DiagnosticTone {
-  if (severity === "Error") return "error";
-  if (severity === "Warning") return "warning";
+  if (activityDiagnosticSeverity(severity) === "Error") return "error";
+  if (activityDiagnosticSeverity(severity) === "Warning") return "warning";
   return "info";
 }
 

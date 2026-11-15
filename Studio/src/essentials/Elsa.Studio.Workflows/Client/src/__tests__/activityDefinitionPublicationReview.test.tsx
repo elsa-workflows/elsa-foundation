@@ -44,6 +44,25 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(harness.container.querySelector("[role='dialog']")).toBeNull();
   });
 
+  it("reopens an existing service failure without clearing it or retrying", async () => {
+    const post = vi.fn(async () => { throw new TypeError("private server details"); });
+    const flush = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));
+    const harness = renderReview({ postJson: post, flushExactSavedRevision: flush });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.textContent).toContain("Publication preflight could not be confirmed"));
+    click(buttonByText(harness.container, "Close publication review"));
+    const retained = buttonByText(harness.container, "Review could not complete");
+    expect(retained.classList.contains("needs-attention")).toBe(true);
+    click(retained);
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
+    expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");
+    expect(harness.container.textContent).not.toContain("private server details");
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(flush).toHaveBeenCalledTimes(1);
+    click(buttonByText(harness.container, "Prepare publication"));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+  });
+
   it("rechecks blocked material and restores publication after correction", async () => {
     let blocked = true;
     const harness = renderReview({ postJson: async () => ({ ...publicationPreflight(), isPublishable: !blocked }) });
