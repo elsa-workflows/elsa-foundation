@@ -18,7 +18,7 @@ public sealed class Endpoint(IEnumerable<IActivityStructureHandler> handlers) : 
     {
         var source = handlers.Where(handler => handler.Kind == BpmnActivityIdentities.StructureKind &&
             handler.SchemaVersion == BpmnAuthoredDocument.SchemaVersion).ToArray();
-        if (source.Length == 0)
+        if (source.Length != 1)
             throw new InvalidOperationException("Complete BPMN authoring requires exactly one matching source structure handler.");
         return Task.FromResult(new BpmnDocumentAuthoringCapabilities(source[0].Kind, source[0].SchemaVersion));
     }

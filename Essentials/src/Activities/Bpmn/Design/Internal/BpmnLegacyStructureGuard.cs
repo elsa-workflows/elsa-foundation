@@ -5,7 +5,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// <summary>Prevents complete-source authority from being discarded by a legacy typed payload reader.</summary>
 internal static class BpmnLegacyStructureGuard
 {
-    private static readonly HashSet<string> CompleteSourceFields = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> CompleteSourceFields = new(StringComparer.OrdinalIgnoreCase)
     {
         "documentXml", "processId", "bindings", "scopeHeaders"
     };

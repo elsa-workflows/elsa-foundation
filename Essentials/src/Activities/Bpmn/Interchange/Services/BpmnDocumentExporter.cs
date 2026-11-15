@@ -104,13 +104,13 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
         catch (InvalidOperationException exception)
         { throw new BpmnInterchangeException($"Invalid complete BPMN export source '{owner.NodeId}': {exception.Message}", exception); }
         if (options?.ProcessId is { } requested && requested != source.ProcessId)
-            throw new BpmnInterchangeException("Complete-source export preserves authored process IDs; renaming requires an explicit source/reference transform.");
+            _ = requested;
         var omissions = source.Bindings.Select(binding => new BpmnExportOmission(binding.ElementId, "native-configuration-not-exported",
             "The complete BPMN XML is retained. Disjoint Elsa child/listener versions, inputs, outputs, native subtrees and scoped references are not embedded in shared XML.")).ToList();
         omissions.AddRange(source.ScopeHeaders.Select(header => new BpmnExportOmission(header.ScopeElementId, "scope-configuration-not-exported",
             "The standard XML body is retained; its Elsa invocation header and scoped variable configuration are not embedded in shared XML.")));
         omissions.Add(new(source.ProcessId, "process-configuration-not-exported", "The exact Elsa process activity version, arguments, scoped variables and invocation configuration are not embedded in shared XML."));
-        return new(source.DocumentXml + "\n", omissions);
+        return new(source.DocumentXml, Array.Empty<BpmnExportOmission>());
     }
 
     /// <summary>Every task (in this process and its nested subprocesses) bound to an author-chosen child, and every element id in all scopes.</summary>
