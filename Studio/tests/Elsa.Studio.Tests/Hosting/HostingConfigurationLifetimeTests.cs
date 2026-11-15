@@ -1,3 +1,4 @@
+using System.Reflection;
 using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Nuplane;
 using Elsa.Studio.Tests.Administration;
@@ -111,7 +112,11 @@ public sealed class HostingConfigurationLifetimeTests
             rebuilt = host.JsonProviders().Select(provider => Assert.IsType<PhysicalFileProvider>(provider.Source.FileProvider)).ToArray();
             Assert.All(first, AssertDisposed);
             Assert.Equal("initial", host.Configuration["LifetimeProbe"]);
-            Assert.All(rebuilt, file => Assert.NotNull(file.Watch("still-live.json")));
+            Assert.All(rebuilt, file =>
+            {
+                AssertDisposalState(file, expectedDisposed: false);
+                Assert.NotNull(file.Watch("still-live.json"));
+            });
 
             var shell = host.Configuration.Sources.OfType<JsonConfigurationSource>()
                 .Single(source => Path.GetFileName(source.Path) == "shells.json");
@@ -120,6 +125,7 @@ public sealed class HostingConfigurationLifetimeTests
             Assert.All(rebuilt, AssertDisposed);
             Assert.Single(remaining);
             Assert.Null(host.Configuration["LifetimeProbe"]);
+            AssertDisposalState(remaining[0], expectedDisposed: false);
             Assert.NotNull(remaining[0].Watch("still-live.json"));
 
             host.Configuration.Sources.Clear();
@@ -167,7 +173,16 @@ public sealed class HostingConfigurationLifetimeTests
     }
 
     private static void AssertDisposed(PhysicalFileProvider provider) =>
-        Assert.Throws<ObjectDisposedException>(() => provider.Watch("lifetime-probe.json"));
+        AssertDisposalState(provider, expectedDisposed: true);
+
+    private static void AssertDisposalState(PhysicalFileProvider provider, bool expectedDisposed)
+    {
+        // The pinned .NET provider exposes no public disposal state; Watch can still
+        // return polling tokens after disposal. Fail explicitly if that runtime state changes.
+        var field = typeof(PhysicalFileProvider).GetField("_disposed", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        Assert.Equal(expectedDisposed, Assert.IsType<bool>(field.GetValue(provider)));
+    }
 
     private sealed class ConfigurationHost : IAsyncDisposable
     {

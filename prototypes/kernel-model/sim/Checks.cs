@@ -11,6 +11,7 @@ public sealed class Oracle
     public readonly Dictionary<string, List<string>> Waiters = new();
     public readonly Dictionary<string, (int Count, string Mode, bool Posted)> Sequences = new();
     public readonly Dictionary<string, List<string>> Runners = new();                  // target -> keys told to go
+    public readonly HashSet<string> KillerJobs = [];
     public readonly Dictionary<string, bool> Fragiles = new();                          // target -> a bad message was sent
     public readonly Dictionary<string, List<string>> CWaiters = new();                 // waiters through correlation instances
     public readonly HashSet<string> Published = [];                                      // correlation instances that were sent an event
@@ -40,7 +41,10 @@ public sealed class Oracle
             case "http": Https[target] = (Json.Read<HttpInput>(m.Start.Input!).Mode, m.Start.Ephemeral, -1, false); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
-            case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die"; break;
+            case "fragile":
+                Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die";
+                if (m.Kind == "dierun") KillerJobs.Add(target);
+                break;
             case null when m.Kind == "add": Ghosts.Add(target); break;
         }
     }
@@ -163,7 +167,13 @@ public sealed partial class World
             }
             if (row.Retired)
             {
-                if (row.Creation <= 0 || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
+                if (_creations.TryGetValue(row.Id, out var observed) && !observed.Retired &&
+                    _known.TryGetValue(row.Id, out var active) && row.Revision <= active.Revision)
+                    return $"I22 {row.Id} retired without advancing observed active revision {active.Revision}";
+                // Generation-zero markers are valid only for generated physical addresses and the exact empty marker shape.
+                var physicalMarker = row.Creation == 0 && CreationProtocol.IsPhysicalAddress(row.Id) &&
+                    row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
+                if (row.Creation <= 0 && !physicalMarker || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
                     row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null || row.PendingStart is not null)
                     return $"I22 {row.Id} has an invalid lifecycle tombstone";
                 _gone.Add(row.Id); _versions.Remove(row.Id);
@@ -190,7 +200,8 @@ public sealed partial class World
             var poison = row.Fault is { } fault && fault.StartsWith("message ") ? fault[8..fault.IndexOf(" was on trial")] : null;
             if (poison is not null && _attempts.GetValueOrDefault(poison) < Config.Attempts) return $"I14 {row.Id} was parked before the threshold: {row.Fault}";
             if (poison is null && !Oracle.Fragiles.GetValueOrDefault(row.Id)) return $"I14 {row.Id} did nothing wrong and was parked: {row.Fault}";
-            if (poison is not null && Parked.Add(row.Id) && !Oracle.Fragiles.GetValueOrDefault(row.Id)) Interlocked.Increment(ref Bystanders);
+            var ownJob = poison is not null && Oracle.KillerJobs.Contains(row.Id) && poison.StartsWith(row.Id + "!", StringComparison.Ordinal);
+            if (poison is not null && Parked.Add(row.Id) && !Oracle.Fragiles.GetValueOrDefault(row.Id) && !ownJob) Interlocked.Increment(ref Bystanders);
         }
         // I22: a row disappears only when its instance was deleted, and a deleted instance never comes back.
         if (_known.Keys.FirstOrDefault(id => !Store.Instances.ContainsKey(id) && !_gone.Contains(id)) is { } gone)
@@ -610,7 +621,7 @@ public sealed partial class World
                 return $"END {id} ({mode}) ended as {row?.Status.ToString() ?? "no row"}{(cancel ? " after a cancel" : "")}";
         }
         foreach (var (id, bad) in Oracle.Fragiles)
-            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
+            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad || Oracle.KillerJobs.Contains(id) ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
         for (var p = 0; p < Config.Partitions; p++)
         {
             for (var round = 0; round < 1000 && Store.Projection[p] < Store.Partitions[p].Position; round++) Watch(Of(round % Config.Nodes, p).Projector.RoundAsync());
