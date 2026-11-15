@@ -16,8 +16,8 @@
         <DefineConstants>$(DefineConstants);ELSA_DASHBOARD_QUALIFICATION</DefineConstants>
     </PropertyGroup>
     <ItemGroup Condition="'$(ElsaDashboardQualification)' == 'true'">
-        <Compile Include="../../../tools/ux-acceptance/DashboardQualificationBootstrap.cs" Link="Qualification/DashboardQualificationBootstrap.cs" />
-        <Compile Include="../../../tools/studio/Weaver.Conformance.Probe/fixtures/BackendConsumer/QualificationPrincipals.cs" Link="Qualification/QualificationPrincipals.cs" />
+        <Compile Include="../../tools/ux-acceptance/DashboardQualificationBootstrap.cs" Link="Qualification/DashboardQualificationBootstrap.cs" />
+        <Compile Include="../../tools/studio/Weaver.Conformance.Probe/fixtures/BackendConsumer/QualificationPrincipals.cs" Link="Qualification/QualificationPrincipals.cs" />
     </ItemGroup>
 
 	<ItemGroup>
