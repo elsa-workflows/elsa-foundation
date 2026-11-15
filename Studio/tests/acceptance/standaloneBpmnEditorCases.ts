@@ -17,7 +17,7 @@ async function process(j: TriggerJourney, name: string, inputs: WorkflowState["i
 async function selectWorker(j: TriggerJourney, authored: Authored, name: string) {
   const page = j.page;
   await page.goto(definitionPath(authored.definition.id));
-  await page.locator('.react-flow__node[data-id="service"]').press("Enter");
+  await page.locator('.react-flow__node[data-id="service"]').press("Enter"); await j.openAuthoringInspector();
   await page.getByRole("button", { name: "Bind a published service workflow", exact: true }).press("Enter");
   const picker = page.getByRole("combobox", { name: /workflow/i }).first();
   await picker.fill(`${name} ${j.stamp}`);
@@ -87,7 +87,7 @@ export async function verifyDefaultAndNullWorkerEditor(j: TriggerJourney) {
   expect(mapping.formatVersion).toBe(2); expect(mapping.inputs).toEqual({});
   expect(mapping.sourceReferenceId).toBe(publication.sourceReferenceId);
   expect(mapping.executable.definitionId).toBe(details.producerIdentity.definitionId);
-  await j.page.goto(definitionPath(defaultProcess.definition.id)); await j.page.locator('.react-flow__node[data-id="service"]').press("Enter");
+  await j.page.goto(definitionPath(defaultProcess.definition.id)); await j.page.locator('.react-flow__node[data-id="service"]').press("Enter"); await j.openAuthoringInspector();
   await expect(j.page.getByRole("combobox", { name: /workflow/i }).first()).toHaveValue(`${logicalName} ${j.stamp}`);
   await expect(j.page.getByRole("region", { name: "Published service workflow", exact: true })).toContainText("Retained service version");
   await expect(j.page.getByRole("region", { name: "Saved service input mappings", exact: true })).toBeVisible();

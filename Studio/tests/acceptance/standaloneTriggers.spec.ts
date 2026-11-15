@@ -94,7 +94,7 @@ async function workflowHttpSummary(journey: TriggerJourney, definitionId: string
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(expected.mode === "WorkflowResponse" ? "Workflow-owned response"
     : expected.admissionPolicy === "AcceptAvailable" ? "Async · Accept available" : "Async · Require all");
-  await journey.capture(capture);
+  await journey.capture(capture, row);
 }
 async function inspectActualRun(journey: TriggerJourney, delivery: DeliveryView, recipientId: string, kind: "native" | "bpmn", capture: string) {
   const recipient = delivery.recipients.find(item => item.id === recipientId)!;
@@ -399,7 +399,7 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
     const sealedFrame = page.getByRole("region", { name: `Recipient ${sealed.id}`, exact: true }).locator("..");
     await expect(sealedFrame.getByRole("button", { name: "Cancel pending recipient", exact: true })).toBeDisabled();
     await expect(sealedFrame.getByRole("link", { name: "Inspect actual run", exact: true })).toHaveCount(0);
-    await expect(sealedFrame).toContainText("Recovery still owes the exact command"); await j.capture("cancel-dispatch-committed");
+    await expect(sealedFrame).toContainText("Recovery still owes the exact command"); await j.capture("cancel-dispatch-committed", sealedFrame);
     const committedCancellation = await j.change(await j.read(recoveryHttp.id), { kind: "CancelPendingRecipients", deliveryId: held.id, expectedDeliveryRevision: held.revision,
       recipients: [{ recipientId: sealed.id, expectedRevision: sealed.revision }] });
     expect(committedCancellation.effects).toEqual(expect.arrayContaining([expect.objectContaining({ recipientId: sealed.id, outcome: "DispatchCommitted" })]));
@@ -547,7 +547,7 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
       sequenceFlows: [{ flowId: "start-service", sourceRef: "start", targetRef: "service" }, { flowId: "service-end", sourceRef: "service", targetRef: "end" }]
     } } } });
   await page.goto(definitionPath(process.definition.id));
-  await page.locator('.react-flow__node[data-id="service"]').press("Enter");
+  await page.locator('.react-flow__node[data-id="service"]').press("Enter"); await j.openAuthoringInspector();
   await page.getByRole("button", { name: "Bind a published service workflow", exact: true }).press("Enter");
   const picker = page.getByRole("combobox", { name: /workflow/i }).first();
   await picker.fill(`Actual declared-input service ${j.stamp}`); await page.getByRole("option").filter({ hasText: `Actual declared-input service ${j.stamp}` }).first().click();
@@ -575,7 +575,7 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
   await expect.poll(async () => savedBinding((await j.api<{ state: WorkflowState }>(`/design/workflows/drafts/${process.draftId}`)).state))
     .toMatchObject({ formatVersion: 2, kind: "nativeService", sourceReferenceId: worker.published.sourceReferenceId,
       inputs: { message: { kind: "Input", name: "processMessage" }, count: { kind: "Literal", value: 7 } } });
-  await page.reload(); await page.locator('.react-flow__node[data-id="service"]').press("Enter");
+  await page.reload(); await page.locator('.react-flow__node[data-id="service"]').press("Enter"); await j.openAuthoringInspector();
   await expect(page.getByRole("region", { name: "Saved service input mappings", exact: true })).toContainText("Configured JSON: 7");
   await expect(page.getByRole("tabpanel").getByText("Loading published versions…", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Service publication", { exact: true })).toBeEnabled();

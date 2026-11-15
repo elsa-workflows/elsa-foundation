@@ -94,11 +94,24 @@ export class TriggerJourney {
   }
   async capture(name: string, focus?: Locator) {
     await expect(this.page.getByText("Loading Studio modules…", { exact: true })).toHaveCount(0);
+    const dismiss = this.page.getByRole("button", { name: "Dismiss notification", exact: true });
+    for (let attempt = 0; attempt < 10 && await dismiss.count(); attempt++) {
+      try { await dismiss.first().click({ timeout: 2_000 }); }
+      catch (error) { if (await dismiss.count()) throw error; }
+      this.requests.push({ kind: "normal-toast-dismissal-before-persistent-capture", capture: name });
+    }
+    await expect(dismiss).toHaveCount(0);
     // These child panels are never the intentional collection-loading witness.
     const surface = this.page.getByRole("tabpanel");
     for (const label of ["Loading live trigger associations", "Loading trigger deliveries"]) {
       await expect(surface.getByLabel(label, { exact: true })).toHaveCount(0);
     }
+    const mappings = this.page.getByRole("region", { name: "Workflow input mappings", exact: true });
+    if (await mappings.count()) await expect.poll(() => mappings.locator('input:not([type="checkbox"]), select, textarea, p').evaluateAll(elements =>
+      elements.filter(element => element.getClientRects().length && !element.closest("table"))
+        .filter(element => { const box = element.getBoundingClientRect(); return box.left < -1 || box.right > innerWidth + 1; })
+        .map(element => element.getAttribute("aria-label") || element.textContent?.slice(0, 80))),
+    { message: `Mapping controls and help remain inside the viewport in ${name}` }).toEqual([]);
     if (name === "workflow-live-triggers" || name === "bpmn-workflow-live-triggers") {
       const associations = this.page.getByRole("region", { name: "Workflow subscriptions", exact: true });
       await associations.scrollIntoViewIfNeeded();
@@ -123,6 +136,12 @@ export class TriggerJourney {
       await empty.scrollIntoViewIfNeeded(); await expect(empty).toBeInViewport();
       await expect(this.page.getByRole("button", { name: "Add workflow", exact: true })).toBeInViewport();
     }
+    const associationCaptures = ["trigger-subscriptions", "subscription-unpublished", "target-incompatible", "target-unpublished", "trigger-design-only-composition", "http-policy-refused", "http-zero-accepted"];
+    const regionName = associationCaptures.includes(name) ? "Workflow subscriptions"
+      : name === "schedule-next-firing" ? "Schedule"
+      : ["http-fanout-mode", "http-workflow-response-mode"].includes(name) ? "HTTP mode and endpoint" : undefined;
+    if (!focus && regionName) focus = this.page.getByRole("region", { name: regionName, exact: true });
+    if (!focus && name === "triggers-read-only") focus = this.page.getByRole("button", { name: "Edit configuration", exact: true }).locator("..");
     if (focus) { await expect(focus).toBeVisible(); await focus.scrollIntoViewIfNeeded(); }
     await expect.poll(() => this.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), { message: `Page overflow in ${name}` }).toBe(true);
     const path = this.info.outputPath(`${name}.png`);
@@ -136,6 +155,25 @@ export class TriggerJourney {
     const aria = this.info.outputPath(`${name}.aria.yml`);
     writeFileSync(aria, await this.page.locator("body").ariaSnapshot());
     await this.info.attach(`${name}.aria.yml`, { path: aria, contentType: "text/yaml" });
+    if (associationCaptures.includes(name)) {
+      const rows = this.page.getByRole("region", { name: "Workflow subscriptions", exact: true }).getByRole("row");
+      for (let index = 1; index < await rows.count(); index++) {
+        const rowPath = this.info.outputPath(`${name}.association-${index}.png`);
+        await rows.nth(index).screenshot({ path: rowPath, animations: "disabled" });
+        await this.info.attach(`${name}.association-${index}.png`, { path: rowPath, contentType: "image/png" });
+        this.requests.push({ kind: "association-row-visual-capture", capture: name, row: index, attachment: `${name}.association-${index}.png` });
+      }
+    }
+    const impact = this.page.getByRole("region", { name: "Change impact", exact: true });
+    if (await impact.count() && await impact.evaluate(element => element.scrollWidth > element.clientWidth + 1)) {
+      const before = await impact.evaluate(element => element.scrollLeft);
+      await impact.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+      const rightPath = this.info.outputPath(`${name}.scroll-right.png`);
+      await this.page.screenshot({ path: rightPath, fullPage: true, animations: "disabled" });
+      await this.info.attach(`${name}.scroll-right.png`, { path: rightPath, contentType: "image/png" });
+      this.requests.push({ kind: "impact-horizontal-scroll-visual-capture", capture: name, attachment: `${name}.scroll-right.png` });
+      await impact.evaluate((element, left) => { element.scrollLeft = left; }, before);
+    }
     this.captures.push({ name, url: this.page.url(), ...await this.page.evaluate(() => {
       const identityPage = !!document.querySelector('form[action="/_elsa/identity/login"]');
       return { viewport: { width: innerWidth, height: innerHeight }, appearanceScope: identityPage ? "identity-login" : "studio",
@@ -216,6 +254,13 @@ export class TriggerJourney {
   async review(capture?: string, focus?: Locator) {
     const apply = this.page.getByRole("button", { name: "Apply reviewed change", exact: true });
     await expect(apply).toBeEnabled();
+    if (capture && !focus) {
+      const impact = this.page.getByRole("region", { name: "Change impact", exact: true });
+      if (await impact.count()) {
+        const nextFiring = impact.getByRole("row").filter({ hasText: "Next firing" });
+        focus = await nextFiring.count() ? nextFiring : impact;
+      }
+    }
     if (capture) await this.capture(capture, focus);
     const response = this.page.waitForResponse(result => result.request().method() === "POST" && new URL(result.url()).pathname.endsWith("/changes/apply"));
     await apply.press("Enter"); const saved = await response;
@@ -243,6 +288,14 @@ export class TriggerJourney {
     return trigger;
   }
   async open(id: string) { await this.page.goto(triggerPath(id)); await expect(this.page.getByRole("button", { name: "Edit configuration", exact: true })).toBeVisible(); }
+  async openAuthoringInspector() {
+    const panel = this.page.getByRole("complementary", { name: "Inspector panel", exact: true });
+    await expect(panel).toBeVisible({ timeout: 45_000 });
+    const expand = panel.getByRole("button", { name: "Expand inspector panel", exact: true });
+    if (await expand.isVisible()) await expand.press("Enter");
+    const inspector = panel.getByRole("tablist", { name: "Inspector panel tabs", exact: true }).getByRole("tab", { name: "Inspector", exact: true });
+    await expect(inspector).toBeVisible(); await inspector.click();
+  }
   async openWorkflowTriggers() {
     // The workspace also has a Triggers tab. Wait for the actual editor and select its contributed inspector tab.
     const inspector = this.page.getByRole("complementary", { name: "Inspector panel", exact: true });
