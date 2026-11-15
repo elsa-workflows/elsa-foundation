@@ -374,8 +374,10 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
   const id = requiredText(flow.getAttribute("id"), "sequence flow identity");
   const references = new Map<string, Element>();
   for (const element of parsed.byId.values()) {
+    if (element.namespaceURI !== bpmnNamespaces.model || !standardReferenceContext(element)) continue;
     for (const direction of ["incoming", "outgoing"]) {
       for (const reference of children(element, bpmnNamespaces.model, direction)) {
+        if (!standardReferenceContext(reference)) continue;
         if (resolveBpmnDocumentReference(parsed, reference, reference.textContent)?.getAttribute("id") !== id) continue;
         if (references.has(direction)) fail(`sequence flow '${id}' has ambiguous ${direction} references`);
         references.set(direction, reference);
