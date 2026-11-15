@@ -201,7 +201,8 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   await page.getByLabel("Configured value for count", { exact: true }).fill("8");
   await page.getByRole("checkbox", { name: "Authorize this shared trigger to invoke the workflow", exact: true }).check();
   await page.getByRole("button", { name: "Review subscription", exact: true }).click(); await j.review();
-  expect((await j.subscriptions(trigger.id)).find(item => item.target.definitionId === second.authored.definition.id)?.mappings).toEqual([configured("message", "Independent mapping"), configured("amount", 7.25)]);
+  // The serving contract emits mappings in canonical destination order; both independent values must survive editing its sibling.
+  expect((await j.subscriptions(trigger.id)).find(item => item.target.definitionId === second.authored.definition.id)?.mappings).toEqual([configured("amount", 7.25), configured("message", "Independent mapping")]);
   await page.goto(definitionPath(first.authored.definition.id)); await j.openWorkflowTriggers();
   await page.getByRole("row").filter({ hasText: trigger.name }).getByRole("button", { name: "Remove", exact: true }).click(); await j.review();
   await page.reload(); await j.openWorkflowTriggers();

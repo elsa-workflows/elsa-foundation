@@ -134,8 +134,22 @@ export async function verifyScheduledRetention(j: TriggerJourney, targets: EchoT
 
 export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: EchoTarget[], actions: ScheduleActions) {
   const cron = await j.create("cron", "Timezone and future generation");
-  await editSchedule(j, cron.id, { "Cron expression": "0 0 9 * * *", Timezone: "UTC" });
-  await j.add(cron.id, targets[0].authored.definition.id, [configured("message", "Cron timezone qualification"), configured("count", 1)]); await j.enable(cron.id);
+  // First let an ordinary six-field Cron become due on the real clock, independently of the later preview checks.
+  await j.add(cron.id, targets[0].authored.definition.id, [source("message", ["metadata", "dueAt"]), configured("count", 1)]);
+  const planned = new Date(Date.now() + 30_000); planned.setUTCMilliseconds(0);
+  const firingExpression = `${planned.getUTCSeconds()} ${planned.getUTCMinutes()} ${planned.getUTCHours()} ${planned.getUTCDate()} ${planned.getUTCMonth() + 1} *`;
+  await editSchedule(j, cron.id, { "Cron expression": firingExpression, Timezone: "UTC" }); await j.enable(cron.id);
+  const dueCursor = await j.read(cron.id); expect(dueCursor.schedule?.timezone).toBe("UTC"); expect(Date.parse(dueCursor.schedule!.nextDueUtc!)).toBe(planned.getTime());
+  const dueDelivery = await j.started(await j.waitDelivery(cron.id)); expect(dueDelivery.acceptedCount).toBe(1);
+  const dueExecution = dueDelivery.recipients[0].executionReference!.id;
+  const dueResult = await businessOutputs(j, dueExecution, { count: 1 });
+  expect(Date.parse(String(scalarOutput(dueResult.outputs.message)))).toBe(Date.parse(dueCursor.schedule!.nextDueUtc!));
+  await j.inspectDelivery(dueDelivery, "cron-delivery"); await actions.pause(cron.id);
+  j.requests.push({ kind: "actual-real-clock-due-cron", triggerId: cron.id, expression: firingExpression, timezone: "UTC",
+    dueUtc: dueCursor.schedule!.nextDueUtc, deliveryId: dueDelivery.id, executionId: dueExecution, completedStatus: dueResult.instance.status,
+    clockChanged: false, manualFiring: false });
+  j.observed.push("A real six-field UTC Cron became due without a manual firing or clock change; its actual business workflow completed and consumed the exact planned due instant.");
+  await editSchedule(j, cron.id, { "Cron expression": "0 0 9 * * *", Timezone: "UTC" }); await j.enable(cron.id);
   const before = await j.read(cron.id); expect(before.schedule?.timezone).toBe("UTC");
   expect(before.schedule?.nextDueUtc).toBeTruthy(); expect(before.schedule?.offset).toBe("+00:00");
   await j.open(cron.id); await j.page.getByRole("button", { name: "Edit configuration", exact: true }).click();
@@ -267,7 +281,7 @@ export async function verifyBpmnInputRefusals(j: TriggerJourney, authored: Autho
 
 /** Exercise the exact UI tokens through real persistence and downstream business consumption. */
 export async function verifyJsonLiteralPersistenceAndConsumption(j: TriggerJourney) {
-  const target = await j.echo("JSON literal consumer", [input("value", "JsonElement")]);
+  const target = await j.echo("JSON literal consumer", [input("value", "System.Text.Json.JsonElement")]);
   const trigger = await j.create("event", "JSON string and precise number");
   await j.add(trigger.id, target.authored.definition.id, [configured("value", "123")]);
   await j.page.reload(); await editSubscription(j, trigger.id, target.authored.definition.id);

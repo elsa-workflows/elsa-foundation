@@ -117,11 +117,11 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 11 gates opt-in authored CLR fault capture; old policies remain unchanged.</summary>
-    public int StateVersion => 11;
+    /// <summary>Version 12 gates staged chart evaluation; old recovery policies remain unchanged.</summary>
+    public int StateVersion => 12;
     public object UpgradeState(string state, int fromVersion)
     {
-        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
@@ -129,7 +129,9 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
         if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
         if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
         if (fromVersion < 7 && native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
-        if (native.InterventionPolicy < 0 || native.InterventionPolicy > (fromVersion < 8 ? 2 : fromVersion < 9 ? 3 : 4) ||
+        if (native.CheckpointControl || native.Inboxes?.Values.Any(i => i.Receipts.Values.Any(r => r.Status == "Evaluating" || r.EvaluationStarted)) == true)
+            throw new InvalidOperationException("Legacy native state contains unsupported evaluation data.");
+        if (native.InterventionPolicy < 0 || native.InterventionPolicy > (fromVersion < 8 ? 2 : fromVersion < 9 ? 3 : fromVersion < 11 ? 4 : 5) ||
             fromVersion < 8 && NativeStatefulRecovery.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported stateful recovery data.");
         return native;
     }
@@ -196,7 +198,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             if (model.HandlesMetadata(message)) turn.Hold(message);
             else Accept(message);
         if (_retryAccepted) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
-        else { await DrainAsync(); DrainInputs(); }
+        else { await DrainAsync(); if (!_checkpointRequested) DrainInputs(); }
+        if (_checkpointRequested) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
         FinishSignals();
         if (turn.Inbox.Any(model.HandlesMetadata)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
@@ -278,7 +281,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     private async ValueTask DrainAsync()
     {
         _s.Agenda.RemoveAll(w => w.Gone);      // only under NativeFlaw.InFlightInMemory: memory forgets now what the row still has
-        while (_s.Agenda.Exists(w => !w.Gone) && _status == InstanceStatus.Running)
+        while (!_checkpointRequested && _s.Agenda.Exists(w => !w.Gone) && _status == InstanceStatus.Running)
         {
             // Durable: a boundary after every activity. Balanced and Ephemeral: one turn until all waits or ends (capped).
             if ((Durable && _executed > 0) || _executed >= model.Options.MaxActivitiesPerTurn)
