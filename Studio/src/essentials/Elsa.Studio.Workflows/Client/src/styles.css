@@ -3977,6 +3977,7 @@
 }
 
 .wf-properties-section {
+  container: workflow-arguments / inline-size;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius-md);
   background: var(--wf-panel);
@@ -3991,6 +3992,8 @@
 
 .wf-properties-section-head {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
@@ -4131,6 +4134,53 @@
 .wf-properties-cell-center {
   text-align: center;
   width: 48px;
+}
+
+/* Reflow declaration forms by their available pane width, including scoped variables. */
+@container workflow-arguments (max-width: 45rem) {
+  .wf-properties-table,
+  .wf-properties-table tbody {
+    display: block;
+  }
+
+  .wf-properties-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .wf-properties-table tbody > tr {
+    display: grid;
+    gap: 12px;
+    padding-block: 12px;
+  }
+
+  .wf-properties-table tbody > tr + tr {
+    border-top: 1px solid var(--wf-border);
+  }
+
+  .wf-properties-table td {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    padding: 0;
+    text-align: start;
+  }
+
+  .wf-properties-table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--wf-muted-text);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .wf-properties-table td:last-child {
+    width: auto;
+    justify-items: end;
+  }
 }
 
 .wf-properties-cell-center input[type="checkbox"] {
