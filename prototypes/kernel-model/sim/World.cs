@@ -90,6 +90,7 @@ public sealed class Actor(int id, int node, int partition)
 /// <summary>What a worker sees as its store: the shared in-memory store behind a wire the simulation controls.</summary>
 public sealed class Wire(World world, Actor actor) : IKernelStore
 {
+    public bool SupportsCommitWindow => world.Store.SupportsCommitWindow;
     public bool CreationIdentityAvailable => world.Store.CreationIdentityAvailable;
     public bool CommitClockAvailable => world.Store.CommitClockAvailable;
     private ValueTask<T> Send<T>(string kind, string text, Func<ValueTask<T>> op)
@@ -135,11 +136,20 @@ public sealed class Wire(World world, Actor actor) : IKernelStore
 
     public ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
         Send("load", $"load [{string.Join(", ", ids)}]", () => world.Store.LoadAsync(ids));
+    public bool HasActorAliases => ((IKernelStore)world.Store).HasActorAliases;
+    public ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default) =>
+        Send("load", $"load [{string.Join(", ", ids)}]", () => ((IKernelStore)world.Store).LoadActorsAsync(ids));
 
     public ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default) =>
         Send("events", $"events for [{string.Join(", ", keys)}]", () => world.Store.FindEventsAsync(keys));
 
+    public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default) =>
+        world.Store.PublishedMatchesAsync(published);
+    public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default) =>
+        Send("events", $"events for {waits.Count} waits", () => world.Store.KeptMatchesAsync(waits));
+
     public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default) => world.Store.AddAsync(message);
+    public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default) => world.Store.AddEventAsync(delivery);
     public ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default) => world.Store.PublishAsync(@event);
     public ValueTask<IReadOnlyList<SubscriptionRow>> FindSubscriptionsAsync(string key, CancellationToken cancellationToken = default) => world.Store.FindSubscriptionsAsync(key);
     public ValueTask SubscribeAsync(SubscriptionRow subscription, CancellationToken cancellationToken = default) => world.Store.SubscribeAsync(subscription);

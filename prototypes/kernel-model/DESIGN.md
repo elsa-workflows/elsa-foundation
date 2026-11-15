@@ -268,6 +268,14 @@ terminate (every wait of the instance) and a delete (its journal rows); then COM
   every active subscription, while retaining the last committed state, fault details and configured history. The
   parent still receives the faulted-child notice. Later arrivals are dropped. Suspension preserves subscriptions;
   a future explicit recovery operation must restore waits, with kept-event semantics needed for events in the gap.
+  Consuming a genuine job ticket retires only its exact typed key in the same commit. Unrelated already-entered jobs
+  retain their completion path; queued callbacks still cannot enter an ended, withheld or different creation. A due,
+  valid exhausted input is a pending Park and precedes sibling job trial/admission. Ordinary predecessor suspects
+  can still be fenced so they cannot strand Park. Genuine worker completions retire volatile as well as durable keys. Terminal metadata keeps the original
+  status and fault, reports the committed status, and emits no second parent completion. Invalid earlier prototype
+  rows remain unsupported pre-GA; this adds no repair scan. Public job-ticket copies and supplied completions are refused.
+  Held legacy child notices retain ordinary next-input batching; qualified lifecycle notices remain isolated.
+  A sole committed child notice revisits earlier held input independently of that selection boundary.
 - **Hold:** a turn hands a message back; it keeps its place and comes with the next turn.
 - **Edge cases:** a message to a missing target without a start spec is dropped and journalled; to an ended instance,
   consumed and dropped.
@@ -381,6 +389,14 @@ the native model (merge):
   native): the opt-out rides on the caller's reply address, and that caller gets the turn's output when the turn ends.
 - **Respond, then continue; wait first** (a timer, a background job): the request stays open, the instance stays in
   memory, up to the request's deadline.
+- **Short waits in memory** (decision 4, FINDINGS 25.6). An Ephemeral instance whose turn sends only itself timers due
+  within its short wait, or job tickets, and takes no message that is a row, stays in memory unwritten (`Slot.Unwritten`).
+  The short wait is `StartSpec.ShortWait`, which an HTTP route sets to its timeout, else `WorkerOptions.ShortWait` (5 s).
+  If it ends there, nothing is ever written. It is written, at the revision it has, by a turn that does anything else,
+  by the end of the short wait, and before anything that is a row or a command reaches it. That commit also writes
+  its timers, job tickets and held messages as rows, and the history of its turns in memory in its journal row; its
+  journal therefore starts at that revision. An unwritten instance is never evicted; an owner standing down writes it
+  first; a crash loses it, as an Ephemeral run always was, now for up to its short wait.
 - **A request that resumes a waiting workflow** adds a delivery carrying its reply address; the owner, on any node,
   sends what the turn emits, and the end, over the runtime's transport (`IReplyTransport`), which is not durable.
 - **The reply address carries the caller's deadline** (decision 6, FINDINGS 25.3): `ReplyTo.Of(node, request,
@@ -543,3 +559,11 @@ numbers; round 4's graph engine (section 26) ran again what it touched, with its
   per-trial acceptance checks); values by reference are not part of that benchmark.
 - **The notifier between nodes**, **one database**: as in draft 5.
 - **MySQL's driver** costs four round trips per commit more than PostgreSQL's (E10).
+
+Actor selection preserves legacy batching by default; the existing contextual singleton classifier selects alone on qualified creations. The workflow explicitly opts in to its ended raw-job boundary on legacy rows. Committed wakeups remain a separate actor decision.
+
+Pending poison blocks new job admission; an earlier raw ticket already converted to terminal or target-refusal cleanup may still obtain its ordinary fence. Cleanup keeps the actor-order bound and cannot enter the physical job.
+
+Ordinary recovery fencing and dispatch use the same mature-control projection, including the exhausted inputs used to order predecessors. Physical job admission remains conservative over every valid due exhausted input. Effective canonical inbox insertions, alias merges, reference resolution and row publication refresh the owner-published poison boundary under the physical-entry lock; taken poison stays conservative until its bound/committed decision owns the restriction.
+
+A selected, fenced raw job blocked by due poison before physical entry yields only its in-memory trial selection. Its durable trial/loss evidence and observation horizon remain. Queued callbacks cannot enter while deferred; if it becomes eligible again, it reacquires runtime isolation under the existing fence before resubmission. Already-entered jobs retain their trial and completion path.
