@@ -56,4 +56,8 @@
          project, so it can also reference the tooling project rather than duplicating its factory list. -->
     <ProjectReference Include="..\..\..\..\..\..\tools\ef\Elsa.EntityFrameworkCore.Tooling\Elsa.EntityFrameworkCore.Tooling.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
 </Project>

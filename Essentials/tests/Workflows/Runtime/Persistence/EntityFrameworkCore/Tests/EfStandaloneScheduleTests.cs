@@ -100,6 +100,8 @@ public sealed class EfStandaloneScheduleTests
         var original = Assert.Single(await host.Schedules.ClaimDueAsync(new("pump", Now, TimeSpan.FromMinutes(1), 10)));
         host.Clock.Advance(TimeSpan.FromSeconds(30));
         var renewed = (await host.Schedules.RenewClaimAsync(original, host.Clock.GetUtcNow(), TimeSpan.FromMinutes(2)))!;
+        host.Clock.Advance(TimeSpan.FromSeconds(45));
+        Assert.True(original.VisibleAfter <= host.Clock.GetUtcNow());
         await using (var transaction = await host.Context.Database.BeginTransactionAsync(IsolationLevel.Serializable))
         {
             var actualDeadline = await host.Schedules.FenceStandaloneOccurrenceAsync(original, host.Clock, default);

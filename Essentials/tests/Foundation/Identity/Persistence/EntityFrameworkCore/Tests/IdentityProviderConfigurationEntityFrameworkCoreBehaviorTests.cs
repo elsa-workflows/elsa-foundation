@@ -14,7 +14,7 @@ using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTests
+public sealed partial class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTests
 {
     [Fact]
     public async Task All_fields_and_arbitrary_utf16_settings_round_trip_losslessly()

@@ -21,6 +21,7 @@ public sealed class PublicationRecordEntityConfiguration : IEntityTypeConfigurat
         builder.Property(row => row.ArtifactId).HasMaxLength(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength).IsRequired();
         builder.Property(row => row.SourceReferenceId).HasMaxLength(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength);
         builder.Property(row => row.ExpectedSlotRevision).IsRequired();
+        builder.Property(row => row.RequestFingerprint).HasMaxLength(PublishingPolicyProjectionEfModule.EncodedIdentityMaximumLength);
         builder.Property(row => row.Status).HasMaxLength(PublishingPolicyProjectionEfModule.EnumMaximumLength).IsRequired();
         builder.Property(row => row.CreatedAtUtcTicks).IsRequired();
         builder.Property(row => row.CreatedAtOffsetMinutes).IsRequired();

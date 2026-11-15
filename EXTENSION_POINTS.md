@@ -103,6 +103,7 @@ not automatic constitution violations.
 | Agent human review API | [`Extensions/Agent/src/Review/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Review/Api/EXTENSION_POINTS.md) |
 | Agent authoring API | [`Extensions/Agent/src/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Api/EXTENSION_POINTS.md) |
 | Agent inspection API | [`Extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md`](Extensions/Agent/src/Inspection/Api/EXTENSION_POINTS.md) |
+| Foundation Identity external authentication | [`Essentials/src/Foundation/Identity/ExternalAuthentication/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/ExternalAuthentication/Core/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
@@ -268,6 +269,8 @@ not automatic constitution violations.
 - [Dashboard native management](Essentials/src/Studio/Dashboard/Management/EXTENSION_POINTS.md)
 
 - [Dashboard query, resource and authoring contracts](Essentials/src/Studio/Dashboard/Core/EXTENSION_POINTS.md)
+
+- [External sign-in Studio module and standalone management client](Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md)
 
 - [Studio server contracts and frontend lifecycle catalog](Studio/src/essentials/Elsa.Studio.Api/EXTENSION_POINTS.md)
 - [API capability contributor catalog](Essentials/src/Api/Capabilities/Elsa.Api.Capabilities/EXTENSION_POINTS.md)

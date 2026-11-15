@@ -21,7 +21,12 @@ const shortFocus = searchParams.has("short-focus");
 /** Isolated layout contract using the real shell, nested content hooks and notification controller. */
 function FocusedSettingsFields({ controller }: { controller: StudioNotificationController }) {
   const { contentRef } = useCompactNavigation();
-  const fields = Array.from({ length: 12 }, (_, index) => <StudioField key={index} label={`Setting ${index + 1}`}>
+  const supportingText = searchParams.get("supporting-text");
+  const [invalid, setInvalid] = useState(supportingText === "error");
+  const fields = Array.from({ length: 12 }, (_, index) => <StudioField key={index} label={`Setting ${index + 1}`}
+    description={supportingText && index === 11 ? "Use a readable name. Supporting instructions remain available while editing this field." : undefined}
+    error={supportingText && invalid && index === 11 ? "This name is already in use. Choose a different name before saving." : undefined}
+    errorRole="alert">
     {largeFrame && index === 0 ? <div style={{ minHeight: 350 }}><input defaultValue={`Draft ${index + 1}`} /></div>
       : nestedFocus && index === 11 ? <div style={{ paddingBlockEnd: 12 }}><input defaultValue={`Draft ${index + 1}`} /></div>
       : <input defaultValue={`Draft ${index + 1}`} />}
@@ -31,6 +36,9 @@ function FocusedSettingsFields({ controller }: { controller: StudioNotificationC
       level: "error", title: "Persistent focus notice",
       message: "A deliberately wrapped notification exercises the real toast stack while the existing field retains keyboard focus and its unsaved value."
     })}>Show focus notice</button>
+    {supportingText ? <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => setInvalid(value => !value)}>
+      {invalid ? "Show supporting instructions" : "Show field validation"}
+    </button> : null}
     {shortFocus ? <>
       <div style={{ height: 32 }} aria-hidden="true" /><a href="#retained">Inline Settings link</a>
       <div style={{ height: 600 }} aria-hidden="true" />

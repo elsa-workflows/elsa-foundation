@@ -43,6 +43,8 @@ public static class OpenIddictBehaviorServiceCollectionExtensions
             {
                 validation.UseLocalServer();
                 validation.EnableTokenEntryValidation();
+                validation.AddEventHandler<global::OpenIddict.Validation.OpenIddictValidationEvents.ValidateTokenContext>(handler =>
+                    handler.UseScopedHandler<ValidateTokenSubject>().SetOrder(int.MaxValue - 1_000));
                 validation.UseAspNetCore();
                 // IdentityModel otherwise uses the generic "AuthenticationTypes.Federation" runtime
                 // type. Give validated OpenIddict principals a provider-specific type so trusting this

@@ -25,12 +25,16 @@ public class AspNetCoreIdentityFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Allowed return URL origins", Description = "Absolute origins (e.g. https://localhost:7030) a post-login returnUrl may redirect back to, in addition to same-origin paths. Set to the Studio origin when Studio is hosted separately from the backend.", Category = "Identity")]
     public string[]? AllowedReturnUrlOrigins { get; set; }
 
+    [ManifestSetting(DisplayName = "Session lifetime", Description = "Absolute durable session lifetime, between one minute and thirty days. Refresh never extends it.", Category = "Identity", DefaultValue = "08:00:00")]
+    public TimeSpan SessionLifetime { get; set; } = TimeSpan.FromHours(8);
+
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
         services.AddFoundationAspNetCoreIdentity(options =>
         {
             options.IsDefault = IsDefault;
+            options.SessionLifetime = SessionLifetime;
             if (AllowedReturnUrlOrigins is { Length: > 0 })
                 options.AllowedReturnUrlOrigins = AllowedReturnUrlOrigins;
         });

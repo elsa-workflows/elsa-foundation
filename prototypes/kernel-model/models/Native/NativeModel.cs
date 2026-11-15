@@ -78,7 +78,7 @@ public sealed partial class NativeState
     public Dictionary<string, InvocationInbox>? Inboxes { get; set; }
 }
 
-/// <summary>A live activity: a composite with children, or an activity that waits.</summary>
+/// <summary>Owned activity state: running/waiting, or a retained fault awaiting intervention.</summary>
 public sealed partial class Frame
 {
     public string Id { get; set; } = "";
@@ -117,15 +117,22 @@ public sealed class NativeModel(WorkflowRegistry registry, NativeOptions? option
     public string Key => ModelKey;
     public Type StateType => typeof(NativeState);
 
-    /// <summary>Version 4 adds private durable lexical resources; old state contains no invented resources.</summary>
-    public int StateVersion => 4;
+    /// <summary>Version 13 gates mapped chart completion; old recovery policies remain unchanged.</summary>
+    public int StateVersion => 13;
     public object UpgradeState(string state, int fromVersion)
     {
-        if (fromVersion is not (1 or 2 or 3)) throw new NotSupportedException($"native state has no version {fromVersion}");
+        if (fromVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or 12)) throw new NotSupportedException($"native state has no version {fromVersion}");
         var native = Json.Read<NativeState>(state);
         // A failed initial turn can leave a genuine JSON-null checkpoint; preserve its existing missing-state behavior.
         if (native is null) return null!;
-        if (LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
+        if (fromVersion < 4 && LexicalScopes.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported lexical scope data.");
+        if (fromVersion < 5 && NativeInterventions.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported recovery data.");
+        if (fromVersion < 6 && NativeRetries.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported successor data.");
+        if (fromVersion < 7 && native.InterventionPolicy != 0) throw new InvalidOperationException("Legacy native state contains unsupported recovery policy data.");
+        if (fromVersion < 12 && (native.CheckpointControl || native.Inboxes?.Values.Any(i => i.Receipts.Values.Any(r => r.Status == "Evaluating" || r.EvaluationStarted)) == true))
+            throw new InvalidOperationException("Legacy native state contains unsupported evaluation data.");
+        if (native.InterventionPolicy < 0 || native.InterventionPolicy > (fromVersion < 8 ? 2 : fromVersion < 9 ? 3 : fromVersion < 11 ? 4 : 5) ||
+            fromVersion < 8 && NativeStatefulRecovery.Present(native)) throw new InvalidOperationException("Legacy native state contains unsupported stateful recovery data.");
         return native;
     }
 
@@ -185,11 +192,14 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     public async ValueTask RunAsync()
     {
         LexicalScopes.Validate(_s);
+        NativeInterventions.Validate(_s);
         if (AdmitPrefix()) return;
         foreach (var message in turn.Inbox)
             if (model.HandlesMetadata(message)) turn.Hold(message);
             else Accept(message);
-        await DrainAsync();
+        if (_retryAccepted) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
+        else { await DrainAsync(); if (!_checkpointRequested) DrainInputs(); }
+        if (_checkpointRequested) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
         FinishSignals();
         if (turn.Inbox.Any(model.HandlesMetadata)) turn.Send(turn.Instance.Ref, NativeKinds.Continue);
     }
@@ -200,9 +210,17 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     {
         switch (m.Kind)
         {
+            case NativeRetry.Kind:
+            {
+                var result = Retry(m);
+                turn.Reply(m, Request.Response, result);
+                turn.Record($"recovery:{result.Id}:{result.Result}:{result.Successor}");
+                break;
+            }
             case Kinds.Start when !_s.Started:
             {
                 _s.Started = true;
+                InitializeIntervention();
                 var start = Json.Read<NativeStart>(m.Start?.Input ?? "{}");
                 foreach (var (name, value) in _wf.Variables) _s.Variables[name] = value?.DeepClone();
                 if (start.Input is { } input) _s.Variables["input"] = input.DeepClone();
@@ -263,7 +281,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
     private async ValueTask DrainAsync()
     {
         _s.Agenda.RemoveAll(w => w.Gone);      // only under NativeFlaw.InFlightInMemory: memory forgets now what the row still has
-        while (_s.Agenda.Exists(w => !w.Gone) && _status == InstanceStatus.Running)
+        while (!_checkpointRequested && _s.Agenda.Exists(w => !w.Gone) && _status == InstanceStatus.Running)
         {
             // Durable: a boundary after every activity. Balanced and Ephemeral: one turn until all waits or ends (capped).
             if ((Durable && _executed > 0) || _executed >= model.Options.MaxActivitiesPerTurn)
@@ -271,7 +289,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 turn.Send(turn.Instance.Ref, NativeKinds.Continue);
                 return;
             }
-            var work = _s.Agenda.First(w => !w.Gone);
+            var work = _s.Agenda.FirstOrDefault(w => !w.Gone && Runnable(w));
+            if (work is null) return;
             if (!work.Resume && Durable && _wf.Nodes[work.Node!].External && work.Attempt == 0 && !Has(NativeFlaw.NoAttemptCommit))
             {
                 // Not replay-safe: commit the attempt first, run it in the next turn. After a crash the row says it may have run.
@@ -293,6 +312,15 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         if (work.Parent is not null && !_s.Frames.ContainsKey(work.Parent)) return;     // its parent was cancelled meanwhile
         var node = _wf.Nodes[work.Node!];
         var frame = new Frame { Id = work.Frame, Node = node.Id, Parent = work.Parent, Tag = work.Tag, Scope = work.Scope, Attempt = work.Attempt, LiveScope = work.LiveScope, LexicalScope = work.LexicalScope };
+        if (work.RetrySource is not null)
+        {
+            frame.RetrySource = work.RetrySource; frame.OperationKey = work.OperationKey;
+            frame.RecoveryStateful = _s.Retries!.Values.Single(r => r.Source.Id == work.RetrySource && r.Successor == work.Frame).Source.RecoveryStateful;
+            frame.RecoveryInputs = (JsonObject)work.RecoveryInputs!.DeepClone(); frame.RecoveryMaterial = (JsonObject)work.RecoveryMaterial!.DeepClone();
+            if (!JsonNode.DeepEquals(frame.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf)))
+                throw new InvalidOperationException("Scheduled retry material is unavailable.");
+            if (!InterventionBoundary(frame)) throw new InvalidOperationException("Scheduled retry boundary is unsupported.");
+        }
         var scope = new FrameScope(this, frame);
         if (node.Background)
         {
@@ -303,7 +331,9 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             turn.StartJob(wait, new BackgroundArgs(_wf.Id, node.Id, frame.Id, Hydrator.Snapshot(node, b => Evaluate(b, scope))));
             return;
         }
-        var activity = Hydrator.Create(node, b => Evaluate(b, scope));
+        var pinned = frame.RecoveryInputs is { } saved ? (JsonObject)saved.DeepClone() : PinRecoveryInputs(frame, node, scope);
+        var activity = CreateActivity(frame, node, pinned, scope);
+        if (activity is null) return;
         switch (activity)
         {
             case IIntrinsic set:
@@ -319,7 +349,8 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                 var delivery = _s.TriggerNode == node.Id && _s.Trigger is not null;
                 var trigger = delivery ? _s.Trigger : null;
                 if (delivery) (_s.TriggerNode, _s.Trigger) = (null, null);
-                Apply(frame, await stateful.StartAsync(Context(frame), delivery, trigger));
+                var context = Context(frame);
+                Apply(frame, await InvokeAuthored(frame, () => stateful.StartAsync(context, delivery, trigger)));
                 break;
             }
             case ILeaf leaf:
@@ -330,14 +361,23 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
                     if (again && Durable) turn.Record($"m:{frame.Id}:{frame.Attempt}");
                     model.Options.OnExternal?.Invoke(turn.Instance.Ref, frame.Id, node.Id, frame.Attempt, again);
                 }
-                Apply(frame, await leaf.ExecuteAsync(Context(frame)));
+                var leafContext = Context(frame);
+                Apply(frame, await InvokeAuthored(frame, () => leaf.ExecuteAsync(leafContext)));
                 break;
         }
     }
 
     private async ValueTask ResumeAsync(Work work)
     {
-        if (!_s.Waits.Remove(work.Wait!, out var wait) || !_s.Frames.TryGetValue(wait.Frame, out var frame)) return;
+        if (!_s.Waits.TryGetValue(work.Wait!, out var wait) || !_s.Frames.TryGetValue(wait.Frame, out var frame)) return;
+        if (frame.RecoveryStateful && frame.Id != work.Frame) throw new InvalidOperationException("Invalid native qualified resume ownership.");
+        var node = _wf.Nodes[frame.Node];
+        if (frame.RecoveryStateful && (!RecoverableKind(node) || !typeof(IStateful).IsAssignableFrom(node.Type) ||
+            !JsonNode.DeepEquals(frame.RecoveryMaterial, NativeRecoveryMaterial.Describe(_wf))))
+            throw new InvalidOperationException("Suspended recovery material is unavailable.");
+        _s.Waits.Remove(work.Wait!);
+        // The first valid delivery owns this occurrence. Already queued duplicates cannot keep a fault runnable.
+        if (frame.RecoveryStateful) _s.Agenda.RemoveAll(w => w.Resume && w.Frame == frame.Id);
         Unregister(work.Wait!, wait, cancel: false);
         foreach (var (id, other) in _s.Waits.Where(w => w.Value.Frame == frame.Id).ToList())     // an activity resumes once
         {
@@ -346,7 +386,6 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         }
         if (wait.Kind == "child") turn.Record($"r:{work.Wait}:{wait.Key}:{work.Payload?["Child"]}");
         _s.Frames.Remove(frame.Id);
-        var node = _wf.Nodes[frame.Node];
         if (node.Background)
         {
             var finished = Values.To<JobFinished>(work.Payload)!;
@@ -354,11 +393,14 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             else if (Json.Read<BackgroundResult>(finished.Result!) is var r) Apply(frame, new Transition(r.Kind, r.Result, r.Outcome, r.Fault));
             return;
         }
-        var activity = (IStateful)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, frame)));
-        Apply(frame, await activity.ResumeAsync(Context(frame), frame.State, work.Payload));
+        var activity = (IStateful?)CreateActivity(frame, node, frame.RecoveryStateful ? (JsonObject)frame.RecoveryInputs!.DeepClone() : null, new FrameScope(this, frame));
+        if (activity is null) return;
+        var context = Context(frame);
+        var state = frame.RecoveryStateful ? frame.State?.DeepClone() : frame.State;
+        Apply(frame, await InvokeAuthored(frame, () => activity.ResumeAsync(context, state, work.Payload)));
     }
 
-    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation);
+    private ActivityContext Context(Frame frame) => new(turn.Instance.Ref, frame.Id, frame.Node, frame.Attempt, cancellationToken, turn.Instance.Creation, frame.OperationKey, frame.RetrySource);
 
     // ---- transitions -------------------------------------------------------------------------------------------------
 
@@ -460,7 +502,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
         }
         if (!_s.Frames.TryGetValue(frame.Parent, out var parent)) return;
         var node = _wf.Nodes[parent.Node];
-        var composite = (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, parent)));
+        var composite = (CompositeActivity)RestoreActivity(parent, node);
         composite.OnChildCompleted(new CompositeContext(this, parent, node), new ChildCompleted(frame.Id, frame.Node, outcome, result, frame.Tag));
     }
 
@@ -483,6 +525,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
 
     internal void Fail(Frame frame, ActivityFault fault)
     {
+        if (CaptureIntervention(frame, fault)) return;
         CloseInbox(frame.Id, "faulted");
         _s.Frames.Remove(frame.Id);
         CancelChildren(frame.Id);
@@ -494,7 +537,7 @@ internal sealed partial class Burst(NativeModel model, ITurn turn, CancellationT
             return;
         }
         var node = _wf.Nodes[parent.Node];
-        var composite = (CompositeActivity)Hydrator.Create(node, b => Evaluate(b, new FrameScope(this, parent)));
+        var composite = (CompositeActivity)RestoreActivity(parent, node);
         composite.OnChildFaulted(new CompositeContext(this, parent, node), new ChildFaulted(frame.Id, frame.Node, fault, frame.Tag));
     }
 
