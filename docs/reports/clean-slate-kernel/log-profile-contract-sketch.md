@@ -39,7 +39,7 @@ Event subscriptions are partitioned by **correlation key**. Publishing routes to
 
 ## Append-compatible payloads and words
 
-Decision 10, values by reference, remains the first option for large values. A Log design may instead need compact deltas plus periodic snapshots for its execution envelope; it must not assume an ever-growing series of whole-state appends. Recovery, state-version upgrades, retention and erasure need an explicit design before selecting that representation. Neither choice adds product storage here.
+Append payloads use values by reference (decision 10) or compact deltas plus periodic snapshots, rather than whole-state appends on every commit. Recovery, state-version upgrades, retention and erasure need an explicit design before selecting that representation. Neither choice adds product storage here.
 
 Use delivery and ownership concepts in the proposed contracts; physical schema names stay in the provider references and existing APIs remain unchanged:
 

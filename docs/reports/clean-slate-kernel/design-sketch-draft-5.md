@@ -129,7 +129,7 @@ This is the shape proven by Temporal (shard fencing; state, history and tasks in
 
 ## Persistence
 
-The prototype depends on `IKernelStore`; its persistence guarantee must remain expressible as **append a fenced batch**, independent of SQL. A provider is correct when it passes the applicable semantic and concurrent conformance checks. Round 5 H proposes four contracts—committed append, ownership, delivery and read models—in the [contract paper](log-profile-contract-sketch.md), before any API split. The current operations below describe the existing shared-store shape.
+The prototype depends on `IKernelStore`; its persistence guarantee must remain expressible as **append a fenced batch**, independent of SQL. A provider must satisfy the same semantic guarantees and concurrent conformance checks; different mechanics do not waive those guarantees. Round 5 H proposes four contracts—committed append, ownership, delivery and read models—in the [contract paper](log-profile-contract-sketch.md), before any API split. The current operations below describe the existing shared-store shape.
 
 What the current shared-store provider has to give:
 
