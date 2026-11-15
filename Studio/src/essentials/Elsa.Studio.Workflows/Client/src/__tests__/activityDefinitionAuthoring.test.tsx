@@ -1537,6 +1537,15 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.textContent).toContain("1 warning");
     expect(rendered.container.textContent).toContain("1 info");
     expect(rendered.container.textContent).toContain("Provide a stable reference key.");
+    const diagnosticsPanel = rendered.container.querySelector<HTMLElement>(".ad-diagnostics-panel")!;
+    const diagnosticsDetails = diagnosticsPanel.querySelector("details")!;
+    diagnosticsDetails.open = false;
+    const scrollToDiagnostics = vi.fn();
+    diagnosticsPanel.scrollIntoView = scrollToDiagnostics;
+    click(buttonByText(rendered.container, "View draft diagnostics"));
+    expect(diagnosticsDetails.open).toBe(true);
+    expect(document.activeElement).toBe(diagnosticsPanel);
+    expect(scrollToDiagnostics).toHaveBeenCalledWith({ block: "start" });
     const codes = [...rendered.container.querySelectorAll(".ad-diagnostic-code")].map(item => item.textContent);
     expect(codes).toEqual([
       "activity.contract.input-invalid",

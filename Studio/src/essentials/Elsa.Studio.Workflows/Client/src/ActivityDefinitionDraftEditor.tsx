@@ -119,6 +119,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
   const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
   const authoringTabsId = useId();
+  const draftDiagnosticsId = useId();
   const [codeBufferState, setCodeBufferState] = useState<ActivityDefinitionDraftCodeBufferState>({
     dirty: false,
     valid: true
@@ -695,6 +696,13 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
               </div>
             </div>
           </details>
+          {draft.validation?.diagnostics.length || validationFailure || codeBufferState.dirty ? <button type="button" className="ad-draft-diagnostics-trigger" aria-controls={draftDiagnosticsId} onClick={() => {
+            const panel = document.getElementById(draftDiagnosticsId);
+            const details = panel?.querySelector("details");
+            if (details) details.open = true;
+            panel?.scrollIntoView({ block: "start" });
+            panel?.focus({ preventScroll: true });
+          }}><AlertTriangle size={16} aria-hidden /> View draft diagnostics</button> : null}
         </div>
       </header>
     </div>
@@ -795,6 +803,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
     </section>
     <ActivityDefinitionDiagnosticsPanel
       panelRef={diagnosticsPanelRef}
+      id={draftDiagnosticsId}
       validation={draft.validation}
       failure={validationFailure}
       localDiagnostics={codeBufferState.dirty ? [{

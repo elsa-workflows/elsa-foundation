@@ -16,6 +16,44 @@ afterEach(() => {
 });
 
 describe("ActivityDefinitionPublicationReview toolbar mode", () => {
+  it("reopens failure details without retrying until the explicit prepare action", async () => {
+    const postJson = vi.fn(async () => { throw new TypeError("private transport detail"); });
+    const flushExactSavedRevision = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));
+    const harness = renderReview({ postJson, flushExactSavedRevision });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.textContent).toContain("Publication preflight could not be confirmed"));
+    click(buttonByText(harness.container, "Close publication review"));
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
+    const summary = harness.container.querySelector('.ad-publication-toolbar-status[role="alert"]')!;
+    expect(summary.textContent).toContain("Review could not be prepared");
+    expect(summary.textContent).not.toContain("error");
+    click(buttonByText(summary, "View details"));
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
+    expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");
+    expect(postJson).toHaveBeenCalledTimes(1);
+    expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
+    click(buttonByText(harness.container, "Close publication review"));
+    click(buttonByText(harness.container, "Review & publish"));
+    expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
+    click(buttonByText(harness.container, "Prepare publication"));
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows real deduplicated severity counts and opens retained publication issues", async () => {
+    const diagnostic = { code: "activity.graph.output", severity: "Error", message: "Connect the declared output.", subject: { kind: "ActivityDraft", id: "draft-1" }, location: null, metadata: {} };
+    const postJson = vi.fn(async () => ({ ...publicationPreflight(), isPublishable: false, diagnostics: [diagnostic, diagnostic, { ...diagnostic, code: "activity.note", severity: "Warning", message: "Review the output type." }] }));
+    const harness = renderReview({ postJson });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    click(buttonByText(harness.container, "Close publication review"));
+    const summary = harness.container.querySelector(".ad-publication-toolbar-status")!;
+    expect(summary.textContent).toContain("Publication blocked · 1 error · 1 warning");
+    click(buttonByText(summary, "View issues"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    expect(postJson).toHaveBeenCalledTimes(1);
+    expect(harness.container.textContent).toContain(diagnostic.message);
+  });
+
   it.each(["Error", "error"])("leads with deduplicated actionable blockers and explains the disabled publish action (%s)", async severity => {
     const diagnostic = {
       code: "agent.manifest.model", severity,

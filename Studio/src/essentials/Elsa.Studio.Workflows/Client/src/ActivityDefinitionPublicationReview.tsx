@@ -1,5 +1,5 @@
 import { graphPublicationValidationFailure } from "./activityPublicationValidationFailure";
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -239,7 +239,15 @@ export function ActivityDefinitionPublicationReview({
     : null;
   const diagnosticSource = uniquePublicationDiagnostics(receipt?.diagnostics?.length ? receipt.diagnostics : preflight?.diagnostics ?? rejectedDiagnostics);
   const hasBlockingDiagnostics = diagnosticSource.some(item => diagnosticSeverity(item.severity) === "Error");
+  const diagnosticCounts = ["Error", "Warning", "Info"].flatMap(severity => {
+    const count = diagnosticSource.filter(item => diagnosticSeverity(item.severity) === severity).length;
+    return count ? [`${count} ${severity.toLowerCase()}${count === 1 || severity === "Info" ? "" : "s"}`] : [];
+  }).join(" · ");
   const publicationBlocked = Boolean(rejectedDiagnostics.length || preflight && phase !== "success" && (!preflight.isPublishable || phase === "failed" && (receipt?.status === "Rejected" || receipt?.status === "Failed")));
+  const needsAttention = phase === "failed" || phase === "stale" || phase === "unknown" || publicationBlocked || hasBlockingDiagnostics;
+  const actionableStatus = needsAttention || phase === "review" && diagnosticSource.length > 0;
+  const attentionTitle = publicationBlocked && hasBlockingDiagnostics ? "Publication blocked" : phase === "failed" ? preflight ? "Publication did not complete" : "Review could not be prepared"
+    : publicationBlocked ? "Publication blocked" : publicationStatusLabel(phase, preflight?.isPublishable);
   const closeAllowed = phase !== "publishing" && phase !== "unknown";
   const focusDiagnostic = async (diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement) => {
     if (mode === "toolbar") {
@@ -322,12 +330,11 @@ export function ActivityDefinitionPublicationReview({
     }} disabled={disabled && phase === "idle"} aria-haspopup="dialog" aria-expanded={dialogOpen}>
       <GitCompareArrows size={16} aria-hidden /> {publicationTriggerLabel(phase, Boolean(preflight))}
     </button>
-    {phase !== "idle" && !dialogOpen ? <button type="button"
-      className={`ad-publication-toolbar-status${phase === "failed" || phase === "stale" || publicationBlocked ? " needs-attention" : ""}`}
-      onClick={() => setDialogOpen(true)} aria-haspopup="dialog" aria-expanded={dialogOpen}>
-      {phase === "failed" || phase === "stale" || publicationBlocked ? <AlertTriangle size={16} aria-hidden /> : null}
-      <span>{phase === "failed" && !hasBlockingDiagnostics ? "Review could not complete" : hasBlockingDiagnostics && publicationBlocked ? "Publication blocked — view issues" : publicationStatusLabel(phase, preflight?.isPublishable)}</span>
-    </button> : null}
+    {phase !== "idle" && !dialogOpen ? actionableStatus ? <div className="ad-publication-toolbar-status is-attention" role={needsAttention ? "alert" : "status"}>
+      <AlertTriangle size={18} aria-hidden />
+      <div><strong>{attentionTitle}{diagnosticCounts ? ` · ${diagnosticCounts}` : ""}</strong>{failure ? <p>{failure}</p> : null}</div>
+      <StudioButton size="sm" onClick={() => setDialogOpen(true)} aria-haspopup="dialog">{diagnosticSource.length ? "View issues" : "View details"}</StudioButton>
+    </div> : <span className="ad-publication-toolbar-status" role="status">{publicationStatusLabel(phase, preflight?.isPublishable)}</span> : null}
     {dialogOpen ? <PublicationDialog canClose={closeAllowed} onClose={() => closeAllowed && setDialogOpen(false)}>{reviewPanel}</PublicationDialog> : null}
   </div>;
 }

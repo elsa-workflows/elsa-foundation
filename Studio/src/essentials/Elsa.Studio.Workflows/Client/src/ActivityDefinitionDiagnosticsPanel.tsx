@@ -23,6 +23,7 @@ export interface ActivityDefinitionLocalDiagnostic {
 }
 
 export function ActivityDefinitionDiagnosticsPanel({
+  id,
   validation,
   panelRef,
   failure,
@@ -32,6 +33,7 @@ export function ActivityDefinitionDiagnosticsPanel({
   onFocus,
   onReturn
 }: {
+  id?: string;
   validation?: ActivityDraftValidationView | null;
   panelRef?: RefObject<HTMLElement | null>;
   failure?: ActivityDraftValidationFailure | null;
@@ -56,7 +58,7 @@ export function ActivityDefinitionDiagnosticsPanel({
   const counts = countSeverities(diagnostics, localDiagnostics);
   const groups = groupDiagnostics(diagnostics);
 
-  return <section ref={panelRef} className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
+  return <section ref={panelRef} id={id} tabIndex={-1} className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
     <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>
         <h2 id="activity-diagnostics-title"><ChevronRight className="ad-diagnostics-chevron" size={14} aria-hidden />Draft diagnostics</h2>
