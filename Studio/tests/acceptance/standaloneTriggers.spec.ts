@@ -313,9 +313,13 @@ test("standalone delivery lifecycle and recovery", async ({ page }) => {
   await j.inspectDelivery(initial, "delivery-admission"); const started = await j.started(initial); await j.inspectDelivery(started, "delivery-subscriber-outcomes");
   await inspectActualRun(j, started, started.recipients[0].id, "native", "delivery-native-inspect-actual-run");
   const captured = initial.recipients[0].capturedVersion; expect(captured).toBeTruthy();
-  await replace(j, target.authored, target.state); const before = new Set((await j.deliveries(event.id)).map(item => item.id));
+  const replacementState = structuredClone(target.state);
+  (replacementState.rootActivity.structure!.payload.activities as { inputs: unknown[] }[])[0].inputs =
+    [literal("name", "message"), literal("value", "Replacement serving slot output")];
+  await replace(j, target.authored, replacementState); const before = new Set((await j.deliveries(event.id)).map(item => item.id));
   await j.event(String(event.configuration.eventName)); const later = await j.waitDelivery(event.id, before);
   expect(later.recipients[0].capturedVersion).not.toBe(captured);
+  await inspectRuns(j, later, [{ message: "Replacement serving slot output", count: 7 }]);
   const old = await j.api<DeliveryView>(`/runtime/standalone-trigger-deliveries/${initial.id}`); expect(old.recipients[0].capturedVersion).toBe(captured);
   await j.inspectDelivery(old, "delivery-captured-version");
   await pause(j, event.id); await j.api(`/publishing/workflows/${target.authored.definition.id}/slots/default`, "DELETE");

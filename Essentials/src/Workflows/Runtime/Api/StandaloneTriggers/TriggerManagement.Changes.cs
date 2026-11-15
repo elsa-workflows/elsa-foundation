@@ -56,6 +56,7 @@ internal sealed partial class TriggerManagement
             var retained = await store.FindAsync(access.Scope, id, ct) ?? throw Missing();
             if (replay.TriggerId != id || !await access.CanReadAsync(retained.Trigger, ct)) throw Missing();
             await AuthorizeCommandAsync(retained.Trigger, command, ct);
+            await events.Publish(new StandaloneTriggerResourceCommitted(access.Scope, id, retained.Trigger.TypeKey, retained.Trigger.Revision), ct);
             return new(requestId, "AlreadyApplied", replay.Revision, null);
         }
         var aggregate = await RequireResourceAsync(id, ct);
@@ -71,6 +72,7 @@ internal sealed partial class TriggerManagement
         if (proof.ObservationFingerprint != Fingerprint(new { Aggregate = aggregate, Targets = observedTargets })) throw Conflict();
         var receipt = await committer.CommitAsync(access.Scope, new(requestId, fingerprint, access.Subject, aggregate.Trigger.Revision,
             prepared.Trigger, prepared.Subscriptions) { ObservedTargets = observedTargets }, ct);
+        await events.Publish(new StandaloneTriggerResourceCommitted(access.Scope, id, prepared.Trigger.TypeKey, receipt.Revision), ct);
         return new(requestId, "Applied", receipt.Revision, await ViewAsync(prepared, ct), Effects:
             [new { message = "The reviewed resource change was committed. Accepted deliveries were not cancelled." }]);
     }

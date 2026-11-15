@@ -68,3 +68,7 @@ Standalone trigger reservations also participate in route projection and its fin
 - HTTP content downloads: [`Http/Elsa.Http/EXTENSION_POINTS.md`](../../../Http/Elsa.Http/EXTENSION_POINTS.md).
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.2 + §2.22.1.
+
+## Standalone resource route notification
+
+`StandaloneTriggerResourceCommitted` is an inline post-commit management notification from Runtime Core. `StandaloneTriggerRouteObserver` handles HTTP resources by converging through the existing shared `IHttpEndpointRouteTableSynchronizer` before the management API acknowledges the change. Replaying an already committed authorized management request repeats the notification, repairing a failed local refresh without another mutation. It carries no invocation authority; the resolver reads the committed physical reservations. Peer nodes retain their existing background convergence. Direct store writes do not emit management notifications.

@@ -368,6 +368,7 @@ public sealed partial class StandaloneTriggerManagementTests
         internal readonly FakeStore Store = new();
         internal readonly FakeDiscovery Discovery = new();
         internal readonly Clock Clock = new();
+        internal readonly Publisher Events = new();
         internal AuthoringTriggerCommitter Committer { get; }
         internal TriggerManagement Management { get; }
         internal Fixture(ITriggerManagementCommitter? runtime = null, IRecurringTriggerScheduleStore? schedules = null,
@@ -376,7 +377,7 @@ public sealed partial class StandaloneTriggerManagementTests
             IWorkflowTriggerBindingStore? bindings = null)
         {
             Committer = new(Store);
-            Management = new(Store, runtime ?? Committer, Access, new Catalog(), Discovery, new Mapper(), new Publisher(), new EphemeralDataProtectionProvider(), Clock,
+            Management = new(Store, runtime ?? Committer, Access, new Catalog(), Discovery, new Mapper(), Events, new EphemeralDataProtectionProvider(), Clock,
                 schedules: schedules, reservations: reservations, reservationPlanners: planners,
                 expressionHandlers: expressionHandlers, expressionEvaluator: expressionEvaluator, reservationPolicies: policies, triggerBindings: bindings);
         }
@@ -387,12 +388,12 @@ public sealed partial class StandaloneTriggerManagementTests
     {
         public string Subject { get; set; } = "operator";
         public TriggerScope Scope { get; } = new(new("tenant-a"), "tenant-a");
-        internal bool TargetRead = true, TargetExecute = true, CanGrant = true, GlobalRights = true;
+        internal bool TargetRead = true, TargetExecute = true, CanGrant = true, GlobalRights = true, ReadResources = true;
         public ValueTask<bool> HasAsync(string permission, object? resource, CancellationToken cancellationToken) => ValueTask.FromResult(resource is null && !GlobalRights ? false : permission switch
         { "workflows/runtime:read" => TargetRead, "workflows/runtime:execute" => TargetExecute, TriggerPermissions.Authorize => CanGrant, _ => true });
         public async ValueTask RequireAsync(string permission, object? resource, CancellationToken cancellationToken, bool mask = false)
         { if (!await HasAsync(permission, resource, cancellationToken)) throw new TriggerOperationException(mask ? "missing" : "forbidden", "Denied"); }
-        public ValueTask<bool> CanReadAsync(object? resource, CancellationToken cancellationToken) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanReadAsync(object? resource, CancellationToken cancellationToken) => ValueTask.FromResult(ReadResources);
         public ValueTask<TriggerActor> ActorAsync(CancellationToken cancellationToken) => ValueTask.FromResult(new TriggerActor(Subject, GlobalRights, GlobalRights, GlobalRights, GlobalRights && CanGrant, false, false, false));
     }
     private sealed class Catalog : IStandaloneTriggerTypeCatalog
@@ -406,7 +407,19 @@ public sealed partial class StandaloneTriggerManagementTests
         public WorkflowExecutableInputValidation ValidateMappings(WorkflowExecutableInputContract contract, IReadOnlyList<TriggerInputMapping> mappings) => WorkflowExecutableInputValidation.Success([]);
     }
     private sealed class Publisher : IInlineEventPublisher
-    { public Task Publish(IEvent value, CancellationToken cancellationToken = default) => Task.CompletedTask; }
+    {
+        internal readonly List<StandaloneTriggerResourceCommitted> Committed = [];
+        internal Action<StandaloneTriggerResourceCommitted>? ObserveCommit;
+        public Task Publish(IEvent value, CancellationToken cancellationToken = default)
+        {
+            if (value is StandaloneTriggerResourceCommitted committed)
+            {
+                Committed.Add(committed);
+                ObserveCommit?.Invoke(committed);
+            }
+            return Task.CompletedTask;
+        }
+    }
     private sealed class FakeDiscovery : IStandaloneTriggerTargetDiscovery
     {
         internal string ContractRevision = "contract-v1";
