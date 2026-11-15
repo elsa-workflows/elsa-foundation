@@ -473,7 +473,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         }
     }
 
-    private static async Task<int> ExecutePublishedSetAndReadAsync(WorkflowExecutable executable)
+    private static async Task<int> ExecutePublishedSetAndReadAsync(WorkflowExecutable executable, int initialCounter = 0)
     {
         const string workflowId = "hash-upgrade-execution";
         const string invocationId = "hash-upgrade-set";
@@ -485,7 +485,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             null, now, now, now, null, null, null, null, new Dictionary<string, string>())
         {
             RootVariableFrame = new VariableFrameFactory().CreateRoot(workflowId, "workflow",
-                new Dictionary<string, ValueEnvelope> { ["counter"] = ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(0), ValueProtectionPolicy.InstanceInline) })
+                new Dictionary<string, ValueEnvelope> { ["counter"] = ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(initialCounter), ValueProtectionPolicy.InstanceInline) })
         });
         var activity = new ActivityExecutionState(
             new ActivityExecution(invocationId, workflowId, "set-counter", "set-counter", "elsa.intrinsic.set", "1.0.0"),

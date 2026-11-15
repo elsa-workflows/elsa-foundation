@@ -23,23 +23,23 @@ public sealed class ActivityTemplateDataSelectionTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Open_workflow_request_context_stops_at_the_closed_body_and_does_not_open_variables(bool portable)
+    public void Declared_workflow_request_context_stops_at_the_closed_body_and_does_not_open_variables(bool portable)
     {
         RuntimeInputBinding Request(string key) => portable ? Expression(new WorkflowRequestExpressionParameterBinding(key)) : RequestBinding(key);
         var root = Container("workflow-root", [], Node("ordinary", Request("legacy")),
             Closed("boundary", "body-key", [], Request("legacy"), Node("body", Request("body-key"))));
-        var facts = ActivityTemplatePlacer.DescribeDataSelectionFacts(root, [], outerRequestIsOpen: true);
+        var facts = ActivityTemplatePlacer.DescribeDataSelectionFacts(root, ["legacy"]);
         ActivityTemplateDataSelectionGuard.Validate(root, true, facts);
-        Assert.Contains("ordinary", facts.OpenRequestConsumers!);
-        Assert.Contains("boundary", facts.OpenRequestConsumers!);
-        Assert.DoesNotContain("body", facts.OpenRequestConsumers!);
+        var undeclared = Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(root, true,
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(root, [])));
+        Assert.Contains(undeclared.Findings, finding => finding.Path == "ordinary/inputs/value" && finding.Type == "ActivityDataSelection/InputUnknown");
         var invalidBody = Closed("boundary", "body-key", [], Request("legacy"), Node("body", Request("legacy")));
         var rejected = Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(invalidBody, true,
-            ActivityTemplatePlacer.DescribeDataSelectionFacts(invalidBody, [], outerRequestIsOpen: true)));
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(invalidBody, ["legacy"])));
         Assert.Contains(rejected.Findings, finding => finding.Path == "body/inputs/value" && finding.Type == "ActivityDataSelection/InputUnknown");
         var variable = Node("variable", VariableBinding("missing", "workflow"));
         Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(variable, true,
-            ActivityTemplatePlacer.DescribeDataSelectionFacts(variable, [], outerRequestIsOpen: true)));
+            ActivityTemplatePlacer.DescribeDataSelectionFacts(variable, [])));
         var native = Node("native", Request("legacy"));
         Assert.Throws<ActivityDataSelectionRejectedException>(() => ActivityTemplateDataSelectionGuard.Validate(native, false,
             ActivityTemplatePlacer.DescribeDataSelectionFacts(native, [])));

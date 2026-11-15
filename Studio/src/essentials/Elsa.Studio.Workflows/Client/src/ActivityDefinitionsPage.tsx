@@ -198,8 +198,8 @@ export function ActivityDefinitionsPage({
     );
   }
 
-  const collectionEntryId = readActivityHistoryMetadata()?.collection?.entryId ?? "new-entry";
-  return <ActivityDefinitionCollection key={`${collectionEntryId}:${historyRevision}`} context={context} baseUrl={context.baseUrl} authorityRevision={authorizationRevision} authorizationInvalidating={authorizationInvalidating} activityEditors={activityEditors()} onHistoryContextChange={updateRouteCollectionContext} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onPlanUpgrade={() => navigateToStudioPath("/workflows/activity-definitions/upgrades")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
+  // Popstate changes the revision; persisting this entry's metadata must not remount an open form.
+  return <ActivityDefinitionCollection key={historyRevision} context={context} baseUrl={context.baseUrl} authorityRevision={authorizationRevision} authorizationInvalidating={authorizationInvalidating} activityEditors={activityEditors()} onHistoryContextChange={updateRouteCollectionContext} onImport={() => navigateToStudioPath("/workflows/activity-definitions/import-elsa3")} onPlanUpgrade={() => navigateToStudioPath("/workflows/activity-definitions/upgrades")} onOpen={definitionId => navigate({ definitionId, section: null, draftId: null, versionId: null })} onCreated={(definitionId, draftId) => navigate({ definitionId, section: "editor", draftId, versionId: null })} />;
 }
 
 function defaultStudioPathNavigation(path: string) {

@@ -12,6 +12,9 @@ using Elsa.Mediator.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Activities.Design.Api.Handlers;
 
@@ -36,8 +39,42 @@ public sealed class ReusableActivityAuthoringService(
     IActivityTypeKeyPolicy typeKeyPolicy,
     IIdentityGenerator identityGenerator,
     TimeProvider timeProvider,
-    IActivityAuthoringContextAsync context) : IReusableActivityAuthoringService
+    IActivityAuthoringContextAsync context,
+    IEnumerable<IActivityAuthoringCatalog>? candidateCatalogs = null,
+    IEnumerable<IActivityDataSelectionDocumentProjector>? candidateProjectors = null,
+    IActivityStructureService? candidateStructures = null) : IReusableActivityAuthoringService
 {
+    // Preserve the original public constructor for existing binary consumers. Compositions that do
+    // not install the request-only candidate dependencies retain their existing authoring behavior.
+    public ReusableActivityAuthoringService(
+        IActivityDefinitionStore definitions,
+        IActivityDefinitionAuthoringStore authoringStore,
+        IActivityDefinitionDraftStore draftStore,
+        IActivityDefinitionVersionPublicationStore publicationStore,
+        IActivityDefinitionLayoutStore layoutStore,
+        IActivityDraftValidationStore validationStore,
+        ICreateActivityDefinitionCommand createDefinition,
+        IUpdateActivityDefinitionPresentationCommand updateDefinitionPresentation,
+        ICreateActivityDraftCommand createDraft,
+        IUpdateActivityDraftPresentationCommand updateDraftPresentation,
+        ICreateActivityDraftConflictCopyCommand createConflictCopy,
+        IReplaceActivityDraftCommand replaceDraft,
+        IDiscardActivityDraftCommand discardDraft,
+        IStoreActivityDraftValidationCommand storeValidation,
+        IActivityProviderRegistry providers,
+        IActivityDraftValidator validator,
+        ActivityContractAuthoringValidator contractAuthoringValidator,
+        IActivityTypeKeyPolicy typeKeyPolicy,
+        IIdentityGenerator identityGenerator,
+        TimeProvider timeProvider,
+        IActivityAuthoringContextAsync context) : this(
+        definitions, authoringStore, draftStore, publicationStore, layoutStore, validationStore,
+        createDefinition, updateDefinitionPresentation, createDraft, updateDraftPresentation, createConflictCopy,
+        replaceDraft, discardDraft, storeValidation, providers, validator, contractAuthoringValidator,
+        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null)
+    {
+    }
+
     public async Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(
         CreateReusableActivityDefinition command,
         CancellationToken cancellationToken)
@@ -360,6 +397,64 @@ public sealed class ReusableActivityAuthoringService(
         }
     }
 
+    public async Task<ActivityCandidateValidationView> ValidateCandidateAsync(ValidateReusableActivityCandidate command, CancellationToken ct)
+    {
+        ActivityCandidateValidationView Refuse(string state) => new(state);
+        var catalogs = candidateCatalogs?.ToArray() ?? [];
+        if (catalogs.Length != 1 || candidateStructures is null) return Refuse("unavailable");
+        var catalog = catalogs[0];
+        if (!await context.CanManageActivityDefinitionsAsync(ct) || !await catalog.CanReadAsync(ct)) return Refuse("denied");
+        var actor = (context.ActorId, context.TenantId, Profile: await context.GetAuthorizationProfileAsync(ct));
+        var draft = await GetDraftAsync(command.DraftId, ct);
+        var authoring = await GetAuthoringAsync(draft.DefinitionId, ct);
+        EnsureVisible(draft.TenantId);
+        EnsureVisible(authoring.TenantId);
+        EnsureDesignAuthority(authoring);
+        EnsureActiveRevision(draft, command.ExpectedRevision);
+        if (!await context.CanReadProviderPayloadAsync(draft.State.Provider.ProviderKey, ct) || !await context.CanReadProviderPayloadAsync(command.Provider.ProviderKey, ct)) return Refuse("denied");
+        var baseline = ActivityDataSelectionSnapshot.Hash(draft.State);
+        var provider = await EnsureAuthorableProviderAsync(command.Provider, ct);
+        var manifest = ActivityDataSelectionSnapshot.Hash(provider.AuthoringCapabilities);
+        var contract = ToDomainContract(command.Contract);
+        EnsureAuthorableContract(contract, new("ActivityDraft", draft.Id, draft.DefinitionId, Revision: draft.Revision));
+        // Normalize the proposal's sidecars through the same owner as replacement. No save command is invoked.
+        _ = NormalizePresentation(command.ActivityPresentation?.Records ?? []);
+        var state = new ActivityDefinitionDraftState(contract, command.Provider, new Dictionary<string, string>(draft.State.Options));
+        var hash = ActivityDataSelectionSnapshot.Hash(state);
+        ActivityDataSelectionDocument? document = null;
+        foreach (var projector in candidateProjectors ?? [])
+        {
+            var projected = await projector.TryProjectAsync(state.Provider, state.Contract, draft.Id, hash, ct);
+            if (projected is null) continue;
+            if (document is not null || projected.ResourceId != draft.Id || projected.ContractRevision != hash) return Refuse("unavailable");
+            document = projected;
+        }
+        if (document is null) return Refuse("unavailable");
+        var visible = await catalog.ListAsync(ct);
+        if (!visible.Allowed || !ActivityDataSelectionContextService.CatalogContains(document.RootActivity,
+                visible.Entries.Select(x => x.ActivityVersionId).ToHashSet(StringComparer.Ordinal), candidateStructures, ct)) return Refuse("denied");
+        var catalogRevision = ActivityDataSelectionSnapshot.Hash(visible);
+        var result = await validator.ValidateAsync(new(draft.DefinitionId, draft.Id, draft.Revision, state), ct);
+        if (result.DraftId != draft.Id || result.Revision != draft.Revision) return Refuse("unavailable");
+        if (actor != (context.ActorId, context.TenantId, await context.GetAuthorizationProfileAsync(ct)) ||
+            !await context.CanManageActivityDefinitionsAsync(ct) || !await catalog.CanReadAsync(ct) ||
+            !await context.CanReadProviderPayloadAsync(draft.State.Provider.ProviderKey, ct) || !await context.CanReadProviderPayloadAsync(command.Provider.ProviderKey, ct)) return Refuse("denied");
+        var after = await GetDraftAsync(command.DraftId, ct);
+        var afterAuthoring = await GetAuthoringAsync(draft.DefinitionId, ct);
+        EnsureVisible(after.TenantId);
+        EnsureVisible(afterAuthoring.TenantId);
+        EnsureDesignAuthority(afterAuthoring);
+        EnsureActiveRevision(after, command.ExpectedRevision);
+        if (after.DefinitionId != draft.DefinitionId || ActivityDataSelectionSnapshot.Hash(after.State) != baseline) return Refuse("stale");
+        var afterProvider = await EnsureAuthorableProviderAsync(command.Provider, ct);
+        var afterCatalog = await catalog.ListAsync(ct);
+        if (!afterCatalog.Allowed) return Refuse("denied");
+        if (ActivityDataSelectionSnapshot.Hash(afterCatalog) != catalogRevision || ActivityDataSelectionSnapshot.Hash(afterProvider.AuthoringCapabilities) != manifest)
+            return Refuse("stale");
+        var valid = result.IsValid && result.Diagnostics.All(diagnostic => diagnostic.Severity != ActivityDiagnosticSeverity.Error);
+        return new(valid ? "validated" : "invalid", new(result.DraftId, result.Revision, valid, result.ValidatedAt, result.Diagnostics));
+    }
+
     public async Task<ActivityDraftValidationView> ValidateDraftAsync(
         ValidateReusableActivityDraft command,
         CancellationToken cancellationToken)
@@ -555,7 +650,7 @@ public sealed class ReusableActivityAuthoringService(
             throw Forbidden("The caller is not authorized to author this activity provider.");
     }
 
-    private async ValueTask EnsureAuthorableProviderAsync(ActivityProviderManifest manifest, CancellationToken cancellationToken)
+    private async ValueTask<IActivityProvider> EnsureAuthorableProviderAsync(ActivityProviderManifest manifest, CancellationToken cancellationToken)
     {
         await EnsureProviderWriteAsync(manifest.ProviderKey, cancellationToken);
         IActivityProvider provider;
@@ -580,6 +675,7 @@ public sealed class ReusableActivityAuthoringService(
                 "activity.provider.schema-not-authorable",
                 "Activity provider schema is not authorable",
                 "The selected provider schema may be readable historically but cannot be used for mutable authoring.");
+        return provider;
     }
 
     private void EnsureAuthorableContract(ActivityContract contract, ActivityDiagnosticSubject subject)
@@ -814,6 +910,8 @@ public interface IReusableActivityAuthoringService
     Task<ReusableActivityDraftView> CreateConflictCopyAsync(CreateReusableActivityDraftConflictCopy command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> MigrateDraftAsync(MigrateReusableActivityDraft command, CancellationToken cancellationToken);
     Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken);
+    Task<ActivityCandidateValidationView> ValidateCandidateAsync(ValidateReusableActivityCandidate command, CancellationToken cancellationToken) =>
+        Task.FromResult(new ActivityCandidateValidationView("unavailable"));
     Task<ActivityDraftValidationView> ValidateDraftAsync(ValidateReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> GetDraftAsync(GetReusableActivityDraft request, CancellationToken cancellationToken);
     Task<ReusableActivityVersionView> GetVersionAsync(GetReusableActivityVersion request, CancellationToken cancellationToken);

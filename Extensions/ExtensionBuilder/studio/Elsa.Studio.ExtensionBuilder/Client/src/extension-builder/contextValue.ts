@@ -74,7 +74,6 @@ export interface ExtensionBuilderContextValue {
   workingBranchName: string;
   allowProtectedBranchEdit: boolean;
   newFilePath: string;
-  status: string | null;
   error: string | null;
 
   // Derived selections + gates.

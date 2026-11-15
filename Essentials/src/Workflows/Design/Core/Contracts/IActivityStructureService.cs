@@ -8,8 +8,10 @@ public interface IActivityStructureService
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
-    /// Projects physical ownership solely for retaining authoring metadata. The default keeps custom
-    /// services compatible by deriving ownership from their existing lexical child projection.
+    /// Projects real physically owned activity roots for authoring-metadata retention and structural
+    /// source/admission validation. Additional node IDs are presentation identities only. The default
+    /// keeps custom services compatible by deriving ownership from their existing lexical child
+    /// projection; physical ownership does not widen lexical scope or establish execution facts.
     /// </summary>
     ActivityOwnershipProjection ProjectOwnership(ActivityNode activity) =>
         new(ProjectChildren(activity).SelectMany(slot => slot.Activities).ToArray(), []);

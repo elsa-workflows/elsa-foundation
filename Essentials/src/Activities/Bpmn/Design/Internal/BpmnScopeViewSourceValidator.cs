@@ -12,9 +12,9 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// Checks physical source before it is traversed. A JSON provenance marker cannot authorize storing
 /// derived views; the ordinary write validation gate propagates this structural rejection.
 /// </summary>
-internal sealed class BpmnScopeViewSourceValidator(IEnumerable<IActivityStructureHandler> handlers) : IDraftValidator
+internal sealed class BpmnScopeViewSourceValidator(IEnumerable<IActivityStructureHandler> handlers, IActivityStructureService? structures = null) : IDraftValidator
 {
-    private readonly DefaultActivityStructureService _structures = new(handlers);
+    private readonly IActivityStructureService _structures = structures ?? new DefaultActivityStructureService(handlers);
 
     public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
@@ -29,7 +29,7 @@ internal sealed class BpmnScopeViewSourceValidator(IEnumerable<IActivityStructur
             // physical native records instead; all other contributions own their native slots.
             var children = activity.Structure is { Kind: BpmnActivityIdentities.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion }
                 ? BpmnDocumentStructureHandler.Read(activity).Activities
-                : _structures.ProjectChildren(activity).SelectMany(slot => slot.Activities);
+                : _structures.ProjectOwnership(activity).Activities;
             foreach (var child in children) pending.Push(child);
         }
         return ValueTask.FromResult<IEnumerable<ValidationError>>([]);

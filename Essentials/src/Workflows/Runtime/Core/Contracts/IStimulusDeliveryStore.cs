@@ -14,6 +14,22 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public interface IStimulusDeliveryStore
 {
+    /// <summary>Atomically seals one canonical ordinary start under the live source claim; replays return the first target command.</summary>
+    /// <remarks>Validate the actual retained cohort, publisher and owning intent decoder before writing. One command per
+    /// deterministic target, including multiple bindings for one artifact. Never overwrite a winner. The persisted command
+    /// remains initial-checkpoint authority after claim completion; no new lease is required to complete accepted work.</remarks>
+    /// <exception cref="StimulusDeliveryBoundaryException">Source, decoder, gate or provider cannot prove admission; preserves the original cause.</exception>
+    /// <exception cref="RuntimePostCommitOutboxStaleClaimException">Current source claim was lost.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
+    ValueTask<WorkflowExecutionCommandEnvelope> SealSavedStartAsync(WorkflowExecutableStimulusDeliveryAuthority authority,
+        WorkflowExecutionCommandEnvelope candidate, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority); ArgumentNullException.ThrowIfNull(candidate);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromException<WorkflowExecutionCommandEnvelope>(new StimulusDeliveryBoundaryException(authority.SourceOutboxItemId,
+            new NotSupportedException("The selected provider cannot seal canonical saved starts."), false));
+    }
+
     /// <summary>Read the canonical physical source before selection or a saved-recipient effect.</summary>
     /// <remarks>The provider revalidates immutable intent, committed scope, current persisted owner/fence/expiry
     /// and publisher facts. An absent cohort permits first selection; a present cohort must be retention accepted.

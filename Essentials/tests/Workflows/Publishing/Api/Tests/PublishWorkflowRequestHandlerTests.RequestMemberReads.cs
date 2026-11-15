@@ -3,9 +3,11 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -48,16 +50,22 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Contains(new RuntimeRequirement(RuntimeReadSelection.RequirementKey, "1"), executable.RuntimeRequirements);
     }
 
-    [Fact]
-    public async Task With_member_reads_on_a_request_member_read_of_an_open_request_publishes()
+    [Theory]
+    [InlineData("WorkflowRequest", "{\"memberKey\":\"customer\"}")]
+    [InlineData("WorkflowRequest", "{\"memberKey\":\"customer\",\"path\":\"id\"}")]
+    [InlineData("WorkflowRequestMember", "{\"memberKey\":\"customer\",\"memberPath\":[\"a.b\",\"\"]}")]
+    public async Task Undeclared_request_whole_and_member_reads_refuse_publication(string role, string payload)
     {
-        var version = WorkflowVersion(Node("consumer", MemberRead("WorkflowRequestMember")));
-
-        var publication = await MemberReadHandler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
-
-        var binding = Assert.IsType<WorkflowExecutable>(await _store.FindAsync(publication.ArtifactId)).RootActivity.InputBindings["Text"];
-        Assert.Equal(RuntimeInputBindingSource.WorkflowRequestMember, binding.Source);
-        Assert.Equal("customer", binding.WorkflowRequest!.MemberKey);
+        var read = new WorkflowArgumentState("Text", new ArgumentValue(JsonDocument.Parse(payload).RootElement.Clone(), role), null, null, null, null);
+        var version = WorkflowVersion(Node("consumer", read));
+        var before = await CountPublishWritesAsync();
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            MemberReadHandler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+        var refusal = Assert.IsType<ActivityDataSelectionRejectedException>(exception.InnerException);
+        Assert.Contains(refusal.Findings, finding => finding.Type == "ActivityData/UnknownInput");
+        Assert.Equal(before, await CountPublishWritesAsync());
+        Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+        Assert.Equal(payload, Assert.IsType<JsonElement>(read.Value.Value).GetRawText());
     }
 
     [Fact]

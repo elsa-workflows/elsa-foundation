@@ -18,7 +18,7 @@
 
 ## Complete-document retention and source validation
 
-- Owning contracts: Workflows Design Core `IActivityStructureHandler` and Validations Core `IDraftValidator`.
+- Owning contracts: Workflows Design Core `IActivityStructureHandler` / `IActivityStructureService` and Validations Core `IDraftValidator`.
 - Contributors: internal singleton `BpmnDocumentStructureHandler` for `elsa.bpmn.structure@2.0.0`,
   internal singleton `BpmnDocumentScopeViewHandler` for transient `elsa.bpmn.scope-view@1.0.0`, and
   scoped enumerable `BpmnScopeViewSourceValidator` / `BpmnDocumentAdmissionValidator`, registered by `ActivitiesBpmnDesignFeature`.
@@ -28,6 +28,8 @@
 - The source validator rejects physically authored derived views and validates complete-document ownership
   before generic traversal. Opaque literal JSON is not treated as activity source. The admission validator
   reports content-derived execution errors without preventing draft retention through ordinary create/update commands.
+  Both use the registered `IActivityStructureService` when available, otherwise the default handler service,
+  to traverse other owners' real physical roots. Compact-header IDs remain presentation identities only.
 - Exact kind/schema matching exposes the document retention payload; the scope-view handler has no authorable
   payload type. Context-free compilation remains closed. Explicit-context compilation admits complete source before lowering
   and requires exact resolved native roles. Raw-source chain facts remain conservative outside the proven subset;

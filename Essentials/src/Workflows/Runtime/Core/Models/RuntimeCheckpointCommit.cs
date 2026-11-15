@@ -16,6 +16,15 @@ public sealed record RuntimeCheckpointCommit(
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
 
+    /// <summary>Optional ordered logical history groups. Null preserves legacy replay/wire shapes.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RuntimeHistoryBatch>? HistoryBatches
+    {
+        get => _historyBatches;
+        init => _historyBatches = value is null ? null : Array.AsReadOnly(value.ToArray());
+    }
+    private readonly IReadOnlyList<RuntimeHistoryBatch>? _historyBatches;
+
     /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelStateChange? ModelState { get; init; }
@@ -24,6 +33,10 @@ public sealed record RuntimeCheckpointCommit(
     /// <remarks>A refreshed concurrency condition is excluded from logical replay identity; the native state retains its immutable model-work origin.</remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelExecutionState? ExpectedModelExecution { get; init; }
+
+    /// <summary>The accepted start and recorded failure that must still authorize a first fault checkpoint.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeInitialStartFault? ExpectedInitialStartFault { get; init; }
 
     /// <summary>The observed native parent wait that must remain live when its model child is first admitted.</summary>
     /// <remarks>A concurrency condition, not source authority. Admission preserves the parent bookmark and its generation.</remarks>
@@ -48,13 +61,14 @@ public sealed record RuntimeCheckpointCommit(
     {
         if (ExpectedModelExecution is not { } expected) return;
         if (ModelState is not null || ExpectedBookmarkResume is not null || ExpectedFence is null ||
-            Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
             expected.ExecutionId == WorkflowExecutionId || expected.Lifecycle != RuntimeModelLifecycle.Running ||
             StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert,
-                State.Status: WorkflowExecutionStatus.Running } native ||
+                State: { } } native ||
+            !(Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted && native.State.Status == WorkflowExecutionStatus.Running && ExpectedInitialStartFault is null ||
+              Checkpoint.Name == RuntimeCheckpointNames.WorkflowFaulted && native.State.Status == WorkflowExecutionStatus.Faulted && ExpectedInitialStartFault is not null) ||
             native.State.StartedAt is not { } startedAt || startedAt > Checkpoint.OccurredAt || native.State.CreatedAt != startedAt ||
             native.State.ParentWorkflowExecutionId is not null ||
-            native.State.TenantId != expected.TenantId || native.State.Partition?.Value != expected.Scope.Value ||
+            native.State.TenantId != expected.TenantId || native.State.Partition?.Value != (expected.Partition?.Value ?? expected.Scope.Value) ||
             native.State.Authority is not { } authority ||
             !WorkflowExecutionAuthoritySnapshot.Matches(expected.Authority, authority.SystemIdentity,
                 authority.RootInitiator, authority.Metadata))
@@ -63,12 +77,16 @@ public sealed record RuntimeCheckpointCommit(
             origin.WorkerExecutionId != WorkflowExecutionId ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, native.State.PinnedExecutable)))
             throw new InvalidOperationException("The native worker's model invocation differs from its admission condition.");
+        if (expected.IngressOrigin is { } ingress && native.State.ModelWorkOrigin?.IngressOrigin?.IsEquivalentTo(ingress) != true)
+            throw new InvalidOperationException("An ingress model worker must retain its source-bound parent invocation.");
     }
 
     /// <summary>Reject a model decision that could alias native state or escape its execution fence.</summary>
     public void EnsureModelStateShape()
     {
         if (ModelState is not { } model) return;
+        if (model.State.IngressOrigin is { } ingress ? ingress.Scope != model.State.Scope || model.State.Partition is null : model.State.Partition is not null)
+            throw new InvalidOperationException("Only a physically admitted ingress model retains an exact scoped partition snapshot.");
         var retainsState = model.ExpectedRevision == model.State.Revision;
         if (model.State.ExecutionId != WorkflowExecutionId || ExpectedFence is null ||
             (!retainsState && model.State.UpdatedAt != Checkpoint.OccurredAt) ||
@@ -86,11 +104,19 @@ public sealed record RuntimeCheckpointCommit(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
 
+    /// <summary>Physical accepted-source authority for the initial exact wait consumption only.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeIngressWaitOrigin? IngressWaitOrigin { get; init; }
+
 
     /// <summary>Validate that the exact wait condition belongs to this initial trigger-claim checkpoint.</summary>
     public void EnsureExactBookmarkResumeShape()
     {
-        if (ExpectedBookmarkResume is not { } expected) return;
+        if (ExpectedBookmarkResume is not { } expected)
+        {
+            if (IngressWaitOrigin is not null) throw new InvalidOperationException("An ingress wait origin requires its initial exact bookmark condition.");
+            return;
+        }
         var activity = StateChanges.ActivityExecutions.SingleOrDefault(change => change.StateId == expected.ActivityExecutionId);
         var bookmark = StateChanges.Bookmarks.SingleOrDefault(change => change.StateId == expected.BookmarkId);
         if (expected.RegistrationCapture is null || expected.WorkflowExecutionId != WorkflowExecutionId ||

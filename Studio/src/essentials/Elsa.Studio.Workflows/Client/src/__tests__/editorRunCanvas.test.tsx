@@ -81,7 +81,7 @@ describe("execution attached to the editor canvas", () => {
     expect(latest.loading).toBe(true);
     expect(container.textContent).toContain("Loading execution evidence…");
     release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
-    expect(latest.loading).toBe(false);
+    await vi.waitFor(() => expect(latest.loading).toBe(false));
     expect(container.textContent).not.toContain("Loading execution evidence…");
 
     click("Refresh execution"); await settle();
@@ -89,7 +89,7 @@ describe("execution attached to the editor canvas", () => {
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
     expect(container.textContent).not.toContain("Loading execution evidence…");
     release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
-    expect(latest.loading).toBe(false);
+    await vi.waitFor(() => expect(latest.loading).toBe(false));
     expect(container.textContent).not.toContain("Loading execution evidence…");
   });
 

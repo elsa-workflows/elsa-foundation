@@ -1,3 +1,10 @@
+import { useWorkflowNativeBlockCommit } from "./useWorkflowNativeBlockCommit";
+import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
+import { presentationScopeFrames } from "../graph-authoring/presentationScopeFrames";
+import { NativeBlockCommands } from "../graph-authoring/NativeBlockCommands";
+import { nextNativeBlockPosition } from "../graph-authoring/nativeBlockPlacement";
+import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
+import { validateWorkflowCandidate } from "../api/nativeBlockValidation";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
@@ -125,6 +132,7 @@ import { bpmnPaletteElements, directHumanBpmnElement } from "../bpmn/bpmnPalette
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
+import { notifySuccess, useNotificationGuard } from "./notifications";
 import { assertLosslessBpmnImport, exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
@@ -241,6 +249,8 @@ export function WorkflowEditor({
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
   const setError = useCallback((value: WorkflowErrorInput) => setErrorState(normalizeWorkflowError(value)), []);
   const [status, setStatus] = useState("");
+  const notificationScope = useMemo(() => ({ context, definitionId, documentAdapter }), [context, definitionId, documentAdapter]);
+  const captureNotificationGuard = useNotificationGuard(notificationScope);
   const [operation, setOperation] = useState<WorkflowEditorOperation>("idle");
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
   const [paletteSearch, setPaletteSearch] = useState("");
@@ -254,17 +264,23 @@ export function WorkflowEditor({
   const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
 
   const historyCatalog = useRef<ActivityCatalogItem[]>([]);
-  const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft) => {
+  const historyView = useRef<GraphAuthoringView>({ frames: [], selectedNodeIds: [], primaryNodeId: null });
+  const pendingHistoryView = useRef<GraphAuthoringView | null>(null);
+  const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft, view?: GraphAuthoringView) => {
     const root = snapshot.state.rootActivity;
-    let path = resolveScopeFrames(root, editableDoc.state.frames, historyCatalog.current);
+    let path = resolveScopeFrames(root, view?.frames ?? editableDoc.state.frames, historyCatalog.current);
     const scope = resolveScope(root, path, historyCatalog.current);
     if (scope?.slot.cardinality === "single") {
       path = planSlotNavigation(path, scope.owner, scope.owner.nodeId, scope.slot, slotCrumbLabel(scope.owner.nodeId, scope.slot), historyCatalog.current)?.frames ?? path;
     }
+    const visible = resolveScope(root, path, historyCatalog.current)?.slot.activities.map(node => node.nodeId) ?? [];
+    const selected = view?.selectedNodeIds.filter(id => visible.includes(id)) ?? [];
+    const primary = view?.primaryNodeId && selected.includes(view.primaryNodeId) ? view.primaryNodeId : selected.at(-1) ?? null;
+    pendingHistoryView.current = view ? { frames: path, selectedNodeIds: selected, primaryNodeId: primary } : null;
     editableDoc.editDraft(() => snapshot);
-    editableDoc.navigateToScope(path);
+    editableDoc.navigateToScope(path, primary);
   }, [editableDoc]);
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
+  const { prepareEdit, cancelPreparedEdit, recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft, captureView: () => structuredClone(historyView.current) });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -289,6 +305,7 @@ export function WorkflowEditor({
   }, [reload, setError]);
   const editorDoc = usePinnedEditorDocument({ document: editableDoc, context, definitionId, catalog });
   const { draft, frames, selectedNodeId } = editorDoc.state;
+  const commitNativeBlock = useWorkflowNativeBlockCommit(editorDoc, { prepareEdit, recordEdit, cancelPreparedEdit });
   const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta, flushDefinitionMeta } = useDefinitionMetadata({ context, documentAdapter, details, setDetails, setStatus });
@@ -530,6 +547,16 @@ export function WorkflowEditor({
     const selected = nodes.filter(node => node.selected).map(node => node.id);
     return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
   }, [nodes, selectedNodeId]);
+  historyView.current = { frames, selectedNodeIds: selectedCanvasNodeIds, primaryNodeId: selectedNodeId };
+  useEffect(() => {
+    const pending = pendingHistoryView.current;
+    if (!pending || JSON.stringify(pending.frames.map(frame => [frame.ownerNodeId, frame.slotId])) !== JSON.stringify(frames.map(frame => [frame.ownerNodeId, frame.slotId]))) return;
+    if (pending.selectedNodeIds.some(id => !authoringNodes.some(node => node.id === id))) return;
+    pendingHistoryView.current = null;
+    canvas.selectNodes(pending.selectedNodeIds, pending.primaryNodeId);
+    if (pending.primaryNodeId) queueCanvasNodeFocus(pending.primaryNodeId);
+  }, [authoringNodes, canvas, frames, queueCanvasNodeFocus]);
+
   const {
     copy: copySelectedActivities,
     paste: pasteCopiedActivities,
@@ -706,6 +733,7 @@ export function WorkflowEditor({
     updateTestDriveResult
   } = useWorkflowOperations({
     context,
+    notificationScope,
     draft: editableDraft,
     lineage: lineageHold.lineage,
     details,
@@ -1041,6 +1069,7 @@ export function WorkflowEditor({
   const exportBpmn = useCallback(async () => {
     const rootActivity = draft?.state.rootActivity;
     if (!rootActivity) return;
+    const canNotify = captureNotificationGuard();
     try {
       const xml = await exportBpmnDocument(context, withDiagramFromLayout(rootActivity, draft.layout));
       const blob = new Blob([xml], { type: "application/xml" });
@@ -1050,13 +1079,12 @@ export function WorkflowEditor({
       anchor.download = `${details?.definition?.name || "workflow"}.bpmn`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setError("");
-      setStatus("Exported BPMN 2.0 XML.");
+      if (canNotify.isOwned()) setError("");
+      if (canNotify()) notifySuccess("Exported BPMN 2.0 XML.");
     } catch {
-      setStatus("");
-      setError("BPMN export failed.");
+      if (canNotify.isOwned()) { setStatus(""); setError("BPMN export failed."); }
     }
-  }, [context, details?.definition?.name, draft, setError, setStatus]);
+  }, [captureNotificationGuard, context, details?.definition?.name, draft, setError, setStatus]);
 
   const importBpmn = useCallback(async (file: File) => {
     const rootActivity = draft?.state.rootActivity;
@@ -1200,35 +1228,7 @@ export function WorkflowEditor({
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
   const presentationByNodeId = indexActivityPresentation(draft.activityPresentation);
-  const visibleFrames = frames.map((frame, index) => {
-    if (!frame.label) return frame;
-    // A hidden selector and its following primary container frame represent one slot entry. Keep
-    // that crumb named after the entered slot while resolving live presentation labels.
-    const frameOwner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
-    const viewedPrimary = frameOwner && getChildSlots(frameOwner, catalogByVersion)[0]?.id === frame.slotId;
-    const previous = frames[index - 1];
-    const rootPrimary = draft.state.rootActivity ? getChildSlots(draft.state.rootActivity, catalogByVersion)[0] : undefined;
-    const labelFrame = viewedPrimary && previous?.label === "" ? previous
-      : viewedPrimary && index === 0 && rootPrimary?.cardinality === "single" && rootPrimary.activities[0]?.nodeId === frame.ownerNodeId
-        ? { ownerNodeId: draft.state.rootActivity!.nodeId, slotId: rootPrimary.id }
-        : frame;
-    const owner = findActivityNode(draft.state.rootActivity, labelFrame.ownerNodeId, catalogByVersion);
-    const slot = owner
-      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === labelFrame.slotId)
-      : undefined;
-    const catalogItem = owner ? catalogByVersion.get(owner.activityVersionId) : undefined;
-    return owner && slot
-      ? {
-          ...frame,
-          label: slotCrumbLabel(
-            resolveActivityLabel(
-              presentationByNodeId.get(owner.nodeId),
-              catalogItem,
-              catalogItem?.activityTypeKey ?? owner.activityVersionId),
-            slot)
-        }
-      : frame;
-  });
+  const visibleFrames = presentationScopeFrames(draft.state.rootActivity, frames, catalogByVersion, draft.activityPresentation);
   // Keep raw editor text: normalizing here removes a space before the next word is typed.
   const inspectedPresentation = inspectedNode
     ? draft.activityPresentation?.find(record => record.nodeId === inspectedNode.nodeId)
@@ -1541,7 +1541,11 @@ export function WorkflowEditor({
         <WorkflowAlert
           error={error}
           onDismiss={() => setError("")}
-          onCopied={label => setStatus(`${label} copied.`)}
+          scope={notificationScope}
+          onCopied={label => {
+            setStatus(current => current === `Could not copy ${label}.` ? "" : current);
+            notifySuccess(`${label} copied.`);
+          }}
           onCopyFailed={label => setStatus(`Could not copy ${label}.`)}
         />
       ) : null}
@@ -1638,7 +1642,7 @@ export function WorkflowEditor({
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
+            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => notifySuccess("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
           ) : canvasView === "versions" ? (
             <div className="wf-properties-view">
               <section className="wf-properties-section">
@@ -1653,6 +1657,36 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
+          {draft.state.rootActivity ? <NativeBlockCommands
+            context={{
+              document: { rootActivity: draft.state.rootActivity, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] },
+              catalog, scope: frames, canEdit: editorDoc.canEdit() && canAddActivitiesToCanvas && !isUnsupportedDesigner && !editorDoc.pinned,
+              referenceContext: [Object.fromEntries(Object.entries(draft.state).filter(([key]) => key !== "rootActivity"))],
+              sourceKey: JSON.stringify([draft, persistedDraft, selectedCanvasNodeIds, documentAdapter?.weaverResource?.revision(), descriptorStatus]),
+              expressionScopePreservation: composeExpressionScopePreservation(expressionEditors)
+            }}
+            selectedNodeIds={selectedCanvasNodeIds}
+            createPosition={nextNativeBlockPosition(authoringNodes, selectedNodeId)}
+            validate={async document => {
+              if (!editorDoc.canEdit() || editorDoc.pinned || (!documentAdapter && !persistedDraft)) return { state: "unavailable", messages: ["Candidate validation is unavailable for this resource."] };
+              const candidate = { ...draft, state: { ...draft.state, rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
+              if (documentAdapter) return documentAdapter.validateCandidate?.(context, candidate) ?? { state: "unavailable", messages: ["This resource does not provide candidate validation."] };
+              return validateWorkflowCandidate(context, persistedDraft!, candidate);
+            }}
+            apply={async (document, selection, isCurrent) => {
+              const next = { ...draft, state: { ...draft.state, rootActivity: document.rootActivity }, layout: document.layout, activityPresentation: document.activityPresentation };
+              if (!editorDoc.canEdit()) throw new Error("The resource is no longer editable.");
+              const applied = await commitNativeBlock(draft, frames, selectedNodeId, next, selection, () => isCurrent() && editorDoc.canEdit());
+              if (!applied) throw new Error("The source changed before the edit could be committed.");
+              canvas.selectNodes(selection);
+              if (selection[0]) queueCanvasNodeFocus(selection[0]);
+            }}
+            open={nodeId => {
+              const node = scope?.slot.activities.find(item => item.nodeId === nodeId);
+              const slot = node && getChildSlots(node, catalogByVersion).find(item => item.property === "activities");
+              if (node && slot) enterSlotScope(nodeId, slot, slotCrumbLabel(resolveActivityLabel(presentationByNodeId.get(nodeId), catalogByVersion.get(node.activityVersionId), nodeId), slot));
+            }}
+          /> : null}
           {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
             <CompensationScopeDesigner
               owner={scopeOwner}
@@ -1687,6 +1721,7 @@ export function WorkflowEditor({
               canvasRef={canvasRef}
               availabilityLookup={availabilityLookup}
               onSelect={selectEditorNode}
+              onSelectMany={canvas.selectNodes}
               onInsert={openSequenceInsertMenu}
               onDropActivity={(versionId, index) => {
                 const activity = paletteCatalog.find(item => item.activityVersionId === versionId);
@@ -1747,7 +1782,8 @@ export function WorkflowEditor({
               },
               onNodeClick: (_, node) => {
                 closeActivityContextMenu();
-                selectEditorNode(node.id);
+                if (runCanvas.attached) selectEditorNode(node.id);
+                else canvas.inspectSelectedNode(node.id);
               },
               onNodeContextMenu: isUnsupportedDesigner || editorDoc.pinned ? undefined : (event, node) => {
                 event.preventDefault();

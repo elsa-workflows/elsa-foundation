@@ -493,3 +493,849 @@ describe("complete BPMN document authority", () => {
     expect(original.structure!.payload.documentXml).toBe(source);
   });
 });
+
+// R7: schema-declared reference roles, distinct from opaque namespace lookalikes.
+function r7FormalOwner(processFragment = "", definitionsFragment = ""): ActivityNode {
+  return owner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:tns="urn:test" xmlns:ext="urn:external" xmlns:vendor="urn:vendor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="urn:test">
+    <bpmn:itemDefinition id="Item"/><bpmn:message id="FormalMessage"/>
+    ${definitionsFragment}<bpmn:process id="Process"><bpmn:task id="Task"/>${processFragment}</bpmn:process>
+  </bpmn:definitions>`);
+}
+function r7InputTransformationOwner(): ActivityNode {
+  return r7FormalOwner('<bpmn:task id="FormalTask"><bpmn:ioSpecification><bpmn:dataInput id="FormalInput"/><bpmn:inputSet/><bpmn:outputSet/></bpmn:ioSpecification><bpmn:dataInputAssociation id="FormalAssociation"><bpmn:targetRef>FormalInput</bpmn:targetRef><bpmn:transformation id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:transformation></bpmn:dataInputAssociation></bpmn:task>');
+}
+function r7ExpectFormalDeletionRefused(original: ActivityNode, commands: BpmnDocumentCommand[] = [{ kind: "remove", target: address("Item") }]) {
+  const before = structuredClone(original), parsed = readBpmnDocument(original), formal = parsed.byId.get("Formal")!;
+  expect(formal.namespaceURI).toBe(bpmnNamespaces.model);
+  expect(formal.hasAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")).toBe(false);
+  expect(resolveBpmnDocumentReference(parsed, formal, formal.getAttribute("evaluatesToTypeRef"))).toBe(parsed.byId.get("Item"));
+  expect(() => {
+    try { applyBpmnDocumentCommands(original, commands); }
+    finally { expect(original).toEqual(before); }
+  }).toThrow("deletion leaves reference 'evaluatesToTypeRef'");
+}
+function r7IoBindingOwner(): ActivityNode {
+  return owner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:tns="urn:binding" xmlns:vendor="urn:vendor" targetNamespace="urn:binding">
+    <bpmn:message id="BindingMessage"/>
+    <bpmn:interface id="BindingInterface" name="Binding"><bpmn:operation id="BindingOperation" name="Invoke"><bpmn:inMessageRef>tns:BindingMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface>
+    <bpmn:process id="Process"><bpmn:ioSpecification id="BindingIo"><bpmn:dataInput id="BindingInput"/><bpmn:dataOutput id="BindingOutput"/><bpmn:inputSet id="BindingInputSet"/><bpmn:outputSet id="BindingOutputSet"/></bpmn:ioSpecification>
+      <bpmn:ioBinding id="Binding" operationRef="tns:BindingOperation" inputDataRef="BindingInput" outputDataRef="BindingOutput"/><bpmn:task id="Task"/>
+    </bpmn:process></bpmn:definitions>`);
+}
+function r7ExpectIoDeletionRefused(target: string, attribute: string, atomic = false) {
+  const original = r7IoBindingOwner(), before = structuredClone(original), parsed = readBpmnDocument(original), binding = parsed.byId.get("Binding")!;
+  expect(binding.localName).toBe("ioBinding");
+  expect(resolveBpmnDocumentReference(parsed, binding, binding.getAttribute(attribute))).toBe(parsed.byId.get(target));
+  const commands: BpmnDocumentCommand[] = [...(atomic ? [{ kind: "attribute" as const, target: address("Task"), name: "name", value: "Uncommitted" }] : []), { kind: "remove", target: address(target) }];
+  expect(() => {
+    try { applyBpmnDocumentCommands(original, commands); }
+    finally { expect(original).toEqual(before); }
+  }).toThrow(`deletion leaves reference '${attribute}'`);
+}
+
+describe("R7 standard BPMN reference deletion regressions", () => {
+  it("refuses deletion through a schema-declared complex behavior condition", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:task id="FormalTask"><bpmn:multiInstanceLoopCharacteristics><bpmn:complexBehaviorDefinition><bpmn:condition id="Formal" evaluatesToTypeRef="tns:Item">ready</bpmn:condition></bpmn:complexBehaviorDefinition></bpmn:multiInstanceLoopCharacteristics></bpmn:task>'));
+  });
+  it("refuses deletion through a schema-declared correlation data path", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:correlationSubscription correlationKeyRef="ext:Key"><bpmn:correlationPropertyBinding correlationPropertyRef="ext:Property"><bpmn:dataPath id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:dataPath></bpmn:correlationPropertyBinding></bpmn:correlationSubscription>'));
+  });
+  it("refuses deletion through a schema-declared correlation message path", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner("", '<bpmn:correlationProperty id="Property"><bpmn:correlationPropertyRetrievalExpression messageRef="tns:FormalMessage"><bpmn:messagePath id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:messagePath></bpmn:correlationPropertyRetrievalExpression></bpmn:correlationProperty>'));
+  });
+  it("refuses deletion through the standard data association transformation type", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:dataObject id="FormalData"/><bpmn:dataAssociation><bpmn:targetRef>FormalData</bpmn:targetRef><bpmn:transformation id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:transformation></bpmn:dataAssociation>'));
+  });
+  it("refuses deletion through a schema-declared input association transformation", () => {
+    r7ExpectFormalDeletionRefused(r7InputTransformationOwner());
+  });
+  it("refuses deletion through a schema-declared output association transformation", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:dataObject id="FormalData"/><bpmn:task id="FormalTask"><bpmn:ioSpecification><bpmn:dataOutput id="FormalOutput"/><bpmn:inputSet/><bpmn:outputSet/></bpmn:ioSpecification><bpmn:dataOutputAssociation><bpmn:sourceRef>FormalOutput</bpmn:sourceRef><bpmn:targetRef>FormalData</bpmn:targetRef><bpmn:transformation id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:transformation></bpmn:dataOutputAssociation></bpmn:task>'));
+  });
+  it("refuses deletion through the global formal expression declaration", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner("", '<bpmn:formalExpression id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:formalExpression>'));
+  });
+  it("refuses an implicit formal reference deletion atomically after an earlier edit", () => {
+    r7ExpectFormalDeletionRefused(r7InputTransformationOwner(), [{ kind: "attribute", target: address("Task"), name: "name", value: "Uncommitted" }, { kind: "remove", target: address("Item") }]);
+  });
+  it("allows removing an implicit formal reference and its target in one transaction", () => {
+    const original = r7InputTransformationOwner(), before = structuredClone(original);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Formal") }, { kind: "remove", target: address("Item") }]);
+    expect(readBpmnDocument(next).byId.has("Formal")).toBe(false);
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+    expect(element(next, "FormalAssociation").localName).toBe("dataInputAssociation");
+    expect(original).toEqual(before);
+  });
+  it("retains explicit formal typing on a conditional event as a reference control", () => {
+    const original = r7FormalOwner('<bpmn:intermediateCatchEvent id="Conditional"><bpmn:conditionalEventDefinition><bpmn:condition id="Formal" xsi:type="bpmn:tFormalExpression" evaluatesToTypeRef="tns:Item">ready</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent>'), before = structuredClone(original);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }])).toThrow("deletion leaves reference 'evaluatesToTypeRef'");
+    expect(original).toEqual(before);
+  });
+  it("does not infer formal typing from an untyped conditional event condition", () => {
+    const original = r7FormalOwner('<bpmn:intermediateCatchEvent id="Conditional"><bpmn:conditionalEventDefinition><bpmn:condition id="Untyped" evaluatesToTypeRef="tns:Item">opaque draft</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent>');
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }]);
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+    expect(element(next, "Untyped").getAttribute("evaluatesToTypeRef")).toBe("tns:Item");
+  });
+  it("preserves vendor and extension-wrapped formal expression lookalikes", () => {
+    const original = r7FormalOwner('<bpmn:task id="OpaqueTask"><bpmn:extensionElements><vendor:formalExpression evaluatesToTypeRef="tns:Item">vendor</vendor:formalExpression><bpmn:formalExpression evaluatesToTypeRef="tns:Item">extension</bpmn:formalExpression></bpmn:extensionElements></bpmn:task>');
+    const retained = element(original, "OpaqueTask").innerHTML, next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }]);
+    expect(element(next, "OpaqueTask").innerHTML).toBe(retained);
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+  });
+  it("does not interpret a vendor attribute on a standard formal expression", () => {
+    const original = r7FormalOwner("", '<bpmn:formalExpression id="Formal" vendor:evaluatesToTypeRef="tns:Item">vendor attribute</bpmn:formalExpression>');
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }]);
+    expect(element(next, "Formal").getAttributeNS("urn:vendor", "evaluatesToTypeRef")).toBe("tns:Item");
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+  });
+  it("refuses deletion through the ioBinding input data reference", () => { r7ExpectIoDeletionRefused("BindingInput", "inputDataRef"); });
+  it("refuses deletion through the ioBinding output data reference", () => { r7ExpectIoDeletionRefused("BindingOutput", "outputDataRef"); });
+  it("refuses deletion through the ioBinding operation reference", () => { r7ExpectIoDeletionRefused("BindingOperation", "operationRef"); });
+  it("refuses an ioBinding reference deletion atomically after an earlier edit", () => { r7ExpectIoDeletionRefused("BindingInput", "inputDataRef", true); });
+  it("allows removing an ioBinding and its referenced input in one transaction", () => {
+    const original = r7IoBindingOwner(), before = structuredClone(original);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Binding") }, { kind: "remove", target: address("BindingInput") }]);
+    expect(readBpmnDocument(next).byId.has("Binding")).toBe(false);
+    expect(readBpmnDocument(next).byId.has("BindingInput")).toBe(false);
+    expect(element(next, "BindingOutput").localName).toBe("dataOutput");
+    expect(element(next, "BindingOperation").localName).toBe("operation");
+    expect(original).toEqual(before);
+  });
+  it("preserves vendor ioBinding lookalikes without inventing references", () => {
+    const original = r7IoBindingOwner();
+    original.structure!.payload.documentXml = readBpmnDocument(original).payload.documentXml.replace('<bpmn:ioBinding id="Binding" operationRef="tns:BindingOperation" inputDataRef="BindingInput" outputDataRef="BindingOutput"/>', '<vendor:ioBinding id="VendorBinding" operationRef="tns:BindingOperation" inputDataRef="BindingInput" outputDataRef="BindingOutput"/>');
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("BindingInput") }]);
+    expect(readBpmnDocument(next).byId.has("BindingInput")).toBe(false);
+    const retained = readBpmnDocument(next).document.getElementsByTagNameNS("urn:vendor", "ioBinding")[0];
+    expect(retained.getAttribute("inputDataRef")).toBe("BindingInput");
+    expect(retained.getAttribute("operationRef")).toBe("tns:BindingOperation");
+  });
+});
+
+function r8DocumentOwner(documentXml: string): ActivityNode {
+  return { nodeId: "r8-document-owner", activityVersionId: "r8-document-version", inputs: [], outputs: [], structure: {
+    kind: "elsa.bpmn.structure", schemaVersion: "2.0.0", payload: { documentXml, processId: "Process", activities: [], bindings: [], variables: [] }
+  } };
+}
+function r8ExpectNoRefusal<T>(action: () => T, assertImmutable: () => void): T {
+  let value: T | undefined, failure: unknown;
+  try { value = action(); } catch (error) { failure = error; }
+  assertImmutable();
+  expect(failure).toBeUndefined();
+  return value!;
+}
+function r8ScopeSnapshot(): ActivityNode {
+  return { nodeId: "opaque-scope-snapshot", activityVersionId: "snapshot-version", inputs: [], outputs: [], structure: { kind: "elsa.bpmn.scope-view", schemaVersion: "1.0.0", payload: { retained: true } } };
+}
+function r8OpaqueNativeOwner(asArray = false): ActivityNode {
+  const original = owner(), native = (original.structure!.payload.activities as ActivityNode[])[0];
+  native.structure = { kind: "vendor.opaque", schemaVersion: "1", payload: { metadata: asArray ? [r8ScopeSnapshot()] : r8ScopeSnapshot(), retained: "native metadata" } };
+  return original;
+}
+function r8ReconnectOwner(realOutgoing: boolean): ActivityNode {
+  return r8DocumentOwner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:tns="urn:reconnect" xmlns:vendor="urn:vendor" targetNamespace="urn:reconnect"><bpmn:process id="Process">
+    <bpmn:extensionElements><vendor:snapshot><bpmn:task id="OpaqueTask"><bpmn:outgoing>tns:Flow</bpmn:outgoing></bpmn:task></vendor:snapshot></bpmn:extensionElements>
+    <bpmn:task id="Old">${realOutgoing ? "<bpmn:outgoing>Flow</bpmn:outgoing>" : ""}</bpmn:task><bpmn:task id="New"/><bpmn:task id="Target"><bpmn:incoming>Flow</bpmn:incoming></bpmn:task>
+    <bpmn:sequenceFlow id="Flow" sourceRef="Old" targetRef="Target"/>
+  </bpmn:process></bpmn:definitions>`);
+}
+function r8SnapshotXml(value: ActivityNode): string {
+  const snapshot = readBpmnDocument(value).document.getElementsByTagNameNS("urn:vendor", "snapshot")[0];
+  return new XMLSerializer().serializeToString(snapshot);
+}
+
+describe("R8 opaque native and XML boundaries", () => {
+  it("opens node-shaped projected-scope metadata below an opaque native structure", () => {
+    const original = r8OpaqueNativeOwner(), before = structuredClone(original);
+    const parsed = r8ExpectNoRefusal(() => readBpmnDocument(original), () => expect(original).toEqual(before));
+    expect(parsed.payload.documentXml).toBe(xml);
+    expect((parsed.payload.activities[0].structure!.payload.metadata as ActivityNode).structure!.kind).toBe("elsa.bpmn.scope-view");
+  });
+  it("preserves opaque native snapshot arrays through an unrelated XML edit", () => {
+    const original = r8OpaqueNativeOwner(true), before = structuredClone(original);
+    const next = r8ExpectNoRefusal(() => applyBpmnDocumentCommands(original, [{ kind: "attribute", target: address("Task"), name: "name", value: "Edited" }]), () => expect(original).toEqual(before));
+    expect(element(next, "Task").getAttribute("name")).toBe("Edited");
+    expect(next.structure!.payload.activities).toBe(original.structure!.payload.activities);
+    expect((next.structure!.payload.activities as ActivityNode[])[0].structure!.payload.metadata).toEqual([r8ScopeSnapshot()]);
+  });
+  it("still rejects projected views in declared canonical and legacy Sequence ownership", () => {
+    for (const kind of ["elsa.sequence.structure", "elsa.sequence"]) {
+      const original = owner(), before = structuredClone(original);
+      (original.structure!.payload.activities as ActivityNode[])[0].structure = { kind, schemaVersion: "1.0.0", payload: { activities: [r8ScopeSnapshot()] } };
+      const configured = structuredClone(original);
+      expect(() => readBpmnDocument(original)).toThrow("projected scope structures");
+      expect(original).toEqual(configured);
+      expect(before.structure!.payload.documentXml).toBe(original.structure!.payload.documentXml);
+    }
+  });
+  it("still rejects projected views in an independently owned complete-document forest", () => {
+    const original = owner(), nested = r8DocumentOwner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" targetNamespace="urn:nested"><bpmn:process id="Process"/></bpmn:definitions>`);
+    nested.nodeId = "nested-document";
+    nested.structure!.payload.activities = [r8ScopeSnapshot()];
+    (original.structure!.payload.activities as ActivityNode[]).push(nested);
+    const before = structuredClone(original);
+    expect(() => readBpmnDocument(original)).toThrow("projected scope structures");
+    expect(original).toEqual(before);
+  });
+  it("preserves an opaque-only outgoing snapshot while reconnecting the active flow", () => {
+    const original = r8ReconnectOwner(false), before = structuredClone(original), opaque = r8SnapshotXml(original);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "reconnect", elementId: "Flow", sourceRef: "New", targetRef: "Target" }]);
+    expect(original).toEqual(before);
+    expect(r8SnapshotXml(next)).toBe(opaque);
+    const parsed = readBpmnDocument(next), outgoing = element(next, "New").getElementsByTagNameNS(bpmnNamespaces.model, "outgoing")[0];
+    expect(resolveBpmnDocumentReference(parsed, outgoing, outgoing.textContent)).toBe(parsed.byId.get("Flow"));
+    expect(element(next, "Flow").getAttribute("sourceRef")).toBe("New");
+    expect(element(next, "OpaqueTask").getElementsByTagNameNS(bpmnNamespaces.model, "outgoing")[0].textContent).toBe("tns:Flow");
+  });
+  it("does not treat an opaque snapshot as an ambiguous active outgoing reference", () => {
+    const original = r8ReconnectOwner(true), before = structuredClone(original), opaque = r8SnapshotXml(original);
+    const next = r8ExpectNoRefusal(() => applyBpmnDocumentCommands(original, [{ kind: "reconnect", elementId: "Flow", sourceRef: "New", targetRef: "Target" }]), () => expect(original).toEqual(before));
+    expect(r8SnapshotXml(next)).toBe(opaque);
+    expect(element(next, "Old").getElementsByTagNameNS(bpmnNamespaces.model, "outgoing")).toHaveLength(0);
+    expect(element(next, "New").getElementsByTagNameNS(bpmnNamespaces.model, "outgoing")).toHaveLength(1);
+  });
+  it("still refuses a reconnect into an opaque snapshot outside the active standard scope", () => {
+    const original = r8ReconnectOwner(true), before = structuredClone(original);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "reconnect", elementId: "Flow", sourceRef: "OpaqueTask", targetRef: "Target" }])).toThrow("one standard scope");
+    expect(original).toEqual(before);
+  });
+});
+
+interface R8ReferenceFixture {
+  xml: string; processId: string; removeId: string;
+  witnesses: { ownerId: string; property: string; targetId: string }[];
+  external?: { ownerLocalName: string; property: string; value: string };
+}
+// Domain-correct representatives are pinned to bpmn-moddle 10.3.1 and the external audit companion.
+const r8ReferenceFixtures: Record<string, R8ReferenceFixture> = {
+  "domain-inputDataItem": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:process id=\"Process\"><bpmn:task id=\"Owner\"><bpmn:multiInstanceLoopCharacteristics><bpmn:inputDataItem id=\"Typed\" itemSubjectRef=\"m:RemovedItem\"/></bpmn:multiInstanceLoopCharacteristics></bpmn:task></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "itemSubjectRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-outputDataItem": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:process id=\"Process\"><bpmn:task id=\"Owner\"><bpmn:multiInstanceLoopCharacteristics><bpmn:outputDataItem id=\"Typed\" itemSubjectRef=\"m:RemovedItem\"/></bpmn:multiInstanceLoopCharacteristics></bpmn:task></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "itemSubjectRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-task-ServiceTask-operation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:message id=\"KeepMessage\"/><bpmn:interface id=\"Interface\" name=\"Service\"><bpmn:operation id=\"RemovedOperation\" name=\"Operation\"><bpmn:inMessageRef>m:KeepMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface><bpmn:process id=\"Process\"><bpmn:task id=\"Typed\" xsi:type=\"bpmn:tServiceTask\" operationRef=\"m:RemovedOperation\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedOperation",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "operationRef",
+        "targetId": "RemovedOperation"
+      }
+    ]
+  },
+  "domain-task-SendTask-operation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:message id=\"KeepMessage\"/><bpmn:interface id=\"Interface\" name=\"Service\"><bpmn:operation id=\"RemovedOperation\" name=\"Operation\"><bpmn:inMessageRef>m:KeepMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface><bpmn:process id=\"Process\"><bpmn:task id=\"Typed\" xsi:type=\"bpmn:tSendTask\" operationRef=\"m:RemovedOperation\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedOperation",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "operationRef",
+        "targetId": "RemovedOperation"
+      }
+    ]
+  },
+  "domain-task-ReceiveTask-operation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:message id=\"KeepMessage\"/><bpmn:interface id=\"Interface\" name=\"Service\"><bpmn:operation id=\"RemovedOperation\" name=\"Operation\"><bpmn:inMessageRef>m:KeepMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface><bpmn:process id=\"Process\"><bpmn:task id=\"Typed\" xsi:type=\"bpmn:tReceiveTask\" operationRef=\"m:RemovedOperation\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedOperation",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "operationRef",
+        "targetId": "RemovedOperation"
+      }
+    ]
+  },
+  "domain-task-SendTask-message": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:message id=\"RemovedMessage\"/><bpmn:process id=\"Process\"><bpmn:task id=\"Typed\" xsi:type=\"bpmn:tSendTask\" messageRef=\"m:RemovedMessage\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedMessage",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "messageRef",
+        "targetId": "RemovedMessage"
+      }
+    ]
+  },
+  "domain-task-ReceiveTask-message": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:message id=\"RemovedMessage\"/><bpmn:process id=\"Process\"><bpmn:task id=\"Typed\" xsi:type=\"bpmn:tReceiveTask\" messageRef=\"m:RemovedMessage\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedMessage",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "messageRef",
+        "targetId": "RemovedMessage"
+      }
+    ]
+  },
+  "domain-artifact-association": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:task id=\"RemovedTask\"/><bpmn:task id=\"KeepTask\"/><bpmn:artifact id=\"Typed\" xsi:type=\"bpmn:tAssociation\" sourceRef=\"m:RemovedTask\" targetRef=\"m:KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedTask",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "sourceRef",
+        "targetId": "RemovedTask"
+      }
+    ]
+  },
+  "domain-choreography-global": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:choreography id=\"Typed\" xsi:type=\"bpmn:tGlobalChoreographyTask\" initiatingParticipantRef=\"m:RemovedParticipant\"><bpmn:participant id=\"RemovedParticipant\"/><bpmn:participant id=\"KeepParticipant\"/></bpmn:choreography><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedParticipant",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "initiatingParticipantRef",
+        "targetId": "RemovedParticipant"
+      }
+    ]
+  },
+  "domain-collaboration-global": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:collaboration id=\"Typed\" xsi:type=\"bpmn:tGlobalChoreographyTask\" initiatingParticipantRef=\"m:RemovedParticipant\"><bpmn:participant id=\"RemovedParticipant\"/><bpmn:participant id=\"KeepParticipant\"/></bpmn:collaboration><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedParticipant",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "initiatingParticipantRef",
+        "targetId": "RemovedParticipant"
+      }
+    ]
+  },
+  "domain-conversationNode-call": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:collaboration id=\"RemovedCollaboration\"/><bpmn:collaboration id=\"KeepCollaboration\"><bpmn:conversationNode id=\"Typed\" xsi:type=\"bpmn:tCallConversation\" calledCollaborationRef=\"m:RemovedCollaboration\"/></bpmn:collaboration><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedCollaboration",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "calledCollaborationRef",
+        "targetId": "RemovedCollaboration"
+      }
+    ]
+  },
+  "domain-event-boundary": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:task id=\"RemovedTask\"/><bpmn:event id=\"Typed\" xsi:type=\"bpmn:tBoundaryEvent\" attachedToRef=\"m:RemovedTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedTask",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "attachedToRef",
+        "targetId": "RemovedTask"
+      }
+    ]
+  },
+  "domain-eventDefinition-error": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:error id=\"RemovedError\"/><bpmn:eventDefinition id=\"Typed\" xsi:type=\"bpmn:tErrorEventDefinition\" errorRef=\"m:RemovedError\"/><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedError",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "errorRef",
+        "targetId": "RemovedError"
+      }
+    ]
+  },
+  "domain-flowElement-service-operation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:message id=\"KeepMessage\"/><bpmn:interface id=\"Interface\" name=\"Service\"><bpmn:operation id=\"RemovedOperation\" name=\"Operation\"><bpmn:inMessageRef>m:KeepMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface><bpmn:process id=\"Process\"><bpmn:flowElement id=\"Typed\" xsi:type=\"bpmn:tServiceTask\" operationRef=\"m:RemovedOperation\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedOperation",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "operationRef",
+        "targetId": "RemovedOperation"
+      }
+    ]
+  },
+  "domain-flowElement-service-default": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:flowElement id=\"Typed\" xsi:type=\"bpmn:tServiceTask\" default=\"RemovedFlow\"/><bpmn:task id=\"KeepTask\"/><bpmn:sequenceFlow id=\"RemovedFlow\" sourceRef=\"Typed\" targetRef=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedFlow",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "default",
+        "targetId": "RemovedFlow"
+      }
+    ]
+  },
+  "domain-loopCharacteristics-multi": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:signalEventDefinition id=\"RemovedEventDefinition\"/><bpmn:process id=\"Process\"><bpmn:task id=\"Owner\"><bpmn:loopCharacteristics id=\"Typed\" xsi:type=\"bpmn:tMultiInstanceLoopCharacteristics\" oneBehaviorEventRef=\"m:RemovedEventDefinition\" noneBehaviorEventRef=\"m:RemovedEventDefinition\"/></bpmn:task></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedEventDefinition",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "oneBehaviorEventRef",
+        "targetId": "RemovedEventDefinition"
+      },
+      {
+        "ownerId": "Typed",
+        "property": "noneBehaviorEventRef",
+        "targetId": "RemovedEventDefinition"
+      }
+    ]
+  },
+  "domain-partitionElement-sequenceFlow": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tSequenceFlow\" sourceRef=\"RemovedTask\" targetRef=\"KeepTask\"/></bpmn:lane></bpmn:laneSet><bpmn:task id=\"RemovedTask\"/><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedTask",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "sourceRef",
+        "targetId": "RemovedTask"
+      }
+    ]
+  },
+  "domain-rootElement-message": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:rootElement id=\"Typed\" xsi:type=\"bpmn:tMessage\" itemRef=\"m:RemovedItem\"/><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "itemRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-DiagramElement-shape": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:task id=\"RemovedTask\"/></bpmn:process><bpmndi:BPMNDiagram id=\"Diagram\"><bpmndi:BPMNPlane id=\"Plane\" bpmnElement=\"m:Process\"><di:DiagramElement id=\"Typed\" xsi:type=\"bpmndi:BPMNShape\" bpmnElement=\"m:RemovedTask\"><dc:Bounds x=\"0\" y=\"0\" width=\"100\" height=\"80\"/></di:DiagramElement></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedTask",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "bpmnElement",
+        "targetId": "RemovedTask"
+      }
+    ]
+  },
+  "domain-DiagramElement-edge-model": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:task id=\"SourceTask\"/><bpmn:task id=\"TargetTask\"/><bpmn:sequenceFlow id=\"ModelFlow\" sourceRef=\"SourceTask\" targetRef=\"TargetTask\"/></bpmn:process><bpmndi:BPMNDiagram id=\"Diagram\"><bpmndi:BPMNPlane id=\"Plane\" bpmnElement=\"m:Process\"><bpmndi:BPMNShape id=\"SourceShape\" bpmnElement=\"m:SourceTask\"><dc:Bounds x=\"0\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"TargetShape\" bpmnElement=\"m:TargetTask\"><dc:Bounds x=\"0\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><di:DiagramElement id=\"Typed\" xsi:type=\"bpmndi:BPMNEdge\" bpmnElement=\"m:ModelFlow\" sourceElement=\"m:SourceShape\" targetElement=\"m:TargetShape\"><di:waypoint x=\"0\" y=\"0\"/><di:waypoint x=\"10\" y=\"10\"/></di:DiagramElement></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "ModelFlow",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "bpmnElement",
+        "targetId": "ModelFlow"
+      }
+    ]
+  },
+  "domain-DiagramElement-edge-source": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:task id=\"SourceTask\"/><bpmn:task id=\"TargetTask\"/><bpmn:sequenceFlow id=\"ModelFlow\" sourceRef=\"SourceTask\" targetRef=\"TargetTask\"/></bpmn:process><bpmndi:BPMNDiagram id=\"Diagram\"><bpmndi:BPMNPlane id=\"Plane\" bpmnElement=\"m:Process\"><bpmndi:BPMNShape id=\"SourceShape\" bpmnElement=\"m:SourceTask\"><dc:Bounds x=\"0\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"TargetShape\" bpmnElement=\"m:TargetTask\"><dc:Bounds x=\"0\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><di:DiagramElement id=\"Typed\" xsi:type=\"bpmndi:BPMNEdge\" bpmnElement=\"m:ModelFlow\" sourceElement=\"m:SourceShape\" targetElement=\"m:TargetShape\"><di:waypoint x=\"0\" y=\"0\"/><di:waypoint x=\"10\" y=\"10\"/></di:DiagramElement></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "SourceShape",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "sourceElement",
+        "targetId": "SourceShape"
+      }
+    ]
+  },
+  "domain-DiagramElement-edge-target": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:task id=\"SourceTask\"/><bpmn:task id=\"TargetTask\"/><bpmn:sequenceFlow id=\"ModelFlow\" sourceRef=\"SourceTask\" targetRef=\"TargetTask\"/></bpmn:process><bpmndi:BPMNDiagram id=\"Diagram\"><bpmndi:BPMNPlane id=\"Plane\" bpmnElement=\"m:Process\"><bpmndi:BPMNShape id=\"SourceShape\" bpmnElement=\"m:SourceTask\"><dc:Bounds x=\"0\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"TargetShape\" bpmnElement=\"m:TargetTask\"><dc:Bounds x=\"0\" y=\"0\" width=\"100\" height=\"80\"/></bpmndi:BPMNShape><di:DiagramElement id=\"Typed\" xsi:type=\"bpmndi:BPMNEdge\" bpmnElement=\"m:ModelFlow\" sourceElement=\"m:SourceShape\" targetElement=\"m:TargetShape\"><di:waypoint x=\"0\" y=\"0\"/><di:waypoint x=\"10\" y=\"10\"/></di:DiagramElement></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "TargetShape",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "targetElement",
+        "targetId": "TargetShape"
+      }
+    ]
+  },
+  "domain-DiagramElement-plane": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"RemovedProcess\"/><bpmn:process id=\"Process\"></bpmn:process><bpmndi:BPMNDiagram id=\"Diagram\"><bpmndi:BPMNPlane id=\"Plane\" bpmnElement=\"m:Process\"><di:DiagramElement id=\"Typed\" xsi:type=\"bpmndi:BPMNPlane\" bpmnElement=\"m:RemovedProcess\"/></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedProcess",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "bpmnElement",
+        "targetId": "RemovedProcess"
+      }
+    ]
+  },
+  "domain-DiagramElement-label": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"></bpmn:process><bpmndi:BPMNDiagram id=\"Diagram\"><bpmndi:BPMNPlane id=\"Plane\" bpmnElement=\"m:Process\"><di:DiagramElement id=\"Typed\" xsi:type=\"bpmndi:BPMNLabel\" labelStyle=\"m:RemovedStyle\"/></bpmndi:BPMNPlane><bpmndi:BPMNLabelStyle id=\"RemovedStyle\"><dc:Font name=\"Arial\"/></bpmndi:BPMNLabelStyle></bpmndi:BPMNDiagram></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedStyle",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "labelStyle",
+        "targetId": "RemovedStyle"
+      }
+    ]
+  },
+  "domain-effective-parent-tComplexBehaviorDefinition": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tComplexBehaviorDefinition\"><bpmn:condition id=\"Expression\" evaluatesToTypeRef=\"m:RemovedItem\">x</bpmn:condition></bpmn:partitionElement></bpmn:lane></bpmn:laneSet><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Expression",
+        "property": "evaluatesToTypeRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-effective-parent-tCorrelationPropertyBinding": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:message id=\"KeepMessage\"/><bpmn:correlationProperty id=\"KeepCorrelationProperty\"><bpmn:correlationPropertyRetrievalExpression messageRef=\"m:KeepMessage\"><bpmn:messagePath>x</bpmn:messagePath></bpmn:correlationPropertyRetrievalExpression></bpmn:correlationProperty><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tCorrelationPropertyBinding\" correlationPropertyRef=\"m:KeepCorrelationProperty\"><bpmn:dataPath id=\"Expression\" evaluatesToTypeRef=\"m:RemovedItem\">x</bpmn:dataPath></bpmn:partitionElement></bpmn:lane></bpmn:laneSet><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Expression",
+        "property": "evaluatesToTypeRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-effective-parent-tCorrelationPropertyRetrievalExpression": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:message id=\"KeepMessage\"/><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tCorrelationPropertyRetrievalExpression\" messageRef=\"m:KeepMessage\"><bpmn:messagePath id=\"Expression\" evaluatesToTypeRef=\"m:RemovedItem\">x</bpmn:messagePath></bpmn:partitionElement></bpmn:lane></bpmn:laneSet><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Expression",
+        "property": "evaluatesToTypeRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-effective-parent-tDataAssociation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tDataAssociation\"><bpmn:targetRef>KeepData</bpmn:targetRef><bpmn:transformation id=\"Expression\" evaluatesToTypeRef=\"m:RemovedItem\">x</bpmn:transformation></bpmn:partitionElement></bpmn:lane></bpmn:laneSet><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Expression",
+        "property": "evaluatesToTypeRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-effective-parent-tDataInputAssociation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tDataInputAssociation\"><bpmn:targetRef>KeepData</bpmn:targetRef><bpmn:transformation id=\"Expression\" evaluatesToTypeRef=\"m:RemovedItem\">x</bpmn:transformation></bpmn:partitionElement></bpmn:lane></bpmn:laneSet><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Expression",
+        "property": "evaluatesToTypeRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-effective-parent-tDataOutputAssociation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"RemovedItem\"/><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tDataOutputAssociation\"><bpmn:targetRef>KeepData</bpmn:targetRef><bpmn:transformation id=\"Expression\" evaluatesToTypeRef=\"m:RemovedItem\">x</bpmn:transformation></bpmn:partitionElement></bpmn:lane></bpmn:laneSet><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedItem",
+    "witnesses": [
+      {
+        "ownerId": "Expression",
+        "property": "evaluatesToTypeRef",
+        "targetId": "RemovedItem"
+      }
+    ]
+  },
+  "domain-partitionElement-relationship-text": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:process id=\"Process\"><bpmn:property id=\"KeepData\"/><bpmn:laneSet id=\"LaneSet\"><bpmn:lane id=\"Lane\"><bpmn:partitionElement id=\"Typed\" xsi:type=\"bpmn:tRelationship\" type=\"audit\"><bpmn:source>m:RemovedTask</bpmn:source><bpmn:target>m:KeepTask</bpmn:target></bpmn:partitionElement></bpmn:lane></bpmn:laneSet><bpmn:task id=\"RemovedTask\"/><bpmn:task id=\"KeepTask\"/></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "RemovedTask",
+    "witnesses": [
+      {
+        "ownerId": "Typed",
+        "property": "source",
+        "targetId": "RemovedTask"
+      }
+    ]
+  },
+  "external-itemDefinition-structure": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"Lookalike\"/><bpmn:itemDefinition id=\"OwnerItem\" structureRef=\"m:Lookalike\"/><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "Lookalike",
+    "witnesses": [],
+    "external": {
+      "ownerLocalName": "itemDefinition",
+      "property": "structureRef",
+      "value": "m:Lookalike"
+    }
+  },
+  "external-interface-implementation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"Lookalike\"/><bpmn:message id=\"KeepMessage\"/><bpmn:interface id=\"OwnerInterface\" name=\"Service\" implementationRef=\"m:Lookalike\"><bpmn:operation id=\"KeepOperation\" name=\"Keep\"><bpmn:inMessageRef>m:KeepMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "Lookalike",
+    "witnesses": [],
+    "external": {
+      "ownerLocalName": "interface",
+      "property": "implementationRef",
+      "value": "m:Lookalike"
+    }
+  },
+  "external-operation-implementation": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:itemDefinition id=\"Lookalike\"/><bpmn:message id=\"KeepMessage\"/><bpmn:interface id=\"KeepInterface\" name=\"Service\"><bpmn:operation id=\"OwnerOperation\" name=\"Keep\" implementationRef=\"m:Lookalike\"><bpmn:inMessageRef>m:KeepMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "Lookalike",
+    "witnesses": [],
+    "external": {
+      "ownerLocalName": "operation",
+      "property": "implementationRef",
+      "value": "m:Lookalike"
+    }
+  },
+  "external-extension-definition": {
+    "xml": "<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:m=\"urn:finite-audit\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:v=\"urn:vendor\" targetNamespace=\"urn:finite-audit\"><bpmn:extension definition=\"m:Lookalike\"/><bpmn:itemDefinition id=\"Lookalike\"/><bpmn:process id=\"Process\"></bpmn:process></bpmn:definitions>",
+    "processId": "Process",
+    "removeId": "Lookalike",
+    "witnesses": [],
+    "external": {
+      "ownerLocalName": "extension",
+      "property": "definition",
+      "value": "m:Lookalike"
+    }
+  }
+};
+function r8ReferenceOwner(id: string): ActivityNode {
+  const fixture = r8ReferenceFixtures[id], original = r8DocumentOwner(fixture.xml);
+  original.structure!.payload.processId = fixture.processId;
+  const parsed = readBpmnDocument(original);
+  expect(parsed.payload.documentXml).toBe(fixture.xml);
+  expect(parsed.byId.has(fixture.removeId)).toBe(true);
+  for (const witness of fixture.witnesses) {
+    const site = parsed.byId.get(witness.ownerId)!;
+    expect(site).toBeDefined();
+    const reference = site.getAttribute(witness.property) ?? [...site.children].find(child => child.namespaceURI === bpmnNamespaces.model && child.localName === witness.property)?.textContent;
+    expect(resolveBpmnDocumentReference(parsed, site, reference ?? null)).toBe(parsed.byId.get(witness.targetId));
+  }
+  return original;
+}
+function r8ExpectOwnedDeletionRefused(id: string) {
+  const original = r8ReferenceOwner(id), before = structuredClone(original), fixture = r8ReferenceFixtures[id];
+  expect(() => {
+    try { applyBpmnDocumentCommands(original, [{ kind: "remove", target: address(fixture.removeId) }]); }
+    finally { expect(original).toEqual(before); }
+  }).toThrow(/deletion leaves/);
+}
+function r8ExpectExternalValuePreserved(id: string) {
+  const original = r8ReferenceOwner(id), before = structuredClone(original), fixture = r8ReferenceFixtures[id], external = fixture.external!;
+  const next = r8ExpectNoRefusal(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address(fixture.removeId) }]), () => expect(original).toEqual(before));
+  expect(readBpmnDocument(next).byId.has(fixture.removeId)).toBe(false);
+  const retained = [...readBpmnDocument(next).document.getElementsByTagNameNS(bpmnNamespaces.model, external.ownerLocalName)].find(site => site.getAttribute(external.property) === external.value);
+  expect(retained).toBeDefined();
+  expect(retained!.getAttribute(external.property)).toBe(external.value);
+}
+
+describe("R8 pinned standard reference role and type domains", () => {
+  it("protects the owned reference for inputDataItem", () => { r8ExpectOwnedDeletionRefused("domain-inputDataItem"); });
+  it("protects the owned reference for outputDataItem", () => { r8ExpectOwnedDeletionRefused("domain-outputDataItem"); });
+  it("protects the owned reference for task ServiceTask operation", () => { r8ExpectOwnedDeletionRefused("domain-task-ServiceTask-operation"); });
+  it("protects the owned reference for task SendTask operation", () => { r8ExpectOwnedDeletionRefused("domain-task-SendTask-operation"); });
+  it("protects the owned reference for task ReceiveTask operation", () => { r8ExpectOwnedDeletionRefused("domain-task-ReceiveTask-operation"); });
+  it("protects the owned reference for task SendTask message", () => { r8ExpectOwnedDeletionRefused("domain-task-SendTask-message"); });
+  it("protects the owned reference for task ReceiveTask message", () => { r8ExpectOwnedDeletionRefused("domain-task-ReceiveTask-message"); });
+  it("protects the owned reference for artifact association", () => { r8ExpectOwnedDeletionRefused("domain-artifact-association"); });
+  it("protects the owned reference for choreography global", () => { r8ExpectOwnedDeletionRefused("domain-choreography-global"); });
+  it("protects the owned reference for collaboration global", () => { r8ExpectOwnedDeletionRefused("domain-collaboration-global"); });
+  it("protects the owned reference for conversationNode call", () => { r8ExpectOwnedDeletionRefused("domain-conversationNode-call"); });
+  it("protects the owned reference for event boundary", () => { r8ExpectOwnedDeletionRefused("domain-event-boundary"); });
+  it("protects the owned reference for eventDefinition error", () => { r8ExpectOwnedDeletionRefused("domain-eventDefinition-error"); });
+  it("protects the owned reference for flowElement service operation", () => { r8ExpectOwnedDeletionRefused("domain-flowElement-service-operation"); });
+  it("protects the owned reference for flowElement service default", () => { r8ExpectOwnedDeletionRefused("domain-flowElement-service-default"); });
+  it("protects the owned reference for loopCharacteristics multi", () => { r8ExpectOwnedDeletionRefused("domain-loopCharacteristics-multi"); });
+  it("protects the owned reference for partitionElement sequenceFlow", () => { r8ExpectOwnedDeletionRefused("domain-partitionElement-sequenceFlow"); });
+  it("protects the owned reference for rootElement message", () => { r8ExpectOwnedDeletionRefused("domain-rootElement-message"); });
+  it("protects the owned reference for DiagramElement shape", () => { r8ExpectOwnedDeletionRefused("domain-DiagramElement-shape"); });
+  it("protects the owned reference for DiagramElement edge model", () => { r8ExpectOwnedDeletionRefused("domain-DiagramElement-edge-model"); });
+  it("protects the owned reference for DiagramElement edge source", () => { r8ExpectOwnedDeletionRefused("domain-DiagramElement-edge-source"); });
+  it("protects the owned reference for DiagramElement edge target", () => { r8ExpectOwnedDeletionRefused("domain-DiagramElement-edge-target"); });
+  it("protects the owned reference for DiagramElement plane", () => { r8ExpectOwnedDeletionRefused("domain-DiagramElement-plane"); });
+  it("protects the owned reference for DiagramElement label", () => { r8ExpectOwnedDeletionRefused("domain-DiagramElement-label"); });
+  it("protects the owned reference for effective parent tComplexBehaviorDefinition", () => { r8ExpectOwnedDeletionRefused("domain-effective-parent-tComplexBehaviorDefinition"); });
+  it("protects the owned reference for effective parent tCorrelationPropertyBinding", () => { r8ExpectOwnedDeletionRefused("domain-effective-parent-tCorrelationPropertyBinding"); });
+  it("protects the owned reference for effective parent tCorrelationPropertyRetrievalExpression", () => { r8ExpectOwnedDeletionRefused("domain-effective-parent-tCorrelationPropertyRetrievalExpression"); });
+  it("protects the owned reference for effective parent tDataAssociation", () => { r8ExpectOwnedDeletionRefused("domain-effective-parent-tDataAssociation"); });
+  it("protects the owned reference for effective parent tDataInputAssociation", () => { r8ExpectOwnedDeletionRefused("domain-effective-parent-tDataInputAssociation"); });
+  it("protects the owned reference for effective parent tDataOutputAssociation", () => { r8ExpectOwnedDeletionRefused("domain-effective-parent-tDataOutputAssociation"); });
+  it("protects the owned reference for partitionElement relationship text", () => { r8ExpectOwnedDeletionRefused("domain-partitionElement-relationship-text"); });
+  it("preserves the external QName domain for itemDefinition structure", () => { r8ExpectExternalValuePreserved("external-itemDefinition-structure"); });
+  it("preserves the external QName domain for interface implementation", () => { r8ExpectExternalValuePreserved("external-interface-implementation"); });
+  it("preserves the external QName domain for operation implementation", () => { r8ExpectExternalValuePreserved("external-operation-implementation"); });
+  it("preserves the external QName domain for extension definition", () => { r8ExpectExternalValuePreserved("external-extension-definition"); });
+});
+
+function r8UnqualifiedTaskType(type: string): ActivityNode {
+  const fixture = r8ReferenceFixtures["domain-task-ServiceTask-operation"];
+  return r8DocumentOwner(fixture.xml.replace('xsi:type="bpmn:tServiceTask"', `xsi:type="${type}"`));
+}
+function r8ExpectUnqualifiedTypeOpaque(type: string) {
+  const original = r8UnqualifiedTaskType(type), before = structuredClone(original);
+  const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("RemovedOperation") }]);
+  expect(readBpmnDocument(next).byId.has("RemovedOperation")).toBe(false);
+  expect(element(next, "Typed").getAttribute("operationRef")).toBe("m:RemovedOperation");
+  expect(original).toEqual(before);
+}
+
+describe("R8 reference qualification controls", () => {
+  it("does not grant standard semantics to a foreign type with a known local spelling", () => { r8ExpectUnqualifiedTypeOpaque("v:tServiceTask"); });
+  it("does not grant standard semantics to an unknown standard type", () => { r8ExpectUnqualifiedTypeOpaque("bpmn:tFutureTask"); });
+  it("does not grant standard semantics to an unbound type prefix", () => { r8ExpectUnqualifiedTypeOpaque("unbound:tServiceTask"); });
+  it("does not grant standard semantics to malformed type QNames", () => {
+    for (const type of ["bpmn:tServiceTask:extra", "bpmn: tServiceTask", ":tServiceTask", "bpmn:", "bpmn:1Task"]) r8ExpectUnqualifiedTypeOpaque(type);
+  });
+  it("does not grant a known non-derived type its reference fields on a task", () => {
+    const fixture = r8ReferenceFixtures["domain-task-ServiceTask-operation"], original = r8DocumentOwner(fixture.xml.replace('<bpmn:message id="KeepMessage"/>', '<bpmn:itemDefinition id="RemovedItem"/><bpmn:message id="KeepMessage"/>').replace('xsi:type="bpmn:tServiceTask" operationRef="m:RemovedOperation"', 'xsi:type="bpmn:tMessage" itemRef="m:RemovedItem"'));
+    const before = structuredClone(original), next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("RemovedItem") }]);
+    expect(element(next, "Typed").getAttribute("itemRef")).toBe("m:RemovedItem");
+    expect(readBpmnDocument(next).byId.has("RemovedItem")).toBe(false);
+    expect(original).toEqual(before);
+  });
+  it("does not grant an abstract element a concrete gateway type contract", () => {
+    const original = r8DocumentOwner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="urn:abstract"><bpmn:process id="Process"><bpmn:task id="Source"/><bpmn:task id="Target"/><bpmn:gateway id="Typed" xsi:type="bpmn:tExclusiveGateway" default="RemovedFlow"/><bpmn:sequenceFlow id="RemovedFlow" sourceRef="Source" targetRef="Target"/></bpmn:process></bpmn:definitions>`);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("RemovedFlow") }]);
+    expect(element(next, "Typed").getAttribute("default")).toBe("RemovedFlow");
+    expect(readBpmnDocument(next).byId.has("RemovedFlow")).toBe(false);
+  });
+  it("does not infer a multi-instance local data-item role under the wrong parent", () => {
+    const fixture = r8ReferenceFixtures["domain-inputDataItem"], original = r8DocumentOwner(fixture.xml.replace("<bpmn:multiInstanceLoopCharacteristics>", "").replace("</bpmn:multiInstanceLoopCharacteristics>", ""));
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("RemovedItem") }]);
+    expect(element(next, "Typed").getAttribute("itemSubjectRef")).toBe("m:RemovedItem");
+    expect(readBpmnDocument(next).byId.has("RemovedItem")).toBe(false);
+  });
+  it("allows atomic removal of each declared multi-instance data item and its reference target", () => {
+    for (const id of ["domain-inputDataItem", "domain-outputDataItem"]) {
+      const original = r8ReferenceOwner(id), before = structuredClone(original);
+      const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Typed") }, { kind: "remove", target: address("RemovedItem") }]);
+      expect(readBpmnDocument(next).byId.has("Typed")).toBe(false);
+      expect(readBpmnDocument(next).byId.has("RemovedItem")).toBe(false);
+      expect(original).toEqual(before);
+    }
+  });
+  it("allows atomic removal of a specialized task and its referenced operation owner", () => {
+    const original = r8ReferenceOwner("domain-task-ServiceTask-operation"), before = structuredClone(original);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Typed") }, { kind: "remove", target: address("Interface") }]);
+    expect(readBpmnDocument(next).byId.has("Typed")).toBe(false);
+    expect(readBpmnDocument(next).byId.has("RemovedOperation")).toBe(false);
+    expect(original).toEqual(before);
+  });
+  it("keeps true ItemDefinition references distinct from external structure and implementation QNames", () => {
+    const prefix = `<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:m="urn:item" targetNamespace="urn:item"><bpmn:itemDefinition id="Item"/>`;
+    const suffix = '<bpmn:process id="Process"/></bpmn:definitions>';
+    for (const declaration of ['<bpmn:error id="Error" structureRef="m:Item"/>', '<bpmn:resource id="Resource"><bpmn:resourceParameter id="Parameter" name="Value" type="m:Item"/></bpmn:resource>']) {
+      const original = r8DocumentOwner(prefix + declaration + suffix), before = structuredClone(original);
+      expect(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }])).toThrow("deletion leaves reference");
+      expect(original).toEqual(before);
+    }
+    expect(() => applyBpmnDocumentCommands(r7InputTransformationOwner(), [{ kind: "remove", target: address("Item") }])).toThrow("deletion leaves reference");
+  });
+  it("keeps the native CallableElement domain of calledElement despite its descriptor String encoding", () => {
+    const original = r8DocumentOwner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:m="urn:call" targetNamespace="urn:call"><bpmn:process id="RemovedProcess"/><bpmn:process id="Process"><bpmn:callActivity id="Caller" calledElement="m:RemovedProcess"/></bpmn:process></bpmn:definitions>`), before = structuredClone(original);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("RemovedProcess") }])).toThrow("deletion leaves reference");
+    expect(original).toEqual(before);
+  });
+});
+
+
+function r9DocumentOwner(processXml: string): ActivityNode {
+  return { nodeId: "document", activityVersionId: "exact-document", inputs: [], outputs: [], structure: {
+    kind: "elsa.bpmn.structure", schemaVersion: "2.0.0", payload: {
+      documentXml: `<b:definitions xmlns:b="${bpmnNamespaces.model}" xmlns:v="urn:vendor" targetNamespace="urn:r9"><b:process id="Process">${processXml}</b:process></b:definitions>`,
+      processId: "Process", activities: [], bindings: [], variables: []
+    }
+  } };
+}
+function r9Reconnect(original: ActivityNode, sourceRef: string, targetRef: string, endpoint: string, expected: string[]) {
+  const before = structuredClone(original), opened = readBpmnDocument(original);
+  expect(opened.byId.get(endpoint)!.children[0].localName).toBe("documentation");
+  const next = applyBpmnDocumentCommands(original, [{ kind: "reconnect", elementId: "F", sourceRef, targetRef }]);
+  expect(original).toEqual(before);
+  expect([...element(next, endpoint).children].map(child => child.localName)).toEqual(expected);
+  expect(element(next, endpoint).getElementsByTagNameNS(bpmnNamespaces.model, "documentation")[0].textContent).toBe("Keep these docs");
+  expect(element(next, "F").getAttribute("sourceRef")).toBe(sourceRef);
+  expect(element(next, "F").getAttribute("targetRef")).toBe(targetRef);
+}
+function r9BoundVendorOwner(): ActivityNode {
+  const original = r9DocumentOwner('<b:task id="Task"><b:extensionElements><v:config id="Task" value="opaque"/></b:extensionElements></b:task>');
+  original.structure!.payload.activities = [{ nodeId: "native", activityVersionId: "exact-native", inputs: [], outputs: [] }];
+  original.structure!.payload.bindings = [{ elementId: "Task", childNodeId: "native" }];
+  return original;
+}
+function r9RemoveForeign(path: { namespaceURI: string; localName: string }[]) {
+  const original = r9BoundVendorOwner(), before = structuredClone(original), opened = readBpmnDocument(original);
+  expect(opened.byId.get("Task")!.namespaceURI).toBe(bpmnNamespaces.model);
+  expect(opened.document.getElementsByTagNameNS("urn:vendor", "config")[0].getAttribute("id")).toBe("Task");
+  let next: ActivityNode | undefined, failure: unknown;
+  try { next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: { elementId: "Task", path } }]); } catch (error) { failure = error; }
+  expect(original).toEqual(before);
+  expect(failure).toBeUndefined();
+  expect(readBpmnDocument(next!).byId.get("Task")!.namespaceURI).toBe(bpmnNamespaces.model);
+  expect(readBpmnDocument(next!).document.getElementsByTagNameNS("urn:vendor", "config")).toHaveLength(0);
+  expect(next!.structure!.payload.activities).toBe(original.structure!.payload.activities);
+  expect(next!.structure!.payload.bindings).toBe(original.structure!.payload.bindings);
+}
+
+describe("R9 document child order and foreign identity boundaries", () => {
+  it("moves an incoming reference after retained documentation and extensions", () => {
+    const original = r9DocumentOwner('<b:task id="A"><b:outgoing>F</b:outgoing></b:task><b:task id="B"><b:incoming>F</b:incoming></b:task><b:task id="C"><b:documentation>Keep these docs</b:documentation><b:extensionElements/></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "A", "C", "C", ["documentation", "extensionElements", "incoming"]);
+  });
+  it("creates a missing incoming reference after retained documentation", () => {
+    const original = r9DocumentOwner('<b:task id="A"/><b:task id="B"/><b:task id="C"><b:documentation>Keep these docs</b:documentation></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "A", "C", "C", ["documentation", "incoming"]);
+  });
+  it("moves an outgoing reference after retained documentation and extensions", () => {
+    const original = r9DocumentOwner('<b:task id="A"><b:outgoing>F</b:outgoing></b:task><b:task id="B"><b:incoming>F</b:incoming></b:task><b:task id="C"><b:documentation>Keep these docs</b:documentation><b:extensionElements/></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "C", "B", "C", ["documentation", "extensionElements", "outgoing"]);
+  });
+  it("creates self-loop references after documentation with incoming before outgoing", () => {
+    const original = r9DocumentOwner('<b:task id="A"/><b:task id="B"/><b:task id="C"><b:documentation>Keep these docs</b:documentation><b:extensionElements/></b:task><b:sequenceFlow id="F" sourceRef="A" targetRef="B"/>');
+    r9Reconnect(original, "C", "C", "C", ["documentation", "extensionElements", "incoming", "outgoing"]);
+  });
+  it("removes a foreign config whose ID matches a retained bound task", () => {
+    r9RemoveForeign([{ namespaceURI: bpmnNamespaces.model, localName: "extensionElements" }, { namespaceURI: "urn:vendor", localName: "config" }]);
+  });
+  it("removes an extension wrapper containing a foreign bound-ID lookalike", () => {
+    r9RemoveForeign([{ namespaceURI: bpmnNamespaces.model, localName: "extensionElements" }]);
+  });
+  it("still refuses actual bound task deletion atomically", () => {
+    const original = r9BoundVendorOwner(), before = structuredClone(original);
+    expect(readBpmnDocument(original).payload.bindings).toEqual([{ elementId: "Task", childNodeId: "native" }]);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Task") }])).toThrow("native-binding transformation");
+    expect(original).toEqual(before);
+  });
+});

@@ -136,6 +136,7 @@ public sealed class ExternalIdentityEntityConfiguration : IEntityTypeConfigurati
         ConfigureText(builder.Property(x => x.Provider), true);
         UserEntityConfiguration.ConfigureNullableText(builder.Property(x => x.ProviderDisplayName), false);
         UserEntityConfiguration.ConfigureTechnical(builder.Property(x => x.ProviderLookupKey), true);
+        UserEntityConfiguration.ConfigureNullableText(builder.Property(x => x.Issuer), false);
         ConfigureText(builder.Property(x => x.ProviderSubject), true);
         UserEntityConfiguration.ConfigureTechnical(builder.Property(x => x.ProviderSubjectLookupKey), true);
         builder.Property(x => x.ExternalOrderKey)

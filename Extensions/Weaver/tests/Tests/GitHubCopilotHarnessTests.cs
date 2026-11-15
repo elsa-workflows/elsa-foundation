@@ -39,6 +39,8 @@ public sealed class GitHubCopilotHarnessTests
 
         // Our tool was handed to the Copilot session as a config tool and auto-invoked by the (fake) harness.
         Assert.Single(factory.Session.RegisteredTools, tool => tool.Name == DeterministicWeaverProvider.ReadOnlyToolName);
+        Assert.Equal(new[] { DeterministicWeaverProvider.ReadOnlyToolName }, factory.Session.LastRequest!.AvailableTools);
+        Assert.DoesNotContain("read_file", factory.Session.LastRequest.AvailableTools);
         Assert.Contains("echo:hi", factory.Session.LastToolResult);
         Assert.Contains("test.echo", factory.Session.LastToolResult);
         var contributed = Assert.Single(events, item => item.Kind == WeaverStreamEventKind.ContributedResult);
@@ -55,12 +57,47 @@ public sealed class GitHubCopilotHarnessTests
         Assert.Contains(events, x => x.Kind == WeaverStreamEventKind.MessageDelta && x.Content == "done");
     }
 
+    [Theory]
+    [InlineData("error")]
+    [InlineData("custom-transport")]
+    [InlineData("ambient-transport")]
+    public async Task Harness_normalizes_sdk_error_and_transport_paths_before_exposing_generic_events(string path)
+    {
+        var provider = BuildProvider(out var factory);
+        factory.Options!.RuntimeConnectionToken = "runtime-fixture-secret";
+        const string message = "SDK failed with test-token runtime-fixture-secret";
+        if (path == "error") factory.Session.ExtraEvents.Add(new(GitHubCopilotStreamEventKind.Error, ErrorCode: "sdk.error", ErrorMessage: message));
+        else
+        {
+            factory.Session.ExtraEvents.Add(new(GitHubCopilotStreamEventKind.ToolExecutionStarted, ToolCallId: "failed-call", ToolName: path == "custom-transport" ? "echo" : "ambient-tool"));
+            factory.Session.ExtraEvents.Add(new(GitHubCopilotStreamEventKind.ToolExecutionCompleted, ToolCallId: "failed-call", Success: false, ErrorMessage: message));
+        }
+        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "Read")], [], [new EchoTool()], WeaverPolicy.Default)
+            { TenantId = "tenant-1", TurnId = "turn" };
+        var events = new List<WeaverStreamEvent>();
+        await foreach (var item in provider.RunTurnAsync(request)) events.Add(item);
+        var serialized = JsonSerializer.Serialize(events);
+        Assert.Contains("[redacted]", serialized);
+        Assert.DoesNotContain("test-token", serialized); Assert.DoesNotContain("runtime-fixture-secret", serialized);
+    }
+
+    [Fact]
+    public async Task Harness_requires_a_trusted_tenant_before_creating_a_client()
+    {
+        var provider = BuildProvider(out var factory);
+        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "Read")], [], [], WeaverPolicy.Default);
+        var events = new List<WeaverStreamEvent>();
+        await foreach (var item in provider.RunTurnAsync(request)) events.Add(item);
+        Assert.Equal("weaver.provider.github_copilot.session_owner_unavailable", Assert.Single(events).Error!.Code);
+        Assert.Null(factory.Session.LastRequest);
+    }
+
     [Fact]
     public async Task Harness_runs_the_workflow_read_graph_tool_and_feeds_the_graph_back()
     {
         var provider = BuildProvider(out var factory, new WorkflowReadGraphTool());
         var graph = WorkflowWeaverTests.Snapshot();
-        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "read the graph")], [graph], [new WorkflowReadGraphTool()], WeaverPolicy.Default);
+        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "read the graph")], [graph], [new WorkflowReadGraphTool()], WeaverPolicy.Default) { TenantId = "tenant-1" };
 
         var events = new List<WeaverStreamEvent>();
         await foreach (var item in provider.RunTurnAsync(request))
@@ -78,7 +115,7 @@ public sealed class GitHubCopilotHarnessTests
     public async Task Harness_surfaces_a_proposal_when_an_auto_invoked_tool_is_mutating()
     {
         var provider = BuildProvider(out var factory, new ApplyChangeTool());
-        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "apply a change")], [], [new ApplyChangeTool()], WeaverPolicy.Default);
+        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "apply a change")], [], [new ApplyChangeTool()], WeaverPolicy.Default) { TenantId = "tenant-1" };
 
         var events = new List<WeaverStreamEvent>();
         await foreach (var item in provider.RunTurnAsync(request))
@@ -179,7 +216,7 @@ public sealed class GitHubCopilotHarnessTests
     private static async Task<string> ContextPrompt(IReadOnlyCollection<WeaverContextAttachment> attachments, bool includeSensitiveContextContent = false)
     {
         var provider = BuildProvider(out var factory, includeSensitiveContextContent);
-        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "Inspect")], attachments, [], WeaverPolicy.Default);
+        var request = new WeaverHarnessTurnRequest("session-1", "actor-1", [new(WeaverRole.User, "Inspect")], attachments, [], WeaverPolicy.Default) { TenantId = "tenant-1" };
         await foreach (var _ in provider.RunTurnAsync(request)) { }
         return Assert.IsType<string>(factory.Session.LastPrompt);
     }
@@ -191,6 +228,8 @@ public sealed class GitHubCopilotHarnessTests
     {
         factory = new FakeCopilotClientFactory();
         var options = new WeaverGitHubCopilotOptions { Enabled = true, GitHubToken = "test-token", IncludeSensitiveContextContent = includeSensitiveContextContent };
+        options.GitHubTokenEnvironmentVariable = "ELSA_COPILOT_TEST_TOKEN_NOT_SET";
+        factory.Options = options;
         IWeaverTool[] registered = tools.Length == 0 ? [new EchoTool()] : tools;
         var capturedFactory = factory;
         var invoker = new WeaverTestToolInvoker(async (invocation, policy) =>
@@ -216,6 +255,7 @@ public sealed class GitHubCopilotHarnessTests
 
     private sealed class FakeCopilotClientFactory : IGitHubCopilotClientFactory
     {
+        public WeaverGitHubCopilotOptions? Options { get; set; }
         public FakeCopilotSession Session { get; } = new();
         public WeaverToolInvocation? LastInvocation { get; set; }
 
@@ -230,12 +270,14 @@ public sealed class GitHubCopilotHarnessTests
 
         public Task<IGitHubCopilotSession> CreateSessionAsync(GitHubCopilotSessionRequest request, CancellationToken cancellationToken)
         {
+            session.LastRequest = request;
             session.Configure(request.CustomTools);
             return Task.FromResult<IGitHubCopilotSession>(session);
         }
 
         public Task<IGitHubCopilotSession> ResumeSessionAsync(GitHubCopilotSessionRequest request, CancellationToken cancellationToken)
         {
+            session.LastRequest = request;
             session.Configure(request.CustomTools);
             return Task.FromResult<IGitHubCopilotSession>(session);
         }
@@ -245,6 +287,8 @@ public sealed class GitHubCopilotHarnessTests
 
     private sealed class FakeCopilotSession : IGitHubCopilotSession
     {
+        public GitHubCopilotSessionRequest? LastRequest { get; set; }
+        public List<GitHubCopilotStreamEvent> ExtraEvents { get; } = [];
         private IReadOnlyCollection<AIFunction> _tools = [];
 
         public string SessionId => "session-1";
@@ -269,6 +313,8 @@ public sealed class GitHubCopilotHarnessTests
                 LastToolResult = JsonSerializer.Serialize(result);
                 yield return new(GitHubCopilotStreamEventKind.ToolExecutionCompleted, ToolCallId: "call-1", Success: true);
             }
+
+            foreach (var item in ExtraEvents) yield return item;
 
             yield return new(GitHubCopilotStreamEventKind.MessageDelta, "done");
             yield return new(GitHubCopilotStreamEventKind.Completed);

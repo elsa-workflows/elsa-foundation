@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -12,6 +13,17 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class RuntimeChainIdTests
 {
+    [Theory]
+    [InlineData("abc", "checkpoint:WorkflowStarted", "ba7816bf8f01cfea:checkpoint:WorkflowStarted")]
+    [InlineData("α/parent", "schedule:root", "627d887d4797ee39:schedule:root")]
+    public void Core_and_existing_Runtime_surface_preserve_frozen_successor_bytes(string parent, string step, string expected)
+    {
+        Assert.Equal(expected, RuntimeChainIdentity.Derive(parent, step));
+        Assert.Equal(expected, RuntimeChainId.Derive(parent, step));
+        Assert.Equal(expected[..16], RuntimeChainIdentity.Fingerprint(parent));
+        Assert.Equal(expected[..16], RuntimeChainId.Fingerprint(parent));
+    }
+
     [Fact]
     public void Fingerprint_IsFixedLengthLowerHex()
     {

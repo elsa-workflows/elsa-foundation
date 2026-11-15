@@ -180,7 +180,8 @@ PostgreSQL, round trips. Native: the fence as its own statement / the fence as c
 | http-reference | Balanced | **80** | **3 / 2** | 1 |
 | http-reference | Durable | 153 | 12 / 8 | 4 |
 | respond, then continue (case 2) | Balanced | | 6 / 4 | 2 |
-| a background job or a 20 ms Delay before the response (case 3) | Ephemeral or Balanced | | 6 / 4 | 2 |
+| a background job or a 20 ms Delay before the response (case 3) | Ephemeral | | **0** (6 / 4 before round 4) | 0 |
+| a background job or a 20 ms Delay before the response (case 3) | Balanced | | 6 / 4 | 2 |
 | resume at an HttpEndpoint, both requests, one node or two (case 4) | Balanced | | 16 / 12 | 4 |
 
 SQLite, engine calls (commands):
@@ -282,9 +283,11 @@ own: no flaw of the plan aims at it, so that it bites is not shown. The round-4 
 moves every seed; the five older flaws' first seeds and messages above are round 4's (`InFlightInMemory` is now caught first by N5, not N1).
 
 Found while building the checks (run): one seed of 1,000 actions failed my own event check because a parked
-instance keeps its subscriptions (seed 500963); the check now skips instances that do not run. Round 4 met the same
-in the kernel's I8 (seed 2282 at 1,000 actions, once `n-graph` shifted the seeds), which now skips an instance the
-poison rule parked while its faulted row exists; and a native defect: in Durable mode a cancel recalled a fired
+instance kept its subscriptions (seed 500963); at that stage the check skipped instances that did not run. Round 4 met the same
+in the kernel's I8 (seed 2282 at 1,000 actions, once `n-graph` shifted the seeds), which initially exempted an instance the
+poison rule parked while its faulted row existed. The owner's 13 November decision now removes active subscriptions
+when Park faults the instance; I8 requires that cleanup and retains its saved waits only as inactive checkpoint data.
+Also found: in Durable mode a cancel recalled a fired
 Delay's timer message that an earlier turn had consumed, because the resume still waited in the agenda (I9, seed
 8486); a timer whose message has arrived is no longer recalled. And a threshold join
 is not deterministic in which branch activities complete: three events in one inbox complete all three Event
@@ -317,10 +320,12 @@ Frictions, without a change:
 - **F-N6. A model cannot tell a redelivery.** Scenario: N4. In Durable, an External effect whose attempt was
   committed ran again under that same attempt 629 times in 20,000 seeds (476 in 5,000 of 1,000), each time after a
   turn's result was lost. To raise "may have run" as an incident instead, a turn needs to know that its message was
-  held by a lost owner; the kernel knows (`Delivery.Suspect`) and could put it on the message. Run.
+  held by a lost owner; the kernel knows (`Delivery.Suspect`) and could put it on the message. Run. The later decision
+  makes the exposed value an observed-history hint, not proof that an unflagged turn has never run; see [LEASE.md](LEASE.md).
 - **F-N7. Ephemeral is lost at the first wait.** Scenario: HTTP case 3. A 20 ms Delay or a background job before the
   response is a message, so the instance commits twice (4 to 6 round trips) where it would otherwise cost zero. Short
   timers kept in memory for an instance that is not written would keep request-response workflows at zero. Run.
+  Since round 4 no longer a friction (decision 4, FINDINGS 25.6): case 3 in Ephemeral mode costs 0 database calls.
 - **F-N8. The meet ticket costs a commit.** Scenario: fork-join-resume. Every turn that subscribes pays a read of the
   event table and a commit that only consumes the ticket, even when the resume will come directly. Run (traced).
 - **F-N9. Kept events change Event's meaning.** Scenario: the cost measurement, first version. An event published
@@ -358,3 +363,11 @@ Reasoned.
 - Client disconnect mapped to cancel, streaming responses, request bodies by reference.
 - GraphActivity, CreateUserTask, HumanReview, RunEtl, RunRules and EvaluateDecision; Switch, For, Do, CompensationScope.
 - Incident strategies; retries of faulted activities.
+
+## 10. Private durable lexical-resource probe
+
+The [lexical runner](models/Native.Scopes.Run/README.md) explores generic scopes whose values survive separate ordinary activity phases. Resources, ownership and optional work/frame references live in the existing native checkpoint; the existing variable/expression/capture paths resolve them between nearer ordinary frame scopes and outer scopes. It adds no actor, store, semantic queue, writer or value interpreter.
+
+Native model state version4 records this private capability. Older1–3 no-resource checkpoints, including genuine JSON-null checkpoints from an initial Park, keep their prior meanings. Unsupported/mixed/dangling/cyclic shapes are refused; reader fixtures do not qualify a historical writer, mixed-binary deployment or provider. Owner completion, cancellation and ordinary fault disposal release resources; an absorbing parent can continue its siblings. Forced kernel termination retires the new handles/resources while retaining other existing forensic state. A technical Park retains its previous checkpoint under the existing policy; this mechanism adds no incident retry or terminal resume.
+
+This is non-packable M0 evidence for #3815/#4229. Attaching scopes to actual StateMachine visits, normal trigger work, Action/Entry initialization, shared source waves, recovery, compensation and product/Studio integration remains required. It does not approve a product scope schema or stronger variable isolation/secret retention. Existing cost figures above are historical; lexical workflow/provider costs have not been measured.

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><ElsaTrackPublicApi>true</ElsaTrackPublicApi><Description>Optional compiler-free owner inspection of the supported primitive release profile.</Description></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <ProjectReference Include="../Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../Workflows/Publishing/Releases/Runtime/Core/Elsa.Workflows.Publishing.Releases.Runtime.Core.csproj" />
+  </ItemGroup>
+</Project>

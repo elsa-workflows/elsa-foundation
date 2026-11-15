@@ -267,7 +267,7 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
 ### E9. SQL Server, fence in the batch, merged kernel: the take deadlocks with a stale commit. Run; fixed in round 4 (the checked fence is SQL Server's default)
 
 - **Graph (`.out/f-mssql-deadlock-graphs.xml`):** a stale owner's SaveChanges holds X on a `PK_Messages` key (a seen
-  or trial mark) and waits for U on `PK_Partitions` (its fence comes last in EF's order); the take holds X on
+  or trial mark) and waits for U on `PK_Partitions` (its fence follows the message write); the take holds X on
   `PK_Partitions` and waits for U on that message key, in the attempts update of E8. 127 in one run, victims all
   takes; one on MySQL. Waits up to 3 s.
 - **Harm:** a take that loses is "not taken" and is tried again; nothing wrong lands (end state holds). It costs
@@ -288,6 +288,39 @@ must be passed at BEGIN (`Engine.BeginAsync`); a session setting is overwritten.
 - **Sentence:** the sketch's cost table (2 round trips per commit) is a PostgreSQL figure. On MySQL it is 6.
 - **Smallest fix, reasoned:** keep one open connection per worker instead of one per store call, or a driver that
   pipelines (MySqlConnector, once a provider for EF Core 10 uses it).
+
+### E11. Oracle's MySQL EF provider can acknowledge a partial batch (#4358)
+
+One commit of 125 fresh `Make.New` turns on MySQL 8.4.13 with the default batch fence returned `Landed`.
+Direct SQL counted 125 instances, partition position 125 and zero journal rows. The general log showed an
+instance insert, the fence update and COMMIT. A fresh database and one writer reproduced it without a
+projector, deletion or recreation. With this row shape, 110 worked, 111 lost all the journal rows, 170 worked
+and 420 failed with an empty command. Batch size alone does not determine the outcome.
+
+Oracle 10.0.12 queues bulk inserts until the next incompatible command. EF Core 10.0.15 saves its SQL rollback
+position before adding that command. When the queued journals and the fence exceed Oracle's parameter check
+(`count + 1 < 2100`), rollback truncates the generated journal SQL and the fence together. Only the fence
+is retried. At 420 turns even the journal insert group alone exceeds the check. Removing it at the next
+boundary leaves an empty command. See [Oracle's batch implementation](https://github.com/mysql/mysql-connector-net/blob/df22e52651cea9942fe903d751116170e2e3af95/EFCore/src/Update/MySQLModificationCommandBatch.cs#L74-L143)
+and [EF's rollback checkpoint](https://github.com/dotnet/efcore/blob/v10.0.15/src/EFCore.Relational/Update/ReaderModificationCommandBatch.cs#L96-L159).
+
+`MySqlCommandBatchPreparer` finishes an ordered EF command set before an incompatible command would cross
+that threshold. Oracle still generates each compatible multi-row insert and applies the configured maximum
+command count. All commands use the store's transaction. In the 125-turn case the first command now includes
+both instance and journal inserts, and the second checks the fence. A refused consume in a subsequent
+command rolls back the earlier writes.
+
+The required `commit: journaled creations` case reads the committed instances, journal and position through a
+separate client. It checks that a missing consume rolls a mixed batch back, then supplies the input and
+repeats the same commit successfully. Against main `beaad818f8` before this correction, the case read zero
+journal rows for 125 acknowledged creations. With the correction, the MySQL batch and checked fences each
+passed 60 of 61 cases with one skip (the provider cannot create a permanently refused row for that case).
+Both passed the semantic send-order checks using the comparer from #4459.
+
+Earlier measurements on the viewer integration tree at `082b1f9195` used the same batch preparer.
+Plain fresh batches of 125, 420, 500 and 850 took two, three, three and three EF commands. On that tree,
+default-fence before/after TCP counts matched on every cost-harness row, including 100 and 1,000 balanced
+starts on the owner (6 and 8) and arriving by poll (19 and 22).
 
 ### Not a finding of the engines: a batch that names one message twice. Run
 

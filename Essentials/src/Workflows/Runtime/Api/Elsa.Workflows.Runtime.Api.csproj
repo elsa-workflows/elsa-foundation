@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="../Inspection/Core/Elsa.Workflows.Runtime.Inspection.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 

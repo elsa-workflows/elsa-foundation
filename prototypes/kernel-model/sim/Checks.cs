@@ -11,6 +11,7 @@ public sealed class Oracle
     public readonly Dictionary<string, List<string>> Waiters = new();
     public readonly Dictionary<string, (int Count, string Mode, bool Posted)> Sequences = new();
     public readonly Dictionary<string, List<string>> Runners = new();                  // target -> keys told to go
+    public readonly HashSet<string> KillerJobs = [];
     public readonly Dictionary<string, bool> Fragiles = new();                          // target -> a bad message was sent
     public readonly Dictionary<string, List<string>> CWaiters = new();                 // waiters through correlation instances
     public readonly HashSet<string> Published = [];                                      // correlation instances that were sent an event
@@ -18,6 +19,7 @@ public sealed class Oracle
     public readonly HashSet<string> Trees = [];                                          // roots of trees started from outside
     public readonly Dictionary<string, List<string>> Events = new();                   // key -> events published
     public readonly List<SubscriptionRow> Starts = [];                                   // start subscriptions registered
+    public readonly Dictionary<string, long> InMemory = new(StringComparer.Ordinal);      // decision 4: instances kept in memory, unwritten, and their last revision there
     public readonly HashSet<string> Deleted = [];                                        // instances that were sent a delete
 
     public bool Accepts(Message m) => m.Kind != "cancel" || Parents.ContainsKey(m.Target.Id) || (Runners.TryGetValue(m.Target.Id, out var keys) && keys.Contains(m.Read<string>()));
@@ -39,7 +41,10 @@ public sealed class Oracle
             case "http": Https[target] = (Json.Read<HttpInput>(m.Start.Input!).Mode, m.Start.Ephemeral, -1, false); break;
             case "sequence": var input = Json.Read<SequenceInput>(m.Start.Input!); Sequences[target] = (input.Count, input.Mode, posted); break;
             case "runner": List(Runners, target).Add(m.Read<string>()); break;
-            case "fragile": Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die"; break;
+            case "fragile":
+                Fragiles[target] = Fragiles.GetValueOrDefault(target) || m.Kind is "throw" or "spoil" or "die";
+                if (m.Kind == "dierun") KillerJobs.Add(target);
+                break;
             case null when m.Kind == "add": Ghosts.Add(target); break;
         }
     }
@@ -50,7 +55,9 @@ public sealed class Oracle
 public sealed partial class World
 {
     public readonly Oracle Oracle = new();
+    private readonly Dictionary<string, EventMatch> _startedBy = [];
     private readonly Dictionary<string, (long Revision, InstanceStatus Status)> _known = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (long Generation, bool Retired)> _creations = new(StringComparer.Ordinal);
     private readonly HashSet<string> _late = new(StringComparer.Ordinal);
     private readonly HashSet<string> _gone = new(StringComparer.Ordinal);    // deleted, and seen gone
     private readonly Dictionary<string, int> _versions = new(StringComparer.Ordinal);   // instances whose row first appeared after their parent had ended
@@ -115,26 +122,70 @@ public sealed partial class World
         // I6 for the view: each view row counts exactly the journal rows of its instance up to its projector's position.
         var projected = Store.Journal.Values.Where(j => j.Revision > 0 && j.Position <= Store.Projection[j.Partition]).GroupBy(j => j.Instance)
             .ToDictionary(g => g.Key, g => (Revision: g.Max(j => j.Revision), Commits: g.Count()), StringComparer.Ordinal);
-        var deletions = Store.Journal.Values.Where(j => j.Revision < 0).ToDictionary(j => j.Instance, j => j, StringComparer.Ordinal);
+        var deletions = Store.Journal.Values.Where(j => j.Revision < 0).GroupBy(j => j.Instance)
+            .ToDictionary(g => g.Key, g => g.MaxBy(j => j.Position)!, StringComparer.Ordinal);
+        if (_creations.FirstOrDefault(c => c.Value.Generation > 0 && !Store.Instances.ContainsKey(c.Key)) is { Key: not null } lostCreation)
+            return $"I22 {lostCreation.Key} lost its retained creation high-water mark";
         foreach (var id in deletions.Keys.Where(id => Oracle.Deleted.Contains(id) && !Store.Instances.ContainsKey(id))) _gone.Add(id);   // also those created and deleted between two checks
         foreach (var (id, view) in Store.Views)
             if (deletions.TryGetValue(id, out var deletion) && deletion.Position > Store.Projection[deletion.Partition]) continue;    // deleted; the projector has not got there yet
             else if (!projected.TryGetValue(id, out var expected) || expected != (view.Revision, view.Commits))
                 return $"I6 the view of {id} says revision {view.Revision} after {view.Commits} commits; the journal up to the projector says {expected.Revision} after {expected.Commits}";
         if (projected.Keys.FirstOrDefault(id => !Store.Views.ContainsKey(id)) is { } unseen) return $"I6 the projector passed the journal rows of {unseen} and has no view of it";
+        // I6 for the viewer (decision 11): the tail read (cursor, view, the instance's rows past the cursor, merged) says
+        // what the instance's whole journal says, whatever the projectors have done. One pass over the journal.
+        foreach (var group in Store.Journal.Values.GroupBy(j => j.Instance))
+        {
+            var rows = group.OrderBy(j => j.Position).ToList();
+            var cursor = Store.Projection[rows[0].Partition];
+            var read = Viewer.Merge(group.Key, Store.Views.GetValueOrDefault(group.Key), rows.Where(j => j.Position > cursor).ToList());
+            // Expected state is an independent fold, so a defect in the viewer cannot validate itself.
+            ViewRow? whole = null;
+            foreach (var row in rows)
+                if (row.Revision < 0) whole = null;
+                else if (row.Revision > 0)
+                    whole = new(whole?.Instance ?? row.Instance, Math.Max(whole?.Revision ?? 0, row.Revision), (whole?.Commits ?? 0) + 1);
+            if (whole != read) return $"I6 the tail read of {group.Key} says {read?.Revision}:{read?.Commits}; the journal says {whole?.Revision}:{whole?.Commits}";
+        }
         foreach (var (id, revisions) in commits)
         {
             revisions.Sort();
             if (Store.Instances.GetValueOrDefault(id) is not { } row) return $"I2 the journal has a commit of {id} and there is no row";
             if (row.History == History.Minimal) return $"I6 {id} keeps minimal history and has journal rows";
-            if (revisions.Count != row.Revision || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
+            // Decision 4: an Ephemeral instance that waited in memory is written at the last revision it had there (a write
+            // of the instance as it is) or the next (a turn or a park), so its journal starts there, with no gap after it.
+            var first = Oracle.InMemory.TryGetValue(id, out var kept) && (revisions[0] == kept || revisions[0] == kept + 1) ? revisions[0] : 1;
+            if (revisions.Count != row.Revision - first + 1 || revisions[0] != first || revisions[^1] != row.Revision) return $"I2 {id} is at revision {row.Revision} and the journal has its commits [{string.Join(", ", revisions)}]";
         }
         foreach (var row in Store.Instances.Values)
         {
+            if (_creations.TryGetValue(row.Id, out var birth) && row.Creation != birth.Generation)
+            {
+                if (!birth.Retired || birth.Generation <= 0 || birth.Generation == long.MaxValue || row.Creation != birth.Generation + 1 || row.Retired || row.Revision != 1)
+                    return $"I10 {row.Id} changed creation {birth.Generation} to {row.Creation} without a valid observed retirement";
+                _known.Remove(row.Id); _versions.Remove(row.Id); _gone.Remove(row.Id);
+            }
+            if (row.Retired)
+            {
+                if (_creations.TryGetValue(row.Id, out var observed) && !observed.Retired &&
+                    _known.TryGetValue(row.Id, out var active) && row.Revision <= active.Revision)
+                    return $"I22 {row.Id} retired without advancing observed active revision {active.Revision}";
+                // Generation-zero markers are valid only for generated physical addresses and the exact empty marker shape.
+                var physicalMarker = row.Creation == 0 && CreationProtocol.IsPhysicalAddress(row.Id) &&
+                    row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
+                if (row.Creation <= 0 && !physicalMarker || !Oracle.Deleted.Contains(row.Id) || !deletions.ContainsKey(row.Id) || row.Status == InstanceStatus.Running ||
+                    row.Model != "" || row.Definition != "" || row.State != "null" || row.Jobs is not null || row.Children is not null || row.Fault is not null || row.CommitTimes is not null || row.PendingStart is not null)
+                    return $"I22 {row.Id} has an invalid lifecycle tombstone";
+                _gone.Add(row.Id); _versions.Remove(row.Id);
+            }
+            _creations[row.Id] = (row.Creation, row.Retired);
             if (!commits.ContainsKey(row.Id) && row.History != History.Minimal) return $"I2 {row.Id} has a row and no journal row";
             // I18: a state is read at its own version or upgraded; no model writes back a state older than the row's.
-            if (_versions.TryGetValue(row.Id, out var version) && row.StateVersion < version) return $"I18 {row.Id} went from state version {version} back to {row.StateVersion}";
-            _versions[row.Id] = row.StateVersion;
+            if (!row.Retired)
+            {
+                if (_versions.TryGetValue(row.Id, out var version) && row.StateVersion < version) return $"I18 {row.Id} went from state version {version} back to {row.StateVersion}";
+                _versions[row.Id] = row.StateVersion;
+            }
             // I19: a rebind is the instance's from the next turn on, in its row and in every turn that follows.
             if (row.Model == "counter" && State<CounterState>(row.Id) is { } bound && (bound.Wrong.Count > 0 || row.Definition != (bound.Bound ?? Counter.Spec.Definition)))
                 return $"I19 {row.Id} is bound to {bound.Bound ?? Counter.Spec.Definition}, its row says {row.Definition}{(bound.Wrong.Count > 0 ? ", and a turn " + bound.Wrong[0] : "")}";
@@ -144,12 +195,13 @@ public sealed partial class World
                 return $"I10 {row.Id} went from revision {before.Revision} {before.Status} to revision {row.Revision} {row.Status}";
             if (!_known.ContainsKey(row.Id) && row.Parent is { } up && Store.Instances.GetValueOrDefault(up) is { Status: not InstanceStatus.Running }) _late.Add(row.Id);
             _known[row.Id] = (row.Revision, row.Status);
-            if (row.Status != InstanceStatus.Faulted) continue;
+            if (row.Retired || row.Status != InstanceStatus.Faulted) continue;
             // I14: parked for losing owners only at the threshold; otherwise only an instance that really fails is parked.
             var poison = row.Fault is { } fault && fault.StartsWith("message ") ? fault[8..fault.IndexOf(" was on trial")] : null;
             if (poison is not null && _attempts.GetValueOrDefault(poison) < Config.Attempts) return $"I14 {row.Id} was parked before the threshold: {row.Fault}";
             if (poison is null && !Oracle.Fragiles.GetValueOrDefault(row.Id)) return $"I14 {row.Id} did nothing wrong and was parked: {row.Fault}";
-            if (poison is not null && Parked.Add(row.Id) && !Oracle.Fragiles.GetValueOrDefault(row.Id)) Interlocked.Increment(ref Bystanders);
+            var ownJob = poison is not null && Oracle.KillerJobs.Contains(row.Id) && poison.StartsWith(row.Id + "!", StringComparison.Ordinal);
+            if (poison is not null && Parked.Add(row.Id) && !Oracle.Fragiles.GetValueOrDefault(row.Id) && !ownJob) Interlocked.Increment(ref Bystanders);
         }
         // I22: a row disappears only when its instance was deleted, and a deleted instance never comes back.
         if (_known.Keys.FirstOrDefault(id => !Store.Instances.ContainsKey(id) && !_gone.Contains(id)) is { } gone)
@@ -157,7 +209,7 @@ public sealed partial class World
             if (!Oracle.Deleted.Contains(gone) || !deletions.ContainsKey(gone)) return $"I10 the row of {gone} disappeared";
             _gone.Add(gone);
         }
-        if (_gone.FirstOrDefault(Store.Instances.ContainsKey) is { } back) return $"I22 {back} was deleted and has a row again";
+        if (_gone.FirstOrDefault(id => Store.Instances.GetValueOrDefault(id) is { Retired: false }) is { } back) return $"I22 {back} was deleted and has a row again";
         return Oracle.Ghosts.FirstOrDefault(Store.Instances.ContainsKey) is { } ghost ? $"I10 {ghost} was created by a message without a start spec" : null;
     }
 
@@ -172,15 +224,21 @@ public sealed partial class World
             if (worker.Idle > 2) return $"I21 actor {actor.Id} holds {worker.Idle} idle instances; the bound is 2";
             if (!worker.Flushing && worker.Position != partition.Position)
                 return $"I9 actor {actor.Id} believes partition {actor.Partition} is at {worker.Position}; it is at {partition.Position}";
+            var unwritten = worker.Unwritten.ToHashSet(StringComparer.Ordinal);
+            var busyNow = worker.Instances.Where(i => i.Busy).Select(i => i.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var id in unwritten)       // decision 4: in memory only, so never a row (unless the commit that writes it is in flight)
+                if (Store.Instances.ContainsKey(id) && !busyNow.Contains(id))
+                    return $"I9 actor {actor.Id} holds {id} in memory only, and it has a row";
             foreach (var (id, row, state, busy) in worker.Instances)
             {
+                if (unwritten.Contains(id)) continue;
                 if (row is { Model: "counter", StateVersion: 2 } && actor.Version == 1) Count("a version-1 owner holds a counter row at version 2");
                 if (busy) continue;
                 if (row != Store.Instances.GetValueOrDefault(id))
                     return $"I9 actor {actor.Id} holds {id} at revision {row?.Revision.ToString() ?? "none"}; its row is at {Store.Instances.GetValueOrDefault(id)?.Revision.ToString() ?? "none"}";
                 if (state is not null && state != row?.State) return $"I9 actor {actor.Id}: the live state of {id} is {state} and its row says {row?.State}";
             }
-            var held = new HashSet<string>(StringComparer.Ordinal);
+            var held = new HashSet<InboxKey>();
             foreach (var (id, durable, taken) in worker.Messages)
             {
                 held.Add(id);
@@ -188,7 +246,7 @@ public sealed partial class World
             }
             if (worker.Flushing) continue;
             foreach (var row in Store.Messages.Values)
-                if (row.Seen == partition.Epoch && !row.Done && row.Message.Target.Partition == actor.Partition && !held.Contains(row.Message.Id))
+                if (row.Seen == partition.Epoch && !row.Done && row.Message.Target.Partition == actor.Partition && !held.Contains(row.Message.InboxKey))
                     return $"I3 message {row.Message.Id} is marked seen at epoch {partition.Epoch} and its owner, actor {actor.Id}, does not hold it";
         }
         return null;
@@ -267,22 +325,28 @@ public sealed partial class World
         return null;
     }
 
-    // I8: the subscriptions of an instance are exactly the waits in its committed state. I13: an event is delivered once.
+    // I8: live subscriptions match committed waits; a parked/faulted instance has no active subscription. I13: an event is delivered once.
     private string? Waits()
     {
         var rows = Store.Subscriptions.Where(s => s.Start is null).ToLookup(s => s.Instance, s => s.Key);
         // I20: an event starts at most one instance per start subscription, and that instance takes exactly that event.
         foreach (var row in Store.Instances.Values.Where(i => i.Model == "onevent"))
-            if (State<OnEventState>(row.Id) is { } got && (got.Got.Count > 1 || got.Got.Exists(id => !row.Id.EndsWith(id.Replace("ev:", "on:").Replace("::", ":")))))
+        {
+            if (State<OnEventState>(row.Id) is not { } got || got.Got.Count == 0) continue;
+            if (got.Got.Count != 1 || got.Match is not { } match || match.Instance != "" || got.Got[0] != $"ev:{match.Event}::{match.Wait}" ||
+                !row.Id.StartsWith("e", StringComparison.Ordinal) || row.Definition != match.Wait)
                 return $"I20 {row.Id} was started by [{string.Join(", ", got.Got)}]";
+            _startedBy[row.Id] = match;
+        }
+        // Owner decision, 13 November: Park retains the checkpoint, but removes active routing in the same commit.
+        if (rows.FirstOrDefault(g => Store.Instances.GetValueOrDefault(g.Key) is { Status: InstanceStatus.Faulted }) is { } faulted)
+            return $"I8 faulted instance {faulted.Key} still has active subscriptions";
         // A running tree leaf waits; nothing else that is no waiter may, and a terminated leaf's wait is gone with its commit.
-        // An instance the poison rule parked keeps its subscriptions (WorkflowInstance.Park consumes the messages and faults
-        // the row; NATIVE.md section 6 found it for the native checks): while its faulted row exists, its waits are not
-        // stray. Once the row is deleted they are.
-        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && !(Parked.Contains(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is { Status: InstanceStatus.Faulted }) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree" or Kernel.Native.NativeModel.ModelKey, Status: InstanceStatus.Running }) is { } stray)
+        if (rows.FirstOrDefault(g => !Oracle.Waiters.ContainsKey(g.Key) && Store.Instances.GetValueOrDefault(g.Key) is not { Model: "tree" or Kernel.Native.NativeModel.ModelKey, Status: InstanceStatus.Running }) is { } stray)
             return $"I8 {stray.Key} has a subscription and is {(Store.Instances.GetValueOrDefault(stray.Key) is { } row ? row.Status.ToString() : "no waiter")}";
         foreach (var id in Oracle.Waiters.Keys)
         {
+            if (Store.Instances.GetValueOrDefault(id) is { Status: InstanceStatus.Faulted }) continue; // its checkpoint describes inactive waits
             var state = State<WaiterState>(id);
             if (!rows[id].Order().SequenceEqual((state?.Waits ?? []).Order()))
                 return $"I8 {id} waits for [{string.Join(", ", state?.Waits ?? [])}] and its subscriptions are [{string.Join(", ", rows[id])}]";
@@ -393,7 +457,10 @@ public sealed partial class World
         var published = false;
         for (var round = 0; round < 150; round++)
         {
-            Time += 11_000;     // past any lease and any timer
+            // Expire a missing owner's lease; while every partition has an owner, give healthy owners passes within
+            // their lease. Advancing past every lease on every round would manufacture repeated owner loss.
+            var missing = Enumerable.Range(0, Config.Partitions).Any(p => !slots.Any(s => s.Partition == p && Of(s.Node, p).Worker.Owns));
+            Time += round == 0 || missing ? 11_000 : 1_000;
             for (var p = 0; p < Config.Partitions; p++)
             {
                 foreach (var (node, _) in slots.Where(s => s.Partition == p && Of(s.Node, p).Worker.Owns)) Watch(Of(node, p).Worker.BeatAsync());   // a stale owner learns that it is one
@@ -431,9 +498,19 @@ public sealed partial class World
                         if (actor.Jobs.Remove(key, out var work)) work.TrySetResult("done");
                 }
             if (Check() is { } violation) return violation;
+            // I15, decision 6: after a pass, an owner holds no caller past its deadline, so no expired caller pins an instance.
+            foreach (var (node, partition) in slots)
+                if (Of(node, partition).Worker is { Owns: true } owner && owner.Callers.FirstOrDefault(c => ReplyTo.Parse(c).Deadline <= owner.Now) is { } late)
+                    return $"I15 actor {Of(node, partition).Id} still holds the reply address {late} past its deadline";
             if (Store.Messages.Values.Any(m => !m.Done && m.Message.Kind != "expire") || slots.Select(s => Of(s.Node, s.Partition)).Any(a => a.Worker.Owns && (a.Worker.NeedsFlush || a.Worker.Ready.Any() || a.Jobs.Count > 0))) continue;
             if (Unfair() is not null) continue;
-            if (published && (!Config.Native || NativeMeet() == 0)) return End();    // native waits that appeared since get their events too
+            if (published && (!Config.Native || NativeMeet() == 0))    // native waits that appeared since get their events too
+            {
+                // A dying owner may commit after its observer disappears. Normal settlement still runs first;
+                // only the final idle check waits for live callers to reach their existing deadlines.
+                if (Asked.Any(a => Running(a.Process) && !a.Request.Done && Time < a.Request.Deadline)) continue;
+                return End();
+            }
             if (Meet() is { } missed) return missed;
             published = true;
         }
@@ -490,13 +567,12 @@ public sealed partial class World
     {
         if (Store.Messages.Values.FirstOrDefault(m => !m.Done && m.Message.Kind != "expire") is { } message) return $"END message {message.Message.Id} was never consumed";
         // I20 at the end: every event and every start subscription of its key, both committed, made exactly one instance.
-        var started = Store.Instances.Values.Where(i => i.Model == "onevent").Select(i => i.Id).Concat(_gone.Where(id => id.Contains("/on:"))).Select(id => id[(id.IndexOf('/') + 1)..]).ToHashSet();
+        var started = _startedBy.Values.ToList();
         Count("instances deleted", _gone.Count);
         foreach (var start in Oracle.Starts)
             foreach (var e in Oracle.Events.GetValueOrDefault(start.Key) ?? [])
-                if (!started.Remove($"on:{e}:{start.Wait}")) return $"I20 event {e} for key {start.Key} and start subscription {start.Wait} are both committed and no instance was started";
-        if (started.Count > 0) return $"I20 instances [{string.Join(", ", started)}] were started by no event and subscription";
-        if (Store.Instances.Values.FirstOrDefault(i => i.Model == "onevent" && i.Status != InstanceStatus.Finished) is { } open) return $"I20 {open.Id} ended as {open.Status}";
+                if (!started.Remove(new(start.Key, e, "", start.Wait))) return $"I20 event {e} for key {start.Key} and subscription {start.Wait} did not start exactly once";
+        if (started.Count > 0) return $"I20 unexpected start for {started[0]}";
         if (Store.Subscriptions.FirstOrDefault(s => s.Start is null && !Parked.Contains(s.Instance)) is { } subscription) return $"END the subscription of {subscription.Instance} to {subscription.Key} is left behind";
         foreach (var (id, (_, delay, spread)) in Oracle.Parents)
         {
@@ -545,7 +621,7 @@ public sealed partial class World
                 return $"END {id} ({mode}) ended as {row?.Status.ToString() ?? "no row"}{(cancel ? " after a cancel" : "")}";
         }
         foreach (var (id, bad) in Oracle.Fragiles)
-            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
+            if (!Parked.Contains(id) && Store.Instances.GetValueOrDefault(id)?.Status != (bad || Oracle.KillerJobs.Contains(id) ? InstanceStatus.Faulted : InstanceStatus.Running)) return $"I14 {id} ended as {Store.Instances.GetValueOrDefault(id)?.Status.ToString() ?? "no row"}";
         for (var p = 0; p < Config.Partitions; p++)
         {
             for (var round = 0; round < 1000 && Store.Projection[p] < Store.Partitions[p].Position; round++) Watch(Of(round % Config.Nodes, p).Projector.RoundAsync());

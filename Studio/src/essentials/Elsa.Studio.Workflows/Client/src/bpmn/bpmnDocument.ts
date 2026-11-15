@@ -1,7 +1,9 @@
 import type { ActivityNode, VariableDefinition } from "../workflowTypes";
-import { getChildSlots } from "../workflowAdapter";
+import type { ActivityCatalogLookup } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
 import { serializeBpmnXml } from "./bpmnDocumentXml";
+import { standardBpmnReferenceAttribute, standardBpmnReferenceContext, standardBpmnReferenceText } from "./bpmnReferenceSemantics";
+import { qualifiedBpmnNativeChildSlots } from "./bpmnDocumentOwnership";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
 export const bpmnDocumentSchemaVersion = "2.0.0";
@@ -158,7 +160,7 @@ function validateVariables(variables: VariableDefinition[]) {
   }
 }
 
-function rejectPhysicalScopeViews(activities: ActivityNode[]) {
+function rejectPhysicalScopeViews(activities: ActivityNode[], catalog?: ActivityCatalogLookup) {
   const pending = [...activities], visited = new Set<ActivityNode>();
   while (pending.length) {
     const activity = pending.pop()!;
@@ -166,7 +168,7 @@ function rejectPhysicalScopeViews(activities: ActivityNode[]) {
     visited.add(activity);
     if (activity.structure?.kind === "elsa.bpmn.scope-view") fail("projected scope structures cannot be physically authored");
     // Use native ownership slots, never arbitrary input values or contributed metadata objects.
-    pending.push(...getChildSlots(activity).flatMap(slot => slot.activities));
+    pending.push(...(qualifiedBpmnNativeChildSlots(activity, catalog, { includeReaderForests: true }) ?? []).flatMap(slot => slot.activities));
   }
 }
 
@@ -177,7 +179,7 @@ function hasStandardScopeChain(element: Element, definitions: Element): boolean 
 }
 
 /** Parse without rewriting bytes. Opening, switching or a no-op Save never migrates the source. */
-export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
+export function readBpmnDocument(owner: ActivityNode, catalog?: ActivityCatalogLookup): ParsedBpmnDocument {
   if (owner.structure?.kind !== bpmnStructureKind || owner.structure.schemaVersion !== bpmnDocumentSchemaVersion)
     fail("complete-document authoring version is unavailable");
   const raw = object(owner.structure.payload, "payload");
@@ -202,7 +204,7 @@ export function readBpmnDocument(owner: ActivityNode): ParsedBpmnDocument {
     if (activityIds.has(nodeId) || nodeId === owner.nodeId) fail(`activity '${nodeId}' is duplicated`);
     activityIds.add(nodeId);
   }
-  rejectPhysicalScopeViews(activities);
+  rejectPhysicalScopeViews(activities, catalog);
   const headers = raw.scopeHeaders === undefined ? [] : array(raw.scopeHeaders, "scopeHeaders")
     .map(value => object(value, "scope header") as BpmnScopeHeader);
   const headersByScope = new Map<string, BpmnScopeHeader>();
@@ -373,8 +375,10 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
   const id = requiredText(flow.getAttribute("id"), "sequence flow identity");
   const references = new Map<string, Element>();
   for (const element of parsed.byId.values()) {
+    if (element.namespaceURI !== bpmnNamespaces.model || !standardReferenceContext(element)) continue;
     for (const direction of ["incoming", "outgoing"]) {
       for (const reference of children(element, bpmnNamespaces.model, direction)) {
+        if (!standardReferenceContext(reference)) continue;
         if (resolveBpmnDocumentReference(parsed, reference, reference.textContent)?.getAttribute("id") !== id) continue;
         if (references.has(direction)) fail(`sequence flow '${id}' has ambiguous ${direction} references`);
         references.set(direction, reference);
@@ -387,9 +391,10 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
     if (!references.has(direction)) child.textContent = id;
     if (child.parentElement !== endpoint) {
       if (references.has(direction)) preserveNamespaceContext(child, endpoint);
+      // BaseElement documentation/extensions precede FlowElement metadata and FlowNode refs.
       // FlowNode adds incoming* followed by outgoing* before the derived Activity/Event fields.
       // A self-loop updates both on one owner, so append order would produce invalid BPMN.
-      const preceding = new Set(["extensionElements", "auditing", "monitoring", "categoryValueRef", "incoming",
+      const preceding = new Set(["documentation", "extensionElements", "auditing", "monitoring", "categoryValueRef", "incoming",
         ...(direction === "outgoing" ? ["outgoing"] : [])]);
       const anchor = [...endpoint.children].find(element => element.namespaceURI === bpmnNamespaces.model && !preceding.has(element.localName));
       endpoint.insertBefore(child, anchor ?? null);
@@ -397,56 +402,8 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
   }
 }
 
-// Reference paths from the BPMN 2.0 Semantic/BPMNDI schemas shipped with pinned bpmn-moddle.
-// Names, expressions, arbitrary attributes and extension payloads are not inferred ID references.
-const modelReferenceAttributes: Readonly<Record<string, readonly string[]>> = {
-  association: ["sourceRef", "targetRef"], boundaryEvent: ["attachedToRef"], callActivity: ["calledElement"],
-  callChoreography: ["calledChoreographyRef", "initiatingParticipantRef"], callConversation: ["calledCollaborationRef"],
-  choreographyTask: ["initiatingParticipantRef"], subChoreography: ["initiatingParticipantRef"], globalChoreographyTask: ["initiatingParticipantRef"],
-  compensateEventDefinition: ["activityRef"], conversationAssociation: ["innerConversationNodeRef", "outerConversationNodeRef"],
-  conversationLink: ["sourceRef", "targetRef"], correlationProperty: ["type"], correlationPropertyBinding: ["correlationPropertyRef"],
-  correlationPropertyRetrievalExpression: ["messageRef"], correlationSubscription: ["correlationKeyRef"],
-  dataInput: ["itemSubjectRef"], dataOutput: ["itemSubjectRef"], dataObject: ["itemSubjectRef"], dataStore: ["itemSubjectRef"],
-  dataObjectReference: ["itemSubjectRef", "dataObjectRef"], dataStoreReference: ["itemSubjectRef", "dataStoreRef"],
-  error: ["structureRef"], errorEventDefinition: ["errorRef"], escalation: ["structureRef"], escalationEventDefinition: ["escalationRef"],
-  extension: ["definition"], group: ["categoryValueRef"], interface: ["implementationRef"],
-  inputOutputBinding: ["operationRef", "inputDataRef", "outputDataRef"], itemDefinition: ["structureRef"], lane: ["partitionElementRef"],
-  message: ["itemRef"], messageEventDefinition: ["messageRef"], messageFlow: ["sourceRef", "targetRef", "messageRef"],
-  messageFlowAssociation: ["innerMessageFlowRef", "outerMessageFlowRef"], multiInstanceLoopCharacteristics: ["oneBehaviorEventRef", "noneBehaviorEventRef"],
-  operation: ["implementationRef"], participant: ["processRef"], process: ["definitionalCollaborationRef"], property: ["itemSubjectRef"],
-  receiveTask: ["messageRef", "operationRef"], resourceParameter: ["type"], resourceParameterBinding: ["parameterRef"],
-  sendTask: ["messageRef", "operationRef"], sequenceFlow: ["sourceRef", "targetRef"], serviceTask: ["operationRef"],
-  signal: ["structureRef"], signalEventDefinition: ["signalRef"]
-};
-const defaultFlowOwners = new Set(["task", "userTask", "serviceTask", "manualTask", "scriptTask", "businessRuleTask", "sendTask", "receiveTask",
-  "callActivity", "subProcess", "adHocSubProcess", "transaction", "exclusiveGateway", "inclusiveGateway", "complexGateway"]);
-const diagramReferenceAttributes: Readonly<Record<string, readonly string[]>> = {
-  BPMNPlane: ["bpmnElement"], BPMNShape: ["bpmnElement", "choreographyActivityShape"],
-  BPMNEdge: ["bpmnElement", "sourceElement", "targetElement"], BPMNLabel: ["labelStyle"]
-};
-const modelReferenceText = new Set(["categoryValueRef", "choreographyRef", "correlationPropertyRef", "dataInputRefs", "dataOutputRefs", "endPointRef",
-  "errorRef", "eventDefinitionRef", "flowNodeRef", "inMessageRef", "incoming", "innerParticipantRef", "inputSetRefs", "interfaceRef",
-  "loopDataInputRef", "loopDataOutputRef", "messageFlowRef", "operationRef", "optionalInputRefs", "optionalOutputRefs", "outMessageRef",
-  "outerParticipantRef", "outgoing", "outputSetRefs", "participantRef", "resourceRef", "source", "sourceRef", "supportedInterfaceRef",
-  "supports", "target", "targetRef", "whileExecutingInputRefs", "whileExecutingOutputRefs"]);
-
-function standardReferenceContext(element: Element) {
-  for (let current: Element | null = element; current; current = current.parentElement) {
-    if (!identityNamespaces.has(current.namespaceURI ?? "")) return false;
-    if (current.namespaceURI === bpmnNamespaces.model && ["extensionElements", "documentation", "script"].includes(current.localName)) return false;
-  }
-  return true;
-}
-function standardReferenceAttribute(element: Element, attribute: Attr) {
-  if (attribute.namespaceURI) return false;
-  if (element.namespaceURI === bpmnNamespaces.diagram) return diagramReferenceAttributes[element.localName]?.includes(attribute.localName) ?? false;
-  if (element.namespaceURI !== bpmnNamespaces.model) return false;
-  if (attribute.localName === "default" && defaultFlowOwners.has(element.localName)) return true;
-  if (attribute.localName === "evaluatesToTypeRef") {
-    const type = element.getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")?.split(":");
-    if (type?.at(-1) === "tFormalExpression" && element.lookupNamespaceURI(type.length === 2 ? type[0] : null) === bpmnNamespaces.model) return true;
-  }
-  return modelReferenceAttributes[element.localName]?.includes(attribute.localName) ?? false;
+function standardReferenceContext(element: Element): boolean {
+  return standardBpmnReferenceContext(element);
 }
 
 function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, nextIds: ReadonlyMap<string, Element>, document: XMLDocument) {
@@ -459,11 +416,11 @@ function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, next
   for (const element of [...document.getElementsByTagName("*")]) {
     if (!standardReferenceContext(element)) continue;
     for (const attribute of [...element.attributes]) {
-      if (!standardReferenceAttribute(element, attribute)) continue;
+      if (!standardBpmnReferenceAttribute(element, attribute)) continue;
       if (attribute.value.trim().split(/\s+/).some(value => removedReference(element, value)))
         fail(`deletion leaves reference '${attribute.name}' to removed content`);
     }
-    if (element.namespaceURI === bpmnNamespaces.model && modelReferenceText.has(element.localName) && removedReference(element, element.textContent?.trim() ?? ""))
+    if (standardBpmnReferenceText(element) && removedReference(element, element.textContent?.trim() ?? ""))
       fail(`deletion leaves '${element.localName}' pointing to removed content`);
   }
 }
@@ -527,8 +484,10 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
     case "remove": {
       const target = resolve(parsed, command.target);
       if (target === parsed.process || target === parsed.document.documentElement) fail("selected process cannot be removed");
-      const containedIds = new Set([target, ...target.getElementsByTagName("*")].map(element => element.getAttribute("id")).filter(Boolean));
-      if (parsed.payload.bindings.some(binding => containedIds.has(binding.elementId)))
+      if (parsed.payload.bindings.some(binding => {
+        const bound = parsed.byId.get(binding.elementId);
+        return bound?.namespaceURI === bpmnNamespaces.model && target.contains(bound);
+      }))
         fail("deletion needs an explicit native-binding transformation");
       target.remove();
       return;
@@ -675,7 +634,7 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
 }
 
 /** Source and native ownership are validated together, before the host admits one history edit. */
-export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: BpmnDocumentTransaction): ActivityNode {
+export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: BpmnDocumentTransaction, catalog?: ActivityCatalogLookup): ActivityNode {
   const commands = transaction.commands ?? [];
   const configuration = transaction.configuration ?? {};
   const configurationKeys = Object.keys(configuration);
@@ -684,7 +643,7 @@ export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: B
   if (configurationKeys.some(key => !Array.isArray(configuration[key as keyof BpmnDocumentConfigurationChange])))
     fail("configuration changes must contain explicit arrays");
   if (!commands.length && !configurationKeys.length) return owner;
-  let parsed = readBpmnDocument(owner);
+  let parsed = readBpmnDocument(owner, catalog);
   const configurationChanged = configurationKeys.some(key => JSON.stringify(configuration[key as keyof BpmnDocumentConfigurationChange]) !== JSON.stringify(parsed.payload[key]));
   // A bound deletion/create can change both ownership lists and XML in this transaction. These
   // intermediate arrays are not projected or persisted; only the final source is admitted below.
@@ -701,13 +660,13 @@ export function applyBpmnDocumentTransaction(owner: ActivityNode, transaction: B
   if (documentXml === before && !configurationChanged) return owner;
   const next = { ...owner, structure: { ...owner.structure!, payload: { ...owner.structure!.payload, ...configuration,
     documentXml: documentXml === before ? parsed.payload.documentXml : documentXml } } };
-  readBpmnDocument(next);
+  readBpmnDocument(next, catalog);
   return next;
 }
 
 /** Atomic immutable XML-only transaction. The host owns revisions, history and persistence. */
-export function applyBpmnDocumentCommands(owner: ActivityNode, commands: readonly BpmnDocumentCommand[]): ActivityNode {
-  return applyBpmnDocumentTransaction(owner, { commands });
+export function applyBpmnDocumentCommands(owner: ActivityNode, commands: readonly BpmnDocumentCommand[], catalog?: ActivityCatalogLookup): ActivityNode {
+  return applyBpmnDocumentTransaction(owner, { commands }, catalog);
 }
 
 export interface BpmnDocumentShape {
@@ -767,8 +726,8 @@ function connectionReferences(parsed: ParsedBpmnDocument, element: Element, name
 }
 
 /** Complete DI projection, including pools, lanes, boundary events, data and artifact connections. */
-export function projectBpmnDocumentScene(owner: ActivityNode, diagramId: string): BpmnDocumentScene {
-  const parsed = readBpmnDocument(owner);
+export function projectBpmnDocumentScene(owner: ActivityNode, diagramId: string, catalog?: ActivityCatalogLookup): BpmnDocumentScene {
+  const parsed = readBpmnDocument(owner, catalog);
   const diagram = parsed.byId.get(diagramId);
   if (!diagram || !is(diagram, bpmnNamespaces.diagram, "BPMNDiagram")) fail(`diagram '${diagramId}' is unavailable`);
   const plane = uniqueChild(diagram, bpmnNamespaces.diagram, "BPMNPlane");

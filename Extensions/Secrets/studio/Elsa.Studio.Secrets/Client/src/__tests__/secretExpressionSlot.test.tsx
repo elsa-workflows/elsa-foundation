@@ -25,6 +25,7 @@ describe("Secret Reference Activity Property Editor Slot", () => {
     const endpoint = endpointContext(vi.fn(() => request.promise));
     const contribution: StudioExpressionEditorContribution = {
       id: "elsa.secret-reference-editor",
+      presentsField: true,
       supports: context => context.syntax === "Secret",
       surfaces: {
         inline: props => <SecretPickerEditor {...props} endpointContext={endpoint} />
@@ -42,6 +43,8 @@ describe("Secret Reference Activity Property Editor Slot", () => {
 
     request.resolve(pickerResponse());
     await waitFor(() => document.activeElement === container.querySelector("select"));
+    expect(container.querySelectorAll(".wf-property-row-caption")).toHaveLength(0);
+    expect(container.querySelector("select")?.labels?.[0].textContent).toBe("Credential");
   });
 });
 

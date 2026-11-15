@@ -1,3 +1,5 @@
+import { NativeBlockAuthorityProvider } from "./graph-authoring/nativeBlockAuthority";
+import { validateActivityDefinitionCandidate } from "./api/activityDesign";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
@@ -74,12 +76,13 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   if (query.isPending || query.isFetching && !query.isFetchedAfterMount) return <main className="ad-page ad-draft-editor" aria-busy="true"><div className="ad-skeleton" role="status">Loading the exact Activity Definition draft…</div></main>;
   if (query.isError || !query.data || query.data.definitionId !== definitionId) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> Activity Definition</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity draft unavailable</h1><p>Studio could not confirm the exact authorized draft. No provider state is shown.</p><button type="button" onClick={() => void query.refetch()}>Try again</button></section></main>;
 
-  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || query.data.presentationLabel?.trim() || generatedDraftLabel(query.data)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
+  return <LoadedActivityDefinitionDraftEditor context={context} initialDraft={query.data} blockAuthoringAllowed={definitionQuery.data?.definition.contentAuthority.kind.toLowerCase() === "design" && definitionQuery.data?.actions.some(action => action.action === "create-draft" && action.allowed) === true} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || query.data.presentationLabel?.trim() || generatedDraftLabel(query.data)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
 }
 
-function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAuthoringAllowed, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   context: StudioEndpointContext;
   initialDraft: ActivityDefinitionDraftView;
+  blockAuthoringAllowed: boolean;
   definitionDisplayName?: string;
   definitionLabel: string;
   activityEditors: StudioActivityDefinitionImplementationEditorContribution[];
@@ -723,7 +726,23 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
     </details>
     </section>
     <section id={tabElementIds(authoringTabsId, 0).panelId} className="ad-designer-view" role="tabpanel" aria-label="Designer" aria-labelledby={tabElementIds(authoringTabsId, 0).tabId} hidden={activeView !== "designer"}>
-    {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></section>}
+    {!hasPayload ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation payload unavailable</h2><p>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</p></section> : !contribution || !Editor ? <section className="ad-failure" role="alert"><AlertTriangle size={22} /><h2>Implementation editor unavailable</h2><p>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</p></section> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><NativeBlockAuthorityProvider value={{
+      sourceKey: JSON.stringify([draft, blockAuthoringAllowed, providerReadOnly, proposalApplying, publicationPending]),
+      canEdit: blockAuthoringAllowed && !providerReadOnly,
+      canApply: () => blockAuthoringAllowed && !providerReadOnly && !publicationPendingRef.current && isActiveDraft(currentRef.current.status) && JSON.stringify(currentRef.current) === JSON.stringify(draft),
+      async validate(candidate) {
+        const source = currentRef.current;
+        const signature = JSON.stringify(source);
+        if (!blockAuthoringAllowed || providerReadOnly || proposalApplying || publicationPendingRef.current || !isActiveDraft(source.status)) return { state: "denied", messages: [] };
+        const result = await validateActivityDefinitionCandidate(context, source.draftId, {
+          expectedRevision: revisionRef.current, contract: source.contract,
+          provider: { providerKey: source.provider.providerKey, schemaVersion: source.provider.schemaVersion, payload: candidate.payload },
+          layout: candidate.layout, activityPresentation: candidate.activityPresentation ?? []
+        });
+        if (signature !== JSON.stringify(currentRef.current) || !isActiveDraft(currentRef.current.status)) return { state: "stale", messages: [] };
+        return { state: result.state, messages: result.validation?.diagnostics.map(item => item.message) ?? [] };
+      }
+    }}><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></NativeBlockAuthorityProvider></section>}
     </section>
     {hasGraphVariables ? <section id={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).panelId} className="ad-variables-view" role="tabpanel" aria-label="Variables" aria-labelledby={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).tabId} hidden={activeView !== "variables"}>
       {activeView === "variables" ? <>
@@ -901,7 +920,7 @@ function focusContractDiagnostic(
   }
   target.closest("details")?.setAttribute("open", "");
   const disabledContext = target.matches(":disabled")
-    ? target.closest<HTMLElement>("label") ?? member
+    ? target.closest<HTMLElement>(".studio-form-control, label") ?? member
     : null;
   const control = disabledContext ?? target;
   if (disabledContext) disabledContext.tabIndex = -1;
