@@ -142,6 +142,13 @@ public static class Semantics
 
     public static IReadOnlyList<Case> Cases { get; } =
     [
+        PhysicalRetirementChecks.Case,
+        MarkerInsertChecks.Case,
+        BatchIntegrityChecks.Atomic,
+        AliasMutationChecks.Case,
+        AliasInsertChecks.Case,
+        BatchIntegrityChecks.Capability,
+        StoredStateChecks.Case,
         new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),
         new("actor addressing: requested spellings resolve under the provider actor collation in one snapshot", Level.Required, async c =>
         {
