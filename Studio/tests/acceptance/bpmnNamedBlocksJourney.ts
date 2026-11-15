@@ -5,7 +5,7 @@ type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; activityVersionId: string; inputs: unknown[]; outputs: unknown[]; structure?: { kind: string; schemaVersion: string; payload: Record<string, unknown> } };
 type Presentation = { nodeId: string; displayName?: string }[];
 type WorkflowDraft = { id: string; state: { rootActivity: Node }; layout: unknown[]; activityPresentation: Presentation };
-type GraphDraft = { draftId: string; revision: number; provider: { payload: { rootActivity: Node } }; layout: unknown[]; activityPresentation: Presentation };
+type GraphDraft = { draftId: string; revision: number; status: string; provider: { payload: { rootActivity: Node } }; layout: unknown[]; activityPresentation: Presentation };
 
 /** Normal authoring/interchange/publication APIs and composed editors; no intercepted responses or direct model execution. */
 export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture: Capture, profile: "interchange" | "authoring" = "interchange", resources: readonly ("workflow" | "activity")[] = ["workflow", "activity"]) {
@@ -114,6 +114,7 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
       const body = (draft: WorkflowDraft | GraphDraft) => "state" in draft ? draft.state.rootActivity : draft.provider.payload.rootActivity;
       await page.goto(host === "workflow" ? `/workflows/definitions?backend=legacy&definition=${definitionId}` : `/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`); await canvas();
       if (host === "workflow") { await page.getByRole("button", { name: "Save", exact: true }).click(); await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved"); }
+      else await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
       const undoAction = page.getByRole("button", { name: host === "workflow" ? "Undo" : "Undo Activity Graph edit", exact: true });
       const redoAction = page.getByRole("button", { name: host === "workflow" ? "Redo" : "Redo Activity Graph edit", exact: true });
       if (profile === "authoring") {
@@ -156,7 +157,10 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
             const rejected = page.waitForResponse(response => response.url() === `${backend}/design/activities/drafts/${draftId}/candidate-validation` && response.request().method() === "POST"); await apply.click(); expect((await rejected).status()).toBe(409);
           }
           await expect(refuse.getByRole("alert")).toBeVisible(); expect((await api<GraphDraft>(`/design/activities/drafts/${draftId}`)).provider).toEqual(changed.provider); await capture(page, info, "activity-bpmn-stale"); await refuse.getByRole("button", { name: "Cancel", exact: true }).click(); await page.reload(); await canvas();
-          await publishActivity(await api(`/design/activities/drafts/${draftId}`), null); await page.goto(`/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`);
+          await publishActivity(await api(`/design/activities/drafts/${draftId}`), null);
+          expect((await api<GraphDraft>(`/design/activities/drafts/${draftId}`)).status.toLowerCase()).toBe("published");
+          await page.goto(`/workflows/activity-definitions?backend=legacy&definition=${definitionId}&section=editor&draft=${draftId}`);
+          await expect(page.locator(".ad-save-state.is-published")).toContainText("read-only");
         } else {
           await page.getByRole("button", { name: "Save", exact: true }).click(); await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved"); await page.getByRole("button", { name: "Test Run", exact: true }).click();
           const update = page.getByRole("button", { name: "Update test", exact: true }); if (await update.isVisible()) await update.click(); await page.getByRole("button", { name: "Start Test Run", exact: true }).click(); const summary = page.getByRole("region", { name: "Test run summary", exact: true }); await expect(summary.locator(".wf-runtime-heading .wf-status-badge")).toHaveText("Completed");
@@ -164,7 +168,8 @@ export async function bpmnNamedBlocksJourney(page: Page, info: TestInfo, capture
           await page.getByRole("group", { name: "Execution controls", exact: true }).getByRole("button", { name: "Return to editing", exact: true }).click(); await page.getByRole("tab", { name: "Runtime", exact: true }).click(); await page.getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
           await expect(page.getByRole("group", { name: "Execution controls", exact: true })).toContainText("Captured snapshot · read only");
         }
-        await canvas(); for (const action of ["Create BPMN subprocess", "Extract block…", "Ungroup…", "Import BPMN body…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();
+        await canvas(); await expect(element(selected)).toBeVisible();
+        for (const action of ["Create BPMN subprocess", "Extract block…", "Ungroup…", "Import BPMN body…"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeDisabled();
         await element(selected).click(); await page.getByRole("button", { name: `Open ${renamed} (0 steps)`, exact: true }).click(); await expect(page.locator(".wf-breadcrumb")).toContainText(renamed); await capture(page, info, `${host}-bpmn-readonly`);
         proof.push({ host, kind: "authoring-boundaries", original, saved: await saved(), blockId: id, blockElementId: selected }); continue;
       }
