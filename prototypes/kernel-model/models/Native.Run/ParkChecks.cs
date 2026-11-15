@@ -207,6 +207,7 @@ public static class ParkChecks
         foreach (var (label, run) in ParkR13Checks.Cases()) await Case(label, run);
         foreach (var (label, run) in ParkR14ControlChecks.Cases()) await Case(label, run);
         foreach (var (label, run) in ParkR14AliasChecks.Cases()) await Case(label, run);
+        foreach (var (label, run) in ParkR15Checks.Cases()) await Case(label, run);
         Console.WriteLine($"park: {cases - failures} passed, {failures} failed");
         return failures == 0 ? 0 : 1;
     }
