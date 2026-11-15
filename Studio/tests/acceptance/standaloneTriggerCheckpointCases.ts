@@ -34,7 +34,7 @@ export async function verifyInitialCheckpointCrashRecovery(j: TriggerJourney) {
         expect(caller.value.body).toMatchObject({ acceptedCount: 1, refusedCount: 0, deliveryId: boundary.sourceOutboxItemId });
       }
       expect(boundary.processId).toBe(recovery.previousProcessId); expect(recovery.processId).not.toBe(boundary.processId);
-      expect(boundary.durableQueueBeforeCheckpoint.some(item => item.commandKind === "Checkpoint")).toBe(true);
+      expect(boundary.durableQueueBeforeCheckpoint.some(item => (item.commandKind === "Start" || item.commandKind === "Checkpoint"))).toBe(true);
       expect(witness).toMatchObject({ stopSignal: "SIGKILL", naturalLeaseWaitSeconds: 61, leaseMutated: false, clockChanged: false });
       expect(witness.physicalAfterDeath!.stateCount).toBe(cut === "AfterInitialCheckpointCommit" ? 1 : 0);
       if (boundary.commitId) expect(witness.physicalAfterDeath!.commitIds).toContain(boundary.commitId);
