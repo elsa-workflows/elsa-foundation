@@ -28,6 +28,8 @@ internal static class StatefulWitness
         wf.InterventionRequested = true; NativeWorkflows.Registry.Add(wf);
         NativeState State() => Json.Read<NativeState>(world.Store.Instances[target.Id].State);
         void Check(bool yes, string why) { if (!yes) throw new InvalidOperationException(why); }
+        void CheckContexts() => Check(StatefulProbe.Calls.All(c => c.RecoverySource ==
+            State().Retries?.Values.SingleOrDefault(r => r.Successor == c.Frame)?.Source.Id), "R46: stateful context lost or invented its immediate recovery predecessor");
         void Apply(Act a)
         {
             world.Apply(a);
@@ -77,6 +79,7 @@ internal static class StatefulWitness
         }
         var source = State().Frames.Values.SingleOrDefault(f => f.Node == "leaf");
         Check(source?.Intervention is not null && StatefulProbe.Calls.Count == (startFault ? 1 : 2), "R32: stateful reported fault lost its continuing invocation or replayed a resume");
+        CheckContexts();
         Check(source!.RecoveryInputs?["Value"]?.ToString() == "17" && source.RecoveryInputs["Data"]?["kept"]?.ToString() == "9" && !State().Waits.Values.Any(w => w.Frame == source.Id) && !State().Agenda.Any(w => w.Frame == source.Id),
             "R33: stateful fault lost detached pins or retained runnable consumed waits");
         if (!startFault) Check(source.State?["Marker"]?.ToString() == "first" && StatefulProbe.Calls[1].Value == 17 && StatefulProbe.Calls[1].Kept == 9,
@@ -91,6 +94,7 @@ internal static class StatefulWitness
             Apply(new("add", M: new("query", target, ReceiptQuery.Kind, Json.Write(new ReceiptQuery("unknown", "probe")), ReplyTo: ReplyTo.Of("outside", "query", world.Time + 120_000), TargetCreation: 1))); Drain();
             Check(Json.Write(State().Retries) == history && world.Deliveries.Select(d => d.Reply.Item).OfType<Admission>().LastOrDefault()?.Result == "UnknownInvocation",
                 "R41: stateful terminal metadata hydrated authored material or altered history");
+            CheckContexts();
             Console.WriteLine($"PASS recovery:stateful,{mode},parent={parent},startFault={startFault},cut={cut}");
         }
         if (cut == "cancel-fault") { Cancel(false); return; }
@@ -127,6 +131,7 @@ internal static class StatefulWitness
         var fresh = State().Frames.Values.Single(f => f.Node == "leaf");
         Check(fresh.Id == State().Retries![retry.Id].Successor && fresh.State?["Marker"]?.ToString() == "fresh" && Json.Write(State().Retries![retry.Id].Source) == archive && StatefulProbe.Calls.Last().Phase == "start" && StatefulProbe.Calls.Last().Value == 17,
             "R36: successor replayed private state/payload, changed pins or mutated forensic source");
+        CheckContexts();
         Reload(); // Persist and restore the successor’s newly registered waits before any new delivery.
         var currentWait = world.Store.Subscriptions.Single(s => s.Instance == target.Id && s.Key == "event:go");
         if (oldWait is not null)
@@ -145,6 +150,7 @@ internal static class StatefulWitness
         var repeated = State().Frames.Values.SingleOrDefault(f => f.Node == "leaf");
         Check(repeated?.Intervention is not null && repeated.Id == fresh.Id && repeated.State?["Marker"]?.ToString() == "fresh",
             "R43: repeated stateful fault advanced or changed the retained occurrence");
+        CheckContexts();
         var second = new NativeRetry("stateful-retry-2", repeated!.Id, repeated.Intervention!.Id, "second repair");
         Apply(new("add", M: new("retry-2", target, NativeRetry.Kind, Json.Write(second), TargetCreation: 1))); Drain(second.Id);
         Check(State().Agenda.Single(w => !w.Resume && w.Node == "leaf").Frame != fresh.Id && State().Retries!.Count == 2,
@@ -155,6 +161,7 @@ internal static class StatefulWitness
         Check(world.Store.Instances[target.Id].Status == InstanceStatus.Finished && StatefulProbe.Calls.Last().Payload == (parent == "foreach" ? "next-item" : "repaired-name") &&
             StatefulProbe.Calls.Take(startFault ? 3 : 4).Select(c => c.Operation).Distinct().Count() == 1 && StatefulProbe.Calls.All(c => c.Kept == 9),
             "R38: fresh name-based delivery failed, operation changed or mutable JSON escaped its snapshot");
+        CheckContexts();
         Console.WriteLine($"PASS recovery:stateful,{mode},parent={parent},startFault={startFault},cut={cut}");
     }
 }
@@ -165,15 +172,15 @@ internal sealed class StatefulProbe : StatefulActivity<int, JsonObject, string>
     [Input] public JsonObject Data { get; set; } = new();
     internal static bool StartFault;
     internal static int Faults;
-    internal static readonly List<(string Phase, string Frame, string Operation, int Value, int Kept, string? Payload)> Calls = [];
+    internal static readonly List<(string Phase, string Frame, string Operation, int Value, int Kept, string? Payload, string? RecoverySource)> Calls = [];
     protected override ValueTask<Transition> ExecuteAsync(StartContext<string> context)
     {
-        Calls.Add(("start", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), null)); Data["kept"] = -1;
+        Calls.Add(("start", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), null, context.RecoverySource)); Data["kept"] = -1;
         return ValueTask.FromResult(Calls.Count == 1 && StartFault && Faults-- > 0 ? Fault("stateful-dependency", "repair") : Suspend(new JsonObject { ["Marker"] = Calls.Count == 1 ? "first" : "fresh" }, new EventTrigger("go"), new EventTrigger("other")));
     }
     protected override ValueTask<Transition> ResumeAsync(ResumeContext<JsonObject, string> context)
     {
-        Calls.Add(("resume", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), context.Trigger)); Data["kept"] = -2; context.State["Marker"] = "authored-mutation";
+        Calls.Add(("resume", context.FrameId, context.OperationKey, Value, Data["kept"]!.GetValue<int>(), context.Trigger, context.RecoverySource)); Data["kept"] = -2; context.State["Marker"] = "authored-mutation";
         return ValueTask.FromResult(Faults-- > 0 ? Fault("stateful-dependency", "repair") : Complete(Value));
     }
 }
