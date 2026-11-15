@@ -386,7 +386,14 @@ public sealed partial class ExternalAuthenticationHttpTests
     }
 
     [Fact]
-    public async Task Concurrent_real_catalog_writers_cannot_both_remove_their_last_proved_administrative_paths()
+    public Task Concurrent_real_catalog_writers_cannot_both_remove_their_last_proved_administrative_paths()
+        => ExerciseConcurrentCatalogWriters(bypassPreparedCommit: false);
+
+    [Fact]
+    public Task Concurrent_catalog_safety_oracle_rejects_two_real_commits_from_an_unsafe_prepared_write_adapter()
+        => ExerciseConcurrentCatalogWriters(bypassPreparedCommit: true);
+
+    private static async Task ExerciseConcurrentCatalogWriters(bool bypassPreparedCommit)
     {
         await using var host = await HttpHost.Start();
         await MakeAdministrative(host, "company"); await MakeAdministrative(host, "partner");
@@ -410,8 +417,9 @@ public sealed partial class ExternalAuthenticationHttpTests
         var inner = native.ServiceProvider.GetRequiredService<IConnectionCatalogStore>();
         var catalog = await inner.ReadAsync();
         var barrier = new RecoveryReadBarrier();
-        await using var nodeA = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier));
-        await using var nodeB = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier));
+        using var unsafeCommits = bypassPreparedCommit ? new SemaphoreSlim(1, 1) : null;
+        await using var nodeA = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier, unsafeCommits));
+        await using var nodeB = host.RuntimeNode(catalog: new RecoverySynchronizedCatalog(inner, barrier, unsafeCommits));
         await using var a = nodeA.CreateAsyncScope(); await using var b = nodeB.CreateAsyncScope();
         a.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
         b.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new PersistenceScope("default")));
@@ -421,6 +429,21 @@ public sealed partial class ExternalAuthenticationHttpTests
         var outcomes = await Task.WhenAll(
             a.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, one), principal, writesTimeout.Token).AsTask(),
             b.ServiceProvider.GetRequiredService<IConnectionWriter>().ApplyAsync(new(ConnectionChange.Disable, catalog.Revision, two), principal, writesTimeout.Token).AsTask());
+        if (bypassPreparedCommit)
+        {
+            // Deliberately violate the prepared-revision/IAM envelope through actual persisted saves.
+            // Two stale whole-catalog snapshots lose an update; they do not remove both paths.
+            Assert.Equal(2, barrier.Reads);
+            Assert.Equal(2, barrier.PreparedWrites);
+            Assert.Equal(2, outcomes.Length);
+            Assert.All(outcomes, outcome => Assert.True(outcome.Saved));
+            var unsafeStore = await inner.ReadAsync(writesTimeout.Token);
+            Assert.Equal(2, unsafeStore.Records.Count);
+            Assert.Single(unsafeStore.Records, record => record.Enabled);
+            // The exact positive safety invariant must reject two real successes, not a fabricated result.
+            Assert.Throws<Xunit.Sdk.SingleException>(() => Assert.Single(outcomes, outcome => outcome.Saved));
+            return;
+        }
         Assert.Single(outcomes, outcome => outcome.Saved);
         Assert.Contains(Assert.Single(outcomes, outcome => !outcome.Saved).Failure, new[] { "revision-conflict", "identity-authority-changed" });
         Assert.Equal(2, barrier.Reads);
@@ -478,7 +501,7 @@ public sealed partial class ExternalAuthenticationHttpTests
             await ready.Task.WaitAsync(token);
         }
     }
-    private sealed class RecoverySynchronizedCatalog(IConnectionCatalogStore inner, RecoveryReadBarrier barrier) : IConnectionCatalogStore
+    private sealed class RecoverySynchronizedCatalog(IConnectionCatalogStore inner, RecoveryReadBarrier barrier, SemaphoreSlim? unsafeCommits) : IConnectionCatalogStore
     {
         public bool SupportsIdentityRevisionGuards => inner.SupportsIdentityRevisionGuards;
         public async ValueTask<ConnectionCatalog> ReadAsync(CancellationToken cancellationToken = default)
@@ -490,6 +513,21 @@ public sealed partial class ExternalAuthenticationHttpTests
         public async ValueTask<CatalogSaveResult> SaveAsync(ConnectionCatalog catalog, CancellationToken cancellationToken = default)
         {
             await barrier.BeforeSave(cancellationToken);
+            if (unsafeCommits is not null)
+            {
+                await unsafeCommits.WaitAsync(cancellationToken);
+                try
+                {
+                    // Test-only unsafe adapter: refresh the revision and discard the IAM guards.
+                    // Return the actual inner result; never synthesize Saved.
+                    var latest = await inner.ReadAsync(cancellationToken);
+                    return await inner.SaveAsync(catalog with { Revision = latest.Revision, IdentityRevisionGuards = null }, cancellationToken);
+                }
+                finally
+                {
+                    unsafeCommits.Release();
+                }
+            }
             return await inner.SaveAsync(catalog, cancellationToken);
         }
     }
