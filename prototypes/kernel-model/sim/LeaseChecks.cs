@@ -232,6 +232,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
 {
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool DelayNext, DelayTake;
     public Func<CancellationToken, Task>? BeforePoll, AfterLoad;
