@@ -112,11 +112,12 @@ describe("navigation mode stylesheet", () => {
     expect(ruleBody(stylesCss, ".sidebar-collapsed .sidebar-search")).toMatch(/display:\s*none;/);
   });
 
-  it("moves left-nav account access to the top bar on narrow screens", () => {
+  it("moves narrow left-nav account access to the top bar while retaining the backend selector", () => {
     expect(ruleBody(stylesCss, ".topbar-actions .user-menu")).toMatch(/display:\s*none;/);
     expect(ruleBody(stylesCss, 'html[data-nav-mode="top"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
     expect(ruleBody(mobileShellCss, ".sidebar-account")).toMatch(/display:\s*none;/);
-    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .sidebar-footer')).toMatch(/display:\s*none;/);
+    expect(ruleBody(mobileShellCss, ".sidebar-footer")).toMatch(/display:\s*flex;/);
+    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .sidebar-footer')).not.toMatch(/display:\s*none;/);
     expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
   });
 
