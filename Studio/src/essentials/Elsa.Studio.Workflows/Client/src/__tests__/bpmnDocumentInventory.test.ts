@@ -287,10 +287,14 @@ describe("R7 expanded intrinsic native reference regressions", () => {
   it("refuses unknown expanded SetOutput expression dialects atomically without an intrinsic catalog", () => { r7ExpectUnknownIntrinsicRefused("SetOutput"); });
   it("preserves literal and nested vendor reference lookalikes in catalogless expanded Set", () => {
     const opaque = { declaringScopeId: "P", producerNodeId: "other-work", expressionType: "VendorReference" }, intrinsic = r7IntrinsicWire("Set", "Literal", opaque);
-    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Literal", value: opaque });
+    const encoded = r7WireValue(intrinsic, "value") as { expressionType: string; value: string };
+    expect(encoded).toEqual({ expressionType: "Object", value: JSON.stringify(opaque) });
+    expect(JSON.parse(encoded.value)).toEqual(opaque);
   });
   it("preserves literal and nested vendor reference lookalikes in catalogless expanded SetOutput", () => {
     const opaque = { declaringScopeId: "P", producerNodeId: "other-work", expressionType: "VendorReference" }, intrinsic = r7IntrinsicWire("SetOutput", "Literal", opaque);
-    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Literal", value: opaque });
+    const encoded = r7WireValue(intrinsic, "value") as { expressionType: string; value: string };
+    expect(encoded).toEqual({ expressionType: "Object", value: JSON.stringify(opaque) });
+    expect(JSON.parse(encoded.value)).toEqual(opaque);
   });
 });
