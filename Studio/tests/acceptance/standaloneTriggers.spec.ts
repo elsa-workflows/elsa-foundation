@@ -541,6 +541,12 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
   const executionId = recipient.executionReference!.id;
   let inspection: { execution: { status: string }; attempts: { workerExecutionId: string; status: string }[] } | undefined;
   await expect.poll(async () => { inspection = await j.api(`/bpmn/executions/${executionId}/inspection`); return inspection!.attempts.length; }, { timeout: 45_000 }).toBe(1);
+  // Model admission precedes native worker admission. Inspect the real attempt until its worker completed,
+  // then require the ordinary native execution and its actual consumed outputs.
+  await expect.poll(async () => {
+    inspection = await j.api(`/bpmn/executions/${executionId}/inspection`);
+    return inspection!.attempts[0].status;
+  }, { timeout: 45_000 }).toBe("Completed");
   await j.outputs(inspection!.attempts[0].workerExecutionId, { message: event.configuration.eventName, count: 7 });
   await inspectActualRun(j, delivery, recipient.id, "bpmn", "bpmn-declared-input-run");
   await expect.poll(async () => (await j.api<{ execution: { status: string } }>(`/bpmn/executions/${executionId}/inspection`)).execution.status, { timeout: 45_000 }).toBe("TerminalSettled");
