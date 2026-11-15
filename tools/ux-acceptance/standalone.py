@@ -482,7 +482,7 @@ class OwnedBackend:
                 if (physical['stateCount'] != 1 or marker['commitId'] not in physical['commitIds'] or
                     physical['origins'] != [marker['origin']]):
                     raise ValueError('The committed checkpoint and immutable origin were not physically retained after process death')
-            elif physical['stateCount'] != 0 or physical['commitIds'] or not any(item['commandKind'] == 'Checkpoint' for item in physical['queuedCommands']):
+            elif physical['stateCount'] != 0 or physical['commitIds'] or not any(item['commandKind'] in ('Start', 'Checkpoint') for item in physical['queuedCommands']):
                 raise ValueError('The uncommitted checkpoint did not leave its durable native queue and no state/marker after process death')
             self.checkpoint_previous_marker = marker
             (self.directory / 'shells.json').write_text(self.original)
