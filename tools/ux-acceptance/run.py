@@ -21,6 +21,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark'}
 CAPTURES = {
+    'native BPMN blocks preserve reviewed XML bindings': ['reference'] + [f'{host}-bpmn-{state}' for host in ('workflow', 'activity') for state in ('selection', 'preview', 'nested', 'reopened', 'import-review', 'imported', 'ungrouped')],
     'named blocks preserve declared expression results': ['reference'] + [f'workflow-sequence-{state}' for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped', 'readonly')],
     'named blocks across graph authoring': ['reference'] + [f'{host}-{kind}-{state}' for host in ('workflow', 'activity') for kind in ('sequence', 'flowchart') for state in ('selection', 'preview', 'nested', 'reopened', 'created-empty', 'empty-ungrouped', 'ungrouped', 'readonly')] + ['workflow-flowchart-created-repeat', 'activity-flowchart-created-repeat', 'activity-flowchart-terminal-readonly', 'workflow-terminal-refusal'],
     "explicit authored activity names survive publication and execution": ["reference", "authored-definition", "authored-executable", "authored-run"],

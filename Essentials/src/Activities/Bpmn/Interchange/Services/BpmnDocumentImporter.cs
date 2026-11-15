@@ -164,7 +164,6 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 _issues.Add(new BpmnImportIssue(BpmnImportIssueSeverity.Dropped, message, elementId));
 
             var definitions = read.Definitions;
-            var diagram = ReadDiagram(definitions);
             var collaboration = new CollaborationFacts(definitions);
             var nodePrefix = options?.NodeIdPrefix ?? LibInterchange.BpmnXmlReader.DefaultBindingRefPrefix;
 
@@ -173,8 +172,12 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                     process.ProcessId,
                     collaboration.ParticipantIdFor(process.ProcessId),
                     collaboration.ParticipantNameFor(process.ProcessId),
-                    BuildProcessNode(process, $"{nodePrefix}-{process.ProcessId}", diagram, collaboration)))
+                    BuildProcessNode(process, $"{nodePrefix}-{process.ProcessId}", ReadDiagram(definitions, process.ProcessId, allowFallback: true), collaboration)))
                 .ToArray();
+
+            // Confirmed identities are author data, never permission to overwrite another imported activity.
+            var nodeIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var process in imported) ValidateNodeIds(process.Node, nodeIds);
 
             // A confirmation the document cannot honor is the author's mistake, not a binding: say so and stay unexecutable.
             foreach (var elementId in _confirmed.Where(elementId => !_proposed.Contains(elementId)).Order(StringComparer.Ordinal))
@@ -183,6 +186,15 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
             var primary = SelectPrimary(definitions.Processes, imported);
             return new BpmnImportResult(primary.Node, new BpmnImportAnalysis(read.Analysis.ProcessIds, read.Analysis.ElementCounts, _issues)
                 { Capabilities = _capabilities }, imported);
+        }
+
+        private static void ValidateNodeIds(ActivityNode node, HashSet<string> identities)
+        {
+            if (!identities.Add(node.NodeId))
+                throw new BpmnInterchangeException($"The retained native node identity '{node.NodeId}' collides with another imported activity.");
+            if (node.Structure?.Kind == BpmnProcessActivity.StructureKind)
+                foreach (var child in node.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!.Activities)
+                    ValidateNodeIds(child, identities);
         }
 
         /// <summary>Explicit <c>ProcessId</c> &gt; first executable &gt; first, unchanged from before the library.</summary>
@@ -199,9 +211,14 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
             LibModel.BpmnProcessDefinition definition,
             string nodeId,
             JsonElement? diagram,
-            CollaborationFacts? collaboration)
+            CollaborationFacts? collaboration,
+            bool nestedProcess = false)
         {
-            ReportUnrepresented(definition.Extensions, definition.ProcessId);
+            // On a subprocess the retained binding belongs to its enclosing element, which MaterializeChild reviews.
+            ReportUnrepresented(nestedProcess ? definition.Extensions with
+            {
+                ForeignAttributes = definition.Extensions.ForeignAttributes.Where(attribute => !BpmnTaskBindingMetadata.IsAttribute(attribute)).ToArray()
+            } : definition.Extensions, definition.ProcessId);
             foreach (var lane in definition.Lanes)
                 ReportUnrepresented(lane.Extensions, lane.LaneId);
             if (definition.ExpressionLanguage is not null)
@@ -282,10 +299,6 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                     flow.ConditionOutcome, isDefault));
             }
 
-            foreach (var variable in definition.Variables)
-                if (variable.TypeHint is not null || variable.DefaultValue is not null)
-                    Degraded(definition.ProcessId, $"Variable '{variable.Name}' imports as Object without its library type hint or default value; those fields are unavailable in the frozen Foundation authoring contract.");
-
             var structure = new BpmnAuthoredStructure(
                 activities: childActivities,
                 elements: elements,
@@ -293,7 +306,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 pools: collaboration?.PoolsFor(definition.ProcessId) ?? [],
                 lanes: definition.Lanes.Select(lane => new BpmnLane(lane.LaneId, lane.PoolId, lane.Name)).ToArray(),
                 variables: definition.Variables
-                    .Select(variable => new VariableDefinition(variable.Name, variable.Name, new TypeReference("Object"), StorageDriverType: null, Default: null))
+                    .Select(variable => BpmnVariableInterchange.Import(variable, definition.ProcessId, _issues))
                     .ToArray(),
                 diagram: diagram,
                 isTransaction: definition.IsTransaction,
@@ -318,13 +331,17 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 result.Activity is not null && result.Activity.NodeId != binding.BindingRef)
                 throw new BpmnInterchangeException($"The work binder returned an incompatible activity identity/availability for '{source.ElementId}'.");
             var capability = binding.GetType().Name;
-            var retained = source.Extensions.ForeignAttributes.Where(BpmnTaskBindingMetadata.IsAttribute).ToArray();
-            if (retained.Length > 0 && (request.Kind != BpmnWorkBindingKind.UnboundTask || result.Activity is not null))
-                Degraded(source.ElementId, "The retained task binding was ignored: it is honored only on a task this host leaves unbound.");
+            // The library reads subprocess attributes on the nested container, rather than its enclosing element.
+            var retainedExtensions = binding is LibInterchange.BpmnWorkBinding.NestedProcess nested
+                ? nested.Definition.Extensions : source.Extensions;
+            var retained = retainedExtensions.ForeignAttributes.Where(BpmnTaskBindingMetadata.IsAttribute).ToArray();
+            var nativeProcess = request.Kind == BpmnWorkBindingKind.NestedProcess && result.Activity?.Structure?.Kind == BpmnProcessActivity.StructureKind;
+            if (retained.Length > 0 && !nativeProcess && (request.Kind != BpmnWorkBindingKind.UnboundTask || result.Activity is not null))
+                Degraded(source.ElementId, "The retained binding was ignored: it is honored only on an unbound task or an ordinary native subprocess.");
             else if (retained.Length > 0 && _sharedElementIds.Contains(source.ElementId))
                 Degraded(source.ElementId, "The retained task binding was ignored: another element in the document uses this element id; bind it explicitly.");
             else if (retained.Length > 0)
-                return Retained(binding, source, retained[0].Value, capability, result);
+                return Retained(binding, source, retained[0].Value, capability, result, nativeProcess ? result.Activity!.Structure : null);
             _capabilities.Add(new BpmnImportCapability(source.ElementId, capability, result.Availability, result.Reason) { BindingRef = binding.BindingRef });
             if (result.Availability is BpmnImportCapabilityAvailability.Unsupported or BpmnImportCapabilityAvailability.Unknown)
                 Degraded(source.ElementId, $"{capability} was retained without executable work: {result.Reason}");
@@ -338,9 +355,9 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
         /// it: a child under the binding's own reference with the exact version and its literal inputs. Either way the
         /// catalog pass still decides whether the version and inputs are available on this host.
         /// </summary>
-        private ActivityNode? Retained(LibInterchange.BpmnWorkBinding binding, LibModel.BpmnElement source, string value, string capability, BpmnWorkBindingResult unbound)
+        private ActivityNode? Retained(LibInterchange.BpmnWorkBinding binding, LibModel.BpmnElement source, string value, string capability, BpmnWorkBindingResult unbound, ActivityNodeStructure? structure = null)
         {
-            if (!BpmnTaskBindingMetadata.TryRead(value, out var activityVersionId, out var inputs, out var problem))
+            if (!BpmnTaskBindingMetadata.TryRead(value, out var activityVersionId, out var inputs, out var retainedNodeId, out var problem))
             {
                 Degraded(source.ElementId, problem!);
                 _capabilities.Add(new BpmnImportCapability(source.ElementId, capability, unbound.Availability, unbound.Reason) { BindingRef = binding.BindingRef });
@@ -357,9 +374,10 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
                 return null;
             }
 
+            var nodeId = retainedNodeId ?? binding.BindingRef;
             _capabilities.Add(new BpmnImportCapability(source.ElementId, BpmnCatalogBindingSession.RetainedBindingCapability, BpmnImportCapabilityAvailability.Available,
-                "The author confirmed the retained binding.") { BindingRef = binding.BindingRef, RetainedBinding = proposal });
-            return new ActivityNode(binding.BindingRef, activityVersionId, inputs, [], null);
+                "The author confirmed the retained binding.") { BindingRef = nodeId, RetainedBinding = proposal });
+            return new ActivityNode(nodeId, activityVersionId, inputs, [], structure);
         }
 
         private BpmnWorkBindingRequest Request(LibInterchange.BpmnWorkBinding binding, LibModel.BpmnElement source) => binding switch
@@ -374,7 +392,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
             LibInterchange.BpmnWorkBinding.CallProcess call => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.CallProcess,
                 WorkflowDefinitionId: RetainedWorkflowDefinitionId(source), WaitForCompletion: call.WaitForCompletion),
             LibInterchange.BpmnWorkBinding.NestedProcess nested => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.NestedProcess,
-                NestedProcess: BuildProcessNode(nested.Definition, binding.BindingRef, diagram: null, collaboration: null)),
+                NestedProcess: BuildProcessNode(nested.Definition, binding.BindingRef, ReadDiagram(read.Definitions, nested.Definition.ProcessId), collaboration: null, nestedProcess: true)),
             LibInterchange.BpmnWorkBinding.UnboundTask => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.UnboundTask),
             _ => new(source.ElementId, binding.BindingRef, BpmnWorkBindingKind.Unknown)
         };
@@ -449,9 +467,11 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
     /// Flattens the library's typed <see cref="LibModel.BpmnDiagram"/> back to the opaque <c>{shapes, edges}</c>
     /// payload design surfaces (and the Studio's TypeScript mirror) read.
     /// </summary>
-    private static JsonElement? ReadDiagram(LibModel.BpmnDefinitions definitions)
+    private static JsonElement? ReadDiagram(LibModel.BpmnDefinitions definitions, string processId, bool allowFallback = false)
     {
-        if (definitions.Diagrams.FirstOrDefault()?.Plane is not { } plane)
+        var diagram = definitions.Diagrams.FirstOrDefault(item => item.Plane.BpmnElementRef == processId)
+                      ?? (allowFallback ? definitions.Diagrams.FirstOrDefault() : null);
+        if (diagram?.Plane is not { } plane)
             return null;
 
         var shapes = new Dictionary<string, object>(StringComparer.Ordinal);

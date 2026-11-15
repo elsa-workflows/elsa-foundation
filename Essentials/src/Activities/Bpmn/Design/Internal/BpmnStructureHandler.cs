@@ -25,11 +25,16 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
     public bool SupportsScopedVariables => true;
 
     public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
-        BpmnLinearChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.Assess(producerChildNodeId, consumerChildNodeId)
+        LinearChildResults(activity)?.Assess(producerChildNodeId, consumerChildNodeId)
         ?? new(ActivityChildResultAvailability.Unknown);
 
     public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) =>
-        BpmnLinearChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity))?.CompletedBefore(childNodeId);
+        LinearChildResults(activity)?.CompletedBefore(childNodeId);
+
+    private static BpmnLinearChildResultAnalysis? LinearChildResults(ActivityNode activity, int depth = 0) =>
+        depth >= 64 ? null : BpmnLinearChildResultAnalysis.TryCreate(ReadAuthoredStructure(activity), child =>
+            child.Structure is { Kind: BpmnProcessActivity.StructureKind, SchemaVersion: BpmnProcessActivity.StructureSchemaVersion }
+            && LinearChildResults(child, depth + 1) is not null);
 
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {

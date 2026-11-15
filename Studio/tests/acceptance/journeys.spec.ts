@@ -1,4 +1,5 @@
 import { namedBlocksJourney } from "./namedBlocksJourney";
+import { bpmnNamedBlocksJourney } from "./bpmnNamedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
 import { nativeDashboardsJourney } from "./nativeDashboardsJourney";
@@ -714,4 +715,8 @@ test("named blocks across graph authoring", async ({ page }, info) => {
 test("named blocks preserve declared expression results", async ({ page }, info) => {
   test.setTimeout(240_000);
   await namedBlocksJourney(page, info, capture, "expression-results");
+});
+
+test("native BPMN blocks preserve reviewed XML bindings", async ({ page }, info) => {
+  await bpmnNamedBlocksJourney(page, info, capture);
 });

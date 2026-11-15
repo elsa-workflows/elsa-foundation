@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
@@ -20,7 +21,7 @@ internal static class BpmnTaskBindingMetadata
     private const int MaximumBytes = 16 * 1024;
     private const int MaximumDepth = 32;
     private const int MaximumIdLength = 512;
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
     /// <summary>The BPMN task types whose bound child is the author's own work; every other element's child is re-established by import.</summary>
     public static readonly IReadOnlySet<string> TaskTypes = new HashSet<string>(StringComparer.Ordinal)
@@ -43,10 +44,10 @@ internal static class BpmnTaskBindingMetadata
         attribute.Name.Namespace == LibInterchange.BpmnXmlNames.VendorNamespaceName &&
         attribute.Name.LocalName == AttributeName;
 
-    public static LibModel.BpmnForeignAttribute ToAttribute(string activityVersionId, IReadOnlyList<ArgumentState> inputs) =>
+    public static LibModel.BpmnForeignAttribute ToAttribute(string activityVersionId, IReadOnlyList<ArgumentState> inputs, string? nodeId = null) =>
         new(new LibModel.BpmnQName(LibInterchange.BpmnXmlNames.VendorNamespaceName, AttributeName), JsonSerializer.Serialize(new Carried(
             activityVersionId,
-            inputs.ToDictionary(input => input.ReferenceKey, input => JsonSerializer.SerializeToElement(input.Value.Value), StringComparer.Ordinal)), Web));
+            inputs.ToDictionary(input => input.ReferenceKey, input => JsonSerializer.SerializeToElement(input.Value.Value), StringComparer.Ordinal), nodeId), Web));
 
     /// <summary>Whether a catalog input declaration may travel with a literal value: never a sensitive, credential, masked or connection input.</summary>
     public static bool IsPortable(InputDefinition declaration) =>
@@ -59,9 +60,13 @@ internal static class BpmnTaskBindingMetadata
 
     /// <summary>Reads a retained binding, or says why it cannot be read; a binding that cannot be read is never proposed.</summary>
     public static bool TryRead(string? value, out string activityVersionId, out IReadOnlyList<ArgumentState> inputs, out string? problem)
+        => TryRead(value, out activityVersionId, out inputs, out _, out problem);
+
+    public static bool TryRead(string? value, out string activityVersionId, out IReadOnlyList<ArgumentState> inputs, out string? nodeId, out string? problem)
     {
         activityVersionId = "";
         inputs = [];
+        nodeId = null;
         problem = null;
         if (string.IsNullOrWhiteSpace(value) || Encoding.UTF8.GetByteCount(value) > MaximumBytes)
         {
@@ -77,6 +82,11 @@ internal static class BpmnTaskBindingMetadata
                 problem = "The retained task binding names a member more than once.";
                 return false;
             }
+            if (root.ValueKind == JsonValueKind.Object && root.EnumerateObject().Any(member => member.Name is not ("activityVersionId" or "inputs" or "nodeId")))
+            {
+                problem = "The retained native binding contains an unsupported member; bind it explicitly instead.";
+                return false;
+            }
             if (root.ValueKind != JsonValueKind.Object ||
                 !root.TryGetProperty("activityVersionId", out var id) || id.ValueKind != JsonValueKind.String ||
                 string.IsNullOrWhiteSpace(id.GetString()) || id.GetString()!.Length > MaximumIdLength ||
@@ -89,6 +99,16 @@ internal static class BpmnTaskBindingMetadata
             {
                 problem = "The retained task binding names an input more than once.";
                 return false;
+            }
+            if (root.TryGetProperty("nodeId", out var identity))
+            {
+                if (identity.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(identity.GetString()) ||
+                    identity.GetString()!.Length > MaximumIdLength || identity.GetString() != identity.GetString()!.Trim())
+                {
+                    problem = "A retained native node identity must be a nonempty, bounded string without surrounding whitespace.";
+                    return false;
+                }
+                nodeId = identity.GetString();
             }
             activityVersionId = id.GetString()!;
             inputs = root.TryGetProperty("inputs", out var values)
@@ -109,5 +129,5 @@ internal static class BpmnTaskBindingMetadata
     private static bool HasDuplicateNames(JsonElement value) =>
         value.EnumerateObject().GroupBy(member => member.Name, StringComparer.Ordinal).Any(group => group.Count() > 1);
 
-    private sealed record Carried(string ActivityVersionId, IReadOnlyDictionary<string, JsonElement> Inputs);
+    private sealed record Carried(string ActivityVersionId, IReadOnlyDictionary<string, JsonElement> Inputs, string? NodeId);
 }

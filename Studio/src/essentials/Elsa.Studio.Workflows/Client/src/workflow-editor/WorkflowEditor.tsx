@@ -133,7 +133,7 @@ import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { notifySuccess, useNotificationGuard } from "./notifications";
-import { assertLosslessBpmnImport, exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
+import { exportBpmnDocument, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
@@ -1054,24 +1054,14 @@ export function WorkflowEditor({
   const isBpmnRoot = draft?.state.rootActivity?.structure?.kind === bpmnStructureKind;
   const canUseBpmnInterchange = isBpmnRoot && frames.length === 0;
   const bpmnFileInputRef = useRef<HTMLInputElement | null>(null);
-  const bpmnImportRequest = useRef<AbortController | null>(null);
-  const [refusedBpmnFile, setRefusedBpmnFile] = useState<File | null>(null);
-  const bpmnImportScope = useRef({ draft, pinned: editorDoc.pinned, root: canUseBpmnInterchange });
-  bpmnImportScope.current = { draft, pinned: editorDoc.pinned, root: canUseBpmnInterchange };
-  useEffect(() => () => bpmnImportRequest.current?.abort(), [context, definitionId]);
-  const downloadRefusedBpmn = useCallback(() => {
-    if (!refusedBpmnFile) return;
-    const url = URL.createObjectURL(refusedBpmnFile);
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = refusedBpmnFile.name;
-    anchor.click(); URL.revokeObjectURL(url);
-  }, [refusedBpmnFile]);
+  const [bpmnImportFile, setBpmnImportFile] = useState<File | null>(null);
 
   const exportBpmn = useCallback(async () => {
     const rootActivity = draft?.state.rootActivity;
     if (!rootActivity) return;
     const canNotify = captureNotificationGuard();
     try {
-      const xml = await exportBpmnDocument(context, withDiagramFromLayout(rootActivity, draft.layout));
+      const xml = await exportBpmnDocument(context, withDiagramFromLayout(rootActivity, draft.layout, draft.activityPresentation));
       const blob = new Blob([xml], { type: "application/xml" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -1081,58 +1071,10 @@ export function WorkflowEditor({
       URL.revokeObjectURL(url);
       if (canNotify.isOwned()) setError("");
       if (canNotify()) notifySuccess("Exported BPMN 2.0 XML.");
-    } catch {
-      if (canNotify.isOwned()) { setStatus(""); setError("BPMN export failed."); }
+    } catch (error) {
+      if (canNotify.isOwned()) { setStatus(""); setError(error instanceof Error ? error.message.startsWith("BPMN export was refused") ? error.message : `BPMN export failed. ${error.message}` : "BPMN export failed."); }
     }
   }, [captureNotificationGuard, context, details?.definition?.name, draft, setError, setStatus]);
-
-  const importBpmn = useCallback(async (file: File) => {
-    const rootActivity = draft?.state.rootActivity;
-    if (!rootActivity || editorDoc.pinned || !canUseBpmnInterchange) return;
-    bpmnImportRequest.current?.abort();
-    const request = new AbortController(); bpmnImportRequest.current = request;
-    const signature = getDraftSignature(draft);
-    const assertCurrent = () => {
-      const current = bpmnImportScope.current;
-      if (request.signal.aborted || backendSession?.disposed || current.pinned || !current.root || !current.draft
-        || current.draft.id !== draft.id || getDraftSignature(current.draft) !== signature)
-        throw new DOMException("The BPMN import no longer belongs to this editable process.", "AbortError");
-    };
-    try {
-      const xml = await file.text(); assertCurrent();
-      const result = await importBpmnDocument(context, xml, undefined, request.signal); assertCurrent();
-      if (directBpmnRoot) {
-        // Keep the original bytes before refusing the conversion; do not normalize its vendor data.
-        setRefusedBpmnFile(file);
-        assertLosslessBpmnImport(result.analysis);
-      }
-      const importedLayout = layoutFromBpmnDiagram(result.processNode);
-      editDraftAndSelect(({ draft: current }) => {
-        const currentRoot = current?.state.rootActivity;
-        if (!current || !currentRoot) return null;
-        return {
-          ...current,
-          layout: importedLayout,
-          state: {
-            ...current.state,
-            rootActivity: {
-              ...result.processNode,
-              nodeId: currentRoot.nodeId,
-              activityVersionId: currentRoot.activityVersionId
-            }
-          }
-        };
-      }, null);
-      setRefusedBpmnFile(null);
-      const issueSummary = summarizeBpmnImportIssues(result.analysis);
-      setError("");
-      setStatus(issueSummary ? `Imported BPMN document (${issueSummary}).` : "Imported BPMN document.");
-    } catch (error) {
-      if (request.signal.aborted || backendSession?.disposed || error instanceof DOMException && error.name === "AbortError") return;
-      setStatus("");
-      setError(error instanceof Error ? error.message : "BPMN import failed — check that the file is a valid BPMN 2.0 document.");
-    }
-  }, [backendSession, canUseBpmnInterchange, context, directBpmnRoot, draft, editDraftAndSelect, editorDoc.pinned, setError, setStatus]);
 
   const { versionChange, openVersionChange, cancelVersionChange, applyVersionChange, saveFromToolbar, saveAndGoBack } = useWorkflowEditorSaveCommands({
     draft, canEdit: editorDoc.canEdit, lineage: lineageHold.lineage, saveDraft, loadDraft, save, flushDefinitionMeta, onBack,
@@ -1501,7 +1443,6 @@ export function WorkflowEditor({
                   : "Publish this workflow first: only a published version has a compiled executable artifact",
                 onSelect: () => void exportExecutableArtifact()
               }] : []),
-              ...(refusedBpmnFile ? [{ label: "Download refused BPMN source", icon: <Download size={15} />, onSelect: downloadRefusedBpmn }] : []),
               ...(canUseBpmnInterchange ? [
                 {
                   label: "Import BPMN",
@@ -1531,7 +1472,7 @@ export function WorkflowEditor({
           onChange={event => {
             const file = event.target.files?.[0];
             event.target.value = "";
-            if (file) void importBpmn(file);
+            if (file) setBpmnImportFile(file);
           }}
         />
       ) : null}
@@ -1658,6 +1599,9 @@ export function WorkflowEditor({
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
           {draft.state.rootActivity ? <NativeBlockCommands
+            endpoint={context}
+            bpmnImportFile={frames.length === 0 ? bpmnImportFile : null}
+            onBpmnImportFileConsumed={() => setBpmnImportFile(null)}
             context={{
               document: { rootActivity: draft.state.rootActivity, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] },
               catalog, scope: frames, canEdit: editorDoc.canEdit() && canAddActivitiesToCanvas && !isUnsupportedDesigner && !editorDoc.pinned,

@@ -113,6 +113,8 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
         var version = await catalog.FindVersion(node.ActivityVersionId, cancellationToken);
         if (version is null)
             return $"Activity version '{node.ActivityVersionId}' could not be read from the visible host catalog.";
+        if (node.Structure?.Kind == Process.StructureKind && !_definitions.Any(definition => definition.Id == version.DefinitionId && definition.ActivityTypeKey == Process.ProcessType))
+            return "A retained native subprocess must bind an exact native BPMN process version.";
         var declarations = version.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         foreach (var input in node.Inputs)
         {
