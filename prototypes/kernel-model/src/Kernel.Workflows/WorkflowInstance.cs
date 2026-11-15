@@ -31,6 +31,10 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     public TurnOutcome? Command(TurnInput input)
     {
         var (row, first) = (input.Row, input.Taken[0]);
+        // The persisted protocol remains authoritative when a cold model drops either metadata interface.
+        // Refuse before controls or the ordinary terminal drain can consume a protected query/Delete.
+        if (row is { IdentityMetadataRequired:true } && _models[row.Model] is not IStateFreeTerminalMetadata)
+            return IdentityMetadataTurn.Unavailable(input);
         if (row is { Creation: > 0 } && first.Message.Kind == WorkflowKinds.ChildFinished)
         {
             try
@@ -76,14 +80,21 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     public async ValueTask<TurnOutcome> TurnAsync(TurnInput input)
     {
+        var model = _models[input.Row?.Model ?? input.Spec!.Model];
+        if (input.Row is {IdentityOnly:true})
+        {
+            if (model is not IStateFreeTerminalMetadata stateFree) return IdentityMetadataTurn.Unavailable(input);
+            var identityTurn=new IdentityMetadataTurn(input);
+            await stateFree.IdentityMetadataAsync(identityTurn,CancellationToken.None);
+            return identityTurn.Seal();
+        }
         var turn = new Turn(input);
-        var model = _models[turn.Instance.Model];
         turn.State = input.State ?? (input.Row is { } row ? ReadState(row, model, input.Services) : model.CreateState(input.Spec!));
         input.Started(turn.Inbox);
         if (input.Row is { Status: not InstanceStatus.Running } && model is IModelMetadata metadata)
             await metadata.MetadataAsync(turn, input.Row!.Status, CancellationToken.None);
         else await model.TurnAsync(turn, CancellationToken.None);
-        return turn.Seal(model.StateVersion);
+        return turn.Seal(model);
     }
 
     public ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken cancellationToken) => _models[model].ExecuteJobAsync(job, cancellationToken);
@@ -107,7 +118,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     }
 
     // Match the typed ticket of this creation, never an ordinary equal-looking wire ID.
-    private static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
+    internal static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
     {
         if (row.Jobs is null) return null;
         var consumed = taken.Where(i => (i.IsDurableJobTicket || i.IsWorkerJobCompletion) && i.Message.Target.Id == row.Id)
@@ -131,10 +142,12 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     {
         var (row, instance) = (input.Row!, input.Actor);
         if (item.Message.Kind == Kinds.Terminate) return Terminate(input, item, row);
+        if (item.Message.Kind == Kinds.Delete && row.IdentityOnly && _models[row.Model] is IModelMetadata and not IStateFreeTerminalMetadata)
+            return IdentityMetadataTurn.Unavailable(input); // an older/unsupported metadata capability cannot infer deletion permission
         if (item.Message.Kind == Kinds.Delete)
             // Only an ended instance is deleted. What arrives for it afterwards is dropped as for a missing target.
             return row.Status == InstanceStatus.Running || row.StateVersion > _models[row.Model].StateVersion ||
-                (_models[row.Model] is IModelMetadata metadata && metadata.ProtectsDeletion(ReadState(row, _models[row.Model], input.Services), input.Services.Now, new DurableTurn(input).Clock)) ? new TurnOutcome(instance) { Consumed = [item], State = input.State, Status = row.Status }
+                (_models[row.Model] is IModelMetadata metadata && (row.IdentityOnly ? ((IStateFreeTerminalMetadata)metadata).ProtectsIdentityDeletion(TerminalIdentity.From(row), input.Services.Now, new ClockObservation(new DurableTurn(input).Clock)) : metadata.ProtectsDeletion(ReadState(row, _models[row.Model], input.Services), input.Services.Now, new DurableTurn(input).Clock))) ? new TurnOutcome(instance) { Consumed = [item], State = input.State, Status = row.Status }
                 : new TurnOutcome(instance) { Delete = true, Row = row.Creation > 0 || CreationProtocol.IsPhysicalAddress(row.Id) ? CreationProtocol.Retire(row) : null,
                     Expected = row.Revision, Consumed = [item], Unsubscribe = true, Status = row.Status, Journal = Json.Write(new[] { "deleted" }) };
         var suspended = item.Message.Kind == Kinds.Suspend;
