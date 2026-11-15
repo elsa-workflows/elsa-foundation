@@ -308,14 +308,15 @@ function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, c
       {isEmpty ? (
         <p className="wf-muted">{emptyLabel}</p>
       ) : (
-        <table className="wf-properties-table">
-          <thead>
-            <tr>
-              {headers.map(header => <th key={header}>{header}</th>)}
-              <th aria-label="Actions" />
+        // Preserve table semantics when the narrow container reflows rows into field groups.
+        <table className="wf-properties-table" role="table" aria-label={`${title} definitions`}>
+          <thead role="rowgroup">
+            <tr role="row">
+              {headers.map(header => <th key={header} role="columnheader" scope="col">{header}</th>)}
+              <th role="columnheader" scope="col" aria-label="Actions" />
             </tr>
           </thead>
-          <tbody>{children}</tbody>
+          <tbody role="rowgroup">{children}</tbody>
         </table>
       )}
     </section>
@@ -324,7 +325,7 @@ function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, c
 
 function RemoveCell({ label, onRemove }: { label: string; onRemove(): void }) {
   return (
-    <td>
+    <td role="cell">
       <button type="button" className="wf-properties-remove" aria-label={label} title={label} onClick={onRemove}>
         <Trash2 size={14} />
       </button>
@@ -402,12 +403,12 @@ function ArgumentsEditor({
         // JSON defaults keep their raw syntax for scalar values and collections alike.
         const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
         return (
-          <tr key={index}>
-            <td>
+          <tr key={index} role="row">
+            <td role="cell" data-label="Name">
               <input type="text" aria-label={`${namePrefix} name`} value={name} onChange={event => update(index, { name: event.target.value })} />
               {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
             </td>
-            <td>
+            <td role="cell" data-label="Type">
               <PickerCell
                 ariaLabel={`${namePrefix} type`}
                 value={argType.alias}
@@ -416,7 +417,7 @@ function ArgumentsEditor({
                 onChange={value => update(index, { type: { alias: value, collectionKind: argType.collectionKind } })}
               />
             </td>
-            <td>
+            <td role="cell" data-label="Collection">
               <CollectionKindCell
                 ariaLabel={`${namePrefix} collection kind`}
                 value={argType.collectionKind}
@@ -424,7 +425,7 @@ function ArgumentsEditor({
               />
             </td>
             {columns.default ? (
-              <td>
+              <td role="cell" data-label="Default">
                 {/* Only Variables render this column; the value is their ArgumentValue default. */}
                 <DefaultValueCell
                   ariaLabel={`${namePrefix} default value`}
@@ -437,7 +438,7 @@ function ArgumentsEditor({
               </td>
             ) : null}
             {columns.storage ? (
-              <td>
+              <td role="cell" data-label="Storage">
                 <PickerCell
                   ariaLabel={`${namePrefix} storage driver`}
                   value={readStringField(item, storageDriverKeys)}
@@ -450,7 +451,7 @@ function ArgumentsEditor({
               </td>
             ) : null}
             {columns.required ? (
-              <td>
+              <td role="cell" data-label="Required">
                 <RequiredCell
                   ariaLabel={`${namePrefix} required`}
                   checked={item.isRequired === true}

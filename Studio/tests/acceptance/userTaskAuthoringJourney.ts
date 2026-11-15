@@ -31,6 +31,23 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   };
   const editorViews = page.getByRole("tablist", { name: "Editor view tabs", exact: true });
   const inspectorSections = page.getByRole("tablist", { name: "Activity inspector sections", exact: true });
+  // Native controls can retain an accessible value while a compressed table hides it visually.
+  const expectDeclarationReadable = async (label: string) => {
+    const control = page.getByLabel(label, { exact: true });
+    await control.scrollIntoViewIfNeeded();
+    await expect(control).toBeVisible();
+    await expect.poll(() => control.evaluate(element => {
+      const input = element as HTMLInputElement | HTMLSelectElement;
+      const style = getComputedStyle(input);
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context) throw new Error("Text measurement is unavailable");
+      context.font = style.font;
+      const select = input instanceof HTMLSelectElement;
+      const value = select ? input.selectedOptions[0]?.label ?? "" : input.value;
+      const available = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - (select ? 24 : 0);
+      return value.length > 0 && Math.ceil(context.measureText(value).width) <= Math.floor(available);
+    })).toBe(true);
+  };
   const suffix = `${info.project.name}-${Date.now()}`;
   const formId = `approval-${suffix}`;
   const title = `Approval ${suffix}`;
@@ -165,9 +182,17 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByLabel("Variable default value", { exact: true }).fill("{}");
   await expect(page.getByLabel("Variable type", { exact: true })).toHaveValue(jsonAlias);
   await expect(page.getByLabel("Variable storage driver", { exact: true })).toHaveValue("elsa.json");
+  await page.setViewportSize(projectViewport);
+  await expectDeclarationReadable("Variable name");
+  await expectDeclarationReadable("Variable type");
+  await expectDeclarationReadable("Variable storage driver");
+  await capture(page, info, "json-variable-definitions");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await expect(page.getByLabel("Output type", { exact: true })).toHaveValue(jsonAlias);
+  await expectDeclarationReadable("Output name");
+  await expectDeclarationReadable("Output type");
   await capture(page, info, "json-output-definitions");
+  await page.setViewportSize(authoringViewport);
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("ReviewData");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
