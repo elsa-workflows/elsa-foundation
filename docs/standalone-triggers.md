@@ -26,6 +26,14 @@ Authoring metadata does not install intake. `StandaloneTriggersApi` deliberately
 
 The checked-in Workbench feature list does not select the standalone management/authoring/schedule features automatically. Add the features required for your host explicitly. Keep the host's existing identity, permission, persistence and shell-route configuration.
 
+## Use Studio
+
+Open **More tools → Triggers** on a backend advertising standalone-trigger contract 1. Create a paused resource, choose its family and configuration, then use **Add workflow**. Search by the workflow's human name; its exact ID stays copyable. Choose the publication slot explicitly. A never-published workflow can be saved disabled without inventing a serving input contract. **Browse published Runtime slots** provides ID-based discovery when Design metadata is unavailable.
+
+The workflow editor's **Triggers** inspector tab edits the same live associations. Saving an association does not save or publish the business graph. Map each declared serving input, authorize the shared resource and enable the association before enabling the trigger. Review the server's impact and findings before applying a change. Source-owned settings and unavailable actions retain their projected restrictions.
+
+HTTP creation asks who responds, then exposes the per-trigger admission policy for asynchronous fan-out. Delivery details keep the captured version, current serving version, committed dispatch, actual run and transport observation separate. Use **Inspect actual run** only when an execution has been observed; a planned ID or sealed command is not a run receipt. Recovery and cancel-pending also require a fresh impact review.
+
 ## Create a paused resource
 
 Discover capability `elsa.api.standalone-triggers`, contract major `1`, and resolve its links against the selected shell's API base. All routes below are suffixes relative to that base. Do not assume `/elsa`, the server root or a particular port. Capabilities describe installed operations; resource `actions`, `findings` and `effectiveState` describe what the current caller and composition can do.
@@ -147,6 +155,8 @@ For a schedule workflow declaring a string `DueAt` input, use:
 An absent source property omits that input; explicit JSON `null` remains a value. The ordinary target input validator applies defaults, requiredness, nullability and type validation. Unknown or duplicate destinations fail validation. Preview a representative envelope through `mapping-preview` with `expectedRevision`, `target`, `mappings`, `sample` and, when available, `contractRevision`. The `sample` is the envelope, for example `{ "payload": { "orderId": "A-42" }, "metadata": {} }`, rather than the body alone. Preview is advisory and performs no admission or execution.
 
 The Core binding model includes pure `Expression` templates with detached literal/source parameters. `mapping-context` lists the languages supplied by installed portable handlers and reports each language's evaluator availability. An empty list means no handler is installed; an unavailable entry includes a reason. Literal and SourceField mappings above require no expression language. Any supplied expression still needs the composed portable evaluator and a binding-pure capability profile; discovery is not proof that an arbitrary language/profile/template will evaluate.
+
+For the genuine BPMN `foundation-inputs-v1` profile, bind a published service workflow and map its declared inputs in the service-worker editor before publishing the direct model. Literal values and compatible process-input mappings are supported, including exact collection kinds. An empty v2 mapping is valid only when worker defaults satisfy all required inputs. Literal null **values** are distinct from explicit-null **defaults**: this profile does not support explicit-null model/worker defaults. Nullable Design JSON can lose default-presence information before the publication guard, so do not use that authoring path as evidence of null-default refusal or consumption. The owning [target contract](../specs/1217-standalone-triggers/contracts/targets.md) defines the profile boundary.
 
 ## Grants and publication changes
 
