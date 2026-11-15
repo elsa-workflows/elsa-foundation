@@ -17,7 +17,7 @@ import {
   type ScopeFrame
 } from "../workflowAdapter";
 import { compensationScopeStructureKind, compensationStepsSlotId } from "../compensationScope";
-import { remapActivityReferences } from "./activityReferenceRemapping";
+import { remapActivityReferences, type ActivityReferenceResourceKind } from "./activityReferenceRemapping";
 import type {
   ActivityNode,
   ActivityPresentationRecord,
@@ -119,6 +119,7 @@ export function snapshotSelectedActivities(options: {
 
 export function planActivityDuplicate(options: {
   snapshot: ActivityClipboardSnapshot;
+  resourceKind: ActivityReferenceResourceKind;
   draft: WorkflowDraft;
   frames: ScopeFrame[];
   catalog: ActivityCatalogLookup;
@@ -156,7 +157,7 @@ export function planActivityDuplicate(options: {
     }
   }
   const activities = options.snapshot.activities.map(activity =>
-    rewriteActivityIds(cloneValue(activity), options.catalog, idMap, structureIdMap));
+    rewriteActivityIds(cloneValue(activity), options.catalog, idMap, structureIdMap, options.resourceKind));
 
   const takenNames = collectDisplayNames(options.draft.state.rootActivity, options.draft.activityPresentation, options.catalog);
   const presentationBySource = indexActivityPresentation(options.snapshot.presentation);
@@ -260,6 +261,7 @@ export function pasteActivitiesIntoDraft(options: {
   draft: WorkflowDraft;
   frames: ScopeFrame[];
   snapshot: ActivityClipboardSnapshot;
+  resourceKind: ActivityReferenceResourceKind;
   catalog: ActivityCatalogLookup;
   allocateId?: (prefix: string, usedIds: Set<string>) => string;
   offset?: { x: number; y: number };
@@ -278,11 +280,11 @@ function ownedChildSlots(activity: ActivityNode, catalog: ActivityCatalogLookup)
 }
 
 function rewriteActivityIds(activity: ActivityNode, catalog: ActivityCatalogLookup,
-  activityIds: Map<string, string>, structureIds: Map<string, string>): ActivityNode {
-  let next = remapActivityReferences(activity, resolveCatalogItem(activity, catalog), activityIds);
+  activityIds: Map<string, string>, structureIds: Map<string, string>, resourceKind: ActivityReferenceResourceKind): ActivityNode {
+  let next = remapActivityReferences(activity, resolveCatalogItem(activity, catalog), activityIds, resourceKind);
   next = { ...next, nodeId: activityIds.get(activity.nodeId) ?? activity.nodeId };
   for (const slot of ownedChildSlots(activity, catalog)) {
-    next = rewriteOwnedSlot(next, slot, child => rewriteActivityIds(child, catalog, activityIds, structureIds));
+    next = rewriteOwnedSlot(next, slot, child => rewriteActivityIds(child, catalog, activityIds, structureIds, resourceKind));
   }
   if (!next.structure) return next;
   const payload = { ...next.structure.payload };

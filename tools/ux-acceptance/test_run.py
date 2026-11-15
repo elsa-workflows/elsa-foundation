@@ -54,6 +54,24 @@ class VerdictTests(unittest.TestCase):
                          'runtime': [copy.deepcopy(run) for _ in range(2 if title == 'copy activity data pairs' else 1)],
                          'boundaries': [{'kind': 'resource-local'}, {'kind': 'invalid-publication-no-write', 'before': {str(i): {} for i in range(4)}, 'after': {str(i): {} for i in range(4)}}]
                          if title == 'preserve external activity references on copy' else []}
+                if title == 'preserve external activity references on copy':
+                    columns = {'elsa_runtime_workflow_executable': 'ContentJson',
+                               'elsa_runtime_workflow_executable_source_reference': 'DefinitionId',
+                               'elsa_publication_records': 'WorkflowDefinitionId',
+                               'elsa_runtime_workflow_activation_slot': 'WorkflowDefinitionId'}
+                    stores = {table: {'store': 'runtime.db', 'columns': ['Id', column], 'count': 1, 'sha256': 'a' * 64}
+                              for table, column in columns.items()}
+                    for receipt, owner in zip(proof['receipts'], ('valid-definition', 'invalid-definition')):
+                        receipt['definitionId'] = owner
+                        receipt['before'] = {'nodeId': owner + '-root'}
+                    proof['runtime'][0]['definitionId'] = 'valid-definition'
+                    proof['boundaries'] = [
+                        {'kind': 'published-store-positive-control', 'definitionId': 'valid-definition',
+                         'rootNodeId': 'valid-definition-root', 'stores': stores},
+                        {'kind': 'resource-local', 'source': 'valid-definition', 'destination': 'other-definition', 'clipboardCleared': True},
+                        {'kind': 'invalid-publication-no-write', 'definitionId': 'invalid-definition',
+                         'before': {table: {**value, 'count': 0} for table, value in stores.items()},
+                         'after': {table: {**value, 'count': 0} for table, value in stores.items()}}]
                 file = self.root / (title.replace(' ', '-') + '.json'); file.write_text(json.dumps(proof))
                 for test in row['tests']:
                     next(item for item in test['results'][0]['attachments'] if item['name'] == 'activity-data-copy-proof.json')['path'] = str(file)
@@ -176,11 +194,56 @@ class VerdictTests(unittest.TestCase):
                 file = self.root / (title.replace(' ', '-') + '.json'); original = file.read_text(); proof = json.loads(original)
                 if mutation == 'original-ran': proof['runtime'][0]['executions'].append({'authoredActivityId': 'producer', 'status': 'Completed'})
                 elif mutation == 'wrong-producer': proof['runtime'][0]['producerId'] = 'unexecuted-original'
-                else: proof['boundaries'][1]['after']['0']['count'] = 1
+                else: next(item for item in proof['boundaries'] if item['kind'] == 'invalid-publication-no-write')['after']['elsa_publication_records']['count'] = 1
                 file.write_text(json.dumps(proof))
                 try:
                     with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
                 finally: file.write_text(original)
+
+    def test_copy_external_positive_store_control_is_required(self):
+        title = 'preserve external activity references on copy'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        self.assertEqual(4, acceptance.verdict(report, self.root, [title]))
+
+    def test_copy_external_rejects_missing_positive_store_control(self):
+        self.assert_external_store_control_rejected('missing-positive')
+
+    def test_copy_external_rejects_invalid_positive_store_evidence(self):
+        for change in ('duplicate-positive', 'zero-count', 'boolean-count', 'missing-table', 'wrong-owner-column',
+                       'empty-store', 'external-store', 'bad-hash', 'wrong-definition', 'wrong-root', 'wrong-runtime',
+                       'wrong-resource-source', 'invalid-definition-is-valid', 'invalid-store-schema', 'invalid-store-change'):
+            with self.subTest(change=change):
+                self.assert_external_store_control_rejected(change)
+
+    def assert_external_store_control_rejected(self, change):
+        title = 'preserve external activity references on copy'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        file = self.root / 'preserve-external-activity-references-on-copy.json'
+        original = file.read_text(); proof = json.loads(original)
+        positive, local, refused = proof['boundaries']
+        store = positive['stores']['elsa_publication_records']
+        if change == 'missing-positive': proof['boundaries'].remove(positive)
+        elif change == 'duplicate-positive': proof['boundaries'].append(copy.deepcopy(positive))
+        elif change == 'zero-count': store['count'] = 0
+        elif change == 'boolean-count': store['count'] = True
+        elif change == 'missing-table': positive['stores'].pop('elsa_publication_records')
+        elif change == 'wrong-owner-column': store['columns'] = ['Id', 'OtherDefinitionId']
+        elif change == 'empty-store': store['store'] = ''
+        elif change == 'external-store': store['store'] = '../foreign.db'
+        elif change == 'bad-hash': store['sha256'] = 'not-a-sha256'
+        elif change == 'wrong-definition': positive['definitionId'] = 'unrelated-definition'
+        elif change == 'wrong-root': positive['rootNodeId'] = 'unrelated-root'
+        elif change == 'wrong-runtime': proof['runtime'][0]['definitionId'] = 'unrelated-definition'
+        elif change == 'wrong-resource-source': local['source'] = 'unrelated-definition'
+        elif change == 'invalid-definition-is-valid': refused['definitionId'] = positive['definitionId']
+        elif change == 'invalid-store-schema': refused['before'] = refused['after'] = {str(i): {} for i in range(4)}
+        elif change == 'invalid-store-change': refused['after']['elsa_publication_records']['sha256'] = 'b' * 64
+        file.write_text(json.dumps(proof))
+        try:
+            with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [title])
+        finally: file.write_text(original)
 
     def test_copy_asset_fence_requires_owner_bytes_at_its_actual_url(self):
         report = copy.deepcopy(self.report)

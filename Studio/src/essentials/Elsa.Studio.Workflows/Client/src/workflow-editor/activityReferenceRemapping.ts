@@ -8,14 +8,16 @@ import { readVariableReference, WORKFLOW_SCOPE_ID } from "../scopedVariables";
 import type { ActivityCatalogItem, ActivityNode, VariableReference } from "../workflowTypes";
 import type { StudioActivityOutputDescriptor } from "@elsa-workflows/studio-sdk";
 
+export type ActivityReferenceResourceKind = "workflow" | "activity-definition";
+
 type Fields = Record<string, unknown>;
 const record = (value: unknown): value is Fields => value !== null && typeof value === "object" && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 
 /** Remaps only the identities owned by authored value roles, never arbitrary JSON or source text. */
 export function remapActivityReferences(node: ActivityNode, catalog: ActivityCatalogItem | undefined,
-  activityIds: ReadonlyMap<string, string>): ActivityNode {
-  const scope = (value: unknown) => typeof value === "string" && value !== WORKFLOW_SCOPE_ID && value !== "activity-graph"
+  activityIds: ReadonlyMap<string, string>, resourceKind: ActivityReferenceResourceKind): ActivityNode {
+  const scope = (value: unknown) => typeof value === "string" && value !== WORKFLOW_SCOPE_ID && !(resourceKind === "activity-definition" && value === "activity-graph")
     ? activityIds.get(value) ?? value : value;
   const variable = (value: unknown): unknown => record(value) && readVariableReference(value)
     ? { ...value, ...(typeof value.declaringScopeId === "string" ? { declaringScopeId: scope(value.declaringScopeId) } : {}) } : value;
@@ -67,6 +69,7 @@ export function remapActivityReferences(node: ActivityNode, catalog: ActivityCat
   // Expanded property locations are owned by the catalog, just as in ActivityPropertiesPanel. Unknown
   // top-level objects, including metadata and missing-provider payloads, remain opaque.
   for (const input of readDeclaredActivityInputs(catalog?.inputs)) {
+    if (input.isWrapped === false) continue;
     const key = getInputPropertyName(input), wrapped = node[key];
     if (record(wrapped) && record(wrapped.expression) && typeof wrapped.expression.type === "string")
       next[key] = { ...wrapped, expression: { ...wrapped.expression, value: definition(wrapped.expression.type, wrapped.expression.value) } };
@@ -80,7 +83,7 @@ export function remapActivityReferences(node: ActivityNode, catalog: ActivityCat
     }
   }
   // Intrinsic variable assignment is distinct from the SetOutput public output name.
-  if (typeof node.intrinsic?.kind === "string" && node.intrinsic.kind.toLowerCase() === "set" && node.intrinsic.variable)
+  if (typeof node.intrinsic?.kind === "string" && variableWriteIntrinsicKinds.has(node.intrinsic.kind.toLowerCase()) && node.intrinsic.variable)
     next.intrinsic = { ...node.intrinsic, variable: variable(node.intrinsic.variable) as VariableReference };
 
   // CaseConditionEditor stores this ArgumentState on the collection item, never in node.inputs.
@@ -98,3 +101,5 @@ export function remapActivityReferences(node: ActivityNode, catalog: ActivityCat
 
 const nonPortableRoles = new Set(["literal", "object", "default", "secret", "connection", "input", "inputmember",
   "workflowrequest", "workflowrequestmember", "variable", "variablemember", "activityresult", "activityresultmember"]);
+
+const variableWriteIntrinsicKinds = new Set(["set", "merge", "reduce"]);

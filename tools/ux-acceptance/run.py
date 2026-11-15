@@ -277,9 +277,25 @@ def activity_copy_verdict(title, attachments, composition):
         if title == 'copy activity data pairs' and (run.get('originalNeverRuns') is not True or 'producer' in ids):
             raise ValueError('Original producer ran; copied-start oracle did not prove the remap')
     if title == 'preserve external activity references on copy':
-        if len(boundaries) != 2 or {item.get('kind') for item in boundaries} != {'resource-local', 'invalid-publication-no-write'}:
-            raise ValueError('Resource-local and invalid publication controls missing')
+        expected_boundaries = {'published-store-positive-control', 'resource-local', 'invalid-publication-no-write'}
+        if len(boundaries) != 3 or {item.get('kind') for item in boundaries} != expected_boundaries:
+            raise ValueError('Published positive, resource-local and invalid publication controls missing')
+        published = next(item for item in boundaries if item['kind'] == 'published-store-positive-control')
+        local = next(item for item in boundaries if item['kind'] == 'resource-local')
         refused = next(item for item in boundaries if item['kind'] == 'invalid-publication-no-write')
+        valid_copy = next(item for item in receipts if item['operation'] == 'consumer-only-valid')
+        invalid_copy = next(item for item in receipts if item['operation'] == 'consumer-only-invalid')
+        definition_id = valid_copy.get('definitionId')
+        if not definition_id or published.get('definitionId') != definition_id or runs[0].get('definitionId') != definition_id \
+                or local.get('source') != definition_id or not published.get('rootNodeId') \
+                or published['rootNodeId'] != valid_copy['before'].get('nodeId'):
+            raise ValueError('Published store control does not belong to the copied source and its completed run')
+        if not refused.get('definitionId') or refused['definitionId'] != invalid_copy.get('definitionId') \
+                or refused['definitionId'] == definition_id:
+            raise ValueError('Invalid publication control does not belong to the separate invalid copy')
+        validate_publication_stores(published.get('stores'), require_published=True)
+        validate_publication_stores(refused.get('before'))
+        validate_publication_stores(refused.get('after'))
         if refused.get('before') != refused.get('after') or len(refused.get('before', {})) != 4:
             raise ValueError('Publication boundary stores changed or were not read')
     if composition == 'minimal':
@@ -289,6 +305,27 @@ def activity_copy_verdict(title, attachments, composition):
         observed = json.loads(Path(files['activity-data-proof.json']).read_text())
         if any(re.search(r'expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression', url, re.I) for url in observed.get('scripts', [])):
             raise ValueError('Optional editor script requested in minimal copy proof')
+
+
+def validate_publication_stores(stores, require_published=False):
+    # These are the ownership columns read by the WAL-aware publication_snapshot.py oracle.
+    owner_columns = {'elsa_runtime_workflow_executable': 'ContentJson',
+                     'elsa_runtime_workflow_executable_source_reference': 'DefinitionId',
+                     'elsa_publication_records': 'WorkflowDefinitionId',
+                     'elsa_runtime_workflow_activation_slot': 'WorkflowDefinitionId'}
+    if not isinstance(stores, dict) or set(stores) != set(owner_columns):
+        raise ValueError('Publication control is missing an owning store/table')
+    for table, owner_column in owner_columns.items():
+        value = stores[table]
+        if not isinstance(value, dict):
+            raise ValueError('Publication control has malformed store evidence')
+        store, columns, digest, count = (value.get(key) for key in ('store', 'columns', 'sha256', 'count'))
+        if not isinstance(store, str) or not store or Path(store).is_absolute() or '..' in Path(store).parts \
+                or not isinstance(columns, list) or not columns or any(not isinstance(column, str) or not column for column in columns) \
+                or len(set(columns)) != len(columns) or owner_column not in columns \
+                or not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest) \
+                or type(count) is not int or count < (1 if require_published else 0):
+            raise ValueError('Publication control has invalid schema, fingerprint or owned-row count')
 
 
 def validate_activity_admission(selection):

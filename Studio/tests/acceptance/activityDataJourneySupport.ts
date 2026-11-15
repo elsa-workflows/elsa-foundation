@@ -5,7 +5,7 @@ import type { ExpressionDescriptorsResponse } from "../../src/essentials/Elsa.St
 export type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 export type Binding = { expressionType: string; value: unknown };
 export type Node = { nodeId: string; activityVersionId: string; inputs: { referenceKey: string; value: Binding }[]; outputs: unknown[];
-  structure?: { kind: string; schemaVersion: string; payload: { activities: Node[]; variables?: unknown[]; [key: string]: unknown } } };
+  structure?: { kind: string; schemaVersion: string; payload: { activities: Node[]; variables?: unknown[]; [key: string]: unknown } } | null };
 export type State = { rootActivity: Node; variables: unknown[]; inputs: unknown[]; outputs: unknown[] };
 export type Created = { definition: { id: string }; draftId: string };
 type Draft = { state: State; layout: unknown; activityPresentation: unknown };

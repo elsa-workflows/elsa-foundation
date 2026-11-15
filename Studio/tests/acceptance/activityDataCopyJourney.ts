@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { expect, type Page, type TestInfo } from "@playwright/test";
-import { activityDataSupport, attachActivityDataJson, wireIdentity, type Binding, type Capture, type Created, type Node, resolvedFeatureClosure, optionalBackendFeatures, type FeatureFact } from "./activityDataJourneySupport";
+import { activityDataSupport, attachActivityDataJson, wireIdentity, type Binding, type Capture, type Created, type Node, type State, resolvedFeatureClosure, optionalBackendFeatures, type FeatureFact } from "./activityDataJourneySupport";
 
 type Execution = { authoredActivityId: string; activityExecutionId: string; status: string };
 type CopyReceipt = { definitionId: string; operation: string; before: unknown; after: unknown; producerId?: string; consumerId: string };
@@ -43,7 +43,9 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   const member: Binding = { expressionType: "ActivityResultMember", value: { producerNodeId: "producer", projectionKey: "Customer", isOptional: false, memberPath: ["customerId"] } };
   const whole: Binding = { expressionType: "ActivityResult", value: { producerNodeId: "producer", projectionKey: "Result", isOptional: false } };
   const nodes = (node: Node): Node[] => [node, ...(node.structure?.payload.activities ?? []).flatMap(nodes),
-    ...((node.structure?.payload.cases ?? []) as { activity: Node | null }[]).flatMap(item => item.activity ? nodes(item.activity) : [])];
+    ...((node.structure?.payload.cases ?? []) as { activity: Node | null }[]).flatMap(item => item.activity ? nodes(item.activity) : []),
+    ...(node.structure?.kind === "elsa.if.structure" ? [node.structure.payload.then, node.structure.payload.else].flatMap(branch => branch ? nodes(branch as Node) : []) : [])];
+  const canonicalLeaf = (value: Node): Node => ({ ...value, structure: null });
   const savedNodes = async (created: Created) => nodes((await s.saved(created)).state.rootActivity);
   const input = (node: Node) => node.inputs.find(item => item.referenceKey === "text")?.value;
   const node = (id: string) => page.locator(`.wf-sequence-step[data-id="${id}"],.wf-canvas .react-flow__node[data-id="${id}"]`).first();
@@ -143,12 +145,41 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 7);
       expect((await s.saved(created)).state).toEqual(afterPaste); await s.select(pastedConsumer.nodeId);
       await capture(page, info, `${role}-paste-redo`);
-      await page.getByRole("button", { name: "Go to", exact: true }).click();
+      await page.locator(".wf-data-reference").getByRole("button", role === "whole" ? { name: /^Go to / } : { name: "Go to", exact: true }).click();
       await expect(page.locator(".wf-inspector-context")).toContainText(pastedProducer.nodeId);
+      // Keep the original and duplicate pairs structurally reachable inside an untaken branch.
+      // Only control-flow containment/connections change; the six saved leaf objects stay identical.
+      const ifVersion = await s.version("Elsa.Activities.If.Activities.If");
+      const controlDraft = await s.saved(created);
+      const leafIds = new Set(nodes(controlDraft.state.rootActivity).filter(item => item.nodeId !== "root").map(item => item.nodeId));
+      const leafDigest = (state: State) => wireIdentity(nodes(state.rootActivity).filter(item => leafIds.has(item.nodeId)).sort((a, b) => a.nodeId.localeCompare(b.nodeId)));
+      const beforeRouting = leafDigest(controlDraft.state);
+      const inactive = s.root(controlDraft.state.rootActivity.structure!.payload.activities.filter(item =>
+        item.nodeId !== pastedProducer.nodeId && item.nodeId !== pastedConsumer.nodeId));
+      inactive.nodeId = "inactive-copy-branch";
+      const guard = { nodeId: "inactive-copy-guard", activityVersionId: ifVersion,
+        inputs: [{ referenceKey: "Condition", value: { expressionType: "Literal", value: false } }], outputs: [],
+        structure: { kind: "elsa.if.structure", schemaVersion: "1.0.0", payload: { then: inactive, else: null } } } as unknown as Node;
+      controlDraft.state.rootActivity.structure!.payload.activities = [pastedProducer, pastedConsumer, guard];
+      controlDraft.state.rootActivity.structure!.payload.connections = [
+        { id: "copied-producer-consumer", source: { nodeId: pastedProducer.nodeId, port: "Done" }, target: { nodeId: pastedConsumer.nodeId } },
+        { id: "copied-consumer-guard", source: { nodeId: pastedConsumer.nodeId, port: "Done" }, target: { nodeId: guard.nodeId } }
+      ];
+      // Keep a valid different start so Code Apply cannot perform the UI transition for us.
+      controlDraft.state.rootActivity.structure!.payload.startNodeId = guard.nodeId;
+      expect(leafDigest(controlDraft.state)).toBe(beforeRouting);
+      await s.canvas(); await page.getByRole("tab", { name: "Code", exact: true }).click();
+      const controlCode = page.getByRole("textbox", { name: "Workflow JSON", exact: true });
+      await controlCode.fill(JSON.stringify({ state: controlDraft.state, layout: controlDraft.layout, activityPresentation: controlDraft.activityPresentation }, null, 2));
+      await page.locator(".wf-code-view").getByRole("button", { name: "Apply", exact: true }).click();
+      await page.getByRole("tab", { name: "Designer", exact: true }).click();
+      await expect.poll(async () => leafDigest((await s.saved(created)).state)).toBe(beforeRouting);
+      await expect.poll(async () => (await s.saved(created)).state.rootActivity.structure!.payload.startNodeId).toBe(guard.nodeId);
+      await s.select(pastedProducer.nodeId);
       await page.getByRole("button", { name: "Set as start node", exact: true }).click();
       await expect.poll(async () => (await s.saved(created)).state.rootActivity.structure!.payload.startNodeId).toBe(pastedProducer.nodeId);
       await capture(page, info, `${role}-copied-start`);
-      await codeReopen(created, pastedConsumer.nodeId); await capture(page, info, `${role}-reopened`);
+      await codeReopen(created, pastedConsumer.nodeId, pastedProducer.nodeId); await capture(page, info, `${role}-reopened`);
       if (role === "member") {
         const viewport = page.viewportSize()!; await page.setViewportSize({ width: 320, height: 900 }); await s.select(pastedConsumer.nodeId);
         await capture(page, info, "copy-reference-320"); await page.setViewportSize(viewport);
@@ -162,19 +193,19 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   if (mode === "scopes") {
     const variable = { referenceKey: "payload", name: "Payload", type: { alias: "Object", collectionKind: "Single" }, storageDriverType: "elsa.json",
       default: { expressionType: "Object", value: JSON.stringify({ "a.b": { "": "scope-copy-id" }, enabled: true }) } };
-    const consumer = s.line(); consumer.inputs = [{ referenceKey: "text", value: { expressionType: "VariableMember", value: { referenceKey: "payload", declaringScopeId: "group", memberPath: ["a.b", ""] } } }];
-    const portable = s.line(); portable.nodeId = "portable";
+    const consumer = canonicalLeaf(s.line()); consumer.inputs = [{ referenceKey: "text", value: { expressionType: "VariableMember", value: { referenceKey: "payload", declaringScopeId: "group", memberPath: ["a.b", ""] } } }];
+    const portable = canonicalLeaf(s.line()); portable.nodeId = "portable";
     const portableValue = { language: "JavaScript", source: 'customer.customerId', resultType: { alias: "String", collectionKind: "Single" },
       parameters: { customer: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "Customer", isOptional: false } }, options: {}, capabilityProfile: "binding-pure-v1" };
     portable.inputs = [{ referenceKey: "text", value: { expressionType: "JavaScript", value: portableValue } }];
     const switchVersion = await s.version("Elsa.Activities.Switch.Activities.Switch");
-    const caseActivity = s.line(); caseActivity.nodeId = "case-consumer";
+    const caseActivity = canonicalLeaf(s.line()); caseActivity.nodeId = "case-consumer";
     caseActivity.inputs = [{ referenceKey: "text", value: { expressionType: "Literal", value: "switch-copy-value" } }];
     const switchNode = { nodeId: "switch", activityVersionId: switchVersion, inputs: [], outputs: [], structure: {
       kind: "elsa.switch.structure", schemaVersion: "2.0.0", payload: { cases: [{ caseId: "copy-case", match: "Approved", activity: caseActivity,
         condition: { referenceKey: "Case:copy-case:Condition", value: { expressionType: "VariableMember", value: {
           referenceKey: "payload", declaringScopeId: "group", memberPath: ["enabled"] } } } }], default: null } } } as unknown as Node;
-    const group = s.root([{ nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] }, consumer, portable, switchNode], "sequence", [variable]); group.nodeId = "group";
+    const group = s.root([canonicalLeaf({ nodeId: "producer", activityVersionId: customerVersion, inputs: [], outputs: [] }), consumer, portable, switchNode], "sequence", [variable]); group.nodeId = "group";
     const outer = s.root([group], "sequence", [{ ...variable, default: { expressionType: "Object", value: '{"a.b":{"":"outer-shadow"}}' } }]);
     const created = await s.seed("copy nested scope and portable", outer);
     await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`); await expect(node("group")).toBeAttached();
@@ -253,8 +284,13 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       after: (await s.saved(created)).state, consumerId: copiedConsumer.nodeId });
     await capture(page, info, valid ? "external-valid-copy" : "external-invalid-copy");
     if (valid) {
-      await publishRun(created, copiedConsumer.nodeId, "producer", "00:00:01");
+      // Copy while the source is still editable, and observe the native clipboard status.
       await s.select("consumer"); await s.canvas(); await node("consumer").press("ControlOrMeta+c");
+      await expect(page.locator(".wf-editor-save-status")).toContainText("Copied 1 activity.");
+      await publishRun(created, copiedConsumer.nodeId, "producer", "00:00:01");
+      const publishedStores = JSON.parse(execFileSync("python3", [resolve("../e2e-tests/activity-data-selection/publication_snapshot.py"),
+        process.env.UX_ACCEPTANCE_OWNED_ROOT!, created.definition.id, root.nodeId, "--require-published"], { encoding: "utf8" }));
+      boundaries.push({ kind: "published-store-positive-control", definitionId: created.definition.id, rootNodeId: root.nodeId, stores: publishedStores });
       const destination = await s.seed("resource-local same IDs", s.root([timer(), s.line()]));
       await s.open(destination); const before = (await s.saved(destination)).state;
       await s.canvas(); await node("consumer").press("ControlOrMeta+v");

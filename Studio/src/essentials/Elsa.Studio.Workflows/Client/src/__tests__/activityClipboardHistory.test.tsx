@@ -24,7 +24,7 @@ function Probe() {
   const [disabled, setDisabled] = useState(false); disable = setDisabled;
   doc = useWorkflowDocument();
   history = useDraftHistory({ draft: doc.state.draft, restoreDraft: snapshot => doc.editDraft(() => snapshot) });
-  clipboard = useActivityClipboard({ draft: doc.state.draft, frames: doc.state.frames, catalogByVersion: catalog,
+  clipboard = useActivityClipboard({ resourceKind: "workflow", draft: doc.state.draft, frames: doc.state.frames, catalogByVersion: catalog,
     selectedNodeIds: ["producer", "consumer"], disabled, definitionId: doc.state.draft?.definitionId ?? "",
     editDraft: recipe => { editCount++; doc.editDraft(recipe); }, select: doc.select, setStatus: () => {} });
   return null;
