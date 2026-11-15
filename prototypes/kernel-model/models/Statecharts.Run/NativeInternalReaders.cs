@@ -36,6 +36,8 @@ internal static class NativeInternalReaders
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain();
         var host = h.State; var raw = host.Frames[frame].State!.Deserialize<MachineState>()!; var source = host.Frames.Values.Single(f => f.Node == "internal");
+        Check(host.Inboxes![frame].Pending.Count == 1 && host.Inboxes[frame].Pending[0].Id == "go",
+            "NRD0: reader fixture did not retain its exact held input");
         var parent = (IInterventionParent)new StateMachine();
         RetryChild Child(InvocationInbox inbox) => new(source.Id, "fresh-successor", source.Node, source.Tag, source.Scope, frame, source.LexicalScope, inbox);
         foreach (var name in Malformed.Concat(Topology.Select(t => "topology-" + t)))
