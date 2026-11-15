@@ -83,7 +83,7 @@ async function workflowHttpSummary(journey: TriggerJourney, definitionId: string
     admissionPolicy: expected.mode === "AsyncFanOut" ? expected.admissionPolicy : null });
   expect(Object.keys(summary!).every(key => key === "mode" || key === "admissionPolicy"), "The workflow summary contains only safe mode/policy metadata").toBe(true);
   await journey.page.goto(definitionPath(definitionId));
-  await journey.page.getByRole("tab", { name: "Triggers", exact: true }).click();
+  await journey.openWorkflowTriggers();
   const row = journey.page.getByRole("region", { name: "Workflow subscriptions", exact: true }).getByRole("row").filter({ hasText: trigger.name });
   await expect(row).toHaveCount(1);
   await expect(row).toContainText(expected.mode === "WorkflowResponse" ? "Workflow-owned response"
@@ -184,7 +184,7 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   page.on("request", watch);
   const firstSubscription = await j.add(trigger.id, first.authored.definition.id, [source("message", ["metadata", "eventName"]), configured("count", 7)]);
   await j.open(trigger.id); await page.reload(); await expect(page.getByRole("region", { name: "Workflow subscriptions", exact: true })).toContainText(first.authored.definition.id); await j.capture("trigger-subscriptions");
-  await page.goto(definitionPath(first.authored.definition.id)); await page.getByRole("tab", { name: "Triggers", exact: true }).click();
+  await page.goto(definitionPath(first.authored.definition.id)); await j.openWorkflowTriggers();
   await expect(page.getByRole("region", { name: "Workflow subscriptions", exact: true })).toContainText(trigger.name); await j.capture("workflow-live-triggers");
   await j.add(trigger.id, second.authored.definition.id, [configured("message", "Independent mapping"), configured("amount", 7.25)], true);
   await j.open(trigger.id); await page.reload(); expect(await j.subscriptions(trigger.id)).toHaveLength(2);
@@ -202,9 +202,9 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   await page.getByRole("checkbox", { name: "Authorize this shared trigger to invoke the workflow", exact: true }).check();
   await page.getByRole("button", { name: "Review subscription", exact: true }).click(); await j.review();
   expect((await j.subscriptions(trigger.id)).find(item => item.target.definitionId === second.authored.definition.id)?.mappings).toEqual([configured("message", "Independent mapping"), configured("amount", 7.25)]);
-  await page.goto(definitionPath(first.authored.definition.id)); await page.getByRole("tab", { name: "Triggers", exact: true }).click();
+  await page.goto(definitionPath(first.authored.definition.id)); await j.openWorkflowTriggers();
   await page.getByRole("row").filter({ hasText: trigger.name }).getByRole("button", { name: "Remove", exact: true }).click(); await j.review();
-  await page.reload(); await page.getByRole("tab", { name: "Triggers", exact: true }).click();
+  await page.reload(); await j.openWorkflowTriggers();
   await expect(page.getByRole("heading", { name: "No live associations", exact: true })).toBeVisible();
   await j.open(trigger.id); expect((await j.subscriptions(trigger.id)).map(item => item.id)).not.toContain(firstSubscription.id);
   expect((await j.api<{ state: unknown }>(`/design/workflows/drafts/${first.authored.draftId}`)).state).toEqual(before.state);
@@ -510,7 +510,7 @@ test("standalone genuine BPMN inputs", async ({ page }) => {
   await j.api(`/interchange/bpmn/versions/${version.id}/publish-direct`, "POST", { requestId: randomUUID() });
   await verifyBpmnInputRefusals(j, process, version.id, authoredState.state);
   const event = await j.create("event", "Start genuine authored process");
-  await j.add(event.id, process.definition.id, [source("processMessage", ["metadata", "eventName"])]); await j.enable(event.id); await j.event(String(event.configuration.eventName));
+  await j.add(event.id, process.definition.id, [source("processMessage", ["metadata", "eventName"])], true); await j.capture("bpmn-workflow-live-triggers"); await j.enable(event.id); await j.event(String(event.configuration.eventName));
   const delivery = await j.started(await j.waitDelivery(event.id)); const recipient = delivery.recipients[0];
   const executionId = recipient.executionReference!.id;
   let inspection: { execution: { status: string }; attempts: { workerExecutionId: string; status: string }[] } | undefined;

@@ -82,6 +82,14 @@ export class TriggerJourney {
   }
   async capture(name: string) {
     await expect(this.page.getByText("Loading Studio modules…", { exact: true })).toHaveCount(0);
+    if (name === "subscription-runtime-targets" || name === "trigger-runtime-only-composition") {
+      const selector = this.page.getByLabel("Workflow and publication slot", { exact: true });
+      await selector.scrollIntoViewIfNeeded(); await expect(selector).toBeInViewport();
+    }
+    if (name === "subscription-workflow-search") {
+      const results = this.page.getByRole("listbox", { name: "Workflow search results", exact: true });
+      await results.scrollIntoViewIfNeeded(); await expect(results).toBeInViewport();
+    }
     if (name === "trigger-details") {
       const edit = this.page.getByRole("button", { name: "Edit configuration", exact: true });
       await expect(edit).toBeVisible(); await edit.scrollIntoViewIfNeeded();
@@ -205,6 +213,16 @@ export class TriggerJourney {
     return trigger;
   }
   async open(id: string) { await this.page.goto(triggerPath(id)); await expect(this.page.getByRole("button", { name: "Edit configuration", exact: true })).toBeVisible(); }
+  async openWorkflowTriggers() {
+    // The workspace also has a Triggers tab. Wait for the actual editor and select its contributed inspector tab.
+    const inspector = this.page.getByRole("complementary", { name: "Inspector panel", exact: true });
+    await expect(inspector).toBeVisible({ timeout: 45_000 });
+    const expand = inspector.getByRole("button", { name: "Expand inspector panel", exact: true });
+    if (await expand.isVisible()) await expand.click();
+    const tab = inspector.getByRole("tablist", { name: "Inspector panel tabs", exact: true }).getByRole("tab", { name: "Triggers", exact: true });
+    await tab.click(); await expect(tab).toHaveAttribute("aria-selected", "true");
+    await expect(inspector.getByRole("region", { name: "Live workflow subscriptions", exact: true })).toBeVisible();
+  }
   async chooseTarget(definitionId: string, viaRuntime = false, capture?: string) {
     if (viaRuntime) {
       const matchesPage = (response: Response, after?: string) => {
@@ -265,7 +283,7 @@ export class TriggerJourney {
     const previousIds = new Set((await this.subscriptions(id)).map(item => item.id));
     if (fromWorkflow) {
       await this.page.goto(definitionPath(definitionId));
-      await this.page.getByRole("tab", { name: "Triggers", exact: true }).click();
+      await this.openWorkflowTriggers();
       await this.page.getByRole("button", { name: "Add trigger", exact: true }).click();
       const trigger = await this.read(id);
       await this.page.getByRole("region", { name: "Choose standalone trigger", exact: true }).getByRole("button", { name: trigger.name, exact: true }).click();
