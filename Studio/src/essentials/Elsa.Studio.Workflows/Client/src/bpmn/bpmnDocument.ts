@@ -391,9 +391,10 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
     if (!references.has(direction)) child.textContent = id;
     if (child.parentElement !== endpoint) {
       if (references.has(direction)) preserveNamespaceContext(child, endpoint);
+      // BaseElement documentation/extensions precede FlowElement metadata and FlowNode refs.
       // FlowNode adds incoming* followed by outgoing* before the derived Activity/Event fields.
       // A self-loop updates both on one owner, so append order would produce invalid BPMN.
-      const preceding = new Set(["extensionElements", "auditing", "monitoring", "categoryValueRef", "incoming",
+      const preceding = new Set(["documentation", "extensionElements", "auditing", "monitoring", "categoryValueRef", "incoming",
         ...(direction === "outgoing" ? ["outgoing"] : [])]);
       const anchor = [...endpoint.children].find(element => element.namespaceURI === bpmnNamespaces.model && !preceding.has(element.localName));
       endpoint.insertBefore(child, anchor ?? null);
@@ -483,8 +484,10 @@ function applyCommand(parsed: ParsedBpmnDocument, command: BpmnDocumentCommand) 
     case "remove": {
       const target = resolve(parsed, command.target);
       if (target === parsed.process || target === parsed.document.documentElement) fail("selected process cannot be removed");
-      const containedIds = new Set([target, ...target.getElementsByTagName("*")].map(element => element.getAttribute("id")).filter(Boolean));
-      if (parsed.payload.bindings.some(binding => containedIds.has(binding.elementId)))
+      if (parsed.payload.bindings.some(binding => {
+        const bound = parsed.byId.get(binding.elementId);
+        return bound?.namespaceURI === bpmnNamespaces.model && target.contains(bound);
+      }))
         fail("deletion needs an explicit native-binding transformation");
       target.remove();
       return;
