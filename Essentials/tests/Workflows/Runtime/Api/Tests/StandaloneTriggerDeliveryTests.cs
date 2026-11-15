@@ -13,6 +13,38 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 public sealed class StandaloneTriggerDeliveryTests
 {
     [Theory]
+    [InlineData("CancelPendingRecipients", true)]
+    [InlineData("CancelPendingRecipients", false)]
+    [InlineData("RetryRecipients", true)]
+    [InlineData("RetryRecipients", false)]
+    public async Task Control_review_identifies_selected_work_without_disclosing_restricted_or_other_resource_targets(string kind, bool readable)
+    {
+        var fixture = new Fixture(); fixture.Access.WorkflowRead = readable;
+        var view = await fixture.Operations.ReadAsync(TriggerDeliveryOperations.EncodeId(fixture.Port.Item.OutboxItemId, "trigger-a"), default);
+        var command = Command(view, kind, "recipient-a");
+        var preview = await fixture.Management.PreviewAsync("trigger-a", Element(new { expectedRevision = 1, command }), default);
+        Assert.Equal(view.Id, Assert.Single(preview.Impact, item => item.Label == "Delivery").Description);
+        var selected = Assert.Single(preview.Impact, item => item.Label == "Selected recipient");
+        Assert.Contains("recipient-a", selected.Description);
+        var captured = fixture.Port.Item.SubscriptionDelivery!.Recipients.Single(item => item.RecipientId == "recipient-a");
+        if (readable)
+        {
+            Assert.Equal(captured.LogicalDefinitionId, selected.Target!.DefinitionId);
+            Assert.Contains(captured.LogicalDefinitionId, selected.Description);
+            Assert.Contains(captured.StartIdentity.WorkflowExecutionId, selected.Description);
+            Assert.Contains(captured.SourceProvenance.SourceVersion ?? captured.Material.ArtifactVersion, selected.Description);
+        }
+        else
+        {
+            Assert.Null(selected.Target);
+            Assert.DoesNotContain(captured.LogicalDefinitionId, JsonSerializer.Serialize(preview));
+            Assert.DoesNotContain(captured.StartIdentity.WorkflowExecutionId, JsonSerializer.Serialize(preview));
+        }
+        Assert.DoesNotContain("private-definition-b", JsonSerializer.Serialize(preview));
+        Assert.DoesNotContain("recipient-b", JsonSerializer.Serialize(preview));
+    }
+
+    [Theory]
     [InlineData("unchanged", true)]
     [InlineData("changed", false)]
     [InlineData("restricted", false)]
