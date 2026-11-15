@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Weaver.Core.Contracts;
 using Elsa.Weaver.Core.Models;
 
 namespace Elsa.Weaver.Services;
@@ -40,12 +41,31 @@ internal static class WeaverInvocationIntegrity
         return stream.ToArray();
     }
 
-    public static string PreparedDigest(WeaverPreparedToolInvocation value) => Digest(new
+    /// <summary>Normalizes only a newly returned module preparation, never a retained legacy invocation.</summary>
+    public static IReadOnlyList<WeaverPrivilegeClass>? PreparePrivilegeClasses(IReadOnlyList<WeaverPrivilegeClass>? classes, WeaverRisk effectiveRisk)
     {
-        value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
-        value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
-        value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId
-    });
+        if (!Enum.IsDefined(effectiveRisk) || classes?.Any(value => !Enum.IsDefined(value)) == true)
+            throw new WeaverContributionException("The preparation contains an unsupported privilege classification.");
+        var required = classes?.ToHashSet() ?? [];
+        if (effectiveRisk == WeaverRisk.Admin) required.Add(WeaverPrivilegeClass.Administrative);
+        return required.Count == 0 ? null : Array.AsReadOnly(required.Order().ToArray());
+    }
+
+    public static string PreparedDigest(WeaverPreparedToolInvocation value) => value.RequiredPrivilegeClasses is not { Count: > 0 }
+        // Exact historical shape: even a null new member would change an already reviewed legacy digest.
+        ? Digest(new
+        {
+            value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
+            value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
+            value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId
+        })
+        : Digest(new
+        {
+            value.SessionId, value.TurnId, value.ToolCallId, value.ToolName, value.ToolContractVersion,
+            value.ModuleId, value.ActorId, value.TenantId, value.Target, value.Arguments, value.Risk,
+            value.Preview, value.ExecutionLocation, value.RequiresApproval, value.Client, value.DisclosureSourceId,
+            value.RequiredPrivilegeClasses
+        });
 
     public static bool SameTarget(WeaverResourceTarget? left, WeaverResourceTarget? right) => left is null
         ? right is null
@@ -53,12 +73,41 @@ internal static class WeaverInvocationIntegrity
           && left.ResourceId == right.ResourceId && left.Revision == right.Revision;
 
     public static bool ValidReceipt(WeaverPreparedToolInvocation invocation, WeaverToolResult result, WeaverEffectScope scope)
-        => result.Succeeded && result.ToolCallId == invocation.ToolCallId && result.ToolName == invocation.ToolName
+        => result.Succeeded && result.Error is null && result.ToolCallId == invocation.ToolCallId && result.ToolName == invocation.ToolName
            && result.Payload is not null && result.Receipt is { } receipt
            && receipt.InvocationId == invocation.InvocationId && receipt.Scope == scope
            && SameTarget(invocation.Target, receipt.Before)
-           && receipt.After.ModuleId == invocation.ModuleId && !string.IsNullOrWhiteSpace(receipt.After.ResourceType)
-           && receipt.Evidence.Data.ValueKind != JsonValueKind.Undefined;
+           && receipt.After is { } after && after.ModuleId == invocation.ModuleId && !string.IsNullOrWhiteSpace(after.ResourceType)
+           && receipt.Evidence is { } evidence && evidence.Data.ValueKind != JsonValueKind.Undefined;
+
+    /// <summary>Derives an accepted outcome from this dispatch's actual admitted contract, never a later lookup.</summary>
+    internal static string? SuccessStatus(WeaverPreparedToolInvocation invocation, WeaverToolResult result, WeaverToolDescriptor descriptor)
+    {
+        try
+        {
+            if (!ValidPayload(result.Payload) || !ValidPayload(result.Receipt?.Evidence)
+                || descriptor.Name != invocation.ToolName || descriptor.ModuleId != invocation.ModuleId
+                || descriptor.ContractVersion != invocation.ToolContractVersion || descriptor.ExecutionLocation != invocation.ExecutionLocation)
+                return null;
+            if (invocation.ExecutionLocation == WeaverExecutionLocation.ClientWorkingState)
+                return ValidReceipt(invocation, result, WeaverEffectScope.ClientWorkingState) ? "executed" : null;
+            if (invocation.ExecutionLocation != WeaverExecutionLocation.Server) return null;
+            if (ValidReceipt(invocation, result, WeaverEffectScope.ServerPersisted)) return "executed";
+            return descriptor.CanPerformWithoutPersistence && ValidReceipt(invocation, result, WeaverEffectScope.NoPersistedEffect)
+                && SameTarget(result.Receipt!.Before, result.Receipt.After) ? "performed" : null;
+        }
+        catch (InvalidOperationException) { return null; } // Disposed/invalid owner JSON is not an admitted receipt.
+    }
+
+    internal static bool ValidSuccessOutcome(WeaverActionProposal proposal, WeaverProposalExecutionResult outcome, WeaverToolDescriptor descriptor)
+        => proposal.PreparedInvocation is { } prepared && outcome.Executed && outcome.ClientInvocation is null
+            && outcome.ProposalId == proposal.Id && outcome.ResourceType == (prepared.Target?.ResourceType ?? proposal.ResourceType ?? "unavailable")
+            && outcome.ResourceId == (prepared.Target?.ResourceId ?? proposal.ResourceId ?? string.Empty)
+            && outcome.ToolResult is { } result && SuccessStatus(prepared, result, descriptor) is { } status && outcome.Status == status;
+
+    private static bool ValidPayload(WeaverPayload? payload) => payload is not null
+        && !string.IsNullOrWhiteSpace(payload.TypeId) && !string.IsNullOrWhiteSpace(payload.SchemaVersion)
+        && payload.Data.ValueKind != JsonValueKind.Undefined;
 
     private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value)
     {

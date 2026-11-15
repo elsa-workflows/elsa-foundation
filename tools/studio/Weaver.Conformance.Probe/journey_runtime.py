@@ -10,6 +10,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import time
@@ -151,9 +152,12 @@ class JourneyRuntime:
     clients: dict = field(default_factory=dict)
     active_http: object | None = None
     active_identity: dict | None = None
+    output_namespace: str = "journeys"
 
     def __post_init__(self):
-        self.root = self.run.root / "journeys"
+        check(isinstance(self.output_namespace, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", self.output_namespace),
+              "Journey evidence namespace must be a bounded owned name")
+        self.root = self.run.root / self.output_namespace
         self.root.mkdir(mode=0o700)
         self.native = NativeObservations(self.root / "native")
         self.command_file = self.run.profiles["backend"]["commandFile"]

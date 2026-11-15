@@ -201,15 +201,17 @@ def witness_manifest():
     from library_journeys import EXPECTED_CASES as LIBRARY_CASES
     from inspection_journeys import EXPECTED_CASES as INSPECTION_CASES
     from run_journeys import EXPECTED_CASES as RUN_CASES
+    from effects_journeys import EXPECTED_CASES as EFFECT_CASES, RESTART_REQUIREMENTS as EFFECT_RESTART_CASES
     return {"originalCases": sorted(REQUIRED_CASES), "currentAuthorityCases": sorted(AUTHORITY_CASES),
             "workflowAuthorizationCases": sorted(WORKFLOW_AUTHORIZATION_CASES), "workflowTruthSeamCases": sorted(TRUTH_SEAM_CASES),
             "workflowBatchCases": sorted(BATCH_CASES), "workflowExplainCases": sorted(EXPLAIN_CASES),
             "workflowLibraryCases": sorted(LIBRARY_CASES), "workflowInspectionCases": sorted(INSPECTION_CASES), "workflowRunCases": sorted(RUN_CASES),
             "autonomyCases": sorted(AUTONOMY_CASES), "autonomyStages": sorted(autonomy_stages()),
             "restartCases": sorted(RESTART_CASES), "restartControls": [RESTART_CONTROL],
+            "moduleEffectsCases": list(EFFECT_CASES), "story1RestartRequirements": list(EFFECT_RESTART_CASES),
             "expectedCaseCount": len(REQUIRED_CASES) + len(AUTHORITY_CASES) + len(WORKFLOW_AUTHORIZATION_CASES) + len(TRUTH_SEAM_CASES)
                                  + len(BATCH_CASES) + len(EXPLAIN_CASES) + len(LIBRARY_CASES) + len(INSPECTION_CASES) + len(RUN_CASES) + len(AUTONOMY_CASES)
-                                 + len(RESTART_CASES) + 1}
+                                 + len(RESTART_CASES) + 1 + len(EFFECT_CASES) + len(EFFECT_RESTART_CASES)}
 
 
 def witness_gaps(report):
@@ -253,6 +255,9 @@ def witness_gaps(report):
     gaps += autonomy_manifest_gaps(report.get(MATRIX_QUALIFICATION), report.get("source"))
     from restart_journeys import RESTART_QUALIFICATION, restart_manifest_gaps
     gaps += restart_manifest_gaps(report.get(RESTART_QUALIFICATION), report.get("source"))
+    from effects_journeys import SECTION as EFFECT_SECTION, RESTART_SECTION as EFFECT_RESTART_SECTION, manifest_gaps as effect_gaps, restart_manifest_gaps as effect_restart_gaps
+    gaps += effect_gaps(report.get(EFFECT_SECTION), report.get("source"))
+    gaps += effect_restart_gaps(report.get(EFFECT_RESTART_SECTION), report.get("source"))
     stages = report.get("stages") if isinstance(report.get("stages"), list) else []
     names = [stage.get("name") if isinstance(stage, dict) else None for stage in stages]
     gaps += [f"Matrix stage {name} ran {names.count(name)} times" for name in manifest["autonomyStages"] if names.count(name) != 1]
@@ -288,6 +293,10 @@ def validate_complete_witness(report, root, allowed_controls):
         require_complete_autonomy(report[MATRIX_QUALIFICATION], root, source=report["source"])
         from restart_journeys import RESTART_QUALIFICATION, require_restart_inventory
         require_restart_inventory(report[RESTART_QUALIFICATION], root, source=report["source"])
+        from effects_journeys import SECTION as EFFECT_SECTION, require_effects
+        require_effects(report[EFFECT_SECTION], root, source=report["source"])
+        from effects_journeys import RESTART_SECTION as EFFECT_RESTART_SECTION, require_effect_restarts
+        require_effect_restarts(report[EFFECT_RESTART_SECTION], root, source=report["source"])
     except EvidenceError:
         raise
     except (RuntimeError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:

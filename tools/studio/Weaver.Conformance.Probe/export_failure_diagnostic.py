@@ -11,6 +11,7 @@ import tempfile
 from evidence import witness_manifest
 from export_evidence import export_evidence
 from journey_runtime import safe_browser_failure
+from author_diagnostics import STAGES as AUTHOR_TEST_STAGES, load_test_failure
 
 
 def export_failure_diagnostic(source, destination):
@@ -29,6 +30,7 @@ def export_failure_diagnostic(source, destination):
                       if name.endswith("Cases") for case in cases}
     allowed_stages.update(manifest["autonomyStages"])
     allowed_stages.update(case + "-browser" for case in manifest["workflowRunCases"])
+    allowed_stages.update(AUTHOR_TEST_STAGES)
     stage = report.get("stage")
     cases = report.get("cases")
     count = len(cases) if isinstance(cases, list) and len(cases) <= 1000000 else None
@@ -39,6 +41,8 @@ def export_failure_diagnostic(source, destination):
         "originalCaseCount": count, "expectedCaseCount": manifest["expectedCaseCount"],
         "browserFailureDiagnostic": safe_browser_failure({"failureDiagnostic": report.get("browserFailureDiagnostic")}),
     }
+    if "authorTestFailureDiagnostic" in report:
+        diagnostic["authorTestFailureDiagnostic"] = load_test_failure(source, report["authorTestFailureDiagnostic"], commit)
     # No original report graph or file reference enters this separately owned source.
     # The ordinary exporter still applies all of its privacy/hash/reference guards.
     with tempfile.TemporaryDirectory(prefix="weaver-failure-diagnostic-") as temporary:

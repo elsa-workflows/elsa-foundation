@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Weaver.Core.Contracts;
 using Elsa.Weaver.Core.Models;
@@ -11,6 +13,85 @@ namespace Elsa.Weaver.Tests;
 
 public sealed class WeaverToolInvokerTests
 {
+    [Fact]
+    public async Task New_privilege_requirements_are_canonical_frozen_and_part_of_the_exact_review_digest()
+    {
+        List<WeaverPrivilegeClass> ownerClasses = [WeaverPrivilegeClass.Activation, WeaverPrivilegeClass.Administrative,
+            WeaverPrivilegeClass.Activation, WeaverPrivilegeClass.Irrecoverable];
+        var tool = new ProposalMutationTool { PrivilegeClasses = ownerClasses };
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: EnableEffects);
+        var proposal = await fixture.ProposeAsync();
+        var prepared = proposal.PreparedInvocation!;
+        Assert.Equal([WeaverPrivilegeClass.Administrative, WeaverPrivilegeClass.Irrecoverable, WeaverPrivilegeClass.Activation], prepared.RequiredPrivilegeClasses);
+        var digest = prepared.ApprovalDigest;
+        ownerClasses.Clear();
+        ownerClasses.Add(WeaverPrivilegeClass.Activation);
+        Assert.Equal(digest, WeaverInvocationIntegrity.PreparedDigest(prepared));
+        Assert.NotEqual(digest, WeaverInvocationIntegrity.PreparedDigest(prepared with { RequiredPrivilegeClasses = [WeaverPrivilegeClass.Activation] }));
+        Assert.Equal(0, tool.DispatchCalls);
+    }
+
+    [Theory]
+    [InlineData(WeaverRisk.Admin, WeaverRisk.ReviewRequired)]
+    [InlineData(WeaverRisk.ReviewRequired, WeaverRisk.Admin)]
+    public async Task Effective_admin_risk_freezes_administrative_even_when_the_owner_omits_classes(WeaverRisk descriptorRisk, WeaverRisk preparationRisk)
+    {
+        var tool = new ProposalMutationTool { CurrentRisk = descriptorRisk, PreparationRisk = preparationRisk };
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: EnableEffects);
+        var proposal = await fixture.ProposeAsync();
+        Assert.Equal(WeaverRisk.Admin, proposal.PreparedInvocation!.Risk);
+        Assert.Equal([WeaverPrivilegeClass.Administrative], proposal.PreparedInvocation.RequiredPrivilegeClasses);
+        Assert.Equal(proposal.PreparedInvocation.ApprovalDigest, WeaverInvocationIntegrity.PreparedDigest(proposal.PreparedInvocation));
+        Assert.Equal(0, tool.DispatchCalls);
+    }
+
+    [Fact]
+    public async Task An_unknown_privilege_class_refuses_before_review_and_owner_dispatch()
+    {
+        var tool = new ProposalMutationTool { PrivilegeClasses = [(WeaverPrivilegeClass)99] };
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: EnableEffects);
+        var dispatch = await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy);
+        Assert.Equal(WeaverToolDispatchOutcome.Denied, dispatch.Outcome);
+        Assert.Equal("weaver.tool.preparation_invalid", dispatch.Error?.Code);
+        Assert.Null(dispatch.Proposal);
+        Assert.Equal(0, tool.DispatchCalls);
+        Assert.DoesNotContain(await fixture.Audit.ListAsync(fixture.Session.Id), item => item.Kind == WeaverAuditEventKind.ProposalCreated);
+    }
+
+    [Fact]
+    public void A_retained_legacy_admin_uses_the_exact_old_canonical_digest_without_retrofitting_classes()
+    {
+        // Oracle is the original pre-1203 anonymous shape, not serialization of today's prepared model.
+        const string legacyCanonical = """
+            {"ActorId":"actor-legacy","Arguments":{"value":"new"},"Client":null,"DisclosureSourceId":"fixture.disclosure",
+            "ExecutionLocation":0,"ModuleId":"fixture","Preview":{"Data":{"after":"new","before":"old"},"SchemaVersion":"1","TypeId":"fixture.preview"},
+            "RequiresApproval":true,"Risk":3,"SessionId":"session-legacy","Target":{"DisplayName":null,"ModuleId":"fixture","ResourceId":"resource-legacy",
+            "ResourceType":"resource","Revision":"revision-legacy","Route":null},"TenantId":"tenant-legacy","ToolCallId":"call-legacy",
+            "ToolContractVersion":"1","ToolName":"fixture.change","TurnId":"turn-legacy"}
+            """;
+        var prepared = new WeaverPreparedToolInvocation("invocation-not-hashed", "session-legacy", "turn-legacy", "call-legacy", "fixture.change", "1",
+            "fixture", "actor-legacy", "tenant-legacy", new("fixture", "resource", "resource-legacy", "revision-legacy"),
+            JsonSerializer.SerializeToElement(new { value = "new" }), "digest-not-hashed", WeaverRisk.Admin,
+            new("fixture.preview", "1", JsonSerializer.SerializeToElement(new { before = "old", after = "new" })),
+            WeaverExecutionLocation.Server, true, null, DateTimeOffset.UnixEpoch) { DisclosureSourceId = "fixture.disclosure" };
+        var expected = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(legacyCanonical.ReplaceLineEndings(string.Empty)))).ToLowerInvariant();
+        Assert.Equal(expected, WeaverInvocationIntegrity.PreparedDigest(prepared));
+        Assert.Equal(expected, WeaverInvocationIntegrity.PreparedDigest(prepared with { RequiredPrivilegeClasses = [] }));
+        Assert.Null(prepared.RequiredPrivilegeClasses);
+        Assert.NotEqual(expected, WeaverInvocationIntegrity.PreparedDigest(prepared with { RequiredPrivilegeClasses = [WeaverPrivilegeClass.Administrative] }));
+    }
+
+    private static void EnableEffects(IServiceCollection services)
+    {
+        new WeaverEffectsFeature().ConfigureServices(services);
+        services.Configure<WeaverPrivilegePolicyOptions>(options =>
+        {
+            options.Administrative = true;
+            options.Irrecoverable = true;
+            options.Activation = true;
+        });
+    }
+
     [Fact]
     public async Task Read_only_tool_executes_inline_with_its_typed_result()
     {

@@ -3,6 +3,7 @@
 | Surface | Purpose |
 | --- | --- |
 | `WeaverEntityFrameworkCoreFeature` | Opt-in shell feature `WeaverEntityFrameworkCore`: provider, connection, schema, pooling and lease. Depends on `Weaver` and `Secrets`. |
+| `WeaverEfEffectsFeature` *(spec 1203 preview, not frozen)* | Extensible effects variation, directly requiring Weaver 1.1 and the existing EF store feature. Select this variation without the common sibling; see [composition and migration](README.md#module-support-preview-spec-1203). |
 | `WeaverEntityFrameworkCoreRegistration.AddWeaverEntityFrameworkCore` | Registers the module-owned contexts and the shared migration lifecycle, and selects the durable record store and audit store. |
 | `WeaverEntityFrameworkCoreOptions` | Explicit choices for that registration. |
 | `WeaverModelBuilderExtensions.AddWeaverModel` | Installs only the Weaver mappings in a consumer-owned context. The host owns migrations. |

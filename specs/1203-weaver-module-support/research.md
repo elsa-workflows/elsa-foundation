@@ -8,17 +8,17 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 
 ## R1 — Current principal without changing every tool signature
 
-**Decision**: Add the scoped `IAgentPrincipalSource` replacement in Agent Core; Agent API supplies the genuine current HTTP principal. Base Agent registers none. API `TryAddScoped` preserves an explicit host integration; a later replacement uses `Replace`. Diagnose duplicates/wrong lifetime, and require exactly one at every new tool/context call boundary. Missing integration refuses owner-unavailable.
+**Decision**: Add the scoped `IWeaverPrincipalSource` replacement in Weaver Core; Weaver API supplies the genuine current HTTP principal. Base Weaver registers none. API `TryAddScoped` preserves an explicit host integration; a later replacement uses `Replace`. Diagnose duplicates/wrong lifetime, and require exactly one at every new tool/context call boundary. Missing integration refuses owner-unavailable.
 
-**Rationale**: [AgentEndpointActor](../../Extensions/Agent/src/Api/Endpoints/AgentEndpointActor.cs) resolves actor and tenant but does not itself check authentication. [HttpAgentToolAuthorizer](../../Extensions/Agent/src/Api/Authorization/HttpAgentToolAuthorizer.cs) sees the current request, while [IAgentTool](../../Extensions/Agent/src/Core/Contracts/AgentToolContracts.cs) receives invocation data only. A source bridges that gap without persisting a principal or making approval call a module. Owners independently authorize the supplied principal.
+**Rationale**: [WeaverEndpointActor](../../Extensions/Weaver/src/Api/Endpoints/WeaverEndpointActor.cs) resolves actor and tenant but does not itself check authentication. [HttpWeaverToolAuthorizer](../../Extensions/Weaver/src/Api/Authorization/HttpWeaverToolAuthorizer.cs) sees the current request, while [IWeaverTool](../../Extensions/Weaver/src/Core/Contracts/WeaverToolContracts.cs) receives invocation data only. A source bridges that gap without persisting a principal or making approval call a module. Owners independently authorize the supplied principal.
 
 **Alternatives**: Reject reconstructed claims, principal fields on frozen models, and a singleton ambient-principal capture. A nonfunctional default plus special replacement logic is unnecessary; absence is an explicitly unsupported optional host integration. The normal API feature still declares its actual prerequisites (framework §2.11).
 
 ## R2 — Feature inheritance and selected-store admission
 
-**Decision**: Distinct `FoundationAgentEffects` and `FoundationAgentEfEffects` identities; the EF feature inherits common behavior and directly declares Agent 1.1.0. Extend the existing store-selection metadata with its required effects feature Type. Check the completed collection and actual selected type. Explicit null/old factory selection means undeclared support and refuses composition with effects; only the known memory marker declares common support. Custom stores opt in through the new overload.
+**Decision**: Distinct `WeaverEffects` and `WeaverEfEffects` identities; the EF feature inherits common behavior and directly declares Weaver 1.1.0. Extend the existing store-selection metadata with its required effects feature Type. Check the completed collection and actual selected type. Explicit null/old factory selection means undeclared support and refuses composition with effects; only the known memory marker declares common support. Custom stores opt in through the new overload.
 
-**Rationale**: CShells 0.0.31 feature discovery rejects different types with one name; inheritance does not substitute a dependency identity. [RequiresSchemaVersionAttribute](../../Essentials/src/Cluster/Core/Models/RequiresSchemaVersionAttribute.cs) is not inherited. [SchemaVersionRequirement](../../Essentials/src/Cluster/Core/Models/SchemaVersionRequirement.cs) extracts direct declarations. [AgentPersistenceSelection](../../Extensions/Agent/src/Elsa.Agent/Extensions/AgentPersistenceSelection.cs) already owns store selection. Common Agent must not reference EF implementation or guess store type.
+**Rationale**: CShells 0.0.31 feature discovery rejects different types with one name; inheritance does not substitute a dependency identity. [RequiresSchemaVersionAttribute](../../Essentials/src/Cluster/Core/Models/RequiresSchemaVersionAttribute.cs) is not inherited. [SchemaVersionRequirement](../../Essentials/src/Cluster/Core/Models/SchemaVersionRequirement.cs) extracts direct declarations. [WeaverPersistenceSelection](../../Extensions/Weaver/src/Elsa.Weaver/Extensions/WeaverPersistenceSelection.cs) already owns store selection. Common Weaver must not reference EF implementation or guess store type.
 
 **Alternatives**: Reject treating an arbitrary legacy factory as known memory, an overlong new EF feature type name (Elsa §E6 R1), a common-to-EF dependency, enabling both siblings, descriptor schema requirements, a second registry or version engine, and treating missing family observation as available. Validate direct minimum declarations for custom specializations; use the shared dormancy checker.
 
@@ -26,7 +26,7 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 
 **Decision**: Monitored host options, all three privilege classes false by default; Workbench base enables all three. Canonical nonempty class sets enter the prepared digest. Logical empty uses the exact old hash shape. A legacy Admin record gets a current administrative veto and display requirement without rewriting its frozen payload/digest.
 
-**Rationale**: [AgentInvocationIntegrity](../../Extensions/Agent/src/Elsa.Agent/Services/AgentInvocationIntegrity.cs) hashes an explicit anonymous shape. [AgentProposalServices](../../Extensions/Agent/src/Elsa.Agent/Services/AgentProposalServices.cs) approves without module dispatch and independently retains executor outcomes. Current accepted terminal receipts must precede a new policy refusal; no replay or false zero-effect result after dispatch.
+**Rationale**: [WeaverInvocationIntegrity](../../Extensions/Weaver/src/Elsa.Weaver/Services/WeaverInvocationIntegrity.cs) hashes an explicit anonymous shape. [WeaverProposalServices](../../Extensions/Weaver/src/Elsa.Weaver/Services/WeaverProposalServices.cs) approves without module dispatch and independently retains executor outcomes. Current accepted terminal receipts must precede a new policy refusal; no replay or false zero-effect result after dispatch.
 
 **Alternatives**: Reject startup/session policy as authority, adding an empty property to the legacy hash, and generic inference of irrecoverability. Module declarations own consequences; the explicit FR020 third-party follow-up remains required.
 
@@ -34,15 +34,15 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 
 **Decision**: Append status 12 and scope 2, use existing `Executed=true` plus `Status=performed`, and require the actual descriptor's declaration and genuine unchanged-revision owner evidence at both integrity boundaries. Normalize declared module codes at their trusted installed source, preserving owner-unavailable provenance before replacement.
 
-**Rationale**: [AgentProposalExecutor](../../Extensions/Agent/src/Elsa.Agent/Services/AgentProposalExecutor.cs) and `StoreOutcome` in proposal services are separate success boundaries. [AgentToolAccess](../../Extensions/Agent/src/Elsa.Agent/Services/AgentToolAccess.cs) and [AgentContextOwnerMarkers](../../Extensions/Agent/src/Elsa.Agent/Services/AgentContextOwnerMarkers.cs) already distinguish installed owner statements from forged host flags. A public/deserialized boolean alone is not provenance.
+**Rationale**: [WeaverProposalExecutor](../../Extensions/Weaver/src/Elsa.Weaver/Services/WeaverProposalExecutor.cs) and `StoreOutcome` in proposal services are separate success boundaries. [WeaverToolAccess](../../Extensions/Weaver/src/Elsa.Weaver/Services/WeaverToolAccess.cs) and [WeaverContextOwnerMarkers](../../Extensions/Weaver/src/Elsa.Weaver/Services/WeaverContextOwnerMarkers.cs) already distinguish installed owner statements from forged host flags. A public/deserialized boolean alone is not provenance.
 
 **Alternatives**: Reject accepting any receipt scope, a second outcome enum, converting all `Executed=true` to persisted, interpreting opaque module JSON, or changing a genuine receipt to uncertain merely because a typed code was unknown. Module-owned safe projections remain mandatory. The existing incorrect client numeric fallback is coordinated with #3761 and tested for every server ordinal.
 
-## R5 — Protected Agent 1.1 and all row kinds
+## R5 — Protected Weaver 1.1 and all row kinds
 
-**Decision**: Identity content upcast in the existing Agent chain; deserialize optional defaults only after authenticated unprotect. Read every stamped row kind and owned summary/count projection through shared readability. Preserve old canonical bytes, purposes, enum ordinals, digests and permanent 1.0 counter readability.
+**Decision**: Identity content upcast in the existing Weaver chain; deserialize optional defaults only after authenticated unprotect. Read every stamped row kind and owned summary/count projection through shared readability. Preserve old canonical bytes, purposes, enum ordinals, digests and permanent 1.0 counter readability.
 
-**Rationale**: [AgentEfModule](../../Extensions/Agent/src/Persistence/EntityFrameworkCore/AgentEfModule.cs), [content declarations](../../Extensions/Agent/src/Persistence/EntityFrameworkCore/AssemblyInfo.cs), [codec](../../Extensions/Agent/src/Persistence/EntityFrameworkCore/Services/AgentRecordCodec.cs), [session decoder](../../Extensions/Agent/src/Persistence/EntityFrameworkCore/Stores/EfAgentSessionRecordStore.Codec.cs), and [audit store](../../Extensions/Agent/src/Persistence/EntityFrameworkCore/Stores/EfAgentAuditStore.cs) show encrypted payloads, integrity-only snapshot Canonical, hard-equality 1.0 checks, and counter updates that never restamp. Audit-owner and summary projections need explicit coverage too.
+**Rationale**: [WeaverEfModule](../../Extensions/Weaver/src/Persistence/EntityFrameworkCore/WeaverEfModule.cs), [content declarations](../../Extensions/Weaver/src/Persistence/EntityFrameworkCore/AssemblyInfo.cs), [codec](../../Extensions/Weaver/src/Persistence/EntityFrameworkCore/Services/WeaverRecordCodec.cs), [session decoder](../../Extensions/Weaver/src/Persistence/EntityFrameworkCore/Stores/EfWeaverSessionRecordStore.Codec.cs), and [audit store](../../Extensions/Weaver/src/Persistence/EntityFrameworkCore/Stores/EfWeaverAuditStore.cs) show encrypted payloads, integrity-only snapshot Canonical, hard-equality 1.0 checks, and counter updates that never restamp. Audit-owner and summary projections need explicit coverage too.
 
 **Alternatives**: Reject decrypt/re-encrypt in an upcaster, latest-version equality, counter restamping, and a relational migration for JSON/enum additions. Keep minimal plain owner lookup before authorization, then validate only exactly owned data; foreign unreadable rows must not disclose schema state or trigger settlement.
 
@@ -50,7 +50,7 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 
 **Decision**: Select WriteVersion from the existing context's module gate inside each metadata attempt. Preserve the initial raw owner/fence lock/version increment; load the tracked session after it and save content, selected stamp and children in the same transaction through the shared interceptor. Rebuild encoding/entities on a narrowly verified forward-adoption retry, never rerun an effect.
 
-**Rationale**: [EfAgentSessionRecordStore](../../Extensions/Agent/src/Persistence/EntityFrameworkCore/Stores/EfAgentSessionRecordStore.cs) currently encodes before retries, stamps the latest constant and uses raw `ExecuteUpdate` for session content. [EfSchemaWriteGateInterceptor](../../Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaWriteGateInterceptor.cs) validates rather than restamps content. [EfWriteRetry](../../Essentials/src/Persistence/EntityFramework/EfWriteRetry.cs) supplies the bounded metadata retry seam. A held 1.0 fleet must keep representable old writes working while refusing new behavior before effects.
+**Rationale**: [EfWeaverSessionRecordStore](../../Extensions/Weaver/src/Persistence/EntityFrameworkCore/Stores/EfWeaverSessionRecordStore.cs) currently encodes before retries, stamps the latest constant and uses raw `ExecuteUpdate` for session content. [EfSchemaWriteGateInterceptor](../../Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaWriteGateInterceptor.cs) validates rather than restamps content. [EfWriteRetry](../../Essentials/src/Persistence/EntityFramework/EfWriteRetry.cs) supplies the bounded metadata retry seam. A held 1.0 fleet must keep representable old writes working while refusing new behavior before effects.
 
 **Alternatives**: Reject latest-assembly stamping, a new observer/fleet, retrying arbitrary schema/corruption failures, and a new raw-write API when tracked SaveChanges preserves the existing fence transaction. Unsupported/unobserved EF cannot authorize 1.1; an unadmitted custom context supports representable legacy content only.
 
@@ -72,7 +72,7 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 
 ## R9 — Major semantics within the existing preview line
 
-**Decision**: Retain approved Major semantic classification for performed and default-off Admin veto, Minor for the listed additive surfaces/Agent 1.1, and Patch for exact native #3779 cleanup. Keep computed 4.0 preview versions; no version-line/publisher/release change or general magnitude engine.
+**Decision**: Retain approved Major semantic classification for performed and default-off Admin veto, Minor for the listed additive surfaces/Weaver 1.1, and Patch for exact native #3779 cleanup. Keep computed 4.0 preview versions; no version-line/publisher/release change or general magnitude engine.
 
 **Rationale**: Framework §4.2, Elsa §E5 and accepted [ADR0080 D4](../../docs/adr/0080-elsa-4-simplification-decisions.md#d4--pre-ga-cleanup) apply the pre-GA policy. `VersionLines.props`, `VersionComputation` and `PackageVersioning.props` supply computed package versions; the constitution explicitly says magnitude mechanical enforcement is not built. Contributor checkpoints reference immutable image pairs and publish metadata only; they are not GA baselines.
 
@@ -81,3 +81,17 @@ The approved [specification](spec.md) supplies scope and owner decisions. This r
 ## Post-design gate result
 
 No unresolved owner decision or constitutional exception is identified. The plan keeps Core/implementation boundaries, scoped authority, replacement diagnostics, shared discovery/persistence mechanisms and risk-based proof. Implementation and contract freeze are still gated by independent review and demonstrated journeys, not this research record.
+
+
+## 12 November source inventory reconciliation
+
+At current main `dff7c490d0e5501b22d4ba89beb389c956d4f423`, the normal Studio shell selects
+`DecisionsStudio` (`Studio/src/apps/Elsa.Studio.Web/shells.json`), and Workbench selects the
+Decisions design/runtime/API/EF features (`Essentials/apps/Elsa.Workbench/shells.json`).
+`Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/module.tsx` registers `/decisions`
+with exact decision/version workspace identity, a decision-version property editor and a decision-input
+expression editor; its source has no Weaver contribution registration. The owning page also composes
+table/model editing, cases, evaluation and rule explanation. FR-001 assigns this new module to the
+mandatory later leaf22 under FR-025. That leaf gets its own spec/issue when it starts; this source
+inventory does not start another implementation lane or imply support. The real normal-host inventory
+and feature/removal observations remain T045 gates, and dated M0 evidence remains unchanged.

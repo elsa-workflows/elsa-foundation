@@ -18,6 +18,10 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
     public string StudioHostId { get; set; } = string.Empty;
     public string WriteRendezvousControlFile { get; set; } = string.Empty;
     public string WriteRendezvousReceiptFile { get; set; } = string.Empty;
+    public string CheckObservationFile { get; set; } = string.Empty;
+    public string EffectFaultControlFile { get; set; } = string.Empty;
+    // Opt-in private observation. Provision WidgetExecutionJournal.Header first; missing files never mean observed zero.
+    public string ExecutionObservationFile { get; set; } = string.Empty;
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
@@ -26,6 +30,20 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
             throw new InvalidOperationException("AcmeHomeWidget requires a valid, fixed StudioHostId.");
         services.AddHttpContextAccessor();
         services.AddSingleton(new WidgetHost(StudioHostId));
+        if (CheckObservationFile.Length > 0) WidgetFixtureFiles.Check(CheckObservationFile);
+        if (EffectFaultControlFile.Length > 0) WidgetFixtureFiles.Check(EffectFaultControlFile);
+        if (ExecutionObservationFile.Length > 0) WidgetFixtureFiles.Check(ExecutionObservationFile);
+        var fixtureFiles = new[] { CheckObservationFile, EffectFaultControlFile, ExecutionObservationFile, WriteRendezvousControlFile, WriteRendezvousReceiptFile,
+            ExecutionObservationFile.Length == 0 ? "" : ExecutionObservationFile + ".failed",
+            ExecutionObservationFile.Length == 0 ? "" : ExecutionObservationFile + ".probe",
+            WriteRendezvousControlFile.Length == 0 ? "" : WriteRendezvousControlFile + ".claimed" }.Where(path => path.Length > 0).ToArray();
+        if (fixtureFiles.Distinct(StringComparer.Ordinal).Count() != fixtureFiles.Length)
+            throw new InvalidOperationException("Widget observation and control files must be distinct.");
+        services.TryAddSingleton(new WidgetEffectsSettings(CheckObservationFile, EffectFaultControlFile, ExecutionObservationFile));
+        services.TryAddSingleton<WidgetRunJournal>();
+        services.TryAddSingleton<WidgetExecutionJournal>();
+        services.TryAddScoped<WidgetEffectOwner>();
+        services.TryAddScoped<WidgetFaultControl>();
         var rendezvous = WidgetWriteRendezvous.Configure(WriteRendezvousControlFile, WriteRendezvousReceiptFile, StudioHostId);
         if (rendezvous is not null) services.TryAddSingleton(rendezvous);
         services.TryAddScoped(provider =>
@@ -43,10 +61,52 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, ReadWidgetTool>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, SetWidgetVisibilityTool>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, SetWidgetSizeTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverContextProvider, WidgetEffectsContext>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverCapabilityProvider, WidgetEffectsCapabilities>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WidgetAdminTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WidgetIrrecoverableTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WidgetOmittedAdminTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WidgetRaisedRiskTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WidgetActivationTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, WidgetCheckTool>());
     }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
+        WidgetPreparationProbe.MapEndpoints(endpoints);
+        endpoints.MapGet(WidgetEffects.ExecutionsEndpoint, async (HttpContext http, WidgetEffectOwner owner, CancellationToken ct) =>
+        {
+            try
+            {
+                var observed = await owner.ExecutionEntriesAsync(ct);
+                http.Response.Headers.CacheControl = "no-store";
+                return Results.Json(observed);
+            }
+            catch (WidgetRefusal refusal)
+            {
+                return Results.Problem(statusCode: refusal.Error.StatusCode, title: refusal.Error.Code, detail: refusal.Error.Message);
+            }
+            catch (WidgetFixtureException error)
+            {
+                return Results.Problem(statusCode: 503, title: "acme.home.effects.execution_observation_unavailable",
+                    detail: "Retain the failed/unknown observation externally and use a fresh observation path.",
+                    extensions: new Dictionary<string, object?> { ["requiresFreshObservationPath"] = true,
+                        ["invalidationRetained"] = error.ObservationInvalidationRetained });
+            }
+        }).RequireAuthorization();
+        endpoints.MapGet(WidgetEffects.ChecksEndpoint, async (HttpContext http, WidgetEffectOwner owner, CancellationToken ct) =>
+        {
+            try
+            {
+                var observed = await owner.ChecksAsync(ct);
+                http.Response.Headers.CacheControl = "no-store";
+                return Results.Json(observed);
+            }
+            catch (WidgetRefusal refusal)
+            {
+                return Results.Problem(statusCode: refusal.Error.StatusCode, title: refusal.Error.Code, detail: refusal.Error.Message);
+            }
+        }).RequireAuthorization();
         endpoints.MapGet(WidgetContract.Endpoint, async (HttpContext http, WidgetResource resource, CancellationToken ct) =>
         {
             try

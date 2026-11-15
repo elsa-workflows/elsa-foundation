@@ -29,6 +29,25 @@ Atomically replace the private command file before each explicit user request:
 
 These are the only three command fields. `arguments` accepts any JSON object with unique member names; nested payload meanings are never inspected. Hold this file unchanged until that turn's review and completion/refusal settle. Give a new explicit request a new command ID. A replayed user request may intentionally retain an ID for detection: the fixture does **not** globally deduplicate command IDs, sessions or prompts.
 
+For a context-only observation, use this explicit alternative instead of the three-field tool command:
+
+```json
+{"commandId":"unique-observation-id","mode":"observe"}
+```
+
+This alternative accepts exactly those two fields. Its command ID must be nonblank and no longer than 128 characters;
+`toolName`, `arguments`, unknown modes, duplicate fields and extra fields are refused. It works with an empty or nonempty
+actual tool offer. Both clients trace the actual supplied context/messages and offered declarations, record an
+`<provider>.observation` with that command ID and tool count, and emit only the fixed text
+"Observed the supplied context and tool declarations. No tool was requested." They never invoke a supplied function,
+emit a function call, consult the pre-call gate or invent a resource result. The response does not interpret module
+support; the driver must inspect the actual request trace and native support/owner observations. A Copilot prompt with
+a typed-result line or an actual adapter continuation header is refused in this mode, even when its result is malformed
+or missing. Anthropic requires a latest user turn and refuses function calls/results in that turn or after it and every
+subsequent tool-role message; historical calls/results before it remain trace evidence and cannot supply a reused outcome.
+Never switch a pending tool command into observation to complete its receipt continuation. Keep its original command
+until it settles. Cancellation remains the caller's real cancellation token.
+
 Copilot resolves the exact name among the actual supplied `AIFunction`s and invokes that supplied function with the unchanged object arguments. SDK tool-execution completion means function transport returned; it does not claim a resource was applied. Pending approval and the actual opaque result return through the unchanged adapter/engine. On the adapter's tool-free receipt continuation, the fixture requires the actual serialized generic tool result, including tool name/call identity, and never invokes another function.
 
 Anthropic validates that the exact tool name was advertised, emits a generic `FunctionCallContent` using the command ID, and leaves invocation to the real host orchestrator. It completes only after that adapter supplies the matching `FunctionResultContent` after the latest user message. A historical result before a newer user message cannot suppress another request. Completion text contains only a hash of the actual opaque result and makes no domain success assertion.
@@ -37,7 +56,7 @@ Private JSONL traces record admitted prompt/context/tool declarations, calls, re
 
 ## Optional pre-call cancellation gate
 
-The separate `GateFile` supports a bounded observation point before the supplied Copilot function is invoked or an Anthropic function call is yielded. It does not change the three-field command file or interpret tool arguments. Initialize a valid nonmatching record before launching a profile that configures this file; a configured missing or malformed file fails closed.
+The separate `GateFile` supports a bounded observation point before the supplied Copilot function is invoked or an Anthropic function call is yielded. It applies to the three-field tool command, never the text-only observation alternative, and does not interpret tool arguments. Initialize a valid nonmatching record before launching a profile that configures this file; a configured missing or malformed file fails closed at the tool's pre-call boundary.
 
 ```json
 {"commandId":"the-explicit-driver-command","epoch":"unique-observation-epoch","state":"hold","timeoutMilliseconds":60000}
@@ -54,3 +73,8 @@ This package contributes no Weaver context/capability/tool source or fan-in hand
 ## Contract checks
 
 The optional external `Tests/` package consumer exercises arbitrary nested arguments through supplied Copilot functions, declaration-only Anthropic calls and actual opaque continuations, cross-turn/session replay visibility, unavailable-tool refusal, malformed input and private trace credential omission. It references the packed fixture by PackageReference, never this source project. Run it only after the retained fixture package exists. These checks do not establish real-host composition, approval/effect handling or live-provider success; the full witness supplies those observations. No fixture build or test run is claimed by this source template.
+
+The original 21 authored cases remain unchanged. The observation extension adds 50 authored cases (71 total): four
+empty/nonempty-offer observations, 32 malformed/ambiguous command controls, five Copilot continuation refusals, six
+Anthropic continuation/user-turn refusals, one historical-result isolation control and two actual-token cancellation
+controls. All new cases are source-only and unrun until the independent packed author is actually built and tested.

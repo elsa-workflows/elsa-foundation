@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "loading": {
+    "loadMode": "HostIntegrated",
+    "scope": "DependencyClosure",
+    "reason": "Independent source-compatible old/current upgrade contribution with exact shared Core packages."
+  }
+}

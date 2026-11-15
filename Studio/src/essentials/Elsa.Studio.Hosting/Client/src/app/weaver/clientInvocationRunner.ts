@@ -11,8 +11,12 @@ export function createClientInvocationRunner(api: ElsaStudioModuleApi) {
         if (previous.envelope !== envelope) return Promise.reject(new Error("Conflicting client invocation delivery."));
         return previous.completion;
       }
-      const completion = execute(invocation, signal);
+      // Install the delivery before a module callback can synchronously deliver it again.
+      let resolve!: (value: StudioWeaverClientAcknowledgement) => void;
+      let reject!: (error: unknown) => void;
+      const completion = new Promise<StudioWeaverClientAcknowledgement>((accept, refuse) => { resolve = accept; reject = refuse; });
       deliveries.set(invocation.invocationId, { envelope, completion });
+      void execute(invocation, signal).then(resolve, reject);
       return completion;
     }
   };
@@ -36,6 +40,9 @@ export function createClientInvocationRunner(api: ElsaStudioModuleApi) {
       if (signal?.aborted || Date.parse(invocation.expiresAt) <= Date.now()) return refuse("Client invocation was cancelled or expired before dispatch.");
       if (target?.status !== "available") return refuse(target?.reason?.trim() || "The owning module reports that this change's target no longer exists. Nothing was applied.");
     }
+    // Target inspection may await. A replacement adapter cannot inherit the old one's review.
+    const current = api.weaver.toolContracts.list().filter(item => item.id === invocation.toolName && item.moduleId === invocation.moduleId);
+    if (current.length !== 1 || current[0] !== contract) return refuse("The owning module's client adapter changed before dispatch. Nothing was applied.");
     try {
       return { ...base, ...await contract.executeClient(invocation, signal) };
     } catch (error) {

@@ -1,0 +1,16 @@
+{
+  "format": "weaver-upgrade-operator-guard-controls",
+  "version": 1,
+  "status": "not-run",
+  "instructions": "Root-owned execution may apply each requestOverrides to an otherwise valid status request against an existing private owned database. The operator must refuse before EfToolingHost is called; retain stdout, exit code and unchanged database evidence. These are authored inputs, not executed results.",
+  "expectedExitCode": 2,
+  "expectedResponse": { "operatorRefused": true, "code": "operator-guard-refused" },
+  "cases": [
+    { "id": "version-above-int32", "requestOverrides": { "version": 2147483648 } },
+    { "id": "version-below-int32", "requestOverrides": { "version": -2147483649 } },
+    { "id": "version-fractional", "requestOverrides": { "version": 1.5 } },
+    { "id": "version-string", "requestOverrides": { "version": "1" } },
+    { "id": "version-null", "requestOverrides": { "version": null } },
+    { "id": "version-boolean", "requestOverrides": { "version": true } }
+  ]
+}

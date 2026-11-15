@@ -1,0 +1,9 @@
+# Weaver 1.0 → 1.1 captured fixtures
+
+These five complete row pairs came from the actual post-rename Weaver 1.0 writer and target 1.1 writer using identical synthetic inputs. All seven content strings are byte-identical, including the three session columns. The original JSON files were copied without reserialization. [Provenance](provenance.json) and the [native evidence receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6861803697) bind the source trees, actual test assemblies, row bytes, raw archive and resource closeout.
+
+Each writer's capture Fact passed once. After quarantining the temporary capture products and removing the Fact, a fresh normal build passed all 189 persistence cases, including the four [canonical checks](../../../../WeaverEffectsV1CanonicalTests.cs). Those checks exercise the three unchanged shared [upcaster proof algorithms](../../../../../../../../../Essentials/tests/Persistence/EntityFramework/Tests/EfSchemaUpcasterFixtureSupport.cs) and complete content-column coverage. The normal run used the pinned target source plus these ten files; exact committed-head CI remains a separate gate.
+
+The `test-only-weaver-fixture:` transport is synthetic plaintext through the production codec/store. It supplies no encryption or authentication proof. Each fresh migrated SQLite database admitted its writer's current format; this does not establish fleet finalization. Runtime SQLite DDL was not recorded. The captured rows and raw evidence remain retained after the disposable worker and its resources were deleted.
+
+Keep these files unchanged and never regenerate them during tests or CI. Historical Agent captures remain unchanged outside this active fixture path. Four-provider, native restart, package/host, browser, live-provider and resulting-main qualification remain separate requirements; this evidence does not freeze the contribution contract or complete the Program.

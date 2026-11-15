@@ -26,6 +26,7 @@ import {
 } from "../sdk";
 import { dialogController } from "./dialogs";
 import { notificationController } from "./notifications";
+import { initializeWeaverRegistryGeneration } from "./weaver/weaverRegistrationOrigins";
 
 type RegistryItem<T> = T extends StudioContributionRegistry<infer Item> ? Item : never;
 
@@ -56,6 +57,7 @@ export function createStudioRegistry(
   const dashboardWidgets = createDashboardWidgetRegistry({hostPolicy});
   // One dispatcher/availability instance serves both names during producer migration.
   const weaverRegistry = createWeaverRegistry({hostPolicy});
+  initializeWeaverRegistryGeneration(weaverRegistry);
   const ai = { dispatchPrompt: weaverRegistry.dispatchPrompt, onPrompt: weaverRegistry.onPrompt, publishPromptResult: weaverRegistry.publishPromptResult, onPromptResult: weaverRegistry.onPromptResult };
 
   return {

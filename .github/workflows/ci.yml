@@ -263,7 +263,7 @@ jobs:
           SHARD: ${{ toJSON(matrix) }}
         run: >-
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
-          --summary "$GITHUB_STEP_SUMMARY"
+          --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Capture whole-project BPMN and design test discovery
         if: ${{ success() && github.event_name == 'pull_request' }}
@@ -335,6 +335,15 @@ jobs:
             ${{ runner.temp }}/shard/try*/**/*.trx
             ${{ runner.temp }}/shard/discovery/**
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain source-bound test discovery
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/discovery/
+          if-no-files-found: error
           retention-days: 7
 
   # The required context. It reports one result for the PR tier: the plan, every shard, the architecture guards and the
@@ -438,7 +447,7 @@ jobs:
           SHARD: ${{ toJSON(matrix) }}
         run: >-
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA"
-          --summary "$GITHUB_STEP_SUMMARY"
+          --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the shard outcome
         if: ${{ !cancelled() }}
@@ -456,6 +465,15 @@ jobs:
           name: trx-${{ matrix.shard }}
           path: ${{ runner.temp }}/shard/try*/**/*.trx
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain source-bound test discovery
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard/discovery/
+          if-no-files-found: error
           retention-days: 7
 
   # Several EF suites per job, one after another: the suites' own build is paid once per job instead of once per suite,
@@ -532,7 +550,7 @@ jobs:
           ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
         run: >-
           python3 tools/ci/run_shard.py --entry "$SHARD" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --parallel 1
-          --summary "$GITHUB_STEP_SUMMARY"
+          --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the shard outcome
         if: ${{ !cancelled() }}
@@ -541,6 +559,17 @@ jobs:
           name: test-outcomes-${{ matrix.shard }}
           path: ${{ runner.temp }}/shard/test-outcomes.json
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain native suite discovery and actual results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-suite-evidence-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/shard/discovery/
+            ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: error
           retention-days: 7
 
   # One result for main/nightly alerts; the PR and merge-queue aggregate below owns the required Full tier context.
@@ -607,7 +636,7 @@ jobs:
       - name: Run the architecture guards
         run: |
           entry=$(python3 tools/ci/test_tiers.py entry --shard architecture-guards --project Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj)
-          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the outcome
         if: ${{ !cancelled() }}
@@ -616,6 +645,17 @@ jobs:
           name: test-outcomes-architecture-guards
           path: ${{ runner.temp }}/shard/test-outcomes.json
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain architecture discovery and actual results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: guard-suite-evidence-architecture
+          path: |
+            ${{ runner.temp }}/shard/discovery/
+            ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: error
           retention-days: 7
 
   # Issue #1815 separates required modules from optional ones. This leg is what makes that
@@ -664,7 +704,7 @@ jobs:
       - name: Test (core only)
         run: |
           entry=$(python3 tools/ci/test_tiers.py entry --shard core-only --slnf Elsa.Server.Core.slnf)
-          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/run_shard.py --entry "$entry" --out "$RUNNER_TEMP/shard" --head "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY" --retain-discovery
 
       - name: Upload the outcome
         if: ${{ !cancelled() }}
@@ -673,6 +713,17 @@ jobs:
           name: test-outcomes-core-only
           path: ${{ runner.temp }}/shard/test-outcomes.json
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Retain core discovery and actual results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-suite-evidence
+          path: |
+            ${{ runner.temp }}/shard/discovery/
+            ${{ runner.temp }}/shard/try*/**/*.trx
+          if-no-files-found: error
           retention-days: 7
 
   # A red main has to reach a human. GitHub's own failure notification for a push does go to
@@ -1215,7 +1266,7 @@ jobs:
     needs: plan-scope
     if: needs.plan-scope.outputs.studio-heavy == 'true'
     runs-on: ubuntu-latest
-    # Allow time for the full composed journeys, Decision runtime qualification and artifact upload.
+    # Existing allocation: composed/default, Weaver observations, Decisions, external sign-in and artifact upload.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -1239,6 +1290,23 @@ jobs:
         run: |
           node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs pin --output "$RUNNER_TEMP/external-auth-ui-toolchain.json"
           node tools/identity/ExternalAuthentication.Probe/ui-build-provenance.mjs studio --root "$RUNNER_TEMP/external-auth-ui-build" --standard-output "$RUNNER_TEMP/ux-acceptance" --toolchain "$RUNNER_TEMP/external-auth-ui-toolchain.json"
+      - name: Inspect shipped-host Weaver inventory and native feature transitions
+        id: weaver-inventory
+        env:
+          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: >-
+          python3 tools/ux-acceptance/run.py
+          --profile weaver-inventory
+          --output "$RUNNER_TEMP/weaver-inventory-safe"
+      - name: Correlate shipped SDK support and route protocol turns
+        id: weaver-semantic
+        timeout-minutes: 30
+        env:
+          UX_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: >-
+          python3 tools/ux-acceptance/run.py
+          --profile weaver-semantic
+          --output "$RUNNER_TEMP/weaver-semantic-safe"
       - name: Qualify shared decision execution and runtime-only restart
         run: python3 tools/decisions/qualify-execution.py --output "$RUNNER_TEMP/ux-acceptance/decision-execution"
       - name: Exercise managed external sign-in on the full Studio host
@@ -1274,6 +1342,24 @@ jobs:
         with:
           name: studio-ux-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ux-acceptance
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain safe shipped-host Weaver inventory evidence
+        if: ${{ !cancelled() && steps.weaver-inventory.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-inventory-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-inventory-safe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain safe external protocol correlation evidence
+        if: ${{ !cancelled() && steps.weaver-semantic.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-semantic-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-semantic-safe
           if-no-files-found: error
           retention-days: 14
 
@@ -1553,6 +1639,57 @@ jobs:
           path: ${{ steps.run-profile-negative-control.outputs.diagnostics_path }}
           if-no-files-found: error
           retention-days: 7
+
+  weaver-causal-controls:
+    needs: plan-scope
+    if: needs.plan-scope.outputs.weaver == 'true'
+    name: Weaver causal controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      WEAVER_CAUSAL_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Studio dependencies
+        uses: ./.github/actions/setup-studio
+
+      - name: Verify causal driver refusal controls
+        run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_causal_proof.py'
+
+      - name: Restore the owning causal-test projects
+        run: |
+          dotnet restore Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
+          dotnet restore Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
+
+      - name: Prove scoped runtime assertions fail and recover
+        run: >-
+          python3 tools/studio/Weaver.Conformance.Probe/causal_proof.py
+          --scope all
+          --output "$RUNNER_TEMP/weaver-causal-evidence"
+
+      - name: Retain separate causal evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-causal-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-causal-evidence/
+          if-no-files-found: error
+          retention-days: 14
 
   package-witness:
     needs: plan-scope

@@ -96,6 +96,7 @@ builder.Services.AddCShellsAspNetCore(shells => shells.WithHostAssemblies()
         typeof(Elsa.Expressions.ExpressionsFeature).Assembly,
         typeof(Elsa.Expressions.Api.ExpressionsApiFeature).Assembly,
         typeof(Elsa.Api.Capabilities.ApiCapabilitiesFeature).Assembly,
+        typeof(Elsa.Attention.Api.AttentionApiFeature).Assembly,
         typeof(Elsa.Foundation.Identity.FoundationIdentityAbstractionsFeature).Assembly,
         typeof(Elsa.Foundation.Identity.Api.FoundationIdentityApiFeature).Assembly,
         typeof(Elsa.Foundation.Identity.AspNetCoreIdentity.AspNetCoreIdentityFeature).Assembly,

@@ -174,6 +174,8 @@ internal sealed class ProposalMutationTool : IWeaverTool
     public int DispatchCalls { get; private set; }
     public int ExecuteCalls { get; private set; }
     public WeaverRisk CurrentRisk { get; set; } = WeaverRisk.ReviewRequired;
+    public WeaverRisk PreparationRisk { get; set; } = WeaverRisk.ReviewRequired;
+    public IReadOnlyList<WeaverPrivilegeClass>? PrivilegeClasses { get; set; }
     public bool NoopWithoutReceipt { get; init; }
     public bool FailAfterEffect { get; init; }
     public bool CancelAfterEffect { get; init; }
@@ -190,8 +192,9 @@ internal sealed class ProposalMutationTool : IWeaverTool
         PrepareCalls++;
         if (Malformed) return Task.FromResult(WeaverResult<WeaverToolPreparation>.Failure("test.malformed", "The module refused malformed arguments."));
         return Task.FromResult(WeaverResult<WeaverToolPreparation>.Success(new(new("test.module", "test.resource", "resource-1", Revision),
-            JsonSerializer.SerializeToElement(invocation.Arguments), WeaverRisk.ReviewRequired,
-            new("test.preview", "1", JsonSerializer.SerializeToElement(new { before = Value, after = "new" })), false)));
+            JsonSerializer.SerializeToElement(invocation.Arguments), PreparationRisk,
+            new("test.preview", "1", JsonSerializer.SerializeToElement(new { before = Value, after = "new" })), false)
+            { RequiredPrivilegeClasses = PrivilegeClasses }));
     }
     public async Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     {
@@ -216,6 +219,7 @@ internal sealed class ProposalMutationTool : IWeaverTool
 
 internal sealed class ProposalClientTool : IWeaverTool, IWeaverClientTool
 {
+    public IReadOnlyList<WeaverPrivilegeClass>? PrivilegeClasses { get; set; }
     public int ExecuteCalls { get; private set; }
     public int CompleteCalls { get; private set; }
     public bool UseSnapshotBinding { get; set; }
@@ -228,7 +232,7 @@ internal sealed class ProposalClientTool : IWeaverTool, IWeaverClientTool
         => Task.FromResult(WeaverResult<WeaverToolPreparation>.Success(new(new("test.module", "test.editor", "editor-1", "revision-1"),
             JsonSerializer.SerializeToElement(invocation.Arguments), WeaverRisk.ReviewRequired,
             new("test.preview", "1", JsonSerializer.SerializeToElement(new { value = "new" })), false)
-        { Client = UseSnapshotBinding ? invocation.Context.Single().Client : invocation.Client }));
+        { Client = UseSnapshotBinding ? invocation.Context.Single().Client : invocation.Client, RequiredPrivilegeClasses = PrivilegeClasses }));
     public Task<WeaverResult<WeaverToolResult>> ExecuteAsync(WeaverPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
     { ExecuteCalls++; return Task.FromResult(WeaverResult<WeaverToolResult>.Failure("test.client_only", "The browser owns this operation.")); }
     public async Task<WeaverResult<WeaverToolResult>> CompleteAsync(WeaverPreparedToolInvocation invocation, WeaverClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default)

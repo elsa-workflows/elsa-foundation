@@ -1,7 +1,10 @@
+import { readWeaverProposalStatus } from "./weaverProposalStatus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioWeaverContextAttachment, StudioWeaverContributionDiagnostic, StudioWeaverMode, StudioWeaverPromptRequest, StudioWeaverSurface, StudioWeaverToolResult } from "../../sdk";
 import { WeaverExecutionError, classifyAutonomyFailure, classifyRecoveryFailure, createWeaverClient, getWeaverErrorCode, getWeaverRetryAfterSeconds, POLICY_CHANGED, type WeaverClient } from "./weaverClient";
-import { collectWeaverContext } from "./weaverContext";
+import { collectWeaverContext, isWeaverContextCollectionCurrent } from "./weaverContext";
+import { refreshStudioSupportInventory } from "./weaverSupportInventory";
+import { copyWeaverPromptOrigin, isWeaverPromptRequestCurrent } from "./weaverRegistrationOrigins";
 import { getActiveWeaverCapabilities, getActivePromptStarters } from "./weaverContributions";
 import { getWeaverErrorMessage } from "./weaverErrors";
 import { subscribeWeaverSessionStream, type WeaverStreamSubscription } from "./weaverStream";
@@ -662,7 +665,10 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
     let missingRequiredContext = false;
     try {
-      const collection = await collectWeaverContext(api, surface, mode, sessionIdRef.current ?? undefined, request.attachments, turnAbort.signal);
+      const support = await refreshStudioSupportInventory(api, turnAbort.signal);
+      if (turnGenerationRef.current !== generation) return settle("cancelled");
+      if (!isWeaverPromptRequestCurrent(api, request)) throw new Error("Module context changed; try the request again.");
+      const collection = await collectWeaverContext(api, surface, mode, sessionIdRef.current ?? undefined, request.attachments, turnAbort.signal, { support });
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       if (diagnosticGenerationRef.current === generation) setRequestContextDiagnostics(collection.diagnostics);
       const missing = collection.diagnostics.filter(item => item.required);
@@ -672,6 +678,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       const activeSessionId = await ensureSession(generation);
       if (turnGenerationRef.current !== generation) return settle("cancelled");
+      if (!isWeaverContextCollectionCurrent(api, collection)) throw new Error("Module context changed; try the request again.");
       const response = await weaverClient.sendMessage(activeSessionId, { message, mode, activeSurface: surface, contextAttachments: collected, capabilityId: capabilities[0]?.id, requestId: deliveryId, source: request.source, promptMode: request.mode });
       // A stopped/superseded response cannot mutate or finish the current conversation.
       if (turnGenerationRef.current !== generation) return settle("cancelled");
@@ -754,7 +761,9 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       if (request.requestId) publishTurnResult("failed", "", request.requestId);
       return;
     }
-    void startTurn({ ...request, message });
+    const contextualRequest = { ...request, message };
+    copyWeaverPromptOrigin(request, contextualRequest);
+    void startTurn(contextualRequest);
   }, [chatState, publishTurnResult, ready, startTurn, steer]);
 
   const stop = useCallback(() => {
@@ -888,6 +897,12 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     if (!response) return;
     updateProposal(proposal.id, { status: response.approvalStatus });
     if (response.clientInvocation) {
+      // A custom client can bypass transport normalization; presence alone is never dispatch admission.
+      if (response.approvalStatus !== "awaiting-client" || response.executed !== false) {
+        updateProposal(proposal.id, { status: "uncertain", error: "The server did not confirm a pending client operation. Nothing was dispatched from this response." });
+        if (deliveryGeneration === turnGenerationRef.current) { publishTurnResult("failed", "", requestId); finishTurn(); }
+        return;
+      }
       const invocation = response.clientInvocation;
       const cancellation = new AbortController(); clientControllersRef.current.add(cancellation);
       if (deliveryGeneration !== turnGenerationRef.current) cancellation.abort();
@@ -920,6 +935,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
 
   function maybeAutoApplyProposal(proposalId: string, payload?: WeaverActionProposalPayload) {
     const prepared = payload?.preparedInvocation;
+    const status = normalizeProposalStatus(payload?.status);
+    if (status !== "awaiting-approval" && status !== "approved") return;
     // The policy that admitted this turn decides, not a selector value chosen afterwards.
     if ((turnAcceptedPolicyRef.current?.autonomyMode ?? autoApplyModeRef.current) !== "full-auto" || !prepared || prepared.requiresApproval || prepared.executionLocation === "clientWorkingState") return;
     const revision = payload?.revision ?? payload?.baseRevision;
@@ -927,6 +944,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       const generation = turnGenerationRef.current;
       const approved = await runReviewedDecision("approveProposal", proposalId, revision, prepared);
       if (!approved || generation !== turnGenerationRef.current) return;
+      updateProposal(proposalId, { status: approved.approvalStatus });
+      if (approved.approvalStatus !== "approved") return;
       const response = await runReviewedDecision("executeProposal", proposalId, revision, prepared);
       if (!response) return;
       updateProposal(proposalId, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });
@@ -1265,6 +1284,6 @@ function normalizeProposal(proposalId: string, proposal?: WeaverActionProposalPa
 }
 
 function normalizeProposalStatus(value: unknown): WeaverActionProposal["status"] {
-  if (typeof value === "number") return (["draft", "awaiting-approval", "approved", "denied", "edited", "expired", "executed", "failed", "cancelled", "executing", "awaiting-client", "uncertain"] as const)[value] ?? "failed";
-  return (String(value ?? "awaiting-approval").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase()) as WeaverActionProposal["status"];
+  // A new proposal-created event may omit status; an explicitly unknown status cannot request approval.
+  return readWeaverProposalStatus(value) ?? (value == null ? "awaiting-approval" : "uncertain");
 }

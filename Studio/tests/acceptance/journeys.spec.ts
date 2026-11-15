@@ -24,6 +24,7 @@ import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
 import { phoneContentJourney } from "./phoneContentJourney";
+import { weaverInventoryJourney, weaverInventoryJourneys, weaverSemanticJourney, weaverSemanticJourneys } from "./weaverInventoryJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await assertToastPlacementHolds(page);
@@ -59,6 +60,17 @@ const browserErrors = new WeakMap<Page, string[]>();
 type CreatedWorkflow = { url: string; authorization?: string; id: string };
 const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
+
+if (process.env.UX_ACCEPTANCE_PROFILE === "weaver-inventory") {
+  const phase = process.env.UX_WEAVER_PHASE;
+  if (phase !== "baseline" && phase !== "enabled") throw new Error("Unknown owned Weaver inventory phase");
+  test(weaverInventoryJourneys[phase], async ({ page }, info) => weaverInventoryJourney(page, info, capture));
+}
+if (process.env.UX_ACCEPTANCE_PROFILE === "weaver-semantic") {
+  const phase = process.env.UX_WEAVER_PHASE;
+  if (phase !== "baseline" && phase !== "enabled") throw new Error("Unknown owned Weaver semantic phase");
+  test(weaverSemanticJourneys[phase], async ({ page }, info) => weaverSemanticJourney(page, info, capture));
+}
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));

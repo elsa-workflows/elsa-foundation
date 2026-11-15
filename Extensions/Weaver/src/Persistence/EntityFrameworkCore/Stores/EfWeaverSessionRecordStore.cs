@@ -4,6 +4,7 @@ using Elsa.Weaver.Core.Models;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Weaver.Persistence.EntityFrameworkCore.Services;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,18 +36,21 @@ internal sealed partial class EfWeaverSessionRecordStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerToken);
         cancellationToken.ThrowIfCancellationRequested();
         var sessionId = record.Session.Id;
-        // Encode before any database work; a value that cannot be recorded refuses the create before any change.
-        var encoded = EncodeOrRefuse(sessionId, "create", new WeaverSessionRecordWrite(sessionId, new(ownerToken, 0))
+        var write = new WeaverSessionRecordWrite(sessionId, new(ownerToken, 0))
         {
             Session = record.Session, Messages = record.Messages, Snapshots = record.Snapshots, Context = record.Context,
             PausedTurn = record.PausedTurn, Proposals = record.Proposals, Keys = record.Keys, PendingAudits = record.PendingAudits
-        }, refuseDuplicateContext: true);
+        };
         return await GuardRetryAsync(sessionId, "create", () => Retry.RunUntilSettledAsync<WeaverSessionRecordResult>(null, async () =>
         {
             await using var scope = scopes.CreateAsyncScope();
             var db = resolveContext(scope.ServiceProvider);
+            string? writeVersion = null;
+            var saving = false;
             try
             {
+                writeVersion = WeaverWriteVersion.Select(db, write);
+                var encoded = EncodeOrRefuse(sessionId, "create", write, refuseDuplicateContext: true, writeVersion);
                 await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
                 var proposalIds = encoded.Proposals.Select(x => x.Id).ToArray();
                 if (await db.Set<WeaverSessionRow>().AnyAsync(x => x.SessionId == sessionId, cancellationToken)
@@ -68,12 +72,14 @@ internal sealed partial class EfWeaverSessionRecordStore(
                 foreach (var proposal in encoded.Proposals) db.Add(proposal.Row(sessionId, sequence++, proposal.Occurrences));
                 foreach (var key in encoded.Keys) db.Add(key.Row(sessionId, sequence++));
                 session.NextSequence = sequence;
+                saving = true;
                 await db.SaveChangesAsync(cancellationToken);
+                saving = false;
                 await transaction.CommitAsync(cancellationToken);
                 return Owned(new(ownerToken, 1), session.LeaseExpiresAtUtcTicks);
             }
             // A competing create committed the same session or proposal identity first; the next attempt reads it.
-            catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<WeaverSessionRecordResult>.Retry(exception); }
+            catch (Exception exception) when (Retry.ShouldRetry(null, exception) || saving && WeaverWriteVersion.IsForwardAdoption(db, writeVersion, exception)) { return EfWriteAttempt<WeaverSessionRecordResult>.Retry(exception); }
         }, Exhausted<WeaverSessionRecordResult>(sessionId, "create"), cancellationToken));
     }
 
@@ -107,7 +113,8 @@ internal sealed partial class EfWeaverSessionRecordStore(
         {
             return Decode(sessionId, rows);
         }
-        catch (Exception exception) when (exception is InvalidDataException or InvalidCastException or ArgumentException or FormatException or OverflowException)
+        catch (Exception exception) when (exception is InvalidDataException or InvalidCastException or ArgumentException or FormatException or OverflowException
+            or EfSchemaVersionSkewException)
         {
             // FR-018: unreadable, corrupt or foreign recorded state makes the session unavailable; nothing was changed.
             throw new WeaverSessionUnavailableException(sessionId, "unreadable", exception);
@@ -175,14 +182,16 @@ internal sealed partial class EfWeaverSessionRecordStore(
         ArgumentNullException.ThrowIfNull(write);
         cancellationToken.ThrowIfCancellationRequested();
         var sessionId = write.SessionId;
-        // Encode outside the transaction; a value that cannot be recorded refuses the write before any change.
-        var encoded = EncodeOrRefuse(sessionId, "write", write, refuseDuplicateContext: false);
         return await GuardRetryAsync(sessionId, "write", () => Retry.RunUntilSettledAsync<WeaverSessionRecordResult>(null, async () =>
         {
             await using var scope = scopes.CreateAsyncScope();
             var db = resolveContext(scope.ServiceProvider);
+            string? writeVersion = null;
+            var saving = false;
             try
             {
+                writeVersion = WeaverWriteVersion.Select(db, write);
+                var encoded = EncodeOrRefuse(sessionId, "write", write, refuseDuplicateContext: false, writeVersion);
                 await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
                 // Moving the version under the writer's owner and fence takes the aggregate's row lock until commit, so
                 // competing writers of the session wait for this one, and the reads below cannot change before it ends.
@@ -194,12 +203,13 @@ internal sealed partial class EfWeaverSessionRecordStore(
                     return new WeaverSessionRecordResult(await db.Set<WeaverSessionRow>().AnyAsync(x => x.SessionId == sessionId, cancellationToken)
                         ? WeaverSessionRecordOutcome.OwnershipLost
                         : WeaverSessionRecordOutcome.NotFound);
-                var row = await db.Set<WeaverSessionRow>().AsNoTracking().Where(x => x.SessionId == sessionId)
-                    .Select(x => new { x.Version, x.NextSequence }).SingleAsync(cancellationToken);
+                var row = await db.Set<WeaverSessionRow>().SingleAsync(x => x.SessionId == sessionId, cancellationToken);
+                WeaverWriteVersion.EnsureCanRewrite(db, writeVersion, row.SchemaVersion);
 
                 var hashes = encoded.Keys.Select(x => x.Hash).Distinct().ToArray();
                 var recordedKeys = hashes.Length == 0 ? [] : await db.Set<WeaverCallKeyRow>().AsNoTracking()
                     .Where(x => x.SessionId == sessionId && hashes.Contains(x.KeyHash)).ToListAsync(cancellationToken);
+                foreach (var key in recordedKeys) EfSchemaVersion.EnsureReadable(WeaverEfModule.Chain, key.SchemaVersion);
                 var conflicts = write.Keys
                     .Select(key => (Key: key, Recorded: recordedKeys.SingleOrDefault(x => x.Kind == key.Kind && x.KeyHash == WeaverRecordCodec.Hash(key.Key))))
                     .Where(x => x.Recorded is not null && x.Recorded.Value != x.Key.Value)
@@ -212,6 +222,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
                     .Where(x => proposalIds.Contains(x.ProposalId)).ToListAsync(cancellationToken);
                 if (recordedProposals.Any(x => x.SessionId != sessionId))
                     return new WeaverSessionRecordResult(WeaverSessionRecordOutcome.AlreadyExists);
+                foreach (var proposal in recordedProposals) WeaverWriteVersion.EnsureCanRewrite(db, writeVersion, proposal.SchemaVersion);
                 // Compare-and-set: each proposal record changes only from the version its writer read (0: not yet recorded).
                 if (encoded.Proposals.Any(proposal => proposal.ReadVersions.Any(version =>
                         version != (recordedProposals.SingleOrDefault(x => x.ProposalId == proposal.Id)?.Version ?? 0))))
@@ -222,6 +233,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
                 var messageIds = encoded.Messages.Select(x => x.Id).ToArray();
                 var recordedMessages = messageIds.Length == 0 ? [] : await db.Set<WeaverMessageRow>()
                     .Where(x => x.SessionId == sessionId && messageIds.Contains(x.MessageId)).ToListAsync(cancellationToken);
+                foreach (var message in recordedMessages) WeaverWriteVersion.EnsureCanRewrite(db, writeVersion, message.SchemaVersion);
                 foreach (var message in encoded.Messages)
                 {
                     if (recordedMessages.SingleOrDefault(x => x.MessageId == message.Id) is { } recorded) message.Apply(recorded);
@@ -246,37 +258,39 @@ internal sealed partial class EfWeaverSessionRecordStore(
                 }
                 foreach (var key in encoded.Keys.Where(key => !recordedKeys.Any(x => x.Kind == key.Kind && x.KeyHash == key.Hash)))
                     db.Add(key.Row(sessionId, sequence++));
-                await db.SaveChangesAsync(cancellationToken);
-
+                // The raw guarded lock already incremented Version. Loading the parent after that lock makes
+                // its original stamp visible to the shared interceptor; all content and children save together.
                 var lease = (now + leaseDuration).UtcTicks;
-                var session = encoded.Session;
-                var paused = encoded.PausedTurn;
-                var removePaused = paused is null && write.RemovePausedTurn;
-                var (writesPendingAudits, pendingAudits) = (encoded.WritesPendingAudits, encoded.PendingAudits);
-                var next = sequence;
-                var applied = await db.Set<WeaverSessionRow>().Where(x => x.SessionId == sessionId && x.Version == row.Version)
-                    .ExecuteUpdateAsync(setters =>
-                    {
-                        setters.SetProperty(x => x.LeaseExpiresAtUtcTicks, lease).SetProperty(x => x.NextSequence, next);
-                        if (session is not null)
-                            setters.SetProperty(x => x.TenantId, session.TenantId).SetProperty(x => x.ActorId, session.ActorId)
-                                .SetProperty(x => x.Workspace, session.Workspace).SetProperty(x => x.Title, session.Title)
-                                .SetProperty(x => x.Status, session.Status).SetProperty(x => x.UpdatedAtUtcTicks, session.UpdatedAtUtcTicks)
-                                .SetProperty(x => x.ExpiresAtUtcTicks, session.ExpiresAtUtcTicks).SetProperty(x => x.PolicyRevision, session.PolicyRevision)
-                                .SetProperty(x => x.ContinuedFrom, session.ContinuedFrom).SetProperty(x => x.LimitReached, session.LimitReached)
-                                .SetProperty(x => x.Payload, session.Payload);
-                        if (paused is not null) setters.SetProperty(x => x.PausedTurnPayload, paused);
-                        else if (removePaused) setters.SetProperty(x => x.PausedTurnPayload, (string?)null);
-                        if (writesPendingAudits) setters.SetProperty(x => x.PendingAuditsPayload, pendingAudits);
-                    }, cancellationToken);
-                if (applied != 1)
-                    throw new InvalidOperationException($"Weaver session '{sessionId}' changed while this write held its row lock.");
+                row.LeaseExpiresAtUtcTicks = lease;
+                row.NextSequence = sequence;
+                row.SchemaVersion = writeVersion;
+                db.Entry(row).Property(x => x.SchemaVersion).IsModified = true;
+                if (encoded.Session is { } session)
+                {
+                    row.TenantId = session.TenantId;
+                    row.ActorId = session.ActorId;
+                    row.Workspace = session.Workspace;
+                    row.Title = session.Title;
+                    row.Status = session.Status;
+                    row.UpdatedAtUtcTicks = session.UpdatedAtUtcTicks;
+                    row.ExpiresAtUtcTicks = session.ExpiresAtUtcTicks;
+                    row.PolicyRevision = session.PolicyRevision;
+                    row.ContinuedFrom = session.ContinuedFrom;
+                    row.LimitReached = session.LimitReached;
+                    row.Payload = session.Payload;
+                }
+                if (encoded.PausedTurn is { } paused) row.PausedTurnPayload = paused;
+                else if (write.RemovePausedTurn) row.PausedTurnPayload = null;
+                if (encoded.WritesPendingAudits) row.PendingAuditsPayload = encoded.PendingAudits;
+                saving = true;
+                await db.SaveChangesAsync(cancellationToken);
+                saving = false;
                 await transaction.CommitAsync(cancellationToken);
                 return Owned(write.Fence, lease);
             }
             // A racing insert of the same proposal identity by another session, or a transient lock conflict; the
             // transaction was disposed uncommitted, so the next attempt re-evaluates everything from a fresh read.
-            catch (Exception exception) when (Retry.ShouldRetry(null, exception)) { return EfWriteAttempt<WeaverSessionRecordResult>.Retry(exception); }
+            catch (Exception exception) when (Retry.ShouldRetry(null, exception) || saving && WeaverWriteVersion.IsForwardAdoption(db, writeVersion, exception)) { return EfWriteAttempt<WeaverSessionRecordResult>.Retry(exception); }
         }, Exhausted<WeaverSessionRecordResult>(sessionId, "write"), cancellationToken));
     }
 
@@ -327,15 +341,26 @@ internal sealed partial class EfWeaverSessionRecordStore(
             var page = await sessions.OrderByDescending(x => x.UpdatedAtUtcTicks).ThenByDescending(x => x.SessionId).Take(query.Take + 1)
                 .Select(x => new
                 {
-                    x.SessionId, x.Title, x.Status, x.UpdatedAtUtcTicks, x.ExpiresAtUtcTicks, x.LimitReached,
-                    Pending = db.Set<WeaverProposalRow>().Count(p => p.SessionId == x.SessionId && (p.Status == awaiting || p.Status == edited)
-                                                                     && (p.ExpiresAtUtcTicks == null || p.ExpiresAtUtcTicks > now))
+                    x.SessionId, x.Title, x.Status, x.UpdatedAtUtcTicks, x.ExpiresAtUtcTicks, x.LimitReached, x.SchemaVersion
                 }).ToListAsync(cancellationToken);
+            // Plain projections still interpret stamped state. Validate only exact-owned selected rows;
+            // never hydrate payloads or silently omit an unreadable row from the list/count.
+            foreach (var row in page) EfSchemaVersion.EnsureReadable(WeaverEfModule.Chain, row.SchemaVersion);
+            var selectedIds = page.Take(query.Take).Select(x => x.SessionId).ToArray();
+            var pending = await db.Set<WeaverProposalRow>().AsNoTracking()
+                .Where(p => selectedIds.Contains(p.SessionId) && sessions.Any(session => session.SessionId == p.SessionId))
+                .GroupBy(p => new { p.SessionId, p.SchemaVersion })
+                .Select(group => new { group.Key.SessionId, group.Key.SchemaVersion,
+                    Count = group.Count(p => (p.Status == awaiting || p.Status == edited)
+                        && (p.ExpiresAtUtcTicks == null || p.ExpiresAtUtcTicks > now)) }).ToListAsync(cancellationToken);
+            // Validate even zero-count groups: an unreadable format cannot establish that its proposals are terminal/expired.
+            foreach (var group in pending) EfSchemaVersion.EnsureReadable(WeaverEfModule.Chain, group.SchemaVersion);
+            var pendingCounts = pending.GroupBy(x => x.SessionId).ToDictionary(group => group.Key, group => group.Sum(x => x.Count));
             var items = page.Take(query.Take)
                 .Select(x => new WeaverSessionSummary(x.SessionId, x.Title,
                     (WeaverSessionStatus)x.Status == WeaverSessionStatus.Active && x.ExpiresAtUtcTicks <= now ? WeaverSessionStatus.Expired : (WeaverSessionStatus)x.Status,
                     Time(x.UpdatedAtUtcTicks),
-                    x.ExpiresAtUtcTicks is { } expires ? Time(expires) : null, x.Pending, WeaverSessionRecoveryStates.Of(x.LimitReached)))
+                    x.ExpiresAtUtcTicks is { } expires ? Time(expires) : null, pendingCounts.GetValueOrDefault(x.SessionId), WeaverSessionRecoveryStates.Of(x.LimitReached)))
                 .ToArray();
             var next = page.Count > query.Take ? Cursor.Format(items[^1].UpdatedAt, items[^1].Id) : null;
             return new WeaverSessionSummaryPage(items, next);
@@ -357,13 +382,13 @@ internal sealed partial class EfWeaverSessionRecordStore(
     }
 
     /// <summary>A value that cannot be serialized or protected refuses the operation before any change, wrapped (§2.23.5).</summary>
-    private Encoded EncodeOrRefuse(string sessionId, string operation, WeaverSessionRecordWrite write, bool refuseDuplicateContext)
+    private Encoded EncodeOrRefuse(string sessionId, string operation, WeaverSessionRecordWrite write, bool refuseDuplicateContext, string writeVersion)
     {
         try
         {
-            return Encode(sessionId, write, refuseDuplicateContext);
+            return Encode(sessionId, write, refuseDuplicateContext, writeVersion);
         }
-        catch (Exception exception) when (exception is not (ArgumentException or OperationCanceledException))
+        catch (Exception exception) when (exception is not (ArgumentException or OperationCanceledException or SchemaWriteRefusedException))
         {
             throw new WeaverContributionException($"Weaver session '{sessionId}' could not encode its {operation}; nothing was changed.", exception);
         }
@@ -390,7 +415,7 @@ internal sealed partial class EfWeaverSessionRecordStore(
             return await run();
         }
         catch (Exception exception) when (exception is not (OperationCanceledException or ObjectDisposedException or WeaverContributionException
-                                              or WeaverSessionUnavailableException))
+                                              or WeaverSessionUnavailableException or EfSchemaVersionSkewException or SchemaWriteRefusedException or ArgumentException))
         {
             var subject = sessionId is null ? "The Weaver session record store" : $"Weaver session '{sessionId}'";
             throw new WeaverContributionException($"{subject} could not complete its {operation}; nothing was changed.", exception);

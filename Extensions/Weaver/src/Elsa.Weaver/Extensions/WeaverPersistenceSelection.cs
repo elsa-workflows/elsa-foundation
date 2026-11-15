@@ -15,11 +15,19 @@ public static class WeaverPersistenceSelection
     /// <summary>Selects the session record store, replacing only the registered process-local default.</summary>
     /// <exception cref="InvalidOperationException">A store was already selected, or a store is registered outside this boundary.</exception>
     public static IServiceCollection SelectWeaverSessionRecordStore(this IServiceCollection services, Func<IServiceProvider, IWeaverSessionRecordStore> factory)
+        => SelectWeaverSessionRecordStore(services, factory, null);
+
+    /// <summary>Selects the record store and its supported effects variation; null declares legacy-only support.</summary>
+    /// <remarks>The required type must derive from <see cref="WeaverEffectsFeature"/>. A selected variation may specialize that type.</remarks>
+    public static IServiceCollection SelectWeaverSessionRecordStore(this IServiceCollection services,
+        Func<IServiceProvider, IWeaverSessionRecordStore> factory, Type? requiredEffectsFeatureType)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(factory);
+        if (requiredEffectsFeatureType is not null && !typeof(WeaverEffectsFeature).IsAssignableFrom(requiredEffectsFeatureType))
+            throw new ArgumentException("The store's supported effects variation must derive from WeaverEffectsFeature.", nameof(requiredEffectsFeatureType));
         Select<RecordStoreSelection>(services, [typeof(IWeaverSessionRecordStore)], [ServiceDescriptor.Singleton(factory)],
-            descriptors => new(descriptors, true), "IWeaverSessionRecordStore");
+            descriptors => new(descriptors, true, requiredEffectsFeatureType), "IWeaverSessionRecordStore");
         return services;
     }
 
@@ -50,7 +58,21 @@ public static class WeaverPersistenceSelection
         if (services.Any(x => x.ServiceType == typeof(IWeaverSessionRecordStore))) return;
         var descriptor = ServiceDescriptor.Singleton(factory);
         services.Add(descriptor);
-        services.AddSingleton(new RecordStoreSelection([descriptor], false));
+        services.AddSingleton(new RecordStoreSelection([descriptor], false, typeof(WeaverEffectsFeature)));
+    }
+
+    /// <summary>Reads only owned selection metadata; never invokes a store factory or infers support from a store's type.</summary>
+    internal static Type? RequiredEffectsFeatureType(IServiceCollection services)
+    {
+        var markers = services.Where(item => item.ServiceType == typeof(RecordStoreSelection)).ToArray();
+        if (markers.Length != 1 || markers[0].IsKeyedService || markers[0].Lifetime != ServiceLifetime.Singleton
+            || markers[0].ImplementationInstance is not RecordStoreSelection selection
+            || selection.Descriptors.Count != 1)
+            throw new InvalidOperationException("Weaver effects require record-store metadata owned by SelectWeaverSessionRecordStore; an unowned registration cannot declare effects support.");
+        var stores = services.Where(item => item.ServiceType == typeof(IWeaverSessionRecordStore)).ToArray();
+        if (stores.Length != 1 || !ReferenceEquals(stores[0], selection.Descriptors[0]))
+            throw new InvalidOperationException("The selected Weaver record store was replaced outside SelectWeaverSessionRecordStore; its effects support is no longer established.");
+        return selection.RequiredEffectsFeatureType;
     }
 
     /// <summary>Registers each process-local audit facet that is not registered yet; the facets it adds stay replaceable by a selection.</summary>
@@ -91,7 +113,7 @@ public static class WeaverPersistenceSelection
 
     private abstract record Selection(IReadOnlyList<ServiceDescriptor> Descriptors, bool IsExplicit);
 
-    private sealed record RecordStoreSelection(IReadOnlyList<ServiceDescriptor> Descriptors, bool IsExplicit) : Selection(Descriptors, IsExplicit);
+    private sealed record RecordStoreSelection(IReadOnlyList<ServiceDescriptor> Descriptors, bool IsExplicit, Type? RequiredEffectsFeatureType) : Selection(Descriptors, IsExplicit);
 
     private sealed record AuditSelection(IReadOnlyList<ServiceDescriptor> Descriptors, bool IsExplicit) : Selection(Descriptors, IsExplicit);
 }

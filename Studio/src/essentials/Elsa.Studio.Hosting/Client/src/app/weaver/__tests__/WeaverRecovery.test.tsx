@@ -176,9 +176,10 @@ describe("Weaver session recovery", () => {
   it("lets a second tab reopen the session without refusing or marking the first tab's client operation", async () => {
     const server = fakeServer();
     let finishDelivery!: () => void;
+    let deliveries = 0;
     const tabA = readyApi("ada");
     tabA.weaver.toolContracts.add({ id: "sample_change", moduleId: "Sample", slotId: "sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], contractVersion: "1", executionLocation: "clientWorkingState",
-      executeClient: () => new Promise(resolve => { finishDelivery = () => resolve({ outcome: "applied", summary: "Moved." }); }) });
+      executeClient: () => new Promise(resolve => { deliveries++; finishDelivery = () => resolve({ outcome: "applied", summary: "Moved." }); }) });
     const sessionId = server.seed("ada", [], [clientProposal("prop_c", "approved")]);
     remember(sessionId);
     const a = mount(server, "ada", tabA);
@@ -186,6 +187,7 @@ describe("Weaver session recovery", () => {
     server.prepareClientDelivery(sessionId, "prop_c", tabA.weaver.clientId);
     click(buttonIn(proposalByTitle(a.container, "Move activity"), "Apply"));
     await settle(() => expect(server.proposal(sessionId, "prop_c").status).toBe("awaiting-client"));
+    await settle(() => expect(deliveries).toBe(1));
 
     const b = mount(server, "ada");
     await settle(() => expect(proposalByTitle(b.container, "Move activity")?.getAttribute("data-status")).toBe("awaiting-client"));
@@ -201,6 +203,7 @@ describe("Weaver session recovery", () => {
     expect(server.client.acknowledgeClient).toHaveBeenCalledWith(sessionId, "inv_prop_c", expect.objectContaining({ outcome: "applied", client: { clientId: tabA.weaver.clientId, generationId: "generation" } }));
     expect(server.client.resolveClientInvocation).not.toHaveBeenCalled();
     expect(server.proposal(sessionId, "prop_c").status).toBe("executed");
+    expect(deliveries).toBe(1);
     a.unmount(); b.unmount();
   });
 
@@ -659,7 +662,7 @@ function fakeServer(options: { listUnsupported?: boolean } = {}) {
       const [id, recorded] = [...sessions].find(([, item]) => item.proposals.some(p => p.id === proposalId))!;
       const proposal = recorded.proposals.find(p => p.id === proposalId)!;
       proposal.status = "awaiting-client"; writes.push(`execute:${id}`);
-      return { proposalId, approvalStatus: "awaiting-client", clientInvocation: proposal.preparedInvocation };
+      return { proposalId, approvalStatus: "awaiting-client", executed: false, clientInvocation: proposal.preparedInvocation };
     }),
     acknowledgeClient: vi.fn<WeaverClient["acknowledgeClient"]>(async (id, invocationId, acknowledgement) => {
       const proposal = owned(id).proposals.find(p => p.preparedInvocation?.invocationId === invocationId)!;
@@ -735,6 +738,8 @@ function readyApi(subject: string, profile = "primary") {
     refreshCapabilities: async () => { throw new Error("unused"); }
   } as unknown as StudioBackendSession;
   const api = createStudioRegistry({ hostVersion: "1.0.0", sdkVersion: "1.0.0", ...createEndpointContext("https://studio.example/") }, { backendBaseUrl: `https://${profile}.example/`, backendSession });
+  vi.spyOn(api.host.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
+  vi.spyOn(api.backend.http, "getJson").mockRejectedValue(new Error("Inventory not available in this fixture."));
   api.weaver.capabilities.add({ id: "weaver.test", displayName: "Weaver test", description: "Test capability.", kind: "answer", risk: "read-only", surfaces: ["*"] });
   return api;
 }

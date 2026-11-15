@@ -7,10 +7,14 @@ import secrets
 from types import SimpleNamespace
 import tempfile
 import unittest
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 import zipfile
 
-from consumers import backend_features, configure_runtime, select_native_archives, stage_native_archives
+from artifacts import BACKEND_PACKAGES
+from consumers import (COMMON_EFFECTS_FEATURE, DURABLE_EFFECTS_FEATURE, DURABLE_STORE_FEATURE, backend_features,
+                       configure_weaver_privileges, configure_runtime, enable_durable_weaver_store, references,
+                       select_native_archives, stage_native_archives)
 
 DI = "Microsoft.Extensions.DependencyInjection.Abstractions"
 
@@ -62,7 +66,7 @@ class RuntimeClosureTests(unittest.TestCase):
             (directory / "appsettings.json").write_text(json.dumps({"Qualification": {}, "Studio": {}}))
         (backend / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": backend_features(backend)}}}}))
         (studio / "shells.json").write_text("{}")
-        run = SimpleNamespace(profiles={
+        run = SimpleNamespace(root=self.root, profiles={
             "backend": {"published": backend, "commandFile": backend / "command.json",
                         "traceFiles": {"copilot": backend / "copilot.jsonl", "anthropic": backend / "anthropic.jsonl"}},
             "studio": {"published": studio}})
@@ -76,10 +80,26 @@ class RuntimeClosureTests(unittest.TestCase):
         configure_runtime(run, **options, provider="anthropic")
         self.assertTrue(first == signing_key())  # Never put private key material in an assertion message.
         self.assertNotIn("EnrollOwnedStore", json.loads((backend / "appsettings.json").read_text())["Qualification"])
+        self.assertEqual({"Administrative": True, "Irrecoverable": True, "Activation": True},
+                         json.loads((backend / "appsettings.json").read_text())["Elsa"]["Weaver"]["Privileges"])
         self.assertIs(True, json.loads((studio / "appsettings.json").read_text())["Qualification"]["EnrollOwnedStore"])
         for directory in (backend, studio):
             for name in ("appsettings.json", "shells.json"):
                 self.assertEqual(0, (directory / name).stat().st_mode & 0o077)
+
+    def test_backend_only_runtime_configuration_needs_no_studio_profile_or_mutation(self):
+        backend = self.root / "standalone-backend"
+        backend.mkdir()
+        (backend / "appsettings.json").write_text(json.dumps({"Qualification": {}}))
+        (backend / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": backend_features(backend)}}}}))
+        run = SimpleNamespace(root=self.root, profiles={"backend": {"published": backend, "commandFile": backend / "command.json",
+            "traceFiles": {"copilot": backend / "copilot.jsonl", "anthropic": backend / "anthropic.jsonl"}}})
+        configure_runtime(run, backend_url="http://127.0.0.1:18001", studio_url="http://127.0.0.1:18002",
+                          admin_username="private-fixture", admin_password=secrets.token_urlsafe(24) + "!aA1", backend_only=True)
+        self.assertEqual({"backend"}, set(run.profiles))
+        self.assertNotIn("Studio", json.loads((backend / "appsettings.json").read_text()))
+        for name in ("appsettings.json", "shells.json"):
+            self.assertEqual(0, (backend / name).stat().st_mode & 0o077)
 
     def test_framework_assembly_sharing_does_not_satisfy_the_nuget_dependency(self):
         before = copy.deepcopy(self.author)
@@ -157,6 +177,139 @@ class RuntimeClosureTests(unittest.TestCase):
     def test_dependency_must_exist_in_selected_net10_target(self):
         del self.graph["targets"]["net10.0"][DI + "/10.0.10"]; self.save_graph()
         with self.assertRaisesRegex(RuntimeError, "selected net10.0 target"): self.select()
+
+
+class WeaverConsumerConfigurationTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.backend, self.studio = self.root / "backend", self.root / "studio"
+        self.backend.mkdir(); self.studio.mkdir()
+        self.settings = {"Qualification": {"StudioOrigin": "http://127.0.0.1:18002"},
+                         "Elsa": {"Weaver": {"RetainOption": True}}}
+        self.path = self.backend / "appsettings.json"
+        self.path.write_text(json.dumps(self.settings))
+        self.studio_settings = self.studio / "appsettings.json"
+        self.studio_settings.write_text("{}")
+        self.run = SimpleNamespace(root=self.root, profiles={"backend": {"published": self.backend},
+                                                           "studio": {"published": self.studio}})
+
+    def test_ordinary_consumer_selects_only_memory_effects(self):
+        features = backend_features(self.backend)
+        self.assertIn(COMMON_EFFECTS_FEATURE, features)
+        self.assertNotIn(DURABLE_EFFECTS_FEATURE, features)
+        self.assertNotIn(DURABLE_STORE_FEATURE, features)
+        self.assertIn("WeaverApi", features)
+        self.assertIn("WeaverWorkflows", features)
+
+    def test_attention_composition_requires_its_exact_product_candidate(self):
+        products = {name: {"version": "4.0.0-fixture.1"} for name in BACKEND_PACKAGES}
+        run = SimpleNamespace(packages=products)
+        document = ET.fromstring("<Project>" + references(run, BACKEND_PACKAGES, ()) + "</Project>")
+        attention = [reference for reference in document if reference.attrib["Include"] == "Elsa.Attention.Api"]
+        self.assertEqual(1, len(attention))
+        self.assertEqual("[4.0.0-fixture.1]", attention[0].attrib["Version"])
+        features = backend_features(self.backend)
+        self.assertTrue({"ApiCapabilities", "ModularityApi", "AttentionApi", "ModularityAttention"}.issubset(features))
+        self.assertTrue(all(features[name] == {} for name in ("AttentionApi", "ModularityAttention")))
+        del products["Elsa.Attention.Api"]
+        with self.assertRaisesRegex(RuntimeError, "Missing genuine consumer candidate: Elsa.Attention.Api"):
+            references(run, BACKEND_PACKAGES, ())
+
+    def test_runtime_configuration_and_policy_target_fresh_content_without_editing_publishes(self):
+        content = self.root / "fresh-runtime-content"
+        content.mkdir(mode=0o700)
+        settings = dict(self.settings, Qualification={"StudioOrigin": "http://127.0.0.1:18002"})
+        (content / "appsettings.json").write_text(json.dumps(settings))
+        (content / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": backend_features(content)}}}}))
+        protocol = content / "protocol"
+        protocol.mkdir()
+        profile = self.run.profiles["backend"]
+        profile.update(contentRoot=content, commandFile=protocol / "command.json",
+                       traceFiles={"copilot": protocol / "copilot.jsonl", "anthropic": protocol / "anthropic.jsonl"})
+        (self.studio / "shells.json").write_text("{}")
+        (self.studio / "appsettings.json").write_text(json.dumps({"Studio": {}, "Qualification": {}}))
+        before = {path.name: path.read_bytes() for path in self.backend.iterdir()}
+        configure_runtime(self.run, backend_url="http://127.0.0.1:18001", studio_url="http://127.0.0.1:18002",
+                          admin_username="private-fixture", admin_password=secrets.token_urlsafe(24) + "!aA1")
+        configure_weaver_privileges(self.run, administrative=False, irrecoverable=True, activation=False)
+        self.assertTrue(before == {path.name: path.read_bytes() for path in self.backend.iterdir()})
+        observed = json.loads((content / "appsettings.json").read_text())
+        self.assertEqual({"Administrative": False, "Irrecoverable": True, "Activation": False}, observed["Elsa"]["Weaver"]["Privileges"])
+        features = json.loads((content / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]
+        self.assertEqual(str(protocol / "command.json"), features["AcmeCopilotProtocolFixture"]["CommandFile"])
+        selected = enable_durable_weaver_store(self.run, content / "weaver.db", secrets.token_urlsafe(48))
+        features = json.loads((content / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]
+        self.assertEqual(str(content / "weaver.db"), selected["database"])
+        self.assertIn(DURABLE_EFFECTS_FEATURE, features)
+        self.assertNotIn(COMMON_EFFECTS_FEATURE, features)
+        self.assertTrue(before == {path.name: path.read_bytes() for path in self.backend.iterdir()})
+        for name in ("appsettings.json", "shells.json"):
+            self.assertEqual(0, (content / name).stat().st_mode & 0o077)
+
+    def test_separate_content_configuration_symlink_cannot_rewrite_a_binary_publish(self):
+        content = self.root / "fresh-runtime-content"
+        content.mkdir()
+        (content / "appsettings.json").symlink_to(self.path)
+        self.run.profiles["backend"]["contentRoot"] = content
+        before = self.path.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, "ordinary file"):
+            configure_weaver_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
+        self.assertEqual(before, self.path.read_bytes())
+
+    def test_private_policy_profiles_preserve_other_configuration_and_studio(self):
+        private_value = secrets.token_urlsafe(48)
+        self.settings["PrivateFixtureValue"] = private_value
+        self.path.write_text(json.dumps(self.settings))
+        for enabled in ((False, False, False), (True, False, False), (True, True, True)):
+            with self.subTest(enabled=enabled):
+                selected = configure_weaver_privileges(self.run, administrative=enabled[0], irrecoverable=enabled[1], activation=enabled[2])
+                settings = json.loads(self.path.read_text())
+                self.assertEqual(dict(zip(("Administrative", "Irrecoverable", "Activation"), enabled)), selected)
+                self.assertEqual(selected, settings["Elsa"]["Weaver"].pop("Privileges"))
+                self.assertTrue(settings == self.settings)  # Do not include the private value in a failed assertion message.
+                self.assertTrue(private_value not in json.dumps(selected))
+                self.assertEqual("{}", self.studio_settings.read_text())
+                self.assertEqual(0, self.path.stat().st_mode & 0o077)
+                self.assertEqual([], list(self.backend.glob(".weaver-privileges-*")))
+
+    def test_invalid_privilege_values_leave_the_original_file_unchanged(self):
+        before = self.path.read_bytes()
+        for invalid in (None, 0, 1, "true", [], {}):
+            for member in ("administrative", "irrecoverable", "activation"):
+                with self.subTest(member=member, invalid=invalid):
+                    options = dict(administrative=True, irrecoverable=True, activation=True)
+                    options[member] = invalid
+                    with self.assertRaisesRegex(RuntimeError, "explicit boolean"):
+                        configure_weaver_privileges(self.run, **options)
+                    self.assertEqual(before, self.path.read_bytes())
+
+    def test_failed_atomic_replacement_preserves_the_original_and_removes_private_temporary_file(self):
+        before = self.path.read_bytes()
+        with patch.object(Path, "replace", side_effect=OSError("fixture replacement failure")):
+            with self.assertRaises(OSError):
+                configure_weaver_privileges(self.run, administrative=True, irrecoverable=False, activation=False)
+        self.assertEqual(before, self.path.read_bytes())
+        self.assertEqual([], list(self.backend.glob(".weaver-privileges-*")))
+
+    def test_policy_writer_refuses_foreign_and_symlinked_configuration_without_writing(self):
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        foreign = Path(outside.name).resolve()
+        foreign_path = foreign / "appsettings.json"
+        foreign_path.write_text("{}")
+        self.run.profiles["backend"]["published"] = foreign
+        with self.assertRaisesRegex(RuntimeError, "owned"):
+            configure_weaver_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
+        self.assertEqual("{}", foreign_path.read_text())
+        self.run.profiles["backend"]["published"] = self.backend
+        self.path.unlink()
+        self.path.symlink_to(foreign_path)
+        with self.assertRaisesRegex(RuntimeError, "owned backend"):
+            configure_weaver_privileges(self.run, administrative=True, irrecoverable=True, activation=True)
+        self.assertTrue(self.path.is_symlink())
+        self.assertEqual("{}", foreign_path.read_text())
 
 
 if __name__ == "__main__":

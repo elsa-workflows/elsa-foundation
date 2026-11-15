@@ -10,6 +10,7 @@ internal sealed class DefaultWeaverToolInvoker(
     IWeaverSessionService sessions,
     IWeaverToolAuthorizer authorizer,
     IWeaverPolicyEvaluator policyEvaluator,
+    WeaverEffectsAdmission effects,
     IWeaverAuditSink auditSink,
     InMemoryWeaverProposalStore proposalStore,
     TimeProvider clock) : IWeaverToolInvoker, IWeaverSessionPolicyParticipant
@@ -21,6 +22,7 @@ internal sealed class DefaultWeaverToolInvoker(
     public async Task<WeaverToolDispatch> DispatchAsync(WeaverToolInvocation invocation, WeaverPolicy policy, CancellationToken cancellationToken = default)
     {
         var tool = await registry.FindAsync(invocation.ToolName, cancellationToken);
+        var declaring = tool?.Descriptor.ModuleCodes is not null;
         if (tool is null)
             return await DeniedAsync("weaver.tool.not_found", "The tool is not installed.", 404);
         var session = await sessions.FindAsync(invocation.SessionId, cancellationToken);
@@ -79,15 +81,18 @@ internal sealed class DefaultWeaverToolInvoker(
                     var existing = await proposals.FindAsync(existingId, cancellationToken);
                     if (existing?.PreparedInvocation is not { } original)
                         return await DeniedAsync("weaver.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
-                    var replayAdmission = await WeaverToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken);
-                    if (WeaverToolAccess.OwnerUnavailable(replayAdmission) is { } replayUnavailable)
-                        return await DeniedAsync(replayUnavailable.Code, replayUnavailable.Message, replayUnavailable.StatusCode);
+                    var replayAdmission = await WeaverToolAccess.AuthorizeAsync(tool, descriptor, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken);
+                    if (WeaverToolAccess.OwnerUnavailable(replayAdmission, descriptor.ModuleCodes is not null) is { } replayUnavailable)
+                        return await DenyErrorAsync(replayUnavailable);
                     if (!replayAdmission.Allowed)
                         return await DeniedAsync("weaver.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
                     if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
                         return WeaverToolDispatch.Executed(WeaverResultProvenance.Stamp(retained, original));
                     return WeaverToolDispatch.Proposed(existing);
                 }
+
+                if (await effects.CheckPreparationAsync(descriptor, cancellationToken) is { } preparationVeto)
+                    return await DenyErrorAsync(preparationVeto);
 
                 WeaverResult<WeaverToolPreparation> preparation;
                 try
@@ -100,7 +105,9 @@ internal sealed class DefaultWeaverToolInvoker(
                     return await DeniedAsync("weaver.tool.preparation_failed", "The installed module could not prepare this operation.", 400);
                 }
                 if (!preparation.Succeeded || preparation.Value is null)
-                    return await DeniedAsync(preparation.Error?.Code ?? "weaver.tool.preparation_failed", preparation.Error?.Message ?? "The module refused this operation.", preparation.Error?.StatusCode ?? 400);
+                    return preparation.Error is { } preparationError
+                        ? await DenyErrorAsync(WeaverModuleCodes.Error(preparationError, descriptor.ModuleCodes, ownerOrigin: true))
+                        : await DeniedAsync("weaver.tool.preparation_failed", "The module refused this operation.", 400);
 
                 var module = preparation.Value;
                 var isMutation = descriptor.Mutability == WeaverToolMutability.Mutating;
@@ -121,9 +128,9 @@ internal sealed class DefaultWeaverToolInvoker(
                         || invocation.Client is not null && binding != invocation.Client || !matchingSnapshot)
                         return await DeniedAsync("weaver.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
                 }
-                var admission = await WeaverToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
-                if (WeaverToolAccess.OwnerUnavailable(admission) is { } unavailable)
-                    return await DeniedAsync(unavailable.Code, unavailable.Message, unavailable.StatusCode);
+                var admission = await WeaverToolAccess.AuthorizeAsync(tool, descriptor, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
+                if (WeaverToolAccess.OwnerUnavailable(admission, descriptor.ModuleCodes is not null) is { } unavailable)
+                    return await DenyErrorAsync(unavailable);
                 if (!admission.Allowed)
                     return await DeniedAsync("weaver.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
 
@@ -134,12 +141,14 @@ internal sealed class DefaultWeaverToolInvoker(
                         throw new WeaverContributionException("Prepared tool arguments must be a JSON object.");
                     var requiresApproval = isMutation && (module.RequiresApproval || approvalBasis.RequiresApprovalForMutations
                         || policy.RequiresApprovalForMutations || descriptor.ExecutionLocation == WeaverExecutionLocation.ClientWorkingState);
+                    var effectiveRisk = module.Risk > descriptor.Risk ? module.Risk : descriptor.Risk;
+                    var requiredClasses = WeaverInvocationIntegrity.PreparePrivilegeClasses(module.RequiredPrivilegeClasses, effectiveRisk);
                     prepared = new(WeaverProviderPrimitives.NewId(), session.Id, invocation.TurnId, invocation.ToolCallId,
                         descriptor.Name, descriptor.ContractVersion, descriptor.ModuleId, session.ActorId, session.TenantId,
                         module.Target, WeaverInvocationIntegrity.Freeze(module.Arguments), string.Empty,
-                        module.Risk > descriptor.Risk ? module.Risk : descriptor.Risk, WeaverInvocationIntegrity.Freeze(module.Preview),
+                        effectiveRisk, WeaverInvocationIntegrity.Freeze(module.Preview),
                         descriptor.ExecutionLocation, requiresApproval, module.Client, clock.GetUtcNow().AddMinutes(5))
-                    { DisclosureSourceId = descriptor.DisclosureSourceId };
+                    { DisclosureSourceId = descriptor.DisclosureSourceId, RequiredPrivilegeClasses = requiredClasses };
                     prepared = prepared with { ApprovalDigest = WeaverInvocationIntegrity.PreparedDigest(prepared) };
                 }
                 catch (Exception ex) when (ex is WeaverContributionException or System.Text.Json.JsonException or NotSupportedException)
@@ -147,20 +156,27 @@ internal sealed class DefaultWeaverToolInvoker(
                     return await DeniedAsync("weaver.tool.preparation_invalid", "The module returned an invalid preparation contract.", 400);
                 }
 
+                if (await effects.CheckInvocationAsync(prepared, descriptor, cancellationToken) is { } preparedVeto)
+                    return await DenyErrorAsync(preparedVeto);
+
                 if (!isMutation)
                 {
                     try
                     {
                         var result = await tool.ExecuteAsync(prepared, cancellationToken);
                         if (!result.Succeeded || result.Value is null)
-                            return await DeniedAsync(result.Error?.Code ?? "weaver.tool.failed", result.Error?.Message ?? "The module refused the read.", result.Error?.StatusCode ?? 400);
-                        if (result.Value.Receipt is not null || result.Value.ToolCallId != prepared.ToolCallId || result.Value.ToolName != prepared.ToolName)
+                            return result.Error is { } readError
+                                ? await DenyErrorAsync(WeaverModuleCodes.Error(readError, descriptor.ModuleCodes, ownerOrigin: true))
+                                : await DeniedAsync("weaver.tool.failed", "The module refused the read.", 400);
+                        if (result.Value.Receipt is not null || result.Value.Succeeded && result.Value.Error is not null
+                            || result.Value.ToolCallId != prepared.ToolCallId || result.Value.ToolName != prepared.ToolName)
                             return await DeniedAsync("weaver.tool.result_invalid", "The module returned a mismatched read result.", 500);
-                        var read = WeaverResultProvenance.Stamp(result.Value with
+                        var normalized = WeaverModuleCodes.Result(result.Value, descriptor.ModuleCodes, ownerOrigin: true).Value;
+                        var read = WeaverResultProvenance.Stamp(normalized with
                         {
-                            Payload = result.Value.Payload is null ? null : WeaverInvocationIntegrity.Freeze(result.Value.Payload)
+                            Payload = normalized.Payload is null ? null : WeaverInvocationIntegrity.Freeze(normalized.Payload)
                         }, prepared);
-                        await AuditAsync(invocation, "executed", cancellationToken);
+                        await AuditAsync(invocation, "executed", cancellationToken, declaring ? normalized.Error : null);
                         return WeaverToolDispatch.Executed(read);
                     }
                     catch (OperationCanceledException) { throw; }
@@ -203,12 +219,14 @@ internal sealed class DefaultWeaverToolInvoker(
                 var execution = await proposals.ExecuteAsync(proposal.Id, session.ActorId, prepared.Target?.Revision, cancellationToken);
                 if (execution.Succeeded && execution.Value?.ToolResult is { } applied)
                 {
-                    await AuditAsync(invocation, applied.Succeeded ? "executed" : "uncertain", cancellationToken);
+                    await AuditAsync(invocation, applied.Succeeded
+                        ? applied.Receipt?.Scope == WeaverEffectScope.NoPersistedEffect ? "performed" : "executed" : "uncertain", cancellationToken);
                     return WeaverToolDispatch.Executed(WeaverResultProvenance.Stamp(applied, prepared));
                 }
                 if (execution.Succeeded && execution.Value?.ClientInvocation is not null)
                     return WeaverToolDispatch.Proposed((await proposals.FindAsync(proposal.Id, cancellationToken))!);
-                return await DeniedAsync(execution.Error?.Code ?? "weaver.tool.execution_incomplete", execution.Error?.Message ?? execution.Value?.Summary ?? "The operation has no applied receipt.", execution.Error?.StatusCode ?? 409);
+                return execution.Error is { } executionError ? await DenyErrorAsync(executionError)
+                    : await DeniedAsync("weaver.tool.execution_incomplete", execution.Value?.Summary ?? "The operation has no applied receipt.", 409);
             }
             finally { callGate?.Release(); }
         }
@@ -219,17 +237,39 @@ internal sealed class DefaultWeaverToolInvoker(
             if (preparationClaim is not null) _owner!.Release(preparationClaim);
         }
 
-        async Task<WeaverToolDispatch> DeniedAsync(string code, string message, int status)
+        Task<WeaverToolDispatch> DeniedAsync(string code, string message, int status) => DenyErrorAsync(new(code, message, status));
+
+        async Task<WeaverToolDispatch> DenyErrorAsync(WeaverError error)
         {
-            await AuditAsync(invocation, "denied", cancellationToken);
-            return WeaverToolDispatch.Denied(new(code, message, status));
+            WeaverToolResult? result = null;
+            if (declaring)
+            {
+                // A legacy/held store cannot represent the new result member. Return its existing typed
+                // gate error instead; the foreground boundary stops through the ordinary error lifecycle.
+                // Module preparation/execution can await. The earlier admission no longer establishes
+                // whether this new result representation may be retained at the refusal boundary.
+                var unavailable = await effects.CheckResultAsync(cancellationToken);
+                if (unavailable is not null) error = unavailable;
+                else result = new(invocation.ToolCallId, invocation.ToolName, false, error.Message) { Error = error };
+            }
+            await AuditAsync(invocation, "denied", cancellationToken, declaring ? error : null);
+            return new(WeaverToolDispatchOutcome.Denied, result, null, error);
         }
     }
 
-    private Task AuditAsync(WeaverToolInvocation invocation, string outcome, CancellationToken cancellationToken) => auditSink.EmitAsync(new(
-        WeaverProviderPrimitives.NewId(), WeaverAuditEventKind.ToolInvoked, invocation.SessionId, invocation.ActorId,
-        "A registered tool invocation was evaluated.", clock.GetUtcNow(),
-        new Dictionary<string, string> { ["toolCallId"] = invocation.ToolCallId, ["toolName"] = invocation.ToolName, ["outcome"] = outcome }), cancellationToken);
+    private Task AuditAsync(WeaverToolInvocation invocation, string outcome, CancellationToken cancellationToken, WeaverError? error = null)
+    {
+        var metadata = new Dictionary<string, string>
+            { ["toolCallId"] = invocation.ToolCallId, ["toolName"] = invocation.ToolName, ["outcome"] = outcome };
+        if (error is not null)
+        {
+            metadata["code"] = error.Code;
+            metadata["statusCode"] = error.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            metadata["ownerUnavailable"] = error.OwnerUnavailable ? "true" : "false";
+        }
+        return auditSink.EmitAsync(new(WeaverProviderPrimitives.NewId(), WeaverAuditEventKind.ToolInvoked,
+            invocation.SessionId, invocation.ActorId, "A registered tool invocation was evaluated.", clock.GetUtcNow(), metadata), cancellationToken);
+    }
 }
 
 /// <summary>Hosts supply current identity integration explicitly; installation alone grants no authority.</summary>

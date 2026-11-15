@@ -1,9 +1,12 @@
 import copy
+from contextlib import redirect_stdout
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -12,6 +15,83 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('acceptance', Path(__file__).with_name('run.py'))
 acceptance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(acceptance)
+
+
+class SiblingImportTests(unittest.TestCase):
+    def test_absolute_spec_import_finds_the_bound_sibling_without_changing_sys_path(self):
+        source = Path(__file__).with_name('run.py').resolve()
+        script = '''
+import importlib.util
+import json
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).resolve()
+original_path = list(sys.path)
+spec = importlib.util.spec_from_file_location('isolated_owned_ux_helpers', source)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+assert sys.path == original_path
+assert Path(module.weaver_inventory.__file__).resolve() == source.with_name('weaver_inventory.py')
+assert sys.modules[module.weaver_inventory.__name__] is module.weaver_inventory
+assert module.weaver_inventory.BASELINE in module.CAPTURES
+assert module.weaver_inventory.BASELINE not in module.selected_journeys()
+print(json.dumps({'boundSibling': True, 'unchangedPath': True}))
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            foreign = Path(directory)
+            (foreign / 'weaver_inventory.py').write_text('raise RuntimeError("Foreign module must not be imported")\n')
+            result = subprocess.run([sys.executable, '-I', '-c', script, str(source)], cwd=foreign,
+                                    capture_output=True, text=True, timeout=30, check=True)
+        self.assertEqual({'boundSibling': True, 'unchangedPath': True}, json.loads(result.stdout))
+
+    def test_isolated_cli_help_preserves_profile_and_composition_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, '-I', str(Path(__file__).with_name('run.py').resolve()), '--help'],
+                                    cwd=directory, capture_output=True, text=True, timeout=30, check=True)
+        self.assertIn('--profile', result.stdout)
+        self.assertIn('--composition', result.stdout)
+        self.assertIn('--journey', result.stdout)
+
+
+class ProvenanceInputPrivacyTests(unittest.TestCase):
+    def test_full_hex_head_reaches_provenance_check_in_canonical_form(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'evidence'
+            with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'B' * 40}), \
+                 patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                 patch.object(acceptance, 'supplies_pr_head', return_value=False) as provenance, \
+                 patch.object(acceptance, 'command') as build, redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(ValueError, 'claimed PR head'):
+                    acceptance.run(output)
+            self.assertEqual('b' * 40, json.loads((output / 'report.json').read_text())['headSha'])
+            self.assertTrue(provenance.called)
+            self.assertTrue(all(call.args[-1] == 'b' * 40 for call in provenance.call_args_list))
+            build.assert_not_called()
+
+    def test_invalid_head_never_enters_failed_report_or_stdout_and_starts_no_build(self):
+        for profile in ('default', 'weaver-inventory', 'weaver-semantic'):
+            for supplied in ('/Users/private-head-canary/auth.json', 'Bearer private-head-canary',
+                             'eyJprivate-head-canary.payload.signature', 'private-head-canary\nBearer token'):
+                with self.subTest(profile=profile, supplied=supplied), tempfile.TemporaryDirectory() as temporary:
+                    output = Path(temporary) / 'evidence'
+                    printed = io.StringIO()
+                    with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': supplied}), \
+                         patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                         patch.object(acceptance, 'supplies_pr_head') as provenance, \
+                         patch.object(acceptance, 'command') as build, redirect_stdout(printed):
+                        with self.assertRaises((ValueError, RuntimeError)):
+                            acceptance.run(output, profile=profile)
+                    serialized = (output / 'report.json').read_text()
+                    for text in (serialized, printed.getvalue()):
+                        self.assertNotIn(supplied, text)
+                        self.assertNotIn('private-head-canary', text)
+                    report = json.loads(serialized)
+                    self.assertEqual('failed', report['status'])
+                    self.assertEqual('source-provenance', report['stage'])
+                    self.assertEqual('invalid_pr_head_sha', report['errorCode'])
+                    self.assertNotIn('headSha', report)
+                    provenance.assert_not_called()
+                    build.assert_not_called()
 
 
 class VerdictTests(unittest.TestCase):
@@ -73,6 +153,21 @@ class VerdictTests(unittest.TestCase):
 
     def test_complete_evidence(self):
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+
+    def test_weaver_inventory_is_opt_in_and_still_requires_its_named_evidence(self):
+        self.assertFalse(acceptance.JOURNEYS & acceptance.weaver_inventory.JOURNEYS)
+        journey = acceptance.weaver_inventory.BASELINE
+        report = {'suites': [{'specs': [{'title': journey, 'tests': [{
+            'projectName': 'desktop-light', 'expectedStatus': 'passed', 'status': 'expected',
+            'results': [{'status': 'passed', 'attachments': [
+                {'name': name, 'path': str(self.trace if name == 'trace' else self.artifact)}
+                for name in ['weaver-interaction.json', 'weaver-inventory.json'] + [f'{capture}.{suffix}'
+                    for capture in acceptance.CAPTURES[journey] for suffix in ('png', 'aria.yml')]]}]}]}]}]}
+        with self.assertRaisesRegex(ValueError, 'safe-export.json'):
+            acceptance.verdict(report, self.root, journeys=[journey], projects=['desktop-light'])
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, [journey])
+        report['suites'][0]['specs'][0]['tests'][0]['results'][0]['attachments'].pop()
+        with self.assertRaises(ValueError): acceptance.verdict(report, self.root, journeys=[journey], projects=['desktop-light'])
 
     def test_compact_inputs_preserve_inherited_named_journeys(self):
         required = {'collections and connection creation', 'agent authoring and navigation',
@@ -174,11 +269,32 @@ class VerdictTests(unittest.TestCase):
         report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
         file = self.root / (title.replace(' ', '-') + '.json'); proof = json.loads(file.read_text())
         proof['composition'] = 'default-off'; file.write_text(json.dumps(proof))
-        with self.assertRaisesRegex(ValueError, 'capability'): acceptance.verdict(report, self.root, [title], 'default-off')
+        with self.assertRaisesRegex(ValueError, 'capability'): acceptance.verdict(report, self.root, journeys=[title], composition='default-off')
         proof['contexts'][0]['response']['analysis']['memberReadsEnabled'] = False; file.write_text(json.dumps(proof))
-        self.assertEqual(4, acceptance.verdict(report, self.root, [title], 'default-off'))
+        self.assertEqual(4, acceptance.verdict(report, self.root, journeys=[title], composition='default-off'))
         proof['contexts'][0]['response']['analysis']['sources'] = []; file.write_text(json.dumps(proof))
-        with self.assertRaisesRegex(ValueError, 'typed source'): acceptance.verdict(report, self.root, [title], 'default-off')
+        with self.assertRaisesRegex(ValueError, 'typed source'): acceptance.verdict(report, self.root, journeys=[title], composition='default-off')
+
+    def test_activity_composition_and_project_selection_are_independent(self):
+        title = 'choose data for activity outputs'
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == title]
+        report['suites'][0]['specs'][0]['tests'] = [test for test in report['suites'][0]['specs'][0]['tests']
+                                                if test['projectName'] == 'desktop-light']
+        file = self.root / (title.replace(' ', '-') + '.json')
+        original = file.read_text(); proof = json.loads(original)
+        proof['composition'] = 'default-off'
+        proof['contexts'][0]['response']['analysis']['memberReadsEnabled'] = False
+        file.write_text(json.dumps(proof))
+        try:
+            self.assertEqual(1, acceptance.verdict(report, self.root, journeys=[title],
+                                                 projects=['desktop-light'], composition='default-off'))
+            with self.assertRaisesRegex(ValueError, 'composition mismatch'):
+                acceptance.verdict(report, self.root, journeys=[title], projects=['desktop-light'], composition='normal')
+            with self.assertRaisesRegex(ValueError, 'Incomplete acceptance inventory'):
+                acceptance.verdict(report, self.root, journeys=[title], projects=['desktop-dark'], composition='default-off')
+        finally:
+            file.write_text(original)
 
 
     def test_stale_development_overlays_never_reach_owned_content_root(self):
@@ -194,6 +310,63 @@ class VerdictTests(unittest.TestCase):
         destination = self.root / 'private'
         acceptance.prepare_host(project, destination)
         self.assertEqual({'appsettings.json', 'shells.json'}, {file.name for file in destination.iterdir()})
+
+    def test_normal_development_profile_uses_only_committed_source_overlays(self):
+        project = self.root / 'source/Host.csproj'
+        project.parent.mkdir()
+        output = project.parent / 'bin/Debug/net10.0'
+        output.mkdir(parents=True)
+        for name in ('appsettings.json', 'shells.json'):
+            (project.parent / name).write_text('{}')
+        source_overlay = project.parent / 'appsettings.Development.json'
+        source_overlay.write_text('{"Elsa":{"Diagnostics":{"ConsoleLogStreaming":{"Enabled":true}}}}')
+        (output / source_overlay.name).write_text('{"staleBuildOutput":true}')
+        (project.parent / 'shells.Development.json').write_text('{"ignoredLocalSettings":true}')
+        (output / 'shells.Development.json').write_text('{"staleBuildOutput":true}')
+        destination = self.root / 'normal-private'
+        def tracked(args, **kwargs):
+            self.assertEqual(['git', '-c', 'core.fsmonitor=false', 'ls-files', '--error-unmatch', '--'], args[:-1])
+            self.assertEqual(self.root, kwargs['cwd'])
+            return subprocess.CompletedProcess(args, 0 if Path(args[-1]).name == source_overlay.name else 1)
+        with patch.object(acceptance, 'ROOT', self.root), patch.object(acceptance.subprocess, 'run', side_effect=tracked) as metadata:
+            acceptance.prepare_host(project, destination, include_development=True)
+        self.assertEqual(2, metadata.call_count)
+        self.assertEqual(source_overlay.read_bytes(), (destination / source_overlay.name).read_bytes())
+        self.assertFalse((destination / 'shells.Development.json').exists())
+        self.assertEqual({'appsettings.json', 'shells.json', source_overlay.name}, {file.name for file in destination.iterdir()})
+
+    def test_development_overlay_symlinks_cannot_borrow_target_tracking(self):
+        for tracked_symlink in (False, True):
+            with self.subTest(tracked_symlink=tracked_symlink):
+                project = self.root / f'symlink-source-{tracked_symlink}/Host.csproj'
+                project.parent.mkdir()
+                (project.parent / 'bin/Debug/net10.0').mkdir(parents=True)
+                for name in ('appsettings.json', 'shells.json'):
+                    (project.parent / name).write_text('{}')
+                development = project.parent / 'appsettings.Development.json'
+                development.write_text('{"committedSource":true}')
+                ignored = project.parent / 'shells.Development.json'
+                if tracked_symlink:
+                    development.unlink()
+                    development.symlink_to(project.parent / 'appsettings.json')
+                else:
+                    ignored.symlink_to(development)
+                destination = self.root / f'symlink-private-{tracked_symlink}'
+                checked = []
+                def tracked(args, **_kwargs):
+                    name = Path(args[-1]).name
+                    checked.append(name)
+                    return subprocess.CompletedProcess(args, 0 if name in {'appsettings.json', 'appsettings.Development.json'} else 1)
+                with patch.object(acceptance, 'ROOT', self.root), patch.object(acceptance.subprocess, 'run', side_effect=tracked):
+                    if tracked_symlink:
+                        with self.assertRaisesRegex(ValueError, 'regular source files'):
+                            acceptance.prepare_host(project, destination, include_development=True)
+                        self.assertFalse((destination / development.name).exists())
+                    else:
+                        acceptance.prepare_host(project, destination, include_development=True)
+                        self.assertEqual(['appsettings.Development.json', 'shells.Development.json'], checked)
+                        self.assertEqual(development.read_bytes(), (destination / development.name).read_bytes())
+                        self.assertFalse((destination / ignored.name).exists())
 
     def test_native_qualification_has_exact_private_grants_and_no_inference(self):
         settings = {}
@@ -258,6 +431,16 @@ class VerdictTests(unittest.TestCase):
             self.assertTrue(popen.call_args.kwargs['start_new_session'])
             self.assertEqual([(43, acceptance.signal.SIGTERM), (43, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
             self.assertEqual(3, process.wait.call_count)
+
+    def test_bounded_command_timeout_stops_its_owned_group_and_preserves_timeout_cause(self):
+        with patch.object(acceptance.subprocess, 'Popen') as popen, patch.object(acceptance.os, 'killpg') as kill:
+            process = popen.return_value
+            process.pid = 43
+            process.wait.side_effect = [subprocess.TimeoutExpired(['browser-runner'], 300), 0, 0]
+            with self.assertRaises(subprocess.TimeoutExpired):
+                acceptance.command(['browser-runner'], self.root / 'command.log', timeout=300)
+            self.assertEqual(300, process.wait.call_args_list[0].kwargs['timeout'])
+            self.assertEqual([(43, acceptance.signal.SIGTERM), (43, acceptance.signal.SIGKILL)], [call.args for call in kill.call_args_list])
 
     def test_owned_host_gets_the_normal_dotnet_shutdown_window_before_forced_kill(self):
         from unittest.mock import Mock
@@ -385,18 +568,70 @@ class CompositionTests(unittest.TestCase):
 
 
 class SourcePairTests(unittest.TestCase):
+    def test_semantic_profile_owns_normal_hosts_and_stays_outside_default_and_native_profiles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'evidence'
+            with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'a' * 40}), \
+                 patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                 patch.object(acceptance, 'command') as build, \
+                 patch.object(acceptance, 'run_weaver_semantic') as semantic, \
+                 patch.object(acceptance, 'run_weaver_inventory') as inventory, \
+                 patch.object(acceptance, 'configure_dashboard_qualification') as dashboard, \
+                 patch.object(acceptance, 'configure_activity_data') as activity, redirect_stdout(io.StringIO()):
+                acceptance.run(output, profile='weaver-semantic', composition='normal')
+            self.assertEqual(3, build.call_count)
+            self.assertIn('-p:ElsaDashboardQualification=false', build.call_args_list[0].args[0])
+            self.assertTrue(all(call.kwargs['timeout'] == 900 for call in build.call_args_list))
+            semantic.assert_called_once(); inventory.assert_not_called(); dashboard.assert_not_called(); activity.assert_not_called()
+            report = json.loads((output / 'report.json').read_text())
+            self.assertEqual('weaver-semantic', report['profile']); self.assertEqual('incomplete', report['t045Acceptance'])
+            self.assertNotIn('fixture', report)
+            self.assertTrue(acceptance.weaver_inventory.SEMANTIC_JOURNEYS.isdisjoint(acceptance.selected_journeys()))
+
+    def test_weaver_profile_keeps_its_shipped_host_build_separate_from_activity_compositions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'evidence'
+            with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'a' * 40}), \
+                 patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                 patch.object(acceptance, 'command') as build, \
+                 patch.object(acceptance, 'run_weaver_inventory') as inventory, \
+                 patch.object(acceptance, 'configure_dashboard_qualification') as dashboard, \
+                 patch.object(acceptance, 'configure_activity_data') as activity, redirect_stdout(io.StringIO()):
+                acceptance.run(output, profile='weaver-inventory', composition='normal')
+            self.assertEqual(3, build.call_count)
+            backend_command = build.call_args_list[0].args[0]
+            self.assertIn('-p:ElsaDashboardQualification=false', backend_command)
+            self.assertFalse(any('CustomAfterMicrosoftCommonTargets' in arg for call in build.call_args_list for arg in call.args[0]))
+            inventory.assert_called_once(); dashboard.assert_not_called(); activity.assert_not_called()
+            report = json.loads((output / 'report.json').read_text())
+            self.assertEqual('weaver-inventory', report['profile']); self.assertEqual('normal', report['composition'])
+            self.assertNotIn('fixture', report); self.assertNotIn('fixtureCleanup', report)
+
+    def test_weaver_profile_refuses_activity_composition_overrides_before_build(self):
+        for composition in ('minimal', 'default-off'):
+            with self.subTest(composition=composition), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / 'evidence'
+                with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'a' * 40}), \
+                     patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), \
+                     patch.object(acceptance, 'command') as build, redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(RuntimeError, 'inventory failed'):
+                        acceptance.run(output, profile='weaver-inventory', composition=composition)
+                build.assert_not_called()
+                report = json.loads((output / 'report.json').read_text())
+                self.assertEqual('failed', report['status']); self.assertNotIn('fixture', report)
+
     def test_dirty_studio_checkout_is_refused_even_when_backend_source_is_clean(self):
         with tempfile.TemporaryDirectory() as directory:
             studio = Path(directory).resolve() / "studio-source"
             output = Path(directory) / "evidence"
-            state = lambda root: ("frontend-head", " M component.tsx") if root == studio else ("backend-head", "")
+            state = lambda root: ("b" * 40, " M component.tsx") if root == studio else ("a" * 40, "")
             with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command") as command:
                 with self.assertRaisesRegex(ValueError, "dirty run"):
                     acceptance.run(output, 'existing home widgets and layout defaults', studio)
             command.assert_not_called()
             report = json.loads((output / "report.json").read_text())
             self.assertTrue(report["studioDirty"])
-            self.assertEqual("frontend-head", report["studioSourceSha"])
+            self.assertEqual("b" * 40, report["studioSourceSha"])
             self.assertEqual("failed", report["status"])
 
     def test_unrelated_claimed_pr_head_is_refused_before_build(self):
@@ -409,8 +644,10 @@ class SourcePairTests(unittest.TestCase):
             self.assertEqual("failed", json.loads((output / "report.json").read_text())["status"])
 
     def test_opt_in_fixture_cleanup_retains_primary_and_cleanup_failures(self):
-        for fail_cleanup in (False, True):
-            with self.subTest(fail_cleanup=fail_cleanup), tempfile.TemporaryDirectory() as directory:
+        for fail_cleanup, composition, journeys in ((False, 'normal', 'choose nested activity data'),
+                (True, 'normal', 'choose nested activity data'), (False, 'minimal', sorted(acceptance.MEMBER_JOURNEYS)),
+                (True, 'minimal', sorted(acceptance.MEMBER_JOURNEYS))):
+            with self.subTest(fail_cleanup=fail_cleanup, composition=composition), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory); output = root / 'evidence'
                 fixture = root / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
                 fixture.parent.mkdir(parents=True); fixture.write_text('test import'); fixture.with_name('CustomerFixture.cs').write_text('test fixture')
@@ -421,11 +658,14 @@ class SourcePairTests(unittest.TestCase):
                     self.assertEqual('fixture-cleanup-build.log', log.name)
                     if fail_cleanup: raise RuntimeError('cleanup build failure')
                     dll.write_bytes(b'fixture-free default host')
-                with patch.object(acceptance, 'ROOT', root), patch.object(acceptance, 'source_state', return_value=('same-head', '')), patch.object(acceptance, 'command', side_effect=command):
+                with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'a' * 40}), \
+                     patch.object(acceptance, 'ROOT', root), patch.object(acceptance, 'source_state', return_value=('a' * 40, '')), patch.object(acceptance, 'command', side_effect=command):
                     with self.assertRaisesRegex(RuntimeError, 'cleanup build failure' if fail_cleanup else 'primary build failure'):
-                        acceptance.run(output, 'choose nested activity data')
+                        acceptance.run(output, journey=journeys, composition=composition)
                 report = json.loads((output / 'report.json').read_text())
                 self.assertEqual('failed', report['status']); self.assertEqual('primary build failure', report['error'])
+                self.assertEqual('default', report['profile']); self.assertEqual(composition, report['composition'])
+                self.assertEqual(sorted(acceptance.selected_journeys(journeys, composition)), report['journeys'])
                 if fail_cleanup: self.assertEqual('cleanup build failure', report['cleanupError'])
                 else: self.assertTrue(report['fixtureCleanup']['markerAbsent'])
 
@@ -461,8 +701,9 @@ class SourcePairTests(unittest.TestCase):
                     test = {"expectedStatus": "passed", "status": "expected", "results": [{"status": "passed", "attachments": [{"contentType": "image/png", "path": str(image)}]}]}
                     (gallery / "playwright.json").write_text(json.dumps({"config": {"metadata": {"outlinedCases": 1}}, "suites": [{"specs": [{"title": "Unit fixture", "tests": [test]}]}]}))
                 if "studio-build.log" in str(_args): raise RuntimeError("Stop after verifying build selection")
-            state = lambda root: ("frontend-head", "") if root == studio else ("backend-head", "")
-            with patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command", side_effect=command):
+            state = lambda root: ("b" * 40, "") if root == studio else ("a" * 40, "")
+            with patch.dict(acceptance.os.environ, {'UX_PR_HEAD_SHA': 'a' * 40}), \
+                 patch.object(acceptance, "source_state", side_effect=state), patch.object(acceptance, "command", side_effect=command):
                 with self.assertRaisesRegex(RuntimeError, "build selection"):
                     acceptance.run(output, 'existing home widgets and layout defaults', studio)
             self.assertEqual(studio / "Studio", calls[1][1])
@@ -470,9 +711,9 @@ class SourcePairTests(unittest.TestCase):
             self.assertIn("tests/browser/playwright.outlined-fields.config.ts", calls[2][0])
             self.assertIn(str(studio / "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"), calls[3][0])
             report = json.loads((output / "report.json").read_text())
-            self.assertEqual("backend-head", report["sourceSha"])
-            self.assertEqual("frontend-head", report["studioSourceSha"])
-            self.assertEqual("frontend-head", report["isolatedFieldGallery"]["sourceSha"])
+            self.assertEqual("a" * 40, report["sourceSha"])
+            self.assertEqual("b" * 40, report["studioSourceSha"])
+            self.assertEqual("b" * 40, report["isolatedFieldGallery"]["sourceSha"])
             self.assertFalse(report["isolatedFieldGallery"]["portOverrideConfirmed"])
             self.assertNotIn("url", report["isolatedFieldGallery"])
 

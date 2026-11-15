@@ -6,6 +6,7 @@
 - **Charter, decisions and progress:** [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428).
 - **Kanban WIP:** [Project #65, view 1](https://github.com/orgs/elsa-workflows/projects/65/views/1).
 - **Full hierarchy:** [Project #65, Roadmap](https://github.com/orgs/elsa-workflows/projects/65/views/2).
+- **Current execution:** In progress after verified dependency resolution, 15 November 2026. [Current source/evidence receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6888372160) records delivered #4555/actual48e filter freshness and supersedes the old removal proposal without applying it. Claim6888268113 is verified; Project65 Program/M4/leaf0 In progress, later leaves Backlog. Pinnedmain90beef/#4561 is now integrated, with two clean bounded integration addenda preserving both parents' acceptance lanes. Node typings, strict causal classification and safe author-diagnostic corrections have clean independent source reviews; the diagnostic privacy P2 is fixed by removing textual identities/C# parsing. Thirteen diagnostic/29 causal controls and current runtime/typecheck/UX remain unrun. Retained542/486 evidence has2016 first-try Weaver passes matched to discovery, plus743 log-reported Studio.NET passes; overall CI and package/causal proof remain failed/incomplete at that source. Required focused native/causal/composed/semantic proof remains; optional broad repeat CI is skipped under the [15 November owner exception](https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6888267720), without treating absent/pending/failed checks as passes. Separate retry/resource/security/acceptance/human holds remain. No merge, contract freeze or completion claim. The [FR022 clarification](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6883469572) still requires real-SDK replies from actual admitted context with shipped-only hosts and deterministic-protocol labeling. No credentials, purchases or extra worker are authorized; T042 remains cleaned. Formal review and all remaining native/package/provider/discovery/composed/semantic/UX/current-main/resulting-main acceptance stays open.
 
 ## Purpose and ownership
 
@@ -56,6 +57,18 @@ supersedes the earlier numerical review ceiling: necessary independent review an
 with cumulative numbering and no reset. Full M0–M5 delivery remains authorized. Every substantive gate,
 claim/WIP/readiness rule and resulting-main check remains required. The narrowly authorized one-file
 owner-account workflow update is complete; ordinary writes and merges use the worker's own App.
+
+The [14 November bounded T042 and merge authorization](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6871081882)
+authorizes one fresh disposable T042 worker, capped at one CPU and 3 GiB for at most 90 minutes,
+with cleanup afterward. It does not renew a previous allocation. The owner also authorizes an admin
+override to self-merge after a clean self-review loop. This exception covers the merge mechanism;
+exact-head independent review, required passing checks, unresolved human holds and resulting-main
+verification remain binding. The cumulative review history and all Program acceptance and charter
+boundaries remain intact. This authorization does not mark T042 or the implementation complete.
+
+The later [14 November coordinator authority](https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6883609973), verified against Sipke's actual messages, permits admin merges of active authorized work after clean exact-head self-review without waiting on CI, and permits the existing authenticated `sfmskywalker` account when the worker App lacks bypass permission. This supersedes the administrative CI-wait timing condition for that work only. Actual CI states remain reported as observed; substantive acceptance, unresolved findings or human holds, scope decisions, dependency ordering, retry/review limits and resulting-main qualification remain binding. A future merge audit records the reviewed SHA, evidence, actual CI state, fallback reason and verified merge SHA/tree. It grants no credentials, resources, agreement signing, releases, deployments, publishers or protection/authentication changes.
+
+The [15 November standing clarification](https://github.com/elsa-workflows/elsa-foundation/pull/3845#issuecomment-6888267720), verified against the owner's direct message, permits as many reasonable independent review passes as needed, including after integration, with cumulative numbering and exact reviewed heads. Skip optional/redundant CI dispatches and administrative waits where possible; substantive correctness/security/acceptance, human/scope/dependency/resource holds, separate three-failure retry limits and actual resulting-main verification remain. Failed, pending and skipped evidence is never relabeled passed. This grants no disabling of shared workflows, rule/authentication changes, foreign cancellations, extra compute or separately paused scope.
 
 The [1 November native-baseline exception](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6563215730)
 authorizes resuming #3440's native baseline after its three failed runs (`1495b57a6`, `d82a0b7fa`,
@@ -187,3 +200,16 @@ provider-protocol and opt-in live evidence distinctly; source probes and histori
 not current end-to-end acceptance. Meaningful risk-based regressions, required exact-head CI/review,
 resulting-main verification, updated existing catalogs and module-author guidance support closure.
 Keep unsupported/deferred boundaries explicit on #3428 until they are resolved or owner-amended.
+
+
+The [12 November resume](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6837492732)
+reactivates this Program only. The current native M4 and M5 children are #3443 and #3444;
+the 9 November triage folded duplicate wrappers #3433/#3434 without completing either milestone.
+Project65 archives those closed wrappers and retains the open feature/leaf states.
+The owner-authorized Weaver rename is the current source boundary: user-defined agents keep
+`Elsa.Agent.*`, the Studio assistant uses `Elsa.Weaver.*` / `api.weaver`, and the additive
+store upgrade must be demonstrated with actual post-rename Weaver1.0/1.1 writers.
+Historical Agent-store captures remain unchanged evidence of their original sources. The source
+inventory adds Decisions to spec1203 FR-001/later leaf22; actual composed support remains unverified.
+The [single bounded Azure verification grant](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6837783960)
+is at most1CPU/3GiB/90minutes with stop/deallocation; it grants no fleet or other paused-stream restart.

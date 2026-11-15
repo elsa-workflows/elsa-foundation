@@ -12,6 +12,45 @@ This is the domain catalog for framework §2.22.1. The [root index](../../../../
 
 `InMemoryWeaverSessionService` (which also owns policy revisions and work claims), `InMemoryWeaverFeedbackService`, `InMemoryWeaverAuditStore` (sink, reader and audit ownership), `WeaverTurnRegistry`, `InMemoryWeaverTurnStateStore` and `InMemoryWeaverProposalStore` are process-local singleton state. The proposal store holds data, synchronization and retained results; scoped facades resolve current tools and authority. It captures no tool instances, callbacks or `HttpContext`. `TimeProvider.System` is registered with `TryAddSingleton` for execution expiry. These defaults provide no durable restart or distributed coordination guarantee. Since #3441 the session owner writes through `IWeaverSessionRecordStore`; the opt-in [EF store](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) makes that record durable ([below](#durable-recovery-3441-preview)).
 
+## Module support preview (spec 1203, not yet qualified)
+
+The following describes the implementation in the current leaf, not a frozen package contract.
+The dated [1186 effects](../../../../specs/1186-weaver-effects/spec.md) and
+[1189 recovery](../../../../specs/1189-weaver-recovery/spec.md) evidence covers its recorded source only.
+Current composed-host and independent-package journeys remain required before this extension freezes.
+
+| Host integration | Source contract and migration |
+| --- | --- |
+| Effects feature | Select `WeaverEffects` for the known process-local store; select the store-specific variation for a declared custom store. [`WeaverEffectsFeature`](WeaverEffectsFeature.cs) is public and extensible; inherited registration captures the actual selected type. Do not select both common and store-specific siblings. |
+| Store selection | The existing two-argument `SelectWeaverSessionRecordStore(factory)` remains a public overload and declares legacy-only support. New effects require `SelectWeaverSessionRecordStore(factory, requiredEffectsFeatureType)`; explicit null is also legacy-only. The type must derive from `WeaverEffectsFeature`, and the actual selected variation must derive from the store's required type. Unowned replacement or duplicate selection is diagnosed; a factory's return type never establishes support. See [EF composition](../Persistence/EntityFrameworkCore/README.md#module-support-preview-spec-1203). |
+| Privilege limits | [`WeaverPrivilegePolicyOptions`](WeaverPrivilegePolicyOptions.cs) is bound from `Elsa:Weaver:Privileges`; `Administrative`, `Irrecoverable` and `Activation` default false. The internal scoped policy reads `IOptionsMonitor` at admission boundaries, independently of session autonomy. Configuration reload requires a reload-capable host provider. Bootstrap exposes current informational booleans; it grants no permission. |
+| Current principal | [`IWeaverPrincipalSource`](../Core/IWeaverPrincipalSource.cs) is an optional **replacement**, scoped per operation. Base Weaver registers none. Weaver API uses `TryAddScoped` for its HTTP implementation, preserving an earlier custom registration; use `Replace` afterward. More than one nonkeyed source or a non-scoped source fails validation. Missing integration cannot manufacture a principal. |
+
+The HTTP principal source returns the actual authenticated current request principal only after exact
+actor/tenant validation. A custom non-HTTP host must supply an equivalent genuine current principal;
+do not reconstruct claims from identifiers or retain a principal between requests. Modules obtain it
+again for explicit execution and independently check owning-resource permissions. Neither the principal
+nor its claims belong in context, prepared arguments, records, digests or provider transport.
+
+Feature admission, current host limits and owning-resource permission are separate checks. Approval
+uses retained core state and current privilege limits, without resolving a module or principal.
+An enabled class cannot authorize a tool, and an enabled feature cannot make an unobserved schema
+available. The exact proposed behavior and remaining qualification are in the
+[privilege/principal contract](../../../../specs/1203-weaver-module-support/contracts/privilege-policy.md)
+and [outcome contract](../../../../specs/1203-weaver-module-support/contracts/outcomes.md).
+
+When the API and an effects variation are selected, `/capabilities` adds `elsa.api.weaver.effects`
+contract1, with bootstrap and proposal links. Its typed API source uses the same selected-feature
+admission as execution, reporting current dormancy without gating the legacy `elsa.api.weaver`
+capability. It adds no schema observation to the in-memory store and no dependency on a module's
+tools, principal or resource store. Privilege limits and resource permission remain separate.
+
+The first-time [Core API inventory](../Core/PublicAPI.Unshipped.txt) and
+[HTTP API inventory](../Api/PublicAPI.Unshipped.txt) track their complete pre-GA surfaces.
+The [T042 provenance](../../../../specs/1203-weaver-module-support/evidence/t042-api-tracking.json)
+separates the existing-source baseline from leaf0 additions and records the remaining guard checks.
+These inventories do not freeze the module-support preview.
+
 ## Overridable contracts
 
 All contracts below have layer badge **Core — `Elsa.Weaver.Core`**. Defaults are internal to `Elsa.Weaver` unless another project is named. Override one contract with `services.Replace(...)`; additive module contribution belongs in the next section. The linked contract files are the signature authority.
@@ -25,6 +64,7 @@ All contracts below have layer badge **Core — `Elsa.Weaver.Core`**. Defaults a
 | [`IWeaverContextCollector`](../Core/Contracts/WeaverContracts.cs) | `DefaultWeaverContextCollector`, scoped | `CollectAsync(policy, WeaverContextRequest)` returns `Task<WeaverResult<WeaverContextContribution>>` | Replace admission orchestration while preserving installed-source admission, diagnostics, minimization and policy. API/session input uses it. |
 | [`IWeaverCapabilityCatalog`](../Core/Contracts/WeaverContracts.cs) | `DefaultWeaverCapabilityCatalog`, scoped | `ListAsync()` returns `Task<IReadOnlyCollection<WeaverCapability>>` | Replace catalog assembly. API capability discovery consumes it; modules normally add sources. |
 | [`IWeaverToolRegistry`](../Core/Contracts/WeaverToolContracts.cs) | `DefaultWeaverToolRegistry`, scoped | Async `ListAsync()` and `FindAsync(toolName)` return installed `IWeaverTool` instances | Replace discovery while retaining the named fan-in and identity validation. Orchestrator, invoker and executor share this registry; there is no second execution registry. |
+| [`IWeaverSupportSource`](../Core/Contracts/WeaverSupportContracts.cs) *(preview, spec1203)* | `DefaultWeaverSupportSource`, scoped | `ReadAsync(actorId, tenantId, policy)` returns a bounded `WeaverSupportView` | Replace the safe installed-support projection for custom hosts. Exactly one scoped replacement is allowed. Weaver API's sessionless `/support` uses and labels the host default policy; a session consumer must supply its actual owned policy. This reads the existing tool/context registrations without preparing tools or collecting/disclosing resource context. Complete inventory does not grant target or disclosure authority; unknown/truncated observations cannot establish absence. |
 | [`IWeaverToolAuthorizer`](../Core/Contracts/WeaverContributionContracts.cs) | `UnavailableWeaverToolAuthorizer`, scoped, denies every request | `AuthorizeAsync(descriptor, actorId, tenantId, target)` returns `Task<WeaverPolicyDecision>` | Supply current server identity, tenant and resource permission integration. Invoker and executor recheck it; modules can also use it before authorized reads. Caller metadata and admitted scopes never grant permission. |
 | [`IWeaverToolInvoker`](../Core/Contracts/WeaverToolContracts.cs) | `DefaultWeaverToolInvoker`, scoped | `DispatchAsync(WeaverToolInvocation, policy)` returns `Task<WeaverToolDispatch>` | Replace generic preparation/policy dispatch while preserving exact binding and the proposal effect pipeline. Both orchestrator and harness tool bridges consume it. |
 | [`IWeaverProposalService`](../Core/Contracts/WeaverContracts.cs) | `InMemoryWeaverProposalService`, scoped over singleton `InMemoryWeaverProposalStore` | Add/find/approve/deny/execute proposals; `AcknowledgeAsync(sessionId, invocationId, actorId, acknowledgement)`; `FindResultAsync(proposalId)` | Supply durable review/result coordination. API and invoker use the facade; orchestrator resumes from its retained actual result. Preserve idempotency and pending-versus-applied state. |
@@ -59,6 +99,7 @@ Known provider implementations:
 
 - **Kind:** Source; the existing interface name is retained. [Signature](../Core/Contracts/WeaverContracts.cs): `Descriptor: WeaverContextProviderDescriptor`, derived `ScopeKind`, and `CollectAsync(WeaverContextRequest): ValueTask<WeaverContextContribution>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverContextProvider, MyContextSource>())`.
+- **Known intra-domain source:** Weaver API's internal `HostSupportContextSource` *(preview, spec1203)* admits only the versioned `Elsa.Weaver` / `weaver.host-support` browser observation and reads backend support under the authenticated owner's actual session policy. It is not ambient: old prompts without that kind remain unchanged. Studio facts stay client-asserted with no WeaverScopes; current native `weaver:use` and plain session ownership are required before hydration. Historical admission preserves old claims as historical and returns only the current backend projection.
 - **Consumed by:** the single `CollectWeaverContext` handler for `WeaverContextCollecting`. `CollectWeaverTools` reads only public descriptor metadata to validate installed tool-to-source ownership. Modules register sources rather than additional fan-in handlers.
 - **Ownership:** descriptor declares module, supported context kinds/schema versions, resource types and scope. The module admits/minimizes caller material, authorizes its own reads, supplies installed guidance and returns typed diagnostics. Caller origin/scopes are reset before source admission; only the installed source can contribute admitted scopes. `Descriptor.ScopeKind = "*"` opts an installed source into ambient collection for every request; it does not admit arbitrary owners, kinds, versions or permissions.
 - **Unavailable owner (preview):** a source whose owner could not decide returns a required `WeaverContributionDiagnostic` under its own descriptor id with `OwnerUnavailable` set and an owner code. That code must be a dotted ASCII identifier of at most 128 characters outside the reserved `weaver.` namespace. When every required diagnostic of a collection is such a diagnostic, collection fails as unavailable: the owner's code, status 503 and a fixed engine message, never the diagnostic's own text. That covers the initial collection, a turn's initial and history admission, and the per-tool re-admission before dispatch. The same holds when the owner is asked about a retained lifecycle outcome (denied, refused or uncertain). Any collection failure of 500 or more from the selected `IWeaverContextCollector`, a replacement included, passes through unchanged there, as on every other admission path, and a paused continuation then keeps its pause and claim and can be retried.
@@ -85,6 +126,7 @@ Across admissions the first error is returned, a 503 included. History admission
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IWeaverTool, MyTool>())`.
 - **Consumed by:** the single `CollectWeaverTools` handler for `WeaverToolsCollecting`, then the existing async `IWeaverToolRegistry`. Duplicate names, missing owner/version, missing/ambiguous/foreign disclosure-source links and malformed input schemas fail discovery; per-turn context/current authority determine availability.
 - **Ownership:** the module validates canonical arguments, exact target/revision, required context and risk during side-effect-free preparation. It supplies versioned preview/result schemas and renderer identity, applies through its owning service/native transaction, rechecks resource constraints and returns actual read-back evidence. `WeaverToolPreparation`, `WeaverPreparedToolInvocation`, `WeaverPayload`, `WeaverResourceTarget` and `WeaverEffectReceipt` are defined in [Core contribution models](../Core/Models/WeaverContributionModels.cs); the generic engine freezes and binds preparation rather than defining module payload meaning. Both provider paths use the existing thin `WeaverToolAIFunctions` bridge.
+- **Typed refusals (Preview):** `WeaverToolResult.Error` carries a normalized `WeaverError` through shared result presentation, retention and both provider paths, without an applied receipt or invented preparation identity. Null preserves legacy JSON. Declared-code normalization, origin checks and selected-store representation admission follow the [outcomes contract](../../../../specs/1203-weaver-module-support/contracts/outcomes.md); an error-bearing result cannot prove successful application.
 - **Known implementations:** `WorkflowReadGraphTool`, `WorkflowSetDesignerPositionTool` and the read-only `WorkflowReadVersionTool` (`Elsa.Weaver.Workflows`) *(cross-domain)*; the read-only `WorkflowReadExecutableTool` and `WorkflowReadRunTool` (`Elsa.Weaver.Workflows.Runtime`) *(cross-domain)*; external `ReadWidgetTool` / `SetWidgetVisibilityTool` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `SetNoteTool` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IWeaverToolAuthorization` *(Core — `Elsa.Weaver.Core`)*

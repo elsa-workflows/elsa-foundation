@@ -52,6 +52,7 @@ import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { disposeStudioModuleInstance, initializeStudioModules, registerStudioModuleInstances, type StudioLoadedModule } from "./loader";
+import { copyWeaverPromptOrigin, isWeaverRegistryCurrent, retireWeaverRegistryGeneration } from "./weaver/weaverRegistrationOrigins";
 import type {StudioConnectionController, StudioManagedBackendSession, StudioShellContribution} from "../sdk";
 import {watchStudioModuleChanges} from "./moduleReset";
 import {ConfiguredBackendConnection,reloadConnectionOnPageRestore} from "./connection";
@@ -220,6 +221,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
       // React may batch synchronous dispatches before the dock consumes either. Explicitly
       // settle the displaced intent; this transport slot is not a durable prompt queue.
       const incoming = { ...prompt, id: `prompt-${Date.now()}-${Math.random()}` };
+      copyWeaverPromptOrigin(prompt, incoming);
       incomingPromptRef.current = incoming;
       setAssistantOpen(true);
       setIncomingPrompt(incoming);
@@ -310,6 +312,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
     if (!manifestResponse) return;
 
     let disposed = false;
+    let loadingRegistry: ElsaStudioModuleApi | undefined;
 
     async function loadRegistry(manifest: StudioModulesResponse) {
       try {
@@ -341,6 +344,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
             enabledFeatures
           }
         });
+        loadingRegistry = registry;
         registerBuiltInSettingEditors(registry);
 
         for (const diagnostic of manifest.diagnostics) {
@@ -348,6 +352,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
         }
 
         await registerStudioModuleInstances(modules,registry);
+        if (disposed || !isWeaverRegistryCurrent(registry)) { retireWeaverRegistryGeneration(registry); return; }
         registerBuiltInContributions(registry);
 
         if (!disposed) {
@@ -356,6 +361,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
           setState("ready");
         }
       } catch (e) {
+        if (loadingRegistry) retireWeaverRegistryGeneration(loadingRegistry);
         if (!disposed) {
           setError(e instanceof Error ? e.message : String(e));
           setState("failed");
@@ -367,6 +373,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
 
     return () => {
       disposed = true;
+      if (loadingRegistry) retireWeaverRegistryGeneration(loadingRegistry);
     };
     // runtimeConfig reads the stable window.__ELSA_STUDIO_RUNTIME__ global (constant for the page lifetime), so it is
     // intentionally not a dependency — listing it would re-run boot on every render for a value that never changes.

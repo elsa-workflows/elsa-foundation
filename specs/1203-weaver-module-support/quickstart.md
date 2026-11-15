@@ -13,15 +13,27 @@ Every native run owns its processes, database/cache/output roots and chosen port
 After implementation, run each affected project whole and compare discovered/executed counts. Run affected API/serializer, current-authority, receipt-integrity, context/disclosure and lifecycle tests together, including both default and replacement executors.
 
 ```sh
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release --list-tests
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj -c Release
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj -c Release --list-tests
-/usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Persistence/Tests/Elsa.Agent.Persistence.Tests.csproj -c Release
-ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1 /usr/local/share/dotnet/dotnet test Extensions/Agent/tests/Persistence/ProviderTests/Elsa.Agent.Persistence.ProviderTests.csproj -c Release
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj -c Release --list-tests
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Tests/Elsa.Weaver.Tests.csproj -c Release
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj -c Release --list-tests
+/usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj -c Release
+ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1 /usr/local/share/dotnet/dotnet test Extensions/Weaver/tests/Persistence/ProviderTests/Elsa.Weaver.Persistence.ProviderTests.csproj -c Release
 python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
 ```
 
 With a build-slot wrapper, submit the equivalent commands through that wrapper, which must target the required binary. The provider flag makes unavailable Docker a failure rather than a successful skip. Retain actual passes, skips, expected-negative causes and retries separately. Extend owning Secrets/Connections whole suites as their leaves land; this plan does not make them part of leaf 0 implementation.
+
+The existing remote full-tier path is:
+
+```sh
+gh workflow run ci.yml --ref <reviewed-branch> -f suite=ci -f tier=full
+```
+
+Confirm actual SQLite whole-project execution and the `ef-2` / `weaver-records` suite, whose runner arms `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1` for PostgreSQL, SQL Server and MySQL. The three native provider cases are a source inventory, not an observed count. `suite=weaver` runs the independent package witness and does not qualify this database matrix. A draft, deferred, docs-only or unaffected Full tier status does not establish container execution.
+
+The shard runner's opt-in `--retain-discovery` captures the matching initial `dotnet test --list-tests --no-build` command, source identity, output and exit before test execution. CI retains those records in `discovery-*` artifacts, with the actual raw TRXs in the existing `trx-*` artifacts. Native container, architecture and core jobs retain both under their respective `*-suite-evidence-*` / `core-suite-evidence` artifacts. Compare discovery and first-attempt execution explicitly; retain parameterized-case differences, skipped results, automatic retries and quarantine separately. A discovery command exit or summarized method outcome is not a count comparison. This capture support still needs execution on the reviewed source.
+
+Keep the current SQLite whole-suite/canonical fixture proof separate from the required native-three result. The five-row/seven-content-column frozen writer fixture checks hydrate through SQLite; the native provider scenario independently exercises migrations, protected records, admission/finalization and stamps, including the retained1.0 counter. Do not describe the native-three pass as running every SQLite fixture case on all four providers.
 
 From `Studio/`, use the existing web suite and scripts:
 
@@ -45,16 +57,31 @@ bash tools/architecture/restore-ci-project-graph.sh
 2. Exercise all principal registration orderings in the policy contract, distinct request scopes/current principal identity, missing/unauthenticated/mismatched actor/tenant, missing/duplicate owning authorization and selected backend isolation. Direct tools and context providers must fail closed even when bypassing default facades.
 3. Perform an owner-backed no-persistence action. Independently read its invocation counter/result and unchanged resource revision. Test failed business verdict versus could-not-run refusal, every wrong status/scope/declaration/target/evidence combination, and a lying custom executor. Duplicate/late/recovered delivery never calls the owner twice.
 4. Put generated canaries in every typed owner code/message/result/diagnostic path. Verify fixed replacement and unavailable classification in HTTP, SSE, provider payload, generic review/results and audit. Include malformed code, reserved code, dotted out-of-set code, forged host/event/custom-executor flag, explicit empty set and undeclared compatibility. Module fixtures separately prove opaque allowlists.
-5. Compose memory and EF variations, neither/both/wrong selection, direct AddAgentStores consumer context, old two-argument/explicit-null custom or EF factories refusing effects composition, declared custom variation, custom specialization with omitted/static declarations, root registration copy and no EF observation. Compare actual catalog, Attention, capabilities and tool/read acceptance while held, unobserved, finalized and newly available without restart.
+5. Compose memory and EF variations, neither/both/wrong selection, direct AddWeaverStores consumer context, old two-argument/explicit-null custom or EF factories refusing effects composition, declared custom variation, custom specialization with omitted/static declarations, root registration copy and no EF observation. Compare actual catalog, Attention, capabilities and tool/read acceptance while held, unobserved, finalized and newly available without restart.
 6. Hydrate old/new mixed row kinds, protected corruption and mismatched projected columns; prove canonical disclosure bytes and legacy digests unchanged. Test audit-owner/counter and owned summary/count projections. A foreign unreadable row cannot hydrate, settle or disclose schema state.
-7. Hold Agent at 1.0: representable legacy writes work, new behavior refuses before effect. Finalize 1.1, read old rows and keep the old counter readable without restamping. Place a barrier between stamp selection and save: only the safe metadata attempt retries, with fresh entities/stamp; domain invocation count stays one. Test paused/pending-only session writes and direct consumer contexts through the shared interceptor.
+7. Hold Weaver at 1.0: representable legacy writes work, new behavior refuses before effect. Finalize 1.1, read old rows and keep the old counter readable without restamping. Place a barrier between stamp selection and save: only the safe metadata attempt retries, with fresh entities/stamp; domain invocation count stays one. Test paused/pending-only session writes and direct consumer contexts through the shared interceptor.
 8. Inventory available, disabled, failed, partially registered, removed and unknown modules in normal Studio and a selected backend. Deselect structured logging, toggle ExtensionBuilder, remove a nested contributed source and reload the independent package. Facts retain side/host/generation; unknown route is route-only. Search projection/provider output for canary credentials, URLs, paths and failure text.
 
 Use barriers and deterministic faults rather than sleeps for race assertions. For behavior changes, retain a failing pre-fix or mutation run and the corrected pass. Invalid cases must fail for the intended cause, not a startup/locator failure.
 
+The separate `Weaver causal controls` CI job runs the [bounded driver](../../tools/studio/Weaver.Conformance.Probe/causal_proof.py) in a disposable clean checkout of the PR head. After restoring its two selected .NET test projects and installing the pinned Studio dependencies, the equivalent command is:
+
+```sh
+nice -n 10 python3 tools/studio/Weaver.Conformance.Probe/causal_proof.py \
+  --scope all --output /absolute/new-private-weaver-causal-proof
+```
+
+It defines fourteen serial recipes: policy, receipt integrity, ordinal module-code identity, SQLite write admission, two Studio origin-removal paths, three R15 result-admission/disclosure paths, two Copilot external-runtime authentication paths, current-route admission and two RuntimeUrl diagnostics controls. The auth, route and URL controls are source-authored and UNRUN: the constructor control requires the pinned SDK's exact `ArgumentException` at the actual factory creation boundary, without starting a runtime; the diagnostic control requires four external-mode failures while three local-mode controls stay green through the existing fake boundary. The route control nulls only the current-route projection and requires `KeyNotFoundException` at the mapped API test's `activeRoute` lookup for all three encoding rows (`plain`, `unicode`, `html`), with authentication and composition intact. Each recipe requires a passing baseline, exact expected assertion/exception failures with no extra/omitted/skipped rows, and a passing restored run. The .NET recipes also require changed owner-binary hashes. A build/setup failure or unrelated assertion is a failed attempt, not evidence of a regression bite. Retain the raw reports, command metadata, original/mutated source identities and final restoration receipt. The CI job binds `WEAVER_CAUSAL_EXPECTED_HEAD` to the checked-out full PR SHA; a malformed or mismatched value refuses before mutation.
+
+The driver has a forty-minute total budget and six-minute command limits. It restores source and terminates owned POSIX process groups on handled failures; detached descendants and restoration after SIGKILL/host loss remain unproven, hence the disposable-checkout requirement. These scoped controls do not replace discovery comparisons, complete suites, other normalization channels, composed/package/provider evidence or resulting-main verification. Raw evidence stays private until inspected for a safe export.
+
+The URL recipes independently mutate the existing `WeaverProviderLogRedactionTests` diagnostics cases through their fake client boundary, without starting a runtime. Redaction removes only the RuntimeUrl literal from the secret set; connection-token redaction still alters the full URL, so the required failure is the endpoint-canary substring assertion at line169. Validation removes only the raw delimiter/path guard; of twenty component/absolute rows, six must fail `Assert.False(diagnostics.IsAvailable)` at line256: absolute `dot-path`, `escaped-dot-path`, `single-dot-path`, `escaped-single-dot-path` and `empty-userinfo`, plus non-absolute `empty-userinfo`. The other fourteen rows must stay green. In particular, the absolute backslash case is still refused by the [.NET10 explicit-port scanner](https://github.com/dotnet/runtime/blob/v10.0.0/src/libraries/System.Private.Uri/src/System/Uri.cs#L3635), which reports BadPort before path normalization. The expected failures are source-derived from [.NET10 URI normalization](https://learn.microsoft.com/en-us/dotnet/api/system.uri?view=net-10.0#remarks) and its [userinfo parsing](https://github.com/dotnet/runtime/blob/v10.0.0/src/libraries/System.Private.Uri/src/System/Uri.cs#L3536); actual red/restored URL proof remains UNRUN. These named diagnostics controls do not qualify every URL representation or disclosure channel, and an auth- or route-recipe pass cannot substitute for their own evidence.
+
 ## Real composed and independent package journeys
 
 Run the complete normal composed Studio/backend browser gate and the complete existing qualifier, extended with leaf 0 cases on both actual adapters. A standalone diagnostic or passing mock is insufficient. Keep normal workflow validation, atomic working-state batches, whole-batch undo, explicit Save/Publish and read-only/source-owned behavior intact.
+
+The separate [normal-host protocol profile](../../tools/ux-acceptance/WEAVER-SEMANTIC.md) connects the shipped Copilot adapter and real SDK to an owned external service under the FR-022 clarification. The service derives its response only from actual admitted context. All twenty turns must join browser submission, admission, SDK delivery, independent native inventory and the completed recorded/rendered answer. The actual open-panel question/answer captures require independent inspection; protocol success cannot establish visual approval or live-model reasoning. Keep the [provider-unavailable native inventory profile](../../tools/ux-acceptance/WEAVER-INVENTORY.md), ordinary composed suite and both-adapter package witness as separate gates. This profile and its authored controls remain UNRUN until exact-source verification.
 
 From committed final source with a new absolute output directory outside the checkout and a unique local version:
 

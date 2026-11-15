@@ -7,7 +7,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
     Sqlite = typeof(WeaverSqliteDbContext), SqlServer = typeof(WeaverSqlServerDbContext),
     PostgreSql = typeof(WeaverPostgreSqlDbContext), MySql = typeof(WeaverMySqlDbContext))]
 [assembly: ManifestExtension("efModules", "Weaver")]
-[assembly: EfSchemaFamily(WeaverEfModule.SchemaFamily, "Weaver", WeaverEfModule.SchemaVersion)]
+[assembly: EfSchemaFamily(WeaverEfModule.SchemaFamily, "Weaver", WeaverEfModule.SchemaVersion, Upcasters = [typeof(WeaverEffectsV1Upcaster)])]
 [assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(WeaverSessionRow), nameof(WeaverSessionRow.Payload), nameof(WeaverSessionRow.PausedTurnPayload),
     nameof(WeaverSessionRow.PendingAuditsPayload))]
 [assembly: EfSchemaContent(WeaverEfModule.SchemaFamily, typeof(WeaverMessageRow), nameof(WeaverMessageRow.Payload))]

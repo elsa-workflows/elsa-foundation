@@ -340,7 +340,7 @@ function stubContext(): StudioEndpointContext {
       postJson: mockPostJson(async url => {
         if (url === "/_elsa/weaver/sessions") return { data: { id: "agt_01", status: "active" } };
         if (url.endsWith("/messages")) return { data: { message: { id: "msg_01" }, warnings: [] } };
-        if (url.endsWith("/execute")) return { data: { proposalId: "prop_01", executed: true, message: "Executed." } };
+        if (url.endsWith("/execute")) return { data: { proposalId: "prop_01", status: "executed", executed: true, message: "Executed." } };
         if (url === "/_elsa/weaver/feedback") return { data: { id: "feedback_01" } };
         return { data: { id: "prop_01", status: "approved" } };
       })
@@ -378,7 +378,7 @@ function stubPascalCaseContext(): StudioEndpointContext {
       postJson: mockPostJson(async url => {
         if (url === "/_elsa/weaver/sessions") return { Data: { SessionId: "agt_01", Status: "Active" } };
         if (url.endsWith("/messages")) return { Data: { Message: { Id: "msg_01" }, Warnings: [] } };
-        if (url.endsWith("/execute")) return { Data: { ProposalId: "prop_01", Executed: true, Message: "Executed." } };
+        if (url.endsWith("/execute")) return { Data: { ProposalId: "prop_01", Status: "Executed", Executed: true, Message: "Executed." } };
         return { Data: { ProposalId: "prop_01", ApprovalStatus: "Approved", ApprovedAt: "2026-06-25T21:00:00Z" } };
       })
     }

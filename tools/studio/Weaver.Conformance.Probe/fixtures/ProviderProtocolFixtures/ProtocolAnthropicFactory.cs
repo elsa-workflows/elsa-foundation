@@ -26,6 +26,16 @@ internal sealed class ProtocolAnthropicClient(ProtocolFiles files) : IChatClient
         // Only results after the latest user message belong to this turn. Historical results cannot
         // suppress a replayed/new user request carrying the same driver command ID.
         var lastUser = transcript.FindLastIndex(message => message.Role == ChatRole.User);
+        if (command.ObserveOnly)
+        {
+            if (lastUser < 0 || transcript.Skip(lastUser).Any(message => message.Role == ChatRole.Tool
+                || message.Contents.Any(content => content is FunctionCallContent or FunctionResultContent)))
+                throw new ProtocolFixtureException("An observation command requires a current user turn without a function continuation.");
+            cancellationToken.ThrowIfCancellationRequested();
+            files.Trace("anthropic.observation", new { command.CommandId, toolCount = functions.Length });
+            yield return new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [new TextContent(ProtocolFiles.ObservationText)] };
+            yield break;
+        }
         var results = transcript.Skip(lastUser + 1).SelectMany(message => message.Contents).OfType<FunctionResultContent>()
             .Where(result => string.Equals(result.CallId, command.CommandId, StringComparison.Ordinal)).ToArray();
         if (results.Length > 0)

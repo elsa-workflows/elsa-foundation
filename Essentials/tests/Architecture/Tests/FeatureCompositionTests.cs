@@ -78,6 +78,8 @@ public sealed class FeatureCompositionTests
                 "WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence"
             ]),
         new("A shell runs exactly one Weaver harness.", ["WeaverAnthropic"], ["WeaverGitHubCopilot"]),
+        new("Weaver effects select the variation matching the selected session record store.",
+            ["WeaverEffects"], ["WeaverEfEffects", "WeaverEntityFrameworkCore"]),
         new("Agent source-only persistence and combined source/journal persistence select the same source ports.",
             ["AgentSourcesEntityFrameworkCore"], ["AgentEntityFrameworkCore"]),
     ];

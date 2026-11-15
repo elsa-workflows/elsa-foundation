@@ -25,6 +25,7 @@ internal sealed partial class DefaultWeaverToolRegistry(IInlineEventPublisher ev
         foreach (var tool in tools)
         {
             var descriptor = tool.Descriptor;
+            WeaverModuleCodes.Validate(descriptor.ModuleCodes);
             if (!ToolNameRegex().IsMatch(descriptor.Name ?? string.Empty))
                 throw new WeaverContributionException($"Invalid Weaver tool name '{descriptor.Name}'; expected ^[a-zA-Z0-9_-]+$.");
             if (string.IsNullOrWhiteSpace(descriptor.ModuleId) || string.IsNullOrWhiteSpace(descriptor.ContractVersion))

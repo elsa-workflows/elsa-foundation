@@ -3,8 +3,33 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { WeaverProposalReview } from "../WeaverProposalReview";
+import type { WeaverActionProposal } from "../weaverTypes";
 
 describe("WeaverProposalReview", () => {
+  it.each([
+    { risk: 0, label: "read only" }, { risk: 1, label: "review required" },
+    { risk: 2, label: "destructive" }, { risk: 3, label: "admin" },
+    { risk: "ReadOnly", label: "read only" }, { risk: "reviewRequired", label: "review required" },
+    { risk: "review-required", label: "review required" }, { risk: "Admin", label: "admin" },
+    { risk: "admin", label: "admin" },
+    { risk: "low", label: "low" }, { risk: "medium", label: "medium" },
+    { risk: "high", label: "high" }, { risk: "critical", label: "critical" },
+    { risk: "future-risk", label: "unknown risk" },
+    { risk: 4, label: "unknown risk" }, { risk: null, label: "unknown risk" }
+  ])("renders wire risk $risk as $label without crashing the review", ({ risk, label }) => {
+    const proposal = Object.freeze({ id: "proposal", title: "Review resource", summary: "Review the owner's operation.",
+      revision: "r1", risk: risk as WeaverActionProposal["risk"], status: "awaiting-approval" as const,
+      resourceTarget: { moduleId: "Owner", resourceType: "sample", resourceId: "one", revision: "r1" }
+    });
+    const { container, unmount } = render(<WeaverProposalReview proposals={[proposal]} onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} />);
+    try {
+      expect(container.querySelector(".weaver-proposal-risk")?.textContent?.trim()).toBe(label);
+      expect(container.querySelector(".weaver-proposal")?.getAttribute("data-risk")).toBe(label === "unknown risk" ? "unknown" : label.replace(/ /g, "-"));
+      expect(proposal.risk).toBe(risk);
+    }
+    finally { unmount(); }
+  });
+
   it.each(["supports", "component"])("keeps structured preview and common controls usable after a module %s failure", failure => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {}); const approve = vi.fn();
     const { container, unmount } = render(<WeaverProposalReview proposals={[{ id: "review", title: "Review resource", summary: "Review the resource change.", revision: "r1", risk: "review-required", status: "awaiting-approval", resourceTarget: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, resultType: "sample.preview", result: { value: 42 } }]} resultRenderers={[{ id: "sample", displayName: "Sample", supports: () => { if (failure === "supports") throw new Error("Broken predicate"); return true; }, component: () => { throw new Error("Broken presentation"); } }]} onApprove={approve} onDeny={() => {}} onExecute={() => {}} />);

@@ -99,7 +99,7 @@ public sealed class WeaverApiMappingTests
     }
 
     [Fact]
-    public void Maps_exactly_seventeen_named_operations()
+    public void Maps_exactly_eighteen_named_operations()
     {
         using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var app = new TestEndpointRouteBuilder(services);
@@ -113,7 +113,7 @@ public sealed class WeaverApiMappingTests
             .OrderBy(x => x)
             .ToArray();
 
-        Assert.Equal(17, names.Length);
+        Assert.Equal(18, names.Length);
         Assert.All(names, name => Assert.StartsWith("ElsaWeaverApiEndpoints", name, StringComparison.Ordinal));
     }
 
@@ -127,6 +127,7 @@ public sealed class WeaverApiMappingTests
         var permissions = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["ElsaWeaverApiEndpointsBootstrap"] = WeaverPermissionKeys.Use,
+            ["ElsaWeaverApiEndpointsSupport"] = WeaverPermissionKeys.Use,
             ["ElsaWeaverApiEndpointsCreateSession"] = WeaverPermissionKeys.Use,
             ["ElsaWeaverApiEndpointsGetSession"] = WeaverPermissionKeys.Use,
             ["ElsaWeaverApiEndpointsChangeAutonomy"] = WeaverPermissionKeys.Use,

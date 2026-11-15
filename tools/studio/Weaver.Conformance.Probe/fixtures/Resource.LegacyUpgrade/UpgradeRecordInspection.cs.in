@@ -1,0 +1,166 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Core.Models;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+
+namespace Acme.Home.Weaver;
+
+/// <summary>
+/// Qualification-module evidence over the real store. Reads do not hydrate the engine or settle its paused work.
+/// The one explicit supplement records an owed audit through the real writer, never through SQL or a fake codec.
+/// </summary>
+internal static class UpgradeRecordInspection
+{
+    private const string OwedAuditKey = "qualification.owed-audit";
+
+    internal static void MapEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapGet("/_qualification/acme/upgrade-records/{sessionId}",
+            async (string sessionId, HttpContext http, UpgradeOwner owner, IWeaverSessionRecordStore store, CancellationToken ct) =>
+            {
+                http.Response.Headers.CacheControl = "no-store";
+                try
+                {
+                    var key = await owner.AuthorizeAsync(null, null, false, ct);
+                    var recordedOwner = await store.FindOwnerAsync(sessionId, ct);
+                    if (recordedOwner is null || recordedOwner.ActorId != key.SubjectId || recordedOwner.TenantId != key.TenantId)
+                        return Results.NotFound();
+                    await owner.AuthorizeAsync(key.SubjectId, key.TenantId, false, ct);
+                    var record = await store.LoadAsync(sessionId, ct);
+                    await owner.AuthorizeAsync(key.SubjectId, key.TenantId, false, ct);
+                    if (record is null || record.Session.Id != sessionId || record.Session.ActorId != key.SubjectId || record.Session.TenantId != key.TenantId)
+                        return Results.NotFound();
+                    return Results.Json(Projection(record));
+                }
+                catch (UpgradeRefusal refusal)
+                {
+                    return Results.Problem(statusCode: refusal.Error.StatusCode, title: refusal.Error.Code, detail: refusal.Error.Message);
+                }
+                catch (Exception error) when (error is not OperationCanceledException)
+                {
+                    return Results.Problem(statusCode: 503, title: "acme.upgrade.record_inspection_unavailable",
+                        detail: "The real owning store could not complete record inspection; this is not an observed empty record.");
+                }
+            }).RequireAuthorization();
+
+        endpoints.MapPost("/_qualification/acme/upgrade-records/{sessionId}/owed-audit",
+            async (string sessionId, UpgradeOwedAudit request, HttpContext http, UpgradeOwner owner, IWeaverSessionRecordStore store, CancellationToken ct) =>
+            {
+                http.Response.Headers.CacheControl = "no-store";
+                WeaverSessionFence? fence = null;
+                try
+                {
+                    var key = await owner.AuthorizeAsync(null, null, true, ct);
+                    if (!Guid.TryParseExact(request.EventId, "N", out _))
+                        return Results.BadRequest(new { code = "acme.upgrade.invalid_event_identity" });
+                    var recordedOwner = await store.FindOwnerAsync(sessionId, ct);
+                    if (recordedOwner is null || recordedOwner.ActorId != key.SubjectId || recordedOwner.TenantId != key.TenantId)
+                        return Results.NotFound();
+                    await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+                    var acquired = await store.AcquireOwnershipAsync(sessionId, "qualification-" + Guid.NewGuid().ToString("N"), ct);
+                    if (!acquired.Succeeded || acquired.Fence is null)
+                        return Results.Conflict(new { code = "acme.upgrade.record_ownership_unavailable", outcome = acquired.Outcome.ToString() });
+                    fence = acquired.Fence;
+                    await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+                    var record = await store.LoadAsync(sessionId, ct);
+                    await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+                    if (record is null || record.Session.Id != sessionId || record.Session.ActorId != key.SubjectId || record.Session.TenantId != key.TenantId)
+                        return Results.NotFound();
+                    var prior = record.Keys.Where(item => item.Kind == OwedAuditKey && item.Key == request.EventId).ToArray();
+                    if (prior.Length > 0)
+                    {
+                        if (prior.Length != 1 || prior[0].Value != request.EventId)
+                            return Results.Conflict(new { code = "acme.upgrade.owed_audit_key_conflict" });
+                        return Results.Json(new { eventId = request.EventId, recorded = true, repeated = true,
+                            evidenceKind = "fixture-only-real-store-owed-audit-supplement" });
+                    }
+                    var owed = new WeaverAuditEvent(request.EventId, WeaverAuditEventKind.MessageAccepted, sessionId, key.SubjectId,
+                        "Qualification-only owed audit content", DateTimeOffset.UtcNow, new Dictionary<string, string>
+                        { ["qualification"] = "real-old-writer-content-coverage" });
+                    var written = await store.WriteAsync(new(sessionId, fence)
+                    {
+                        PendingAudits = record.PendingAudits.Append(owed).ToArray(),
+                        Keys = [new(OwedAuditKey, request.EventId, request.EventId)]
+                    }, ct);
+                    if (!written.Succeeded)
+                        return Results.Conflict(new { code = "acme.upgrade.owed_audit_write_refused", outcome = written.Outcome.ToString() });
+                    await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+                    var read = await store.LoadAsync(sessionId, ct);
+                    await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+                    if (read is null || read.PendingAudits.Count(item => item.Id == request.EventId) != 1
+                        || read.Keys.Count(item => item.Kind == OwedAuditKey && item.Key == request.EventId && item.Value == request.EventId) != 1)
+                        return Results.Problem(statusCode: 503, title: "acme.upgrade.owed_audit_readback_unavailable");
+                    return Results.Json(new { eventId = request.EventId, recorded = true, repeated = false,
+                        evidenceKind = "fixture-only-real-store-owed-audit-supplement" });
+                }
+                catch (UpgradeRefusal refusal)
+                {
+                    return Results.Problem(statusCode: refusal.Error.StatusCode, title: refusal.Error.Code, detail: refusal.Error.Message);
+                }
+                catch (Exception error) when (error is not OperationCanceledException)
+                {
+                    return Results.Problem(statusCode: 503, title: "acme.upgrade.owed_audit_supplement_unavailable",
+                        detail: "Retain this failed or unknown write; do not replay it with another event identity.");
+                }
+                finally
+                {
+                    if (fence is not null) await store.ReleaseOwnershipAsync(sessionId, fence, CancellationToken.None);
+                }
+            }).RequireAuthorization();
+    }
+
+    private static object Projection(WeaverSessionRecord record)
+    {
+        var results = record.Messages.SelectMany(item => item.Message.ToolResults)
+            .Concat(record.Proposals.Where(item => item.Result is not null).Select(item => item.Result!))
+            .Concat(record.PausedTurn?.Turn.DisclosureResults ?? []);
+        return new
+        {
+            evidenceKind = "native-real-store-decoding-without-engine-hydration",
+            sessionId = record.Session.Id, actorId = record.Session.ActorId, tenantId = record.Session.TenantId,
+            providerId = record.Session.ProviderId, status = record.Session.Status.ToString(),
+            counts = new { messages = record.Messages.Count, snapshots = record.Snapshots.Count, context = record.Context.Count,
+                proposals = record.Proposals.Count, keys = record.Keys.Count, pendingAudits = record.PendingAudits.Count },
+            content = new { session = Digest(record.Session), messages = Digest(record.Messages), snapshots = Digest(record.Snapshots),
+                context = Digest(record.Context), pausedTurn = Digest(record.PausedTurn), proposals = Digest(record.Proposals),
+                keys = Digest(record.Keys), pendingAudits = Digest(record.PendingAudits) },
+            snapshots = record.Snapshots.Select(item => new { item.Digest, item.Size,
+                decodedCanonicalSha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(item.Canonical))).ToLowerInvariant() }).ToArray(),
+            // Arguments, preview, transcript and provider metadata never leave this inspector, even for an owned session.
+            proposals = record.Proposals.Select(item => new { item.Proposal.Id, status = item.Proposal.Status.ToString(),
+                toolName = item.Proposal.PreparedInvocation?.ToolName, moduleId = item.Proposal.PreparedInvocation?.ModuleId,
+                approvalDigest = item.Proposal.PreparedInvocation?.ApprovalDigest, expiresAt = item.Proposal.PreparedInvocation?.ExpiresAt,
+                preparedContentSha256 = Digest(item.Proposal.PreparedInvocation) }).ToArray(),
+            legacyDefaults = new
+            {
+                preparationsHaveNoClasses = record.Proposals.All(item => NoNewClasses(item.Proposal.PreparedInvocation)),
+                resultsHaveNoTypedErrorsOrModuleCodes = results.All(LegacyResult),
+                noPerformedStatus = record.Proposals.All(item => item.Proposal.Status.ToString() != "Performed")
+            }
+        };
+    }
+
+    private static string Digest<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value))).ToLowerInvariant();
+
+    private static bool NoNewClasses(WeaverPreparedToolInvocation? value)
+    {
+        if (value is null) return true;
+        var json = JsonSerializer.SerializeToElement(value);
+        return !json.TryGetProperty("RequiredPrivilegeClasses", out var classes) || classes.ValueKind == JsonValueKind.Null
+            || classes.ValueKind == JsonValueKind.Array && classes.GetArrayLength() == 0;
+    }
+
+    private static bool LegacyResult(WeaverToolResult value)
+    {
+        var json = JsonSerializer.SerializeToElement(value);
+        if (json.TryGetProperty("Error", out var error) && error.ValueKind != JsonValueKind.Null) return false;
+        return !json.TryGetProperty("Receipt", out var receipt) || receipt.ValueKind == JsonValueKind.Null
+            || !receipt.TryGetProperty("ModuleCode", out var code) || code.ValueKind == JsonValueKind.Null;
+    }
+}
+
+internal sealed record UpgradeOwedAudit(string EventId);

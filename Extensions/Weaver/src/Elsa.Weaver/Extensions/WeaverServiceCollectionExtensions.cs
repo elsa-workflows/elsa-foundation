@@ -6,6 +6,7 @@ using CShells.Lifecycle;
 using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Weaver.Extensions;
 
@@ -25,6 +26,11 @@ public static class WeaverServiceCollectionExtensions
                 services.Remove(previous);
         }
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer>(registrationValidator));
+        services.TryAddScoped<WeaverEffectsAdmission>();
+        services.AddOptions<WeaverPrivilegePolicyOptions>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<WeaverPrivilegePolicyOptions>, WeaverPrivilegePolicyConfiguration>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IOptionsChangeTokenSource<WeaverPrivilegePolicyOptions>, WeaverPrivilegePolicyConfiguration>());
+        services.TryAddScoped<WeaverPrivilegePolicy>();
         services.TryAddEventHandler<WeaverContextCollecting, CollectWeaverContext>();
         services.TryAddEventHandler<WeaverCapabilitiesCollecting, CollectWeaverCapabilities>();
         services.TryAddEventHandler<WeaverToolsCollecting, CollectWeaverTools>();
@@ -53,6 +59,7 @@ public static class WeaverServiceCollectionExtensions
         services.TryAddSingleton<IWeaverFeedbackService, InMemoryWeaverFeedbackService>();
         // Scoped so tools may depend on per-request services without being captured by a singleton.
         services.TryAddScoped<IWeaverToolRegistry, DefaultWeaverToolRegistry>();
+        services.TryAddScoped<IWeaverSupportSource>(WeaverRegistrationValidator.Create<DefaultWeaverSupportSource>);
         services.TryAddSingleton<IWeaverTurnRegistry, WeaverTurnRegistry>();
         // The default keeps the paused turn on the default owner's session record; any other session service gets a local map.
         services.TryAddSingleton<IWeaverTurnStateStore>(sp => new InMemoryWeaverTurnStateStore(sp.GetRequiredService<IWeaverSessionService>() as InMemoryWeaverSessionService));

@@ -41,6 +41,7 @@
           "ExpressionsApi": {},
           "FileSystemDistributedLocking": {},
           "Weaver": {},
+          "WeaverEffects": {},
           "WeaverApi": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityApi": {},

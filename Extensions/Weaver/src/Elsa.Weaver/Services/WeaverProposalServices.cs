@@ -59,12 +59,14 @@ internal sealed class InMemoryWeaverProposalService(
     InMemoryWeaverProposalStore store,
     IWeaverActionProposalExecutor executor,
     WeaverPreparedInvocationResolver preparedResolver,
+    WeaverEffectsAdmission effects,
     IWeaverSessionService sessions,
     IWeaverAuditSink auditSink,
     TimeProvider clock,
     ILogger<InMemoryWeaverProposalService>? logger = null) : IWeaverProposalService, IWeaverSessionPolicyParticipant
 {
     private readonly InMemoryWeaverSessionService? _owner = sessions as InMemoryWeaverSessionService;
+    private readonly DefaultWeaverActionProposalExecutor.DispatchOrigin _dispatchOrigin = new();
 
     InMemoryWeaverSessionService? IWeaverSessionPolicyParticipant.PolicyOwner => _owner;
 
@@ -241,10 +243,33 @@ internal sealed class InMemoryWeaverProposalService(
     /// <summary>The single audit record of an execution's recorded outcome.</summary>
     private Task AuditOutcomeAsync(string proposalId, WeaverResult<WeaverProposalExecutionResult> result, string? actorId,
         IReadOnlyDictionary<string, string>? metadata = null)
-        => AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? WeaverAuditEventKind.ProposalExecuted
+    {
+        var performed = result.Value is { Executed: true, Status: "performed" };
+        var error = store.Results.TryGetValue(proposalId, out var retained) ? retained.Error : null;
+        if (performed || error is not null)
+        {
+            var facts = metadata?.ToDictionary(pair => pair.Key, pair => pair.Value) ?? new Dictionary<string, string>();
+            if (performed)
+            {
+                facts["outcome"] = "performed";
+                facts["scope"] = nameof(WeaverEffectScope.NoPersistedEffect);
+                facts["dispatch"] = "server";
+                facts["effect"] = "performed";
+            }
+            if (error is not null)
+            {
+                facts["code"] = error.Code;
+                facts["statusCode"] = error.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                facts["ownerUnavailable"] = error.OwnerUnavailable ? "true" : "false";
+            }
+            metadata = facts;
+        }
+        return AuditAsync(store.Proposals[proposalId], result.Value?.Executed == true ? WeaverAuditEventKind.ProposalExecuted
                 : result.Value?.Status == "awaiting-client" ? WeaverAuditEventKind.ToolInvoked : WeaverAuditEventKind.ProposalFailed,
-            actorId, result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.",
+            actorId, performed ? "The owning action ran without a persisted resource change."
+                : result.Value?.Executed == true ? "The owning module supplied an observed effect receipt." : "Execution remains pending, refused or uncertain.",
             CancellationToken.None, metadata);
+    }
 
     private static readonly IReadOnlyDictionary<string, string> RecoveredOutcome = new Dictionary<string, string>
         { [WeaverProposalRecovery.SettledBy] = WeaverProposalRecovery.Recovery };
@@ -340,10 +365,24 @@ internal sealed class InMemoryWeaverProposalService(
                 await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<WeaverActionProposal>();
             }
+            if (proposal.Status is WeaverActionProposalStatus.AwaitingApproval or WeaverActionProposalStatus.Edited or WeaverActionProposalStatus.Approved)
+            {
+                var veto = await effects.CheckReviewAsync(proposal, cancellationToken);
+                if (PastPreDispatchDeadline(proposal))
+                {
+                    await ExpireBeforeDispatchAsync(proposal, version, actorId);
+                    return Expired<WeaverActionProposal>();
+                }
+                if (veto is not null)
+                {
+                    await RefuseBeforeDispatchAsync(proposal, version, actorId, veto);
+                    return new(null, veto);
+                }
+            }
             // Only a recorded review decision is idempotent. An automatic approval is not one, so approving it
             // cannot report or relabel it as a human decision.
             if (proposal.RequiresApproval && proposal.ApprovedBy == actorId
-                && proposal.Status is WeaverActionProposalStatus.Approved or WeaverActionProposalStatus.AwaitingClient or WeaverActionProposalStatus.Executed)
+                && proposal.Status is WeaverActionProposalStatus.Approved or WeaverActionProposalStatus.AwaitingClient or WeaverActionProposalStatus.Executed or WeaverActionProposalStatus.Performed)
                 return WeaverResult<WeaverActionProposal>.Success(proposal);
             if (proposal.Status is not WeaverActionProposalStatus.AwaitingApproval and not WeaverActionProposalStatus.Edited)
                 return WeaverResult<WeaverActionProposal>.Failure("weaver.proposal.invalid_state", "This operation is not awaiting review.", 409);
@@ -425,10 +464,18 @@ internal sealed class InMemoryWeaverProposalService(
                 await ExpireBeforeDispatchAsync(proposal, version, actorId);
                 return Expired<WeaverProposalExecutionResult>();
             }
-            if (proposal.RequiresApproval && proposal.Status != WeaverActionProposalStatus.Approved)
-                return WeaverResult<WeaverProposalExecutionResult>.Failure("weaver.proposal.approval_required", "The exact operation requires approval before execution.", 409);
             if (proposal.PreparedInvocation is null)
                 return WeaverResult<WeaverProposalExecutionResult>.Failure("weaver.proposal.executor_unavailable", "This proposal has no concrete prepared executor.", 409);
+            var frozenVeto = await effects.CheckInvocationAsync(proposal.PreparedInvocation, cancellationToken: cancellationToken);
+            if (PastPreDispatchDeadline(proposal))
+            {
+                await ExpireBeforeDispatchAsync(proposal, version, actorId);
+                return Expired<WeaverProposalExecutionResult>();
+            }
+            if (frozenVeto is not null)
+                return await RefuseBeforeDispatchAsync(proposal, version, actorId, frozenVeto);
+            if (proposal.RequiresApproval && proposal.Status != WeaverActionProposalStatus.Approved)
+                return WeaverResult<WeaverProposalExecutionResult>.Failure("weaver.proposal.approval_required", "The exact operation requires approval before execution.", 409);
             // Story 2.3: the approval basis must still be the session's current policy revision. A stale basis is a
             // recorded zero-effect refusal; the executor and resolver then recheck everything else before dispatch.
             if (_owner is not null && proposal.PolicyRevision is { } stamped
@@ -456,23 +503,44 @@ internal sealed class InMemoryWeaverProposalService(
                 return Expired<WeaverProposalExecutionResult>();
             }
             WeaverResult<WeaverProposalExecutionResult> result;
+            WeaverToolAdmission? admitted = null;
+            var handedOff = false;
             try
             {
-                result = await executor.ExecuteAsync(executing, cancellationToken);
+                // Recording Executing can await storage. A host toggle during that write must veto before
+                // either a default or replaced executor is called, without pretending to revoke a later effect.
+                var current = await preparedResolver.ResolveAsync(executing, cancellationToken);
+                if (current.Error is not null)
+                    result = DefaultWeaverActionProposalExecutor.RefusedBeforeDispatch(executing, current.Error, _dispatchOrigin);
+                else
+                {
+                    admitted = current.Admission!;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    handedOff = true;
+                    result = executor is DefaultWeaverActionProposalExecutor defaults
+                        ? await defaults.ExecuteAdmittedAsync(executing, admitted, cancellationToken)
+                        : await executor.ExecuteAsync(executing, cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {
-                result = WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(executing,
-                    "Execution was interrupted after dispatch. Its effect is uncertain and will not be replayed."));
+                result = !handedOff
+                    ? DefaultWeaverActionProposalExecutor.CancelledBeforeDispatchResult(executing, _dispatchOrigin)
+                    : WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(executing,
+                        "Execution was interrupted after dispatch. Its effect is uncertain and will not be replayed."));
             }
             catch (Exception ex)
             {
-                logger?.LogError("Prepared operation {InvocationId} failed with {FailureType}; its outcome is uncertain.", proposal.PreparedInvocation.InvocationId, ex.GetType().Name);
-                result = WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(executing,
-                    "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
+                logger?.LogError("Prepared operation {InvocationId} failed with {FailureType} ({DispatchPhase}).",
+                    proposal.PreparedInvocation.InvocationId, ex.GetType().Name, handedOff ? "after executor handoff" : "before executor handoff");
+                result = !handedOff
+                    ? DefaultWeaverActionProposalExecutor.RefusedBeforeDispatch(executing, new("weaver.proposal.admission_unavailable",
+                        "Current execution admission could not be established before dispatch.", 503), _dispatchOrigin)
+                    : WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(executing,
+                        "The installed executor failed after dispatch. Its effect is uncertain and will not be replayed."));
             }
             finally { _owner?.EndExecution(proposal.SessionId, proposalId); }
-            try { result = await StoreOutcomeAsync(executing, dispatched, result); }
+            try { result = await StoreOutcomeAsync(executing, dispatched, result, admittedDescriptor: admitted?.Descriptor); }
             catch (WeaverProposalConflictException)
             {
                 // Executing is recorded and the executor ran, so an effect may have happened. The operation changed
@@ -509,7 +577,7 @@ internal sealed class InMemoryWeaverProposalService(
                 return WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(executing,
                     "The operation was dispatched, but its outcome could not be recorded. Its effect is uncertain and will not be replayed; read its current state."));
             }
-            await AuditOutcomeAsync(proposalId, result, actorId);
+            await AuditOutcomeAsync(proposalId, result, actorId, IsBeforeDispatch(proposal, result) ? PreDispatchExpiry : null);
             return result;
         }
         catch (WeaverProposalConflictException) { return Conflict<WeaverProposalExecutionResult>(); }
@@ -545,11 +613,19 @@ internal sealed class InMemoryWeaverProposalService(
             if (proposal.Status is not WeaverActionProposalStatus.AwaitingClient and not WeaverActionProposalStatus.Uncertain)
                 return WeaverResult<WeaverProposalExecutionResult>.Failure("weaver.invocation.not_pending", "The client invocation is not pending completion.", 409);
             WeaverResult<WeaverProposalExecutionResult> completion;
+            WeaverToolAdmission? admitted = null;
             var completionValidated = false;
             try
             {
-                completion = await executor.CompleteClientAsync(proposal, acknowledgement, cancellationToken);
-                completionValidated = completion.Succeeded && completion.Value is not null;
+                var current = await preparedResolver.ResolveAsync(proposal, cancellationToken);
+                admitted = current.Admission;
+                completion = current.Error is not null
+                    ? WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(proposal,
+                        "Current client completion admission is unavailable. Its reported effect remains uncertain and will not be replayed."))
+                    : executor is DefaultWeaverActionProposalExecutor defaults
+                        ? await defaults.CompleteAdmittedAsync(proposal, acknowledgement, admitted!, cancellationToken)
+                        : await executor.CompleteClientAsync(proposal, acknowledgement, cancellationToken);
+                completionValidated = current.Error is null && completion.Succeeded && completion.Value is not null;
             }
             catch (OperationCanceledException)
             {
@@ -570,7 +646,8 @@ internal sealed class InMemoryWeaverProposalService(
             // The accepted acknowledgement is recorded in the same write as the outcome it produced.
             completion = await StoreOutcomeAsync(proposal, version, completion, stored => completionValidated && stored.Succeeded && (stored.Value?.Executed == true
                 || acknowledgement.Outcome == WeaverClientOutcome.Refused && stored.Value?.Status == "refused"
-                || acknowledgement.Outcome == WeaverClientOutcome.Uncertain && stored.Value?.Status == "uncertain") ? digest : null);
+                || acknowledgement.Outcome == WeaverClientOutcome.Uncertain && stored.Value?.Status == "uncertain") ? digest : null,
+                admittedDescriptor: admitted?.Descriptor);
             await AuditAsync(store.Proposals[proposalId], completion.Value?.Executed == true ? WeaverAuditEventKind.ProposalExecuted : WeaverAuditEventKind.ProposalFailed,
                 actorId, completion.Value?.Executed == true ? "The originating client supplied an admitted local effect receipt." : "The reported client outcome is refused or uncertain.", CancellationToken.None);
             return completion;
@@ -713,23 +790,71 @@ internal sealed class InMemoryWeaverProposalService(
     /// <paramref name="refusal"/> (or the executor's refusal) as its zero-effect lifecycle envelope.
     /// </summary>
     private async Task<WeaverResult<WeaverProposalExecutionResult>> StoreOutcomeAsync(WeaverActionProposal proposal, long version, WeaverResult<WeaverProposalExecutionResult> outcome,
-        Func<WeaverResult<WeaverProposalExecutionResult>, string?>? acknowledgement = null, string? refusal = null)
+        Func<WeaverResult<WeaverProposalExecutionResult>, string?>? acknowledgement = null, string? refusal = null,
+        WeaverToolDescriptor? admittedDescriptor = null)
     {
-        if (outcome.Value?.Executed == true && (proposal.PreparedInvocation is not { } preparedInvocation
-            || outcome.Value.ToolResult is not { } observed
-            || !WeaverInvocationIntegrity.ValidReceipt(preparedInvocation, observed,
-                preparedInvocation.ExecutionLocation == WeaverExecutionLocation.ClientWorkingState ? WeaverEffectScope.ClientWorkingState : WeaverEffectScope.ServerPersisted)))
+        var beforeDispatch = IsBeforeDispatch(proposal, outcome);
+        // A replaced producer may return a genuine engine refusal borrowed from another executor (or copy
+        // its private cancellation error). That does not establish what this producer did after handoff.
+        // Discard its zero-effect message as well as its classification before retention or disclosure.
+        if (!beforeDispatch && (DefaultWeaverActionProposalExecutor.HasBeforeDispatchProof(outcome)
+            || DefaultWeaverActionProposalExecutor.IsCancelledBeforeDispatch(outcome)))
+            outcome = WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(proposal,
+                "The executor returned an unverified refusal after handoff. Its effect is uncertain and will not be replayed."));
+        // A replaced executor is not a fresh callback from this installed owner. Its public marker,
+        // including a borrowed genuine error object, cannot create owner authority.
+        if (!beforeDispatch && executor is not DefaultWeaverActionProposalExecutor && admittedDescriptor is not null)
+        {
+            if (outcome.Error is { } customError)
+            {
+                var normalized = WeaverModuleCodes.Error(customError, admittedDescriptor.ModuleCodes, ownerOrigin: false, out var replaced);
+                outcome = outcome with { Error = normalized };
+                if (replaced && outcome.Value is { } errorValue)
+                    outcome = outcome with { Value = errorValue with
+                    {
+                        Summary = normalized.Message,
+                        ToolResult = errorValue.ToolResult is { } associated
+                            ? associated with { Content = normalized.Message } : null
+                    } };
+            }
+            if (outcome.Value?.ToolResult is { } customResult)
+            {
+                var normalized = WeaverModuleCodes.Result(customResult, admittedDescriptor.ModuleCodes);
+                outcome = outcome with { Value = outcome.Value with
+                {
+                    ToolResult = normalized.Value,
+                    Summary = normalized.Replaced ? normalized.Value.Content : outcome.Value.Summary
+                } };
+            }
+        }
+        if (outcome.Succeeded && outcome.Value is null)
+            outcome = WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(proposal,
+                "The executor returned an empty success after handoff. Its effect is uncertain and will not be replayed."));
+        if (outcome.Value is { } success && (success.Executed || success.Status is "executed" or "performed"
+            || success.ToolResult?.Succeeded == true || success.ToolResult?.Receipt is not null)
+            && (!outcome.Succeeded || admittedDescriptor is null || !WeaverInvocationIntegrity.ValidSuccessOutcome(proposal, success, admittedDescriptor)))
             outcome = WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(proposal,
                 "The executor reported success without a valid owning-resource receipt. Its effect is uncertain and will not be replayed."));
         if (proposal.PreparedInvocation is { } original && outcome.Value?.ToolResult is { } observedResult)
-            outcome = outcome with { Value = outcome.Value with { ToolResult = WeaverResultProvenance.Stamp(observedResult, original) } };
+        {
+            try
+            {
+                outcome = outcome with { Value = outcome.Value with { ToolResult = WeaverResultProvenance.Stamp(DefaultWeaverActionProposalExecutor.FreezeResult(observedResult), original) } };
+            }
+            catch (Exception failure) when (failure is WeaverContributionException or System.Text.Json.JsonException or InvalidOperationException)
+            {
+                outcome = WeaverResult<WeaverProposalExecutionResult>.Success(DefaultWeaverActionProposalExecutor.Uncertain(proposal,
+                    "The returned effect evidence could not be retained safely. Its effect is uncertain and will not be replayed."));
+            }
+        }
         var value = outcome.Value;
         // Only the executor's own engine-owned signal is a pre-dispatch cancellation; a module returning the same
         // public code after dispatch is an ordinary refusal (Failed, refused lifecycle, claim released).
-        var cancelled = DefaultWeaverActionProposalExecutor.IsCancelledBeforeDispatch(outcome);
+        var cancelled = beforeDispatch && DefaultWeaverActionProposalExecutor.IsCancelledBeforeDispatch(outcome);
         var status = cancelled ? WeaverActionProposalStatus.Cancelled
+            : beforeDispatch && outcome.Error?.Code == "weaver.proposal.expired" ? WeaverActionProposalStatus.Expired
             : !outcome.Succeeded ? WeaverActionProposalStatus.Failed
-            : value?.Executed == true ? WeaverActionProposalStatus.Executed
+            : value?.Executed == true ? value.Status == "performed" ? WeaverActionProposalStatus.Performed : WeaverActionProposalStatus.Executed
             : value?.Status == "awaiting-client" ? WeaverActionProposalStatus.AwaitingClient
             : value?.Status == "uncertain" ? WeaverActionProposalStatus.Uncertain
             : WeaverActionProposalStatus.Failed;
@@ -739,11 +864,30 @@ internal sealed class InMemoryWeaverProposalService(
             ?? (!outcome.Succeeded && proposal.PreparedInvocation is { } prepared
                 ? DefaultWeaverActionProposalExecutor.LifecycleResult(prepared, "refused", cancelled
                     ? "The operation was cancelled before dispatch to its owning module. No effect occurred."
-                    : refusal ?? "The owning executor refused application before reporting an effect.")
+                    : refusal ?? (beforeDispatch ? "Execution admission refused the operation before dispatch. No effect occurred."
+                        : "The owning executor refused application before reporting an effect."))
                 : null);
+        // This optional new outcome representation depends on the selected store's admitted effects contract,
+        // not on fixture classes or a live module lookup. The approval decision itself remains core-only.
+        // The shared I/O-free observation may enrich it; it never refreshes or delays the core decision.
+        // A held/unknown/legacy store keeps the original representation; the actual write still checks its own attempt.
+        if (outcome.Error is { } typedError && result is not null && effects.CanRepresentOptionalTypedResult())
+            result = result with { Error = typedError };
         await TransitionAsync(proposal with { Status = status, UpdatedAt = clock.GetUtcNow(), Result = value?.ToolResult?.Payload },
             version, result, outcome, acknowledgement?.Invoke(outcome));
         return outcome;
+    }
+
+    private bool IsBeforeDispatch(WeaverActionProposal proposal, WeaverResult<WeaverProposalExecutionResult> result)
+        => DefaultWeaverActionProposalExecutor.IsBeforeDispatch(proposal, result, _dispatchOrigin)
+            || executor is DefaultWeaverActionProposalExecutor defaults && defaults.IsOwnBeforeDispatch(proposal, result);
+
+    private async Task<WeaverResult<WeaverProposalExecutionResult>> RefuseBeforeDispatchAsync(WeaverActionProposal proposal, long version,
+        string actorId, WeaverError error)
+    {
+        var refused = await StoreOutcomeAsync(proposal, version, DefaultWeaverActionProposalExecutor.RefusedBeforeDispatch(proposal, error, _dispatchOrigin));
+        await AuditOutcomeAsync(proposal.Id, refused, actorId, PreDispatchExpiry);
+        return refused;
     }
 
     /// <summary>
@@ -821,7 +965,7 @@ internal sealed class InMemoryWeaverProposalService(
     /// </summary>
     internal static bool Settled(WeaverActionProposal proposal) => proposal.Status switch
     {
-        WeaverActionProposalStatus.Executed or WeaverActionProposalStatus.Denied or WeaverActionProposalStatus.Expired
+        WeaverActionProposalStatus.Executed or WeaverActionProposalStatus.Performed or WeaverActionProposalStatus.Denied or WeaverActionProposalStatus.Expired
             or WeaverActionProposalStatus.Failed or WeaverActionProposalStatus.Cancelled => true,
         WeaverActionProposalStatus.Uncertain => proposal.PreparedInvocation?.ExecutionLocation != WeaverExecutionLocation.ClientWorkingState
             || proposal.OwnerResolution is not null,
@@ -845,9 +989,24 @@ internal sealed class InMemoryWeaverProposalService(
     private async Task ExpireBeforeDispatchAsync(WeaverActionProposal proposal, long version, string? actorId)
     {
         var expired = proposal with { Status = WeaverActionProposalStatus.Expired, UpdatedAt = clock.GetUtcNow() };
-        await TransitionAsync(expired, version);
+        WeaverToolResult? result = null;
+        WeaverResult<WeaverProposalExecutionResult>? execution = null;
+        IReadOnlyDictionary<string, string> metadata = PreDispatchExpiry;
+        if (proposal.PreparedInvocation is { } prepared && effects.CanRepresentOptionalTypedResult())
+        {
+            execution = Expired<WeaverProposalExecutionResult>();
+            result = DefaultWeaverActionProposalExecutor.LifecycleResult(prepared, "refused",
+                "The prepared operation expired before dispatch. No effect occurred.") with { Error = execution.Error };
+            metadata = new Dictionary<string, string>(PreDispatchExpiry)
+            {
+                ["code"] = execution.Error!.Code,
+                ["statusCode"] = execution.Error.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["ownerUnavailable"] = "false"
+            };
+        }
+        await TransitionAsync(expired, version, result, execution);
         await AuditAsync(expired, WeaverAuditEventKind.ProposalFailed, actorId, "The prepared operation expired before dispatch; no effect occurred.",
-            CancellationToken.None, PreDispatchExpiry);
+            CancellationToken.None, metadata);
     }
 
     /// <summary>
@@ -879,7 +1038,7 @@ internal sealed class InMemoryWeaverProposalService(
 
     private SemaphoreSlim Gate(string proposalId) => store.Gates.GetOrAdd(proposalId, _ => new(1, 1));
     private static bool RevisionMatches(WeaverActionProposal proposal, string? expected) => string.Equals(proposal.PreparedInvocation?.Target?.Revision ?? proposal.BaseRevision, expected, StringComparison.Ordinal);
-    private static bool IsTerminal(WeaverActionProposalStatus status) => status is WeaverActionProposalStatus.Executed or WeaverActionProposalStatus.Failed
+    private static bool IsTerminal(WeaverActionProposalStatus status) => status is WeaverActionProposalStatus.Executed or WeaverActionProposalStatus.Performed or WeaverActionProposalStatus.Failed
         or WeaverActionProposalStatus.Denied or WeaverActionProposalStatus.Cancelled or WeaverActionProposalStatus.Expired or WeaverActionProposalStatus.Uncertain;
     private Task AuditAsync(WeaverActionProposal proposal, WeaverAuditEventKind kind, string? actorId, string summary, CancellationToken cancellationToken,
         IReadOnlyDictionary<string, string>? outcome = null)

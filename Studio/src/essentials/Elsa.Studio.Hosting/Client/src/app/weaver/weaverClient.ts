@@ -1,3 +1,4 @@
+import { readWeaverProposalStatus } from "./weaverProposalStatus";
 // The transport uses the public SDK bundle; its error class must have the same runtime identity.
 import { StudioHttpError } from "@elsa-workflows/studio-sdk";
 import type { StudioWeaverPreparedInvocation, StudioWeaverToolResult, StudioEndpointContext } from "../../sdk";
@@ -59,17 +60,23 @@ export interface WeaverClient {
 
 /** An HTTP refusal with the authenticated server's authoritative terminal operation outcome. */
 export class WeaverExecutionError extends StudioHttpError {
+  /** Reported transport metadata; never proof of no effect or fresh owner authority. */
+  readonly ownerUnavailable: boolean;
   constructor(status: number, message: string, public readonly code: string, public readonly terminalOutcome: WeaverProposalDecisionResponse, payload: unknown) {
     super(status, message, null, payload);
     this.name = "WeaverExecutionError";
+    this.ownerUnavailable = readBoolean(readRecord(payload, "error"), "ownerUnavailable") === true;
   }
 }
 
 /** An HTTP refusal that carries the Weaver API's error code (for example `weaver.session.policy_stale`). */
 export class WeaverApiError extends StudioHttpError {
+  /** Reported transport metadata; never proof of no effect or fresh owner authority. */
+  readonly ownerUnavailable: boolean;
   constructor(status: number, message: string, public readonly code: string, payload: unknown, retryAfterSeconds: number | null = null) {
     super(status, message, null, payload, retryAfterSeconds);
     this.name = "WeaverApiError";
+    this.ownerUnavailable = readBoolean(readRecord(payload, "error"), "ownerUnavailable") === true;
   }
 }
 
@@ -421,8 +428,8 @@ function mapRecordedProposal(proposal: Record<string, unknown>): WeaverRecordedP
 function terminalExecutionError(envelope: unknown, proposalId: string, status?: number): WeaverExecutionError | null {
   const error = readRecord(envelope, "error"); const data = readRecord(envelope, "data");
   if (!error || !data || readString(data, "proposalId") !== proposalId || readBoolean(data, "executed") !== false) return null;
-  const outcome = normalizeEnum(readField(data, "status"));
-  if (!["expired", "failed", "denied", "cancelled"].includes(outcome)) return null;
+  const outcome = readWeaverProposalStatus(readField(data, "status"));
+  if (!outcome || !["expired", "failed", "denied", "cancelled"].includes(outcome)) return null;
   const errorStatus = readField(error, "statusCode");
   return new WeaverExecutionError(status ?? (typeof errorStatus === "number" ? errorStatus : 409),
     readString(error, "message") ?? "The server refused the reviewed execution.", readString(error, "code") ?? "weaver.execution.refused",
@@ -431,7 +438,7 @@ function terminalExecutionError(envelope: unknown, proposalId: string, status?: 
 
 interface WeaverApiResponse<T> {
   data?: T | null;
-  error?: { code: string; message: string; statusCode?: number } | null;
+  error?: { code: string; message: string; statusCode?: number; ownerUnavailable?: boolean } | null;
 }
 
 interface BackendWeaverBootstrapResponse {
@@ -440,6 +447,7 @@ interface BackendWeaverBootstrapResponse {
   modes?: WeaverBootstrapResponse["modes"];
   capabilities?: BackendWeaverCapability[];
   policy?: WeaverBootstrapResponse["policy"];
+  privileges?: WeaverBootstrapResponse["privileges"];
   provider?: BackendWeaverProviderDiagnostics | null;
 }
 
@@ -536,8 +544,19 @@ function mapBootstrap(response: BackendWeaverBootstrapResponse): WeaverBootstrap
     capabilities: capabilities.map(mapCapability),
     provider,
     policy: mapPolicy(readRecord(response, "policy")),
+    ...mapPrivilegeProjection(response),
     ...(recovery ? { recovery } : {})
   };
+}
+
+function mapPrivilegeProjection(response: unknown): Pick<WeaverBootstrapResponse, "privileges"> {
+  const view = readRecord(response, "privileges");
+  const administrative = readBoolean(view, "administrative");
+  const irrecoverable = readBoolean(view, "irrecoverable");
+  const activation = readBoolean(view, "activation");
+  // An absent/partial old-server view is not an observation that the current host disabled all classes.
+  return administrative !== undefined && irrecoverable !== undefined && activation !== undefined
+    ? { privileges: { administrative, irrecoverable, activation } } : {};
 }
 
 const DEFAULT_AUTONOMY_MODE: WeaverAutonomyMode = "auto-read-only";
@@ -676,11 +695,15 @@ export function mapAdmittedContextAttachment(attachment: Record<string, unknown>
 }
 
 function mapExecution(result: BackendWeaverProposalExecutionResult, fallbackId: string): WeaverProposalDecisionResponse {
+  const status = getExecutionStatus(result);
+  const executed = readBoolean(result, "executed");
+  const clientInvocation = readField(result, "clientInvocation") as StudioWeaverPreparedInvocation | undefined;
+  const pendingClient = status === "awaiting-client" && executed === false;
   return {
     proposalId: readString(result, "proposalId") ?? fallbackId,
-    approvalStatus: getExecutionStatus(result),
-    executed: readBoolean(result, "executed"),
-    clientInvocation: readField(result, "clientInvocation") as StudioWeaverPreparedInvocation | undefined,
+    approvalStatus: clientInvocation && !pendingClient ? "uncertain" : status,
+    executed,
+    clientInvocation: pendingClient ? clientInvocation : undefined,
     toolResult: readField(result, "toolResult") as StudioWeaverToolResult | undefined,
     result: {
       resourceType: readString(result, "resourceType") ?? "weaver-proposal",
@@ -750,11 +773,10 @@ function mapProposalDecision(proposal: BackendWeaverActionProposal): WeaverPropo
 }
 
 function getExecutionStatus(result: BackendWeaverProposalExecutionResult): WeaverActionProposal["status"] {
-  const status = normalizeEnum(readField(result, "status") ?? readField(result, "approvalStatus"));
-  if (status === "awaiting-client" || status === "uncertain" || status === "cancelled" || status === "expired" || status === "failed" || status === "denied") return status;
-  const executed = readBoolean(result, "executed");
-  if (executed !== undefined) return executed ? "executed" : "failed";
-  return mapProposalStatus(status);
+  const status = readWeaverProposalStatus(readField(result, "status") ?? readField(result, "approvalStatus"));
+  // A ran flag cannot distinguish a persisted effect from performed or make an unknown result successful.
+  if ((status === "executed" || status === "performed") && readBoolean(result, "executed") !== true) return "uncertain";
+  return status ?? "uncertain";
 }
 
 function mapMessageStatus(status: unknown): WeaverMessageResponse["status"] {
@@ -787,13 +809,7 @@ function mapSessionStatus(status: unknown): WeaverCreateSessionResponse["status"
 }
 
 function mapProposalStatus(status: unknown): WeaverActionProposal["status"] {
-  const value = normalizeEnum(status);
-  if (["draft", "edited", "expired", "cancelled", "executing", "awaiting-client", "uncertain"].includes(value)) return value as WeaverActionProposal["status"];
-  if (value === "approved" || status === 1) return "approved";
-  if (value === "denied" || status === 2) return "denied";
-  if (value === "executed" || status === 3) return "executed";
-  if (value === "failed" || status === 4) return "failed";
-  return "awaiting-approval";
+  return readWeaverProposalStatus(status) ?? "uncertain";
 }
 
 function mapSensitivity(sensitivity: WeaverMessageRequest["contextAttachments"][number]["sensitivity"]) {

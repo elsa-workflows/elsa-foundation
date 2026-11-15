@@ -6,6 +6,7 @@ using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.Core.Attributes;
+using Elsa.Studio.Core.Events;
 using Elsa.Studio.Core.Models;
 using Elsa.Studio.Diagnostics.OpenTelemetry;
 using Elsa.Studio.Diagnostics.StructuredLogs;
@@ -163,14 +164,26 @@ public sealed class StudioModuleManifestProviderTests
     public async Task GetModules_RejectsInvalidStyleContractWithoutBreakingOtherModules(string contract)
     {
         const string directory = "_content/Elsa.Studio.Workflows/studio/modules/workflows";
-        var response = await GetModulesAsync(webAssets: new Dictionary<string, string[]>(), fileContents: new Dictionary<string, string>
+        var webAssets = new Dictionary<string, string[]>();
+        var fileContents = new Dictionary<string, string>
         {
             [$"{directory}/entry-styles.json"] = contract,
             [$"{directory}/module-entryHash.css"] = "entry"
-        });
+        };
+        var response = await GetModulesAsync(webAssets: webAssets, fileContents: fileContents);
         Assert.DoesNotContain(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Contains(response.Diagnostics, x => x.ModuleId == "Elsa.Studio.Workflows" && x.Status == StudioModuleDiagnosticStatuses.Failed);
         Assert.Contains(response.Modules, x => x.Id == "Elsa.Studio.Dashboard");
+
+        var registry = await GetRegistryAsync(webAssets: webAssets, fileContents: fileContents);
+        Assert.True(registry.Complete);
+        var failed = Assert.Single(registry.Modules, x => x.Id == "Elsa.Studio.Workflows");
+        Assert.Equal("Workflows", failed.DisplayName);
+        Assert.Equal(StudioModuleDiagnosticStatuses.Failed, failed.Status);
+        Assert.Contains(failed.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Failed);
+        Assert.DoesNotContain(failed.Diagnostics, x => x.Status == StudioModuleDiagnosticStatuses.Available);
+        Assert.Empty(failed.Manifest.Styles);
+        Assert.Contains(registry.Modules, x => x.Id == "Elsa.Studio.Dashboard" && x.Status == StudioModuleDiagnosticStatuses.Available);
     }
 
     [Fact]
@@ -238,6 +251,7 @@ public sealed class StudioModuleManifestProviderTests
     public async Task GetModuleRegistry_ReturnsBackendAwareModuleMetadata()
     {
         var response = await GetRegistryAsync();
+        Assert.True(response.Complete);
 
         var featureManagement = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.FeatureManagement");
         Assert.Equal("full-stack", featureManagement.Scope);
@@ -262,6 +276,81 @@ public sealed class StudioModuleManifestProviderTests
         var weather = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Samples.WeatherForecast");
         Assert.Equal(StudioModuleDiagnosticStatuses.Disabled, weather.Status);
         AssertDisabled(weather.Diagnostics, "Elsa.Studio.Samples.WeatherForecast");
+    }
+
+    [Fact]
+    public void ExistingRegistryProviderResponseDoesNotEstablishCompleteness()
+    {
+        var response = new StudioModuleRegistryResponse("1.0.0", "1.0.0", DateTimeOffset.UtcNow, []);
+        Assert.Null(response.Complete);
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        Assert.DoesNotContain("complete", System.Text.Json.JsonSerializer.Serialize(response, options));
+        Assert.Contains("\"complete\":true", System.Text.Json.JsonSerializer.Serialize(response with { Complete = true }, options));
+        Assert.Contains("\"complete\":false", System.Text.Json.JsonSerializer.Serialize(response with { Complete = false }, options));
+    }
+
+    [Fact]
+    public async Task GetModuleRegistry_EmptySuccessfulDiscoveryIsComplete()
+    {
+        var services = new ServiceCollection();
+        services.AddElsaStudioApi();
+        services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog([]));
+        await using var provider = services.BuildServiceProvider();
+        var response = await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
+        Assert.Empty(response.Modules);
+        Assert.True(response.Complete);
+    }
+
+    [Theory]
+    [InlineData("duplicate")]
+    [InlineData("DUPLICATE")]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task GetModuleRegistry_RejectsAmbiguousDisabledDiscovery(string secondId)
+    {
+        var services = new ServiceCollection();
+        services.AddElsaStudioApi(options =>
+        {
+            options.DisabledModuleIds.Add("duplicate");
+            options.DisabledModuleIds.Add(secondId);
+        });
+        services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog([]));
+        services.AddSingleton<IStudioEventHandler<OnStudioModuleManifestsCollecting>>(new ManifestContribution(secondId));
+        await using var provider = services.BuildServiceProvider();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IStudioModuleManifestProvider>()
+            .GetModuleRegistry(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetModuleRegistry_CancelledDiscoveryCannotBecomeComplete()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var services = new ServiceCollection();
+        services.AddElsaStudioApi();
+        services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog([]));
+        services.AddSingleton<IStudioEventHandler<OnStudioModuleManifestsCollecting>>(new CancellingManifestContribution(cancellation));
+        await using var provider = services.BuildServiceProvider();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetRequiredService<IStudioModuleManifestProvider>()
+            .GetModuleRegistry(cancellation.Token));
+    }
+
+    private sealed class ManifestContribution(string secondId) : IStudioEventHandler<OnStudioModuleManifestsCollecting>
+    {
+        public Task Handle(OnStudioModuleManifestsCollecting collection, CancellationToken cancellationToken)
+        {
+            collection.Manifests.Add(new("duplicate", "First", "1.0.0", "/first.js", [], "*", "*", []));
+            collection.Manifests.Add(new(secondId, "Second", "1.0.0", "/second.js", [], "*", "*", []));
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class CancellingManifestContribution(CancellationTokenSource cancellation) : IStudioEventHandler<OnStudioModuleManifestsCollecting>
+    {
+        public Task Handle(OnStudioModuleManifestsCollecting collection, CancellationToken cancellationToken)
+        {
+            cancellation.Cancel();
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>
@@ -321,9 +410,12 @@ public sealed class StudioModuleManifestProviderTests
         return await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModules(CancellationToken.None);
     }
 
-    private static async Task<StudioModuleRegistryResponse> GetRegistryAsync(Action<StudioApiOptions>? configure = null)
+    private static async Task<StudioModuleRegistryResponse> GetRegistryAsync(
+        Action<StudioApiOptions>? configure = null,
+        IReadOnlyDictionary<string, string[]>? webAssets = null,
+        IReadOnlyDictionary<string, string>? fileContents = null)
     {
-        await using var provider = CreateProvider(configure);
+        await using var provider = CreateProvider(configure, webAssets: webAssets, fileContents: fileContents);
         return await provider.GetRequiredService<IStudioModuleManifestProvider>().GetModuleRegistry(CancellationToken.None);
     }
 

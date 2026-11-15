@@ -3,7 +3,27 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { WeaverToolResults } from "../WeaverToolResults";
+import type { StudioWeaverEffectScope, StudioWeaverToolResult } from "../../../sdk";
 import { WeaverProposalReview } from "../WeaverProposalReview";
+
+it("keeps a terminal refusal's canonical reason visible in the shared result and review without replacing owner presentation", () => {
+  const container = document.createElement("div"); const root = createRoot(container);
+  const message = "Current host policy disables a privilege required by this operation.";
+  const result: StudioWeaverToolResult = { toolCallId: "call", toolName: "owner_test", succeeded: false,
+    content: "Execution admission refused the operation before dispatch. No effect occurred.",
+    error: { code: "weaver.proposal.privilege_disabled", message, statusCode: 403 } };
+  try {
+    flushSync(() => root.render(<><WeaverToolResults results={[result]} renderers={[]} />
+      <WeaverProposalReview proposals={[{ id: "failed", title: "Test resource", summary: result.content,
+        risk: "review-required", status: "failed", toolResult: result }]} onApprove={() => {}} onDeny={() => {}} onExecute={() => {}} /></>));
+    expect([...container.querySelectorAll("p")].filter(item => item.textContent === message)).toHaveLength(2);
+    expect(container.textContent).toContain("No effect occurred");
+    expect(container.querySelector("article[data-succeeded]")?.getAttribute("data-succeeded")).toBe("false");
+    flushSync(() => root.render(<WeaverToolResults results={[{ ...result, content: message }]} renderers={[]} />));
+    expect([...container.querySelectorAll("p")].filter(item => item.textContent === message)).toHaveLength(1);
+    expect(container.textContent).not.toContain("Persisted resource");
+  } finally { flushSync(() => root.unmount()); }
+});
 
 it.each(["supports", "component"])("keeps owner evidence and shared review usable when contributed %s fails", failure => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -47,5 +67,36 @@ it("matches renderers by resource module and renders the owning module's result 
     expect(container.textContent?.match(/Owner undo/g)).toHaveLength(2);
     expect(container.textContent).not.toContain("Wrong type control");
     expect(container.textContent).not.toContain("Stranger control");
+  } finally { flushSync(() => root.unmount()); }
+});
+
+const scopeCases = [
+  { scope: "clientWorkingState", label: "Local working state" },
+  { scope: "ClientWorkingState", label: "Local working state" },
+  { scope: 0, label: "Local working state" },
+  { scope: "client-working-state", label: "Local working state" },
+  { scope: "serverPersisted", label: "Persisted resource" },
+  { scope: "ServerPersisted", label: "Persisted resource" },
+  { scope: 1, label: "Persisted resource" },
+  { scope: "server-persisted", label: "Persisted resource" },
+  { scope: "noPersistedEffect", label: "No persisted resource change" },
+  { scope: "NoPersistedEffect", label: "No persisted resource change" },
+  { scope: 2, label: "No persisted resource change" },
+  { scope: "no-persisted-effect", label: "No persisted resource change" },
+  ...["future-scope", 3, -1, 0.5, null].map(scope => ({ scope, label: "Effect scope unavailable" }))
+];
+it.each(scopeCases)("labels owning receipt scope $scope as $label without interpreting the module verdict", ({ scope, label }) => {
+  const container = document.createElement("div"); const root = createRoot(container);
+  const target = { moduleId: "Owner", resourceType: "sample", resourceId: "one", revision: "r1" };
+  const payload = { typeId: "owner.test-result", schemaVersion: "1", data: { passed: false } };
+  try {
+    flushSync(() => root.render(<WeaverToolResults results={[{ toolCallId: "call", toolName: "owner_test", succeeded: true,
+      content: "The owner ran the test and reported a negative verdict.", payload,
+      receipt: { invocationId: "invocation", before: target, after: target, scope: scope as StudioWeaverEffectScope, evidence: payload }
+    }]} renderers={[]} />));
+    expect(container.querySelector("article small")?.textContent).toBe(label);
+    expect(container.querySelector("article")?.getAttribute("data-succeeded")).toBe("true");
+    expect(container.textContent).toContain("negative verdict");
+    expect(container.textContent).toContain('"passed": false');
   } finally { flushSync(() => root.unmount()); }
 });

@@ -22,6 +22,15 @@ def retained(path):
     return {"path": str(path), "sha256": sha(path)}
 
 
+def retained_json(root, reference):
+    """Read a hash-bound, owned receipt; never trust a section's summarized booleans."""
+    check(isinstance(reference, dict) and set(reference) == {"path", "sha256"}, "A complete retained reference is required")
+    path = Path(reference["path"])
+    check(path.is_absolute() and path.resolve().is_relative_to(Path(root).resolve()) and path.is_file()
+          and not path.is_symlink() and sha(path) == reference["sha256"], "Retained evidence is missing, foreign or changed")
+    return strict_json(path.read_text())
+
+
 class CaseRecords:
     def __init__(self, run, expected_controls):
         check(set(expected_controls) == CONTROL_IDS, "Every refusal needs a driver-owned expected cause")
@@ -76,12 +85,12 @@ def _normalized_result(value):
     result = copy.deepcopy(value)
     if result.get("receipt"):
         scope = result["receipt"]["scope"]
-        # WeaverEffectScope declares ClientWorkingState=0, ServerPersisted=1.
+        # WeaverEffectScope: ClientWorkingState=0, ServerPersisted=1, NoPersistedEffect=2.
         # Weaver API uses camelCase; SDK/ordinary JSON uses PascalCase or numbers.
-        if type(scope) is int and scope in (0, 1):
+        if type(scope) is int and scope in (0, 1, 2):
             canonical = scope
-        elif type(scope) is str and scope in ("clientWorkingState", "ClientWorkingState", "serverPersisted", "ServerPersisted"):
-            canonical = 0 if scope in ("clientWorkingState", "ClientWorkingState") else 1
+        elif type(scope) is str and scope in ("clientWorkingState", "ClientWorkingState", "serverPersisted", "ServerPersisted", "noPersistedEffect", "NoPersistedEffect"):
+            canonical = 0 if scope in ("clientWorkingState", "ClientWorkingState") else 1 if scope in ("serverPersisted", "ServerPersisted") else 2
         else:
             check(False, "Unsupported generic receipt effect scope")
         result["receipt"]["scope"] = canonical

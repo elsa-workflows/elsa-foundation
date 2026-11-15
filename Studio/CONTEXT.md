@@ -21,7 +21,7 @@ The host or module responsible for defining a Slot's identity, accepted contribu
 _Avoid_: Slot provider, parent module
 
 **Host Policy**:
-Studio-wide rules that decide whether Contributions, Weaver Tools, Slots, and Resource Target mutations are available for the current user, tenant, feature state, module state, and risk boundary.
+Studio-wide rules that decide whether Contributions, Weaver Tools, Slots, and Resource Target mutations are available for the current user, tenant, feature state, module state, and risk boundary. The backend [Privilege policy](../docs/glossary/elsa.md#privilege-policy) is part of Host Policy and gives administrator-configured class limits final veto; it does not grant owning-resource permission.
 _Avoid_: Slot Owner rules, module policy
 
 **Module Policy**:
@@ -197,7 +197,7 @@ A Diagnostics Contribution that subscribes to a diagnostic stream and updates co
 _Avoid_: Snapshot diagnostics contribution
 
 **Module Load Status**:
-Module management state that describes whether a Studio module was discovered, accepted, activated, disabled, or rejected. Module Load Status is administration state, not a Diagnostics Contribution.
+The diagnostics status of a Studio module: available, loaded, disabled, incompatible or failed. The module registry also represents pending and unknown. Module Load Status is administration state, not a Diagnostics Contribution.
 _Avoid_: Diagnostics signal, observability widget
 
 **Weaver**:
@@ -219,6 +219,18 @@ _Avoid_: Execution, save, publish
 **Context Kind**:
 A module-owned, versioned description of one kind of Studio context that Weaver may read, such as `workflow.definition` for the active draft. Each Context Kind declares its own bounds and the revision identity it is attributed to. Resource content, such as a workflow's names, descriptions and expression text, is untrusted data, kept distinct from installed-module guidance, which a module contributes as its own kind (for example `workflow.guidance`).
 _Avoid_: Attachment type, prompt context
+
+**Built-in Studio Screen**:
+A screen rendered by the `Elsa.Studio.Hosting` client itself.
+_Avoid_: Module-owned screen
+
+**Client-Asserted Kind**:
+A Context Kind whose content is supplied only by the browser. It is untrusted and grants no authority; the server checks its schema and bounds.
+_Avoid_: Server-verified context
+
+**Weaver Outcome Terms**:
+The backend Elsa glossary defines [Proposed](../docs/glossary/elsa.md#proposed), [Approved](../docs/glossary/elsa.md#approved), [Persisted](../docs/glossary/elsa.md#persisted), [Applied locally](../docs/glossary/elsa.md#applied-locally), [Refused](../docs/glossary/elsa.md#refused), [Uncertain](../docs/glossary/elsa.md#uncertain), [Performed](../docs/glossary/elsa.md#performed), [Owner-unavailable](../docs/glossary/elsa.md#owner-unavailable), [Unavailable](../docs/glossary/elsa.md#unavailable), [Unsupported](../docs/glossary/elsa.md#unsupported) and [Stale](../docs/glossary/elsa.md#stale). It also defines [Privilege policy](../docs/glossary/elsa.md#privilege-policy), [Privilege class](../docs/glossary/elsa.md#privilege-class), [Module code](../docs/glossary/elsa.md#module-code), [Secret consumer](../docs/glossary/elsa.md#secret-consumer) and [Connection-owned secret](../docs/glossary/elsa.md#connection-owned-secret). These meanings do not establish that a preview contract or a later module leaf has shipped.
+_Avoid_: Treating approval or a transport success as proof of application
 
 **Weaver Tool**:
 A module-contributed capability that Weaver can invoke to inspect, propose, or mutate Studio-managed resources according to the user's goal, available skills, permissions, and policy.
@@ -253,7 +265,7 @@ A Weaver Tool that returns a Proposal for review before a mutation can occur.
 _Avoid_: Direct Tool
 
 **Privileged Tool**:
-A Weaver Tool that requires stronger approval or policy controls because it can perform high-impact, sensitive, or administrative mutations.
+A Weaver Tool whose effect requires a [Privilege class](../docs/glossary/elsa.md#privilege-class), subject to the backend Privilege policy as well as owning-resource permission and review. An effect may run without persisting a resource change.
 _Avoid_: Direct Tool
 
 **Tool Result**:

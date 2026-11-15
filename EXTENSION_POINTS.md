@@ -89,8 +89,8 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Weaver foundation (sessions, policy, context, proposals, provider facade, audit, session record store and durable recovery) | [`Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md`](Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md) |
-| Weaver EF session record store and durable audit (opt-in Weaver recovery) | [`Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Weaver foundation (sessions, policy, context, proposals, provider facade, audit, recovery and preview module effects/current-principal integration) | [`Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md`](Extensions/Weaver/src/Elsa.Weaver/EXTENSION_POINTS.md) |
+| Weaver EF session record store and durable audit (opt-in recovery and preview effects variation) | [`Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Weaver/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Agent model providers | [`Extensions/Agent/src/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Core/EXTENSION_POINTS.md) |
 | Connection-backed agent model contributors | [`Extensions/Agent/src/Connections/EXTENSION_POINTS.md`](Extensions/Agent/src/Connections/EXTENSION_POINTS.md) |
 | Agent EF turn journal | [`Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Extensions/Agent/src/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |

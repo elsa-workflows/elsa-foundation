@@ -1,0 +1,99 @@
+using Elsa.Weaver.Core.Contracts;
+using Elsa.Weaver.Core.Models;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+
+namespace Acme.Home.Weaver;
+
+// This independently packaged module calls the public invoker through the native request services. It does not
+// imitate a provider turn, bypass schema admission, construct a proposal or execute/approve a prepared action.
+internal static class WidgetPreparationProbe
+{
+    internal const string EvidenceKind = "native-module-public-invoker-preparation";
+
+    internal static void MapEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapPost(WidgetContract.Endpoint + "/effects/prepare", async (WidgetPrepareRequest request,
+            HttpContext http, WidgetEffectOwner owner, IWeaverSessionService sessions, IWeaverToolInvoker invoker, CancellationToken ct) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            try
+            {
+                var response = await PrepareAsync(request, owner, sessions, invoker, ct);
+                return Results.Json(response.Body, statusCode: response.StatusCode);
+            }
+            catch (WidgetRefusal refusal)
+            {
+                return Results.Problem(statusCode: refusal.Error.StatusCode, title: refusal.Error.Code, detail: refusal.Error.Message);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                // A response failure can follow a real insertion. Never manufacture an observed empty proposal.
+                return Results.Problem(statusCode: 503, title: "acme.home.effects.preparation_observation_unavailable",
+                    detail: "Retain this failed or unknown preparation; do not replay it as a new request.");
+            }
+        }).RequireAuthorization();
+    }
+
+    internal static async Task<WidgetPrepareResponse> PrepareAsync(WidgetPrepareRequest request, WidgetEffectOwner owner,
+        IWeaverSessionService sessions, IWeaverToolInvoker invoker, CancellationToken ct)
+    {
+        var requireCurrent = owner.CaptureCurrentRequest();
+        requireCurrent();
+        var key = await owner.AuthorizeCurrentAsync(ct);
+        requireCurrent();
+        if (string.IsNullOrWhiteSpace(request.SessionId) || request.SessionId.Length > 256 || request.ExpectedVisible is null)
+            throw WidgetEffects.Refusal(WidgetEffects.Invalid, "A bounded owned session identity and explicit expected visibility are required.", 400);
+        var identity = await sessions.FindOwnerAsync(request.SessionId, ct);
+        requireCurrent();
+        ct.ThrowIfCancellationRequested();
+        if (identity?.ActorId != key.SubjectId || identity?.TenantId != key.TenantId)
+            throw WidgetEffects.Refusal(WidgetEffects.Foreign, "An owned session is required for preparation.", 403);
+        // The plain owner lookup may await storage. Recheck current native write authority before hydration.
+        await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+        requireCurrent();
+        var session = await sessions.FindAsync(request.SessionId, ct);
+        requireCurrent();
+        ct.ThrowIfCancellationRequested();
+        if (session is not { Status: WeaverSessionStatus.Active } || session.Id != request.SessionId
+            || session.ActorId != key.SubjectId || session.TenantId != key.TenantId
+            || session.ExpiresAt is { } expires && expires <= DateTimeOffset.UtcNow)
+            throw WidgetEffects.Refusal(WidgetEffects.Foreign, "A current owned session is required for preparation.", 403);
+        if (!session.Policy.RequiresApprovalForMutations)
+            throw WidgetEffects.Refusal(WidgetEffects.Invalid, "This preparation observation requires an existing reviewed autonomy policy.", 409);
+        var state = await owner.ObserveAsync(key.SubjectId, key.TenantId, true, ct);
+        requireCurrent();
+        await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+        requireCurrent();
+        // These are fresh server identities for a direct module invocation, not caller/provider correlation.
+        var invocation = new WeaverToolInvocation(Guid.NewGuid().ToString("N"), WidgetEffects.Check, session.Id, key.SubjectId,
+            new Dictionary<string, object?> { ["expectedVisible"] = request.ExpectedVisible.Value }, [WidgetEffectsContext.Snapshot(state)])
+        { TurnId = Guid.NewGuid().ToString("N"), TenantId = key.TenantId };
+        var dispatch = await invoker.DispatchAsync(invocation, session.Policy, ct);
+        requireCurrent();
+        await owner.AuthorizeAsync(key.SubjectId, key.TenantId, true, ct);
+        requireCurrent();
+        ct.ThrowIfCancellationRequested();
+        if (dispatch.Outcome == WeaverToolDispatchOutcome.Denied && dispatch.Error is { } error && dispatch.Proposal is null)
+            return new(error.StatusCode, new(EvidenceKind, session.Id, invocation.ToolName, invocation.TurnId, invocation.ToolCallId,
+                dispatch.Outcome.ToString(), null, dispatch.Result is null ? null : new(dispatch.Result.Succeeded, dispatch.Result.Receipt is not null,
+                    dispatch.Result.Error is not null), new(error.Code, error.StatusCode, error.OwnerUnavailable)));
+        if (dispatch.Outcome != WeaverToolDispatchOutcome.ProposalCreated || dispatch.Error is not null || dispatch.Result is not null
+            || dispatch.Proposal is not { Status: WeaverActionProposalStatus.AwaitingApproval, RequiresApproval: true, PreparedInvocation: { } prepared } proposal
+            || proposal.SessionId != session.Id || prepared.SessionId != session.Id || prepared.TurnId != invocation.TurnId
+            || prepared.ToolCallId != invocation.ToolCallId || prepared.ToolName != invocation.ToolName || prepared.ActorId != key.SubjectId
+            || prepared.TenantId != key.TenantId || !prepared.RequiresApproval)
+            throw WidgetEffects.Refusal(WidgetEffects.Invalid, "The native preparation did not produce the required review outcome.", 503);
+        return new(200, new(EvidenceKind, session.Id, invocation.ToolName, invocation.TurnId, invocation.ToolCallId,
+            dispatch.Outcome.ToString(), new(proposal.Id, proposal.Status.ToString(), proposal.RequiresApproval), null, null));
+    }
+}
+
+internal sealed record WidgetPrepareRequest(string SessionId, bool? ExpectedVisible);
+internal sealed record WidgetPrepareResponse(int StatusCode, WidgetPrepareBody Body);
+internal sealed record WidgetPrepareBody(string EvidenceKind, string SessionId, string ToolName, string TurnId, string ToolCallId,
+    string Outcome, WidgetPreparedProposal? Proposal, WidgetPreparedResult? Result, WidgetPreparedError? Error);
+internal sealed record WidgetPreparedProposal(string Id, string Status, bool RequiresApproval);
+internal sealed record WidgetPreparedResult(bool Succeeded, bool HasReceipt, bool HasError);
+internal sealed record WidgetPreparedError(string Code, int StatusCode, bool OwnerUnavailable);
