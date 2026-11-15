@@ -18,7 +18,7 @@ public sealed class InMemoryPublicationRecordStore : IPublicationRecordStore
         lock (_gate)
         {
             if (_records.TryGetValue(publication.PublicationId, out var existing) && existing != publication)
-                throw new InvalidOperationException($"Publication '{publication.PublicationId}' already exists.");
+                throw new PublicationRecordAlreadyExistsException(publication.PublicationId);
             _records[publication.PublicationId] = publication;
         }
         return ValueTask.CompletedTask;
@@ -99,7 +99,7 @@ public sealed class InMemoryPublicationRecordStore : IPublicationRecordStore
             current.WorkflowDefinitionId != next.WorkflowDefinitionId ||
             current.WorkflowDefinitionVersionId != next.WorkflowDefinitionVersionId ||
             current.SlotName != next.SlotName ||
-            current.ArtifactId != next.ArtifactId || current.ExpectedSlotRevision != next.ExpectedSlotRevision ||
+            current.ArtifactId != next.ArtifactId || current.RequestFingerprint != next.RequestFingerprint || current.ExpectedSlotRevision != next.ExpectedSlotRevision ||
             current.CreatedAt != next.CreatedAt)
             throw new InvalidOperationException("A publication lifecycle transition cannot change immutable publication identity.");
     }

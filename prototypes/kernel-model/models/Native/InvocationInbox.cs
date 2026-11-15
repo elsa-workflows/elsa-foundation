@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Kernel.Native;
 
@@ -11,9 +12,17 @@ public sealed record InvocationInput(string Frame, string Id, string Name, strin
 }
 public sealed record ReceiptQuery(string Frame, string Id) { public const string Kind = "native.receipt-query"; }
 public sealed record Admission(string Frame, string Id, string Result, long? Order = null, string? Outcome = null,
-    string? Actor = null, string? Status = null, long? ValidUntil = null, long? FinalizedAt = null);
+    string? Actor = null, string? Status = null, long? ValidUntil = null, long? FinalizedAt = null)
+{
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal bool EvaluationStarted { get; init; }
+}
 public sealed record InputReceipt(string Digest, long Order, string Status = "Queued", string? Outcome = null,
-    long? Retention = null, string? Clock = null);
+    long? Retention = null, string? Clock = null)
+{
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    internal bool EvaluationStarted { get; init; }
+}
 public sealed class InvocationInbox
 {
     public int Capacity { get; set; }
@@ -60,6 +69,7 @@ internal sealed partial class Burst
     internal ValueTask MetadataAsync()
     {
         LexicalScopes.Validate(_s);
+        NativeInterventions.Validate(_s, cancelled: ended == InstanceStatus.Cancelled);
         if (AdmissionHas(AdmissionFlaw.DropMetadata)) return ValueTask.CompletedTask;
         if (ended is { } status && turn.Clock.Resolve(WorkflowCommitClock.Terminal) is not null)
             InvocationLifetime.Terminate(_s, WorkflowCommitClock.Terminal, status switch
@@ -96,7 +106,8 @@ internal sealed partial class Burst
         var until = receipt is null ? null : InvocationLifetime.Deadline(receipt, turn.Clock);
         if (AdmissionHas(AdmissionFlaw.Restamp) && finalized is not null && receipt?.Retention is { } duration)
             until = checked(turn.Now + duration);
-        return new(frame, id, result, receipt?.Order, receipt?.Outcome, turn.Instance.Ref.Id, receipt?.Status, until, finalized);
+        return new(frame, id, result, receipt?.Order, receipt?.Outcome, turn.Instance.Ref.Id, receipt?.Status, until, finalized)
+        { EvaluationStarted = receipt?.EvaluationStarted == true };
     }
 
     private Admission Admit(InvocationInput? input)
@@ -128,7 +139,7 @@ internal sealed partial class Burst
         return Result("Accepted", receipt);
     }
 
-    private static string Digest(InvocationInput input)
+    internal static string Digest(InvocationInput input)
     {
         using var bytes = new MemoryStream();
         using var writer = new BinaryWriter(bytes, new UTF8Encoding(false, true), leaveOpen: true);
@@ -143,7 +154,7 @@ internal sealed partial class Burst
     private void CloseInbox(string frame, string reason)
     {
         if (_s.Inboxes?.GetValueOrDefault(frame) is not { Closed: null } inbox) return;
-        var reference = inbox.Receipts.Values.Any(r => r.Retention is not null && (r.Status is "Queued" or "Selected"))
+        var reference = inbox.Receipts.Values.Any(r => r.Retention is not null && (r.Status is "Queued" or "Evaluating" or "Selected"))
             ? turn.Clock.Capture() : null;
         InvocationLifetime.Close(_s, frame, reason, reference, AdmissionHas(AdmissionFlaw.KeepPayload), AdmissionHas(AdmissionFlaw.RestampCompleted));
     }
@@ -168,10 +179,11 @@ internal sealed partial class Burst
         return input;
     }
 
-    internal void FinishInput(Frame frame, string id, string outcome)
+    internal void FinishInput(Frame frame, string id, string outcome, bool evaluation = false)
     {
         var inbox = _s.Inboxes![frame.Id];
-        if (!inbox.Receipts.TryGetValue(id, out var receipt) || receipt.Status != "Selected")
+        if (!inbox.Receipts.TryGetValue(id, out var receipt) || receipt.Status != (evaluation ? "Evaluating" : "Selected") ||
+            evaluation && (outcome != "unhandled" || !receipt.EvaluationStarted))
             throw new InvalidOperationException("Only a selected input may finish.");
         inbox.Pending.RemoveAll(i => i.Id == id);
         inbox.Receipts[id] = InvocationLifetime.Final(receipt, "Completed", outcome, receipt.Retention is not null ? turn.Clock.Capture() : null);

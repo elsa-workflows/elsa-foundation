@@ -9,13 +9,16 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 public sealed class RecurringScheduleCalculator : IRecurringScheduleCalculator
 {
     public DateTimeOffset? ComputeNext(RecurringScheduleKind kind, string expression, DateTimeOffset after)
+        => ComputeNext(kind, expression, after, "UTC");
+
+    public DateTimeOffset? ComputeNext(RecurringScheduleKind kind, string expression, DateTimeOffset after, string timeZoneId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expression);
 
         return kind switch
         {
             RecurringScheduleKind.Interval => after + ParseInterval(expression),
-            RecurringScheduleKind.Cron => ComputeNextCron(expression, after),
+            RecurringScheduleKind.Cron => ComputeNextCron(expression, after, TimeZoneInfo.FindSystemTimeZoneById(timeZoneId)),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown recurring schedule kind.")
         };
     }
@@ -38,7 +41,7 @@ public sealed class RecurringScheduleCalculator : IRecurringScheduleCalculator
         return interval;
     }
 
-    private static DateTimeOffset? ComputeNextCron(string expression, DateTimeOffset after)
+    private static DateTimeOffset? ComputeNextCron(string expression, DateTimeOffset after, TimeZoneInfo timezone)
     {
         var format = CountFields(expression) >= 6 ? CronFormat.IncludeSeconds : CronFormat.Standard;
         CronExpression cron;
@@ -52,7 +55,7 @@ public sealed class RecurringScheduleCalculator : IRecurringScheduleCalculator
         }
 
         // Non-inclusive so a fire at exactly the cursor advances past it rather than re-selecting the same instant.
-        return cron.GetNextOccurrence(after, TimeZoneInfo.Utc, inclusive: false);
+        return cron.GetNextOccurrence(after, timezone, inclusive: false);
     }
 
     private static int CountFields(string expression) =>

@@ -48,6 +48,7 @@
     <Project Path="Extensions/Weaver/tests/Persistence/Tests/Elsa.Weaver.Persistence.Tests.csproj" />
     <Project Path="Extensions/Weaver/tests/Persistence/ProviderTests/Elsa.Weaver.Persistence.ProviderTests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Weaver/tests/Workflows/" />
   <Folder Name="/Extensions/Weaver/tests/Workflows/Runtime/">
     <Project Path="Extensions/Weaver/tests/Workflows/Runtime/Tests/Elsa.Weaver.Workflows.Runtime.Tests.csproj" />
   </Folder>
@@ -178,6 +179,9 @@
   </Folder>
   <Folder Name="/tools/hosting/">
     <Project Path="tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj" />
+  </Folder>
+  <Folder Name="/tools/identity/">
+    <Project Path="tools/identity/ExternalAuthentication.Probe/ExternalAuthentication.Probe.csproj" />
   </Folder>
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
@@ -365,6 +369,15 @@
     <Project Path="Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
     <Project Path="Essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
     <Project Path="Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Foundation/Identity/ExternalAuthentication/">
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Api/Elsa.Foundation.Identity.ExternalAuthentication.Api.csproj" />
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Core/Elsa.Foundation.Identity.ExternalAuthentication.Core.csproj" />
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication/Elsa.Foundation.Identity.ExternalAuthentication.csproj" />
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Oidc/Elsa.Foundation.Identity.ExternalAuthentication.Oidc.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/">
+    <Project Path="Essentials/src/Foundation/Identity/ExternalAuthentication/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.ExternalAuthentication.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Foundation/Identity/AspNetCoreIdentity/">
     <Project Path="Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
@@ -645,6 +658,7 @@
   <Folder Name="/Essentials/tests/Connections/">
     <Project Path="Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Connections/Persistence/" />
   <Folder Name="/Essentials/tests/Connections/Persistence/EntityFrameworkCore/">
     <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
@@ -867,6 +881,7 @@
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Runtime/Source/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Runtime/Source/Tests/Elsa.Workflows.Publishing.Releases.Runtime.Source.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Persistence/" />
   <Folder Name="/Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/">
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="Essentials/tests/Workflows/Publishing/Releases/Persistence/EntityFrameworkCore/RestartProbe/Elsa.Workflows.Publishing.Releases.Persistence.EntityFrameworkCore.RestartProbe.csproj" />
@@ -939,6 +954,7 @@
   <Folder Name="/Extensions/Decisions/tests/Evaluation/">
     <Project Path="Extensions/Decisions/tests/Evaluation/Tests/Elsa.Decisions.Evaluation.Tests.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Decisions/" />
   <Folder Name="/Extensions/Decisions/src/">
     <Project Path="Extensions/Decisions/src/Core/Elsa.Decisions.Core.csproj" />
     <Project Path="Extensions/Decisions/src/Elsa.Decisions/Elsa.Decisions.csproj" />
@@ -946,6 +962,7 @@
     <Project Path="Extensions/Decisions/src/Design/Elsa.Decisions.Design.csproj" />
     <Project Path="Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Decisions/tests/" />
   <Folder Name="/Extensions/Decisions/tests/Api/">
     <Project Path="Extensions/Decisions/tests/Api/Tests/Elsa.Decisions.Api.Tests.csproj" />
   </Folder>
@@ -967,6 +984,8 @@
     <Project Path="Extensions/Decisions/src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
     <Project Path="Extensions/Decisions/src/Workflows/Api/Elsa.Decisions.Workflows.Api.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Examples/" />
+  <Folder Name="/Extensions/Examples/src/" />
   <Folder Name="/Extensions/Examples/src/Acme.Processing/">
     <Project Path="Extensions/Examples/src/Acme.Processing/Core/Acme.Processing.Core.csproj" />
   </Folder>

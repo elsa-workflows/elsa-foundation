@@ -10,6 +10,8 @@ public sealed class PartitionEntity
     public int Id { get; set; }
     public string? Owner { get; set; }
     public long Epoch { get; set; }
+    public long? WindowStart { get; set; }
+    public long? WindowEnd { get; set; }
     public long LeaseUntil { get; set; }
     public long Position { get; set; }
     public bool Died { get; set; }          // the last take found another owner's lease expired
@@ -30,6 +32,7 @@ public sealed class InstanceEntity
     public InstanceStatus Status { get; set; }
     public string State { get; set; } = "";
     public string? Jobs { get; set; }
+    public string? CustomHandles { get; set; }
     public long Revision { get; set; }
     public string? Parent { get; set; }
     public string? Fault { get; set; }
@@ -55,6 +58,9 @@ public sealed class ViewEntity
 
 public sealed class MessageEntity
 {
+    public long InboxScope { get; set; }
+    public byte[] IssuedWire { get; set; } = [];
+    public byte[]? EventMatch { get; set; }
     // Only used while preparing this commit. EF maps public properties by convention.
     internal int SendOrdinal { get; set; }
     public string Id { get; set; } = "";
@@ -136,8 +142,25 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
         model.Entity<MessageEntity>(e =>
         {
             e.ToTable("Messages");
-            e.HasKey(m => m.Id);
+            var exactIssued = Database.IsSqlServer() || Database.ProviderName == "MySql.EntityFrameworkCore";
+            var key = exactIssued ? e.HasKey(m => new { m.Id, m.InboxScope, m.IssuedWire }) : e.HasKey(m => new { m.Id, m.InboxScope });
+            if (exactIssued)
+            {
+                // Exactly one of Id and IssuedWire carries the wire value. The largest actual SQL Server
+                // key is 908 bytes. Ordinary keys retain their database collation and original width.
+                e.Property(m => m.IssuedWire).HasColumnType(Database.IsSqlServer() ? "varbinary(900)" : "varbinary(1020)")
+                    .HasDefaultValueSql(Database.IsSqlServer() ? "0x" : "X''").ValueGeneratedNever();
+            }
+            else e.Ignore(m => m.IssuedWire);
+            if (Database.IsSqlServer())
+            {
+                key.IsClustered(false); // nvarchar(450) plus scope exceeds the 900-byte clustered limit
+                e.Property(m => m.Id).HasMaxLength(450);
+            }
+            if (Database.ProviderName == "MySql.EntityFrameworkCore") e.Property(m => m.Id).HasMaxLength(255);
+            e.Property(m => m.InboxScope).ValueGeneratedNever();
             e.HasIndex(m => new { m.Partition, m.Seq });
+            e.Property(m => m.EventMatch).IsConcurrencyToken();
             e.Property(m => m.Done).IsConcurrencyToken();       // a consumed row must still be there and not done: the count check
             // seq: an identity column on PostgreSQL. SQLite has one writer, so the store assigns max + 1 under the write lock.
             if (Database.IsNpgsql()) e.Property(m => m.Seq).UseIdentityByDefaultColumn();
@@ -184,12 +207,15 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null) : IKernelStore
+public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
 {
     /// <summary>
     /// Whether the fence rides in the batch. The default (decided 12 and 13 November) is in the batch on every engine
     /// but SQL Server, whose default is the checked fence: there the fence in the batch deadlocks takes (ENGINES.md E9).
     /// </summary>
+    private bool _windowInstalled;
+    public bool SupportsCommitWindow => _windowInstalled;
+
     public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault ?? true;
 
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
@@ -207,6 +233,9 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     private sealed class PollRow
     {
+        public long? InboxScope { get; set; }
+        public byte[]? IssuedWire { get; set; }
+        public byte[]? EventMatch { get; set; }
         public long Now { get; set; }
         public string? Id { get; set; }
         public long? Seq { get; set; }
@@ -237,6 +266,33 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         var count = partitions ?? (postgres ? Defaults.ServerPartitions : Defaults.SqlitePartitions);
         await using var db = create();
         await db.Database.EnsureCreatedAsync();
+        if (postgres && Engine is null) await db.Database.ExecuteSqlRawAsync(EventInsert.InstallPostgres);
+        if (enableCommitWindow)
+        {
+            if (!postgres || Engine is not null || !FenceInBatch) throw new NotSupportedException("Commit windows require PostgreSQL and the fence in the batch.");
+            await db.Database.ExecuteSqlRawAsync(PgCommitWindow.Install);
+            _windowInstalled = true;
+        }
+        if (!postgres && Engine is null)
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TABLE IF NOT EXISTS EventActorCounter (CounterId INTEGER PRIMARY KEY, LastIssued INTEGER NOT NULL CHECK(typeof(LastIssued)='integer'));
+                INSERT OR IGNORE INTO EventActorCounter VALUES(0,0);
+                CREATE TRIGGER IF NOT EXISTS increment_event_actor AFTER INSERT ON Messages
+                WHEN NEW.EventMatch IS NOT NULL AND NEW.Start IS NOT NULL BEGIN
+                    UPDATE EventActorCounter SET LastIssued=LastIssued+1 WHERE CounterId=0;
+                END;
+                """);
+        if (Engine is SqlServerEngine)
+            await db.Database.ExecuteSqlRawAsync("IF OBJECT_ID('kernel_event_actor','SO') IS NULL EXEC('CREATE SEQUENCE kernel_event_actor AS BIGINT START WITH 1 NO CYCLE')");
+        if (Engine is MySqlEngine mysql)
+        {
+            await db.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS EventActorCounter (CounterId INT PRIMARY KEY, LastIssued BIGINT NOT NULL)");
+            await db.Database.ExecuteSqlRawAsync("INSERT IGNORE INTO EventActorCounter VALUES(0,0)");
+            await db.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS EventInsertLocks (Bucket INT PRIMARY KEY)");
+            await db.Database.ExecuteSqlRawAsync(
+                "INSERT IGNORE INTO EventInsertLocks (Bucket) WITH RECURSIVE n AS (SELECT 0 AS i UNION ALL SELECT i+1 FROM n WHERE i<63) SELECT i FROM n");
+            await db.Database.ExecuteSqlRawAsync(mysql.Sql(EventInsert.InstallMySql.Replace("CREATE PROCEDURE", "CREATE PROCEDURE IF NOT EXISTS")));
+        }
         if (Engine is not null) await Engine.CreatedAsync(db, default);
         if (await db.Partitions.AnyAsync()) return;
         db.Partitions.AddRange(Enumerable.Range(0, count).Select(id => new PartitionEntity { Id = id }));
@@ -291,11 +347,17 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         // count that does not match is on a wait, or that subscribes anything and fails with a definite error while the
         // fence holds (a key violation may be a wait that is there), is sent once more with its subscriptions as
         // statements that tolerate both: round trips of their own, on that path only.
+        if (batch.Window is not null && !SupportsCommitWindow)
+            throw new NotSupportedException("This provider cannot enforce the requested commit window.");
         var waits = Waits(batch);
         var careful = false;
         while (true)
         {
             try { return await CommitOnceAsync(batch, waits, careful, cancellationToken); }
+            catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
+            {
+                throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
+            }
             catch (DbUpdateConcurrencyException e) when (!careful && e.Entries.Any(x => x.Entity is SubscriptionEntity))
             {
                 careful = true;     // the first count that did not match was an unsubscribe; the batch was rolled back whole
@@ -363,6 +425,13 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                 (tokenEpoch, tokenPosition) = (current.Epoch, current.Position);
             }
             var fence = db.Attach(new PartitionEntity { Id = batch.Partition, Epoch = tokenEpoch, Position = tokenPosition }).Entity;
+            if (batch.Window is { } window)
+            {
+                fence.WindowStart = window.FromInclusive;
+                fence.WindowEnd = window.UntilExclusive;
+                db.Entry(fence).Property(p => p.WindowStart).IsModified = true;
+                db.Entry(fence).Property(p => p.WindowEnd).IsModified = true;
+            }
             fence.Position = batch.Position + batch.Positions;
             fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
             db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
@@ -396,15 +465,15 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                 var entity = new InstanceEntity
                 {
                     Id = row.Id, Partition = batch.Partition, Model = row.Model, Definition = row.Definition, Status = row.Status,
-                    State = row.State, Jobs = row.Jobs, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion,
+                    State = row.State, Jobs = row.Jobs, CustomHandles = row.CustomHandles, Revision = row.Revision, Parent = row.Parent, Fault = row.Fault, History = row.History, Suspended = row.Suspended, Children = row.Children, StateVersion = row.StateVersion,
                 };
                 if (turn.Expected is not { } expected) db.Add(entity);
                 else db.Update(entity).Property(i => i.Revision).OriginalValue = expected;
             }
-            foreach (var id in turn.Consumed) db.Remove(new MessageEntity { Id = id });
-            foreach (var id in turn.Done) db.Attach(new MessageEntity { Id = id }).Entity.Done = true;
+            foreach (var id in turn.Consumed) db.Remove(MailKey(id));
+            foreach (var id in turn.Done) db.Attach(MailKey(id)).Entity.Done = true;
             foreach (var id in turn.Held ?? [])     // its turn ran: no longer on trial
-                db.Attach(new MessageEntity { Id = id, Trial = 0 }).Property(m => m.Trial).IsModified = true;
+                db.Attach(MailKey(id)).Property(m => m.Trial).IsModified = true;
             foreach (var message in turn.Sent)
             {
                 var entity = ToEntity(message, batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0, postgres ? 0 : ++seq);
@@ -420,10 +489,10 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                 if (there) db.Add(new SubscriptionEntity { Key = key, Instance = instance, Wait = wait, Partition = batch.Partition });
                 else db.Remove(new SubscriptionEntity { Key = key, Instance = instance, Wait = wait });
         foreach (var id in batch.Seen)
-            db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch }).Property(m => m.Seen).IsModified = true;
+            db.Attach(MailKey(id, seen: batch.Epoch)).Property(m => m.Seen).IsModified = true;
         foreach (var id in batch.Trial)
         {
-            var tried = db.Attach(new MessageEntity { Id = id, Seen = batch.Epoch, Trial = batch.Epoch });
+            var tried = db.Attach(MailKey(id, seen: batch.Epoch, trial: batch.Epoch));
             (tried.Property(m => m.Seen).IsModified, tried.Property(m => m.Trial).IsModified) = (true, true);
         }
 
@@ -466,18 +535,36 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         // A plain read. The left join returns database time even when no message does.
         var rows = await db.Database.SqlQueryRaw<PollRow>(Engine?.Poll ??
             $"""
-             SELECT t.now AS "Now", m."Id", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+             SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
              FROM (SELECT {Now} AS now) t
              LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
              ORDER BY m."Seq" LIMIT {"{3}"}
              """, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
-        var messages = rows.Where(r => r.Id is not null).Select(r => new Stored(
-            new Message(r.Id!, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo),
-            r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value)).ToList();
+        var messages = rows.Where(r => r.Id is not null).Select(r =>
+        {
+            var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
+            if (Engine is null) key = IssuedMailKey.FromTextKey(key);
+            else if (r.IssuedWire is { Length: > 0 } wire) key = key with { Id = IssuedMailKey.Decode(wire) };
+            return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo).WithInboxScope(key.Scope, key.Match),
+                r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
+        }).ToList();
         return new Polled(messages, rows[0].Now);
     }
 
-    public async ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
+    public ValueTask<bool> AddAsync(Message message, CancellationToken cancellationToken = default)
+    {
+        Kinds.RequireApplicationSend(message.Kind);
+        return InsertAsync(message.AsOrdinary(), cancellationToken);
+    }
+
+    public async ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken cancellationToken = default)
+    {
+        CreationProtocol.RejectUnsupported(delivery.Message);
+        await using var db = create();
+        return await EventInsert.Run(db, Engine, postgres, ToEntity(delivery.Message, 0, 0), cancellationToken);
+    }
+
+    private async ValueTask<bool> InsertAsync(Message message, CancellationToken cancellationToken)
     {
         CreationProtocol.RejectUnsupported(message);
         await using var db = create();
@@ -486,18 +573,52 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         var seq = postgres ? ("", "") : (""", "Seq" """, """, (SELECT COALESCE(MAX("Seq"), 0) + 1 FROM "Messages")""");
         return await db.Database.ExecuteSqlRawAsync(
             $$"""
-              INSERT INTO "Messages" ("Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo"{{seq.Item1}})
-              VALUES ({0}, {1}, {2}, {3}, CAST({4} AS TEXT), CAST({5} AS TEXT), CAST({6} AS TEXT), {7}, 0, 0, 0, CAST({8} AS BIGINT), {{False}}, CAST({9} AS TEXT){{seq.Item2}})
-              ON CONFLICT ("Id") DO NOTHING
+              INSERT INTO "Messages" ("InboxScope", "Id", "Partition", "Target", "Kind", "Payload", "Sender", "Start", "Due", "Seen", "Attempts", "Trial", "KeepUntil", "Done", "ReplyTo"{{seq.Item1}})
+              VALUES ({10}, {0}, {1}, {2}, {3}, CAST({4} AS TEXT), CAST({5} AS TEXT), CAST({6} AS TEXT), {7}, 0, 0, 0, CAST({8} AS BIGINT), {{False}}, CAST({9} AS TEXT){{seq.Item2}})
+              ON CONFLICT ("Id", "InboxScope") DO NOTHING
               """,
-            [m.Id, m.Partition, m.Target, m.Kind, m.Payload!, m.Sender!, m.Start!, m.Due, m.KeepUntil!, m.ReplyTo!], cancellationToken) == 1;
+            [m.Id, m.Partition, m.Target, m.Kind, m.Payload!, m.Sender!, m.Start!, m.Due, m.KeepUntil!, m.ReplyTo!, m.InboxScope], cancellationToken) == 1;
     }
 
     public async ValueTask<IReadOnlyList<InstanceRow>> LoadAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         var rows = await db.Instances.AsNoTracking().Where(i => ids.Contains(i.Id)).ToListAsync(cancellationToken);
-        return rows.Select(i => new InstanceRow(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision, i.Parent, i.Fault, i.Jobs, i.History, i.Suspended, i.Children, i.StateVersion)).ToList();
+        return rows.Select(Snapshot).ToList();
+    }
+
+    private static InstanceRow Snapshot(InstanceEntity i) => new(i.Id, i.Model, i.Definition, i.Status, i.State, i.Revision,
+        i.Parent, i.Fault, i.Jobs, i.History, i.Suspended, i.Children, i.StateVersion, CustomHandles: i.CustomHandles);
+
+    private sealed class RequestedActor
+    {
+        public int Ordinal { get; set; }
+        public int FirstEquivalent { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    public bool HasActorAliases => Engine is MySqlEngine or SqlServerEngine;
+
+    public async ValueTask<IReadOnlyList<ActorLookup>> LoadActorsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
+    {
+        if (!HasActorAliases) return ActorLookup.Ordinal(ids, await LoadAsync(ids, cancellationToken));
+        var names = ids.ToArray();
+        if (names.Length == 1)
+        {
+            var row = (await LoadAsync(names, cancellationToken)).SingleOrDefault();
+            return [new(names[0], row?.Id ?? names[0], row)];
+        }
+        // CS/CI, accent and padding equality come from the same database that owns Instances.Id.
+        // Ordinals identify exact input spellings without asking the CLR to reproduce the database collation.
+        const string select = "SELECT input.Ordinal, input.Name, MIN(input.Ordinal) OVER(PARTITION BY input.Name) AS FirstEquivalent FROM (";
+        var sql = Engine is MySqlEngine
+            ? select + "SELECT CAST(j.n-1 AS SIGNED) AS Ordinal, j.name AS Name FROM JSON_TABLE({0}, '$[*]' COLUMNS(n FOR ORDINALITY, name LONGTEXT PATH '$')) j) input"
+            : select + "SELECT CAST(j.[key] AS int) AS Ordinal, j.value COLLATE DATABASE_DEFAULT AS Name FROM OPENJSON({0}) j) input";
+        await using var db = create();
+        var requested = db.Database.SqlQueryRaw<RequestedActor>(sql, Json.Write(names));
+        var matches = await (from r in requested join i in db.Instances.AsNoTracking() on r.Name equals i.Id into rows
+            from row in rows.DefaultIfEmpty() select new { r.Ordinal, r.FirstEquivalent, Row = row }).ToListAsync(cancellationToken);
+        return matches.Select(m => new ActorLookup(names[m.Ordinal], m.Row?.Id ?? names[m.FirstEquivalent], m.Row is null ? null : Snapshot(m.Row))).ToList();
     }
 
     public async ValueTask PublishAsync(EventRow @event, CancellationToken cancellationToken = default)
@@ -525,6 +646,45 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
             """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition", "Start") VALUES ({0}, {1}, {2}, 0, CAST({3} AS TEXT)) ON CONFLICT DO NOTHING""",
             [subscription.Key, subscription.Instance, subscription.Wait, Json.Write(subscription.Start)], cancellationToken);
     }
+
+    public async ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        var rows = await (from e in db.Events.AsNoTracking()
+            join s in db.Subscriptions.AsNoTracking() on e.Key equals s.Key
+            where e.Key == published.Key && e.Id == published.Id
+            orderby s.Instance, s.Wait
+            select new { Event = e, Wait = s }).ToListAsync(cancellationToken);
+        return rows.Select(x => Match(x.Event, x.Wait)).ToList();
+    }
+
+    public async ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default)
+    {
+        // This provider has no qualified subscription rows. A stale qualified meet cannot select a legacy registration.
+        var unqualified = waits.Where(w => !CreationProtocol.Qualified(w)).ToArray();
+        if (unqualified.Length == 0) return [];
+        await using var db = create();
+        // One parameter carries the whole ticket, avoiding per-wait SQL parameters and expression-depth limits.
+        var unpack = Engine switch
+        {
+            SqlServerEngine => """SELECT w."Key",w."Instance",w."Wait" FROM OPENJSON({0}) WITH ("Key" nvarchar(max), "Instance" nvarchar(max), "Wait" nvarchar(max)) w""",
+            MySqlEngine => """SELECT w."Key",w."Instance",w."Wait" FROM JSON_TABLE({0}, '$[*]' COLUMNS ("Key" TEXT PATH '$.Key',"Instance" TEXT PATH '$.Instance',"Wait" TEXT PATH '$.Wait')) w""",
+            _ when postgres => """SELECT * FROM jsonb_to_recordset({0}::jsonb) AS w("Key" text,"Instance" text,"Wait" text)""",
+            _ => """SELECT value->>'$.Key' AS "Key",value->>'$.Instance' AS "Instance",value->>'$.Wait' AS "Wait" FROM json_each({0})""",
+        };
+        var selectedSql = Q($"""
+            SELECT s.* FROM "Subscriptions" s WHERE EXISTS (SELECT 1 FROM ({unpack}) w
+            WHERE s."Key"=w."Key" AND s."Instance"=w."Instance" AND s."Wait"=w."Wait")
+            """);
+        var selected = db.Subscriptions.FromSqlRaw(selectedSql, Json.Write(unqualified.Select(w => new { w.Key, w.Instance, w.Wait }))).AsNoTracking();
+        var kept = db.Events.FromSqlRaw(Q($"""SELECT * FROM "Events" WHERE "KeepUntil" >= {Now}""")).AsNoTracking();
+        var rows = await (from e in kept join s in selected on e.Key equals s.Key
+            orderby e.Id, s.Instance, s.Wait select new { Event = e, Wait = s }).ToListAsync(cancellationToken);
+        return rows.Select(x => Match(x.Event, x.Wait)).ToList();
+    }
+
+    private static EventRoute Match(EventEntity e, SubscriptionEntity s) =>
+        new(new(e.Key, e.Id, e.Payload, e.KeepUntil), new(s.Key, s.Instance, s.Wait, s.Start is null ? null : Json.Read<StartSpec>(s.Start)));
 
     public async ValueTask<IReadOnlyList<EventRow>> FindEventsAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken = default)
     {
@@ -625,11 +785,29 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         return await db.Database.ExecuteSqlRawAsync(Q($"""DELETE FROM "Messages" WHERE "Done" <> {False} AND "KeepUntil" < {Now}; DELETE FROM "Events" WHERE "KeepUntil" < {Now}"""), cancellationToken);
     }
 
-    private static MessageEntity ToEntity(Message m, long seen, long seq) => new()
+    private MessageEntity MailKey(InboxKey key, long seen = 0, long trial = 0)
     {
-        Id = m.Id, Seq = seq, Partition = m.Target.Partition, Target = m.Target.Id, Kind = m.Kind, Payload = m.Payload, Sender = m.Sender,
-        Start = m.Start is null ? null : Json.Write(m.Start), Due = m.Due ?? 0, Seen = seen, KeepUntil = m.KeepUntil, ReplyTo = m.ReplyTo,
-    };
+        if (Engine is null) key = IssuedMailKey.ToTextKey(key);
+        var exact = Engine is SqlServerEngine or MySqlEngine && key.HasIssuedOrigin;
+        return new() { Id = exact ? "" : key.Id, IssuedWire = exact ? IssuedMailKey.Encode(key.Id) : [],
+            InboxScope = key.Scope, EventMatch = EventInsert.Bytes(key.Match), Seen = seen, Trial = trial };
+    }
+
+    private MessageEntity ToEntity(Message m, long seen, long seq)
+    {
+        var entity = MailKey(m.InboxKey, seen);
+        entity.Seq = seq;
+        entity.Partition = m.Target.Partition;
+        entity.Target = m.Target.Id;
+        entity.Kind = m.Kind;
+        entity.Payload = m.Payload;
+        entity.Sender = m.Sender;
+        entity.Start = m.Start is null ? null : Json.Write(m.Start);
+        entity.Due = m.Due ?? 0;
+        entity.KeepUntil = m.KeepUntil;
+        entity.ReplyTo = m.ReplyTo;
+        return entity;
+    }
 
     /// <summary>What a failure means: it did not happen and may be retried, it did not happen and never will, or nobody knows.</summary>
     private StoreException Classify(Exception e)

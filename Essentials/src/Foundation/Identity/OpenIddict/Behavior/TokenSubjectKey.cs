@@ -18,21 +18,41 @@ internal static class TokenSubjectKey
         ArgumentNullException.ThrowIfNull(subject);
 
         var kind = subject.UserId is not null ? "user" : "provider";
+        // Existing canonical-user and issuer-less legacy keys retain their exact UTF-8 v1 bytes.
+        // Issuer-qualified external subjects have a separate versioned domain.
+        var version = subject.UserId is null && subject.Issuer is not null ? "v2" : "v1";
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        Append(hash, "elsa.token-subject.v1");
-        Append(hash, kind);
-        Append(hash, subject.TenantId);
+        Action<IncrementalHash, string> append = version == "v2" ? AppendUtf16 : Append;
+        append(hash, $"elsa.token-subject.{version}");
+        append(hash, kind);
+        append(hash, subject.TenantId);
         if (subject.UserId is { } userId)
         {
-            Append(hash, userId);
+            append(hash, userId);
         }
         else
         {
-            Append(hash, subject.Provider!);
-            Append(hash, subject.ProviderSubject!);
+            append(hash, subject.Provider!);
+            if (subject.Issuer is { } issuer)
+                append(hash, issuer);
+            append(hash, subject.ProviderSubject!);
         }
 
-        return $"elsa:v1:{kind}:{Convert.ToHexStringLower(hash.GetHashAndReset())}";
+        return $"elsa:{version}:{kind}:{Convert.ToHexStringLower(hash.GetHashAndReset())}";
+    }
+
+    // Managed external subjects are opaque .NET strings. Encoding.UTF8's replacement fallback would
+    // otherwise collapse distinct unpaired surrogates and U+FFFD into one scope. This v2 domain writes
+    // the exact UTF-16 code units; it deliberately leaves the existing v1 encoder unchanged.
+    private static void AppendUtf16(IncrementalHash hash, string value)
+    {
+        var bytes = new byte[checked(value.Length * sizeof(char))];
+        for (var index = 0; index < value.Length; index++)
+            BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(index * sizeof(char)), value[index]);
+        Span<byte> length = stackalloc byte[sizeof(int)];
+        BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+        hash.AppendData(length);
+        hash.AppendData(bytes);
     }
 
     private static void Append(IncrementalHash hash, string value)

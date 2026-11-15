@@ -1,29 +1,39 @@
+using System.Text.Json.Nodes;
+
 namespace Kernel.Statecharts;
 
 internal enum NodeKind { Root, Compound, Parallel, Region, Atomic, Final }
 internal enum VisitMode { Internal, Preserve, Reenter }
-internal sealed record GraphNode(string Id, NodeKind Kind, string? Parent = null, string? Initial = null, string? Entry = null, string? Exit = null);
-internal sealed record GraphRule(string Id, int Order, string Source, string? Target, VisitMode Mode, string Trigger, string? Action = null, string? When = null);
-internal sealed record StructuralDefinition(GraphNode[] Nodes, GraphRule[] Rules);
+internal enum TriggerKind { Event, Automatic, Completion }
+internal sealed record GraphNode(string Id, NodeKind Kind, string? Parent = null, string? Initial = null, string? Entry = null, string? Exit = null, Dictionary<string, JsonNode?>? Defaults = null);
+internal sealed record GraphRule(string Id, int Order, string Source, string? Target, VisitMode Mode, string Trigger, string? Action = null, string? When = null, TriggerKind Kind = TriggerKind.Event);
+internal sealed record StructuralDefinition(GraphNode[] Nodes, GraphRule[] Rules, Dictionary<string, JsonNode?>? Defaults = null);
 internal sealed record StateVisit(string State, string Occurrence);
 internal sealed record GraphStep(string Id, string Phase, string State, string? Activity, string? Visit, string? Transition, string[] After);
 internal sealed record GraphPlan(string[] Candidates, string[] Selected, string[] Next, GraphStep[] Steps);
 
 // Structural selection only. The host owns input admission, wave closure, physical visits, values and recovery.
-internal sealed class SelectionChart
+internal sealed partial class SelectionChart
 {
     private readonly Dictionary<string, GraphNode> _nodes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string[]> _paths = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string[]> _children;
     private readonly GraphRule[] _rules;
     private readonly string _root;
+    internal IReadOnlyDictionary<string, JsonNode?> MachineDefaults { get; }
+    internal bool HasDefaults => MachineDefaults.Count != 0 || _nodes.Values.Any(n => n.Defaults?.Count > 0);
+    internal bool HasInternalRules => _rules.Any(r => r.Kind != TriggerKind.Event);
+    internal IReadOnlyList<GraphRule> Rules => _rules;
+    private static Dictionary<string, JsonNode?> Clone(IReadOnlyDictionary<string, JsonNode?>? values) =>
+        values?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
     private static bool IsState(GraphNode node) => node.Kind is not (NodeKind.Root or NodeKind.Region);
     private static bool Container(GraphNode node) => node.Kind is NodeKind.Root or NodeKind.Compound or NodeKind.Parallel or NodeKind.Region;
 
-    internal SelectionChart(IEnumerable<GraphNode> nodes, IEnumerable<GraphRule> rules)
+    internal SelectionChart(IEnumerable<GraphNode> nodes, IEnumerable<GraphRule> rules, IReadOnlyDictionary<string, JsonNode?>? defaults = null)
     {
+        MachineDefaults = Clone(defaults);
         foreach (var n in nodes)
-            if (string.IsNullOrEmpty(n.Id) || !Enum.IsDefined(n.Kind) || !_nodes.TryAdd(n.Id, n with { }))
+            if (string.IsNullOrEmpty(n.Id) || !Enum.IsDefined(n.Kind) || !_nodes.TryAdd(n.Id, n with { Defaults = Clone(n.Defaults) }))
                 throw new ArgumentException("Invalid or duplicate node identity/kind.");
         var roots = _nodes.Values.Where(n => n.Kind == NodeKind.Root).ToArray();
         if (roots is not [{ Parent: null } root]) throw new ArgumentException("Exactly one root is required.");
@@ -44,8 +54,8 @@ internal sealed class SelectionChart
             .Select(n => n.Id).Order(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         foreach (var node in _nodes.Values)
         {
-            if (!IsState(node) && (node.Entry is not null || node.Exit is not null))
-                throw new ArgumentException("Structural containers cannot own state activity work.");
+            if (!IsState(node) && (node.Entry is not null || node.Exit is not null || node.Defaults?.Count > 0))
+                throw new ArgumentException("Structural containers cannot own state activity work or declarations.");
             if (node.Id != _root)
             {
                 var parent = _nodes[node.Parent!];
@@ -66,9 +76,12 @@ internal sealed class SelectionChart
             throw new ArgumentException("Unique transition identity and explicit order required.");
         foreach (var r in _rules)
         {
-            if (string.IsNullOrEmpty(r.Id) || string.IsNullOrEmpty(r.Trigger) || !Enum.IsDefined(r.Mode) ||
+            if (string.IsNullOrEmpty(r.Id) || !Enum.IsDefined(r.Kind) ||
+                (r.Kind == TriggerKind.Event ? string.IsNullOrEmpty(r.Trigger) : r.Trigger != "") || !Enum.IsDefined(r.Mode) ||
                 !_nodes.TryGetValue(r.Source, out var source) || !IsState(source) || source.Kind == NodeKind.Final)
                 throw new ArgumentException("Invalid transition source, trigger or mode.");
+            if (r.Kind == TriggerKind.Completion && source.Kind is not (NodeKind.Compound or NodeKind.Parallel))
+                throw new ArgumentException("Completion requires a compound or parallel source.");
             if (r.Mode == VisitMode.Internal)
             {
                 if (r.Target is not null) throw new ArgumentException("Internal reactions have no target.");
@@ -89,7 +102,11 @@ internal sealed class SelectionChart
     private string Branch(string node, string ancestor) => _paths[node][Array.IndexOf(_paths[node], ancestor) - 1];
     internal IEnumerable<string> Activities => _nodes.Values.SelectMany(n => new[] { n.Entry, n.Exit })
         .Concat(_rules.Select(r => r.Action)).OfType<string>();
+    internal string? StateParent(string state) => _paths[state].Skip(1).FirstOrDefault(id => IsState(_nodes[id]));
+    internal int Depth(string state) => _paths[state].Length;
+    internal IReadOnlyDictionary<string, JsonNode?> Defaults(string state) => _nodes[state].Defaults!;
     internal string? Entry(string state) => _nodes[state].Entry;
+    internal IEnumerable<string> TopFinalStates => _nodes.Values.Where(n => n.Parent == _root && n.Kind == NodeKind.Final).Select(n => n.Id);
     internal bool IsTopFinal(IEnumerable<string> active) => active.Any(id => _nodes[id].Parent == _root && _nodes[id].Kind == NodeKind.Final);
 
     internal string[] Initial() => EnterBelow(_root, null);

@@ -285,6 +285,51 @@ public sealed class RuntimeHistoryValueOwnerTests
         Assert.Null(scope.ServiceProvider.GetService<RuntimeHistoryOptions>());
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Legacy_composition_does_not_resolve_unused_scoped_native_policy_storage(bool registerFirst)
+    {
+        var services = new ServiceCollection();
+        var resolutions = 0;
+        void RegisterNativeStore() => services.AddScoped<IWorkflowExecutionStateStore>(_ =>
+        {
+            resolutions++;
+            throw new InvalidOperationException("The native store requires bound execution persistence access.");
+        });
+        if (registerFirst) RegisterNativeStore();
+        services.AddWorkflowRuntime();
+        if (!registerFirst) RegisterNativeStore();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var owner = scope.ServiceProvider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>();
+        Assert.False(owner.SupportsCheckpointValueCapture);
+        var projection = await owner.BuildProjectionAsync(State(), "checkpoint", At,
+            valueSnapshots: [Snapshot("ordinary value")]);
+        Assert.NotNull(projection);
+        Assert.Null(projection.CheckpointValueCapture);
+        Assert.Equal(0, resolutions);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Configured_composition_keeps_the_retained_policy_when_new_admissions_are_disabled(bool enabled)
+    {
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        await executions.SaveAsync(Workflow(Policy));
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddSingleton(new RuntimeHistoryOptions { Enabled = enabled });
+        services.AddSingleton<IWorkflowExecutionStateStore>(executions);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var owner = scope.ServiceProvider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>();
+        Assert.True(owner.SupportsCheckpointValueCapture);
+        var projection = await owner.BuildProjectionWithSourceAsync(State(), "checkpoint", At,
+            () => new("run", "work", ActivityValueCapturePhase.Invoke), valueSnapshots: [Snapshot("captured")]);
+        Assert.Equal("work", projection.CheckpointValueCapture!.SchedulerWorkItemId);
+        Assert.Single(projection.CheckpointValueCapture.EvidenceIds);
+    }
+
     private static WorkflowExecutionState Workflow(RuntimeHistoryCapturePolicy? policy) => new("run", new("artifact", "definition", "version", "1", "hash"),
         WorkflowExecutionStatus.Running, null, At, At, At, null, null, null, null, new Dictionary<string, string>()) { HistoryCapturePolicy = policy };
 
