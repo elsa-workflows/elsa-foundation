@@ -135,6 +135,8 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
         if (marker != "true" || commit.Checkpoint.Name != RuntimeCoalescingMetadataKeys.FlushCheckpointName ||
             session is null || !session.AppliesTo(commit.WorkflowExecutionId) || session.PreparedQuiescenceFlushCommitId != commit.CommitId)
             throw new InvalidOperationException("History flush validation requires its actual prepared coalescing session.");
+        if (!session.MatchesPreparedQuiescenceFlush(commit))
+            throw new InvalidOperationException("The prepared flush no longer retains its original native payload and history groups.");
         var expected = session.FoldHistoryBatchesWith();
         if (RuntimeCheckpointCommitFingerprint.Compute(commit) !=
             RuntimeCheckpointCommitFingerprint.Compute(commit with { HistoryBatches = expected }))

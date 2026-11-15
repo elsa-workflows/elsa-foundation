@@ -123,7 +123,7 @@ public sealed class RuntimeHistoryCandidateTests
         {
             Metadata = new Dictionary<string, string> { [RuntimeCoalescingMetadataKeys.CoalescedFlush] = changed == "false-marker" ? "false" : "true" }
         } };
-        if (changed != "unprepared") session.PrepareQuiescenceFlush(flush.CommitId);
+        if (changed != "unprepared") session.PrepareQuiescenceFlush(flush);
         using var current = accessor.Push(session);
         if (changed == "coverage")
         {
@@ -138,6 +138,42 @@ public sealed class RuntimeHistoryCandidateTests
             await fixture.Capture.ValidateFinalAsync(flush);
         }
         else await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(flush));
+    }
+
+    [Theory]
+    [InlineData("empty-state")] [InlineData("late-value")]
+    public async Task Prepared_flush_refuses_native_payload_replacement(string change)
+    {
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        using var fixture = await Fixture.Create(Policy("ActivityStarted", "ValueCaptured"), coalescing: accessor);
+        var logical = await fixture.Capture.EnrichAsync(Commit("buffered-native", RuntimeCheckpointNames.ActivityStarted,
+            activity: Activity(ActivityExecutionStatus.Running)));
+        var session = new RuntimeCoalescingSession("run", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
+        session.BufferDeferred(logical);
+        var flush = Commit("prepared-native", RuntimeCoalescingMetadataKeys.FlushCheckpointName) with
+        {
+            StateChanges = session.FoldBufferedStateChanges(),
+            HistoryBatches = session.FoldHistoryBatchesWith()
+        };
+        flush = flush with { Checkpoint = flush.Checkpoint with { Metadata = new Dictionary<string, string>
+            { [RuntimeCoalescingMetadataKeys.CoalescedFlush] = "true" } } };
+        session.PrepareQuiescenceFlush(flush);
+        using var current = accessor.Push(session);
+        if (change == "empty-state") flush = flush with { StateChanges = new(null, null, [], [], [], [], []) };
+        else
+        {
+            var state = Assert.Single(flush.StateChanges.ActivityExecutions).State;
+            var evidence = new ActivityExecutionInspectionValueSnapshot("late-evidence", ActivityExecutionInspectionValueSubject.ActivityInput,
+                default, null, At, JsonSerializer.SerializeToElement("private"), "test", false,
+                new Dictionary<string, string>(), EvidenceId: "late-evidence");
+            var projection = ActivityExecutionInspectionProjection.FromState(state, logical.Checkpoint.CheckpointId, At,
+                valueSnapshots: [evidence]) with { CheckpointValueCapture = new(logical.Checkpoint.CheckpointId, "work", ["late-evidence"]) };
+            flush = flush with { StateChanges = new(null, null, flush.StateChanges.ActivityExecutions, [], [], [], [],
+                activityExecutionInspections: [new("activity", RuntimeStateChangeOperation.Upsert, projection, new Dictionary<string, string>())]) };
+        }
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(flush));
+        Assert.True(session.HasBufferedChanges);
+        Assert.True(session.IsActive);
     }
 
     [Fact]

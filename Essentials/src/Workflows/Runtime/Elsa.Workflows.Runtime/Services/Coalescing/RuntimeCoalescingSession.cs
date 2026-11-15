@@ -168,13 +168,26 @@ public sealed class RuntimeCoalescingSession
 
     internal string? PreparedQuiescenceFlushCommitId { get; private set; }
 
-    internal void PrepareQuiescenceFlush(string commitId)
+    private string? _preparedQuiescenceFlushFingerprint;
+
+    internal void PrepareQuiescenceFlush(RuntimeCheckpointCommit commit)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
-        if (PreparedQuiescenceFlushCommitId is { } prepared && prepared != commitId)
+        ArgumentNullException.ThrowIfNull(commit);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
+        if (!AppliesTo(commit.WorkflowExecutionId))
+            throw new InvalidOperationException("A quiescence flush must belong to its active coalescing session.");
+        var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+        if (PreparedQuiescenceFlushCommitId is { } prepared &&
+            (prepared != commit.CommitId || _preparedQuiescenceFlushFingerprint != fingerprint))
             throw new InvalidOperationException("Resolve the prepared quiescence flush before preparing another.");
-        PreparedQuiescenceFlushCommitId = commitId;
+        PreparedQuiescenceFlushCommitId = commit.CommitId;
+        _preparedQuiescenceFlushFingerprint = fingerprint;
     }
+
+    // The committer validates this logical payload before adding its derived outbox writes and current fence.
+    internal bool MatchesPreparedQuiescenceFlush(RuntimeCheckpointCommit commit) =>
+        AppliesTo(commit.WorkflowExecutionId) && PreparedQuiescenceFlushCommitId == commit.CommitId &&
+        _preparedQuiescenceFlushFingerprint == RuntimeCheckpointCommitFingerprint.Compute(commit);
 
     internal void EnsurePreparedFlushAllows(RuntimeCheckpointCommit commit)
     {
@@ -191,6 +204,7 @@ public sealed class RuntimeCoalescingSession
     {
         IsActive = false;
         PreparedQuiescenceFlushCommitId = null;
+        _preparedQuiescenceFlushFingerprint = null;
         DisableDurableValuePageReuse();
     }
 
