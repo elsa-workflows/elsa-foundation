@@ -12,6 +12,36 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 
 public sealed class StandaloneTriggerDeliveryTests
 {
+    [Theory]
+    [InlineData("unchanged", true)]
+    [InlineData("changed", false)]
+    [InlineData("restricted", false)]
+    [InlineData("missing", false)]
+    [InlineData("other-resource", false)]
+    public async Task Refused_targets_are_identified_only_from_the_same_readable_association_revision(string scenario, bool identified)
+    {
+        var fixture = new Fixture(external: true, refusalForA: true);
+        fixture.Access.WorkflowRead = scenario != "restricted";
+        fixture.Discovery.Unpublished = true;
+        if (scenario != "missing")
+        {
+            var row = new TriggerSubscription("refused-a", scenario == "other-resource" ? "trigger-b" : "trigger-a",
+                "private-refused-definition", "default", "native", scenario == "changed" ? 2 : 1, 1, true, [], new(TriggerManagementKind.Studio));
+            fixture.Store.Rows["trigger-a"] = fixture.Store.Rows["trigger-a"] with { Subscriptions = [row] };
+        }
+        var view = await fixture.Operations.ReadAsync(TriggerDeliveryOperations.EncodeId(fixture.Port.Item.OutboxItemId, "trigger-a"), default);
+        var refused = Assert.Single(view.Recipients, item => item.Admission == "Refused");
+        Assert.Equal(identified ? "private-refused-definition" : null, refused.Target?.DefinitionId);
+        Assert.Equal(identified ? "Readable workflow" : null, refused.TargetDisplayName);
+        Assert.Null(refused.CapturedVersion);
+        Assert.Null(refused.CurrentVersion);
+        Assert.Null(refused.ExecutionReference);
+        Assert.Empty(refused.Actions);
+        Assert.Contains(refused.Findings, finding => finding.Code == "target-unpublished");
+        if (!identified) Assert.DoesNotContain("private-refused-definition", JsonSerializer.Serialize(refused));
+        if (scenario == "restricted") Assert.Equal(0, fixture.Discovery.Calls);
+    }
+
     [Fact]
     public async Task Shared_Event_source_projects_only_authorized_resource_subset_and_other_resource_progress_does_not_change_its_revision()
     {
@@ -136,14 +166,14 @@ public sealed class StandaloneTriggerDeliveryTests
         internal readonly Store Store = new(); internal readonly Access Access = new(); internal readonly Clock Clock = new();
         internal readonly Discovery Discovery = new();
         internal readonly Port Port; internal readonly TriggerDeliveryOperations Operations; internal readonly TriggerManagement Management;
-        internal Fixture(bool external = false)
+        internal Fixture(bool external = false, bool refusalForA = false)
         {
             var protection = new EphemeralDataProtectionProvider(); var discovery = Discovery;
-            Port = new(Source(external)); Operations = new(Store, Access, discovery, protection, Clock, Port);
+            Port = new(Source(external, refusalForA)); Operations = new(Store, Access, discovery, protection, Clock, Port);
             Management = new(Store, new AuthoringTriggerCommitter(Store), Access, new Catalog(), discovery, new Mapper(), new Publisher(), protection, Clock, Operations);
         }
     }
-    private static RuntimePostCommitOutboxItem Source(bool external)
+    private static RuntimePostCommitOutboxItem Source(bool external, bool refusalForA = false)
     {
         var now = DateTimeOffset.UnixEpoch.AddDays(1); var scope = new PersistenceScope("physical");
         var intent = new RuntimePostCommitIntent("event", "publisher-private", "Test.Event", now, null, "key", null);
@@ -151,7 +181,7 @@ public sealed class StandaloneTriggerDeliveryTests
         var payload = Element(new { payload = new { }, trigger = new { configuration = new { http = new { mode = "AsyncFanOut" } } } });
         var standalone = external ? new RuntimeStandaloneIngressSource(1, "admission", "dispatch", now, scope, "actual-tenant", new("physical"),
             "trigger-a", 1, 0, "Http", "request-key", RuntimeStandaloneIngressSource.ComputeRequestFingerprint(scope, "actual-tenant", "trigger-a", "Http", "request-key", schema, payload, actor),
-            schema, payload, RuntimeIngressAdmissionPolicy.RequireAll, actor) : null;
+            schema, payload, refusalForA ? RuntimeIngressAdmissionPolicy.AcceptAvailable : RuntimeIngressAdmissionPolicy.RequireAll, actor) : null;
         var id = standalone?.OutboxItemId ?? "source-z";
         var fingerprint = standalone?.Fingerprint ?? RuntimeCheckpointCommitFingerprint.ComputeIntent(intent);
         RuntimeSubscriptionRecipient Recipient(string suffix) => new("recipient-" + suffix, "subscription-" + suffix, 1, 1, "private-definition-" + suffix, "native",
@@ -160,7 +190,7 @@ public sealed class StandaloneTriggerDeliveryTests
                 "version", "1", "activation-" + suffix, WorkflowActivationSlotIdentity.Create("private-definition-" + suffix, "default")), new string('a', 64),
             1, 1, new Dictionary<string, JsonElement>(), actor, "actual-tenant", new("physical"), new(1, scope, id, "subscription-" + suffix));
         var recipients = external ? new[] { Recipient("a") } : new[] { Recipient("a"), Recipient("b") };
-        var delivery = new RuntimeSubscriptionDelivery(1, id, fingerprint, scope, recipients, external ? [] : [new("refused-b", 1, "Admission", "blocked-b")],
+        var delivery = new RuntimeSubscriptionDelivery(1, id, fingerprint, scope, recipients, external ? refusalForA ? [new("refused-a", 1, "Admission", "target-unpublished")] : [] : [new("refused-b", 1, "Admission", "blocked-b")],
             recipients.Select(item => new RuntimeRecipientProgress(item.RecipientId, RuntimeRecipientPhase.Pending)).ToArray(),
             resourceCaptures: external ? null : [new("trigger-a", 1, 1, 0, ["subscription-a"], Element(new { name = "a" })),
                 new("trigger-b", 1, 1, 0, ["subscription-b", "refused-b"], Element(new { name = "b" }))]);
@@ -220,11 +250,12 @@ public sealed class StandaloneTriggerDeliveryTests
     private sealed class Discovery : IStandaloneTriggerTargetDiscovery
     {
         internal int Calls;
+        internal bool Unpublished;
         public ValueTask<TriggerTargetDescription?> DescribeAsync(TriggerScope scope, string id, string slot, CancellationToken ct = default)
         {
             Calls++;
-            return ValueTask.FromResult<TriggerTargetDescription?>(new(id, slot, "Readable workflow", "native", TriggerTargetState.Available,
-                new(1, []), "contract-1", "version-1", "1", "publication-1", 1, false, []));
+            return ValueTask.FromResult<TriggerTargetDescription?>(new(id, slot, "Readable workflow", "native", Unpublished ? TriggerTargetState.Unpublished : TriggerTargetState.Available,
+                new(1, []), "contract-1", Unpublished ? null : "version-1", Unpublished ? null : "1", "publication-1", 1, false, []));
         }
         public ValueTask<TriggerTargetPage> ListAsync(TriggerScope scope, TriggerTargetQuery query, CancellationToken ct = default) => ValueTask.FromResult(new TriggerTargetPage([], null));
     }
