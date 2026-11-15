@@ -20,3 +20,8 @@
 .wf-trigger-table { min-width: 44rem; table-layout: fixed; }
 .wf-trigger-table th, .wf-trigger-table td { overflow-wrap: anywhere; }
 @media (width <= 480px) { .wf-trigger-facts { grid-template-columns: minmax(0, 1fr); gap: var(--studio-space-1, 4px); } .wf-trigger-facts dd { margin-block-end: var(--studio-space-3, 12px); } }
+
+/* The shared association surface must keep state and controls visible inside the workflow inspector. */
+.wf-trigger-association-table { min-width: 0; }
+.wf-trigger-association-table th:first-child { width: 40%; }
+.wf-trigger-association-table .studio-page-actions { margin-block-start: var(--studio-space-2, 8px); }
