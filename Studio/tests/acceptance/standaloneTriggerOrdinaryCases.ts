@@ -281,7 +281,7 @@ export async function verifyBpmnInputRefusals(j: TriggerJourney, authored: Autho
 
 /** Exercise the exact UI tokens through real persistence and downstream business consumption. */
 export async function verifyJsonLiteralPersistenceAndConsumption(j: TriggerJourney) {
-  const target = await j.echo("JSON literal consumer", [input("value", "JsonElement")]);
+  const target = await j.echo("JSON literal consumer", [input("value", "System.Text.Json.JsonElement")]);
   const trigger = await j.create("event", "JSON string and precise number");
   await j.add(trigger.id, target.authored.definition.id, [configured("value", "123")]);
   await j.page.reload(); await editSubscription(j, trigger.id, target.authored.definition.id);
