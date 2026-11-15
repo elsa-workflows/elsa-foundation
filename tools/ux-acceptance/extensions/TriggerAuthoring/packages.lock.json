@@ -62,6 +62,9 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.tasks.core": {
+        "type": "Project"
+      },
       "elsa.workflows.runtime.core": {
         "type": "Project",
         "dependencies": {
