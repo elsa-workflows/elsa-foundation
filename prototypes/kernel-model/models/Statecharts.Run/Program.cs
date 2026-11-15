@@ -17,6 +17,7 @@ if (args is ["--native-internal-phases"]) { NativeInternalPhaseWitness.Run(); re
 if (args is ["--native-internal-regions"]) { NativeInternalRegionalWitness.Run(); return; }
 if (args is ["--native-internal-structure"]) { NativeInternalStructureWitness.Run(); return; }
 if (args is ["--native-priority"]) { NativePriorityWitness.Run(); return; }
+if (args is ["--native-internal-readers"]) { NativeInternalReaders.Run(); return; }
 if (args is ["--native-internal"]) { NativeInternalSuite.Run(); return; }
 if (args is ["--native-internal-list"]) { foreach (var n in NativeInternalSuite.Names) Console.WriteLine(n); return; }
 if (args is ["--internal"]) { InternalProgressWitness.Run(); return; }

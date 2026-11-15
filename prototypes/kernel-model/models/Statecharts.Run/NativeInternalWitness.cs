@@ -9,6 +9,20 @@ using Kernel.Statecharts.Native;
 
 internal static class NativeInternalWitness
 {
+    // Proof registrations must also be removed when an assertion fails.
+    internal static IDisposable Register(Workflow workflow) => new Registration(workflow);
+
+    private sealed class Registration : IDisposable
+    {
+        private readonly string _id;
+        internal Registration(Workflow workflow)
+        {
+            _id = workflow.Id;
+            NativeWorkflows.Registry.Add(workflow);
+        }
+        public void Dispose() => NativeWorkflows.Registry.Remove(_id);
+    }
+
     internal static IEnumerable<string> Names => from mode in new[] { Modes.Balanced, Modes.Durable }
         from nested in new[] { false, true } select $"native-internal:baseline,{mode},nested={nested}";
     internal static void Run()
@@ -31,7 +45,7 @@ internal static class NativeInternalWitness
             ("InternalExecution", Binding.Literal(new InternalExecutionSettings(8, "internal", new() { ["advance"] = "permission" }))))
             .With(Control(), Wf.Event("gate", "entry"));
         var root = nested ? Wf.Flowchart("flow", [machine, Wf.Set("after", "returned", true)], [new("machine", "after")]) : machine;
-        var wf = Wf.Workflow("machine-inbox", root, ("permission", false)); wf.InterventionRequested = true; NativeWorkflows.Registry.Add(wf);
+        var wf = Wf.Workflow("machine-inbox", root, ("permission", false)); wf.InterventionRequested = true; using var registration = Register(wf);
         h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         Check(h.State.CheckpointControl && h.State.Inboxes![frame].Receipts.Count == 0,

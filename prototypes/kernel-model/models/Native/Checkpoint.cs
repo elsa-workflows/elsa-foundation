@@ -4,6 +4,7 @@ namespace Kernel.Native;
 
 public sealed partial class NativeState
 {
+    // Permanent schema12 capability marker; not the transient per-turn checkpoint request below.
     [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     internal bool CheckpointControl { get; set; }
 }

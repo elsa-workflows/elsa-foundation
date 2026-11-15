@@ -23,7 +23,7 @@ internal static class NativePriorityWitness
                 .With(Control(), Mark("auto-mark"), Mark("business-mark"));
             var wf = Wf.Workflow("machine-inbox", Wf.Parallel("parallel", null, machine,
                 Wf.Sequence("repair", Wf.Event("wait", "enable-auto"), Wf.Set("enable", "permission", true))), ("permission", false));
-            wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+            wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
             var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
             NativeGuardWitness.Release(h, "enable-auto"); h.Reload();
             h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain();

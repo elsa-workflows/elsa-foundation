@@ -32,7 +32,7 @@ internal static class NativeLoopWitness
             Wf.Flowchart("flow", [machine, Wf.Set("returned", "returned", true)], [new("machine", "returned")]),
             Wf.Sequence("repair", Wf.Event("repair-wait", "stop-cycle"), Wf.Set("disable", "enabled", false))) : machine;
         var wf = Wf.Workflow("machine-inbox", root, ("enabled", true)); wf.InterventionRequested = true;
-        Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        using var registration = Register(wf); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         var blocked = Chart(); var scopes = Json.Write(h.State.LexicalScopes);
@@ -59,7 +59,8 @@ internal static class NativeLoopWitness
         if (!repair)
         {
             h.Apply(new("add", M: new("cancel", h.Target, Kinds.Terminate, TargetCreation: 1))); h.Drain();
-            Check(h.State.Inboxes![frame].Pending.Count == 0 && h.State.Inboxes[frame].Receipts.Values.All(r => r is { Status: "NotProcessed", Outcome: "cancelled", EvaluationStarted: false }),
+            Check(h.State.Inboxes![frame].Pending.Count == 0 &&
+                h.State.Inboxes[frame].Receipts.Values.All(r => r is { Status: "NotProcessed", Outcome: "cancelled", EvaluationStarted: false }),
                 "NL4: cancelling a loop incident lost final queued dispositions");
         }
         else
@@ -67,7 +68,9 @@ internal static class NativeLoopWitness
             var request = new NativeRetry("reset", source.Id, source.Intervention!.Id, "explicit loop budget reset");
             var transport = h.Send(NativeRetry.Kind, request); h.Drain(transport);
             var reset = Chart();
-            Check(reset.Control is { ReboundFrom: not null } && Json.Write(reset.Settling) == Json.Write(blocked.Settling) && Json.Write(reset.Visits) == Json.Write(blocked.Visits) &&
+            Check(reset.Control is { ReboundFrom: not null } &&
+                Json.Write(reset.Settling) == Json.Write(blocked.Settling) &&
+                Json.Write(reset.Visits) == Json.Write(blocked.Visits) &&
                 ChartMark.Calls.Count == (work ? 4 : 0), "NL5: retry preparation reset progress before verified helper acknowledgement");
             h.Reload();
             var again = Chart();

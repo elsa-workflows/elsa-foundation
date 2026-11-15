@@ -36,7 +36,7 @@ internal static class NativeInternalPhaseWitness
             ("InputInbox", Binding.Literal(new MachineInboxSettings(3, 8, 120000))),
             ("InternalExecution", Binding.Literal(new InternalExecutionSettings(8, "internal")))).With(work.ToArray());
         var wf = Wf.Workflow("machine-inbox", nested ? Wf.Flowchart("flow", [machine, Wf.Set("returned", "returned", true)], [new("machine", "returned")]) : machine);
-        wf.InterventionRequested = true; Kernel.Sim.Native.NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         if (kind == TriggerKind.Event) { h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain(); }
@@ -56,7 +56,8 @@ internal static class NativeInternalPhaseWitness
             h.Apply(new("add", M: new("cancel", h.Target, Kinds.Terminate, TargetCreation: 1))); h.Drain();
             Check(h.State.Inboxes![frame].Receipts["tail"] is { Status: "NotProcessed", Outcome: "cancelled", EvaluationStarted: false } &&
                 (kind != TriggerKind.Event || h.State.Inboxes[frame].Receipts["go"] is { Status: "Interrupted", Outcome: "cancelled", EvaluationStarted: true }) &&
-                ChartDependency.Calls.Count == 1 && ChartMark.Calls.SequenceEqual(completed), "NP2: failed phase cancellation replayed completed work or lost terminal dispositions");
+                ChartDependency.Calls.Count == 1 &&
+                    ChartMark.Calls.SequenceEqual(completed), "NP2: failed phase cancellation replayed completed work or lost terminal dispositions");
         }
         else
         {

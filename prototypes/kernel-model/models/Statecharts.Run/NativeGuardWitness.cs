@@ -42,7 +42,7 @@ internal static class NativeGuardWitness
             Wf.Set("change", "permission", true), Wf.Set("change-settings", "settings", "incompatible-after-entry"))) : machine;
         var variables = new Dictionary<string, JsonNode?> { ["settings"] = Kernel.Native.Values.From(settings) };
         if (value != "missing") variables["permission"] = JsonNode.Parse(value);
-        var wf = new Workflow("machine-inbox", root, variables); wf.InterventionRequested = true; NativeWorkflows.Registry.Add(wf); h.Start(mode);
+        var wf = new Workflow("machine-inbox", root, variables); wf.InterventionRequested = true; using var registration = Register(wf); h.Start(mode);
         var frame = h.State.Frames.Values.Single(f => f.Node == "machine").Id;
         MachineState Chart() => h.State.Frames[frame].State!.Deserialize<MachineState>()!;
         if (kind == TriggerKind.Event) { h.Send(InvocationInput.Kind, new InvocationInput(frame, "go", "go")); h.Drain(); }
