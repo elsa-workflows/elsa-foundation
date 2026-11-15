@@ -7,7 +7,7 @@ import {
   normalizeFlowchartStartNode,
   readFlowchartStartNodeId
 } from "./flowchartStartNode";
-import { bpmnStructureKind } from "./bpmn/bpmnTypes";
+import { bpmnStructureKind } from "./bpmn/bpmnStructure";
 import { compensationScopeChildSlots, compensationScopeStructureKind, replaceCompensationScopeActivities } from "./compensationScope";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
@@ -33,7 +33,7 @@ export {
   readFlowchartStartNodeId,
   setFlowchartStartNode
 } from "./flowchartStartNode";
-export { bpmnStructureKind } from "./bpmn/bpmnTypes";
+export { bpmnStructureKind } from "./bpmn/bpmnStructure";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
@@ -571,7 +571,8 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
   };
 }
 
-function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+/** Declared physical slots, without a designer's additional navigation projections. */
+export function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
   const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
