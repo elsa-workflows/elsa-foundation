@@ -57,7 +57,7 @@ export async function verifyHttpAdmissionAndQueueFaults(j: TriggerJourney) {
     const key = randomUUID(), payload = { message: "Same request after unavailable physical acceptance" };
     const unavailable = await send(j, http, key, payload);
     expect(unavailable.response.status()).toBe(503);
-    expect(unavailable.body.code).toBe("SourceUnavailable");
+    expect(unavailable.body.code).toBe("unavailable");
     const refusal = await observedFault(j, "SourceWriteRefused");
     expect(refusal.triggerId).toBe(http.id); expect(refusal.physicalSourcePresent).toBe(false);
     expect(await j.deliveries(http.id)).toEqual([]);
