@@ -22,7 +22,7 @@ function scalarOutput(output: BusinessOutput): unknown {
 
 export async function businessOutputs(j: TriggerJourney, executionId: string, expected: Record<string, unknown>) {
   let result: { instance: { status: string; artifactId: string; definitionVersionId: string }; outputs: Record<string, BusinessOutput> } | undefined;
-  await expect.poll(async () => { result = await j.api(`/runtime/workflows/instances/${executionId}`); return result!.instance.status; }, { timeout: 45_000 }).toBe("Completed");
+  await expect.poll(async () => { result = await j.findInstance(executionId); return result?.instance.status ?? "NotYetAdmitted"; }, { timeout: 45_000 }).toBe("Completed");
   for (const [name, value] of Object.entries(expected)) expect(scalarOutput(result!.outputs[name]), `Actual business output ${name}`).toEqual(value);
   return result!;
 }
