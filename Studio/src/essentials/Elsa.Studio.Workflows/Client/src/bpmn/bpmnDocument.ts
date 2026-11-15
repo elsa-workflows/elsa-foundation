@@ -2,6 +2,7 @@ import type { ActivityNode, VariableDefinition } from "../workflowTypes";
 import { getChildSlots } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnTypes";
 import { serializeBpmnXml } from "./bpmnDocumentXml";
+import { standardBpmnReferenceAttribute, standardBpmnReferenceContext, standardBpmnReferenceText } from "./bpmnReferenceSemantics";
 
 /** Complete-source authoring contract. No persisted flat graph or second diagram store. */
 export const bpmnDocumentSchemaVersion = "2.0.0";
@@ -397,66 +398,8 @@ function updateSequenceReferences(parsed: ParsedBpmnDocument, flow: Element, sou
   }
 }
 
-// Reference paths from the BPMN 2.0 Semantic/BPMNDI schemas shipped with pinned bpmn-moddle.
-// Names, expressions, arbitrary attributes and extension payloads are not inferred ID references.
-const modelReferenceAttributes: Readonly<Record<string, readonly string[]>> = {
-  association: ["sourceRef", "targetRef"], boundaryEvent: ["attachedToRef"], callActivity: ["calledElement"],
-  callChoreography: ["calledChoreographyRef", "initiatingParticipantRef"], callConversation: ["calledCollaborationRef"],
-  choreographyTask: ["initiatingParticipantRef"], subChoreography: ["initiatingParticipantRef"], globalChoreographyTask: ["initiatingParticipantRef"],
-  compensateEventDefinition: ["activityRef"], conversationAssociation: ["innerConversationNodeRef", "outerConversationNodeRef"],
-  conversationLink: ["sourceRef", "targetRef"], correlationProperty: ["type"], correlationPropertyBinding: ["correlationPropertyRef"],
-  correlationPropertyRetrievalExpression: ["messageRef"], correlationSubscription: ["correlationKeyRef"],
-  dataInput: ["itemSubjectRef"], dataOutput: ["itemSubjectRef"], dataObject: ["itemSubjectRef"], dataStore: ["itemSubjectRef"],
-  dataObjectReference: ["itemSubjectRef", "dataObjectRef"], dataStoreReference: ["itemSubjectRef", "dataStoreRef"],
-  error: ["structureRef"], errorEventDefinition: ["errorRef"], escalation: ["structureRef"], escalationEventDefinition: ["escalationRef"],
-  extension: ["definition"], group: ["categoryValueRef"], interface: ["implementationRef"],
-  ioBinding: ["operationRef", "inputDataRef", "outputDataRef"], itemDefinition: ["structureRef"], lane: ["partitionElementRef"],
-  message: ["itemRef"], messageEventDefinition: ["messageRef"], messageFlow: ["sourceRef", "targetRef", "messageRef"],
-  messageFlowAssociation: ["innerMessageFlowRef", "outerMessageFlowRef"], multiInstanceLoopCharacteristics: ["oneBehaviorEventRef", "noneBehaviorEventRef"],
-  operation: ["implementationRef"], participant: ["processRef"], process: ["definitionalCollaborationRef"], property: ["itemSubjectRef"],
-  receiveTask: ["messageRef", "operationRef"], resourceParameter: ["type"], resourceParameterBinding: ["parameterRef"],
-  sendTask: ["messageRef", "operationRef"], sequenceFlow: ["sourceRef", "targetRef"], serviceTask: ["operationRef"],
-  signal: ["structureRef"], signalEventDefinition: ["signalRef"]
-};
-const defaultFlowOwners = new Set(["task", "userTask", "serviceTask", "manualTask", "scriptTask", "businessRuleTask", "sendTask", "receiveTask",
-  "callActivity", "subProcess", "adHocSubProcess", "transaction", "exclusiveGateway", "inclusiveGateway", "complexGateway"]);
-const diagramReferenceAttributes: Readonly<Record<string, readonly string[]>> = {
-  BPMNPlane: ["bpmnElement"], BPMNShape: ["bpmnElement", "choreographyActivityShape"],
-  BPMNEdge: ["bpmnElement", "sourceElement", "targetElement"], BPMNLabel: ["labelStyle"]
-};
-const modelReferenceText = new Set(["categoryValueRef", "choreographyRef", "correlationPropertyRef", "dataInputRefs", "dataOutputRefs", "endPointRef",
-  "errorRef", "eventDefinitionRef", "flowNodeRef", "inMessageRef", "incoming", "innerParticipantRef", "inputSetRefs", "interfaceRef",
-  "loopDataInputRef", "loopDataOutputRef", "messageFlowRef", "operationRef", "optionalInputRefs", "optionalOutputRefs", "outMessageRef",
-  "outerParticipantRef", "outgoing", "outputSetRefs", "participantRef", "resourceRef", "source", "sourceRef", "supportedInterfaceRef",
-  "supports", "target", "targetRef", "whileExecutingInputRefs", "whileExecutingOutputRefs"]);
-
-function standardReferenceContext(element: Element) {
-  for (let current: Element | null = element; current; current = current.parentElement) {
-    if (!identityNamespaces.has(current.namespaceURI ?? "")) return false;
-    if (current.namespaceURI === bpmnNamespaces.model && ["extensionElements", "documentation", "script"].includes(current.localName)) return false;
-  }
-  return true;
-}
-// These local properties are directly declared tFormalExpression by the pinned BPMN schema.
-// A condition under conditionalEventDefinition is tExpression until explicitly xsi-typed.
-const formalExpressionParents: Readonly<Record<string, readonly string[]>> = {
-  condition: ["complexBehaviorDefinition"], dataPath: ["correlationPropertyBinding"],
-  messagePath: ["correlationPropertyRetrievalExpression"],
-  transformation: ["dataAssociation", "dataInputAssociation", "dataOutputAssociation"]
-};
-function standardReferenceAttribute(element: Element, attribute: Attr) {
-  if (attribute.namespaceURI) return false;
-  if (element.namespaceURI === bpmnNamespaces.diagram) return diagramReferenceAttributes[element.localName]?.includes(attribute.localName) ?? false;
-  if (element.namespaceURI !== bpmnNamespaces.model) return false;
-  if (attribute.localName === "default" && defaultFlowOwners.has(element.localName)) return true;
-  if (attribute.localName === "evaluatesToTypeRef") {
-    const parent = element.parentElement;
-    if (element.localName === "formalExpression" || parent?.namespaceURI === bpmnNamespaces.model
-      && formalExpressionParents[element.localName]?.includes(parent.localName)) return true;
-    const type = element.getAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")?.split(":");
-    if (type?.at(-1) === "tFormalExpression" && element.lookupNamespaceURI(type.length === 2 ? type[0] : null) === bpmnNamespaces.model) return true;
-  }
-  return modelReferenceAttributes[element.localName]?.includes(attribute.localName) ?? false;
+function standardReferenceContext(element: Element): boolean {
+  return standardBpmnReferenceContext(element);
 }
 
 function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, nextIds: ReadonlyMap<string, Element>, document: XMLDocument) {
@@ -469,11 +412,11 @@ function rejectRemovedReferences(previousIds: ReadonlyMap<string, Element>, next
   for (const element of [...document.getElementsByTagName("*")]) {
     if (!standardReferenceContext(element)) continue;
     for (const attribute of [...element.attributes]) {
-      if (!standardReferenceAttribute(element, attribute)) continue;
+      if (!standardBpmnReferenceAttribute(element, attribute)) continue;
       if (attribute.value.trim().split(/\s+/).some(value => removedReference(element, value)))
         fail(`deletion leaves reference '${attribute.name}' to removed content`);
     }
-    if (element.namespaceURI === bpmnNamespaces.model && modelReferenceText.has(element.localName) && removedReference(element, element.textContent?.trim() ?? ""))
+    if (standardBpmnReferenceText(element) && removedReference(element, element.textContent?.trim() ?? ""))
       fail(`deletion leaves '${element.localName}' pointing to removed content`);
   }
 }
