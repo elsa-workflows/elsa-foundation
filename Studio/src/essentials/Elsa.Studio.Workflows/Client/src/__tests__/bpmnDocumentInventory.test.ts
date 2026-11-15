@@ -224,3 +224,73 @@ describe("bounded whole-document native identity transform", () => {
     expect(() => remapBpmnDocumentNativeIdentities(original, mapping, [writeLine, sequenceActivity])).toThrow(/exact catalog contract/);
   });
 });
+
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "../intrinsicActivities";
+
+function r7ExpandedIntrinsic(kind: "Set" | "SetOutput", expressionType: string, expressionValue: unknown) {
+  const original = owner(), descriptor = readIntrinsicDescriptor({ ...writeLine, intrinsic: { kind, valueInputKey: "value", variableInputKey: kind === "Set" ? "variable" : null, outputNameInputKey: kind === "SetOutput" ? "name" : null } })!;
+  const intrinsic = buildIntrinsicWireBlock(descriptor);
+  if (kind === "Set") intrinsic.variable = { referenceKey: "target", declaringScopeId: "P" };
+  nodes(original)[1] = { nodeId: "listener", activityVersionId: kind === "Set" ? "elsa.intrinsic.set@1" : "elsa.intrinsic.set-output@1", intrinsic,
+    inputs: [...(kind === "SetOutput" ? [arg("Literal", "result", "name")] : []), arg(expressionType, expressionValue, "value")], outputs: [],
+    moduleData: { value: { expression: { type: "VendorReference", value: { declaringScopeId: "P", producerNodeId: "other-work" } } } } };
+  const originalBefore = structuredClone(original), expanded = expandStateFromWire({ rootActivity: original }).rootActivity!;
+  expect(original).toEqual(originalBefore);
+  expect(nodes(expanded)[1].inputs).toEqual([]);
+  expect(nodes(expanded)[1].value).toMatchObject({ expression: { type: expressionType, value: expressionValue } });
+  expect(catalog.some(item => item.activityVersionId === nodes(expanded)[1].activityVersionId)).toBe(false);
+  return expanded;
+}
+function r7WireValue(node: ActivityNode, referenceKey: string): unknown {
+  const inputs = node.inputs as { referenceKey: string; value: unknown }[];
+  return inputs.find(input => input.referenceKey === referenceKey)!.value;
+}
+function r7IntrinsicWire(kind: "Set" | "SetOutput", expressionType: string, value: unknown) {
+  const expanded = r7ExpandedIntrinsic(kind, expressionType, value), before = structuredClone(expanded);
+  const remapped = remapBpmnDocumentNativeIdentities(expanded, map(expanded), catalog);
+  expect(expanded).toEqual(before);
+  const wire = canonicalizeStateForWire({ rootActivity: remapped }).rootActivity!, intrinsic = nodes(wire)[1];
+  expect(intrinsic.nodeId).toBe("copy:listener");
+  if (kind === "Set") expect(intrinsic.intrinsic!.variable!.declaringScopeId).toBe("copy:P");
+  else expect(r7WireValue(intrinsic, "name")).toEqual({ expressionType: "Literal", value: "result" });
+  expect(intrinsic.moduleData).toEqual(nodes(expanded)[1].moduleData);
+  expect(wire.structure!.payload.documentXml).toBe(source);
+  return intrinsic;
+}
+function r7ExpectUnknownIntrinsicRefused(kind: "Set" | "SetOutput") {
+  const expanded = r7ExpandedIntrinsic(kind, "VendorReference", { declaringScopeId: "P", producerNodeId: "other-work" }), before = structuredClone(expanded);
+  expect(() => {
+    try { remapBpmnDocumentNativeIdentities(expanded, map(expanded), catalog); }
+    finally { expect(expanded).toEqual(before); }
+  }).toThrow(/qualified reference transform/);
+}
+
+describe("R7 expanded intrinsic native reference regressions", () => {
+  it("persists the remapped Variable value of catalogless expanded Set", () => {
+    const intrinsic = r7IntrinsicWire("Set", "Variable", { referenceKey: "value", declaringScopeId: "P" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Variable", value: { referenceKey: "value", declaringScopeId: "copy:P" } });
+  });
+  it("persists the remapped ActivityResult value of catalogless expanded Set", () => {
+    const intrinsic = r7IntrinsicWire("Set", "ActivityResult", { producerNodeId: "other-work", producerScopeId: "scope-other", projectionKey: "$result" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "ActivityResult", value: { producerNodeId: "copy:other-work", producerScopeId: "copy:scope-other", projectionKey: "$result" } });
+  });
+  it("persists the remapped Variable value of catalogless expanded SetOutput", () => {
+    const intrinsic = r7IntrinsicWire("SetOutput", "Variable", { referenceKey: "value", declaringScopeId: "P" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Variable", value: { referenceKey: "value", declaringScopeId: "copy:P" } });
+  });
+  it("persists the remapped ActivityResult value of catalogless expanded SetOutput", () => {
+    const intrinsic = r7IntrinsicWire("SetOutput", "ActivityResult", { producerNodeId: "other-work", producerScopeId: "scope-other", projectionKey: "$result" });
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "ActivityResult", value: { producerNodeId: "copy:other-work", producerScopeId: "copy:scope-other", projectionKey: "$result" } });
+  });
+  it("refuses unknown expanded Set expression dialects atomically without an intrinsic catalog", () => { r7ExpectUnknownIntrinsicRefused("Set"); });
+  it("refuses unknown expanded SetOutput expression dialects atomically without an intrinsic catalog", () => { r7ExpectUnknownIntrinsicRefused("SetOutput"); });
+  it("preserves literal and nested vendor reference lookalikes in catalogless expanded Set", () => {
+    const opaque = { declaringScopeId: "P", producerNodeId: "other-work", expressionType: "VendorReference" }, intrinsic = r7IntrinsicWire("Set", "Literal", opaque);
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Literal", value: opaque });
+  });
+  it("preserves literal and nested vendor reference lookalikes in catalogless expanded SetOutput", () => {
+    const opaque = { declaringScopeId: "P", producerNodeId: "other-work", expressionType: "VendorReference" }, intrinsic = r7IntrinsicWire("SetOutput", "Literal", opaque);
+    expect(r7WireValue(intrinsic, "value")).toEqual({ expressionType: "Literal", value: opaque });
+  });
+});

@@ -493,3 +493,122 @@ describe("complete BPMN document authority", () => {
     expect(original.structure!.payload.documentXml).toBe(source);
   });
 });
+
+// R7: schema-declared reference roles, distinct from opaque namespace lookalikes.
+function r7FormalOwner(processFragment = "", definitionsFragment = ""): ActivityNode {
+  return owner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:tns="urn:test" xmlns:ext="urn:external" xmlns:vendor="urn:vendor" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="urn:test">
+    <bpmn:itemDefinition id="Item"/><bpmn:message id="FormalMessage"/>
+    ${definitionsFragment}<bpmn:process id="Process"><bpmn:task id="Task"/>${processFragment}</bpmn:process>
+  </bpmn:definitions>`);
+}
+function r7InputTransformationOwner(): ActivityNode {
+  return r7FormalOwner('<bpmn:task id="FormalTask"><bpmn:ioSpecification><bpmn:dataInput id="FormalInput"/><bpmn:inputSet/><bpmn:outputSet/></bpmn:ioSpecification><bpmn:dataInputAssociation id="FormalAssociation"><bpmn:targetRef>FormalInput</bpmn:targetRef><bpmn:transformation id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:transformation></bpmn:dataInputAssociation></bpmn:task>');
+}
+function r7ExpectFormalDeletionRefused(original: ActivityNode, commands: BpmnDocumentCommand[] = [{ kind: "remove", target: address("Item") }]) {
+  const before = structuredClone(original), parsed = readBpmnDocument(original), formal = parsed.byId.get("Formal")!;
+  expect(formal.namespaceURI).toBe(bpmnNamespaces.model);
+  expect(formal.hasAttributeNS("http://www.w3.org/2001/XMLSchema-instance", "type")).toBe(false);
+  expect(resolveBpmnDocumentReference(parsed, formal, formal.getAttribute("evaluatesToTypeRef"))).toBe(parsed.byId.get("Item"));
+  expect(() => {
+    try { applyBpmnDocumentCommands(original, commands); }
+    finally { expect(original).toEqual(before); }
+  }).toThrow("deletion leaves reference 'evaluatesToTypeRef'");
+}
+function r7IoBindingOwner(): ActivityNode {
+  return owner(`<bpmn:definitions xmlns:bpmn="${bpmnNamespaces.model}" xmlns:tns="urn:binding" xmlns:vendor="urn:vendor" targetNamespace="urn:binding">
+    <bpmn:message id="BindingMessage"/>
+    <bpmn:interface id="BindingInterface" name="Binding"><bpmn:operation id="BindingOperation" name="Invoke"><bpmn:inMessageRef>tns:BindingMessage</bpmn:inMessageRef></bpmn:operation></bpmn:interface>
+    <bpmn:process id="Process"><bpmn:ioSpecification id="BindingIo"><bpmn:dataInput id="BindingInput"/><bpmn:dataOutput id="BindingOutput"/><bpmn:inputSet id="BindingInputSet"/><bpmn:outputSet id="BindingOutputSet"/></bpmn:ioSpecification>
+      <bpmn:ioBinding id="Binding" operationRef="tns:BindingOperation" inputDataRef="BindingInput" outputDataRef="BindingOutput"/><bpmn:task id="Task"/>
+    </bpmn:process></bpmn:definitions>`);
+}
+function r7ExpectIoDeletionRefused(target: string, attribute: string, atomic = false) {
+  const original = r7IoBindingOwner(), before = structuredClone(original), parsed = readBpmnDocument(original), binding = parsed.byId.get("Binding")!;
+  expect(binding.localName).toBe("ioBinding");
+  expect(resolveBpmnDocumentReference(parsed, binding, binding.getAttribute(attribute))).toBe(parsed.byId.get(target));
+  const commands: BpmnDocumentCommand[] = [...(atomic ? [{ kind: "attribute" as const, target: address("Task"), name: "name", value: "Uncommitted" }] : []), { kind: "remove", target: address(target) }];
+  expect(() => {
+    try { applyBpmnDocumentCommands(original, commands); }
+    finally { expect(original).toEqual(before); }
+  }).toThrow(`deletion leaves reference '${attribute}'`);
+}
+
+describe("R7 standard BPMN reference deletion regressions", () => {
+  it("refuses deletion through a schema-declared complex behavior condition", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:task id="FormalTask"><bpmn:multiInstanceLoopCharacteristics><bpmn:complexBehaviorDefinition><bpmn:condition id="Formal" evaluatesToTypeRef="tns:Item">ready</bpmn:condition></bpmn:complexBehaviorDefinition></bpmn:multiInstanceLoopCharacteristics></bpmn:task>'));
+  });
+  it("refuses deletion through a schema-declared correlation data path", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:correlationSubscription correlationKeyRef="ext:Key"><bpmn:correlationPropertyBinding correlationPropertyRef="ext:Property"><bpmn:dataPath id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:dataPath></bpmn:correlationPropertyBinding></bpmn:correlationSubscription>'));
+  });
+  it("refuses deletion through a schema-declared correlation message path", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner("", '<bpmn:correlationProperty id="Property"><bpmn:correlationPropertyRetrievalExpression messageRef="tns:FormalMessage"><bpmn:messagePath id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:messagePath></bpmn:correlationPropertyRetrievalExpression></bpmn:correlationProperty>'));
+  });
+  it("refuses deletion through the standard data association transformation type", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:dataObject id="FormalData"/><bpmn:dataAssociation><bpmn:targetRef>FormalData</bpmn:targetRef><bpmn:transformation id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:transformation></bpmn:dataAssociation>'));
+  });
+  it("refuses deletion through a schema-declared input association transformation", () => {
+    r7ExpectFormalDeletionRefused(r7InputTransformationOwner());
+  });
+  it("refuses deletion through a schema-declared output association transformation", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner('<bpmn:dataObject id="FormalData"/><bpmn:task id="FormalTask"><bpmn:ioSpecification><bpmn:dataOutput id="FormalOutput"/><bpmn:inputSet/><bpmn:outputSet/></bpmn:ioSpecification><bpmn:dataOutputAssociation><bpmn:sourceRef>FormalOutput</bpmn:sourceRef><bpmn:targetRef>FormalData</bpmn:targetRef><bpmn:transformation id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:transformation></bpmn:dataOutputAssociation></bpmn:task>'));
+  });
+  it("refuses deletion through the global formal expression declaration", () => {
+    r7ExpectFormalDeletionRefused(r7FormalOwner("", '<bpmn:formalExpression id="Formal" evaluatesToTypeRef="tns:Item">value</bpmn:formalExpression>'));
+  });
+  it("refuses an implicit formal reference deletion atomically after an earlier edit", () => {
+    r7ExpectFormalDeletionRefused(r7InputTransformationOwner(), [{ kind: "attribute", target: address("Task"), name: "name", value: "Uncommitted" }, { kind: "remove", target: address("Item") }]);
+  });
+  it("allows removing an implicit formal reference and its target in one transaction", () => {
+    const original = r7InputTransformationOwner(), before = structuredClone(original);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Formal") }, { kind: "remove", target: address("Item") }]);
+    expect(readBpmnDocument(next).byId.has("Formal")).toBe(false);
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+    expect(element(next, "FormalAssociation").localName).toBe("dataInputAssociation");
+    expect(original).toEqual(before);
+  });
+  it("retains explicit formal typing on a conditional event as a reference control", () => {
+    const original = r7FormalOwner('<bpmn:intermediateCatchEvent id="Conditional"><bpmn:conditionalEventDefinition><bpmn:condition id="Formal" xsi:type="bpmn:tFormalExpression" evaluatesToTypeRef="tns:Item">ready</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent>'), before = structuredClone(original);
+    expect(() => applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }])).toThrow("deletion leaves reference 'evaluatesToTypeRef'");
+    expect(original).toEqual(before);
+  });
+  it("does not infer formal typing from an untyped conditional event condition", () => {
+    const original = r7FormalOwner('<bpmn:intermediateCatchEvent id="Conditional"><bpmn:conditionalEventDefinition><bpmn:condition id="Untyped" evaluatesToTypeRef="tns:Item">opaque draft</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent>');
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }]);
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+    expect(element(next, "Untyped").getAttribute("evaluatesToTypeRef")).toBe("tns:Item");
+  });
+  it("preserves vendor and extension-wrapped formal expression lookalikes", () => {
+    const original = r7FormalOwner('<bpmn:task id="OpaqueTask"><bpmn:extensionElements><vendor:formalExpression evaluatesToTypeRef="tns:Item">vendor</vendor:formalExpression><bpmn:formalExpression evaluatesToTypeRef="tns:Item">extension</bpmn:formalExpression></bpmn:extensionElements></bpmn:task>');
+    const retained = element(original, "OpaqueTask").innerHTML, next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }]);
+    expect(element(next, "OpaqueTask").innerHTML).toBe(retained);
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+  });
+  it("does not interpret a vendor attribute on a standard formal expression", () => {
+    const original = r7FormalOwner("", '<bpmn:formalExpression id="Formal" vendor:evaluatesToTypeRef="tns:Item">vendor attribute</bpmn:formalExpression>');
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Item") }]);
+    expect(element(next, "Formal").getAttributeNS("urn:vendor", "evaluatesToTypeRef")).toBe("tns:Item");
+    expect(readBpmnDocument(next).byId.has("Item")).toBe(false);
+  });
+  it("refuses deletion through the ioBinding input data reference", () => { r7ExpectIoDeletionRefused("BindingInput", "inputDataRef"); });
+  it("refuses deletion through the ioBinding output data reference", () => { r7ExpectIoDeletionRefused("BindingOutput", "outputDataRef"); });
+  it("refuses deletion through the ioBinding operation reference", () => { r7ExpectIoDeletionRefused("BindingOperation", "operationRef"); });
+  it("refuses an ioBinding reference deletion atomically after an earlier edit", () => { r7ExpectIoDeletionRefused("BindingInput", "inputDataRef", true); });
+  it("allows removing an ioBinding and its referenced input in one transaction", () => {
+    const original = r7IoBindingOwner(), before = structuredClone(original);
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("Binding") }, { kind: "remove", target: address("BindingInput") }]);
+    expect(readBpmnDocument(next).byId.has("Binding")).toBe(false);
+    expect(readBpmnDocument(next).byId.has("BindingInput")).toBe(false);
+    expect(element(next, "BindingOutput").localName).toBe("dataOutput");
+    expect(element(next, "BindingOperation").localName).toBe("operation");
+    expect(original).toEqual(before);
+  });
+  it("preserves vendor ioBinding lookalikes without inventing references", () => {
+    const original = r7IoBindingOwner();
+    original.structure!.payload.documentXml = readBpmnDocument(original).payload.documentXml.replace('<bpmn:ioBinding id="Binding" operationRef="tns:BindingOperation" inputDataRef="BindingInput" outputDataRef="BindingOutput"/>', '<vendor:ioBinding id="VendorBinding" operationRef="tns:BindingOperation" inputDataRef="BindingInput" outputDataRef="BindingOutput"/>');
+    const next = applyBpmnDocumentCommands(original, [{ kind: "remove", target: address("BindingInput") }]);
+    expect(readBpmnDocument(next).byId.has("BindingInput")).toBe(false);
+    const retained = readBpmnDocument(next).document.getElementsByTagNameNS("urn:vendor", "ioBinding")[0];
+    expect(retained.getAttribute("inputDataRef")).toBe("BindingInput");
+    expect(retained.getAttribute("operationRef")).toBe("tns:BindingOperation");
+  });
+});
