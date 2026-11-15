@@ -979,6 +979,45 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/candidate-validation",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityCandidateValidationView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/candidate-validation"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsValidateCandidate"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: POST /design/activities/drafts/{draftId}/conflict-copies",
       "methods": [
         "POST"
