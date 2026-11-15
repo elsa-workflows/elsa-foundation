@@ -23,6 +23,7 @@ internal sealed partial class SelectionChart
     internal IReadOnlyDictionary<string, JsonNode?> MachineDefaults { get; }
     internal bool HasDefaults => MachineDefaults.Count != 0 || _nodes.Values.Any(n => n.Defaults?.Count > 0);
     internal bool HasInternalRules => _rules.Any(r => r.Kind != TriggerKind.Event);
+    internal IReadOnlyList<GraphRule> Rules => _rules;
     private static Dictionary<string, JsonNode?> Clone(IReadOnlyDictionary<string, JsonNode?>? values) =>
         values?.ToDictionary(p => p.Key, p => p.Value?.DeepClone(), StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
     private static bool IsState(GraphNode node) => node.Kind is not (NodeKind.Root or NodeKind.Region);

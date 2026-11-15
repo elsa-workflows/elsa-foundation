@@ -243,6 +243,34 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
   });
 
+  it("keeps initial exact-execution ancestry when Activity is first opened from Timeline", async () => {
+    api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
+    api.browseActivityExecutions.mockImplementation(async (_context, _run, request: { anchorActivityExecutionId?: string }) => ({
+      items: [{ execution: request.anchorActivityExecutionId === "slow-parent" ? { ...activityExecution(), activityExecutionId: "slow-parent" } : activityExecution(), position: 1 }],
+      totalCount: 1, previousCursor: null, nextCursor: null
+    }));
+    const pending = deferred<ActivityExecutionInspection>();
+    api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => id === "slow-parent" ? pending.promise
+      : activityInspection({ provenance: { parentActivityExecutionId: "slow-parent" } as ActivityExecutionInspection["provenance"] }));
+    renderWorkbench("timeline", "execution-target");
+    await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledWith(
+      expect.anything(), "run-1", "slow-parent", expect.anything()));
+    expect(container.querySelector("[data-tab-id='timeline']")?.getAttribute("aria-selected")).toBe("true");
+
+    click(container.querySelector<HTMLButtonElement>("[data-tab-id='activity']"));
+
+    expect(container.textContent).toContain("Resolving execution scope");
+    expect(buttonByText(container, "Retry execution scope")).toBeFalsy();
+    pending.resolve(activityInspection({ activityExecutionId: "slow-parent", provenance: {} as ActivityExecutionInspection["provenance"] }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-execution-details")).toBeTruthy());
+    const identity = Array.from(container.querySelectorAll(".wf-activity-meta-item"))
+      .find(row => row.querySelector("dt")?.textContent === "Activity Execution ID");
+    expect(identity?.querySelector("dd code")?.textContent).toBe("execution-target");
+    expect(container.textContent).not.toContain("interrupted");
+    expect(container.textContent).not.toContain("Resolving execution scope");
+    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+  });
+
   it.each(["Timeline", "Collapse run details panel", "Restore run details panel", "Back to workflow run canvas"])("makes pending ancestry retryable after %s", async action => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });

@@ -22,6 +22,8 @@ sealed class Leveled(History? level, int pad)
     {
         public bool SingleMessage(Message message) => inner.SingleMessage(message);
         public bool SingleMessage(string? model, InstanceRow? row, Delivery delivery) => inner.SingleMessage(model, row, delivery);
+        public bool SelectsAlone(string? model, InstanceRow? row, Delivery delivery) => inner.SelectsAlone(model, row, delivery);
+        public bool RevisitsHeld(string? model, InstanceRow row, Delivery delivery) => inner.RevisitsHeld(model, row, delivery);
         public bool Withholds(InstanceRow row, ITurnServices services) => inner.Withholds(row, services);
         public TurnOutcome? Command(TurnInput input) => shape.Shape(inner.Command(input));
         public async ValueTask<TurnOutcome> TurnAsync(TurnInput input) => shape.Shape(await inner.TurnAsync(input))!;

@@ -4,12 +4,23 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Resolvers;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Testing;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
+using VariableDefinition = Elsa.Expressions.Core.Models.VariableDefinition;
+using VariableReference = Elsa.Expressions.Core.Models.VariableReference;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -124,6 +135,129 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.Equal("Elsa.Any", binding.Expression!.ResultType!.Id);
         Assert.Equal(source, binding.Expression.Expression);
         Assert.Null(binding.ConversionPlan);
+    }
+
+    public static IEnumerable<object[]> SetOutputWholeVariableAutoCases =>
+        from alias in new[] { "Int32", "System.Text.Json.JsonElement" }
+        from request in WholeVariableConversionTests.DefaultRequests
+        select new object[] { alias, request };
+
+    public static IEnumerable<object[]> SetOutputWholeVariableRefusalCases =>
+        from alias in new[] { "Int32", "System.Text.Json.JsonElement", "Object" }
+        from intent in WholeVariableConversionTests.ConversionIntents
+        select new object[] { alias, intent };
+
+    [Theory]
+    [MemberData(nameof(SetOutputWholeVariableAutoCases))]
+    public async Task A_dynamic_SetOutput_with_ordinary_Variable_Auto_publishes_and_executes_the_declared_output(string alias, string request)
+    {
+        var version = SetOutputVariableVersion(alias, WholeVariableConversionTests.Request(request));
+
+        var publication = await Handler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+
+        var executable = Assert.IsType<WorkflowExecutable>(await _store.FindAsync(publication.ArtifactId));
+        var binding = executable.RootActivity.InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
+        Assert.Equal(new ValueTypeDescriptor(alias), binding.TargetType);
+        Assert.Equal(("source", "workflow"), (binding.Variable!.VariableKey, binding.Variable.DeclaringScopeId));
+        Assert.Null(binding.ConversionRequest);
+        Assert.Equal(ValueConversionOperation.Identity, binding.ConversionPlan!.Operation);
+        var payload = alias == "Int32" ? JsonSerializer.SerializeToElement(7) : JsonSerializer.SerializeToElement(new { approved = true, count = 7 });
+
+        var output = await ExecutePublishedVariableSetOutputAsync(executable, alias, payload);
+
+        Assert.Equal(alias, output.Type.Id);
+        Assert.Equal(payload.GetRawText(), output.InlineValue!.Value.GetRawText());
+    }
+
+    [Theory]
+    [MemberData(nameof(SetOutputWholeVariableRefusalCases))]
+    public async Task A_dynamic_SetOutput_cannot_drop_meaningful_Variable_conversion_intent(string alias, string intent)
+    {
+        var version = SetOutputVariableVersion(alias, WholeVariableConversionTests.Request(intent));
+        var authored = JsonSerializer.Serialize(version.State);
+        var before = await CountPublishWritesAsync();
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Handler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+
+        var refusal = Assert.IsType<ValueConversionPublicationException>(exception.InnerException);
+        Assert.Equal(ValueConversionRejectionReason.VariableSourceContractUnknown, refusal.ReasonCode);
+        Assert.Equal(new ValueConversionBindingContext("set-output", WorkflowIntrinsicInputKeys.Value, ValueConversionBindingKind.Input), refusal.Binding);
+        Assert.Null(refusal.SourceType);
+        Assert.Null(refusal.SourceRepresentation);
+        Assert.Equal(before, await CountPublishWritesAsync());
+        Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+        Assert.Equal(authored, JsonSerializer.Serialize(version.State));
+    }
+
+    [Theory]
+    [InlineData("omitted")]
+    [InlineData("Auto")]
+    public async Task A_dynamic_SetOutput_Variable_preserves_the_open_Object_destination(string request)
+    {
+        var version = SetOutputVariableVersion("Object", WholeVariableConversionTests.Request(request));
+
+        var publication = await Handler(version).Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+
+        var executable = Assert.IsType<WorkflowExecutable>(await _store.FindAsync(publication.ArtifactId));
+        var binding = executable.RootActivity.InputBindings[WorkflowIntrinsicInputKeys.Value];
+        Assert.Equal(RuntimeInputBindingSource.VariableRead, binding.Source);
+        Assert.Equal("Elsa.Any", binding.TargetType.Alias);
+        Assert.Null(binding.ConversionPlan);
+    }
+
+    private static WorkflowDefinitionVersion SetOutputVariableVersion(string outputAlias, AuthoredValueConversionRequest? conversion)
+    {
+        var node = new ActivityNode("set-output", "elsa.intrinsic.set-output@1",
+        [
+            new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Name, new ArgumentValue(JsonSerializer.SerializeToElement("Count"), "Literal"), null, null, null, null),
+            new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, new ArgumentValue(new VariableReference("source", "workflow"), "Variable"), null, null, null, null, conversion)
+        ], [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("Elsa.Any"), null)
+        };
+        var version = WorkflowVersion(node);
+        version.State = version.State! with
+        {
+            Variables = [new VariableDefinition("source", "Source", new TypeReference(outputAlias == "Object" ? "System.Text.Json.JsonElement" : outputAlias), null, null)],
+            Outputs = [CountOutput with { Type = new TypeReference(outputAlias) }]
+        };
+        return version;
+    }
+
+    private static async Task<DurableValueState> ExecutePublishedVariableSetOutputAsync(WorkflowExecutable executable, string alias, JsonElement payload)
+    {
+        const string workflowId = "published-variable-output";
+        const string invocationId = "set-output-invocation";
+        var now = DateTimeOffset.UtcNow;
+        var workflows = new InMemoryWorkflowExecutionStateStore();
+        var activities = new InMemoryActivityExecutionStateStore();
+        await workflows.SaveAsync(new WorkflowExecutionState(workflowId, executable.Identity, WorkflowExecutionStatus.Running,
+            null, now, now, now, null, null, null, null, new Dictionary<string, string>())
+        {
+            RootVariableFrame = new VariableFrameFactory().CreateRoot(workflowId, "workflow",
+                new Dictionary<string, ValueEnvelope> { ["source"] = ValueEnvelope.Inline(new ValueTypeDescriptor(alias), payload, ValueProtectionPolicy.InstanceInline) })
+        });
+        var activity = new ActivityExecutionState(
+            new ActivityExecution(invocationId, workflowId, "set-output", "set-output", "elsa.intrinsic.set-output", "1.0.0"),
+            ActivityExecutionStatus.Scheduled, null, now, null, null, null, null, null, null, null, [], [], 0, 0,
+            new Dictionary<string, string>());
+        await activities.SaveAsync(activity);
+        var start = new RuntimeStartActivityCommandPayload(executable.Identity, "set-output", invocationId,
+            RuntimeStartActivityCommandPayload.ScheduledActivityReason);
+        var work = new RuntimeSchedulerWorkItem("start", workflowId, "command", WorkflowExecutionCommandKind.StartActivity,
+            "envelope", "published-variable-output-start", now, now, 1, JsonSerializer.SerializeToElement(start),
+            new Dictionary<string, string>(), new Dictionary<string, string>());
+        var executor = new WorkflowIntrinsicExecutor(workflows, activities, new RuntimeInputBindingResolver(),
+            new InMemoryDurableValueStateStore(), new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
+            TimeProvider.System, inputValidator: new WorkflowExecutableInputValidator(TestWellKnownTypeRegistry.Create()));
+
+        var commit = await executor.ExecuteAsync(work, start, executable, executable.RootActivity, activity);
+
+        Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(commit.StateChanges.ActivityExecutions).State.Status);
+        return Assert.Single(commit.StateChanges.DurableValues,
+            change => change.State.Metadata.GetValueOrDefault(RuntimeMetadataKeys.OutputName) == "Count").State;
     }
 
     private static ExpressionDefinition SetOutputExpression(TypeReference resultType, string source = "7") =>
