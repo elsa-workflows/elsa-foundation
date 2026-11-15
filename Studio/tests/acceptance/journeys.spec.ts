@@ -18,6 +18,7 @@ import { decisionsJourney } from "./decisionsJourney";
 import { settingsTabsJourney } from "./settingsTabsJourney";
 import { assertToastPlacementHolds, holdToastForPlacement, releaseToastPlacementHolds } from "./toastPlacementControl";
 import { structuredLogsJourney } from "./structuredLogsJourney";
+import { activityDataCopyJourney } from "./activityDataCopyJourney";
 import { activityDataMembersJourney } from "./activityDataMembersJourney";
 import { activityDataSourcesJourney } from "./activityDataSourcesJourney";
 import { chooseDataJourney } from "./chooseDataJourney";
@@ -672,6 +673,14 @@ test("workflow template metadata defaults", async ({ page }, info) => {
 
 test("executable designer parity", async ({ page }, info) => {
   await executableDesignerJourney(page, info, capture);
+});
+
+for (const [title, mode] of [
+  ["copy activity data pairs", "pairs"],
+  ["copy scoped and portable activity data", "scopes"],
+  ["preserve external activity references on copy", "external"]
+] as const) test(title, async ({ page }, info) => {
+  await activityDataCopyJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); }, mode);
 });
 
 test("choose nested activity data", async ({ page }, info) => {

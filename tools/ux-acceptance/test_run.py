@@ -39,6 +39,22 @@ class VerdictTests(unittest.TestCase):
             title = row['title']
             if title not in acceptance.DATA_JOURNEYS:
                 continue
+            if title in acceptance.COPY_JOURNEYS:
+                operations = {'copy activity data pairs': ['duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'],
+                              'copy scoped and portable activity data': ['duplicate-sequence-scope-portable'],
+                              'preserve external activity references on copy': ['consumer-only-valid', 'consumer-only-invalid']}[title]
+                run = {'consumerId': 'copied-consumer', 'producerId': 'copied-producer', 'expected': 'value', 'committed': 'value',
+                       'originalNeverRuns': True, 'executions': [{'authoredActivityId': id, 'status': 'Completed'} for id in ('copied-consumer', 'copied-producer')]}
+                proof = {'sourceSha': 'head', 'studioSha': 'head', 'composition': 'normal',
+                         'builtAssets': {'module.js': 'source-asset-hash'}, 'servedAssets': [{'sha256': 'source-asset-hash'}],
+                         'receipts': [{'operation': op, 'before': {'root': 'before'}, 'after': {'root': 'after'}, 'consumerId': 'copied-consumer'} for op in operations],
+                         'runtime': [copy.deepcopy(run) for _ in range(2 if title == 'copy activity data pairs' else 1)],
+                         'boundaries': [{'kind': 'resource-local'}, {'kind': 'invalid-publication-no-write', 'before': {str(i): {} for i in range(4)}, 'after': {str(i): {} for i in range(4)}}]
+                         if title == 'preserve external activity references on copy' else []}
+                file = self.root / (title.replace(' ', '-') + '.json'); file.write_text(json.dumps(proof))
+                for test in row['tests']:
+                    next(item for item in test['results'][0]['attachments'] if item['name'] == 'activity-data-copy-proof.json')['path'] = str(file)
+                continue
             member = {'expressionType': 'ActivityResultMember', 'value': {'producerNodeId': 'producer', 'projectionKey': 'Customer', 'isOptional': False, 'memberPath': ['customerId']}}
             scoped = [{'expressionType': 'VariableMember', 'value': {'referenceKey': key, 'declaringScopeId': scope, 'memberPath': ['a.b', '']}}
                       for key, scope in [('inner-payload', 'root'), ('outer-payload', 'workflow')]]
@@ -149,6 +165,19 @@ class VerdictTests(unittest.TestCase):
                     with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
                 finally: file.write_text(original)
         self.assertEqual(len(acceptance.PROJECTS) * len(acceptance.JOURNEYS), acceptance.verdict(self.report, self.root))
+
+    def test_copy_requires_copied_start_identity_and_unchanged_publication_stores(self):
+        for title, mutation in [('copy activity data pairs', 'original-ran'), ('copy activity data pairs', 'wrong-producer'),
+                                ('preserve external activity references on copy', 'store-changed')]:
+            with self.subTest(mutation=mutation):
+                file = self.root / (title.replace(' ', '-') + '.json'); original = file.read_text(); proof = json.loads(original)
+                if mutation == 'original-ran': proof['runtime'][0]['executions'].append({'authoredActivityId': 'producer', 'status': 'Completed'})
+                elif mutation == 'wrong-producer': proof['runtime'][0]['producerId'] = 'unexecuted-original'
+                else: proof['boundaries'][1]['after']['0']['count'] = 1
+                file.write_text(json.dumps(proof))
+                try:
+                    with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
+                finally: file.write_text(original)
 
     def test_missing_actual_browser_cancellation_cannot_pass(self):
         file = self.root / 'choose-nested-activity-data.json'; original = file.read_text(); proof = json.loads(original)

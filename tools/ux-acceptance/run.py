@@ -60,9 +60,18 @@ CAPTURES['native dashboard questions and sharing'] += (
     + ['dashboard-share-dependency-review-end', 'dashboard-copy-dependency-review-end', 'dashboard-copy-question-form',
        'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
 )
+COPY_JOURNEYS = {'copy activity data pairs', 'copy scoped and portable activity data', 'preserve external activity references on copy'}
+CAPTURES.update({
+    'copy activity data pairs': ['reference', *[f'{role}-{state}' for role in ('whole', 'member') for state in
+        ('original', 'duplicated', 'pasted', 'copied-start', 'reopened', 'runtime')], 'copy-reference-320'],
+    'copy scoped and portable activity data': ['reference', 'scope-copied-reference', 'portable-copied-preserved', 'switch-copied-condition'],
+    'preserve external activity references on copy': ['reference', 'external-valid-original', 'external-valid-copy',
+        'foreign-resource-clipboard-cleared', 'external-invalid-original', 'external-invalid-copy',
+        'invalid-publication-refused', 'invalid-reference-320'],
+})
 JOURNEYS = set(CAPTURES)
 MEMBER_JOURNEYS = {'choose nested activity data', 'choose declared and scoped activity data'}
-DATA_JOURNEYS = MEMBER_JOURNEYS | {'choose data for activity outputs'}
+DATA_JOURNEYS = MEMBER_JOURNEYS | COPY_JOURNEYS | {'choose data for activity outputs'}
 COMPOSITIONS = {'normal', 'minimal', 'default-off'}
 
 
@@ -96,7 +105,8 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
         for key in ('JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'):
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
-    **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS},
+    **{journey: {'activity-data-proof.json', 'activity-data-copy-proof.json'} for journey in COPY_JOURNEYS},
+    **{journey: {'activity-data-proof.json'} for journey in DATA_JOURNEYS - COPY_JOURNEYS},
     'choose nested activity data': {'activity-data-proof.json', 'customer-catalog.json'},
     'saved dashboard period comparison and membership': {'native-weaver-boundary.json', 'dashboard-comparison-oracle.json'},
     'native dashboard questions and sharing': {'native-weaver-boundary.json', 'reader-weaver-boundary.json', 'dashboard-native-oracle.json', 'dashboard-native-presentations.json', 'question-editor-preview-appearance-matrix.json', 'dashboards-collection-appearance-matrix.json', 'dashboard-and-dependency-dialogs-appearance-matrix.json', 'questions-collection-appearance-matrix.json'},
@@ -217,13 +227,55 @@ def verdict(report, artifacts, journeys=None, composition="normal"):
             file = Path(item.get('path', '')).resolve()
             if not file.is_relative_to(artifacts.resolve()) or not file.is_file() or not file.stat().st_size:
                 raise ValueError(f'{project} / {title}: missing or unsafe artifact {item.get("name")}')
-        if title in DATA_JOURNEYS:
+        if title in COPY_JOURNEYS:
+            activity_copy_verdict(title, attachments, composition)
+        elif title in DATA_JOURNEYS:
             activity_data_verdict(title, attachments, composition)
         if title == 'native dashboard questions and sharing':
             trace = next(item['path'] for item in attachments if item.get('name') == 'trace')
             if len(recorded_browser_contexts(trace)) < 2:
                 raise ValueError(f'{project} / {title}: independent owner and reader contexts are missing from the combined trace')
     return len(rows)
+
+
+def activity_copy_verdict(title, attachments, composition):
+    files = {item.get('name'): item.get('path') for item in attachments}
+    proof = json.loads(Path(files['activity-data-copy-proof.json']).read_text())
+    if proof.get('composition') != composition or not proof.get('sourceSha') or not proof.get('studioSha'):
+        raise ValueError('Copy proof lacks exact source/composition identity')
+    receipts, runs, boundaries = proof.get('receipts', []), proof.get('runtime', []), proof.get('boundaries', [])
+    expected_hashes = {sha for path, sha in proof.get('builtAssets', {}).items() if path.endswith('.js')}
+    if not expected_hashes or not any(item.get('sha256') in expected_hashes for item in proof.get('servedAssets', [])):
+        raise ValueError('Browser did not fetch the built source Workflows module bytes')
+    expected = {'copy activity data pairs': {'duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'},
+                'copy scoped and portable activity data': {'duplicate-sequence-scope-portable'},
+                'preserve external activity references on copy': {'consumer-only-valid', 'consumer-only-invalid'}}[title]
+    if len(receipts) != len(expected) or {item.get('operation') for item in receipts} != expected:
+        raise ValueError('Copy operation inventory incomplete')
+    if any(not item.get('before') or not item.get('after') or not item.get('consumerId') for item in receipts):
+        raise ValueError('Missing before/after copy identity')
+    expected_runs = 2 if title == 'copy activity data pairs' else 0 if composition == 'minimal' and title == 'copy scoped and portable activity data' else 1
+    if len(runs) != expected_runs or any(item.get('committed') != item.get('expected') for item in runs):
+        raise ValueError('Committed copy runtime inventory incomplete')
+    for run in runs:
+        ids = {execution['authoredActivityId']: execution['status'] for execution in run.get('executions', [])}
+        if ids.get(run['consumerId']) != 'Completed' or run.get('producerId') and ids.get(run['producerId']) != 'Completed':
+            raise ValueError('Copied producer/consumer did not complete')
+        if title == 'copy activity data pairs' and (run.get('originalNeverRuns') is not True or 'producer' in ids):
+            raise ValueError('Original producer ran; copied-start oracle did not prove the remap')
+    if title == 'preserve external activity references on copy':
+        if len(boundaries) != 2 or {item.get('kind') for item in boundaries} != {'resource-local', 'invalid-publication-no-write'}:
+            raise ValueError('Resource-local and invalid publication controls missing')
+        refused = next(item for item in boundaries if item['kind'] == 'invalid-publication-no-write')
+        if refused.get('before') != refused.get('after') or len(refused.get('before', {})) != 4:
+            raise ValueError('Publication boundary stores changed or were not read')
+    if composition == 'minimal':
+        preserved = next((item for item in boundaries if item.get('kind') == 'missing-language'), None)
+        if title == 'copy scoped and portable activity data' and (not preserved or not preserved.get('bodyPreservedWithRemappedIdentity')):
+            raise ValueError('Missing-language body/identity preservation proof missing')
+        observed = json.loads(Path(files['activity-data-proof.json']).read_text())
+        if any(re.search(r'expressioneditors?\.(javascript|liquid)|javascript.expression|liquid.expression', url, re.I) for url in observed.get('scripts', [])):
+            raise ValueError('Optional editor script requested in minimal copy proof')
 
 
 def validate_activity_admission(selection):
@@ -459,7 +511,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         if not (supplies_pr_head(ROOT, sha, head) or supplies_pr_head(studio_root, studio_sha, head)):
             raise ValueError('The claimed PR head supplied neither observed source tree nor a verified CI merge parent')
         studio_project = studio_root / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'
-        backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:2', '-nr:false', '-v:q', '-nologo']
+        backend_command = ['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=true', '-m:1', '-nr:false', '-v:q', '-nologo']
         if selected & DATA_JOURNEYS:
             fixture = ROOT / 'e2e-tests/activity-data-selection/fixtures/fixture.targets'
             backend_command.append(f'-p:CustomAfterMicrosoftCommonTargets={fixture}')
@@ -468,6 +520,8 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             fixture_built = True
         command(backend_command, output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
+        workflow_assets = fingerprints(studio_root / 'Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows')
+        report['workflowSourceAssets'] = workflow_assets
         report['stage'] = 'isolated-field-gallery'
         gallery = output / 'outlined-gallery'
         gallery_port = free_port()
@@ -483,7 +537,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             report['isolatedFieldGallery']['url'] = gallery_url
         report['stage'] = 'build'
 
-        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
+        command(['dotnet', 'build', str(studio_project), '-p:RestoreLockedMode=true', '-m:1', '-nr:false', '-v:q', '-nologo'], output / 'studio-build.log')
         with tempfile.TemporaryDirectory(prefix='elsa-ux-acceptance-') as temporary:
             data = Path(temporary)
             backend, studio = data / 'workbench', data / 'studio'
@@ -521,7 +575,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                     browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha,
-                                       UX_ACTIVITY_DATA_COMPOSITION=composition)
+                                       UX_ACTIVITY_DATA_COMPOSITION=composition, UX_ACCEPTANCE_OWNED_ROOT=str(data), UX_WORKFLOW_ASSET_SHA256S=json.dumps(workflow_assets))
                     browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                     if journey is not None:
                         # Playwright greps project/file/title together; anchor the exact final title.
@@ -542,11 +596,13 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         # TemporaryDirectory and nested host contexts have ended before removing the opt-in fixture build.
         if fixture_built:
             try:
-                command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-m:2', '-nr:false', '-v:q', '-nologo'], output / 'fixture-cleanup-build.log')
+                command(['dotnet', 'build', str(backend_project), '-p:RestoreLockedMode=true', '-p:ElsaDashboardQualification=false', '-m:1', '-nr:false', '-v:q', '-nologo'], output / 'fixture-cleanup-build.log')
                 dll = backend_project.parent / 'bin/Debug/net10.0/Elsa.Workbench.dll'
-                if b'ActivityDataSelectionProof' in dll.read_bytes():
-                    raise ValueError('Default Workbench still contains the opt-in customer fixture')
-                report['fixtureCleanup'] = {'status': 'passed', 'workbenchSha256': hashlib.sha256(dll.read_bytes()).hexdigest(), 'markerAbsent': True}
+                markers = ('DashboardQualificationBootstrap', 'QualificationPrincipals', 'DashboardQualificationServiceExclusions', 'ActivityDataSelectionProof')
+                marker_absence = {marker: marker.encode() not in dll.read_bytes() and marker.encode('utf-16-le') not in dll.read_bytes() for marker in markers}
+                if not all(marker_absence.values()):
+                    raise ValueError('Default Workbench still contains an opt-in customer fixture marker')
+                report['fixtureCleanup'] = {'status': 'passed', 'workbenchSha256': hashlib.sha256(dll.read_bytes()).hexdigest(), 'markerAbsent': True, 'markerAbsence': marker_absence}
                 if (sha, dirty) != source_state(ROOT) or (studio_sha, studio_dirty) != source_state(studio_root):
                     raise ValueError('Source changed during fixture cleanup')
             except Exception as error:
