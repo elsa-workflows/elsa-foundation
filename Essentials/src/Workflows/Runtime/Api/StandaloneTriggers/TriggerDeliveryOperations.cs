@@ -48,7 +48,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
                 if (scanned == 0 && cursor.SourceId == source.OutboxItemId && cursor.AfterTrigger is not null && StringComparer.Ordinal.Compare(owner, cursor.AfterTrigger) <= 0) continue;
                 var resource = await resources.FindAsync(access.Scope, owner, ct);
                 if (resource is null || !await access.HasAsync(TriggerPermissions.DeliveriesRead, resource.Trigger, ct)) continue;
-                output.Add(await ViewAsync(source, resource.Trigger, ct));
+                output.Add(await ViewAsync(source, resource, ct));
                 if (output.Count == limit)
                     return new(output, ProtectCursor(new(access.Subject, access.Scope, triggerId, sourceAfter, source.OutboxItemId, owner)));
             }
@@ -62,7 +62,7 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
         RequireInspection();
         var (source, owner) = await ResolveAsync(id, null, ct);
         var resource = await RequireResourceAsync(owner, TriggerPermissions.DeliveriesRead, ct);
-        return await ViewAsync(source, resource.Trigger, ct);
+        return await ViewAsync(source, resource, ct);
     }
 
     internal async ValueTask<TriggerPreview> PreviewAsync(string triggerId, JsonElement request, CancellationToken ct)
@@ -124,8 +124,9 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
                     message = "The source control receipt was committed; it does not assert workflow completion." }).ToArray());
     }
 
-    private async ValueTask<TriggerDeliveryView> ViewAsync(RuntimePostCommitOutboxItem source, StandaloneTrigger trigger, CancellationToken ct)
+    private async ValueTask<TriggerDeliveryView> ViewAsync(RuntimePostCommitOutboxItem source, TriggerAggregate resource, CancellationToken ct)
     {
+        var trigger = resource.Trigger;
         var delivery = source.SubscriptionDelivery!;
         var recipients = new List<TriggerRecipientView>();
         var accepted = delivery.Recipients.Where(item => Owns(source, item.SubscriptionId, trigger.Id)).ToArray();
@@ -164,9 +165,25 @@ internal sealed class TriggerDeliveryOperations(IStandaloneTriggerStore resource
                  new("CancelPendingRecipients", cancel && progress.Phase == RuntimeRecipientPhase.Pending,
                      progress.Phase == RuntimeRecipientPhase.Pending ? null : progress.Seal is not null ? "DispatchCommitted" : "NotEligible")], progress.RetryAt, progress.AttemptCount, targetDisplayName));
         }
-        recipients.AddRange(refused.Select(item => new TriggerRecipientView("refused:" + item.SubscriptionId, item.SubscriptionRevision,
-            item.SubscriptionId, null, null, null, "Refused", "NotDispatched", null, null,
-            [new(SafeCode(item.ReasonCode), "This association was refused during source admission.")], [])));
+        foreach (var item in refused)
+        {
+            // A matching immutable association revision proves its logical target; a later edit cannot rewrite admission history.
+            var association = resource.Subscriptions.SingleOrDefault(row => row.Id == item.SubscriptionId &&
+                row.TriggerId == trigger.Id && row.Revision == item.SubscriptionRevision);
+            TriggerTargetSelector? target = null; string? displayName = null; string? currentVersion = null;
+            var findings = new List<TriggerFinding> { new(SafeCode(item.ReasonCode), "This association was refused during source admission.") };
+            if (association is null)
+                findings.Add(new("AssociationDetailsUnavailable", "The association changed or its historical target details are unavailable."));
+            else if (await access.HasAsync("workflows/runtime:read", new TriggerTargetResource(association.DefinitionId, association.SlotName), ct))
+            {
+                target = new(association.DefinitionId, association.SlotName);
+                var current = await targets.DescribeAsync(access.Scope, association.DefinitionId, association.SlotName, ct);
+                displayName = current?.DisplayName; currentVersion = current?.Version;
+            }
+            else findings.Add(new("TargetDetailsRestricted", "Workflow details require ordinary workflow read permission."));
+            recipients.Add(new("refused:" + item.SubscriptionId, item.SubscriptionRevision, item.SubscriptionId, target,
+                null, currentVersion, "Refused", "NotDispatched", null, null, findings, [], TargetDisplayName: displayName));
+        }
         if (source.StandaloneIngress?.TriggerId == trigger.Id && delivery.WaitDelivery is { } waits)
             foreach (var wait in waits.Recipients) recipients.Add(await WaitViewAsync(wait, waits.Progress.Single(item => item.WaitId == wait.WaitId), ct));
         var capture = delivery.ResourceCaptures?.SingleOrDefault(item => item.TriggerId == trigger.Id);
