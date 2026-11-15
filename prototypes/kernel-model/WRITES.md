@@ -446,3 +446,8 @@ and bool datum1. The wide-key datum sizes remain11096/22120 with36624 WAL bytes 
 These are separate bounded samples. Headers, escapes, retained rows/receipts/bindings/indexes/WAL still
 cost storage and retain indefinitely; no universal byte count, expiry/tenant/default/budget or architecture
 adoption follows. The hardening A-F proposal remains held for its separately authorized later stage.
+
+The actual repaired delivery prefix6 repeat is a separate window: raw delete/retirement measured
+536/632 WAL bytes, 4 observed TCP edges each, retained tuple101 and bool datum1. Required metadata
+was33 physical State bytes, typed state11, and wide-key WAL36624. Those samples do not replace the
+qualified preparation512/656 window or establish universal constants.

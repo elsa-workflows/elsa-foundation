@@ -146,3 +146,7 @@ All 16 actual-current-main SQL Server driver/TCP rows match; retirement retains 
 +1 internal server statement. PostgreSQL bulk transport-edge variation remains explicit.
 TWO NEW completed independent nonauthor clean reviews remain required. Architecture/product/default/
 retention/budget choices and the later hardening A-F proposal remain unapproved/held.
+
+The actual repaired delivery prefix6 repeat separately measured raw/marker WAL536/632 at4 observed
+TCP edges each, tuple101/bool1, required metadata33 bytes and wide-key WAL36624. Earlier windows
+remain retained observations; no fixed write-cost promise follows.
