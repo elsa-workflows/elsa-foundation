@@ -875,6 +875,9 @@ def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
                              'StandaloneScheduleTriggerAuthoring', 'StandaloneScheduleTriggers',
                              'ActivitiesBpmnHosting', 'ActivitiesBpmnHostingApi', 'ActivitiesBpmnDirectPublishing', 'AcceptanceTriggerAuthoring'):
                     features[name] = {}
+                features['ActivitiesBpmnHosting']['AdmitNewExecutions'] = True
+                report['bpmnHosting'] = {'admitNewExecutions': True,
+                    'configuration': 'Owned host opt-in through the ordinary ActivitiesBpmnHosting manifest setting'}
                 # Qualify the actual single-node host here; causal multi-node delivery has a separate provider witness.
                 for name in ('WorkflowsRuntimeDistributed', 'WorkflowsRuntimeDistributedEntityFrameworkCorePersistence',
                              'WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence'):
