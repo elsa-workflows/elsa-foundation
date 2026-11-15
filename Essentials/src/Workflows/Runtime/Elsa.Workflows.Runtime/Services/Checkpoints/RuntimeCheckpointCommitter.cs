@@ -123,6 +123,8 @@ public sealed class RuntimeCheckpointCommitter
         // decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
+        if (commit.ExpectedInitialStartFault is not null && !_checkpointCommitStore.SupportsInitialStartFaultAdmission)
+            throw new NotSupportedException("The selected checkpoint store cannot atomically admit an accepted start's first fault.");
         if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)
             throw new NotSupportedException("The selected checkpoint store cannot atomically persist model state and accepted inputs.");
         if (commit.ExpectedModelExecution is not null && !_checkpointCommitStore.SupportsModelAdmission)

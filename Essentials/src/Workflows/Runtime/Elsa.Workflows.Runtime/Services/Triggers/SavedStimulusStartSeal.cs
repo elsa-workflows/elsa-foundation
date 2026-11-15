@@ -33,7 +33,8 @@ internal static class SavedStimulusStartSeal
     internal static void ValidateCommitOrigin(RuntimeCheckpointCommit commit)
     {
         if (!commit.Metadata.TryGetValue(OriginMetadata, out var marker)) return;
-        if (commit.Checkpoint.Name != Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted ||
+        if (!(commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted && commit.ExpectedInitialStartFault is null ||
+              commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowFaulted && commit.ExpectedInitialStartFault is not null) ||
             commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert, State.StimulusDeliveryOrigin: { } origin } ||
             marker != JsonSerializer.Serialize(origin))
             throw new InvalidDataException("Saved initial command authority requires its canonical physical workflow admission.");
