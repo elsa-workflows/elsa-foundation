@@ -58,7 +58,9 @@ async function savePublishAndConsume(j: TriggerJourney, authored: Authored, expe
 }
 
 export async function verifyDefaultAndNullWorkerEditor(j: TriggerJourney) {
-  const defaults = [{ ...input("message"), defaultValue: "worker default", defaultSyntax: "Literal" },
+  // Keep this producer distinct from earlier appearances while deliberately deduplicating its logical publication below.
+  const defaultMessage = `worker default ${j.stamp}`;
+  const defaults = [{ ...input("message"), defaultValue: defaultMessage, defaultSyntax: "Literal" },
     { ...input("count", "Int32"), defaultValue: 7, defaultSyntax: "Literal" }];
   const producer = await j.echo("Original default worker producer", defaults);
   const logicalName = "Logical default worker publication";
@@ -79,7 +81,7 @@ export async function verifyDefaultAndNullWorkerEditor(j: TriggerJourney) {
   await expect(j.page.getByLabel("Service input message source", { exact: true })).toHaveValue("Omit");
   await expect(j.page.getByLabel("Service input count source", { exact: true })).toHaveValue("Omit");
   await j.page.getByRole("button", { name: "Apply service input mapping", exact: true }).press("Enter");
-  const state = await savePublishAndConsume(j, defaultProcess, { message: "worker default", count: 7 });
+  const state = await savePublishAndConsume(j, defaultProcess, { message: defaultMessage, count: 7 });
   const element = (state.rootActivity.structure!.payload.elements as { elementId: string; properties: Record<string, string> }[]).find(item => item.elementId === "service")!;
   const mapping = JSON.parse(element.properties["elsa.direct.binding"]);
   expect(mapping.formatVersion).toBe(2); expect(mapping.inputs).toEqual({});
