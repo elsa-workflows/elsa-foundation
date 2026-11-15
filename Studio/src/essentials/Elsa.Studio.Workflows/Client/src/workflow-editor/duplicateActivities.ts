@@ -13,6 +13,7 @@ import {
   resolveScope,
   updateScopeOwner,
   type ActivityCatalogLookup,
+  type ChildSlot,
   type ScopeFrame
 } from "../workflowAdapter";
 import { compensationScopeStructureKind, compensationStepsSlotId } from "../compensationScope";
@@ -281,8 +282,7 @@ function rewriteActivityIds(activity: ActivityNode, catalog: ActivityCatalogLook
   let next = remapActivityReferences(activity, resolveCatalogItem(activity, catalog), activityIds);
   next = { ...next, nodeId: activityIds.get(activity.nodeId) ?? activity.nodeId };
   for (const slot of ownedChildSlots(activity, catalog)) {
-    next = replaceSlotActivities(next, slot,
-      slot.activities.map(child => rewriteActivityIds(child, catalog, activityIds, structureIds)), false);
+    next = rewriteOwnedSlot(next, slot, child => rewriteActivityIds(child, catalog, activityIds, structureIds));
   }
   if (!next.structure) return next;
   const payload = { ...next.structure.payload };
@@ -298,6 +298,26 @@ function rewriteActivityIds(activity: ActivityNode, catalog: ActivityCatalogLook
     if (Array.isArray(payload.sequenceFlows)) payload.sequenceFlows = payload.sequenceFlows.map(item => rewriteBpmnFlow(item, structureIds));
   }
   return { ...next, structure: { ...next.structure, payload } };
+}
+
+/** The designer projects only recognized children. Copy must retain raw unknown entries at the owned location. */
+function rewriteOwnedSlot(owner: ActivityNode, slot: ChildSlot, rewrite: (child: ActivityNode) => ActivityNode): ActivityNode {
+  if (!owner.structure) return owner;
+  const mapValue = (value: unknown) => slot.cardinality === "many" && Array.isArray(value)
+    ? value.map(child => isActivityNode(child) ? rewrite(child) : child)
+    : slot.cardinality === "single" && isActivityNode(value) ? rewrite(value) : value;
+  const payload = owner.structure.payload;
+  if (slot.collectionProperty && slot.childProperty && slot.collectionIndex !== undefined) {
+    const collection = payload[slot.collectionProperty];
+    if (!Array.isArray(collection)) return owner;
+    const item = collection[slot.collectionIndex];
+    if (!isRecord(item) || !(slot.childProperty in item)) return owner;
+    const nextCollection = [...collection];
+    nextCollection[slot.collectionIndex] = { ...item, [slot.childProperty]: mapValue(item[slot.childProperty]) };
+    return { ...owner, structure: { ...owner.structure, payload: { ...payload, [slot.collectionProperty]: nextCollection } } };
+  }
+  if (!(slot.property in payload)) return owner;
+  return { ...owner, structure: { ...owner.structure, payload: { ...payload, [slot.property]: mapValue(payload[slot.property]) } } };
 }
 
 function rewriteConnection(
@@ -425,6 +445,10 @@ function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLook
 
 function nodeIdPrefix(nodeId: string) {
   return nodeId.replace(/-[a-f0-9]{8}$/i, "") || nodeId;
+}
+
+function isActivityNode(value: unknown): value is ActivityNode {
+  return isRecord(value) && typeof value.nodeId === "string" && typeof value.activityVersionId === "string";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

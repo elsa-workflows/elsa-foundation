@@ -21,20 +21,20 @@ export function remapActivityReferences(node: ActivityNode, catalog: ActivityCat
     ? { ...value, ...(typeof value.declaringScopeId === "string" ? { declaringScopeId: scope(value.declaringScopeId) } : {}) } : value;
   const definition = (type: string, value: unknown): unknown => {
     if (!record(value)) return value;
-    switch (type) {
-      case "ActivityResult":
+    switch (type.toLowerCase()) {
+      case "activityresult":
         if (!readActivityResultReference(value) || value.memberPath != null || value.path != null
           || value.producerScopeId != null && !text(value.producerScopeId)
           || value.isOptional != null && typeof value.isOptional !== "boolean") return value;
         return { ...value, producerNodeId: activityIds.get(value.producerNodeId as string) ?? value.producerNodeId,
           ...(typeof value.producerScopeId === "string" ? { producerScopeId: scope(value.producerScopeId) } : {}) };
-      case "ActivityResultMember":
-        return readActivityDataMemberReference({ expressionType: type, value })
+      case "activityresultmember":
+        return readActivityDataMemberReference({ expressionType: "ActivityResultMember", value })
           ? { ...value, producerNodeId: activityIds.get(value.producerNodeId as string) ?? value.producerNodeId } : value;
-      case "Variable":
+      case "variable":
         return value.memberPath == null && value.path == null ? variable(value) : value;
-      case "VariableMember":
-        return readActivityDataMemberReference({ expressionType: type, value }) ? variable(value) : value;
+      case "variablemember":
+        return readActivityDataMemberReference({ expressionType: "VariableMember", value }) ? variable(value) : value;
     }
     // Closed non-expression roles never gain portable semantics because their business value looks like one.
     if (nonPortableRoles.has(type.toLowerCase())) return value;
@@ -61,7 +61,7 @@ export function remapActivityReferences(node: ActivityNode, catalog: ActivityCat
   const next: ActivityNode = { ...node,
     inputs: node.inputs.map(argument),
     // Outputs are write destinations: only a whole Variable capture owns a lexical scope here.
-    outputs: node.outputs.map(value => record(value) && record(value.value) && value.value.expressionType === "Variable"
+    outputs: node.outputs.map(value => record(value) && record(value.value) && typeof value.value.expressionType === "string" && value.value.expressionType.toLowerCase() === "variable"
       ? { ...value, value: { ...value.value, value: variable(value.value.value) } } : value) };
 
   // Expanded property locations are owned by the catalog, just as in ActivityPropertiesPanel. Unknown

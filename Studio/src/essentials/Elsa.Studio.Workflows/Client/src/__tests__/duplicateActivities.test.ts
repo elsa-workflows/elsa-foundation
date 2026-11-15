@@ -212,6 +212,44 @@ describe("reference-aware activity copies", () => {
     expect(copied.copies[1]).toEqual({ ...consumer, nodeId: copied.idMap.get("consumer") });
   });
 
+  it.each(["activityresult", "aCtIvItYrEsUlTmEmBeR", "variable", "vArIaBlEmEmBeR"])("remaps backend-valid discriminator casing %s without changing its spelling", spelling => {
+    for (const expanded of [false, true]) {
+      const consumer = leafNode("consumer");
+      const canonical = spelling.toLowerCase().startsWith("activityresult")
+        ? result(spelling.toLowerCase().endsWith("member") ? "ActivityResultMember" : "ActivityResult")
+        : variable("scope", spelling.toLowerCase().endsWith("member") ? "VariableMember" : "Variable");
+      const binding = { ...canonical, expressionType: spelling };
+      consumer.inputs = [argument(binding)];
+      const scope = sequenceNode("scope", [leafNode("producer"), consumer]);
+      const copied = copy([expanded ? expandStateFromWire({ rootActivity: scope }).rootActivity! : scope]);
+      const wire = canonicalizeStateForWire(copied.draft.state);
+      const child = ((wire.rootActivity!.structure!.payload.activities as ActivityNode[])[1].structure!.payload.activities as ActivityNode[])[1];
+      const expected = { ...binding, value: { ...binding.value,
+        ...(spelling.toLowerCase().startsWith("activityresult") ? { producerNodeId: copied.idMap.get("producer") } : { declaringScopeId: copied.idMap.get("scope") }) } };
+      expect(child.inputs).toEqual([argument(expected)]);
+    }
+  });
+
+  it("keeps opaque entries in a mixed Sequence array while remapping the recognized children", () => {
+    const consumer = leafNode("consumer"); consumer.inputs = [argument(result())];
+    const scope = sequenceNode("scope", [leafNode("producer"), consumer]);
+    const opaque = { kind: "future-child", payload: { nodeId: "producer" } };
+    scope.structure!.payload.activities = [null, opaque, leafNode("producer"), "future", consumer, 42];
+    const copied = copy([scope]);
+    const children = copied.copies[0].structure!.payload.activities as unknown[];
+    expect(children).toHaveLength(6);
+    expect([children[0], children[1], children[3], children[5]]).toEqual([null, opaque, "future", 42]);
+    expect(children[2]).toMatchObject({ nodeId: copied.idMap.get("producer") });
+    expect((children[4] as ActivityNode).inputs).toEqual([argument({ ...result(), value: { ...result().value, producerNodeId: copied.idMap.get("producer") } })]);
+  });
+
+  it.each([{ kind: "future-body", data: ["producer"] }, ["future-body"], "future-body"])("keeps an unrecognized single-child body opaque: %s", body => {
+    const each = forEachNode("each", null);
+    each.structure!.payload.body = body;
+    const copied = copy([each]);
+    expect(copied.copies[0].structure!.payload.body).toEqual(body);
+  });
+
   it("does not treat a structural connection ID as an activity producer or lexical scope", () => {
     const consumer = leafNode("consumer"); consumer.inputs = [argument(result("ActivityResult", "edge-only")), argument(variable("edge-only"), "other")];
     const nested = connectedFlowchart([leafNode("producer"), consumer], [{ from: "producer", to: "consumer", id: "edge-only" }]);
