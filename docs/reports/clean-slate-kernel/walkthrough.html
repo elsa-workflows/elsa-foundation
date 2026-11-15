@@ -487,7 +487,7 @@ ol.stmts code { font-size: 12.5px; }
   <div class="num">04</div>
   <h2>What is stored</h2>
   <p>Eight record kinds in the shared-store shape, shown as tables; EF and MongoDB implement equivalent records. The checkpoint holds owner state; the journal records committed history. Their current transaction inserts the recipient inbox with sender state, so this shape needs no separate outbox. The accepted provider-neutral rule records sends atomically with sender state and permits deduplicated later delivery through an outbox when cross-partition transactions are unavailable. Click a table.</p>
-  <p class="note">These cards use the sketch's proposed record names for the existing shared-store shape. Non-owner queries, including lists and counts, use read models in the proposed design. The <a href="log-profile-contract-sketch.md">round 5 H paper</a> separates that proposal from built behavior. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md">Storage model reference</a> maps the physical EF tables and MongoDB collections, with lifecycles, writers, indexes and retention costs.</p>
+  <p class="note">These cards use the sketch's proposed record names for the existing shared-store shape. Non-owner queries, including lists and counts, use read models in the proposed design. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/reports/clean-slate-kernel/log-profile-contract-sketch.md">round 5 H paper</a> separates that proposal from built behavior. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture/storage-model.md">Storage model reference</a> maps the physical EF tables and MongoDB collections, with lifecycles, writers, indexes and retention costs.</p>
   <div class="picker" id="data-picker" data-default="message">
   <figure>
     <div class="fig">
@@ -916,7 +916,7 @@ ol.stmts code { font-size: 12.5px; }
         <tr><td>Projector</td><td>an exporter that reads committed log records past its position</td></tr>
       </tbody>
     </table></div>
-    It touches two seams: <code>IKernelStore</code> and ownership in <code>IActorRuntime</code>. The <a href="log-profile-contract-sketch.md">round 5 H paper</a> proposes four contracts before code. The accepted send boundary records sends with sender state and permits deduplicated later delivery; logical per-virtual-partition journal positions remain distinct from physical log indexes.</div>
+    It touches two seams: <code>IKernelStore</code> and ownership in <code>IActorRuntime</code>. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/reports/clean-slate-kernel/log-profile-contract-sketch.md">round 5 H paper</a> proposes four contracts before code. The accepted send boundary records sends with sender state and permits deduplicated later delivery; logical per-virtual-partition journal positions remain distinct from physical log indexes.</div>
   <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
 </section>
 

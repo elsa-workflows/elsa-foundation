@@ -39,7 +39,7 @@
         <tr><td>Projector</td><td>an exporter that reads committed log records past its position</td></tr>
       </tbody>
     </table></div>
-    It touches two seams: <code>IKernelStore</code> and ownership in <code>IActorRuntime</code>. The <a href="log-profile-contract-sketch.md">round 5 H paper</a> proposes four contracts before code. The accepted send boundary records sends with sender state and permits deduplicated later delivery; logical per-virtual-partition journal positions remain distinct from physical log indexes.</div>
+    It touches two seams: <code>IKernelStore</code> and ownership in <code>IActorRuntime</code>. The <a href="https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/reports/clean-slate-kernel/log-profile-contract-sketch.md">round 5 H paper</a> proposes four contracts before code. The accepted send boundary records sends with sender state and permits deduplicated later delivery; logical per-virtual-partition journal positions remain distinct from physical log indexes.</div>
   <div class="principle"><strong>Inline execution</strong> is chosen per workflow or per route: a run that a request starts without a caller's key executes in that request until its first wait, under any persistence mode; a keyed start owned by another node answers over a reply address. Inline plus Ephemeral costs no database calls and no hop. Every profile supports it, because every node owns partitions to place a new instance in.</div>
 </section>
 
