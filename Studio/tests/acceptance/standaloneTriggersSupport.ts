@@ -164,6 +164,25 @@ export class TriggerJourney {
         this.requests.push({ kind: "association-row-visual-capture", capture: name, row: index, attachment: `${name}.association-${index}.png` });
       }
     }
+    if (["bpmn-worker-input-validation", "bpmn-worker-input-mapping"].includes(name)) {
+      const fields = this.page.getByRole("region", { name: "Service input mappings", exact: true }).locator("fieldset");
+      for (let index = 0; index < await fields.count(); index++) {
+        const field = fields.nth(index);
+        await field.scrollIntoViewIfNeeded();
+        const fieldPath = this.info.outputPath(`${name}.input-${index + 1}.png`);
+        await field.screenshot({ path: fieldPath, animations: "disabled" });
+        await this.info.attach(`${name}.input-${index + 1}.png`, { path: fieldPath, contentType: "image/png" });
+        this.requests.push({ kind: "bpmn-input-visual-capture", capture: name, input: index + 1, attachment: `${name}.input-${index + 1}.png` });
+      }
+    }
+    if (name === "bpmn-worker-input-reopened") {
+      const saved = this.page.getByRole("region", { name: "Saved service input mappings", exact: true });
+      await saved.scrollIntoViewIfNeeded();
+      const savedPath = this.info.outputPath(`${name}.saved-inputs.png`);
+      await saved.screenshot({ path: savedPath, animations: "disabled" });
+      await this.info.attach(`${name}.saved-inputs.png`, { path: savedPath, contentType: "image/png" });
+      this.requests.push({ kind: "bpmn-saved-inputs-visual-capture", capture: name, attachment: `${name}.saved-inputs.png` });
+    }
     const impact = this.page.getByRole("region", { name: "Change impact", exact: true });
     if (await impact.count() && await impact.evaluate(element => element.scrollWidth > element.clientWidth + 1)) {
       const before = await impact.evaluate(element => element.scrollLeft);
