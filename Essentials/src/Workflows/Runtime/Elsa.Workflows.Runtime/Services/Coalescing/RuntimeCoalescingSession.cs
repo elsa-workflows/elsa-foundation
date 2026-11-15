@@ -176,7 +176,7 @@ public sealed class RuntimeCoalescingSession
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
         if (!AppliesTo(commit.WorkflowExecutionId))
             throw new InvalidOperationException("A quiescence flush must belong to its active coalescing session.");
-        var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
+        var fingerprint = RuntimePreparedFlushIdentity.Compute(commit);
         if (PreparedQuiescenceFlushCommitId is { } prepared &&
             (prepared != commit.CommitId || _preparedQuiescenceFlushFingerprint != fingerprint))
             throw new InvalidOperationException("Resolve the prepared quiescence flush before preparing another.");
@@ -187,7 +187,7 @@ public sealed class RuntimeCoalescingSession
     // The committer validates this logical payload before adding its derived outbox writes and current fence.
     internal bool MatchesPreparedQuiescenceFlush(RuntimeCheckpointCommit commit) =>
         AppliesTo(commit.WorkflowExecutionId) && PreparedQuiescenceFlushCommitId == commit.CommitId &&
-        _preparedQuiescenceFlushFingerprint == RuntimeCheckpointCommitFingerprint.Compute(commit);
+        _preparedQuiescenceFlushFingerprint == RuntimePreparedFlushIdentity.Compute(commit);
 
     internal void EnsurePreparedFlushAllows(RuntimeCheckpointCommit commit)
     {

@@ -1,3 +1,4 @@
+using Elsa.Primitives.Models;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -174,6 +175,40 @@ public sealed class RuntimeHistoryCandidateTests
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(flush));
         Assert.True(session.HasBufferedChanges);
         Assert.True(session.IsActive);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Prepared_flush_preserves_exact_native_outcome_code_units(bool changed)
+    {
+        var original = new string((char)0xd800, 1);
+        var replacement = new string((char)0xd801, 1);
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        using var fixture = await Fixture.Create(Policy("ActivityCompleted", "ActivityContinuationCompleted"), coalescing: accessor);
+        ActivityCompletion Completion(string outcome) => new("activity", "attempt",
+            ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), outcome, At.AddSeconds(5), "contract");
+        var state = Activity(ActivityExecutionStatus.Completed) with { Completion = Completion(original) };
+        var logical = await fixture.Capture.EnrichAsync(Commit("buffered-exact", RuntimeCheckpointNames.ActivityCompleted, activity: state) with
+        {
+            HistorySourceFacts = [new(RuntimeHistorySourceFactKind.ActivityContinuationCompleted, "activity", At.AddSeconds(5),
+                activityExecutionId: "activity", outcomeNames: [original])]
+        });
+        var session = new RuntimeCoalescingSession("run", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
+        session.BufferDeferred(logical);
+        var flush = Commit("prepared-exact", RuntimeCoalescingMetadataKeys.FlushCheckpointName) with
+        { StateChanges = session.FoldBufferedStateChanges(), HistoryBatches = session.FoldHistoryBatchesWith() };
+        flush = flush with { Checkpoint = flush.Checkpoint with { Metadata = new Dictionary<string, string>
+            { [RuntimeCoalescingMetadataKeys.CoalescedFlush] = "true" } } };
+        session.PrepareQuiescenceFlush(flush);
+        using var current = accessor.Push(session);
+        if (changed)
+        {
+            var native = Assert.Single(flush.StateChanges.ActivityExecutions);
+            flush = flush with { StateChanges = new(null, null,
+                [native with { State = native.State with { Completion = Completion(replacement) } }], [], [], [], []) };
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(flush));
+        }
+        else await fixture.Capture.ValidateFinalAsync(flush);
     }
 
     [Fact]
