@@ -573,6 +573,7 @@ marker path.n { fill: var(--muted); }
         <li>Round 5, hardening before the proposal<span class="tech">range-owned virtual partitions · hand-owned commit SQL per provider · a stable effect key per activity attempt</span></li>
         <li>The design proposal, and the architecture docs</li>
         <li>Release 1</li>
+        <li>Later, an option: no external database for running work<span class="tech">a replicated log per partition, as in Camunda's Zeebe · planned, not designed</span></li>
       </ul>
       <p style="font-size:1.15rem"><a href="kernel-in-motion.html">The kernel in motion</a>: the full interactive explainer, the fence lab included.<br><a href="walkthrough.html">The walkthrough</a>: the design record.</p>
     </div>
@@ -1325,7 +1326,7 @@ const SLIDES = [
   { title: 'Persistence modes', steps: BEATS.length, render: renderS4, notes: i => BEATS[i].notes },
   { title: 'Database commands', steps: 3, render: renderS5, notes: i => S5NOTES[i] },
   { title: 'Why it is safe, and what is next', steps: 1, render: () => {},
-    notes: () => ['The fence is the conditional update inside every save: it lands only while the epoch and position are still the ones the owner expects.', 'Here Node A paused past its lease, Node B took the partition and raised the epoch to 9, so Node A\'s stale save changes 0 rows, rolls back, and nothing from it lands.', 'Next: round 5\'s hardening, then the design proposal with the architecture docs, then release 1.'] },
+    notes: () => ['The fence is the conditional update inside every save: it lands only while the epoch and position are still the ones the owner expects.', 'Here Node A paused past its lease, Node B took the partition and raised the epoch to 9, so Node A\'s stale save changes 0 rows, rolls back, and nothing from it lands.', 'Next: round 5\'s hardening, then the design proposal with the architecture docs, then release 1.', 'Later, an option: because every save goes through one storage contract and each partition has one writer, running work could live in a replicated log per partition, as in Camunda\'s Zeebe, instead of in a database. Lists and reports would still read from a separate store, and the contract needs splitting first. Planned, not designed.'] },
 ];
 const slideEls = SLIDES.map((_, j) => $('s' + (j + 1)));
 const step = SLIDES.map(() => 0);
