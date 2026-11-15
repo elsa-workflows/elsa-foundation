@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
@@ -57,7 +59,8 @@ TRIGGER_CAPTURES = {
         'http-accepted-subscriber-owed', 'http-accepted-subscriber-recovered', 'http-response-write-failed'],
     'standalone delivery lifecycle and recovery': ['delivery-admission', 'delivery-subscriber-outcomes', 'delivery-captured-version', 'target-unpublished', 'pending-cancel-review', 'pending-cancelled', 'delivery-dispatch-committed', 'cancel-dispatch-committed', 'delivery-partial-failure', 'delivery-recovered', 'delivery-concurrent-claims', 'delivery-concurrent-peer-started',
         'delivery-native-inspect-actual-run-delivery-link', 'delivery-native-inspect-actual-run', 'delivery-resource-delete-review',
-        'delivery-held-cohort', 'deleted-trigger-retry-review', 'deleted-trigger-delivery-controls'],
+        'delivery-held-cohort', 'deleted-trigger-retry-review', 'deleted-trigger-delivery-controls',
+        'delivery-before-initial-checkpoint-recovered', 'delivery-committed-checkpoint-ack-lost-recovered'],
     'standalone genuine BPMN inputs': ['bpmn-worker-input-mapping', 'bpmn-worker-input-validation', 'bpmn-worker-input-reopened', 'bpmn-declared-input-run', 'bpmn-worker-input-consumed', 'bpmn-declared-input-run-delivery-link', 'bpmn-workflow-live-triggers'],
     'standalone access and availability': ['triggers-read-only', 'triggers-denied', 'triggers-other-tenant', 'trigger-source-owned',
         'trigger-backend-scope-switch', 'triggers-scope-response-isolated', 'trigger-module-unavailable', 'trigger-capability-unavailable', 'trigger-contract-incompatible',
@@ -398,6 +401,37 @@ class OwnedBackend:
         finally:
             self.stop_studio()
 
+    def checkpoint_marker(self):
+        path = self.directory / 'checkpoint-crash' / 'cut.json'
+        marker = json.loads(path.read_text()) if path.exists() else None
+        if marker and (self.process is None or marker.get('processId') != self.process.pid or
+                       marker.get('sourceRevision') != self.env['UX_SOURCE_SHA'] or marker.get('cut') != self.checkpoint_cut):
+            raise ValueError('The checkpoint marker is not from this exact owned process and source')
+        return marker
+
+    def checkpoint_snapshot(self, marker):
+        # Read-only physical evidence after owned process death, and again after normal recovery.
+        # No timestamp, queue claim, lease, state, marker or outbox writes are made here.
+        encoded = base64.b64encode(marker['workflowExecutionId'].encode('utf-16-le')).decode('ascii')
+        with sqlite3.connect((self.directory / 'elsa.db').as_uri() + '?mode=ro', uri=True) as database:
+            states = database.execute('SELECT ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?', (encoded,)).fetchall()
+            all_states = database.execute('SELECT WorkflowExecutionId, ContentJson FROM elsa_runtime_workflow_execution_state').fetchall()
+            commits = database.execute('SELECT CommitId FROM elsa_runtime_checkpoint_commit WHERE WorkflowExecutionId = ?', (encoded,)).fetchall()
+            queue = database.execute('SELECT WorkItemId, ContentJson FROM elsa_runtime_scheduler_work_item WHERE WorkflowExecutionId = ?', (encoded,)).fetchall()
+        decode = lambda value: base64.b64decode(value, validate=True).decode('utf-16-le')
+        origins = []
+        for row in states:
+            origin = json.loads(row[0]).get('ingressOrigin')
+            origins.append({key: decode(origin[key]) for key in ('sourceOutboxItemId', 'recipientId', 'sourceFingerprint', 'selectionFingerprint')} if origin else None)
+        source_executions = []
+        for row in all_states:
+            origin = json.loads(row[1]).get('ingressOrigin')
+            if origin and decode(origin['sourceOutboxItemId']) == marker['sourceOutboxItemId'] and decode(origin['recipientId']) == marker['origin']['recipientId']:
+                source_executions.append(decode(row[0]))
+        return {'sourceExecutionIds': source_executions, 'workflowExecutionId': marker['workflowExecutionId'], 'stateCount': len(states), 'origins': origins,
+                'commitIds': [decode(row[0]) for row in commits],
+                'queuedCommands': [{'workItemId': decode(row[0]), 'commandKind': json.loads(row[1])['commandKind']} for row in queue]}
+
     def execute(self, request):
         if self.closing.is_set(): raise InterruptedError("Owned backend teardown has begun")
         if request.get('token') != self.token:
@@ -410,12 +444,56 @@ class OwnedBackend:
         peer = None
         concurrent = None
         fault = None
+        checkpoint = None
         if action in ('pause', 'resume'):
             if self.process is None or self.process.poll() is not None:
                 raise ValueError('The owned backend is not running')
             os.killpg(self.process.pid, signal.SIGSTOP if action == 'pause' else signal.SIGCONT)
         elif action == 'stop':
             self.stop()
+        elif action == 'arm-checkpoint-crash':
+            trigger_id, source_key, cut = request.get('triggerId'), request.get('sourceKey'), request.get('checkpointCut')
+            if (not isinstance(trigger_id, str) or not trigger_id or len(trigger_id) > 128 or
+                not isinstance(source_key, str) or not source_key or len(source_key) > 128 or
+                cut not in ('BeforeInitialCheckpoint', 'AfterInitialCheckpointCommit')):
+                raise ValueError('An exact real trigger, source key and supported checkpoint cut are required')
+            self.stop()
+            self.checkpoint_cut = cut
+            directory = self.directory / 'checkpoint-crash'
+            if directory.is_symlink(): raise ValueError('The checkpoint directory cannot be symbolic')
+            directory.mkdir(exist_ok=True)
+            (directory / 'cut.json').unlink(missing_ok=True)
+            shells = json.loads(self.original)
+            shells['CShells']['Shells']['default']['Features']['AcceptanceTriggerCheckpointCrash'] = {
+                'OwnerToken': self.token, 'SourceRevision': self.env['UX_SOURCE_SHA'],
+                'TriggerId': trigger_id, 'SourceKey': source_key, 'Cut': cut}
+            (self.directory / 'shells.json').write_text(json.dumps(shells))
+            (self.directory / '.ux-acceptance-owner.json').write_text(json.dumps({'ownerToken': self.token, 'checkpointFixture': True}))
+            self.start()
+        elif action == 'recover-checkpoint-crash':
+            deadline = time.monotonic() + 45
+            while not (marker := self.checkpoint_marker()):
+                if time.monotonic() >= deadline: raise TimeoutError('The actual initial checkpoint transaction cut was not observed')
+                time.sleep(.1)
+            self.kill()
+            killed_at = datetime.now(timezone.utc).isoformat()
+            physical = self.checkpoint_snapshot(marker)
+            if marker['checkpointTransactionCommitted']:
+                if (physical['stateCount'] != 1 or marker['commitId'] not in physical['commitIds'] or
+                    physical['origins'] != [marker['origin']]):
+                    raise ValueError('The committed checkpoint and immutable origin were not physically retained after process death')
+            elif physical['stateCount'] != 0 or physical['commitIds'] or not any(item['commandKind'] == 'Checkpoint' for item in physical['queuedCommands']):
+                raise ValueError('The uncommitted checkpoint did not leave its durable native queue and no state/marker after process death')
+            self.checkpoint_previous_marker = marker
+            (self.directory / 'shells.json').write_text(self.original)
+            deadline = time.monotonic() + 61
+            self.start()
+            while time.monotonic() < deadline:
+                time.sleep(max(.001, min(.25, deadline - time.monotonic())))
+            checkpoint = {'cut': marker, 'physicalAfterDeath': physical, 'killedAt': killed_at,
+                          'stopSignal': 'SIGKILL', 'naturalLeaseWaitSeconds': 61, 'leaseMutated': False, 'clockChanged': False}
+        elif action == 'inspect-checkpoint-recovery':
+            checkpoint = {'cut': self.checkpoint_previous_marker, 'physicalAfterRecovery': self.checkpoint_snapshot(self.checkpoint_previous_marker)}
         elif action == 'arm-trigger-fault':
             trigger_id, mode = request.get('triggerId'), request.get('faultMode')
             if not isinstance(trigger_id, str) or not trigger_id or len(trigger_id) > 128 or mode not in ('SourceWriteRefused', 'DispatchShed', 'ResponseWriteFailed'):
@@ -466,7 +544,7 @@ class OwnedBackend:
                 'FoundationIdentityAspNetCoreIdentityEntityFrameworkCore', 'FoundationIdentityOpenIddict', 'FoundationIdentityOidc',
                 'StandaloneTriggersApi', 'AcceptanceTriggerAuthoring', 'StudioPreferences', 'StudioPreferencesApi', 'StudioPreferencesEntityFrameworkCore'}
             design = {'WorkflowsDesignApi', 'WorkflowDesignValidations', 'WorkflowsDesignEntityFrameworkCore',
-                'ActivitiesDesignApi', 'ActivitiesDesignEntityFrameworkCore', 'ActivitiesGraphDesign', 'ActivitiesGraphRuntime',
+                'ActivitiesDesignApi', 'ActivitiesDesignEntityFrameworkCore', 'ActivitiesGraphRuntime',
                 'ActivitiesRuntime', 'ActivitiesSequence', 'StandaloneEventTriggerAuthoring'}
             runtime = {'WorkflowsRuntimeApi', 'WorkflowsRuntimeEntityFrameworkCore', 'WorkflowsRuntimeCheckpointPersistence',
                 'WorkflowsRuntimeDistributed', 'WorkflowsRuntimeDistributedEntityFrameworkCorePersistence',
@@ -627,6 +705,8 @@ class OwnedBackend:
             receipt['scopePeer'] = peer
         if concurrent is not None:
             receipt['concurrent'] = concurrent
+        if checkpoint is not None:
+            receipt['checkpoint'] = checkpoint
         if fault is not None:
             receipt['fault'] = fault
         self.receipts.append(receipt)
