@@ -94,6 +94,11 @@ export class TriggerJourney {
   }
   async capture(name: string, focus?: Locator) {
     await expect(this.page.getByText("Loading Studio modules…", { exact: true })).toHaveCount(0);
+    // These child panels are never the intentional collection-loading witness.
+    const surface = this.page.getByRole("tabpanel");
+    for (const label of ["Loading live trigger associations", "Loading trigger deliveries"]) {
+      await expect(surface.getByLabel(label, { exact: true })).toHaveCount(0);
+    }
     if (name === "workflow-live-triggers" || name === "bpmn-workflow-live-triggers") {
       const associations = this.page.getByRole("region", { name: "Workflow subscriptions", exact: true });
       await associations.scrollIntoViewIfNeeded();
