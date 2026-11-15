@@ -12,6 +12,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Endpoints;
 [JsonSerializable(typeof(BpmnImportAnalysis))]
 [JsonSerializable(typeof(BpmnImportResult))]
 [JsonSerializable(typeof(ExportBpmnDocumentResult))]
+[JsonSerializable(typeof(BpmnDocumentAuthoringCapabilities))]
 [JsonSerializable(typeof(BpmnInterchangeError))]
 internal partial class BpmnInterchangeJsonContext : JsonSerializerContext
 {

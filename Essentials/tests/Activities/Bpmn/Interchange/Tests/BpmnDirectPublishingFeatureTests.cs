@@ -31,7 +31,8 @@ public sealed class BpmnDirectPublishingFeatureTests
         if (enabled) publishing.MapEndpoints(app, null);
         var routes = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>().Select(endpoint => endpoint.RoutePattern.RawText).ToArray();
-        Assert.Equal(enabled ? 4 : 3, routes.Length);
+        Assert.Equal(enabled ? 5 : 4, routes.Length);
+        Assert.Single(routes, route => route!.EndsWith("interchange/bpmn/authoring-capabilities", StringComparison.Ordinal));
         Assert.Equal(enabled, routes.Any(route => route!.EndsWith("publish-direct", StringComparison.Ordinal)));
         var capabilities = app.Services.GetServices<ApiCapabilityDeclaration>()
             .Where(value => value.CapabilityId == "elsa.api.bpmn-publishing").ToArray();

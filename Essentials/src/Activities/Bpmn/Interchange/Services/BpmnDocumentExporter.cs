@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Exceptions;
 using Elsa.Activities.Bpmn.Interchange.Models;
+using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -29,6 +30,10 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// conversion or output settings. Every binding left out is reported for its element. <see cref="Export"/> has no catalog,
 /// so it carries none.
 /// </para>
+/// <para>
+/// Complete-source schema2 export returns its canonical XML directly. Disjoint native bindings and scope/process
+/// configuration are not added to that XML; <see cref="ExportAsync"/> reports those omissions explicitly.
+/// </para>
 /// </summary>
 public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = null) : IBpmnDocumentExporter
 {
@@ -40,12 +45,14 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
     public string Export(ActivityNode processNode, BpmnExportOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(processNode);
+        if (IsCompleteSource(processNode)) return CompleteSourceExport(processNode, options).Xml;
         return Write(ReadStructure(processNode), processNode, options, new Dictionary<string, LibModel.BpmnForeignAttribute>(StringComparer.Ordinal));
     }
 
     public async Task<BpmnExportResult> ExportAsync(ActivityNode processNode, BpmnExportOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(processNode);
+        if (IsCompleteSource(processNode)) return CompleteSourceExport(processNode, options);
         var structure = ReadStructure(processNode);
         var carried = new Dictionary<string, LibModel.BpmnForeignAttribute>(StringComparer.Ordinal);
         var omissions = new List<BpmnExportOmission>();
@@ -85,6 +92,25 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
         }
 
         return new(Write(structure, processNode, options, carried), omissions);
+    }
+
+    private static bool IsCompleteSource(ActivityNode node) => node.Structure is
+        { Kind: BpmnProcessActivity.StructureKind, SchemaVersion: BpmnAuthoredDocument.SchemaVersion };
+
+    private static BpmnExportResult CompleteSourceExport(ActivityNode owner, BpmnExportOptions? options)
+    {
+        BpmnAuthoredDocument source;
+        try { source = BpmnDocumentStructureHandler.Read(owner); }
+        catch (InvalidOperationException exception)
+        { throw new BpmnInterchangeException($"Invalid complete BPMN export source '{owner.NodeId}': {exception.Message}", exception); }
+        if (options?.ProcessId is { } requested && requested != source.ProcessId)
+            throw new BpmnInterchangeException("Complete-source export preserves authored process IDs; renaming requires an explicit source/reference transform.");
+        var omissions = source.Bindings.Select(binding => new BpmnExportOmission(binding.ElementId, "native-configuration-not-exported",
+            "The complete BPMN XML is retained. Disjoint Elsa child/listener versions, inputs, outputs, native subtrees and scoped references are not embedded in shared XML.")).ToList();
+        omissions.AddRange(source.ScopeHeaders.Select(header => new BpmnExportOmission(header.ScopeElementId, "scope-configuration-not-exported",
+            "The standard XML body is retained; its Elsa invocation header and scoped variable configuration are not embedded in shared XML.")));
+        omissions.Add(new(source.ProcessId, "process-configuration-not-exported", "The exact Elsa process activity version, arguments, scoped variables and invocation configuration are not embedded in shared XML."));
+        return new(source.DocumentXml, omissions);
     }
 
     /// <summary>Every task (in this process and its nested subprocesses) bound to an author-chosen child, and every element id in all scopes.</summary>
@@ -345,7 +371,17 @@ public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = nu
     {
         if (!StringComparer.Ordinal.Equals(processNode.Structure?.Kind, BpmnProcessActivity.StructureKind))
             throw new BpmnInterchangeException($"Activity node '{processNode.NodeId}' does not carry an '{BpmnProcessActivity.StructureKind}' structure.");
+        if (!StringComparer.Ordinal.Equals(processNode.Structure.SchemaVersion, BpmnProcessActivity.StructureSchemaVersion))
+            throw new BpmnInterchangeException($"Activity node '{processNode.NodeId}' has unsupported authoring schema '{processNode.Structure.SchemaVersion}'; legacy BPMN export requires '{BpmnProcessActivity.StructureSchemaVersion}'.");
 
+        try
+        {
+            BpmnLegacyStructureGuard.RejectCompleteSourceFields(processNode.Structure.Payload);
+        }
+        catch (JsonException exception)
+        {
+            throw new BpmnInterchangeException($"Activity node '{processNode.NodeId}' cannot be read as legacy BPMN: {exception.Message}", exception);
+        }
         return processNode.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)
                ?? throw new BpmnInterchangeException($"Activity node '{processNode.NodeId}' structure resolved to null.");
     }
