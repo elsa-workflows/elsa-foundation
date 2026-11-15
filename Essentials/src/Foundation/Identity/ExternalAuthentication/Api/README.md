@@ -121,6 +121,10 @@ Security events use closed action/result categories, the canonical actor, target
 They omit external authorization codes, browser state, secrets and private credential/recovery bindings. Sink
 failure is contained after a committed operation and cannot undo it or expose its exception through the API.
 
+The optional [Studio module](../../../../../../Extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/README.md)
+consumes this contract for Security → External sign-in and User access. Its contribution availability follows
+selected backend, module, ownership and current permission state. The API package itself does not install it.
+
 ## Source-preparation boundary
 
 This prefix contains protocol/chooser/preview, canonical session integration, connection management and

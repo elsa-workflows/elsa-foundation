@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Studio.Identity.ExternalAuthentication.ExternalAuthenticationStudioFeature
+Elsa.Studio.Identity.ExternalAuthentication.ExternalAuthenticationStudioFeature.ExternalAuthenticationStudioFeature() -> void
+virtual Elsa.Studio.Identity.ExternalAuthentication.ExternalAuthenticationStudioFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
