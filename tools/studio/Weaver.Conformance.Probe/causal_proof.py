@@ -283,14 +283,30 @@ def parse_trx(path: Path, recipe: Recipe) -> tuple[list[dict], dict]:
     if any(int(counters.get(kind, "0")) for kind in ("error", "timeout", "aborted", "inconclusive", "passedButRunAborted",
             "notRunnable", "notExecuted", "disconnected", "inProgress", "pending")):
         raise ProofFailure("TRX contains unfinished, skipped, or infrastructure outcomes.")
-    if any(info.get("outcome", "").lower() in ("error", "failed", "aborted")
-            for info in tree.findall("./{*}ResultSummary/{*}RunInfos/{*}RunInfo")):
-        raise ProofFailure("TRX contains a run-level failure in addition to assertions.")
     for kind in ("passed", "failed"):
         if int(counters.get(kind, "-1")) != observed[kind]:
             raise ProofFailure("TRX verdict counters disagree with executions.")
     if len(definitions) != len(rows) or len(binaries) != 1 or not next(iter(binaries), None):
         raise ProofFailure("TRX definitions or test binary identity are incomplete.")
+    # The xUnit adapter also logs each failed selected row as an Error RunInfo.
+    # Recognize only that observed single-line announcement, one-to-one with
+    # actual failed executions; every other run-level failure remains fatal.
+    announcements = []
+    for info in tree.findall("./{*}ResultSummary/{*}RunInfos/{*}RunInfo"):
+        if info.get("outcome", "").lower() not in ("error", "failed", "aborted"):
+            continue
+        texts = info.findall("{*}Text")
+        match = re.fullmatch(r"\[xUnit\.net [0-9]{2}:[0-5][0-9]:[0-5][0-9]\.[0-9]{2}\] {5}([^\r\n]+) \[FAIL\]",
+            texts[0].text or "") if len(texts) == 1 else None
+        if (info.get("outcome") != "Error" or len(info) != 1 or len(texts) != 1 or len(texts[0]) != 0
+                or texts[0].attrib or (info.text or "").strip() or (texts[0].tail or "").strip()):
+            raise ProofFailure("TRX contains a run-level failure in addition to assertions.")
+        if not match or match.group(1) not in recipe.names():
+            raise ProofFailure("TRX contains a run-level failure in addition to assertions.")
+        announcements.append(match.group(1))
+    failed_rows = Counter(row["name"] for row in rows if row["status"] == "failed")
+    if announcements and (Counter(announcements) != failed_rows or any(count != 1 for count in failed_rows.values())):
+        raise ProofFailure("TRX failure announcements do not match failed selected executions one-to-one.")
     return rows, {"rawCounters": dict(counters.attrib), "testBinary": next(iter(binaries))}
 
 

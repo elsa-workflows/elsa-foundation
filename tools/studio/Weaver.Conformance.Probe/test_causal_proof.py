@@ -262,6 +262,112 @@ class ReportControls(unittest.TestCase):
         ET.ElementTree(tree).write(path)
         with self.assertRaises(proof.ProofFailure): proof.parse_trx(path, recipe)
 
+    def run_infos(self, tree, texts, outcome="Error"):
+        infos = ET.SubElement(tree.find("./ResultSummary"), "RunInfos")
+        for text in texts:
+            info = ET.SubElement(infos, "RunInfo", outcome=outcome, computerName="synthetic-runner")
+            ET.SubElement(info, "Text").text = text
+        return infos
+
+    def announcements(self, rows):
+        # Exact shape observed in the retained 542bd297 TRX: Error RunInfo,
+        # timestamp, five spaces, exact failed UnitTestResult name, then [FAIL].
+        return ["[xUnit.net 00:00:00.71]     " + row["name"] + " [FAIL]" for row in rows if row["status"] == "failed"]
+
+    def test_real_shape_xunit_error_announcements_correlate_one_to_one_without_changing_rows(self):
+        for recipe in proof.RECIPES:
+            if recipe.scope != "dotnet": continue
+            with self.subTest(recipe=recipe.id):
+                expected = records(recipe)
+                path, tree = self.trx(recipe, expected)
+                tree.set("xmlns", "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")
+                self.run_infos(tree, self.announcements(expected))
+                ET.ElementTree(tree).write(path)
+                actual, metadata = proof.parse_trx(path, recipe)
+                self.assertEqual(expected, actual)
+                self.assertEqual(len(expected), int(metadata["rawCounters"]["executed"]))
+                self.assertEqual(len(recipe.failed_names()), proof.assess(recipe, "mutated", 1, actual)["failed"])
+
+    def test_xunit_announcements_never_hide_infrastructure_counters(self):
+        recipe = proof.RECIPES[0]
+        for counter in ("error", "timeout", "aborted", "inconclusive", "passedButRunAborted", "notRunnable",
+                "notExecuted", "disconnected", "inProgress", "pending"):
+            with self.subTest(counter=counter):
+                expected = records(recipe)
+                path, tree = self.trx(recipe, expected)
+                self.run_infos(tree, self.announcements(expected))
+                tree.find("./ResultSummary/Counters").set(counter, "1")
+                ET.ElementTree(tree).write(path)
+                with self.assertRaises(proof.ProofFailure): proof.parse_trx(path, recipe)
+
+    def test_extra_duplicate_missing_passed_foreign_and_multiline_announcements_remain_fatal(self):
+        recipe = next(recipe for recipe in proof.RECIPES if recipe.id == "write-admission")
+        expected = records(recipe)
+        originals = self.announcements(expected)
+        passed = next(row["name"] for row in expected if row["status"] == "passed")
+        scenarios = [
+            originals + [originals[0]],
+            originals[:-1],
+            [originals[0]] + originals[:-1],
+            ["[xUnit.net 00:00:00.71]     " + passed + " [FAIL]"] + originals[1:],
+            ["[xUnit.net 00:00:00.71]     Foreign.test [FAIL]"] + originals[1:],
+            originals + ["The test host process crashed."],
+            [originals[0] + "\nSystem.InvalidOperationException: synthetic setup failure"] + originals[1:],
+            [originals[0] + "\n"] + originals[1:],
+            [originals[0] + " additional error"] + originals[1:],
+            [originals[0].replace("     ", "    ", 1)] + originals[1:],
+            [originals[0].replace("00:00:00.71", "invalid timestamp")] + originals[1:],
+        ]
+        for index, announcements in enumerate(scenarios):
+            with self.subTest(scenario=index):
+                path, tree = self.trx(recipe, expected)
+                self.run_infos(tree, announcements)
+                ET.ElementTree(tree).write(path)
+                with self.assertRaises(proof.ProofFailure): proof.parse_trx(path, recipe)
+
+    def test_nonerror_outcomes_and_malformed_text_cannot_be_classified_as_failure_echoes(self):
+        recipe = proof.RECIPES[0]
+        expected = records(recipe)
+        for outcome in ("Failed", "Aborted", "error"):
+            with self.subTest(outcome=outcome):
+                path, tree = self.trx(recipe, expected)
+                self.run_infos(tree, self.announcements(expected), outcome)
+                ET.ElementTree(tree).write(path)
+                with self.assertRaises(proof.ProofFailure): proof.parse_trx(path, recipe)
+        for malformed in ("missing", "duplicate", "nested", "extra-child", "mixed-before", "mixed-after", "text-attribute"):
+            with self.subTest(malformed=malformed):
+                path, tree = self.trx(recipe, expected)
+                infos = self.run_infos(tree, self.announcements(expected))
+                info = infos[0]
+                if malformed == "missing": info.remove(info.find("Text"))
+                if malformed == "duplicate": ET.SubElement(info, "Text").text = self.announcements(expected)[0]
+                if malformed == "nested": ET.SubElement(info.find("Text"), "Failure").text = "synthetic extra error"
+                if malformed == "extra-child": ET.SubElement(info, "Failure").text = "synthetic extra error"
+                if malformed == "mixed-before": info.text = "synthetic extra error"
+                if malformed == "mixed-after": info.find("Text").tail = "synthetic extra error"
+                if malformed == "text-attribute": info.find("Text").set("error", "synthetic extra error")
+                ET.ElementTree(tree).write(path)
+                with self.assertRaises(proof.ProofFailure): proof.parse_trx(path, recipe)
+
+    def test_exact_echo_does_not_bypass_strict_cause_frame_row_or_exit_assessment(self):
+        recipe = proof.RECIPES[0]
+        for change in (lambda row: row.update(message="System.InvalidOperationException: synthetic setup failure"),
+                lambda row: row.update(stack="at Other.cs:line 32"),
+                lambda row: row.update(name=recipe.test + "(required: Activation, enabled: True)")):
+            with self.subTest(change=change):
+                expected = records(recipe)
+                change(next(row for row in expected if row["status"] == "failed"))
+                path, tree = self.trx(recipe, expected)
+                self.run_infos(tree, self.announcements(expected))
+                ET.ElementTree(tree).write(path)
+                actual, _ = proof.parse_trx(path, recipe)
+                with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 1, actual)
+        path, tree = self.trx(recipe, records(recipe))
+        self.run_infos(tree, self.announcements(records(recipe)))
+        ET.ElementTree(tree).write(path)
+        actual, _ = proof.parse_trx(path, recipe)
+        with self.assertRaises(proof.ProofFailure): proof.assess(recipe, "mutated", 2, actual)
+
     def test_vitest_ignores_only_pending_foreign_cases_and_never_runtime_errors(self):
         recipe = proof.RECIPES[4]
         rows = records(recipe)
