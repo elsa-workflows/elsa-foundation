@@ -78,7 +78,7 @@ public sealed class ExecutableNodeCompiler(
         ActivityStructureCompilationContext context)
     {
         // Match the public entry point: one declared-input snapshot/index for this compile and all its children.
-        var declaredInputs = workflowInputs?.ToArray() ?? [];
+        var declaredInputs = workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? [];
         // Validate complete authored content before a placed reusable can replace its node.
         // The cache also keeps each activity-owned lowering to one invocation.
         var structures = projection.Nodes.ToDictionary(node => node.NodeId,

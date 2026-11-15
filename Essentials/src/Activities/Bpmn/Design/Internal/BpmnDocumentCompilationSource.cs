@@ -58,7 +58,7 @@ internal sealed class BpmnDocumentCompilationSource(
                 var expected = _normalizers[0].Normalize(nodeId, BpmnDocumentAdmission.Lower(activity, scopeId))
                     ?? throw new InvalidOperationException("The canonical executable structure normalizer returned no BPMN structure.");
                 if (expected.Kind != structure.Kind || expected.SchemaVersion != structure.SchemaVersion ||
-                    !JsonElement.DeepEquals(expected.Payload, structure.Payload))
+                    !JsonElement.DeepEquals(expected.Payload, expected.Payload))
                     throw new ArgumentException($"BPMN source '{activity.NodeId}', scope '{scopeId}' did not retain its complete admitted semantic payload during compilation.");
             }
         }

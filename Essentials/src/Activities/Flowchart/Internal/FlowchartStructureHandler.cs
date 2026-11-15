@@ -155,6 +155,8 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
             if (name == "connectionMetadata" && key is not null && fields[key].ValueKind == JsonValueKind.Object)
                 foreach (var entry in fields[key].EnumerateObject()) _ = entry.Value.Deserialize<FlowchartConnectionMetadata>(SerializerOptions);
         }
+        var variablesKey = Key(fields, "variables");
+        if (variablesKey is not null && fields[variablesKey].ValueKind == JsonValueKind.Array) fields[variablesKey] = Write(Array.Empty<object>());
         return new ActivityNodeStructure(Kind, SchemaVersion, Write(fields));
 
         static Dictionary<string, JsonElement> Object(JsonElement value) => value.ValueKind == JsonValueKind.Object

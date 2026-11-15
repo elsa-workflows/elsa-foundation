@@ -124,6 +124,7 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
                 if (item[name] is { } reference)
                     item[name] = Remap(reference.GetValue<string>(), authoredToExecutableNodeIds);
         }
+        if (payload["variables"] is JsonArray) payload["variables"] = new JsonArray();
         return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 

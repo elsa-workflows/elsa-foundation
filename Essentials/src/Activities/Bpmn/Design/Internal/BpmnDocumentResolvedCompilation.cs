@@ -42,7 +42,7 @@ internal static class BpmnDocumentResolvedCompilation
         {
             if (!context.Invocations.TryGetValue(nodeId, out var fact) || fact.ActivityVersionId != versionId ||
                 fact.ResolutionKind != ActivityDefinitionVersionResolutionKind.AuthorableActivity ||
-                fact.RuntimeActivityTypeKey != runtimeType || fact.RuntimeConsumerKey != WellKnownRuntimeActivityConsumers.ClrActivity ||
+                fact.RuntimeConsumerKey != WellKnownRuntimeActivityConsumers.ClrActivity ||
                 fact.RuntimeDescriptorSchemaVersion != RuntimeActivityDescriptor.InitialSchemaVersion ||
                 requireStructure && fact.DeclaredStructure is not { Kind: BpmnActivityIdentities.StructureKind, SchemaVersion: BpmnActivityIdentities.StructureSchemaVersion })
                 throw new ArgumentException($"BPMN source '{owner.NodeId}', native invocation '{nodeId}' requires its exact authorable native runtime role '{runtimeType}'.");

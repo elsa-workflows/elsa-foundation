@@ -442,6 +442,7 @@ public sealed class ActivityTemplateCompiler(
             }
             try
             {
+                if (normalizeAuthoredStructure) _ = structureNormalizer!.Normalize(occurrence.OccurrenceId, structure);
                 var normalized = normalizeAuthoredStructure
                     ? structureNormalizer!.Normalize(occurrence.OccurrenceId, structure)
                     : structure is null ? null : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);

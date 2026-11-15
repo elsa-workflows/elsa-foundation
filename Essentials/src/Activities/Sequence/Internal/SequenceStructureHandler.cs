@@ -103,6 +103,8 @@ internal sealed class SequenceStructureHandler : IActivityStructureHandler
         var variablesKey = Key("variables");
         if (variablesKey is not null && fields[variablesKey].ValueKind is not (JsonValueKind.Array or JsonValueKind.Null))
             throw new InvalidOperationException("Sequence executable variables must be an array.");
+        if (variablesKey is not null && fields[variablesKey].ValueKind == JsonValueKind.Array)
+            fields[variablesKey] = JsonSerializer.SerializeToElement(Array.Empty<object>(), SerializerOptions);
         return new ActivityNodeStructure(Kind, SchemaVersion, JsonSerializer.SerializeToElement(fields, SerializerOptions));
 
         string? Key(string name) => fields.Keys.SingleOrDefault(key => StringComparer.OrdinalIgnoreCase.Equals(key, name));
