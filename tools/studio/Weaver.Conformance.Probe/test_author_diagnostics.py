@@ -48,7 +48,7 @@ public sealed class DeclaredTests
                             f'Assert.Equal() Failure: expected CS9999 {self.canary}\n')
         self.trx = self.root / "author-evidence/authors-backend-tests-results/contracts.trx"
         self.trx.parent.mkdir(parents=True)
-        # Three execution rows, including two InlineData rows of the same declared method.
+        # Three execution rows, including two InlineData rows with the same observed method metadata.
         self.document = ET.fromstring('''<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
   <Results>
     <UnitTestResult executionId="e1" testId="t1" outcome="Failed" testName="display values never identify a method"><Output><ErrorInfo><Message/><StackTrace/></ErrorInfo></Output></UnitTestResult>
@@ -82,20 +82,24 @@ public sealed class DeclaredTests
         diagnostics.retain_test_failure(self.run, "authors-backend-tests", self.source, error or RuntimeError(self.canary))
         return json.loads(Path(self.report["authorTestFailureDiagnostic"]["path"]).read_text())
 
-    def test_nonzero_exit_retains_counts_and_declared_method_without_display_inline_data_messages_or_paths(self):
+    def test_nonzero_exit_retains_counts_and_opaque_method_group_without_raw_names_data_or_paths(self):
         value = self.retain()
         self.assertEqual({"termination": "nonzero-exit", "exitCode": 1}, value["command"])
         self.assertEqual("valid", value["trx"]["status"])
         self.assertEqual({"total": 3, "executed": 3, "passed": 1, "failed": 2, "error": 0, "timeout": 0, "aborted": 0, "notExecuted": 0}, value["trx"]["counts"])
-        self.assertEqual([{"className": "Observed.Tests.DeclaredTests", "method": "Fails", "executions": 2,
-                           "assertionKinds": ["Equal"], "frames": [{"file": "DeclaredTests.cs", "line": 9}]}], value["trx"]["failedMethods"])
+        self.assertEqual(1, len(value["trx"]["failedMethods"]))
+        group = value["trx"]["failedMethods"][0]
+        self.assertRegex(group["groupSha256"], r'^[a-f0-9]{64}$')
+        self.assertEqual({"executions": 2, "assertionKinds": ["Equal"], "frames": [{"file": "DeclaredTests.cs", "line": 9}]},
+                         {key: item for key, item in group.items() if key != "groupSha256"})
+        self.assertEqual("observed-untrusted-trx-class-method-metadata", value["trx"]["identitySource"])
         self.assertEqual(["CS0123"], value["compiler"]["errors"])
         self.assertEqual(["NU1603"], value["compiler"]["warnings"])
         self.assertEqual("failed", self.report["authors"]["backend"]["status"])
         self.assertFalse(value["qualificationComplete"])
         self.assertFalse(value["rawTrxExported"])
         text = json.dumps(value)
-        for private in (self.canary, str(self.root), "Bearer ", "value:", "private assembly path", "/elsewhere/"):
+        for private in (self.canary, str(self.root), "Bearer ", "value:", "private assembly path", "/elsewhere/", '"Fails"', "Observed.Tests.DeclaredTests"):
             self.assertNotIn(private, text)
 
     def test_full_and_fallback_exports_select_only_new_safe_metadata_without_raw_log_or_trx_permissions(self):
@@ -175,7 +179,7 @@ public sealed class DeclaredTests
         self.assertEqual(["CS0123"], value["compiler"]["errors"])
         self.assertEqual([], value["trx"]["failedMethods"])
 
-    def test_foreign_symlink_and_undeclared_identities_never_become_named_failed_tests(self):
+    def test_foreign_trx_is_refused_and_untrusted_method_metadata_never_becomes_textual_identity(self):
         outside = self.root.parent / "foreign.trx"
         outside.write_bytes(self.trx.read_bytes())
         self.trx.unlink(); self.trx.symlink_to(outside)
@@ -186,8 +190,9 @@ public sealed class DeclaredTests
         self.write_trx()
         value = diagnostics._trx(self.root, self.source, self.trx)
         self.assertEqual("valid", value["status"])
-        self.assertEqual(2, value["unavailableFailedIdentities"])
-        self.assertEqual([], value["failedMethods"])
+        self.assertEqual(0, value["unavailableFailedIdentities"])
+        self.assertEqual(1, len(value["failedMethods"]))
+        self.assertRegex(value["failedMethods"][0]["groupSha256"], r'^[a-f0-9]{64}$')
         self.assertNotIn(self.canary.replace("-", "_"), json.dumps(value))
 
     def test_compiler_codes_and_input_bytes_have_explicit_bounds(self):
@@ -198,9 +203,7 @@ public sealed class DeclaredTests
         self.log.write_bytes(b'x' * (diagnostics.LOG_LIMIT + 1))
         self.assertEqual("over-limit", diagnostics._compiler(self.root, self.log)["status"])
 
-    def test_failed_method_limit_preserves_observed_omission_count_without_display_name_fallback(self):
-        (self.source / "MoreTests.cs").write_text('namespace Observed.Tests;\n\npublic sealed class MoreTests\n{\n'
-            + ''.join(f'\n    [Fact]\n    public void Case{i}() {{ }}\n' for i in range(17)) + '}\n')
+    def test_method_metadata_group_limit_preserves_observed_omission_count_without_identity_authority(self):
         rows, definitions = self.document.find("{*}Results"), self.document.find("{*}TestDefinitions")
         rows.clear(); definitions.clear()
         for i in range(17):
@@ -245,13 +248,14 @@ public sealed class DeclaredTests
         forged = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
         self.assertEqual("unavailable", diagnostics.load_test_failure(self.root, forged, "a" * 40)["retention"])
 
-    def test_fallback_projects_away_unknown_fields_display_data_bad_frames_and_forged_failed_names(self):
+    def test_fallback_projects_away_raw_names_data_bad_frames_and_invalid_group_keys(self):
         value = self.retain()
         value.update(message=self.canary, password=self.canary, content={"accessToken": self.canary})
         row = value["trx"]["failedMethods"][0]
-        row.update(testName=self.canary, inlineData=[self.canary])
-        row["frames"] += [{"file": "/private/" + self.canary, "line": 3}, {"file": self.file.name, "line": True}]
-        value["trx"]["failedMethods"].append(dict(row, method="Undeclared_" + self.canary.replace("-", "_")))
+        row.update(testName=self.canary, inlineData=[self.canary], className=self.canary, method=self.canary)
+        row["frames"] += [{"file": "/private/" + self.canary, "line": 3}, {"file": self.file.name, "line": True},
+                          {"file": self.file.name, "line": 1000000}]
+        value["trx"]["failedMethods"].append(dict(row, groupSha256="invalid_" + self.canary.replace("-", "_")))
         reference = self.report["authorTestFailureDiagnostic"]
         path = Path(reference["path"]); path.write_text(json.dumps(value))
         reference["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -261,6 +265,49 @@ public sealed class DeclaredTests
         self.assertEqual([{"file": self.file.name, "line": 9}], safe["trx"]["failedMethods"][0]["frames"])
         self.assertNotIn(self.canary, json.dumps(safe))
         self.assertNotIn(self.canary.replace("-", "_"), json.dumps(safe))
+
+    def test_raw_string_and_comment_fake_method_metadata_never_exports_names_or_literal_data(self):
+        raw_name = "PRIVATE_RAW_" + uuid.uuid4().hex
+        comment_name = "PRIVATE_COMMENT_" + uuid.uuid4().hex
+        # One actual public class; the apparent extra methods are only raw-string/comment data.
+        self.file.write_text('namespace Observed.Tests;\n\npublic sealed class DeclaredTests\n{\n'
+            '    [Theory]\n    [InlineData("""\n    [Fact]\n    public void ' + raw_name + '()\n    """)]\n'
+            '    public void Fails(string value) { }\n    /*\n    [Fact]\n    public void ' + comment_name + '()\n    */\n'
+            '    [Fact]\n    public void Works() { }\n}\n')
+        for method, name in zip(self.document.findall("{*}TestDefinitions/{*}UnitTest/{*}TestMethod")[:2], (raw_name, comment_name)):
+            method.set("name", name)
+        self.write_trx()
+        value = self.retain()
+        self.run.save()
+        self.assertEqual(2, len(value["trx"]["failedMethods"]))
+        for row in value["trx"]["failedMethods"]:
+            self.assertEqual({"groupSha256", "executions", "assertionKinds", "frames"}, set(row))
+            self.assertRegex(row["groupSha256"], r'^[a-f0-9]{64}$')
+            self.assertEqual(1, row["executions"])
+            self.assertEqual([{"file": self.file.name, "line": 9}], row["frames"])
+        for directory, export in [(self.root.parent / "full", export_evidence), (self.root.parent / "fallback", export_failure_diagnostic)]:
+            index = export(self.root, directory)
+            self.assertEqual("failed", index["qualificationStatus"])
+            data = b''.join(path.read_bytes() for path in directory.rglob('*') if path.is_file())
+            for private in (raw_name, comment_name, self.canary, "Observed.Tests.DeclaredTests", '"Fails"', '"Works"'):
+                self.assertNotIn(private.encode(), data)
+            selected = json.loads((directory / "report.json").read_text())["authorTestFailureDiagnostic"]
+            if "path" in selected:
+                selected = json.loads((directory / "author-evidence/authors-backend-tests-failure.json").read_text())
+            self.assertEqual("observed-untrusted-trx-class-method-metadata", selected["trx"]["identitySource"])
+            self.assertEqual(value["trx"]["failedMethods"], selected["trx"]["failedMethods"])
+
+    def test_frames_require_real_owned_source_and_current_line_bounds_without_examining_declarations(self):
+        rows = self.document.findall("{*}Results/{*}UnitTestResult")[:2]
+        for row in rows:
+            row.find("{*}Output/{*}ErrorInfo/{*}StackTrace").text = (
+                f'   at Untrusted.Metadata in {self.file}:line {len(self.file.read_text().splitlines()) + 1}\n'
+                f'   at Untrusted.Metadata in {self.file}:line 0')
+        self.write_trx()
+        value = diagnostics._trx(self.root, self.source, self.trx)
+        self.assertEqual("valid", value["status"])
+        self.assertEqual(["Equal"], value["failedMethods"][0]["assertionKinds"])
+        self.assertEqual([], value["failedMethods"][0]["frames"])
 
 
 if __name__ == "__main__":

@@ -414,10 +414,11 @@ qualifier executes the committed candidate; source review alone does not complet
 A failed protocol/backend author test attempt retains one hash-bound JSON reference at
 `report.authorTestFailureDiagnostic` before rethrowing the original exception. It records the actual known command
 exit/timeout, bounded compiler-shaped error/warning codes, and reconciled TRX counts with at most sixteen failed
-declared class/method groups. Theory display names and InlineData values never identify a method. Names must match
-the actual owned fixture's supported file-scoped public test-class declarations; unsupported identities stay
-unavailable. Assertion kinds use a fixed allowlist; up to four frames per method retain only an owned declared
-source basename and numeric line. Missing, malformed, inconsistent, unsafe or oversized TRX remains explicit, and
+groups keyed only by SHA-256 of the observed TRX class/method metadata. That metadata is untrusted; its opaque
+hashes are diagnostic identifiers, not proof of declarations or authority. No textual class/method names, theory
+display names or InlineData values are exported, and there is no C# declaration parser. Assertion kinds use a fixed
+allowlist; up to four observed frames per group retain only an actual owned materialized source basename and a
+numeric line within that file's current line bounds. Missing, malformed, inconsistent, unsafe or oversized TRX remains explicit, and
 compiler codes alone do not establish the cause of failure. A valid zero-test TRX never makes the failed attempt pass.
 
 The input limits are 8 MiB UTF-8 TRX / 10,000 rows, 2 MiB compiler log / eight codes per severity, and 64 source files /
