@@ -42,10 +42,10 @@ for (const mode of ["light", "dark"] as const) {
     const switcher = page.getByRole("button", { name: /^All tabs \(/ });
     await expect(tabs).toHaveCount(1);
     const sparse = await stripGeometry(page);
+    await capture(page, info, "sparse-tabs");
     expect(sparse.gap).toBeGreaterThanOrEqual(0);
     expect(sparse.gap).toBeLessThanOrEqual(12);
     expect(sparse.rightGap).toBeLessThanOrEqual(12);
-    await capture(page, info, "sparse-tabs");
 
     await add.focus();
     await page.keyboard.press("Enter");
@@ -56,10 +56,10 @@ for (const mode of ["light", "dark"] as const) {
     await tabs.first().click();
     await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
     const growing = await stripGeometry(page);
+    await capture(page, info, "earlier-tab-selected");
     expect(growing.gap).toBeLessThanOrEqual(12);
     expect(growing.plusLeft).toBeGreaterThan(sparse.plusLeft);
     expect(growing.menuLeft).toBeCloseTo(sparse.menuLeft, 0);
-    await capture(page, info, "earlier-tab-selected");
 
     for (let count = 4; count <= 20; count++) {
       await add.click();
@@ -70,12 +70,12 @@ for (const mode of ["light", "dark"] as const) {
       return geometry.scrollWidth > geometry.clientWidth;
     }).toBe(true);
     const overflow = await stripGeometry(page);
+    await capture(page, info, "overflow-end");
     expect(overflow.plusVisible).toBe(true);
     expect(overflow.plusCenterY).toBeCloseTo(overflow.rowCenterY, 0);
     expect(overflow.menuCenterY).toBeCloseTo(overflow.rowCenterY, 0);
     expect(overflow.plusRight).toBeLessThanOrEqual(overflow.menuLeft);
-    expect(overflow.menuLeft).toBeCloseTo(sparse.menuLeft, 0);
-    await capture(page, info, "overflow-end");
+    expect(overflow.rightGap).toBeCloseTo(sparse.rightGap, 0);
     await list.evaluate(element => { element.scrollLeft = 0; });
     await expect.poll(async () => (await stripGeometry(page)).plusVisible).toBe(true);
     await capture(page, info, "overflow-start");
@@ -85,13 +85,13 @@ for (const mode of ["light", "dark"] as const) {
 
     await page.setViewportSize({ width: 360, height: 900 });
     const narrow = await stripGeometry(page);
+    await capture(page, info, "narrow-overflow");
     expect(narrow.plusVisible).toBe(true);
     expect(narrow.plusCenterY).toBeCloseTo(narrow.rowCenterY, 0);
     expect(narrow.menuCenterY).toBeCloseTo(narrow.rowCenterY, 0);
     expect(narrow.plusRight).toBeLessThanOrEqual(narrow.menuLeft);
     expect(narrow.rightGap).toBeLessThanOrEqual(12);
     expect(narrow.pageScroll).toBeLessThanOrEqual(narrow.pageWidth + 1);
-    await capture(page, info, "narrow-overflow");
     await add.click();
     await expect(tabs).toHaveCount(21);
     await expect.poll(() => new URL(page.url()).pathname).toBe("/");
