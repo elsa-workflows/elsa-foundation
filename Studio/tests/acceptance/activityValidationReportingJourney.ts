@@ -81,11 +81,17 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
   await expect(dialog.getByRole("button", { name: "Edit output value source", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Close publication review", exact: true }).click();
-  const status = page.getByRole("button", { name: "Publication blocked — view issues", exact: true });
+  const status = page.getByRole("button", { name: "View issues", exact: true });
   await expect(status).toBeVisible();
+  await expect(page.locator(".ad-publication-toolbar-status")).toContainText(/\d+ errors?/);
+  await capture(page, info, "review-summary");
   const existingReviews = reviews;
   await status.press("Enter");
   await expect(dialog.getByRole("button", { name: "Edit output value source", exact: true })).toBeVisible();
   expect(reviews).toBe(existingReviews);
   await capture(page, info, "review-retained");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".ad-publication-toolbar-trigger")).toBeFocused();
+  expect(reviews).toBe(existingReviews);
+  await capture(page, info, "review-focus-return");
 }

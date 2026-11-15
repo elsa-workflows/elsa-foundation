@@ -95,7 +95,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(harness.container.textContent).not.toContain("could not be confirmed");
     expect(harness.container.querySelector(".ad-publication-confirmation")).toBeNull();
     click(buttonByText(harness.container, "Close publication review"));
-    click(buttonByText(harness.container, "Publication blocked — view issues"));
+    click(buttonByText(harness.container, "View issues"));
     expect(post).toHaveBeenCalledTimes(1);
     click(buttonByText(harness.container, "Edit output value source"));
     await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(expect.objectContaining({
@@ -116,8 +116,8 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     click(buttonByText(harness.container, "Review & publish"));
     await waitFor(() => expect(harness.container.textContent).toContain("Publication preflight could not be confirmed"));
     click(buttonByText(harness.container, "Close publication review"));
-    const retained = buttonByText(harness.container, "Review could not complete");
-    expect(retained.classList.contains("needs-attention")).toBe(true);
+    const retained = buttonByText(harness.container, "View details");
+    expect(retained.closest(".is-attention")).not.toBeNull();
     click(retained);
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
     expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");

@@ -1541,11 +1541,13 @@ describe("Activity Definition authoring", () => {
     const diagnosticsDetails = diagnosticsPanel.querySelector("details")!;
     diagnosticsDetails.open = false;
     const scrollToDiagnostics = vi.fn();
-    diagnosticsPanel.scrollIntoView = scrollToDiagnostics;
-    click(buttonByText(rendered.container, "View draft diagnostics"));
+    const firstDiagnostic = diagnosticsPanel.querySelector<HTMLElement>(".ad-diagnostic-item[tabindex]")!;
+    firstDiagnostic.scrollIntoView = scrollToDiagnostics;
+    expect(rendered.container.querySelectorAll(".ad-draft-diagnostics-link")).toHaveLength(1);
+    click(rendered.container.querySelector(".ad-draft-diagnostics-link")!);
     expect(diagnosticsDetails.open).toBe(true);
-    expect(document.activeElement).toBe(diagnosticsPanel);
-    expect(scrollToDiagnostics).toHaveBeenCalledWith({ block: "start" });
+    expect(document.activeElement).toBe(firstDiagnostic);
+    expect(scrollToDiagnostics).toHaveBeenCalledWith({ block: "center" });
     const codes = [...rendered.container.querySelectorAll(".ad-diagnostic-code")].map(item => item.textContent);
     expect(codes).toEqual([
       "activity.contract.input-invalid",

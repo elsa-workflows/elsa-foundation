@@ -44,7 +44,6 @@
 
 .ad-authoring-toolbar-actions > button,
 .ad-publication-toolbar-trigger,
-.ad-publication-toolbar-status,
 .ad-authoring-advanced > summary {
   display: inline-flex;
   align-items: center;
@@ -93,7 +92,7 @@
 
 .ad-publication-toolbar-status.is-attention > div { flex: 1 1 12rem; min-width: 0; }
 .ad-publication-toolbar-status.is-attention p { margin: .25rem 0 0; color: var(--studio-text); }
-.ad-draft-diagnostics-trigger { grid-column: 1 / -1; order: 2; justify-self: start; }
+.ad-draft-diagnostics-link { grid-column: 1 / -1; order: 2; justify-self: start; }
 .ad-diagnostics-panel:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 
 .ad-authoring-advanced { position: relative; }
@@ -292,6 +291,4 @@
   .ad-public-interface-view .ad-contract-workbench:not(.is-empty) { grid-template-columns: minmax(0, 1fr); }
 }
 
-.ad-publication-toolbar .ad-publication-toolbar-status { display: inline-flex; align-items: center; gap: .4rem; text-align: start; white-space: normal; }
-.ad-publication-toolbar .ad-publication-toolbar-status.needs-attention,
 .ad-draft-diagnostics-link.needs-attention { color: var(--studio-danger-fg); border-color: var(--studio-danger-fg); }

@@ -635,9 +635,10 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
     const details = panel?.querySelector<HTMLDetailsElement>("details");
     const summary = details?.querySelector<HTMLElement>("summary");
     if (details && !details.open) summary?.click();
-    const first = panel?.querySelector<HTMLElement>(".ad-diagnostic-item");
-    (first ?? summary)?.focus();
-    (first ?? panel)?.scrollIntoView?.({ block: "center" });
+    const first = panel?.querySelector<HTMLElement>(".ad-diagnostic-item[tabindex]");
+    const target = first ?? panel;
+    target?.focus();
+    target?.scrollIntoView?.({ block: "center" });
   };
   const draftErrorCount = draft.validation?.diagnostics.filter(item => activityDiagnosticSeverity(item.severity) === "Error").length ?? 0;
 
@@ -672,7 +673,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
             mode="toolbar"
             triggerRef={publicationToolbarRef}
           />
-          {draft.validation || validationFailure ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure ? " needs-attention" : ""}`} onClick={viewDraftDiagnostics}>
+          {draft.validation || validationFailure || codeBufferState.dirty ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure ? " needs-attention" : ""}`} aria-controls={draftDiagnosticsId} onClick={viewDraftDiagnostics}>
             {draftErrorCount || validationFailure ? <AlertTriangle size={16} aria-hidden /> : <CheckCircle2 size={16} aria-hidden />} {validationFailure ? "View validation problem" : draftErrorCount ? `View ${draftErrorCount} draft error${draftErrorCount === 1 ? "" : "s"}` : "View draft diagnostics"}
           </button> : null}
           <button type="button" onClick={() => setTestRunOpen(true)} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button>
@@ -696,13 +697,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
               </div>
             </div>
           </details>
-          {draft.validation?.diagnostics.length || validationFailure || codeBufferState.dirty ? <button type="button" className="ad-draft-diagnostics-trigger" aria-controls={draftDiagnosticsId} onClick={() => {
-            const panel = document.getElementById(draftDiagnosticsId);
-            const details = panel?.querySelector("details");
-            if (details) details.open = true;
-            panel?.scrollIntoView({ block: "start" });
-            panel?.focus({ preventScroll: true });
-          }}><AlertTriangle size={16} aria-hidden /> View draft diagnostics</button> : null}
+
         </div>
       </header>
     </div>
