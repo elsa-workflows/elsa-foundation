@@ -7,23 +7,31 @@ type EchoTarget = Awaited<ReturnType<TriggerJourney["echo"]>>;
 type ScheduleActions = { pause(id: string, capture?: string): Promise<void>; replace(authored: Authored, state: WorkflowState): Promise<unknown> };
 type BusinessOutput = { value: unknown; isRedacted: boolean };
 
-function scalarOutput(output: BusinessOutput): unknown {
-  expect(output, "The business workflow durably assigned its named output").toBeTruthy();
-  expect(output.isRedacted).toBe(false);
-  const value = output.value;
+function capturedValue(value: unknown): unknown {
   if (value && typeof value === "object") {
-    const snapshot = value as { kind?: string; preview?: unknown; value?: unknown };
+    const snapshot = value as { kind?: string; preview?: unknown; value?: unknown; items?: unknown[]; itemCount?: number; truncated?: boolean };
     if (snapshot.kind === "null") return null;
+    if (snapshot.kind === "array") {
+      expect(snapshot.truncated, "The collection output is complete").toBe(false);
+      expect(Array.isArray(snapshot.items)).toBe(true);
+      expect(snapshot.itemCount).toBe(snapshot.items!.length);
+      return snapshot.items!.map(capturedValue);
+    }
     if (Object.hasOwn(snapshot, "preview")) return snapshot.preview;
     if (Object.hasOwn(snapshot, "value")) return snapshot.value;
   }
   return value;
 }
+function businessOutput(output: BusinessOutput): unknown {
+  expect(output, "The business workflow durably assigned its named output").toBeTruthy();
+  expect(output.isRedacted).toBe(false);
+  return capturedValue(output.value);
+}
 
 export async function businessOutputs(j: TriggerJourney, executionId: string, expected: Record<string, unknown>) {
   let result: { instance: { status: string; artifactId: string; definitionVersionId: string }; outputs: Record<string, BusinessOutput> } | undefined;
   await expect.poll(async () => { result = await j.findInstance(executionId); return result?.instance.status ?? "NotYetAdmitted"; }, { timeout: 45_000 }).toBe("Completed");
-  for (const [name, value] of Object.entries(expected)) expect(scalarOutput(result!.outputs[name]), `Actual business output ${name}`).toEqual(value);
+  for (const [name, value] of Object.entries(expected)) expect(businessOutput(result!.outputs[name]), `Actual business output ${name}`).toEqual(value);
   return result!;
 }
 
@@ -121,7 +129,7 @@ export async function verifyScheduledRetention(j: TriggerJourney, targets: EchoT
       const result = await businessOutputs(j, recipient.executionReference!.id, { count: 9 });
       expect(result.instance.artifactId).toBe(original.published.artifactId);
       expect(result.instance.definitionVersionId).toBe(original.authored.version.id);
-      expect(Date.parse(String(scalarOutput(result.outputs.message)))).toBe(Date.parse(armed.schedule!.nextDueUtc!));
+      expect(Date.parse(String(businessOutput(result.outputs.message)))).toBe(Date.parse(armed.schedule!.nextDueUtc!));
     }
     expect((await j.read(timer.id)).configuration.interval).toBe("PT30S"); expect((await j.read(timer.id)).desiredState).toBe("Paused");
     await j.page.reload(); await j.capture("subscriber-runs");
@@ -143,7 +151,7 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   const dueDelivery = await j.started(await j.waitDelivery(cron.id)); expect(dueDelivery.acceptedCount).toBe(1);
   const dueExecution = dueDelivery.recipients[0].executionReference!.id;
   const dueResult = await businessOutputs(j, dueExecution, { count: 1 });
-  expect(Date.parse(String(scalarOutput(dueResult.outputs.message)))).toBe(Date.parse(dueCursor.schedule!.nextDueUtc!));
+  expect(Date.parse(String(businessOutput(dueResult.outputs.message)))).toBe(Date.parse(dueCursor.schedule!.nextDueUtc!));
   await j.inspectDelivery(dueDelivery, "cron-delivery"); await actions.pause(cron.id);
   j.requests.push({ kind: "actual-real-clock-due-cron", triggerId: cron.id, expression: firingExpression, timezone: "UTC",
     dueUtc: dueCursor.schedule!.nextDueUtc, deliveryId: dueDelivery.id, executionId: dueExecution, completedStatus: dueResult.instance.status,
@@ -231,7 +239,7 @@ export async function verifyCronAndOverdueRecovery(j: TriggerJourney, targets: E
   expect(partial).toMatchObject({ admission: "PartiallyAccepted", admissionPolicy: "Independent", acceptedCount: 1, refusedCount: 1 });
   const started = await j.started(partial); const recipient = started.recipients.find(item => item.admission === "Accepted")!;
   const result = await businessOutputs(j, recipient.executionReference!.id, { count: 23 });
-  expect(Date.parse(String(scalarOutput(result.outputs.message)))).toBe(Date.parse(armed.schedule!.nextDueUtc!));
+  expect(Date.parse(String(businessOutput(result.outputs.message)))).toBe(Date.parse(armed.schedule!.nextDueUtc!));
   await expect.poll(async () => Date.parse((await j.read(timer.id)).schedule!.nextDueUtc!) > Date.now(), { timeout: 45_000 }).toBe(true);
   const future = await j.read(timer.id); expect(future.schedule?.generation).toBe(armed.schedule?.generation);
   await actions.pause(timer.id);
