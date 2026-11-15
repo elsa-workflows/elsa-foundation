@@ -82,6 +82,13 @@ export class TriggerJourney {
   }
   async capture(name: string) {
     await expect(this.page.getByText("Loading Studio modules…", { exact: true })).toHaveCount(0);
+    if (name === "workflow-live-triggers" || name === "bpmn-workflow-live-triggers") {
+      const associations = this.page.getByRole("region", { name: "Workflow subscriptions", exact: true });
+      await associations.scrollIntoViewIfNeeded();
+      const row = associations.getByRole("row").nth(1);
+      await expect(row.getByRole("button", { name: "Edit", exact: true })).toBeInViewport();
+      await expect(row.getByRole("button", { name: "Remove", exact: true })).toBeInViewport();
+    }
     if (name === "subscription-runtime-targets" || name === "trigger-runtime-only-composition") {
       const selector = this.page.getByLabel("Workflow and publication slot", { exact: true });
       await selector.scrollIntoViewIfNeeded(); await expect(selector).toBeInViewport();
