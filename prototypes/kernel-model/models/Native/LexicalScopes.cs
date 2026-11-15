@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 
 namespace Kernel.Native;
 
+internal sealed record LexicalScopeInfo(string Owner, string? Parent);
+
 internal sealed record LexicalResource(string Owner, string? Parent, Dictionary<string, JsonNode?> Values);
 
 public sealed partial class NativeState
@@ -76,6 +78,12 @@ internal static class LexicalScopes
 
 internal sealed partial class Burst
 {
+    internal LexicalScopeInfo LexicalScopeInfo(Frame owner, string id)
+    {
+        var resource = LexicalScopes.Accessible(_s, owner.Id, id);
+        return new(resource.Owner, resource.Parent);
+    }
+    internal string[] OwnedLexicalScopes(Frame owner) => (_s.LexicalScopes ?? []).Where(p => p.Value.Owner == owner.Id).Select(p => p.Key).ToArray();
     internal string CreateLexicalScope(Frame owner, IReadOnlyDictionary<string, JsonNode?> values, string? parent)
     {
         if (!_s.Frames.ContainsKey(owner.Id)) throw new InvalidOperationException("Lexical scope owner is not live.");
@@ -118,20 +126,48 @@ internal sealed partial class Burst
         {
             if (frame.LiveScope is { } live) yield return live;
             if (frame.Scope is { } local) yield return local;
-            for (var id = frame.LexicalScope; id is not null && seen.Add(id);)
-            {
-                // An executing intrinsic/leaf is not stored as a live frame; its scheduled parent owns access.
-                var access = _s.Frames.ContainsKey(frame.Id) ? frame.Id : frame.Parent ?? frame.Id;
-                var scope = LexicalScopes.Accessible(_s, access, id);
-                yield return scope.Values;
-                id = scope.Parent;
-            }
+            // An executing intrinsic/leaf is not stored as a live frame; its scheduled parent owns access.
+            var access = _s.Frames.ContainsKey(frame.Id) ? frame.Id : frame.Parent ?? frame.Id;
+            foreach (var values in LexicalValues(access, frame.LexicalScope, seen)) yield return values;
         }
     }
+
+    private IEnumerable<Dictionary<string, JsonNode?>> LexicalValues(string frame, string? scope, HashSet<string> seen)
+    {
+        for (var id = scope; id is not null && seen.Add(id);)
+        {
+            var resource = LexicalScopes.Accessible(_s, frame, id);
+            yield return resource.Values;
+            id = resource.Parent;
+        }
+    }
+
+    internal JsonNode? EvaluateInScope(Frame owner, Binding binding, string lexicalScope)
+    {
+        // Refuse an invalid handle even if this binding never reads a variable.
+        _ = LexicalScopes.Accessible(_s, owner.Id, lexicalScope);
+        return Evaluate(binding, new CompositeReadScope(this, owner, lexicalScope));
+    }
+
+    internal JsonNode? ReadInScope(Frame owner, string lexicalScope, string name)
+    {
+        foreach (var values in LexicalValues(owner.Id, lexicalScope, new(StringComparer.Ordinal)))
+            if (values.TryGetValue(name, out var value)) return value;
+        return Read(owner, name);
+    }
+}
+
+internal sealed class CompositeReadScope(Burst burst, Frame owner, string lexicalScope) : IScope
+{
+    public JsonNode? Variable(string name) => burst.ReadInScope(owner, lexicalScope, name);
+    public JsonNode? Result(string node) => burst.Result(node);
 }
 
 public sealed partial class CompositeContext
 {
+    internal JsonNode? EvaluateInScope(Binding binding, string lexicalScope) => _burst.EvaluateInScope(_frame, binding, lexicalScope);
+    internal LexicalScopeInfo LexicalScopeInfo(string scope) => _burst.LexicalScopeInfo(_frame, scope);
+    internal string[] OwnedLexicalScopes() => _burst.OwnedLexicalScopes(_frame);
     internal string CreateLexicalScope(IReadOnlyDictionary<string, JsonNode?> values, string? parent = null) => _burst.CreateLexicalScope(_frame, values, parent);
     internal string ScheduleInScope(Node child, string scope, string? tag = null) => _burst.Schedule(_frame, child, tag, null, scope);
     internal void ReleaseLexicalScope(string scope) => _burst.ReleaseLexicalScope(_frame, scope);

@@ -105,8 +105,8 @@ public sealed class HttpHost(string node, Requests requests, HttpRoutes routes, 
             var key = HttpRoutes.Key(request.Method, request.Path);
             var waiting = await store.FindSubscriptionsAsync(key);
             if (waiting.Count == 0) return new HttpResponse(404, "text/plain", "no workflow waits on this route");
-            var delivery = Events.Deliver(new EventRow(key, $"{node}.{id}", Json.Write(request), local.Now + 60_000), waiting[0]);
-            await store.AddAsync(delivery with { ReplyTo = replyTo });
+            var delivery = new EventRoute(new EventRow(key, $"{node}.{id}", Json.Write(request), local.Now + 60_000), waiting[0]).Delivery(replyTo: replyTo);
+            await store.AddEventAsync(delivery);
         }
         await pump();
         requests.Expire(open.Deadline);     // the pump gave up: past this request's deadline

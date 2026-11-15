@@ -470,6 +470,10 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Migrations.P
                         .HasColumnType("nvarchar(64)")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<string>("RequestFingerprint")
+                        .HasMaxLength(1200)
+                        .HasColumnType("nvarchar(1200)");
+
                     b.Property<int?>("RetiredAtOffsetMinutes")
                         .HasColumnType("int");
 

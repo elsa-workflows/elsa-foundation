@@ -427,6 +427,7 @@ public sealed class Tree(Func<IJob, CancellationToken, ValueTask<object?>> work)
 
 public sealed class OnEventState
 {
+    public EventMatch? Match { get; set; }
     public List<string> Got { get; set; } = [];
 }
 
@@ -437,7 +438,11 @@ public sealed class OnEvent : Model<OnEventState>
 
     protected override void Turn(ITurn turn, OnEventState state)
     {
-        foreach (var message in turn.Inbox.Where(m => m.Kind == Kinds.Event)) state.Got.Add(message.Id);
+        foreach (var message in turn.Inbox.Where(m => m.Kind == Kinds.Event))
+        {
+            state.Got.Add(message.Id);
+            if (message.EventMatch is { } match) state.Match = EventMatch.Decode(match);
+        }
         turn.SetStatus(InstanceStatus.Finished);
     }
 }

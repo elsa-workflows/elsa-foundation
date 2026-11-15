@@ -87,6 +87,7 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
     public static IdentityBuilder AddIdentityCoreServices(this IServiceCollection services, bool isDevelopmentOrDemo = false)
     {
         services.AddNormalizedAuthenticationType(AspNetCoreIdentityDefaults.CookieScheme);
+        services.EnsureReplacementContract<ICanonicalUserSignInService, AspNetCoreIdentityCanonicalSignInService>();
 
         var builder = services
             .AddIdentityCore<AspNetCoreIdentityUser>(options =>

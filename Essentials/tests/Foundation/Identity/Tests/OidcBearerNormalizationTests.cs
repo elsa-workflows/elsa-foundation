@@ -334,7 +334,11 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.Role, "admin"),
             new Claim(IdentityClaimTypes.Permission, "worker:admin"),
             new Claim(IdentityClaimTypes.UserId, "user-forged"),
-            new Claim(IdentityClaimTypes.SubjectProvider, "idp-forged"));
+            new Claim(IdentityClaimTypes.SubjectProvider, "idp-forged"),
+            new Claim(IdentityClaimTypes.SubjectIssuer, "https://forged.example/"),
+            new Claim(IdentityClaimTypes.ExternalSubject, "forged-sub"),
+            new Claim(IdentityClaimTypes.TokenSubjectKey, "forged-key"),
+            new Claim(IdentityClaimTypes.SessionId, "forged-session"));
 
         using var response = await host.SendBearerAsync(token);
 
@@ -602,7 +606,11 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.Role.ToUpperInvariant(), "admin"),
             new Claim(IdentityClaimTypes.Permission, "worker:admin"),
             new Claim(IdentityClaimTypes.UserId, "user-forged"),
-            new Claim(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "idp-forged")
+            new Claim(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "idp-forged"),
+            new Claim(IdentityClaimTypes.SubjectIssuer.ToUpperInvariant(), "https://forged.example/"),
+            new Claim(IdentityClaimTypes.ExternalSubject.ToUpperInvariant(), "forged-sub"),
+            new Claim(IdentityClaimTypes.TokenSubjectKey.ToUpperInvariant(), "forged-key"),
+            new Claim(IdentityClaimTypes.SessionId.ToUpperInvariant(), "forged-session")
         ], "validated-token"));
         var context = CreateTokenValidatedContext(unit.Options, original);
 
@@ -612,6 +620,9 @@ public sealed class OidcBearerNormalizationTests
         Assert.NotNull(received);
         Assert.Contains(received!.Claims, claim => claim.Type == "outside" && claim.Value == "kept");
         Assert.DoesNotContain(received.Claims, IsInternalClaim);
+        Assert.Equal(Provider, Assert.Single(context.Principal!.FindAll(IdentityClaimTypes.SubjectProvider)).Value);
+        Assert.Equal(Issuer, Assert.Single(context.Principal.FindAll(IdentityClaimTypes.SubjectIssuer)).Value);
+        Assert.Empty(context.Principal.FindAll(IdentityClaimTypes.SessionId));
         Assert.Equal(OidcBearerNormalizationEvents.NormalizedAuthenticationType, context.Principal!.Identity!.AuthenticationType);
     }
 
@@ -1195,6 +1206,10 @@ public sealed class OidcBearerNormalizationTests
             IdentityClaimTypes.TenantId,
             IdentityClaimTypes.Provider,
             IdentityClaimTypes.SubjectProvider,
+            IdentityClaimTypes.SubjectIssuer,
+            IdentityClaimTypes.ExternalSubject,
+            IdentityClaimTypes.TokenSubjectKey,
+            IdentityClaimTypes.SessionId,
             IdentityClaimTypes.Role,
             IdentityClaimTypes.Permission,
             IdentityClaimTypes.UserId

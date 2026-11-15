@@ -557,7 +557,8 @@ public sealed class TokenEndpointTests : IAsyncLifetime
             subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, [])
         {
             CanonicalUserId = subject is null ? principal.FindFirst(IdentityClaimTypes.UserId)?.Value : null,
-            Provider = subject is null ? null : provider
+            Provider = subject is null ? null : provider,
+            SubjectIssuer = subject is null ? null : "https://validated.example/"
         });
     }
 
@@ -580,14 +581,15 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         var principal = (await tokens.ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
         Assert.Empty(principal.FindAll(IdentityClaimTypes.UserId));
         return (await tokens.IssueAsync(new TokenIssueRequest(
-            principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, []) { Provider = provider })).RefreshToken!;
+            principal.FindFirst(IdentityClaimTypes.ExternalSubject)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, [])
+        { Provider = provider, SubjectIssuer = principal.FindFirst(IdentityClaimTypes.SubjectIssuer)!.Value })).RefreshToken!;
     }
 
     private async Task<string> SubjectOfAsync(string accessToken)
     {
         await using var scope = _fixture.Services.CreateAsyncScope();
         var principal = (await scope.ServiceProvider.GetRequiredService<ITokenService>().ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
-        return principal.FindFirst(ClaimTypes.NameIdentifier)!.Value;
+        return principal.FindFirst(IdentityClaimTypes.ExternalSubject)?.Value ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value;
     }
 
     /// <summary>The tenant and Elsa user the access token was issued to.</summary>
