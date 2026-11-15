@@ -80,7 +80,7 @@ export function remapActivityReferences(node: ActivityNode, catalog: ActivityCat
     }
   }
   // Intrinsic variable assignment is distinct from the SetOutput public output name.
-  if (node.intrinsic?.kind.toLowerCase() === "set" && node.intrinsic.variable)
+  if (typeof node.intrinsic?.kind === "string" && node.intrinsic.kind.toLowerCase() === "set" && node.intrinsic.variable)
     next.intrinsic = { ...node.intrinsic, variable: variable(node.intrinsic.variable) as VariableReference };
 
   // CaseConditionEditor stores this ArgumentState on the collection item, never in node.inputs.

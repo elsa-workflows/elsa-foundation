@@ -22,6 +22,7 @@ import {
 import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { collectActivityNodeIds } from "../workflowAdapter";
+import { buildDraftFromJson } from "../workflowSerialization";
 
 const catalog = new Map([
   [writeLine.activityVersionId, writeLine],
@@ -230,6 +231,17 @@ describe("reference-aware activity copies", () => {
     }
   });
 
+  it.each([false, true])("remaps a backend-valid mixed-case output Variable capture (expanded: %s)", expanded => {
+    const reader = leafNode("reader");
+    const capture = { ...variable("scope"), expressionType: "vArIaBlE" };
+    reader.outputs = [argument(capture, "result")];
+    const scope = sequenceNode("scope", [reader]);
+    const copied = copy([expanded ? expandStateFromWire({ rootActivity: scope }).rootActivity! : scope]);
+    const wire = canonicalizeStateForWire(copied.draft.state);
+    const child = ((wire.rootActivity!.structure!.payload.activities as ActivityNode[])[1].structure!.payload.activities as ActivityNode[])[0];
+    expect(child.outputs).toEqual([argument({ ...capture, value: { ...capture.value, declaringScopeId: copied.idMap.get("scope") } }, "result")]);
+  });
+
   it("keeps opaque entries in a mixed Sequence array while remapping the recognized children", () => {
     const consumer = leafNode("consumer"); consumer.inputs = [argument(result())];
     const scope = sequenceNode("scope", [leafNode("producer"), consumer]);
@@ -248,6 +260,15 @@ describe("reference-aware activity copies", () => {
     each.structure!.payload.body = body;
     const copied = copy([each]);
     expect(copied.copies[0].structure!.payload.body).toEqual(body);
+  });
+
+  it.each([{}, { kind: null }, { kind: 7 }, { kind: [] }])("preserves malformed intrinsic metadata reachable through Code Apply: %s", intrinsic => {
+    const authored = draftOf(sequenceNode("root", [leafNode("reader")]));
+    const imported = buildDraftFromJson(JSON.stringify({ state: { rootActivity: { ...leafNode("reader"), intrinsic } } }), authored);
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) throw new Error(imported.error);
+    const copied = copy([imported.draft.state.rootActivity!]);
+    expect(copied.copies[0].intrinsic).toEqual(intrinsic);
   });
 
   it("does not treat a structural connection ID as an activity producer or lexical scope", () => {
