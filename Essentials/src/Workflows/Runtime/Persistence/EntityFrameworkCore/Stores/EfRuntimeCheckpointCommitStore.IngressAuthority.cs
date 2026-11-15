@@ -33,6 +33,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore
         CancellationToken cancellationToken)
     {
         SavedStimulusStartSeal.ValidateCommitOrigin(commit);
+        await StageInitialStartFaultAsync(commit, scope, cancellationToken);
         if (commit.StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert } change) return;
         NativeIngressCheckpointAuthority.ValidateOriginShape(change.State);
         var origin = change.State.IngressOrigin;
@@ -49,7 +50,7 @@ public sealed partial class EfRuntimeCheckpointCommitStore
             // Normal workflow staging updates this same tracked row and keeps its original CAS revision.
             return;
         }
-        if (commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted)
+        if (commit.Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted && commit.ExpectedInitialStartFault is null)
             throw new InvalidDataException("Ingress workflow authority requires its exact initial physical checkpoint.");
         if (saved is not null)
         {

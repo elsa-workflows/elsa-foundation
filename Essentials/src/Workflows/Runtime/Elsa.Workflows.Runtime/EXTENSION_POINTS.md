@@ -14,6 +14,35 @@ contracts are Design-free and operate on runtime-owned executable artifacts and 
 > your implementation against the `.Core` contract; the engine package's registrations all use
 > `TryAdd*`.
 
+## Conditional initial-fault admission
+
+Cross-model contributors use the mechanical `RuntimeChainIdentity` surface in Runtime Core.
+Its frozen UTF-8/SHA-256 successor bytes are shared with the existing `RuntimeChainId`
+compatibility surface in the Runtime implementation; the existing API and persisted ids remain stable.
+
+`IRuntimeCheckpointCommitStore.SupportsInitialStartFaultAdmission` defaults to `false`.
+`RuntimeCheckpointCommitter` refuses a non-null `RuntimeCheckpointCommit.ExpectedInitialStartFault`
+unless the selected writer advertises support; the coalescing decorator forwards that capability
+and treats the condition as an immediate physical boundary. Replacement writers must not ignore it.
+
+The native in-memory writer joins its selected poison and ownership stores under their common
+write gates. The Runtime EF writer compares the actual poison row, accepted source and ownership
+fence in the same transaction as the first faulted execution, blocking incident and replay marker;
+model-owned workers also require the actual live parent decision and retained model-work source.
+A condition carries the actual failed initial scheduler work retained by the drainer in poison
+metadata. Its full payload is excluded from incident/checkpoint diagnostic metadata and remains
+private to the parked decision and admission proof. That evidence proposes a fault; it grants no independent start authority. Both writers
+check its exact source-bound pin, input lineage, scope and authority and refuse unrelated effects.
+Only an authorized typed model result may accompany a model worker's first fault.
+
+Invalid conditional admission raises `RuntimeCheckpointCommitValidationException` with the
+original cause and commit, execution and work identities. Requested cancellation propagates.
+The optional condition changes only its own logical fingerprint; absent conditions preserve
+legacy replay identity. Retained poison metadata uses the existing schema family and requires
+no schema migration. Already queued initial checkpoints need no new field: their actual failed
+work is captured when they poison. Historical poison records without captured work are not
+independent authority to synthesize a protected execution.
+
 ## Documented ADR 0033 deviations hosted at the composition root
 
 Two contract-shaped surfaces live in the engine package rather than `.Core`, deliberately:
@@ -1367,8 +1396,8 @@ All interfaces below live in `Elsa.Workflows.Runtime.Core`. The entries below na
 | `IRuntimeIngressTransportObserver` | Physical-provider replacement; `SupportsObservations`, `RecordAsync(scope,observation,ct)`. | Runtime aliases the selected delivery store when it supports `IRuntimeIngressTransportObserver`, otherwise selects an unavailable observer. Transport exchange facts remain separate from source acceptance and workflow execution; they cannot create a target receipt. |
 | `ITriggerTargetModelSource` | Metadata contribution; `GetModels()`. | Runtime contributes singleton `NativeTriggerTargetModelSource` through the Sequential `TriggerTargetModelsDiscovering` event and scoped `CollectTriggerTargetModels` aggregator. Descriptors advertise model/protocol/profile/response support; they grant no runtime invocation authority. |
 | `IStandaloneTriggerRuntimeTarget` | Scoped model-adapter contribution; `ModelKey`, `Supports(native,model)`, `PrepareDispatchAsync(source,recipient,ct)`, `ReconcileAsync(source,recipient,seal,ct)`, `DispatchAsync(source,recipient,seal,ct)`. | Runtime contributes scoped `NativeStandaloneTriggerRuntimeTarget` for native material; other models add their own adapters. Preparation is side-effect free; reconciliation requires actual deterministic target evidence. The provider commits an immutable source seal before enqueue. |
-| `IStandaloneSchedulePlanner` | Scoped source-module contribution; `Supports(typeKey)`, `Plan(scope,previous,write,current,now)`. | No default planner. Returns preserve/replace/deactivate/remove; the provider must apply the plan with the resource mutation. |
-| `IStandaloneScheduleSource` | Scoped source-module contribution; `Supports(typeKey,family)`, `AdmitAsync(scope,claim,ct)`. | No default source. The existing recurring pump will supply an actual resource-owned occurrence claim. A prepared descriptor alone cannot settle its cursor. |
+| `IStandaloneSchedulePlanner` | Scoped source-module contribution; `Supports(typeKey)`, `Plan(scope,previous,write,current,now)`. | Bare Runtime installs no planner. Cross-domain `ScheduleResourcePlanner` (`Elsa.Activities.Scheduling`) is registered scoped by `StandaloneScheduleTriggersFeature`. Returns preserve/replace/deactivate/remove; the provider must apply the plan with the resource mutation. |
+| `IStandaloneScheduleSource` | Scoped source-module contribution; `Supports(typeKey,family)`, `AdmitAsync(scope,claim,ct)`. | Bare Runtime installs no source. Cross-domain `ScheduleResourceSource` (`Elsa.Activities.Scheduling`) is registered scoped by `StandaloneScheduleTriggersFeature`. The existing recurring pump supplies the resource-owned occurrence snapshot, while the protected native/EF admission writer checks the actual current physical deadline after renewals. A prepared descriptor alone cannot settle its cursor. |
 | `IAuthoredModelAdmission` | Scoped physical-admission replacement; `AdmitAsync(AuthoredModelAdmissionRequest,ct)`. | Runtime selects scoped `AuthoredModelAdmission`, which refuses when no checked router/physical queue participant is installed and preserves cancellation. Support requires a protected actual queue/slot/source/material boundary; ordinary queue support alone is insufficient. |
 | `IAuthoredModelQueue` | Core physical-provider replacement; `AdmitAsync(request,work,grants,ct)`. | An optional scoped queue participant for protected authored model starts. Native composition supplies none and refuses that capability. A provider must qualify its actual queue/slot/source/material transaction, register one participant and preserve root grants; an ordinary queue acknowledgement grants no start authority. |
 
@@ -1446,3 +1475,9 @@ An ordinary saved-cohort start emitted by a checked ingress publisher carries Co
 ### BPMN standalone target contributions
 
 `ActivitiesBpmnHostingFeature` in the BPMN runtime module registers two independent **cross-domain contributions** to Runtime Core: singleton `BpmnTriggerModelSource : ITriggerTargetModelSource` contributes detached `bpmn` protocol/profile metadata through the one `TriggerTargetModelsDiscovering` aggregator; scoped `BpmnTriggerTarget : IStandaloneTriggerRuntimeTarget` owns captured model `Supports`, `PrepareDispatchAsync`, `ReconcileAsync` and `DispatchAsync` for the common delivery executor. There is no default BPMN contribution when the module is absent. Metadata discovery does not resolve the interpreter or delivery adapter. Fresh-admission capability differs from retained source/queue responsibility. The [implementer catalogue](../../../Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md#standalone-target-contributions-and-authored-preparation) names the full ownership and replacement boundaries.
+
+### Schedule module contributions
+
+Cross-domain `ScheduleTriggerTypeSource` (`Elsa.Activities.Scheduling`) contributes Timer/Cron metadata through `IStandaloneTriggerTypeSource`; `StandaloneScheduleTriggerAuthoringFeature` registers it with scoped `TimerTriggerConfigurationValidator` and `CronTriggerConfigurationValidator` (`ITriggerConfigurationValidator`). The existing single authoring/type aggregators consume these contributions; authoring installs no intake.
+
+`StandaloneScheduleTriggersFeature` registers scoped `ScheduleResourcePlanner`, `ScheduleResourceSource` and `ScheduleSourceContext`. The same context is aliased as `IStandaloneTriggerSourceContext<TimerScheduleSource>` and `IStandaloneTriggerSourceContext<CronScheduleSource>`; each uses its distinct producer descriptor/family. Configuration and source failures preserve their cause and scope/resource fields through `TriggerOperationException`. The ordinary recurring pump retains one overdue occurrence until a positive cohort is accepted, then advances beyond both the accepted occurrence and current time. Existing accepted cohorts remain immutable; this component contract is not live host/provider/restart acceptance. See the [module contribution note](../../../Activities/Scheduling/StandaloneTriggers/README.md#cross-domain-contributions).

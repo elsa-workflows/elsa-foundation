@@ -99,6 +99,7 @@ public sealed class Sizing(IKernelStore inner) : IKernelStore
 {
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
+    public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public int Commits, Rows;
     public long StateBytes, MaxStateBytes;

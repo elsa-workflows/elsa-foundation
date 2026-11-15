@@ -1,0 +1,325 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using Elsa.Common.RecurringTasks;
+using Elsa.Extensions;
+using Elsa.Persistence.EFCore;
+using Elsa.Persistence.EFCore.Extensions;
+using Elsa.Persistence.EFCore.Modules.Management;
+using Elsa.Persistence.EFCore.Modules.Runtime;
+using Elsa.Workflows;
+using Elsa.Workflows.CommitStates.Strategies;
+using Elsa.Workflows.Management;
+using Elsa.Workflows.Management.Filters;
+using Elsa.Workflows.Runtime;
+using Elsa.Workflows.Runtime.Activities;
+using Elsa.Workflows.Runtime.Filters;
+using Elsa.Workflows.Runtime.Messages;
+using Elsa.Workflows.Runtime.Stimuli;
+using Elsa.Common;
+using Elsa.Common.Models;
+using Elsa.Workflows.Models;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+
+namespace Elsa3Cost;
+
+public static class Program
+{
+    public static readonly string[] AllWorkflows = ["writeline-sequence", "http-reference", "fork-join-resume"];
+
+    /// <summary>
+    /// default: Elsa 3's default (no workflow commit strategy; state is committed when a burst of execution ends).
+    /// activity-executed: the "Commit After Activity Execution" workflow strategy set as the global default.
+    /// default-cache: default commit strategy plus management.UseCache() and runtime.UseCache(), as the Elsa.Server
+    /// sample host configures them.
+    /// </summary>
+    public static readonly string[] AllConfigs = ["default", "activity-executed", "default-cache"];
+
+    private static readonly TimeSpan BeyondAnyRun = TimeSpan.FromHours(1);
+    private const int QuietMs = 1500;
+    private const string MeasureHeader = "x-elsa3cost-phase";
+
+    public static async Task<int> Main(string[] args)
+    {
+        var options = ParseArgs(args);
+        var outDir = options.GetValueOrDefault("out") ?? Path.Combine(AppContext.BaseDirectory, "out");
+        var workflows = (options.GetValueOrDefault("workflows") ?? string.Join(',', AllWorkflows)).Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var configs = (options.GetValueOrDefault("configs") ?? string.Join(',', AllConfigs)).Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var runs = int.Parse(options.GetValueOrDefault("runs") ?? "3");
+        var provider = options.GetValueOrDefault("provider") ?? "sqlite";
+        var pgAdmin = options.GetValueOrDefault("pg");
+        Directory.CreateDirectory(outDir);
+
+        var failures = 0;
+        foreach (var workflow in workflows)
+        foreach (var config in configs)
+        for (var run = 1; run <= runs; run++)
+        {
+            var runDir = Path.Combine(outDir, provider, workflow, config, $"run-{run}");
+            if (Directory.Exists(runDir)) Directory.Delete(runDir, recursive: true);
+            Directory.CreateDirectory(runDir);
+            Console.WriteLine($"=== {provider} {workflow} {config} run {run} ===");
+            try
+            {
+                var result = await RunCaseAsync(provider, pgAdmin, workflow, config, run, runDir);
+                Console.WriteLine($"    window commands: {result.WindowCommands} (in-flow {result.InFlowCommands}, background {result.BackgroundCommands}); SaveChanges {result.SaveChanges}; transactions {result.TransactionsStarted}");
+            }
+            catch (Exception e)
+            {
+                failures++;
+                Console.WriteLine($"    FAILED: {e}");
+                await File.WriteAllTextAsync(Path.Combine(runDir, "FAILED.txt"), e.ToString());
+            }
+        }
+
+        Report.Write(outDir, provider);
+        return failures == 0 ? 0 : 1;
+    }
+
+    private static Dictionary<string, string> ParseArgs(string[] args)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < args.Length; i++)
+            if (args[i].StartsWith("--") && i + 1 < args.Length)
+                map[args[i][2..]] = args[++i];
+        return map;
+    }
+
+    private static async Task<RunResult> RunCaseAsync(string provider, string? pgAdmin, string workflow, string config, int run, string runDir)
+    {
+        var recorder = new Recorder();
+        string connectionString;
+        string? pgDatabase = null;
+        if (provider == "sqlite")
+        {
+            var dbPath = Path.Combine(runDir, "elsa.sqlite.db");
+            connectionString = $"Data Source={dbPath};Cache=Shared;";
+        }
+        else
+        {
+            pgDatabase = $"elsa3cost_{workflow.Replace('-', '_')}_{config.Replace('-', '_')}_{run}_{Guid.NewGuid():N}"[..50];
+            connectionString = await Postgres.CreateDatabaseAsync(pgAdmin!, pgDatabase);
+        }
+
+        var app = BuildHost(provider, connectionString, config, recorder);
+        try
+        {
+            await app.StartAsync();
+            // Startup tasks (migrations, definition store population, trigger indexing, route table) run during
+            // StartAsync; wait until the database is quiet before the window opens.
+            await recorder.WaitForQuietAsync(2000);
+            var setupCommands = recorder.Commands.Count;
+
+            var phases = new List<PhaseResult>();
+            switch (workflow)
+            {
+                case "writeline-sequence":
+                    phases.Add(await MeasureAsync(recorder, "start", async () =>
+                    {
+                        var response = await StartDirectlyAsync(app.Services, WriteLineSequenceWorkflow.DefinitionId);
+                        return response.WorkflowInstanceId;
+                    }));
+                    await AssertInstanceAsync(app.Services, phases[0].InstanceId!, WorkflowStatus.Finished, WorkflowSubStatus.Finished, expectedBookmarks: 0);
+                    break;
+
+                case "http-reference":
+                    var client = app.GetTestClient();
+                    string? body = null;
+                    HttpStatusCode status = 0;
+                    phases.Add(await MeasureAsync(recorder, "request", async () =>
+                    {
+                        using var request = new HttpRequestMessage(HttpMethod.Post, $"/workflows/{HttpReferenceWorkflow.Path}")
+                        {
+                            Content = new StringContent("""{"firstName":"Alice","lastName":"Smith"}""", Encoding.UTF8, "application/json")
+                        };
+                        request.Headers.Add(MeasureHeader, "request");
+                        using var response = await client.SendAsync(request);
+                        status = response.StatusCode;
+                        body = await response.Content.ReadAsStringAsync();
+                        return null;
+                    }));
+                    if (status != HttpStatusCode.OK || body != "Alice Smith")
+                        throw new InvalidOperationException($"Unexpected HTTP response: {(int)status} '{body}'.");
+                    var instanceId = await SingleInstanceIdAsync(app.Services, HttpReferenceWorkflow.DefinitionId);
+                    phases[0] = phases[0] with { InstanceId = instanceId };
+                    await AssertInstanceAsync(app.Services, instanceId, WorkflowStatus.Finished, WorkflowSubStatus.Finished, expectedBookmarks: 0);
+                    break;
+
+                case "fork-join-resume":
+                    phases.Add(await MeasureAsync(recorder, "start", async () =>
+                    {
+                        var response = await StartDirectlyAsync(app.Services, ForkJoinResumeWorkflow.DefinitionId);
+                        return response.WorkflowInstanceId;
+                    }));
+                    var id = phases[0].InstanceId!;
+                    await AssertInstanceAsync(app.Services, id, WorkflowStatus.Running, WorkflowSubStatus.Suspended, expectedBookmarks: 1);
+                    phases.Add(await MeasureAsync(recorder, "resume", async () =>
+                    {
+                        await using var scope = app.Services.CreateAsyncScope();
+                        var resumer = scope.ServiceProvider.GetRequiredService<IWorkflowResumer>();
+                        var responses = (await resumer.ResumeAsync<Event>(new EventStimulus(ForkJoinResumeWorkflow.EventName), id)).ToList();
+                        if (responses.Count != 1)
+                            throw new InvalidOperationException($"Expected one resumed instance, got {responses.Count}.");
+                        return id;
+                    }));
+                    await AssertInstanceAsync(app.Services, id, WorkflowStatus.Finished, WorkflowSubStatus.Finished, expectedBookmarks: 0);
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(workflow), workflow, null);
+            }
+
+            var result = RunResult.From(provider, workflow, config, run, recorder, phases, setupCommands);
+            await File.WriteAllTextAsync(Path.Combine(runDir, "result.json"), JsonSerializer.Serialize(result, Report.Json));
+            await File.WriteAllTextAsync(Path.Combine(runDir, "commands.sql.log"), Report.SqlLog(recorder));
+            await File.WriteAllTextAsync(Path.Combine(runDir, "window.sql.log"), Report.SqlLog(recorder, windowOnly: true));
+            return result;
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+            if (pgDatabase is not null)
+                await Postgres.DropDatabaseAsync(pgAdmin!, pgDatabase);
+        }
+    }
+
+    private static async Task<PhaseResult> MeasureAsync(Recorder recorder, string phase, Func<Task<string?>> action)
+    {
+        var openedAt = recorder.Commands.Count;
+        recorder.Open(phase);
+        string? instanceId;
+        double returnedAtMs;
+        try
+        {
+            instanceId = await action();
+            returnedAtMs = recorder.Commands.Count > 0 ? recorder.Commands[^1].AtMs : 0;
+            var countAtReturn = recorder.Commands.Count(c => c.Phase == phase);
+            // Keep the window open until the database has been quiet for QuietMs, so work that the run hands to
+            // background channels (log sinks, notifications) is counted too.
+            await recorder.WaitForQuietAsync(QuietMs);
+            var total = recorder.Commands.Count(c => c.Phase == phase);
+            return new PhaseResult(phase, instanceId, countAtReturn, total - countAtReturn);
+        }
+        finally
+        {
+            recorder.Close();
+        }
+    }
+
+    private static async Task<RunWorkflowInstanceResponse> StartDirectlyAsync(IServiceProvider services, string definitionId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var runtime = scope.ServiceProvider.GetRequiredService<IWorkflowRuntime>();
+        var client = await runtime.CreateClientAsync();
+        return await client.CreateAndRunInstanceAsync(new CreateAndRunWorkflowInstanceRequest
+        {
+            WorkflowDefinitionHandle = WorkflowDefinitionHandle.ByDefinitionId(definitionId, VersionOptions.Published)
+        });
+    }
+
+    private static async Task<string> SingleInstanceIdAsync(IServiceProvider services, string definitionId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowInstanceStore>();
+        var instances = (await store.FindManyAsync(new WorkflowInstanceFilter { DefinitionId = definitionId })).ToList();
+        if (instances.Count != 1)
+            throw new InvalidOperationException($"Expected one instance of {definitionId}, found {instances.Count}.");
+        return instances[0].Id;
+    }
+
+    private static async Task AssertInstanceAsync(IServiceProvider services, string instanceId, WorkflowStatus status, WorkflowSubStatus subStatus, int expectedBookmarks)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var instance = await scope.ServiceProvider.GetRequiredService<IWorkflowInstanceStore>().FindAsync(new WorkflowInstanceFilter { Id = instanceId })
+                       ?? throw new InvalidOperationException($"Workflow instance {instanceId} not found.");
+        if (instance.Status != status || instance.SubStatus != subStatus)
+            throw new InvalidOperationException($"Workflow instance {instanceId} is {instance.Status}/{instance.SubStatus}, expected {status}/{subStatus}. Incidents: {instance.IncidentCount}.");
+        if (instance.IncidentCount != 0)
+            throw new InvalidOperationException($"Workflow instance {instanceId} has {instance.IncidentCount} incidents.");
+        var bookmarks = (await scope.ServiceProvider.GetRequiredService<IBookmarkStore>().FindManyAsync(new BookmarkFilter { WorkflowInstanceId = instanceId })).Count();
+        if (bookmarks != expectedBookmarks)
+            throw new InvalidOperationException($"Workflow instance {instanceId} has {bookmarks} bookmarks, expected {expectedBookmarks}.");
+    }
+
+    private static WebApplication BuildHost(string provider, string connectionString, string config, Recorder recorder)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Production" });
+        builder.WebHost.UseTestServer();
+        builder.Logging.ClearProviders();
+        builder.Logging.AddSimpleConsole(o => o.SingleLine = true);
+        builder.Logging.SetMinimumLevel(LogLevel.Warning);
+
+        var services = builder.Services;
+        var useCache = config == "default-cache";
+
+        services.AddElsa(elsa =>
+        {
+            elsa.UseWorkflows(workflows =>
+            {
+                if (config == "activity-executed")
+                    workflows.WithDefaultWorkflowCommitStrategy(new ActivityExecutedWorkflowStrategy());
+            });
+            elsa.UseWorkflowManagement(management =>
+            {
+                management.UseEntityFrameworkCore(ef => Configure(ef, provider, connectionString, recorder));
+                if (useCache) management.UseCache();
+            });
+            elsa.UseWorkflowRuntime(runtime =>
+            {
+                runtime.UseEntityFrameworkCore(ef => Configure(ef, provider, connectionString, recorder));
+                if (useCache) runtime.UseCache();
+            });
+            elsa.UseJavaScript();
+            elsa.UseHttp();
+            elsa.AddWorkflow<WriteLineSequenceWorkflow>();
+            elsa.AddWorkflow<HttpReferenceWorkflow>();
+            elsa.AddWorkflow<ForkJoinResumeWorkflow>();
+        });
+
+        // Every recurring task Elsa registered runs on an interval no run reaches, so timer work stays out of the
+        // window (the Elsa 4 gate does the same with its lease and schema-gate timers).
+        var recurringTaskTypes = services
+            .Where(d => d.ServiceType == typeof(Elsa.Common.IRecurringTask) && d.ImplementationType is not null)
+            .Select(d => d.ImplementationType!)
+            .Distinct()
+            .ToList();
+        services.PostConfigure<RecurringTaskOptions>(o =>
+        {
+            foreach (var type in recurringTaskTypes)
+                o.Schedule.ConfigureTask(type, IntervalExpression.FromInterval(BeyondAnyRun));
+        });
+        RecurringTaskTypes = recurringTaskTypes.Select(t => t.FullName!).ToList();
+
+        var app = builder.Build();
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Headers.TryGetValue(MeasureHeader, out var phase))
+                recorder.JoinFlow(phase.ToString());
+            await next();
+        });
+        app.UseWorkflows();
+        return app;
+    }
+
+    public static List<string> RecurringTaskTypes { get; private set; } = [];
+
+    private static void Configure<TFeature, TDbContext>(PersistenceFeatureBase<TFeature, TDbContext> ef, string provider, string connectionString, Recorder recorder)
+        where TDbContext : ElsaDbContextBase
+        where TFeature : PersistenceFeatureBase<TFeature, TDbContext>
+    {
+        if (provider == "sqlite")
+            ef.UseSqlite(connectionString);
+        else
+            ef.UsePostgreSql(connectionString);
+        var inner = ef.DbContextOptionsBuilder;
+        ef.DbContextOptionsBuilder = (sp, options) =>
+        {
+            inner(sp, options);
+            options.AddInterceptors(recorder.Interceptors());
+        };
+    }
+}
+
+public sealed record PhaseResult(string Phase, string? InstanceId, int CommandsUntilReturn, int CommandsAfterReturn);

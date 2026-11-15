@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Node } from "@xyflow/react";
 import type { StudioActivityDefinitionImplementationEditorProps, StudioActivityDefinitionImplementationState } from "@elsa-workflows/studio-sdk";
 import type { WorkflowNodeData } from "../workflowAdapter";
+import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
 import type { GraphDocumentAdapter } from "../graph-authoring/graphDocumentAdapter";
 import { useGraphAuthoringCanvas } from "../graph-authoring/useGraphAuthoringCanvas";
 
@@ -24,7 +25,7 @@ const applyModel = (_document: Document, nodes: Node<WorkflowNodeData>[]) => ({ 
 const cleanup: (() => void)[] = [];
 afterEach(() => { for (const unmount of cleanup.splice(0)) unmount(); });
 
-function renderCanvas(legacyChange?: CanvasOptions["onChange"]) {
+function renderCanvas(legacyChange?: CanvasOptions["onChange"], viewOptions: Pick<CanvasOptions, "captureView" | "restoreView"> = {}) {
   const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
   let canvas!: Canvas;
   let current = { value: 0 };
@@ -47,7 +48,7 @@ function renderCanvas(legacyChange?: CanvasOptions["onChange"]) {
       return true;
     });
     canvas = useGraphAuthoringCanvas({ document, adapter, resetKey: "resource", buildModel, applyModel,
-      onChange: legacyChange ?? legacyNotification, tryChange: legacyChange ? undefined : changes });
+      ...viewOptions, onChange: legacyChange ?? legacyNotification, tryChange: legacyChange ? undefined : changes });
     return <output>{canvas.nodes[0]?.position.x}</output>;
   }
   flushSync(() => root.render(<Harness />));
@@ -161,4 +162,29 @@ describe("graph parent admission and canonical history", () => {
     expect(h.canvas.undo()).toBe(true);
     await vi.waitFor(() => expect(h.current.value).toBe(0));
   });
+});
+
+it("restores captured graph positions only after parent-admitted Undo and Redo", async () => {
+  const initial: GraphAuthoringView = { frames: [], selectedNodeIds: ["one", "two"], primaryNodeId: "two" };
+  const nested: GraphAuthoringView = { frames: [{ ownerNodeId: "block", slotId: "activities", label: "Block" }], selectedNodeIds: ["one"], primaryNodeId: "one" };
+  let view = initial;
+  const restoreView = vi.fn((next: GraphAuthoringView) => { view = next; });
+  const h = renderCanvas(undefined, { captureView: () => structuredClone(view), restoreView });
+  await commit(h, 1); view = nested;
+  h.policy.refuse = true;
+  expect(h.canvas.undo()).toBe(false);
+  expect(view).toEqual(nested); expect(restoreView).not.toHaveBeenCalled();
+  expect(h.current.value).toBe(1); expect(h.canvas.canRedo).toBe(false);
+  h.policy.refuse = false;
+  expect(h.canvas.undo()).toBe(true);
+  await vi.waitFor(() => { expect(h.current.value).toBe(0); expect(h.canvas.canRedo).toBe(true); });
+  expect(view).toEqual(initial);
+  h.policy.refuse = true;
+  expect(h.canvas.redo()).toBe(false);
+  expect(view).toEqual(initial); expect(restoreView).toHaveBeenCalledTimes(1);
+  expect(h.current.value).toBe(0); expect(h.canvas.canRedo).toBe(true);
+  h.policy.refuse = false;
+  expect(h.canvas.redo()).toBe(true);
+  await vi.waitFor(() => expect(h.current.value).toBe(1));
+  expect(view).toEqual(nested); expect(restoreView).toHaveBeenCalledTimes(2);
 });

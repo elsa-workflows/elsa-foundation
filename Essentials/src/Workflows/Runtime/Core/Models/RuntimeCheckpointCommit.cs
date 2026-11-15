@@ -34,6 +34,10 @@ public sealed record RuntimeCheckpointCommit(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelExecutionState? ExpectedModelExecution { get; init; }
 
+    /// <summary>The accepted start and recorded failure that must still authorize a first fault checkpoint.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeInitialStartFault? ExpectedInitialStartFault { get; init; }
+
     /// <summary>The observed native parent wait that must remain live when its model child is first admitted.</summary>
     /// <remarks>A concurrency condition, not source authority. Admission preserves the parent bookmark and its generation.</remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -57,10 +61,11 @@ public sealed record RuntimeCheckpointCommit(
     {
         if (ExpectedModelExecution is not { } expected) return;
         if (ModelState is not null || ExpectedBookmarkResume is not null || ExpectedFence is null ||
-            Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
             expected.ExecutionId == WorkflowExecutionId || expected.Lifecycle != RuntimeModelLifecycle.Running ||
             StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert,
-                State.Status: WorkflowExecutionStatus.Running } native ||
+                State: { } } native ||
+            !(Checkpoint.Name == RuntimeCheckpointNames.WorkflowStarted && native.State.Status == WorkflowExecutionStatus.Running && ExpectedInitialStartFault is null ||
+              Checkpoint.Name == RuntimeCheckpointNames.WorkflowFaulted && native.State.Status == WorkflowExecutionStatus.Faulted && ExpectedInitialStartFault is not null) ||
             native.State.StartedAt is not { } startedAt || startedAt > Checkpoint.OccurredAt || native.State.CreatedAt != startedAt ||
             native.State.ParentWorkflowExecutionId is not null ||
             native.State.TenantId != expected.TenantId || native.State.Partition?.Value != (expected.Partition?.Value ?? expected.Scope.Value) ||

@@ -66,7 +66,8 @@ public sealed class EditorialInterchangeTests
             var placed = graph.Elements.Where(x => x.ChildNodeId is not null).ToDictionary(x => x.ElementId, x => x.ChildNodeId!, StringComparer.Ordinal);
             var confirmed = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(Web)!.Elements
                 .Where(x => placed.ContainsKey(x.ElementId)).ToDictionary(x => x.ChildNodeId!, x => placed[x.ElementId], StringComparer.Ordinal);
-            var handler = services.GetServices<IActivityStructureHandler>().Single(x => x.Kind == BpmnProcessActivity.StructureKind);
+            var handler = services.GetServices<IActivityStructureHandler>().Single(x => x.Kind == BpmnProcessActivity.StructureKind &&
+                x.SchemaVersion == BpmnProcessActivity.StructureSchemaVersion);
             var compiled = handler.RemapExecutableStructure(handler.CompileExecutableStructure(imported.ProcessNode), confirmed);
             return new ExecutableActivityStructure(compiled.Kind, compiled.SchemaVersion, compiled.Payload);
         });

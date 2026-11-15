@@ -339,6 +339,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 ResolveUnderlyingStore<IActivityExecutionStateStore>(serviceProvider, typeof(CoalescingActivityExecutionStateStore)));
             store.StimulusAdapters = serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>().ToArray();
             store.StimulusInputValidator = serviceProvider.GetService<IWorkflowExecutableInputValidator>();
+            store.InitialStartFaultPoisonStore = serviceProvider.GetService<IWorkflowSchedulerPoisonStore>();
             return store;
         });
         services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
