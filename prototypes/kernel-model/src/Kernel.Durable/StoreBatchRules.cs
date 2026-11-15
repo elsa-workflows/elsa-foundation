@@ -13,7 +13,7 @@ public static class StoreBatchRules
             {
                 if (turn.Expected is not { } expected)
                     throw new StoreException(Failure.Definite,"Delete requires the existing row's exact revision.");
-                if (turn.Row is { } marker && (!marker.Retired || marker.Creation < 0 ||
+                if (turn.Row is { } marker && (turn.Journal is null || !marker.Retired || marker.Creation < 0 ||
                     marker.Creation == 0 && !CreationProtocol.IsPhysicalAddress(marker.Id) ||
                     marker.Status == InstanceStatus.Running || expected == long.MaxValue ||
                     marker != new InstanceRow(marker.Id,"","",marker.Status,"null",expected+1,null,

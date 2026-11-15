@@ -75,7 +75,7 @@ public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
 /// <c>Held</c> messages stay, and are no longer on trial: their turn ran and did not kill the process.
 /// <c>Delete</c> requires a present <c>Expected</c> matching an existing row. With <c>Row</c> null it is a trusted
-/// raw deletion; otherwise <c>Row</c> must be the canonical retirement marker. Both remove positive journal history;
+/// raw deletion; otherwise <c>Row</c> must be the canonical retirement marker with a non-null deletion journal. Both remove positive journal history;
 /// the delete's own journal item records removal. Missing actors never acquire a default revision.
 /// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
 /// <c>Subscribed</c> and <c>Unsubscribed</c> are idempotent (FINDINGS 25.2): a wait that is there already stays one wait,
