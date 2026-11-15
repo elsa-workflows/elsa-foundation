@@ -191,7 +191,7 @@ public static class RuntimeCheckpointCommitFingerprint
                         .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
                     Cancellations = commit.StateChanges.BackgroundActivityWork.Cancellations
                         .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
-                        .ThenBy(request => JsonSerializer.Serialize(request.ActivityExecutionIds), StringComparer.Ordinal)
+                        .ThenBy(request => JsonSerializer.Serialize(request.ActivityExecutionIds, exactHistorySource ? ExactBookmarkOptions : null), StringComparer.Ordinal)
                         .ToArray()
                 },
                 PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)

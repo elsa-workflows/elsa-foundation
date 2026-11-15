@@ -286,10 +286,31 @@ public sealed class RuntimeHistoryCandidateTests
         using var current = accessor.Push(session);
         if (changed == "cleanup")
             flush = flush with { StateChanges = new(null, null, flush.StateChanges.ActivityExecutions, [], [], [], [],
-                activityScopeCleanups: [new("run", "scope", ["activity"], ["bookmark"], [], [])]) };
+                activityScopeCleanups: [new("run", "activity", ["activity"], ["bookmark"], [], [])]) };
         else flush = flush with { RetainSchedulerWork = true };
+        RuntimeCheckpointCommitValidator.Validate(flush);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(flush));
         Assert.True(session.IsActive); Assert.True(session.HasBufferedChanges);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Equivalent_background_cancellation_sets_keep_exact_replay_identity(bool opaque)
+    {
+        var firstId = opaque ? new string((char)0xd800, 1) : "first";
+        var secondId = opaque ? new string((char)0xd801, 1) : "second";
+        using var fixture = await Fixture.Create(Policy("ActivityStarted"));
+        var raw = Commit("background-canonical", RuntimeCheckpointNames.ActivityStarted, activity: Activity(ActivityExecutionStatus.Running));
+        var a = new BackgroundActivityWorkCancellationRequest("run", [firstId]);
+        var b = new BackgroundActivityWorkCancellationRequest("run", [secondId]);
+        var first = raw with { StateChanges = raw.StateChanges.WithBackgroundActivityWork(new(cancellations: [a, b])) };
+        var second = raw with { StateChanges = raw.StateChanges.WithBackgroundActivityWork(new(cancellations: [b, a])) };
+        RuntimeCheckpointCommitValidator.Validate(first); RuntimeCheckpointCommitValidator.Validate(second);
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(second));
+        var capturedFirst = await fixture.Capture.EnrichAsync(first);
+        var capturedSecond = await fixture.Capture.EnrichAsync(second);
+        await fixture.Capture.ValidateFinalAsync(capturedFirst); await fixture.Capture.ValidateFinalAsync(capturedSecond);
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(capturedFirst), RuntimeCheckpointCommitFingerprint.Compute(capturedSecond));
     }
 
     [Fact]
