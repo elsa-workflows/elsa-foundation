@@ -166,8 +166,10 @@
 .ad-draft-editor .ad-authoring-view-tabs {
   flex-wrap: wrap;
   gap: 4px;
-  margin: 16px 0;
-  padding: 0 0 8px;
+  min-height: 2.5rem;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: .2rem .5rem;
   border: 0;
   border-bottom: 1px solid var(--studio-border);
   border-radius: 0;
@@ -175,7 +177,7 @@
 }
 
 .ad-draft-editor .ad-authoring-view-tabs button {
-  min-height: 36px;
+  min-height: 1.9rem;
   padding: 8px 12px;
   border-color: transparent;
   background: transparent;

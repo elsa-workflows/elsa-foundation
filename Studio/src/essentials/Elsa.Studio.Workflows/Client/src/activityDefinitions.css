@@ -346,19 +346,6 @@
   padding: 0;
 }
 
-.ad-draft-editor.is-graph-designer .ad-authoring-view-tabs {
-  min-height: 2.5rem;
-  flex: 0 0 auto;
-  margin: 0;
-  padding: .2rem .5rem;
-  border-width: 0 0 1px;
-  border-radius: 0;
-}
-
-.ad-draft-editor.is-graph-designer .ad-authoring-view-tabs button {
-  min-height: 1.9rem;
-}
-
 .ad-draft-editor.is-graph-designer .ad-draft-lifecycle {
   flex: 0 0 auto;
   border-bottom: 1px solid var(--studio-border);
