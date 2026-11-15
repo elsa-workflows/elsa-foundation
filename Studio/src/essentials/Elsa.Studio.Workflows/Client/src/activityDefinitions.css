@@ -305,7 +305,7 @@
 .ad-graph-outcome-mappings ul { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
 .ad-graph-outcome-mappings li, .ad-graph-outcome-mapping-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: end; }
 .ad-graph-outcome-mapping-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-.ad-graph-node-actions { display: grid; grid-template-columns: auto auto 1fr; gap: .4rem; padding: .65rem .75rem 0; }
+.ad-graph-node-actions { display: flex; align-items: center; gap: .4rem; padding: .65rem .75rem 0; }
 /* Canvas fill is inherited from the shared .wf-canvas-shell tone; only the host-specific
    sizing/overflow belongs here. */
 .ad-graph-canvas { min-width: 0; padding: 0; overflow: hidden; }

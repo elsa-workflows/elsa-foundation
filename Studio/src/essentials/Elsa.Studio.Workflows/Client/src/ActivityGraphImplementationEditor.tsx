@@ -901,11 +901,11 @@ export function ActivityGraphImplementationEditor({
       render: () => (
         <>
           {/* A pure BPMN structure element has no bound activity, but is still removable. */}
-          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions">
+          {selected || selectedBpmnElement ? <div className="ad-graph-node-actions" role="group" aria-label="Selected activity actions">
             {/* Ordering is a slot-list concept; a BPMN process is ordered by its sequence flows. */}
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} /> : <ArrowLeft size={15} />}</button>
-            <button type="button" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} /> : <ArrowRight size={15} />}</button>
-            <button type="button" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} /> Remove</button>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} aria-hidden="true" /> : <ArrowLeft size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} aria-hidden="true" /> : <ArrowRight size={15} aria-hidden="true" />}</StudioButton>
+            <StudioButton size="sm" className="danger" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} aria-hidden="true" /> Remove</StudioButton>
           </div> : null}
           {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
           {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
