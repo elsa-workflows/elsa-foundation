@@ -228,7 +228,12 @@ test("standalone trigger associations and inputs", async ({ page }, info) => {
   expect(await j.deliveries(trigger.id)).toEqual(runsBefore);
   await page.getByLabel("Configured value for count", { exact: true }).fill("wrong number");
   await page.getByRole("button", { name: "Review subscription", exact: true }).click();
-  await expect(page.getByRole("alert").first()).toBeVisible(); await expect(page.getByLabel("Configured value for count", { exact: true })).toHaveValue("wrong number"); await j.capture("mapping-errors");
+  const rejectedMapping = page.getByLabel("Configured value for count", { exact: true });
+  await expect(rejectedMapping).toHaveValue("wrong number"); await expect(rejectedMapping).toBeFocused();
+  await expect(rejectedMapping).toBeInViewport();
+  const rejectedField = rejectedMapping.locator("xpath=ancestor::fieldset[contains(@class, 'wf-trigger-mapping')][1]");
+  await expect(rejectedField.getByRole("alert")).toContainText("Enter a whole number");
+  await j.capture("mapping-errors", rejectedField);
   await page.getByLabel("Configured value for count", { exact: true }).fill("8");
   await page.getByRole("checkbox", { name: "Authorize this shared trigger to invoke the workflow", exact: true }).check();
   await page.getByRole("button", { name: "Review subscription", exact: true }).click(); await j.review();

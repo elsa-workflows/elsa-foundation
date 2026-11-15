@@ -74,6 +74,34 @@ describe("standalone source property paths", () => {
 });
 
 describe("mounted source path authoring", () => {
+  it.each(["Literal", "SourceField"])("focuses rejected mappings without losing other draft values: %s", async kind => {
+    const declared = [...inputs, { name: "Count", type: { alias: "Int32", collectionKind: "Single" }, isRequired: true }];
+    const selected = { ...target, inputContract: { version: 1, inputs: declared } };
+    function Harness() {
+      const [drafts, setDrafts] = useState(() => mappingDrafts([
+        { inputName: "Customer", binding: { kind: "Literal", value: "kept untouched" } },
+        { inputName: "Count", binding: { kind: "Literal", value: 7 } }
+      ]));
+      const [errors, setErrors] = useState<Record<string, string>>({});
+      return <><MappingEditor client={{} as TriggerClient} triggerId="trigger" triggerRevision={1} target={selected}
+        context={{ ...context, target: selected }} drafts={drafts} onChange={setDrafts} errors={errors} />
+        <button onClick={() => setErrors(realizeMappings(declared, drafts).errors)}>Review mapping</button></>;
+    }
+    const container = mount(<Harness />);
+    if (kind === "SourceField") {
+      fill(control(container, "Value source for Count"), "SourceField");
+      fill(control(container, "Source field for Count"), "custom");
+    } else fill(control(container, "Configured value for Count"), "wrong number");
+    const rejected = control(container, kind === "SourceField" ? "Source path for Count" : "Configured value for Count");
+    const review = [...container.querySelectorAll("button")].find(button => button.textContent === "Review mapping")!;
+    review.focus(); click(container, "Review mapping");
+
+    await vi.waitFor(() => expect(document.activeElement).toBe(rejected));
+    expect(rejected.getAttribute("aria-invalid")).toBe("true");
+    expect(rejected.value).toBe(kind === "SourceField" ? "" : "wrong number");
+    expect(control(container, "Configured value for Customer").value).toBe("kept untouched");
+  });
+
   it("authors a nested payload path, invalidates its preview on edits and corrects invalid text without using the old path", async () => {
     const { container, drafts, client } = editor();
     fill(control(container, "Value source for Customer"), "SourceField");

@@ -214,14 +214,15 @@ export class TriggerJourney {
       await this.info.attach(`${name}.saved-inputs.png`, { path: savedPath, contentType: "image/png" });
       this.requests.push({ kind: "bpmn-saved-inputs-visual-capture", capture: name, attachment: `${name}.saved-inputs.png` });
     }
-    const impact = this.page.getByRole("region", { name: "Change impact", exact: true });
+    const impact = this.page.getByRole("region", { name: name === "mapping-preview" ? "Mapped sample inputs" : "Change impact", exact: true });
     if (await impact.count() && await impact.evaluate(element => element.scrollWidth > element.clientWidth + 1)) {
       const before = await impact.evaluate(element => element.scrollLeft);
+      await impact.scrollIntoViewIfNeeded();
       await impact.evaluate(element => { element.scrollLeft = element.scrollWidth; });
       const rightPath = this.info.outputPath(`${name}.scroll-right.png`);
       await this.page.screenshot({ path: rightPath, fullPage: true, animations: "disabled" });
       await this.info.attach(`${name}.scroll-right.png`, { path: rightPath, contentType: "image/png" });
-      this.requests.push({ kind: "impact-horizontal-scroll-visual-capture", capture: name, attachment: `${name}.scroll-right.png` });
+      this.requests.push({ kind: name === "mapping-preview" ? "mapping-preview-horizontal-scroll-visual-capture" : "impact-horizontal-scroll-visual-capture", capture: name, attachment: `${name}.scroll-right.png` });
       await impact.evaluate((element, left) => { element.scrollLeft = left; }, before);
     }
     this.captures.push({ name, url: this.page.url(), ...await this.page.evaluate(() => {
