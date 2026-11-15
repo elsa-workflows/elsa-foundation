@@ -406,15 +406,15 @@ def host(directory, dll, url, ready_path, log, env):
             stop_group(process, graceful_timeout=45)
 
 
-def prepare_host(project, destination):
+def prepare_host(project, destination, *, configuration_directory=None):
     output = project.parent / 'bin/Debug/net10.0'
-    shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages", "appsettings*.json", "shells*.json"))
+    shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "native-store", "packages", "appsettings*.json", "shells*.json"))
     # Older local outputs may contain stores. Never seed acceptance from them.
     for file in destination.rglob('*'):
         if file.is_file() and (file.suffix in {'.db', '.db-shm', '.db-wal'} or file.name == 'nuplane.lock.json'):
             file.unlink()
     for name in ['appsettings.json', 'shells.json']:
-        shutil.copy2(project.parent / name, destination / name)
+        shutil.copy2((configuration_directory or project.parent) / name, destination / name)
 
 
 def source_state(root):
