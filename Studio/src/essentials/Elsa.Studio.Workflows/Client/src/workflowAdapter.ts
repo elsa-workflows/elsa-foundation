@@ -942,7 +942,7 @@ export function normalizeActivityStructures(root: ActivityNode | null | undefine
   if (!root) return null;
 
   const catalogItem = resolveCatalogItem(root, catalog);
-  const normalizedStructure = root.structure ?? (catalogItem ? createStructureForActivity(catalogItem) : null);
+  const normalizedStructure = root.structure ?? (catalogItem ? createStructureForActivity(catalogItem) : null) ?? root.structure;
   let next: ActivityNode = normalizedStructure === root.structure ? root : { ...root, structure: normalizedStructure };
 
   const slots = getChildSlots(next, catalog);

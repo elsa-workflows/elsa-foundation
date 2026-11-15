@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Activities.Bpmn.Core.BpmnDocumentSourceException
+Elsa.Activities.Bpmn.Core.BpmnDocumentSourceException.BpmnDocumentSourceException(string! message, System.Exception? innerException = null) -> void
 Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.AdmitNewExecutions.get -> bool
 Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>? serviceBindings, System.Collections.Generic.IReadOnlyList<string!>? timerBindings) -> void
 Elsa.Activities.Bpmn.Core.BpmnModelDefinition.TimerBindings.get -> System.Collections.Generic.IReadOnlyList<string!>?

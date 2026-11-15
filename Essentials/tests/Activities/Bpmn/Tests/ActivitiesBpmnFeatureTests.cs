@@ -48,10 +48,19 @@ public sealed class ActivitiesBpmnFeatureTests
         feature.ConfigureServices(services);
         feature.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
-        var handler = Assert.Single(provider.GetServices<IActivityStructureHandler>());
-        Assert.Equal(Activities.BpmnProcess.StructureKind, handler.Kind);
-        Assert.True(handler.SupportsScopedVariables);
+        var handlers = provider.GetServices<IActivityStructureHandler>().ToArray();
+        Assert.Equal(3, handlers.Length);
+        Assert.All(handlers, item => Assert.True(item.SupportsScopedVariables));
+        var handler = Assert.Single(handlers, item => item.Kind == Activities.BpmnProcess.StructureKind &&
+            item.SchemaVersion == Activities.BpmnProcess.StructureSchemaVersion);
         Assert.Equal(typeof(Models.BpmnAuthoredStructure), handler.AuthoredPayloadType);
+        Assert.Equal(typeof(Models.BpmnAuthoredDocument), Assert.Single(handlers, item =>
+            item.Kind == Activities.BpmnProcess.StructureKind && item.SchemaVersion == Models.BpmnAuthoredDocument.SchemaVersion).AuthoredPayloadType);
+        Assert.Null(Assert.Single(handlers, item => item.Kind == Models.BpmnDocumentScopeView.Kind &&
+            item.SchemaVersion == Models.BpmnDocumentScopeView.SchemaVersion).AuthoredPayloadType);
+        var validators = services.Where(item => item.ServiceType == typeof(Elsa.Workflows.Design.Validations.Core.Contracts.IDraftValidator)).ToArray();
+        Assert.Equal(2, validators.Length);
+        Assert.All(validators, item => Assert.Equal(ServiceLifetime.Scoped, item.Lifetime));
         Assert.Single(services, service => service.ServiceType == typeof(IExecutableCompilationSource));
         Assert.DoesNotContain(services, service => service.ServiceType == typeof(IBpmnProcessRuntime));
         Assert.DoesNotContain(typeof(ActivitiesBpmnDesignFeature).Assembly.GetReferencedAssemblies(),
