@@ -1,3 +1,4 @@
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import type { ActivityNode, ActivityPresentationRecord } from "../workflowTypes";
 import { createActivityNode, getChildSlots } from "../workflowAdapter";
 import { bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
@@ -64,6 +65,13 @@ export function planExtractBpmnBlock(context: NativeBlockContext, request: Extra
   });
 }
 
+// Compare the host's real wire representation, independent of JSON object insertion order.
+function stableBoundaryValue(value: unknown): string | undefined {
+  const ordered = (item: unknown): unknown => Array.isArray(item) ? item.map(ordered) : record(item)
+    ? Object.fromEntries(Object.keys(item).sort().map(key => [key, ordered(item[key])])) : item;
+  return JSON.stringify(ordered(value));
+}
+
 export function planUngroupBpmnBlock(context: NativeBlockContext, elementId: string): NativeBlockPlan {
   return guarded(() => {
     const scope = prepare(context);
@@ -75,9 +83,14 @@ export function planUngroupBpmnBlock(context: NativeBlockContext, elementId: str
     const defaults = template(context, block.activityVersionId, block.nodeId);
     defaults.inputs = [...defaults.inputs.filter(input => !record(input) || input.referenceKey !== "CanStartWorkflow"),
       { referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: false } }];
-    for (const [key, value] of Object.entries(block)) {
+    // Wire expansion is tolerant for rendering; it must not conceal an extra/duplicate authored binding here.
+    if (block.inputs.length !== defaults.inputs.length || block.outputs.length !== defaults.outputs.length)
+      refuse("boundary-settings", `nodes.${block.nodeId}`, "Ungroup would discard block inputs, outputs or execution settings.");
+    const currentBoundary = canonicalizeStateForWire(expandStateFromWire({ rootActivity: block })).rootActivity!;
+    const defaultBoundary = canonicalizeStateForWire(expandStateFromWire({ rootActivity: defaults })).rootActivity!;
+    for (const [key, value] of Object.entries(currentBoundary)) {
       if (["nodeId", "activityVersionId", "structure"].includes(key)) continue;
-      if (JSON.stringify(value) !== JSON.stringify(defaults[key]))
+      if (stableBoundaryValue(value) !== stableBoundaryValue(defaultBoundary[key]))
         refuse("boundary-settings", `nodes.${block.nodeId}.${key}`, "Ungroup would discard block inputs, outputs or execution settings.");
     }
     for (const [key, value] of Object.entries(block.structure!.payload)) {

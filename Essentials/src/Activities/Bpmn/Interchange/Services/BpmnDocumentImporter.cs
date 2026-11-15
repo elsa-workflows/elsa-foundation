@@ -193,7 +193,7 @@ public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDe
             if (!identities.Add(node.NodeId))
                 throw new BpmnInterchangeException($"The retained native node identity '{node.NodeId}' collides with another imported activity.");
             if (node.Structure?.Kind == BpmnProcessActivity.StructureKind)
-                foreach (var child in node.Structure.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!.Activities)
+                foreach (var child in BpmnCatalogBindingSession.ReadStructure(node).Activities)
                     ValidateNodeIds(child, identities);
         }
 

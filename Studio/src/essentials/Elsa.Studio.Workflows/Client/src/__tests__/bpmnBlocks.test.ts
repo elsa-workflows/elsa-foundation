@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { nativeBlockEditorDocument, nativeBlockPlannerContext } from "../graph-authoring/nativeBlockEditorContext";
 import { describe, expect, it } from "vitest";
 import { createActivityNode } from "../workflowAdapter";
 import { applyNativeBlockPlan, type NativeBlockContext, type NativeBlockPlan } from "../graph-authoring/nativeBlocks";
@@ -38,6 +39,36 @@ describe("BPMN resource proposals", () => {
       expect(plan.document).toEqual(test.grouped); expect(plan.selection).toEqual(test.selection);
       expect(accepted(planUngroupBpmnBlock({ ...source, document: plan.document }, plan.selection[0])).document).toEqual(test.ungrouped);
     }
+  });
+  it.each(["create", "extract"])("can Ungroup an untouched %s subprocess after the normal editor/wire round trip", action => {
+    const source = context();
+    const proposal = accepted(action === "create" ? planCreateBpmnBlock(source, { ...request, position: { x: 0, y: 0 } }) : planExtractBpmnBlock(source, request));
+    const editor = nativeBlockEditorDocument(proposal.document, source.catalog);
+    const persisted = nativeBlockPlannerContext({ ...source, document: editor }, { x: 0, y: 0 });
+    const block = children(persisted.document.rootActivity).find(child => child.nodeId === request.nodeId)!;
+    expect(block.inputs).toContainEqual({ referenceKey: "CanStartWorkflow", value: { value: "false", expressionType: "Literal" } });
+    const result = accepted(planUngroupBpmnBlock(persisted, proposal.selection[0]));
+    expect(children(result.document.rootActivity).some(child => child.nodeId === request.nodeId)).toBe(false);
+  });
+  it("refuses authored subprocess properties that would disappear during Ungroup", () => {
+    const source = context(), proposal = accepted(planExtractBpmnBlock(source, request));
+    (proposal.document.rootActivity.structure!.payload.elements as Record<string, unknown>[]).find(element => element.elementId === proposal.selection[0])!.properties = { reviewTag: "keep" };
+    const original = structuredClone(proposal.document);
+    refuse(planUngroupBpmnBlock({ ...source, document: proposal.document }, proposal.selection[0]), "boundary-metadata");
+    expect(proposal.document).toEqual(original);
+  });
+  it("keeps refusal of a real invocation setting after canonical wire comparison", () => {
+    const source = context(), proposal = accepted(planExtractBpmnBlock(source, request));
+    const persisted = nativeBlockPlannerContext({ ...source, document: nativeBlockEditorDocument(proposal.document, source.catalog) }, { x: 0, y: 0 });
+    const input = children(persisted.document.rootActivity).find(child => child.nodeId === request.nodeId)!.inputs[0] as { autoEvaluate?: boolean };
+    input.autoEvaluate = true;
+    refuse(planUngroupBpmnBlock(persisted, proposal.selection[0]), "boundary-settings");
+  });
+  it("does not normalize away a duplicate invocation binding before Ungroup", () => {
+    const source = context(), proposal = accepted(planExtractBpmnBlock(source, request));
+    const block = children(proposal.document.rootActivity).find(child => child.nodeId === request.nodeId)!;
+    block.inputs.unshift({ referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: true } });
+    refuse(planUngroupBpmnBlock({ ...source, document: proposal.document }, proposal.selection[0]), "boundary-settings");
   });
   it("inserts an empty ordinary subprocess on the selected task's existing route", () => {
     const source = context(), before = structuredClone(source);

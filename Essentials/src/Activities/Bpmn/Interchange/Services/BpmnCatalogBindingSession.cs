@@ -126,7 +126,7 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
         return null;
     }
 
-    private static BpmnAuthoredStructure ReadStructure(ActivityNode node)
+    internal static BpmnAuthoredStructure ReadStructure(ActivityNode node)
     {
         if (node.Structure!.SchemaVersion != Process.StructureSchemaVersion)
             throw new BpmnInterchangeException($"BPMN binding node '{node.NodeId}' has unsupported authoring schema '{node.Structure.SchemaVersion}'.");

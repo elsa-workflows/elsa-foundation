@@ -134,6 +134,12 @@ export function ungroupBpmnBlockRegion(owner: ActivityNode, elementId: string, c
   const inner = readOrdinaryBpmnBody(block, catalog, refuse);
   const outside = diagram(outer.payload.diagram, refuse), inside = diagram(inner.payload.diagram, refuse);
   const selectedElement = boundary.elements[0];
+  for (const [key, value] of Object.entries(selectedElement)) {
+    // The named wrapper and its placement disappear by the author's explicit Ungroup action.
+    if (["elementId", "elementType", "childNodeId", "laneId", "name"].includes(key)) continue;
+    if (value == null || value === false || key === "cancelActivity" && value === true || Array.isArray(value) && !value.length || record(value) && !Object.keys(value).length) continue;
+    refuse("boundary-metadata", `elements.${elementId}.${key}`, "Ungroup would discard authored subprocess properties. Keep this block or remove those properties first.");
+  }
   const position = layout.find(item => item.nodeId === elementId) ?? outside.shapes[elementId] ?? { x: 0, y: 0 };
   const origin = point(position, { x: 0, y: 0 }, `layout.${elementId}`, refuse) as unknown as Position;
   const removed = new Set([elementId, inner.start.elementId, inner.end.elementId]);
