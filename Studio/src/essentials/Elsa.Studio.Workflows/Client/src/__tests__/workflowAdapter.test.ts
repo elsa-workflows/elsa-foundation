@@ -233,6 +233,21 @@ describe("workflow adapter", () => {
     });
   });
 
+  it.each([true, false])("preserves omitted leaf structures when opening a graph (known catalog: %s)", known => {
+    const leaf = node("unchanged-leaf");
+    delete leaf.structure;
+    const explicitNull = node("explicit-null-leaf");
+    const root = sequenceRoot([leaf, explicitNull]);
+    const before = JSON.stringify(root);
+
+    const normalized = normalizeActivityStructures(root, known ? [writeLine] : []);
+
+    expect(normalized).toBe(root);
+    expect(JSON.stringify(normalized)).toBe(before);
+    expect(Object.hasOwn(leaf, "structure")).toBe(false);
+    expect(explicitNull.structure).toBeNull();
+  });
+
   it("normalizes existing nodes with null structure from the catalog facet", () => {
     const root = node("foreach");
     root.activityVersionId = forEachActivity.activityVersionId;
