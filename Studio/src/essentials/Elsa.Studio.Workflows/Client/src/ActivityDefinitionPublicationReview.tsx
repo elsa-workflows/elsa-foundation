@@ -65,6 +65,8 @@ export function ActivityDefinitionPublicationReview({
   const [failure, setFailure] = useState<string | null>(null);
   const [recommendationEvidence, setRecommendationEvidence] = useState<"first" | "unchanged" | "unconfirmed" | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const localTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const reviewTriggerRef = triggerRef ?? localTriggerRef;
   const operationKeyRef = useRef<string | null>(null);
   const reviewedRecommendationRef = useRef<string | null>(null);
   const recommendationVerificationRef = useRef(0);
@@ -324,7 +326,7 @@ export function ActivityDefinitionPublicationReview({
 
   if (mode === "full") return reviewPanel;
   return <div className="ad-publication-toolbar">
-    <button ref={triggerRef} type="button" className="ad-publication-toolbar-trigger" onClick={() => {
+    <button ref={reviewTriggerRef} type="button" className="ad-publication-toolbar-trigger" onClick={() => {
       setDialogOpen(true);
       if (phase === "idle") void prepare();
     }} disabled={disabled && phase === "idle"} aria-haspopup="dialog" aria-expanded={dialogOpen}>
@@ -335,7 +337,7 @@ export function ActivityDefinitionPublicationReview({
       <div><strong>{attentionTitle}{diagnosticCounts ? ` · ${diagnosticCounts}` : ""}</strong>{failure ? <p>{failure}</p> : null}</div>
       <StudioButton size="sm" onClick={() => setDialogOpen(true)} aria-haspopup="dialog">{diagnosticSource.length ? "View issues" : "View details"}</StudioButton>
     </div> : <span className="ad-publication-toolbar-status" role="status">{publicationStatusLabel(phase, preflight?.isPublishable)}</span> : null}
-    {dialogOpen ? <PublicationDialog canClose={closeAllowed} onClose={() => closeAllowed && setDialogOpen(false)}>{reviewPanel}</PublicationDialog> : null}
+    {dialogOpen ? <PublicationDialog canClose={closeAllowed} onClose={() => closeAllowed && setDialogOpen(false)} restoreFocus={() => reviewTriggerRef.current?.focus()}>{reviewPanel}</PublicationDialog> : null}
   </div>;
 }
 
@@ -409,9 +411,9 @@ function uniquePublicationDiagnostics(diagnostics: StudioActivityDiagnostic[]) {
   }).sort((left, right) => ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(left.severity)) - ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(right.severity)));
 }
 
-function PublicationDialog({ canClose, onClose, children }: { canClose: boolean; onClose(): void; children: ReactNode }) {
+function PublicationDialog({ canClose, onClose, restoreFocus, children }: { canClose: boolean; onClose(): void; restoreFocus(): void; children: ReactNode }) {
   const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocus(dialogRef, canClose ? onClose : null);
+  useDialogFocus(dialogRef, canClose ? onClose : null, true, restoreFocus);
   return <div className="ad-dialog-backdrop ad-publication-dialog-backdrop" role="presentation" onMouseDown={event => {
     if (canClose && event.target === event.currentTarget) onClose();
   }}>

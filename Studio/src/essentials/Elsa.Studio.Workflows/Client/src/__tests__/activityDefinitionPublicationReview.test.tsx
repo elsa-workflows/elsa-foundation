@@ -27,12 +27,16 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const summary = harness.container.querySelector('.ad-publication-toolbar-status[role="alert"]')!;
     expect(summary.textContent).toContain("Review could not be prepared");
     expect(summary.textContent).not.toContain("error");
-    click(buttonByText(summary, "View details"));
+    const details = buttonByText(summary, "View details");
+    details.focus();
+    click(details);
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
     expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");
     expect(postJson).toHaveBeenCalledTimes(1);
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
-    click(buttonByText(harness.container, "Close publication review"));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(buttonByText(harness.container, "Review & publish"));
     click(buttonByText(harness.container, "Review & publish"));
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
     click(buttonByText(harness.container, "Prepare publication"));
