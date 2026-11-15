@@ -2151,6 +2151,11 @@ TERMS.forEach(([layer, heading, terms]) => {
       }
       setFocus(b, null);
       $({ a: 'scenebox', b: 'scenebox2', lab: 'labbox' }[scene]).scrollIntoView({ behavior: motionOn() ? 'smooth' : 'auto', block: 'center' });
+      if (id === 'log') {
+        const frame = $('scenebox'), bounds = frame.getBoundingClientRect();
+        const vault = A1.svg.querySelector('[data-part="vault"] > rect').getBoundingClientRect();
+        frame.scrollLeft += vault.left - bounds.left - frame.clientLeft - (frame.clientWidth - vault.width) / 2;
+      }
     });
     termButtons.push(b);
     group.querySelector('.ggrid').append(b);

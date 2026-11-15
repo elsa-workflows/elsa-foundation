@@ -94,16 +94,17 @@
 <section class="ch" id="tradeoffs">
   <div class="num">15</div>
   <h2>Trade-offs and the chosen defaults</h2>
-  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. Defaults accepted on 12 November:</p>
+  <p>The owner set the order to optimise in: <b>correctness, then database calls per workflow, then latency, then flexibility</b>. The original 12 November defaults are shown below; the partition experiment was amended on 15 November.</p>
   <div class="chips">
     <span class="chip">Side effects at least once in Balanced</span>
     <span class="chip">History: Full</span>
     <span class="chip">Lease: 10 s</span>
-    <span class="chip">64 partitions, 1 on SQLite</span>
+    <span class="chip">Original prototype: 64 server partitions, 1 on SQLite</span>
     <span class="chip">HTTP response after commit</span>
     <span class="chip">No reads across instances</span>
     <span class="chip">Events not kept unless asked</span>
   </div>
+  <p class="note">Adopted experiment, not implemented: compare 1,024 and 4,096 fixed virtual partitions, provisionally 4,096. Both fence variants retain a gapless ordered journal per virtual partition. Final fence granularity is the owner's decision after measurements; existing diagrams retain the original prototype numbers.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>#</th><th>Gain</th><th>Price</th><th>Lever</th></tr></thead>
     <tbody>
