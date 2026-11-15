@@ -7,6 +7,8 @@ public static class LeaseChecks
     {
         int failures = 0;
         void Check(bool ok, string name) { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); if (!ok) failures++; }
+        await CheckConcurrentProcessDeaths(Check);
+        await CheckLoadAfterEviction(Check);
         const string id = "0/subject";
         long time = 100;
         var store = new InMemoryStore(1, () => time);
@@ -224,6 +226,59 @@ public static class LeaseChecks
         await Drain(replacement, () => Json.Read<RunnerState>(store.Instances[id].State).Log.Contains("result work"));
         Check(oldJobs == 1 && oldEffects == 1 && newJobs == 1, "an already-running external effect can finish after expiry and overlap recovery");
         return failures == 0 ? 0 : 1;
+    }
+
+    private static async Task CheckLoadAfterEviction(Action<bool, string> check)
+    {
+        var store = new InMemoryStore(1, () => 100);
+        var wire = new DelayedCommit(store);
+        await using var owner = new Worker("owner", 0, wire, new WorkflowInstance([new Counter()]),
+            new() { MaxInstances = 0, Monotonic = () => 100 });
+        await new DurableHost([owner]).ActivateAsync(0);
+        var target = InstanceRef.In(0, "evicted");
+        owner.Post(new("first", target, "add", Json.Write(new Add("one")), Start: Counter.Spec), fresh: true);
+        owner.RunTurn(target.Id);
+        owner.Post(new("unloaded", InstanceRef.In(0, "other"), "wake"));
+        var reply = new TaskCompletionSource();
+        wire.AfterLoad = _ => reply.Task;
+        var missing = owner.LoadAsync(); // includes the fresh actor before its first commit
+        await owner.FlushAsync();
+        var evicted = owner.Evicted > 0 && store.Instances[target.Id].Revision == 1 && owner.Instances.All(s => s.Id != target.Id);
+        owner.Post(new("second", target, "add", Json.Write(new Add("two"))));
+        reply.SetResult();
+        await missing;
+        var needsOwnRead = owner.NeedsLoad && owner.Instances.All(s => s.Id != target.Id);
+        await owner.LoadAsync();
+        var current = owner.Instances.Single(s => s.Id == target.Id).Row?.Revision;
+        owner.RunTurn(target.Id);
+        await owner.FlushAsync();
+        var row = store.Instances[target.Id];
+        check(evicted && needsOwnRead && current == 1 && row.Revision == 2 && Json.Read<CounterState>(row.State).Ids.SequenceEqual(["first", "second"]),
+            $"delayed Load across same-owner eviction and new delivery: evicted={evicted}, needs own read={needsOwnRead}, loaded={current}, committed={row.Revision}");
+    }
+
+    private static async Task CheckConcurrentProcessDeaths(Action<bool, string> check)
+    {
+        var world = new World(new Config(2, 2, Flaw.None)) { Auto = true };
+        var owners = new[] { world.Of(0, 0), world.Of(1, 1) };
+        foreach (var actor in owners)
+        {
+            await actor.Runtime.ActivateAsync(actor.Partition);
+            var target = InstanceRef.In(actor.Partition, "fatal");
+            world.Apply(new("add", M: new($"birth-{actor.Node}", target, "dierun", Start: Fragile.Spec)));
+            await actor.Worker.PollAsync();
+            await actor.Worker.LoadAsync();
+            await actor.Worker.FlushAsync();
+            actor.Worker.RunTurn(target.Id);
+        }
+        // Both acknowledgements start their lethal jobs before the next public simulation action.
+        foreach (var actor in owners) await actor.Worker.FlushAsync();
+        world.Apply(new("tick", A: 1));
+        foreach (var survivor in owners.Where(a => !a.Dead)) await survivor.Worker.RunAsync();
+        var stopped = owners.All(a => a.Dead) && world.Store.Instances.Values.All(row => row.Revision == 1);
+        var result = world.Settle();
+        check(stopped && result is null && world.Store.Instances.Values.All(row => row.Status == InstanceStatus.Faulted),
+            $"both lethal-job owners stop before a completion can advance either row: stopped={stopped}, settlement={result ?? "healthy"}");
     }
 }
 
