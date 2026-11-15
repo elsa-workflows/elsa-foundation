@@ -1485,3 +1485,11 @@ Cross-domain `ScheduleTriggerTypeSource` (`Elsa.Activities.Scheduling`) contribu
 ### `StandaloneTriggerResourceCommitted` (Runtime Core notification)
 
 The management API publishes this inline notification after a protected resource change commits and before returning its apply acknowledgement. It carries the trusted scope, resource identity/type and observed resource revision, with no invocation authority or configuration payload. Authorized idempotent replay publishes the current retained resource again so a failed local projection can recover without another mutation. HTTP route convergence is described in [Runtime HTTP](../Http/EXTENSION_POINTS.md#standalone-resource-route-notification). Direct persistence writes do not publish management notifications.
+
+### Model execution outcome inspection
+
+`IRuntimeModelExecutionOutcomeProjector` is an optional pure model-owned projection of an already authorized retained terminal result. Register one contribution per model key. Only `Completed`, `Faulted` and `Cancelled` are accepted as terminal outcomes; absent, ambiguous or unsupported contributions leave the outcome explicitly unavailable. Cleanup settlement remains a separate observation. Projection must not dispatch work or resolve an interpreter.
+
+| Contract / owner | Signature / registration | Cross-domain implementation / caller |
+|---|---|---|
+| `IRuntimeModelExecutionOutcomeProjector`, Runtime Core | `string ModelKey { get; }`; `Project(RuntimeModelExecutionState execution) -> WorkflowExecutionStatus?`. Optional singleton contributions; select one exact model key, default unknown if absent or ambiguous. | BPMN's `BpmnModelExecutionOutcomeProjector` is registered with `TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeModelExecutionOutcomeProjector, BpmnModelExecutionOutcomeProjector>())` by `ActivitiesBpmnHostingFeature`. Runtime API's `TriggerDeliveryOperations` calls it only after authorization and retained-origin/pin checks. See the [implementer catalogue](../../../Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md#standalone-target-contributions-and-authored-preparation). |

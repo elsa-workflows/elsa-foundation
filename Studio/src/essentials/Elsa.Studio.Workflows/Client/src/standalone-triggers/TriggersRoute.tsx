@@ -90,7 +90,7 @@ function TriggerDetails({ api, client, actor, id, navigate }: { api: ElsaStudioM
       {trigger.schedule ? <ScheduleSummary schedule={trigger.schedule} /> : null}
       <div className="studio-page-actions"><StudioButton disabled={!descriptor || !allowed(trigger.actions, "SaveConfiguration")} title={actionReason(trigger.actions, "SaveConfiguration")} onClick={() => setEditing(true)}>Edit configuration</StudioButton>{([ [trigger.desiredState === "Enabled" ? "PauseTrigger" : "EnableTrigger", trigger.desiredState === "Enabled" ? "Pause new starts" : "Enable trigger"], ["DeleteTrigger", "Delete trigger"] ] as const).map(([kind, title]) => <StudioButton key={kind} disabled={!allowed(trigger.actions, kind)} title={actionReason(trigger.actions, kind)} onClick={() => setCommand({ kind })}>{title}</StudioButton>)}</div>
       <SubscriptionsSection api={api} client={client} actor={actor} trigger={trigger} onChanged={reload} />
-      {allowed(trigger.actions, "ReadDeliveries") ? <DeliveriesSection client={client} trigger={trigger} /> : <StudioAlert>Delivery evidence requires permission to read trigger deliveries.</StudioAlert>}
+      {allowed(trigger.actions, "ReadDeliveries") ? <DeliveriesSection client={client} trigger={trigger} /> : <StudioAlert>Delivery evidence is unavailable for this resource in the current backend or access scope.</StudioAlert>}
     </> : null}
   </StudioPage>;
 }
