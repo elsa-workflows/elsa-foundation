@@ -791,8 +791,10 @@ test("standalone access and availability", async ({ page, browser }) => {
       await j.capture("triggers-scope-response-isolated");
     } finally { await delay.release(); }
     await switchProfile("Default backend", "acceptance-primary");
-    await page.goto("/workflows/triggers/new?backend=acceptance-primary");
-    await page.getByLabel("Trigger type", { exact: true }).selectOption("acceptance-event:1");
+    await j.openInstalledConfigurationEditor(async () => {
+      await page.goto("/workflows/triggers/new?backend=acceptance-primary");
+      await page.getByLabel("Trigger type", { exact: true }).selectOption("acceptance-event:1");
+    });
     await page.getByLabel("Trigger name", { exact: true }).fill(`Independent editor ${j.stamp}`);
     await page.getByLabel("Acme topic", { exact: true }).fill("saved through independently built editor");
     await j.capture("trigger-optional-editor-installed");
@@ -800,8 +802,9 @@ test("standalone access and availability", async ({ page, browser }) => {
     await page.getByRole("button", { name: "Create trigger", exact: true }).click();
     const editorResourceResponse = await createdEditorResource; expect(editorResourceResponse.status()).toBe(201);
     const editorResource = await editorResourceResponse.json() as { id: string; configuration: { topic: string } }; j.triggers.push(editorResource.id);
-    await j.open(editorResource.id); await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
-    await expect(page.getByLabel("Acme topic", { exact: true })).toHaveValue(editorResource.configuration.topic);
+    await j.openInstalledConfigurationEditor(async () => {
+      await j.open(editorResource.id); await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
+    }, editorResource.configuration.topic);
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await j.host("without-optional-editor"); await page.reload();
     await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
@@ -811,9 +814,10 @@ test("standalone access and availability", async ({ page, browser }) => {
     await page.getByLabel("Topic", { exact: true }).fill("corrected through metadata fallback"); await j.capture("trigger-optional-editor-unavailable");
     await page.getByRole("button", { name: "Review changes", exact: true }).click(); await j.review();
     expect((await j.read(editorResource.id)).configuration.topic).toBe("corrected through metadata fallback");
-    await j.host("restore-studio-features"); await page.reload();
-    await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
-    await expect(page.getByLabel("Acme topic", { exact: true })).toHaveValue("corrected through metadata fallback");
+    await j.host("restore-studio-features");
+    await j.openInstalledConfigurationEditor(async () => {
+      await j.open(editorResource.id); await page.getByRole("button", { name: "Edit configuration", exact: true }).click();
+    }, "corrected through metadata fallback");
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     const timer = await j.create("timer", "Preserved missing module", { interval: "PT1H" });
     await j.host("without-schedule-module"); await page.reload();
