@@ -777,7 +777,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, blockAutho
           layout: candidate.layout, activityPresentation: candidate.activityPresentation ?? []
         });
         if (signature !== JSON.stringify(currentRef.current) || !isActiveDraft(currentRef.current.status)) return { state: "stale", messages: [] };
-        return { state: result.state, messages: result.validation?.diagnostics.map(item => item.message) ?? [] };
+        return { state: result.state, messages: result.validation?.diagnostics.map(item => `${item.code}: ${item.message}`) ?? [] };
       }
     }}><ProviderEditorBoundary key={`${draft.draftId}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></NativeBlockAuthorityProvider></section>}
     </section>

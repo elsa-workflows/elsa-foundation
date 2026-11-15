@@ -1,4 +1,5 @@
 import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
+import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
 import { namedBlocksJourney } from "./namedBlocksJourney";
 import { authoredActivityNamesJourney } from "./authoredActivityNamesJourney";
 import { cleanupDashboardJourney } from "./dashboardJourneySupport";
@@ -73,6 +74,7 @@ test("user task authoring and workflow result", async ({ page }, info) => {
   }, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 test("activity validation explains and locates graph settings", async ({ page }, info) => activityValidationReportingJourney(page, info, capture));
+test("native block validation errors and retry", async ({ page }, info) => nativeBlockValidationJourney(page, info, capture));
 
 test("activity definition identity survives reopening", async ({ page }, info) => activityDefinitionTitleJourney(page, info, capture));
 
