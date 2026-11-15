@@ -49,7 +49,34 @@ Native receipts distinguish `Evaluating` from selected business phase work. Stag
 
 Guard and loop work use normal native incidents and verified fresh-successor retries. Recovery preserves completed phases, successful siblings, scope handles, held inputs and semantic counters; a loop acknowledgement resets only the explicit budget/block. A surviving cycle requires a new manual recovery. This private profile uses manual-only `WaitForIntervention`/`NativeRetry`; it does not adopt an automatic retry policy. Pure parent preparation validates the authoritative held payload before either control or phase rebind. Control-cut schedules qualify atomic receipt/rebind/owed-successor commits under before-apply loss and lost acknowledgement, including deduplication and conflicting retries. No private incident or acknowledgement store is introduced.
 
-Machine checkpoint6 and native host schema12 gate this opt-in experiment. A native-owned checkpoint-control marker rejects relabelled older-host data even before any event receipt exists. Older machine profiles retain their paths and do not adopt current bindings on callbacks. These are private in-memory native model/worker/store witnesses, not provider durability, historical mixed-binary rollout, product API/operator recovery policy or release qualification. Product architecture agreement, ordinary trigger/rearming/source-wave integration, compensation composition and Studio authoring/inspection remain separate delivery requirements.
+Machine checkpoint6 originally required native host schema12 for this opt-in experiment; the current host writes schema13 for mapped completion as described below. A native-owned checkpoint-control marker rejects relabelled older-host data even before any event receipt exists. Older machine profiles retain their paths and do not adopt current bindings on callbacks. These are private in-memory native model/worker/store witnesses, not provider durability, historical mixed-binary rollout, product API/operator recovery policy or release qualification. Product architecture agreement, ordinary trigger/rearming/source-wave integration, compensation composition and Studio authoring/inspection remain separate delivery requirements.
+
+## Private final-outcome transport
+
+`--outcomes-list` discovers94 unique cases; `--outcomes` executes them:48 mapped completion schedules,
+four unmapped machine6 completion schedules, two actual old12-capability worker journeys,14 actual invalid
+startup refusals, two actual definition-tamper refusals and24 constructed reader/upgrade fixtures.
+`--outcome-readers` and `--outcome-gate` isolate the latter concerns. Reader fixtures are not old writers or binary migrations.
+
+Literal `FinalOutcomes` explicitly maps the complete set of machine-level final IDs to existing Native outcome
+strings; nested finals are ineligible. The private profile requires the qualified internal/inbox/recovery path,
+defensively freezes its map in machine checkpoint7, and uses ordinary `Complete(outcome)` only after all final
+Entry work succeeds. Old machine profiles retain `Done`; a null map field is omitted from their JSON. Named
+outcome transport is proved through actual normal Flowchart branches, not inferred from matching state names.
+Root journeys prove completion timing, not a root named-outcome protocol. A local final leaves its compound
+parent/machine active. Final Entry waits and faults preserve the selected plan, operation keys and queued-tail
+receipts across cold simulation-owner reloads and lost-before-apply/lost-acknowledgement cuts.
+
+Native host schema13 uses the existing outer model-version withholding gate. An actual Worker with a strict
+previous-version12 capability facade holds a committed mapped row unchanged, then exercises ordinary opaque
+future-state termination/metadata handling. This is not a historical host binary. Constructed native12 upgrade
+fixtures preserve earlier evaluation/control data; direct CLR-module recovery material remains authoritative,
+so reader acceptance does not establish resumability across rebuilt binaries. Changing the authored definition
+after suspension is refused by that normal material check; no recovery guard was weakened to accept rebinding.
+
+This is private single-outcome transport evidence, not OD45's product declared-outcome references/publication
+contract, provider persistence, full StateMachine delivery, actual compensation composition, or Studio acceptance.
+No outcome registry, semantic selector, chart-specific host parser, writer, receipt owner or Saga engine is added.
 
 ## Full graph native bridge
 
