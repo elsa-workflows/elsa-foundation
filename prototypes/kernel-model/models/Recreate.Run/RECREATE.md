@@ -23,8 +23,8 @@ Id predicate in the existing UPDATE; the database column supplies equality. Raw 
 provider-equal spellings. Their conditional same-command guard performs an indexed EXISTS check on
 SQL Server or a MySQL DO/IF expression without a result set. Both add indexed reads on that conditional
 path. A qualified MySQL same-value UPDATE variant was retained as a rejected alternative because it
-invoked update triggers; DO removes that side effect. Neither guard adds a driver request; canonical
-SQL and parameter shapes are unchanged. These are prototype measurements, not a selected latency budget.
+invoked update triggers; DO removes that side effect. Neither guard adds a driver request; guard activation leaves the candidate
+canonical SQL and parameter shapes unchanged. These are prototype measurements, not a selected latency budget.
 An ordinal actor/row appears at most once per batch; database-equal spellings retain their per-update
 revision predicates and irreversible retirement protection. Refusal rolls back
 unrelated effects. Raw `TurnCommit(Delete:true, Row:null)` remains a separate trusted primitive with
@@ -38,8 +38,10 @@ is inferred. Optional `PhysicalRetirementAvailable` defaults false, forwards thr
 and guards generation-zero owner retirement independently of positive creation capability. All accepted relational INSERTs are active (Retired=false). The database
 false default is used without generated readback; BeforeSave Ignore omits only that validated INSERT
 value. Every requested first-retired header refuses atomically before it can be silently materialized
-as active. Existing retirement UPDATEs still write true. This keeps ordinary batching equal to actual
-main, including SQL Server owner 100 at 4 and owner 1000 at 13 observed TCP edges. A rejected direct
+as active. Existing retirement UPDATEs still write true. The 16 measured reference cases retain observed driver/TCP counts,
+including ordinary INSERT budgets (SQL Server owner 100 at 4 and owner 1000 at 13 TCP edges).
+The added Retired property also participates in active EF UPDATE parameter shapes; universal UPDATE
+parameter/batching identity and unmeasured batch thresholds remain unqualified. A rejected direct
 Retired INSERT-parameter variant measured 5/14; it is not an adopted budget. Old schemas
 and invalid historical rows are unsupported; fresh experiment stores are used.
 
