@@ -17,7 +17,7 @@ export function ConfigurationForm({ descriptor, trigger, initialDraft, editors =
       ...trigger?.configuration, ...initialDraft?.configuration };
     return preserveConfiguration(value, trigger?.configuration ?? value, descriptor.configurationFields, trigger);
   });
-  const [fields, setFields] = useState<Record<string, string>>(() => Object.fromEntries(descriptor.configurationFields.map(field => [field.key, fieldText(initialConfiguration[field.key], field)])));
+  const [fields, setFields] = useState<Record<string, string>>(() => Object.fromEntries(descriptor.configurationFields.map(field => [field.key, fieldText(Object.hasOwn(initialConfiguration, field.key) ? initialConfiguration[field.key] : undefined, field)])));
   const [changedFields, setChangedFields] = useState<Set<string>>(() => new Set());
   function changeField(key: string, value: string) {
     setChangedFields(current => new Set(current).add(key));
@@ -28,7 +28,7 @@ export function ConfigurationForm({ descriptor, trigger, initialDraft, editors =
   const [errors, setErrors] = useState<Record<string, string>>(() => Object.create(null) as Record<string, string>);
   const [editorFailed, setEditorFailed] = useState(false);
   const [editorConfiguration, setEditorConfiguration] = useState(initialConfiguration);
-  const displayedErrors = { ...Object.fromEntries(Object.entries(serverErrors).map(([field, messages]) => [field, messages.join(" ")])), ...errors };
+  const displayedErrors = Object.assign(Object.create(null) as Record<string, string>, Object.fromEntries(Object.entries(serverErrors).map(([field, messages]) => [field, messages.join(" ")])), errors);
   let publicConfiguration: Record<string, JsonValue> | undefined;
   let precisionReason: string | undefined;
   try { publicConfiguration = configurationForEditor(editorConfiguration); } catch (error) { precisionReason = (error as Error).message; }
@@ -43,7 +43,7 @@ export function ConfigurationForm({ descriptor, trigger, initialDraft, editors =
     const numbers = restoreEditorNumbers(value, editorConfiguration) as Record<string, JsonValue>;
     const next = preserveConfiguration(numbers, editorConfiguration, descriptor.configurationFields, trigger);
     setEditorConfiguration(next);
-    setFields(Object.fromEntries(descriptor.configurationFields.map(field => [field.key, fieldText(next[field.key], field)])));
+    setFields(Object.fromEntries(descriptor.configurationFields.map(field => [field.key, fieldText(Object.hasOwn(next, field.key) ? next[field.key] : undefined, field)])));
   }
   const isHttp = descriptor.family === "Http";
   function submit(event: FormEvent) {
@@ -60,7 +60,7 @@ export function ConfigurationForm({ descriptor, trigger, initialDraft, editors =
       }
       if (!raw && field.required) { nextErrors[field.key] = `${field.label} is required.`; continue; }
       if (raw === "" && field.type !== "string") { delete configuration[field.key]; continue; }
-      try { configuration[field.key] = parseField(raw, field); }
+      try { Object.defineProperty(configuration, field.key, { value: parseField(raw, field), enumerable: true, writable: true, configurable: true }); }
       catch (error) { nextErrors[field.key] = error instanceof Error ? error.message : "Enter a valid value."; }
     }
     if (!name.trim()) nextErrors.name = "Enter a trigger name.";

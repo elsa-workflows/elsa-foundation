@@ -99,6 +99,20 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     }
   });
 
+  it.each(["__proto__", "constructor", "toString"])("creates a literal module configuration key %s without inherited values", key => {
+    const submit = vi.fn();
+    const descriptor: TriggerTypeDescriptor = { typeKey: "module-literal-key", schemaVersion: "1", displayName: "Literal key", family: "Event", canCreate: true,
+      configurationFields: [{ key, label: "Module value", type: "json" }] };
+    const { container } = mount(<ConfigurationForm descriptor={descriptor} onCancel={vi.fn()} onSubmit={submit} />);
+    expect(control(container, "Module value").value).toBe("");
+    fill(control(container, "Trigger name"), "Literal module configuration");
+    fill(control(container, "Module value"), '{"nested":"retained"}');
+    flushSync(() => button(container, "Create trigger").click());
+    expect(submit).toHaveBeenCalledOnce();
+    const configuration = submit.mock.calls[0][0].configuration;
+    expect(Object.hasOwn(configuration, key)).toBe(true);
+    expect(serializeTriggerPayload(configuration)).toBe(JSON.stringify(Object.fromEntries([[key, { nested: "retained" }]])));
+  });
   it("uses an exact public optional editor while preserving source-protected and unknown fields", () => {
     const submit = vi.fn();
     const descriptor: TriggerTypeDescriptor = { typeKey: "acme-event", schemaVersion: "1", displayName: "Acme Event", family: "Event", canCreate: true,
@@ -154,6 +168,32 @@ describe("mounted standalone trigger interactions (component evidence)", () => {
     fill(control(container, "HTTP admission policy"), "AcceptAvailable");
     flushSync(() => button(container, "Create trigger").click());
     expect(submit).toHaveBeenCalledWith(expect.objectContaining({ configuration: { route: "/accounting" }, http: { mode: "AsyncFanOut", admissionPolicy: "AcceptAvailable" } }));
+  });
+  it("reuses a create request only for the same exact JSON wire content and schema", async () => {
+    discovery.document.capabilities[0].links.push({ rel: "types", href: "custom/types" });
+    const descriptors = ["1", "2"].map(schemaVersion => ({ typeKey: "create-fingerprint", schemaVersion, displayName: `Version ${schemaVersion}`,
+      family: "Event", canCreate: true, configurationFields: [{ key: "payload", label: "Payload", type: "json" }] }));
+    const sent: { requestId: string; schemaVersion: string; configuration: { payload: unknown } }[] = [];
+    const context = { baseUrl: "https://backend.example/", http: {
+      getJson: vi.fn(async (path: string) => path.endsWith("trigger-identity") ? actor : { items: descriptors }),
+      requestJson: vi.fn(async (_path: string, init: RequestInit) => { sent.push(JSON.parse(init.body as string)); throw new Error("Acknowledgement unavailable"); })
+    } } as unknown as StudioEndpointContext;
+    const { container } = mount(<TriggersRoute api={apiStub(context)} view="create" navigate={vi.fn()} />);
+    await vi.waitFor(() => expect(control(container, "Trigger type")).not.toBeNull());
+    fill(control(container, "Trigger type"), "create-fingerprint:1");
+    fill(control(container, "Trigger name"), "Retryable create"); fill(control(container, "Payload"), "123");
+    const send = async (count: number) => {
+      flushSync(() => button(container, "Create trigger").click());
+      await vi.waitFor(() => { expect(sent).toHaveLength(count); expect(button(container, "Create trigger").disabled).toBe(false); });
+    };
+    await send(1); await send(2);
+    expect(sent[1].requestId).toBe(sent[0].requestId);
+    fill(control(container, "Payload"), '{"text":"123"}'); await send(3);
+    expect(sent[0].configuration.payload).toBe(123); expect(sent[2].configuration.payload).toEqual({ text: "123" });
+    expect(sent[2].requestId).not.toBe(sent[0].requestId);
+    fill(control(container, "Trigger type"), "create-fingerprint:2");
+    fill(control(container, "Trigger name"), "Retryable create"); fill(control(container, "Payload"), '{"text":"123"}'); await send(4);
+    expect(sent[3].schemaVersion).toBe("2"); expect(sent[3].requestId).not.toBe(sent[2].requestId);
   });
   it("keeps missing capability and denied access distinct from an empty collection", async () => {
     discovery.document.capabilities = [];
