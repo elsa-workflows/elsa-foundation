@@ -14,6 +14,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   const receipts: CopyReceipt[] = [], runtime: unknown[] = [], boundaries: unknown[] = [];
   const servedAssets: { url: string; sha256: string }[] = [], assetReads: Promise<void>[] = [];
   const builtAssets = JSON.parse(process.env.UX_WORKFLOW_ASSET_SHA256S ?? "{}") as Record<string, string>;
+  const copyImplementationAssets = JSON.parse(process.env.UX_COPY_IMPLEMENTATION_ASSETS ?? "{}") as Record<string, { sha256: string; sources: string[] }>;
   page.on("response", response => {
     if (response.request().resourceType() === "script" && response.ok()) assetReads.push((async () => {
       const hash = await crypto.subtle.digest("SHA-256", new Uint8Array(await response.body()));
@@ -22,15 +23,19 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
   });
   registerCleanup(async () => {
     await Promise.all(assetReads);
-    const expected = Object.entries(builtAssets).filter(([path]) => path.endsWith(".js")).map(([, hash]) => hash);
-    const matched = servedAssets.filter(asset => expected.includes(asset.sha256));
+    const studioOrigin = new URL(page.url()).origin;
+    const matched = servedAssets.filter(asset => {
+      const url = new URL(asset.url);
+      return url.origin === studioOrigin && copyImplementationAssets[url.pathname]?.sha256 === asset.sha256;
+    });
     await attachActivityDataJson(info, "activity-data-copy-proof.json", {
       sourceSha: process.env.UX_SOURCE_SHA, studioSha: process.env.UX_STUDIO_SOURCE_SHA,
       composition: process.env.UX_ACTIVITY_DATA_COMPOSITION ?? "normal", mode, receipts, runtime, boundaries,
-      builtAssets, servedAssets, matchingSourceAssets: matched
+      builtAssets, copyImplementationAssets, servedAssets, studioOrigin, matchingSourceAssets: matched
     });
-    expect(expected.length, "Freshly built Workflows module asset inventory").toBeGreaterThan(0);
-    expect(matched.length, "Browser fetched exact bytes from the freshly built source Workflows module").toBeGreaterThan(0);
+    expect(Object.keys(copyImplementationAssets).length, "Actual normal chunks containing the reviewed copy sources").toBeGreaterThan(0);
+    for (const [path, owner] of Object.entries(copyImplementationAssets))
+      expect(matched.some(asset => new URL(asset.url).pathname === path && asset.sha256 === owner.sha256), `Browser fetched current copy implementation ${path}`).toBe(true);
   });
   const timerVersion = await s.version("Elsa.Activities.Scheduling.Activities.Timer");
   const customerVersion = await s.version("Elsa.Workbench.ActivityDataSelectionProof.GetCustomer");
@@ -122,6 +127,7 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       expect((await s.saved(created)).state).toEqual(before.state);
       await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 5);
       expect((await savedNodes(created)).find(item => item.nodeId === duplicatedConsumer.nodeId)).toEqual(duplicatedConsumer);
+      const beforePaste = (await s.saved(created)).state;
       await selectPair(); await node("consumer").press("ControlOrMeta+c"); await node("consumer").press("ControlOrMeta+v");
       await waitCount(created, 7);
       const pasted = (await savedNodes(created)).slice(5);
@@ -130,7 +136,13 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       expect(input(pastedConsumer)).toEqual({ ...expected, value: { ...(expected.value as object), producerNodeId: pastedProducer.nodeId } });
       receipts.push({ definitionId: created.definition.id, operation: `paste-${role}`, before: duplicated, after: (await s.saved(created)).state,
         producerId: pastedProducer.nodeId, consumerId: pastedConsumer.nodeId });
+      const afterPaste = (await s.saved(created)).state;
       await s.select(pastedConsumer.nodeId); await capture(page, info, `${role}-pasted`);
+      await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 5);
+      expect((await s.saved(created)).state).toEqual(beforePaste); await capture(page, info, `${role}-paste-undo`);
+      await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 7);
+      expect((await s.saved(created)).state).toEqual(afterPaste); await s.select(pastedConsumer.nodeId);
+      await capture(page, info, `${role}-paste-redo`);
       await page.getByRole("button", { name: "Go to", exact: true }).click();
       await expect(page.locator(".wf-inspector-context")).toContainText(pastedProducer.nodeId);
       await page.getByRole("button", { name: "Set as start node", exact: true }).click();
@@ -166,19 +178,36 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     const outer = s.root([group], "sequence", [{ ...variable, default: { expressionType: "Object", value: '{"a.b":{"":"outer-shadow"}}' } }]);
     const created = await s.seed("copy nested scope and portable", outer);
     await page.goto(`/workflows/definitions?definition=${created.definition.id}&backend=legacy`); await expect(node("group")).toBeAttached();
+    const beforeDuplicate = (await s.saved(created)).state;
     await s.select("group"); await page.getByRole("button", { name: "Duplicate Sequence", exact: true }).click();
     await waitCount(created, 13);
-    const copiedGroup = (await s.saved(created)).state.rootActivity.structure!.payload.activities[1];
+    const duplicatedState = (await s.saved(created)).state;
+    const duplicatedGroup = duplicatedState.rootActivity.structure!.payload.activities[1];
+    receipts.push({ definitionId: created.definition.id, operation: "duplicate-sequence-scope-portable", before: beforeDuplicate,
+      after: duplicatedState, producerId: duplicatedGroup.structure!.payload.activities[0].nodeId, consumerId: duplicatedGroup.structure!.payload.activities[1].nodeId });
+    await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 7);
+    expect((await s.saved(created)).state).toEqual(beforeDuplicate);
+    await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 13);
+    expect((await s.saved(created)).state).toEqual(duplicatedState);
+    await s.select("group"); await s.canvas(); await node("group").press("ControlOrMeta+c"); await node("group").press("ControlOrMeta+v");
+    await waitCount(created, 19);
+    const pastedState = (await s.saved(created)).state;
+    const copiedGroup = pastedState.rootActivity.structure!.payload.activities[2];
+    await capture(page, info, "scope-pasted");
+    await page.getByRole("button", { name: "Undo", exact: true }).click(); await waitCount(created, 13);
+    expect((await s.saved(created)).state).toEqual(duplicatedState); await capture(page, info, "scope-paste-undo");
+    await page.getByRole("button", { name: "Redo", exact: true }).click(); await waitCount(created, 19);
+    expect((await s.saved(created)).state).toEqual(pastedState); await capture(page, info, "scope-paste-redo");
     const [copiedProducer, copiedConsumer, copiedPortable, copiedSwitch] = copiedGroup.structure!.payload.activities;
     const copiedCase = (copiedSwitch.structure!.payload.cases as { activity: Node; condition: { value: Binding } }[])[0];
     expect(copiedCase.activity.nodeId).not.toBe("case-consumer");
     expect(copiedCase.condition.value).toEqual({ expressionType: "VariableMember", value: { referenceKey: "payload", declaringScopeId: copiedGroup.nodeId, memberPath: ["enabled"] } });
     expect(input(copiedConsumer)).toEqual({ expressionType: "VariableMember", value: { referenceKey: "payload", declaringScopeId: copiedGroup.nodeId, memberPath: ["a.b", ""] } });
     expect(input(copiedPortable)).toEqual({ expressionType: "JavaScript", value: { ...portableValue, parameters: { customer: { ...portableValue.parameters.customer, producerNodeId: copiedProducer.nodeId } } } });
-    receipts.push({ definitionId: created.definition.id, operation: "duplicate-sequence-scope-portable", before: outer, after: (await s.saved(created)).state,
+    receipts.push({ definitionId: created.definition.id, operation: "paste-sequence-scope-portable", before: duplicatedState, after: (await s.saved(created)).state,
       producerId: copiedProducer.nodeId, consumerId: copiedConsumer.nodeId });
     await codeReopen(created, copiedGroup.nodeId, "group");
-    await s.canvas(); await node(copiedGroup.nodeId).getByRole("button", { name: /^Open Activities/ }).click();
+    await s.canvas(); await node(copiedGroup.nodeId).locator("..").getByRole("button", { name: /^Open Activities/ }).click();
     await s.select(copiedConsumer.nodeId); await expect(s.reference()).toContainText('"a.b"'); await expect(s.reference()).toContainText('""');
     await capture(page, info, "scope-copied-reference");
     await s.select(copiedSwitch.nodeId); await capture(page, info, "switch-copied-condition");
@@ -195,8 +224,15 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
     } else {
       await publishRun(created, copiedConsumer.nodeId, copiedProducer.nodeId, "scope-copy-id");
       // The same real run must also execute the copied portable consumer with its remapped producer.
-      const run = runtime.at(-1) as { executions: Execution[] };
-      expect(run.executions.find(item => item.authoredActivityId === copiedPortable.nodeId)?.status).toBe("Completed");
+      const run = runtime.at(-1) as { workflowExecutionId: string; executions: Execution[]; portable?: unknown };
+      const portableExecution = run.executions.find(item => item.authoredActivityId === copiedPortable.nodeId)!;
+      expect(portableExecution.status).toBe("Completed");
+      const instance = `/runtime/workflows/instances/${run.workflowExecutionId}`;
+      const details = await s.api<{ valueSnapshots: { inputKey: string; evidenceId: string }[] }>(`${instance}/activity-executions/${portableExecution.activityExecutionId}`);
+      const text = details.valueSnapshots.find(item => item.inputKey === "text")!;
+      const payload = await s.api<{ payload: { preview: string } }>(`${instance}/activity-executions/${portableExecution.activityExecutionId}/value-evidence/${text.evidenceId}/payload`);
+      expect(payload.payload.preview).toBe("cust-1042");
+      run.portable = { consumerId: copiedPortable.nodeId, expected: "cust-1042", committed: payload.payload.preview };
       expect(run.executions.find(item => item.authoredActivityId === copiedCase.activity.nodeId)?.status).toBe("Completed");
     }
     return;
@@ -233,9 +269,9 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
         process.env.UX_ACCEPTANCE_OWNED_ROOT!, created.definition.id, root.nodeId], { encoding: "utf8" }));
       const before = snapshot();
       await page.getByRole("button", { name: "Review & publish", exact: true }).click();
-      const review = page.getByRole("dialog", { name: "Publish workflow", exact: true });
-      await expect(review.getByRole("alert").filter({ hasText: /Fix these issues before publishing|Publication blocked/ })).toContainText(/producer|source/i);
-      await expect(review.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+      await expect(page.getByRole("alert").filter({ hasText: "Could not prepare a trustworthy publication review" }))
+        .toContainText("No version was promoted or published");
+      await expect(page.getByRole("dialog", { name: "Publish workflow", exact: true })).toHaveCount(0);
       const current = await s.saved(created);
       const refused = await page.request.post(process.env.ELSA_WORKBENCH_URL + "/publishing/workflows/preflight", {
         data: { definitionId: created.definition.id, state: current.state, layout: current.layout, slotName: "default", action: "replace" }
@@ -244,9 +280,8 @@ export async function activityDataCopyJourney(page: Page, info: TestInfo, captur
       expect(refused.ok(), refusal.body).toBe(false); expect(refusal.body).toMatch(/producer|ValueFlow/i);
       const after = snapshot(); expect(after).toEqual(before);
       boundaries.push({ kind: "invalid-publication-no-write", definitionId: created.definition.id, before, after,
-        reference: input(copiedConsumer), refusal, gate: "actual publication review refuses before promotion/publication" });
+        reference: input(copiedConsumer), refusal, gate: "actual publication review refuses before opening a dialog or promotion/publication" });
       await capture(page, info, "invalid-publication-refused");
-      await review.getByRole("button", { name: "Cancel", exact: true }).click();
       const viewport = page.viewportSize()!; await page.setViewportSize({ width: 320, height: 900 }); await s.select(copiedConsumer.nodeId);
       await capture(page, info, "invalid-reference-320"); await page.setViewportSize(viewport);
     }

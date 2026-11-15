@@ -41,12 +41,15 @@ class VerdictTests(unittest.TestCase):
                 continue
             if title in acceptance.COPY_JOURNEYS:
                 operations = {'copy activity data pairs': ['duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'],
-                              'copy scoped and portable activity data': ['duplicate-sequence-scope-portable'],
+                              'copy scoped and portable activity data': ['duplicate-sequence-scope-portable', 'paste-sequence-scope-portable'],
                               'preserve external activity references on copy': ['consumer-only-valid', 'consumer-only-invalid']}[title]
                 run = {'consumerId': 'copied-consumer', 'producerId': 'copied-producer', 'expected': 'value', 'committed': 'value',
                        'originalNeverRuns': True, 'executions': [{'authoredActivityId': id, 'status': 'Completed'} for id in ('copied-consumer', 'copied-producer')]}
-                proof = {'sourceSha': 'head', 'studioSha': 'head', 'composition': 'normal',
-                         'builtAssets': {'module.js': 'source-asset-hash'}, 'servedAssets': [{'sha256': 'source-asset-hash'}],
+                proof = {'sourceSha': 'head', 'studioSha': 'head', 'composition': 'normal', 'studioOrigin': 'http://owned',
+                         'builtAssets': {'InspectorPanel-current.js': 'owner-hash', 'arrow.js': 'aux-hash'},
+                         'copyImplementationAssets': {'/_content/Elsa.Studio.Workflows/studio/modules/workflows/InspectorPanel-current.js': {
+                             'sha256': 'owner-hash', 'sources': ['workflow-editor/duplicateActivities.ts', 'workflow-editor/activityReferenceRemapping.ts']}},
+                         'servedAssets': [{'url': 'http://owned/_content/Elsa.Studio.Workflows/studio/modules/workflows/InspectorPanel-current.js', 'sha256': 'owner-hash'}],
                          'receipts': [{'operation': op, 'before': {'root': 'before'}, 'after': {'root': 'after'}, 'consumerId': 'copied-consumer'} for op in operations],
                          'runtime': [copy.deepcopy(run) for _ in range(2 if title == 'copy activity data pairs' else 1)],
                          'boundaries': [{'kind': 'resource-local'}, {'kind': 'invalid-publication-no-write', 'before': {str(i): {} for i in range(4)}, 'after': {str(i): {} for i in range(4)}}]
@@ -177,6 +180,23 @@ class VerdictTests(unittest.TestCase):
                 file.write_text(json.dumps(proof))
                 try:
                     with self.assertRaises(ValueError): acceptance.verdict(self.report, self.root)
+                finally: file.write_text(original)
+
+    def test_copy_asset_fence_requires_owner_bytes_at_its_actual_url(self):
+        report = copy.deepcopy(self.report)
+        report['suites'][0]['specs'] = [row for row in report['suites'][0]['specs'] if row['title'] == 'copy activity data pairs']
+        self.assertEqual(4, acceptance.verdict(report, self.root, ['copy activity data pairs']))
+        file = self.root / 'copy-activity-data-pairs.json'; original = file.read_text()
+        for change in ('auxiliary-only', 'stale-owner', 'wrong-url'):
+            with self.subTest(change=change):
+                proof = json.loads(original)
+                auxiliary = {'url': 'http://owned/_content/Elsa.Studio.Workflows/studio/modules/workflows/arrow.js', 'sha256': 'aux-hash'}
+                if change == 'auxiliary-only': proof['servedAssets'] = [auxiliary]
+                elif change == 'stale-owner': proof['servedAssets'][0]['sha256'] = 'old-owner-hash'; proof['servedAssets'].append(auxiliary)
+                else: proof['servedAssets'][0]['url'] = 'http://owned/unrelated/InspectorPanel-current.js'
+                file.write_text(json.dumps(proof))
+                try:
+                    with self.assertRaises(ValueError): acceptance.verdict(report, self.root, ['copy activity data pairs'])
                 finally: file.write_text(original)
 
     def test_missing_actual_browser_cancellation_cannot_pass(self):
@@ -352,6 +372,33 @@ class VerdictTests(unittest.TestCase):
                         self.assertEqual(2, process.wait.call_count)
 
 
+
+
+class CopyAssetOwnershipTests(unittest.TestCase):
+    def test_map_sources_current_content_and_normal_js_parity_are_all_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); source, normal, diagnostics = root / 'source', root / 'normal', root / 'diagnostics'
+            source.mkdir(); normal.mkdir(); diagnostics.mkdir(); (source / 'workflow-editor').mkdir()
+            for path in acceptance.COPY_SOURCE_PATHS:
+                (source / path).write_text('reviewed:' + path)
+            content = b'current compiled owning chunk'
+            (normal / 'InspectorPanel-current.js').write_bytes(content)
+            (diagnostics / 'InspectorPanel-current.js').write_bytes(content)
+            mapping = {'sources': ['../' + path for path in sorted(acceptance.COPY_SOURCE_PATHS)],
+                       'sourcesContent': [(source / path).read_text() for path in sorted(acceptance.COPY_SOURCE_PATHS)]}
+            map_path = diagnostics / 'InspectorPanel-current.js.map'; map_path.write_text(json.dumps(mapping))
+            owners = acceptance.copy_implementation_assets(source, normal, diagnostics)
+            self.assertEqual(1, len(owners)); self.assertEqual(acceptance.COPY_SOURCE_PATHS, set(next(iter(owners.values()))['sources']))
+            (diagnostics / 'InspectorPanel-current.js').write_bytes(b'stale owning code')
+            with self.assertRaisesRegex(ValueError, 'normal compiled bytes'):
+                acceptance.copy_implementation_assets(source, normal, diagnostics)
+            (diagnostics / 'InspectorPanel-current.js').write_bytes(content)
+            mapping['sourcesContent'][0] = 'older reviewed source'; map_path.write_text(json.dumps(mapping))
+            with self.assertRaisesRegex(ValueError, 'current reviewed source'):
+                acceptance.copy_implementation_assets(source, normal, diagnostics)
+            map_path.unlink()
+            with self.assertRaisesRegex(ValueError, 'both reviewed copy'):
+                acceptance.copy_implementation_assets(source, normal, diagnostics)
 
 
 class CompositionTests(unittest.TestCase):

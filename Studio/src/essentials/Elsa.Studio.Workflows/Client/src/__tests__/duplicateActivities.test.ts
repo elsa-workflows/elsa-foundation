@@ -271,6 +271,20 @@ describe("reference-aware activity copies", () => {
     expect(copied.copies[0].intrinsic).toEqual(intrinsic);
   });
 
+  it("uses raw compensation step addresses after opaque rows without losing children or metadata", () => {
+    const producer = leafNode("producer"), consumer = leafNode("consumer"); consumer.inputs = [argument(result())];
+    const rows = [null, { name: "Work", activity: producer, compensation: consumer,
+      future: { producerNodeId: "producer" } }, "opaque"];
+    const scope: ActivityNode = { nodeId: "scope", activityVersionId: "compensation@1", inputs: [], outputs: [],
+      structure: { kind: "elsa.compensation-scope.structure", schemaVersion: "1.0.0", payload: { steps: rows } } };
+    const copied = copy([scope]);
+    const steps = copied.copies[0].structure!.payload.steps as unknown[];
+    expect([steps[0], steps[2]]).toEqual([rows[0], rows[2]]);
+    expect(steps[1]).toEqual({ name: "Work", activity: { ...producer, nodeId: copied.idMap.get("producer") },
+      compensation: { ...consumer, nodeId: copied.idMap.get("consumer"), inputs: [argument({ ...result(), value: {
+        ...result().value, producerNodeId: copied.idMap.get("producer") } })] }, future: { producerNodeId: "producer" } });
+  });
+
   it("does not treat a structural connection ID as an activity producer or lexical scope", () => {
     const consumer = leafNode("consumer"); consumer.inputs = [argument(result("ActivityResult", "edge-only")), argument(variable("edge-only"), "other")];
     const nested = connectedFlowchart([leafNode("producer"), consumer], [{ from: "producer", to: "consumer", id: "edge-only" }]);

@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urlparse
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,11 +61,13 @@ CAPTURES['native dashboard questions and sharing'] += (
     + ['dashboard-share-dependency-review-end', 'dashboard-copy-dependency-review-end', 'dashboard-copy-question-form',
        'dashboard-long-name', 'dashboard-long-name-share', 'dashboard-long-question-picker', 'dashboard-list-tile', 'dashboard-list-values', 'dashboard-metric-tile', 'dashboard-metric-values', 'dashboard-metric-values-end']
 )
+COPY_SOURCE_PATHS = {'workflow-editor/duplicateActivities.ts', 'workflow-editor/activityReferenceRemapping.ts'}
+COPY_ASSET_PREFIX = '/_content/Elsa.Studio.Workflows/studio/modules/workflows/'
 COPY_JOURNEYS = {'copy activity data pairs', 'copy scoped and portable activity data', 'preserve external activity references on copy'}
 CAPTURES.update({
     'copy activity data pairs': ['reference', *[f'{role}-{state}' for role in ('whole', 'member') for state in
-        ('original', 'duplicated', 'pasted', 'copied-start', 'reopened', 'runtime')], 'copy-reference-320'],
-    'copy scoped and portable activity data': ['reference', 'scope-copied-reference', 'portable-copied-preserved', 'switch-copied-condition'],
+        ('original', 'duplicated', 'pasted', 'paste-undo', 'paste-redo', 'copied-start', 'reopened', 'runtime')], 'copy-reference-320'],
+    'copy scoped and portable activity data': ['reference', 'scope-pasted', 'scope-paste-undo', 'scope-paste-redo', 'scope-copied-reference', 'portable-copied-preserved', 'switch-copied-condition'],
     'preserve external activity references on copy': ['reference', 'external-valid-original', 'external-valid-copy',
         'foreign-resource-clipboard-cleared', 'external-invalid-original', 'external-invalid-copy',
         'invalid-publication-refused', 'invalid-reference-320'],
@@ -244,11 +247,19 @@ def activity_copy_verdict(title, attachments, composition):
     if proof.get('composition') != composition or not proof.get('sourceSha') or not proof.get('studioSha'):
         raise ValueError('Copy proof lacks exact source/composition identity')
     receipts, runs, boundaries = proof.get('receipts', []), proof.get('runtime', []), proof.get('boundaries', [])
-    expected_hashes = {sha for path, sha in proof.get('builtAssets', {}).items() if path.endswith('.js')}
-    if not expected_hashes or not any(item.get('sha256') in expected_hashes for item in proof.get('servedAssets', [])):
-        raise ValueError('Browser did not fetch the built source Workflows module bytes')
+    owners = proof.get('copyImplementationAssets', {})
+    if not owners or {source for owner in owners.values() for source in owner.get('sources', [])} != COPY_SOURCE_PATHS:
+        raise ValueError('Copy implementation chunk/source ownership is missing')
+    origin = urlparse(proof.get('studioOrigin', ''))
+    for path, owner in owners.items():
+        if not path.startswith(COPY_ASSET_PREFIX) or proof.get('builtAssets', {}).get(path.removeprefix(COPY_ASSET_PREFIX)) != owner.get('sha256'):
+            raise ValueError('Copy implementation chunk is not the normal built asset')
+        if not any(urlparse(item.get('url', '')).path == path and
+                   (urlparse(item.get('url', '')).scheme, urlparse(item.get('url', '')).netloc) == (origin.scheme, origin.netloc) and
+                   item.get('sha256') == owner.get('sha256') for item in proof.get('servedAssets', [])):
+            raise ValueError('Browser did not fetch the current copy implementation bytes at their owned URL')
     expected = {'copy activity data pairs': {'duplicate-whole', 'paste-whole', 'duplicate-member', 'paste-member'},
-                'copy scoped and portable activity data': {'duplicate-sequence-scope-portable'},
+                'copy scoped and portable activity data': {'duplicate-sequence-scope-portable', 'paste-sequence-scope-portable'},
                 'preserve external activity references on copy': {'consumer-only-valid', 'consumer-only-invalid'}}[title]
     if len(receipts) != len(expected) or {item.get('operation') for item in receipts} != expected:
         raise ValueError('Copy operation inventory incomplete')
@@ -492,6 +503,34 @@ def fingerprints(root):
             (file.suffix in {'.dll', '.js', '.css', '.html'} or file.name in {'appsettings.json', 'shells.json'})}
 
 
+def copy_implementation_assets(source, normal, diagnostics):
+    """Map original reviewed sources to normal output chunks through a byte-identical hidden-map build."""
+    owners, found = {}, set()
+    for path in diagnostics.rglob('*.js.map'):
+        mapping = json.loads(path.read_text())
+        owned = [(index, expected) for index, item in enumerate(mapping.get('sources', []))
+                 for expected in COPY_SOURCE_PATHS if item.replace('\\', '/').endswith('/' + expected)]
+        if not owned:
+            continue
+        for index, expected in owned:
+            contents = mapping.get('sourcesContent', [])
+            if index >= len(contents) or contents[index] != (source / expected).read_text():
+                raise ValueError(f'Diagnostic map does not contain the current reviewed source: {expected}')
+        compiled = path.with_suffix('')
+        relative = compiled.relative_to(diagnostics)
+        current = normal / relative
+        if not current.is_file() or current.read_bytes() != compiled.read_bytes():
+            raise ValueError(f'Diagnostic owning chunk differs from the normal compiled bytes: {relative}')
+        sources = sorted(expected for _, expected in owned)
+        found.update(sources)
+        owners[COPY_ASSET_PREFIX + relative.as_posix()] = {
+            'sha256': hashlib.sha256(current.read_bytes()).hexdigest(), 'sources': sources,
+            'sourceMapSha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'diagnosticMap': str(path.relative_to(diagnostics))}
+    if found != COPY_SOURCE_PATHS:
+        raise ValueError('Diagnostic maps do not identify both reviewed copy implementation sources')
+    return owners
+
+
 def run(output, journey=None, studio_root=None, composition='normal'):
     output.mkdir(parents=True, exist_ok=False)
     studio_root = (studio_root or ROOT).resolve()
@@ -520,8 +559,16 @@ def run(output, journey=None, studio_root=None, composition='normal'):
             fixture_built = True
         command(backend_command, output / 'backend-build.log')
         command(['pnpm', 'build'], output / 'frontend-build.log', cwd=studio_root / 'Studio')
-        workflow_assets = fingerprints(studio_root / 'Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows')
+        workflow_module = studio_root / 'Studio/src/essentials/Elsa.Studio.Workflows'
+        workflow_assets = fingerprints(workflow_module / 'wwwroot/studio/modules/workflows')
         report['workflowSourceAssets'] = workflow_assets
+        copy_assets = {}
+        if selected & COPY_JOURNEYS:
+            diagnostics = output / 'copy-asset-diagnostics'
+            command(['pnpm', '--filter', '@elsa-workflows/studio-workflows', 'exec', 'vite', 'build', '--sourcemap', 'hidden', '--outDir', str(diagnostics)],
+                    output / 'copy-asset-diagnostics.log', cwd=studio_root / 'Studio')
+            copy_assets = copy_implementation_assets(workflow_module / 'Client/src', workflow_module / 'wwwroot/studio/modules/workflows', diagnostics)
+            report['copyImplementationAssets'] = copy_assets
         report['stage'] = 'isolated-field-gallery'
         gallery = output / 'outlined-gallery'
         gallery_port = free_port()
@@ -575,7 +622,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                     browser_env = dict(os.environ, UX_ACCEPTANCE_OWNED='1', ELSA_STUDIO_URL=studio_url,
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_STUDIO_SOURCE_SHA=studio_sha,
-                                       UX_ACTIVITY_DATA_COMPOSITION=composition, UX_ACCEPTANCE_OWNED_ROOT=str(data), UX_WORKFLOW_ASSET_SHA256S=json.dumps(workflow_assets))
+                                       UX_ACTIVITY_DATA_COMPOSITION=composition, UX_ACCEPTANCE_OWNED_ROOT=str(data), UX_WORKFLOW_ASSET_SHA256S=json.dumps(workflow_assets), UX_COPY_IMPLEMENTATION_ASSETS=json.dumps(copy_assets))
                     browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                     if journey is not None:
                         # Playwright greps project/file/title together; anchor the exact final title.
