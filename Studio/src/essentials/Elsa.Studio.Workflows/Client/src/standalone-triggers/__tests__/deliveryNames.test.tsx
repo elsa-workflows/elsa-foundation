@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../../api/workflowDesign";
 import { DeliveryDetails } from "../Deliveries";
+import { ChangeReview } from "../ChangeReview";
 import type { TriggerClient } from "../api";
 import type { DeliveryView, RecipientView } from "../types";
 
@@ -46,4 +47,16 @@ it("ignores a delayed name from the previous backend context", async () => {
   await vi.waitFor(() => expect(container.querySelector("h3")?.textContent).toBe("Current backend name"));
   finish(details("Old backend name")); await Promise.resolve();
   expect(container.querySelector("h3")?.textContent).toBe("Current backend name");
+});
+
+it.each(["resolved", "denied", "restricted"] as const)("uses optional authorized Design names in change impacts: %s", async state => {
+  if (state === "resolved") vi.mocked(getDefinition).mockResolvedValue(details("Reconcile Accounts"));
+  else vi.mocked(getDefinition).mockRejectedValue(new Error("Design unavailable"));
+  const restricted = state === "restricted";
+  const transport = { preview: vi.fn().mockResolvedValue({ canApply: true, findings: [], impact: [{ label: restricted ? "Restricted workflow" : "Target", description: restricted ? "Restricted details retained" : "opaque-workflow / default", target: restricted ? undefined : { definitionId: "opaque-workflow", slotName: "default" } }] }) } as unknown as TriggerClient;
+  const context = api();
+  const { container } = mount(<ChangeReview api={context} client={transport} trigger={{ id: "trigger", name: "End of day", revision: 1 }} command={{ kind: "PauseTrigger" }} onCancel={vi.fn()} onApplied={vi.fn()} />);
+  await vi.waitFor(() => expect(container.textContent).toContain(state === "resolved" ? "Reconcile Accounts" : restricted ? "Restricted workflow" : "Target"));
+  if (restricted) { expect(getDefinition).not.toHaveBeenCalled(); expect(container.textContent).not.toContain("opaque-workflow"); }
+  else { await vi.waitFor(() => expect(getDefinition).toHaveBeenCalledWith(context.backend, "opaque-workflow", expect.any(AbortSignal))); expect(container.textContent).toContain("opaque-workflow / default"); }
 });
