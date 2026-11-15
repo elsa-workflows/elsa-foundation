@@ -11,7 +11,7 @@ namespace Kernel.Durable;
 /// <c>PendingStart</c> is the durable owner's initial delivery ID only while its first authored work remains held.
 /// </summary>
 public sealed record InstanceRow(string Id, string Model, string Definition, InstanceStatus Status, string State, long Revision, string? Parent, string? Fault = null, string? Jobs = null, History History = History.Full, bool Suspended = false, string? Children = null, int StateVersion = 1, string? CommitTimes = null,
-    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null);
+    long Creation = 0, bool Retired = false, string? StartIntent = null, long ParentCreation = 0, InboxKey? PendingStart = null, string? CustomHandles = null, bool IdentityOnly = false);
 
 /// <summary>A requested spelling, its stored actor identity (or first equivalent candidate if missing), and its snapshot.</summary>
 public sealed record ActorLookup(string Requested, string Canonical, InstanceRow? Row)
@@ -74,7 +74,9 @@ public sealed record Polled(IReadOnlyList<Stored> Messages, long Now);
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
 /// <c>Held</c> messages stay, and are no longer on trial: their turn ran and did not kill the process.
-/// <c>Delete</c> removes the instance's row (at revision <c>Expected</c>) and its journal rows; its own journal row says so.
+/// <c>Delete</c> requires a present <c>Expected</c> matching an existing row. With <c>Row</c> null it is a trusted
+/// raw deletion; otherwise <c>Row</c> must be the canonical retirement marker. Both remove positive journal history;
+/// the delete's own journal item records removal. Missing actors never acquire a default revision.
 /// <c>Unsubscribe</c> deletes every subscription of the instance: it was ended by force and the kernel holds no list of them.
 /// <c>Subscribed</c> and <c>Unsubscribed</c> are idempotent (FINDINGS 25.2): a wait that is there already stays one wait,
 /// and removing one that is not there changes nothing; neither is a count that does not match. Within a turn its
@@ -128,6 +130,8 @@ public interface IKernelStore : IMembership
     bool SupportsCommitWindow => false;
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;
+    /// <summary>Irreversible empty markers for generated physical addresses, independent of positive generations.</summary>
+    bool PhysicalRetirementAvailable => false;
     bool HasActorAliases => false;
 
     /// <summary>
