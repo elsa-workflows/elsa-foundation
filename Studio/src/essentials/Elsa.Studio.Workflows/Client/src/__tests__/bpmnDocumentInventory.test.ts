@@ -298,3 +298,19 @@ describe("R7 expanded intrinsic native reference regressions", () => {
     expect(JSON.parse(encoded.value)).toEqual(opaque);
   });
 });
+
+describe("R8 qualified inventory metadata boundary", () => {
+  it("leaves node-shaped projected-view metadata outside an unqualified native inventory", () => {
+    const original = owner(), snapshot: ActivityNode = { nodeId: "metadata-only-scope", activityVersionId: "snapshot-version", inputs: [], outputs: [], structure: { kind: "elsa.bpmn.scope-view", schemaVersion: "1.0.0", payload: {} } };
+    nodes(original)[0].structure = { kind: "vendor.opaque", schemaVersion: "1", payload: { metadata: [snapshot] } };
+    const before = structuredClone(original);
+    let observed: ReturnType<typeof inventoryBpmnDocument> | undefined, failure: unknown;
+    try { observed = inventoryBpmnDocument(original, catalog); } catch (error) { failure = error; }
+    expect(original).toEqual(before);
+    expect(failure).toBeUndefined();
+    expect(observed!.nativeNodes.has("metadata-only-scope")).toBe(false);
+    expect(observed!.unqualifiedStructures).toMatchObject([{ nodeId: "native-body" }]);
+    expect(() => remapBpmnDocumentNativeIdentities(original, map(original), catalog)).toThrow("unqualified native ownership");
+    expect(original).toEqual(before);
+  });
+});
