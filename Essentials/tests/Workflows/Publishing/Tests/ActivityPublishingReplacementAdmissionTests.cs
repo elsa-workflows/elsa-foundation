@@ -1,4 +1,5 @@
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +13,7 @@ public sealed class ActivityPublishingReplacementAdmissionTests
     public static IEnumerable<object[]> Contracts() => new[]
     {
         typeof(IActivityTemplateCompiler), typeof(IActivityPublicationCandidateEvaluator), typeof(IActivityPublicationReadiness),
-        typeof(IActivityCatalogProjection), typeof(IActivityPublicationVersionPolicy)
+        typeof(IActivityCatalogProjection), typeof(IActivityPublicationVersionPolicy), typeof(IActivityBindingConversionPreviewer)
     }.Select(type => new object[] { type });
 
     [Theory]

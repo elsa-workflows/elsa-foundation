@@ -26,7 +26,7 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 
 ### `IActivityBindingConversionPreviewer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
 
-The optional scoped Publishing implementation resolves a selected whole activity result against the consuming input's type and authored mode through `ValueConversionPlanResolver`. Draft validators use rejections for input findings. A target-only activity-data query with `previewBindingConversion: true` receives the operation or refusal for the snapshot's stored binding. Design-only hosts omit the preview.
+The optional scoped Publishing implementation resolves a selected whole activity result against the consuming input's type and authored mode through `ValueConversionPlanResolver`. Draft validators use rejections for input findings. A target-only activity-data query with `previewBindingConversion: true` receives the operation or refusal for the snapshot's stored binding. Design-only hosts omit the preview by default. Shell preparation requires at most one scoped registration. Publishing registers the default and checks that exactly one implementation is present at startup.
 
 ### `ICredentialLiteralValidator` *(Core, `Elsa.Workflows.Design.Validations.Core`)*
 - **Kind:** Validator (returns findings), a single-implementation **replacement contract** (framework §2.6.2), declared by `[CredentialLiteralValidatorReplacementContract]`.

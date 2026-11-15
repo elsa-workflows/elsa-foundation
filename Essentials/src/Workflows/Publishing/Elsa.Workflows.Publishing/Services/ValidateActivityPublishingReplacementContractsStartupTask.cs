@@ -1,5 +1,6 @@
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,7 +16,8 @@ internal sealed class ValidateActivityPublishingReplacementContractsStartupTask(
         typeof(IActivityPublicationCandidateEvaluator),
         typeof(IActivityPublicationReadiness),
         typeof(IActivityCatalogProjection),
-        typeof(IActivityPublicationVersionPolicy)
+        typeof(IActivityPublicationVersionPolicy),
+        typeof(IActivityBindingConversionPreviewer)
     ];
 
     public Task ExecuteAsync(CancellationToken cancellationToken)
