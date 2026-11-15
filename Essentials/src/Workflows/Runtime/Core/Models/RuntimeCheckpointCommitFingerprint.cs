@@ -159,7 +159,8 @@ public static class RuntimeCheckpointCommitFingerprint
         // Consumed scheduler work items only appear on the atomic-ack path, which never existed for older markers.
         // Emit a superset shape that also includes them so the pre-existing branches below stay byte-identical (and old
         // durable replay markers keep the same fingerprint) whenever no work item is consumed.
-        object stateChanges = !commit.StateChanges.BackgroundActivityWork.IsEmpty
+        // Source agreement covers every participant, even when historical durable replay selected an older shape.
+        object stateChanges = exactHistorySource || !commit.StateChanges.BackgroundActivityWork.IsEmpty
             ? new
             {
                 commit.StateChanges.WorkflowExecution,
@@ -301,7 +302,7 @@ public static class RuntimeCheckpointCommitFingerprint
         // ExpectedModelParentWait is likewise only a refreshed physical condition. The model-owned state
         // retains its immutable native invocation/result address and participates in this fingerprint.
         if (exactHistorySource)
-            element = JsonSerializer.SerializeToElement(new { HistoryCaptureSourceVersion = 1, Payload = element }, SerializerOptions);
+            element = JsonSerializer.SerializeToElement(new { HistoryCaptureSourceVersion = 1, Payload = element, commit.RetainSchedulerWork }, SerializerOptions);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);

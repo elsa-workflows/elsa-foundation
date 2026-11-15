@@ -268,6 +268,30 @@ public sealed class RuntimeHistoryCandidateTests
         Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(capturedFirst), RuntimeCheckpointCommitFingerprint.Compute(capturedSecond));
     }
 
+    [Theory]
+    [InlineData("cleanup")] [InlineData("retain-work")]
+    public async Task Prepared_flush_refuses_late_native_participants_and_retention_changes(string changed)
+    {
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        using var fixture = await Fixture.Create(Policy("ActivityStarted"), coalescing: accessor);
+        var logical = await fixture.Capture.EnrichAsync(Commit("buffered-participants", RuntimeCheckpointNames.ActivityStarted,
+            activity: Activity(ActivityExecutionStatus.Running)));
+        var session = new RuntimeCoalescingSession("run", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
+        session.BufferDeferred(logical);
+        var flush = Commit("prepared-participants", RuntimeCoalescingMetadataKeys.FlushCheckpointName) with
+        { StateChanges = session.FoldBufferedStateChanges(), HistoryBatches = session.FoldHistoryBatchesWith() };
+        flush = flush with { Checkpoint = flush.Checkpoint with { Metadata = new Dictionary<string, string>
+            { [RuntimeCoalescingMetadataKeys.CoalescedFlush] = "true" } } };
+        session.PrepareQuiescenceFlush(flush);
+        using var current = accessor.Push(session);
+        if (changed == "cleanup")
+            flush = flush with { StateChanges = new(null, null, flush.StateChanges.ActivityExecutions, [], [], [], [],
+                activityScopeCleanups: [new("run", "scope", ["activity"], ["bookmark"], [], [])]) };
+        else flush = flush with { RetainSchedulerWork = true };
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.Capture.ValidateFinalAsync(flush));
+        Assert.True(session.IsActive); Assert.True(session.HasBufferedChanges);
+    }
+
     [Fact]
     public async Task An_undeclared_kind_or_different_selected_source_bridge_cannot_qualify_capture()
     {
