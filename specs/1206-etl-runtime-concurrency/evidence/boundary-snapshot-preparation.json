@@ -1,0 +1,81 @@
+{
+  "productionSource": "eaeec794dbc9bca3fc1a88eda356ca7279adc884",
+  "workingTreeParent": "0d47ad1a5e6e47bde91d00579cb8fe018507e26b",
+  "testSource": "Extensions/Etl/tests/Shared/RuntimeStore/EtlRuntimeRetryContract.cs",
+  "testSha256": "3281bbd70d140f674a21362cc392e8a39ee7764b50af9f74b1218ba18375db22",
+  "results": [
+    {
+      "name": "boundary-snapshot-preparation",
+      "counters": {
+        "total": "12",
+        "executed": "12",
+        "passed": "10",
+        "failed": "2",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "491a16d440190cbf521f99e0a9a7ba2bb70d31ea23eb9e7ec18391e8e45ffabc",
+      "diagnosis": "Two preparation cases failed before injection: Assert.IsType incorrectly required the abstract context type. Corrected to IsAssignableFrom before green runs; this is a harness failure, not a product red/green control."
+    },
+    {
+      "name": "boundary-snapshot-preparation-green",
+      "counters": {
+        "total": "12",
+        "executed": "12",
+        "passed": "12",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "ec1300b5ad2d7654e6ffc87566bb38f419a4cbe2e93a3a06d82267c340861a9d",
+      "testSha256": "3281bbd70d140f674a21362cc392e8a39ee7764b50af9f74b1218ba18375db22"
+    },
+    {
+      "name": "native-boundary-snapshot-preparation",
+      "counters": {
+        "total": "36",
+        "executed": "36",
+        "passed": "36",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trxSha256": "84a2dcf4bd235c15c566488f0da5381b499e378fa0387d28096b7875000f218e",
+      "testSha256": "3281bbd70d140f674a21362cc392e8a39ee7764b50af9f74b1218ba18375db22"
+    }
+  ],
+  "limits": [
+    "Injected failures execute against real databases; only the separate admission races prove genuine native contention.",
+    "Completed-state host, broader recovery, remaining races and exact-head full qualification are pending."
+  ]
+}

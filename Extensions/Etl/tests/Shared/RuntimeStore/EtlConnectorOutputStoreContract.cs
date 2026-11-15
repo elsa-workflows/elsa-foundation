@@ -461,7 +461,7 @@ public abstract partial class EtlRuntimeStoreContract
         return new(accepted, rejected, filtered, main, errors);
     }
 
-    private protected static EtlConnectorRouteOutput OutputRoute(EtlConnectorRunAdmission admission,
+    internal static EtlConnectorRouteOutput OutputRoute(EtlConnectorRunAdmission admission,
         EtlConnectorBatchDescriptor batch, EtlOutputRoute route, EtlConnectorKind kind,
         string key, string contentHash, long byteLength, long records)
     {

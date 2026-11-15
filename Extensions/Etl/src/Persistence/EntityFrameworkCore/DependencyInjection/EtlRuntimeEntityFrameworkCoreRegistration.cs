@@ -34,13 +34,13 @@ internal static class EtlRuntimeEntityFrameworkCoreRegistration
         Validate(options);
 
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        if (!StringComparer.Ordinal.Equals(provider, "sqlite"))
-            // The server schemas are available, but concurrent runtime transitions are not yet qualified.
-            throw new NotSupportedException("The ETL runtime EF module supports SQLite only until its transitions are qualified on other engines.");
-
-        Binding.AddContext<EtlRuntimeSqliteDbContext>(services, options.Pooling, (serviceProvider, builder) =>
-            Binding.Apply(builder, serviceProvider, provider, options.ConnectionString, options.ConnectionName, options.Schema));
-        services.AddScoped<EtlRuntimeDbContext>(serviceProvider => serviceProvider.GetRequiredService<EtlRuntimeSqliteDbContext>());
+        var addContext = Binding.Select<Action<IServiceCollection, EtlRuntimeEntityFrameworkCoreOptions, string>>(
+            provider,
+            AddContext<EtlRuntimeSqliteDbContext>,
+            AddContext<EtlRuntimeSqlServerDbContext>,
+            AddContext<EtlRuntimePostgreSqlDbContext>,
+            AddContext<EtlRuntimeMySqlDbContext>);
+        addContext(services, options, provider);
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(new EtlRuntimeStoreOptions(
             options.PreparationLease, options.PartitionLease, options.DeliveryLease,
@@ -54,6 +54,14 @@ internal static class EtlRuntimeEntityFrameworkCoreRegistration
         services.AddScoped<IEtlConnectorRuntimeInspector>(provider =>
             (provider.GetRequiredService<IEtlRuntimeStore>() as IEtlConnectorRuntimeInspector)!);
         return services;
+    }
+
+    private static void AddContext<TContext>(IServiceCollection services, EtlRuntimeEntityFrameworkCoreOptions options, string provider)
+        where TContext : EtlRuntimeDbContext
+    {
+        Binding.AddContext<TContext>(services, options.Pooling, (serviceProvider, builder) =>
+            Binding.Apply(builder, serviceProvider, provider, options.ConnectionString, options.ConnectionName, options.Schema));
+        services.AddScoped<EtlRuntimeDbContext>(providerServices => providerServices.GetRequiredService<TContext>());
     }
 
     private static void Validate(EtlRuntimeEntityFrameworkCoreOptions options)

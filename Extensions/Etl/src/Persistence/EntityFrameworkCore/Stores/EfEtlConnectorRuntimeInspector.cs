@@ -12,10 +12,17 @@ internal sealed partial class EfEtlRuntimeStore
     public async ValueTask<EtlConnectorRunInspection?> FindConnectorInspectionAsync(EtlScope scope, string runId,
         CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(FindConnectorInspectionAsync), scope, runId, cancellationToken);
+        return await RunOperationAsync(nameof(FindConnectorInspectionAsync), scope, runId,
+            () => FindConnectorInspectionOnceAsync(scope, runId, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<EtlConnectorRunInspection?> FindConnectorInspectionOnceAsync(EtlScope scope, string runId,
+        CancellationToken cancellationToken = default)
+    {
         var key = RunKey(scope, runId);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var run = await FindConnectorRunAsync(scope, runId, cancellationToken);
+        var run = await FindConnectorRunOnceAsync(scope, runId, cancellationToken);
         if (run is null) return null;
 
         var counts = await AcceptedEffectCounts(key.ScopeKey, key.RunKey, cancellationToken);
@@ -33,12 +40,19 @@ internal sealed partial class EfEtlRuntimeStore
     public async ValueTask<IReadOnlyList<EtlConnectorPartitionInspection>> ListConnectorPartitionsAsync(EtlScope scope,
         string runId, int afterPartitionOrdinal, int take, CancellationToken cancellationToken = default)
     {
-        db.ChangeTracker.Clear();
+        PrepareOperation(nameof(ListConnectorPartitionsAsync), scope, runId, cancellationToken);
+        return await RunOperationAsync(nameof(ListConnectorPartitionsAsync), scope, runId,
+            () => ListConnectorPartitionsOnceAsync(scope, runId, afterPartitionOrdinal, take, cancellationToken), cancellationToken);
+    }
+
+    private async ValueTask<IReadOnlyList<EtlConnectorPartitionInspection>> ListConnectorPartitionsOnceAsync(EtlScope scope,
+        string runId, int afterPartitionOrdinal, int take, CancellationToken cancellationToken = default)
+    {
         ValidatePage(scope, take);
         if (afterPartitionOrdinal < -1) throw new ArgumentOutOfRangeException(nameof(afterPartitionOrdinal));
         var key = RunKey(scope, runId);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var run = await FindConnectorRunAsync(scope, runId, cancellationToken);
+        var run = await FindConnectorRunOnceAsync(scope, runId, cancellationToken);
         if (run is null)
         {
             await transaction.CommitAsync(cancellationToken);

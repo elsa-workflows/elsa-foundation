@@ -1,0 +1,17 @@
+{
+  "sourceRevision": "a48ec7b0daaa64d8db51667029809918fce668f9",
+  "stackBaseRevision": "7afdb3456b6dd76b341bff959d12edf6124e89ee",
+  "paths": {
+    "Extensions/Etl/src/Persistence/EntityFrameworkCore/Migrations": {
+      "files": 41,
+      "gitTreeEntriesSha256": "1453b19165ea797651c5ebaa99f6b9c0ae1163a06a5efc128126b8788aa97dd6",
+      "unchangedRelativeToStackBase": true
+    },
+    "specs/1017-direct-bpmn-hosting/evidence/baseline": {
+      "files": 63,
+      "gitTreeEntriesSha256": "5dd8eb2dc1d4f2631ec873d5eee045d60314acd86fbced5321a3970843fa45b9",
+      "unchangedRelativeToStackBase": true
+    }
+  },
+  "scope": "Exact source-byte preservation relative to the schema stack base. This does not substitute for old-writer upgraded-host or Studio acceptance."
+}

@@ -1,3 +1,7 @@
+using Elsa.Etl.Core.Runtime;
+using Elsa.Etl.Design;
+using Elsa.Etl.Design.Stores;
+using Elsa.Etl.Tests;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Persistence.EntityFramework;
@@ -40,14 +44,43 @@ public abstract class EtlRuntimeProviderTests(EtlNativeProviderFixture fixture)
         Assert.NotEqual(context.RunKeyOf("Run-A"), context.RunKeyOf("run-a"));
     }
 
-    [SkippableFact]
-    public void The_runtime_registration_still_refuses_server_engines_until_their_transitions_are_qualified()
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Runtime_only_registration_selects_the_engine_and_preserves_scoped_capabilities(bool pooling)
     {
-        fixture.RequireAvailable();
+        await using var database = await EtlProviderRuntimeDatabase.CreateTypedAsync(fixture);
         var services = new ServiceCollection();
-
-        Assert.Throws<NotSupportedException>(() => services.AddEtlRuntimeEntityFrameworkCore(
-            new EtlRuntimeEntityFrameworkCoreOptions { Provider = fixture.Provider, ConnectionString = "unused" }));
+        services.AddLogging();
+        services.AddEtlRuntimeEntityFrameworkCore(new EtlRuntimeEntityFrameworkCoreOptions
+        {
+            Provider = database.Provider, ConnectionString = database.ConnectionString, Pooling = pooling
+        });
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var admission = EtlRuntimeFixtures.Admission("registered-store");
+        IEtlRuntimeStore first;
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>();
+            await using (var expected = database.CreateContext())
+                Assert.Equal(expected.GetType(), context.GetType());
+            Assert.Equal(EfRelationalProviderBinding.ExpectedProviderName(database.Provider), context.Database.ProviderName);
+            first = scope.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
+            Assert.Same(first, scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeStore>());
+            Assert.Same(first, scope.ServiceProvider.GetRequiredService<IEtlConnectorRuntimeInspector>());
+            Assert.Null(scope.ServiceProvider.GetService<IEtlDefinitionStore>());
+            Assert.Null(scope.ServiceProvider.GetService<IEtlDefinitionStoreV2>());
+            Assert.Null(scope.ServiceProvider.GetService<IEtlArtifactCompiler>());
+            Assert.Equal(EtlStoreStatus.Applied, (await first.AdmitAsync(admission)).Status);
+            Assert.Equal(EtlStoreStatus.Replay, (await first.AdmitAsync(admission)).Status);
+        }
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
+            Assert.NotSame(first, store);
+            var retained = Assert.IsType<EtlRunView>(await store.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+            Assert.Equal(EtlRuntimeIdentity.InvocationFingerprint(admission.Invocation), EtlRuntimeIdentity.InvocationFingerprint(retained.Invocation));
+        }
     }
 
     private static async Task<string?> ScalarAsync(EtlProviderRuntimeDatabase database, string sql)

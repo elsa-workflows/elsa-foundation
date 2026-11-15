@@ -51,7 +51,11 @@ starting the backend tiers:
 gh workflow run ci.yml --ref <branch> -f suite=studio
 ```
 
-Other suite values are `backend-source`, `weaver`, `published-images`, and `studio-order`.
+Other suite values are `backend-source`, `weaver`, `published-images`, `studio-order`, and `etl-host`.
+The manual-only `etl-host` suite publishes Workbench once and runs the existing three-engine
+ETL server-store journey. It retains the actual source and product receipt, execution outcomes
+and any completed journey evidence. Its restart proves completed-state readback; it does not
+establish mid-work recovery, an upgrade or Studio compatibility. It adds no PR, push or nightly job.
 The default `suite=ci` retains the existing `tier=full|pr` dispatch. Marking a PR ready starts a
 complete ready run: the PR tier, full tier, generated maps and affected focused proofs report
 together. It supersedes an in-progress draft run. This avoids

@@ -9,16 +9,39 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 internal sealed partial class EfEtlRuntimeStore
 {
     public ValueTask<EtlConnectorHttpDeliveryResult> BeginConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease,
-        string batchId, EtlOutputRoute route, string requestId, CancellationToken cancellationToken = default) =>
-        MutateConnectorHttpDeliveryAsync(lease, batchId, route,
+        string batchId, EtlOutputRoute route, string requestId, CancellationToken cancellationToken = default)
+    {
+        PrepareOperation(nameof(BeginConnectorHttpDeliveryAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return RunOperationAsync(nameof(BeginConnectorHttpDeliveryAsync), lease?.Scope, lease?.RunId,
+            () => BeginConnectorHttpDeliveryOnceAsync(lease, batchId, route, requestId, cancellationToken), cancellationToken);
+    }
+
+    private ValueTask<EtlConnectorHttpDeliveryResult> BeginConnectorHttpDeliveryOnceAsync(EtlConnectorPartitionLease? lease,
+        string batchId, EtlOutputRoute route, string requestId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        return MutateConnectorHttpDeliveryAsync(lease, batchId, route,
             (state, effect, policy, now) => EtlHttpDeliveryTransitions.Begin(state, effect, requestId, lease.Fence, now, policy), cancellationToken);
+    }
 
     public ValueTask<EtlConnectorHttpDeliveryResult> CompleteConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease,
         string batchId, EtlOutputRoute route, EtlHttpDeliveryAttempt attempt, EtlHttpDeliveryResponse response,
-        CancellationToken cancellationToken = default) =>
-        MutateConnectorHttpDeliveryAsync(lease, batchId, route,
+        CancellationToken cancellationToken = default)
+    {
+        PrepareOperation(nameof(CompleteConnectorHttpDeliveryAsync), lease?.Scope, lease?.RunId, cancellationToken);
+        return RunOperationAsync(nameof(CompleteConnectorHttpDeliveryAsync), lease?.Scope, lease?.RunId,
+            () => CompleteConnectorHttpDeliveryOnceAsync(lease, batchId, route, attempt, response, cancellationToken), cancellationToken);
+    }
+
+    private ValueTask<EtlConnectorHttpDeliveryResult> CompleteConnectorHttpDeliveryOnceAsync(EtlConnectorPartitionLease? lease,
+        string batchId, EtlOutputRoute route, EtlHttpDeliveryAttempt attempt, EtlHttpDeliveryResponse response,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease);
+        return MutateConnectorHttpDeliveryAsync(lease, batchId, route,
             (state, _, policy, now) => state is null ? new(EtlStoreStatus.Conflict, null, null) :
                 EtlHttpDeliveryTransitions.Complete(state, attempt, response, lease.Fence, now, policy), cancellationToken);
+    }
 
     private async ValueTask<EtlConnectorHttpDeliveryResult> MutateConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease,
         string batchId, EtlOutputRoute route,

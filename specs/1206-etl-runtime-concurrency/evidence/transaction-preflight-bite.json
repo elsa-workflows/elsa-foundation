@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "f0faedc2a02b2521dd7522b1c7e3314acc31050a",
+  "qualifiedProductionSource": "a48ec7b0daaa64d8db51667029809918fce668f9",
+  "mutatedFile": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlRuntimeOperation.cs",
+  "originalSha256": "bba0b87df7351308685e4f47908ee8f3c662505916686390ca93a8e1ea54b7ff",
+  "mutatedSha256": "fa7f1eef5a945763f7b7a4edd23be443c20752b860909a1714f16ee098ad1676",
+  "mutation": "Remove the complete caller/current/ambient/enlisted transaction refusal before tracking is cleared.",
+  "restoredByteIdentical": true,
+  "requiredNativeMode": true,
+  "results": [
+    {
+      "phase": "guard-removed",
+      "project": "sqlite",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking|FullyQualifiedName~Admission_refuses_an_ambient_transaction_before_issuing_a_database_command|FullyQualifiedName~Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+        "--logger",
+        "trx;LogFileName=tests.trx",
+        "--results-directory",
+        "/tmp/elsa-codex-2908/1206/transaction-preflight-bite/guard-removed/sqlite"
+      ],
+      "exitCode": 1,
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "0",
+        "failed": "2",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "test": "Elsa.Etl.Tests.EtlRuntimeStoreTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Tests.EtlRuntimeStoreTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        }
+      ],
+      "logSha256": "02c7d95f703541b77721674d1aa1c20e2fd7b510de6a947be2452b309cce8bd1",
+      "trxSha256": "0fd79ebba7a469060892c54fdb5a0040ed57c6be4f7281a37eeda9871c843636"
+    },
+    {
+      "phase": "guard-removed",
+      "project": "native",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking|FullyQualifiedName~Admission_refuses_an_ambient_transaction_before_issuing_a_database_command|FullyQualifiedName~Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+        "--logger",
+        "trx;LogFileName=tests.trx",
+        "--results-directory",
+        "/tmp/elsa-codex-2908/1206/transaction-preflight-bite/guard-removed/native"
+      ],
+      "exitCode": 1,
+      "counters": {
+        "total": "9",
+        "executed": "9",
+        "passed": "0",
+        "failed": "9",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStorePostgreSqlTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreSqlServerTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStorePostgreSqlTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreMySqlTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreSqlServerTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreMySqlTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+          "outcome": "Failed",
+          "failure": "Assert.Equal() Failure: Values differ\nExpected: Modified\nActual:   Detached"
+        }
+      ],
+      "logSha256": "001ff6b95d6e37680f8992cfbc8c50cc371f0b53f2007bc9f9be31a74473f494",
+      "trxSha256": "e5e1d00423dbcdb2c911e9d974b30c2abcb73c9202e8f4742893966ddb7427a0"
+    },
+    {
+      "phase": "guard-restored",
+      "project": "sqlite",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking|FullyQualifiedName~Admission_refuses_an_ambient_transaction_before_issuing_a_database_command|FullyQualifiedName~Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+        "--logger",
+        "trx;LogFileName=tests.trx",
+        "--results-directory",
+        "/tmp/elsa-codex-2908/1206/transaction-preflight-bite/guard-restored/sqlite"
+      ],
+      "exitCode": 0,
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "test": "Elsa.Etl.Tests.EtlRuntimeStoreTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Tests.EtlRuntimeStoreTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Passed",
+          "failure": null
+        }
+      ],
+      "logSha256": "3c5caef4b53fd59b020c750ce850acb8e64c5061701be586d78866bb7aec63b1",
+      "trxSha256": "20f177b8ef16aa2436f82b0462c39ff299fc63fcaf0e2394edaceded0f1cfe5c"
+    },
+    {
+      "phase": "guard-restored",
+      "project": "native",
+      "command": [
+        "dotnet",
+        "test",
+        "Extensions/Etl/tests/Persistence/ProviderTests/Elsa.Etl.Persistence.ProviderTests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking|FullyQualifiedName~Admission_refuses_an_ambient_transaction_before_issuing_a_database_command|FullyQualifiedName~Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+        "--logger",
+        "trx;LogFileName=tests.trx",
+        "--results-directory",
+        "/tmp/elsa-codex-2908/1206/transaction-preflight-bite/guard-restored/native"
+      ],
+      "exitCode": 0,
+      "counters": {
+        "total": "9",
+        "executed": "9",
+        "passed": "9",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencySqlServerTests.Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyPostgreSqlTests.Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreSqlServerTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreMySqlTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStorePostgreSqlTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeConcurrencyMySqlTests.Enlisted_transaction_is_refused_without_ambient_scope_or_tracking_mutation",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreSqlServerTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStoreMySqlTests.Admission_refuses_an_ambient_transaction_before_issuing_a_database_command",
+          "outcome": "Passed",
+          "failure": null
+        },
+        {
+          "test": "Elsa.Etl.Persistence.ProviderTests.EtlRuntimeStorePostgreSqlTests.Admission_refuses_a_caller_transaction_before_discarding_its_pending_tracking",
+          "outcome": "Passed",
+          "failure": null
+        }
+      ],
+      "logSha256": "0e3fb0ae43dd364d527b3dc22557d8d1969c2c94189d8ff14bd35abb7701ea71",
+      "trxSha256": "a07519c7cf415ac6efccc58743529f05e2e22882d2b155dbbd9fd01da966c87f"
+    }
+  ]
+}

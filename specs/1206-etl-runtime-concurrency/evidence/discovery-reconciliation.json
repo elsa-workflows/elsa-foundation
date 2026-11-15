@@ -1,0 +1,35 @@
+{
+  "sourceRevision": "a48ec7b0daaa64d8db51667029809918fce668f9",
+  "results": [
+    {
+      "project": "etl",
+      "discoveredCases": 1353,
+      "discoveredMethods": 862,
+      "executedCases": 1353,
+      "executedMethods": 862,
+      "outcomes": {
+        "Passed": 1353
+      },
+      "missingMethods": [],
+      "extraMethods": [],
+      "caseCountDifferences": [],
+      "discoveryLogSha256": "ad33815f6d5accf1ef791a79ac61504a4790f1afdca26d3cdd9e3503a875aec4",
+      "trxSha256": "aacf5f71db290f194f9ef7759e47d72fd94e6c21a5adc478aebacabf08f2be7d"
+    },
+    {
+      "project": "provider",
+      "discoveredCases": 933,
+      "discoveredMethods": 601,
+      "executedCases": 933,
+      "executedMethods": 601,
+      "outcomes": {
+        "Passed": 933
+      },
+      "missingMethods": [],
+      "extraMethods": [],
+      "caseCountDifferences": [],
+      "discoveryLogSha256": "d4c7ae706d2303c2bd2ce02df42f2052aa73f9534fb8d91a361bcfbbbc02d548",
+      "trxSha256": "8042ee11f0b7c463997fdd2241b8f6ba9f9d6d88e54d84d9e8a246dcc98e7484"
+    }
+  ]
+}
