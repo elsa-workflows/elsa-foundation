@@ -1341,7 +1341,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
     if (tab === activeInspectorTab) return;
     // Opening the selected execution's Activity view does not navigate away from its pending ancestry.
-    const openingPendingSelection = tab === "activity" && scopeNavigation.context === browserContext && scopeNavigation.loading
+    const pendingScope = scopeRequest.current;
+    const openingPendingSelection = tab === "activity" && scopeNavigation.context === browserContext
+      && pendingScope !== null && !pendingScope.signal.aborted && focusReadyScope.current !== pendingScope
       && requestedScope.current?.includeSelf === false
       && requestedScope.current.execution.activityExecutionId === selectedActivity?.activityExecutionId;
     if (!openingPendingSelection) beginEvidenceNavigation();
