@@ -408,3 +408,23 @@ has the original file identity.
 
 This is the source-authored qualification path. Its new controls and native journeys remain **UNRUN** until the real
 qualifier executes the committed candidate; source review alone does not complete T038 or establish package/UX acceptance.
+
+## Failed packaged author-test diagnostics
+
+A failed protocol/backend author test attempt retains one hash-bound JSON reference at
+`report.authorTestFailureDiagnostic` before rethrowing the original exception. It records the actual known command
+exit/timeout, bounded compiler-shaped error/warning codes, and reconciled TRX counts with at most sixteen failed
+declared class/method groups. Theory display names and InlineData values never identify a method. Names must match
+the actual owned fixture's supported file-scoped public test-class declarations; unsupported identities stay
+unavailable. Assertion kinds use a fixed allowlist; up to four frames per method retain only an owned declared
+source basename and numeric line. Missing, malformed, inconsistent, unsafe or oversized TRX remains explicit, and
+compiler codes alone do not establish the cause of failure. A valid zero-test TRX never makes the failed attempt pass.
+
+The input limits are 8 MiB UTF-8 TRX / 10,000 rows, 2 MiB compiler log / eight codes per severity, and 64 source files /
+1 MiB each. Symlinked/foreign inputs and XML DTD/entity documents are refused. Neither the failed raw TRX nor its log,
+messages, prompts, auth/configuration, private stack paths or seed/canary values acquire a new export reference.
+The ordinary exporter selects the safe JSON through its existing reference/hash guards; the separate failure
+exporter verifies the exact owned reference and projects only this bounded schema. If retention itself fails, the
+known exit remains available where observed, metadata is explicitly unavailable, and the original failure survives.
+No diagnostic claims qualification complete or an independent witness. This diagnostic correction and its synthetic
+controls remain **UNRUN** until exact-source CI; it does not diagnose or erase any prior native failure.

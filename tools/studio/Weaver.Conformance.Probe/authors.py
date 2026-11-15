@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from artifacts import REPO, check, package_identity, sha, write_json
+from author_diagnostics import retain_test_failure
 
 MODULE_IDS = ("Acme.Weaver.ProtocolFixtures", "Acme.Home.Weaver", "Acme.Home.Studio")
 
@@ -158,24 +159,28 @@ def _tests(run, tag, source, package_id, packed, version, expected):
     env = _environment(run, tag)
     record = _restore(run, tag, source, env)
     destination = run.root / "author-evidence" / (tag + "-results")
-    run.run(tag + "-test", [run.dotnet, "test", str(_project(source)), "-c", "Release", "--no-restore",
+    try:
+        run.run(tag + "-test", [run.dotnet, "test", str(_project(source)), "-c", "Release", "--no-restore",
                             "--logger", "trx;LogFileName=contracts.trx", "--results-directory", str(destination)], source, env)
-    trx = destination / "contracts.trx"
-    document = ET.parse(trx)
-    namespace = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
-    counts = {key: int(value) for key, value in document.find("t:ResultSummary/t:Counters", namespace).attrib.items()}
-    check(counts["total"] == counts["executed"] == counts["passed"] == expected and
-          all(value == 0 for key, value in counts.items() if key not in {"total", "executed", "passed"}), "Author tests failed, skipped, or changed expected count")
-    rows = document.findall("t:Results/t:UnitTestResult", namespace)
-    check(len(rows) == expected and all(row.attrib["outcome"] == "Passed" for row in rows), "Author test result rows are incomplete")
-    cache = Path(env["NUGET_PACKAGES"]) / package_id.lower() / version.lower()
-    cached_package = cache / (package_id.lower() + "." + version.lower() + ".nupkg")
-    cached_dll = cache / packed["archiveEntry"]
-    test_dll = source / "bin/Release/net10.0" / (packed["assembly"] + ".dll")
-    check(sha(cached_package) == packed["package"]["sha256"] and sha(cached_dll) == sha(test_dll) == packed["builtDll"]["sha256"], "Tests did not consume the retained packed fixture")
-    record.update(counts=counts, skipped=0, retried=0, flaky=0, trx=_ref(trx),
-                  cachedPackage=_ref(cached_package), cachedDll=_ref(cached_dll), testDll=_ref(test_dll))
-    return record
+        trx = destination / "contracts.trx"
+        document = ET.parse(trx)
+        namespace = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+        counts = {key: int(value) for key, value in document.find("t:ResultSummary/t:Counters", namespace).attrib.items()}
+        check(counts["total"] == counts["executed"] == counts["passed"] == expected and
+              all(value == 0 for key, value in counts.items() if key not in {"total", "executed", "passed"}), "Author tests failed, skipped, or changed expected count")
+        rows = document.findall("t:Results/t:UnitTestResult", namespace)
+        check(len(rows) == expected and all(row.attrib["outcome"] == "Passed" for row in rows), "Author test result rows are incomplete")
+        cache = Path(env["NUGET_PACKAGES"]) / package_id.lower() / version.lower()
+        cached_package = cache / (package_id.lower() + "." + version.lower() + ".nupkg")
+        cached_dll = cache / packed["archiveEntry"]
+        test_dll = source / "bin/Release/net10.0" / (packed["assembly"] + ".dll")
+        check(sha(cached_package) == packed["package"]["sha256"] and sha(cached_dll) == sha(test_dll) == packed["builtDll"]["sha256"], "Tests did not consume the retained packed fixture")
+        record.update(counts=counts, skipped=0, retried=0, flaky=0, trx=_ref(trx),
+                      cachedPackage=_ref(cached_package), cachedDll=_ref(cached_dll), testDll=_ref(test_dll))
+        return record
+    except BaseException as error:
+        retain_test_failure(run, tag, source, error)
+        raise
 
 
 def _sdk_graph(run, source, env):
