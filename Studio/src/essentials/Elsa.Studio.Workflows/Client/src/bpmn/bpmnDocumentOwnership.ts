@@ -1,5 +1,5 @@
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
-import { getChildSlots, readStructureDesignFacet, sequenceStructureKind, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
+import { getFacetChildSlots, readStructureDesignFacet, sequenceStructureKind, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
 import { bpmnStructureKind } from "./bpmnStructure";
 
 export function bpmnNativeCatalogItem(node: ActivityNode, catalog: ActivityCatalogLookup): ActivityCatalogItem | undefined {
@@ -17,7 +17,19 @@ export function qualifiedBpmnNativeChildSlots(node: ActivityNode, catalog?: Acti
   if (options?.includeReaderForests && structure.kind === bpmnStructureKind && structure.schemaVersion === "2.0.0")
     return [activitiesSlot(node, "bpmn")];
   const facet = readStructureDesignFacet(bpmnNativeCatalogItem(node, catalog));
-  if (facet) return facet.kind === structure.kind && facet.schemaVersion === structure.schemaVersion ? getChildSlots(node, catalog) : null;
+  if (facet) {
+    if (facet.kind !== structure.kind || facet.schemaVersion !== structure.schemaVersion) return null;
+    // Projection omits invalid collections/rows; physical ownership must reject that lost data.
+    for (const descriptor of facet.payload.slots) {
+      if (!descriptor.collectionProperty || !descriptor.childProperty) continue;
+      const collection = structure.payload?.[descriptor.collectionProperty];
+      if (!Array.isArray(collection))
+        throw new Error(`Cannot inspect BPMN native ownership: declared collection '${descriptor.collectionProperty}' is malformed.`);
+      for (const item of collection) if (!item || typeof item !== "object" || Array.isArray(item))
+        throw new Error(`Cannot inspect BPMN native ownership: declared collection '${descriptor.collectionProperty}' contains a malformed row.`);
+    }
+    return getFacetChildSlots(structure, facet);
+  }
   if (structure.schemaVersion === "1.0.0" && (structure.kind === sequenceStructureKind
     || options?.includeReaderForests && structure.kind === "elsa.sequence")) return [activitiesSlot(node, "sequence")];
   return null;

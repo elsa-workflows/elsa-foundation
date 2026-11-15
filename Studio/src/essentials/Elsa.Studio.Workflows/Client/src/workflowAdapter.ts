@@ -571,7 +571,8 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
   };
 }
 
-function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+/** Declared physical slots, without a designer's additional navigation projections. */
+export function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
   const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
