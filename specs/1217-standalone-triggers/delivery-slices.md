@@ -2,7 +2,7 @@
 
 The owner closed the original whole-feature PR #3912 without merge on 9 November 2026 and requested stacked PRs of roughly 3,000 changed lines per spec slice. On 13 November the owner explicitly resumed both the corrected RuntimeArtifact extraction and the complete standalone-trigger feature, including necessary qualification. [Resumption and merge-exception receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3582#issuecomment-6857970842).
 
-The original branch remains a donor, not a delivered feature. Existing design reviews and historical runs retain their exact source; they do not qualify a new port to current main. Every implementation task after M0 remains unchecked until its slice is integrated and verified. This file refines delivery shape; the specification's product decisions and acceptance criteria remain unchanged.
+The original branch remains a donor, not a delivered feature. Existing design reviews and historical runs retain their exact source; they do not qualify a new port to current main. An implementation task is checked only after its slice is integrated and verified; the [task list](tasks.md) records the current state. This file refines delivery shape; the specification's product decisions and acceptance criteria remain unchanged.
 
 ## Order and boundaries
 

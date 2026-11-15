@@ -2,7 +2,7 @@
 
 **Input**: [spec](spec.md), [plan](plan.md), [data model](data-model.md), [runtime](contracts/runtime.md), [targets](contracts/targets.md), [API](contracts/api.md), [transports](contracts/transports.md), [UX acceptance](ux-acceptance.md).
 
-**State**: M0 reviewed; the original M1–M4 source remains a donor at closed PR #3912, not integrated product delivery. The owner resumed both the artifact predecessor and complete feature on 13 November 2026. Follow [task-ordered delivery slices](delivery-slices.md) as reviewable stacked PRs. Implementation tasks remain unchecked until their slices are integrated and qualified; the first slice provides only the corrected artifact schema/helper and protected source port. Composed journeys, independent visual acceptance and M5 remain outstanding. One canonical issue owns the stack; precursor merges do not close #3582.
+**State**: M0 reviewed; the original #3912 remains a closed, unmerged donor. The owner resumed both the artifact predecessor and complete feature on 13 November. RuntimeArtifact, resource/provider, admission/dispatch, HTTP, Event, genuine BPMN and schedule slices are integrated; the Studio/fixture/journey/producer stack is draft #4580/#4582/#4584/#4585. Implementation checkboxes below distinguish integrated backend work from still-pending UI and full feature acceptance. The owner closed #3582 on 14 November; preserve that state while recording unfinished qualification and the eventual delivery receipt. Follow [delivery slices](delivery-slices.md); closure alone is not feature acceptance.
 
 **Tests**: ADR0080 risk-based tests apply. The derived constitution deliberately prescribes no TDD cadence; tests may accompany implementation, with meaningful causal failure controls before acceptance. Existing valid behavior remains covered. Final checks run affected projects whole and compare listed/executed counts. Do not request a new cadence approval or add documentation-text tests.
 
@@ -17,15 +17,15 @@
 
 ## Phase 2 — Foundation shared by all stories (M1/M2)
 
-- [ ] T007 Add public thin resource/subscription/grant/configuration/mapping/capture models and purpose-specific source/type/model/store contracts under `Essentials/src/Workflows/Runtime/Core/`, with explicit single-replacement/contribution kinds and unknown-version refusal.
-- [ ] T008 Add optional standalone feature registration and descriptor/adapter registry events in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/`; diagnose duplicate keys and unsupported selected composition without adding a Runtime→Design reference.
-- [ ] T009 Implement scoped revisioned resources/subscriptions/resource grants in the existing in-memory store family and EF entities/configuration/store registration under `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/`; preserve source ownership, failed-update state and idempotent mutation receipts.
-- [ ] T010 Add compatible true ingress arm and typed standalone recipient selection/progress to `Core/Models/RuntimePostCommitOutbox.cs`; preserve `RuntimePostCommitIntent`, old checkpoint/wire/fingerprint/key formats and original workflow source semantics.
-- [ ] T011 Extend the existing outbox backend family/processor/dispatcher/source reader/retention in `Elsa.Workflows.Runtime/Services/Checkpoints/` and EF stores for actual source kinds, provider readiness and ordinary resumption; no second queue/pump.
-- [ ] T012 Implement provider-atomic source admission with exact source-key replay/conflict, resource/grant/association/publication compare and material-root acceptance in the selected in-memory/EF family; reject unknown/truncated evaluation rather than call it partial success.
-- [ ] T013 Implement immutable `DispatchCommitted` seal, cancel CAS and per-recipient progress/target receipt transitions in the same physical source store; retain owed commands and source tombstones across failure and deletion.
-- [ ] T014 Extend all four existing Runtime provider migration/schema chains under `Persistence/EntityFrameworkCore/Migrations/Runtime/` for new resource facts and source-neutral outbox projections; preserve old readers/bytes and refuse unsupported writers/providers.
-- [ ] T015 Add meaningful Runtime/EF behavior and logic-bearing registration tests for T007–T014 in the existing owning test projects, including old wire vectors, split-provider refusal, atomic mutation/replay and source/seal/cancel crash controls.
+- [x] T007 Add public thin resource/subscription/grant/configuration/mapping/capture models and purpose-specific source/type/model/store contracts under `Essentials/src/Workflows/Runtime/Core/`, with explicit single-replacement/contribution kinds and unknown-version refusal.
+- [x] T008 Add optional standalone feature registration and descriptor/adapter registry events in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/`; diagnose duplicate keys and unsupported selected composition without adding a Runtime→Design reference.
+- [x] T009 Implement scoped revisioned resources/subscriptions/resource grants in the existing in-memory store family and EF entities/configuration/store registration under `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/`; preserve source ownership, failed-update state and idempotent mutation receipts.
+- [x] T010 Add compatible true ingress arm and typed standalone recipient selection/progress to `Core/Models/RuntimePostCommitOutbox.cs`; preserve `RuntimePostCommitIntent`, old checkpoint/wire/fingerprint/key formats and original workflow source semantics.
+- [x] T011 Extend the existing outbox backend family/processor/dispatcher/source reader/retention in `Elsa.Workflows.Runtime/Services/Checkpoints/` and EF stores for actual source kinds, provider readiness and ordinary resumption; no second queue/pump.
+- [x] T012 Implement provider-atomic source admission with exact source-key replay/conflict, resource/grant/association/publication compare and material-root acceptance in the selected in-memory/EF family; reject unknown/truncated evaluation rather than call it partial success.
+- [x] T013 Implement immutable `DispatchCommitted` seal, cancel CAS and per-recipient progress/target receipt transitions in the same physical source store; retain owed commands and source tombstones across failure and deletion.
+- [x] T014 Extend all four existing Runtime provider migration/schema chains under `Persistence/EntityFrameworkCore/Migrations/Runtime/` for new resource facts and source-neutral outbox projections; preserve old readers/bytes and refuse unsupported writers/providers.
+- [x] T015 Add meaningful Runtime/EF behavior and logic-bearing registration tests for T007–T014 in the existing owning test projects, including old wire vectors, split-provider refusal, atomic mutation/replay and source/seal/cancel crash controls.
 
 ## Phase 3 — US1: shared live resource management (M1/M4)
 
@@ -100,7 +100,7 @@
 - [ ] T054 Obtain independent visual UX inspection of current-commit downloadable screenshots/traces plus independent correctness/standards/acceptance review; fix findings and repeat affected suites/host journeys on the new exact head.
 - [ ] T055 Finish practical operator/module documentation/examples for four families, both HTTP policies/modes, mapping, grants, slots, missed firing and recovery/retention limits in their existing canonical documentation homes.
 - [ ] T056 Mark the converged draft ready, request normal review, satisfy exact-head checks and merge under current org rules without bypassing human holds/protection; record the actual merged commit and gate evidence on #3582/PR.
-- [ ] T057 Qualify resulting main and the composed feature, set the spec lifecycle in the finishing implementation PR, remove terminal checklists and close #3582 only after all agreed acceptance is complete.
+- [ ] T057 Qualify resulting main and the composed feature, set the spec lifecycle in the finishing implementation PR, remove terminal checklists and record completion on owner-closed #3582 only after all agreed acceptance is complete.
 
 ## Dependencies and parallel work
 
