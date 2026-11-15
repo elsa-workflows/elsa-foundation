@@ -185,8 +185,10 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.setViewportSize(projectViewport);
   await expectDeclarationReadable("Variable name");
   await expectDeclarationReadable("Variable type");
-  await expectDeclarationReadable("Variable storage driver");
+  await page.getByLabel("Variable name", { exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "json-variable-definitions");
+  await expectDeclarationReadable("Variable storage driver");
+  await capture(page, info, "json-variable-storage");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await expect(page.getByLabel("Output type", { exact: true })).toHaveValue(jsonAlias);
   await expectDeclarationReadable("Output name");
