@@ -98,6 +98,42 @@ try {
   browser = await chromium.launch({ headless: true });
   const admin = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
   const page = await admin.newPage();
+  const navigationEvidence = [];
+  async function tabTo(target) {
+    const count = await page.locator("a[href], button, input, select, textarea, [tabindex]").evaluateAll(elements => elements
+      .filter(element => element.tabIndex >= 0 && !element.disabled && element.getClientRects().length > 0
+        && element.ownerDocument.defaultView.getComputedStyle(element).visibility !== "hidden" && !element.closest("[inert]")).length);
+    const limit = Math.min(count + 1, 200);
+    for (let step = 0; step < limit; step++) {
+      if (await target.evaluate(element => element === element.ownerDocument.activeElement)) return step;
+      await page.keyboard.press("Tab");
+    }
+    await expect(target).toBeFocused();
+    return limit;
+  }
+  async function activateOwnedNavigation(group, label, view, checkpoint) {
+    const navigation = page.getByRole("navigation", { name: group, exact: true });
+    await expect(navigation).toBeVisible();
+    const trigger = navigation.getByRole("button", { name: group, exact: true });
+    const triggerTabs = await tabTo(trigger);
+    if (await trigger.getAttribute("aria-expanded") !== "true") await page.keyboard.press("Enter");
+    const link = navigation.getByRole("link", { name: label, exact: true });
+    await expect(link).toHaveCount(1);
+    await expect(link).toBeVisible();
+    const expected = new URL(componentUrl(view));
+    const href = await link.getAttribute("href");
+    expect(href).not.toBeNull();
+    expect(new URL(href, settings.studioUrl).href).toBe(expected.href);
+    const linkTabs = await tabTo(link);
+    expect(linkTabs).toBeGreaterThan(0);
+    await expect(link).toBeFocused();
+    await capture(page, checkpoint, { region: `nav.nav-section-group[aria-label="${group}"]`, action: "tab-enter-navigation" });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(expected.href);
+    await expect(page.getByRole("heading", { name: label, level: 2, exact: true })).toBeVisible();
+    navigationEvidence.push({ group, label, href: expected.pathname + expected.search, backend: "owned",
+      activation: "Tab+Enter", triggerTabs, linkTabs, qualifiedUrlMatched: true, headingVisible: true, checkpoint });
+  }
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("dialog", dialog => dialog.accept());
@@ -134,7 +170,11 @@ try {
     expect((await Promise.all(administratorExchanges)).every(Boolean)).toBe(true);
     return administratorExchanges.length;
   }
-  await page.goto(componentUrl("connections"));
+  if (settings.studioUrl) {
+    await page.goto(componentUrl("access"));
+    await expect(page.getByRole("heading", { name: "User access", level: 2, exact: true })).toBeVisible();
+    await activateOwnedNavigation("Integrations", "External sign-in", "connections", "navigation-integrations");
+  } else await page.goto(componentUrl("connections"));
   await expect(page.getByRole("heading", { name: "External sign-in", level: 2, exact: true })).toBeVisible();
   if (settings.uiRecovery) {
     await page.getByLabel("Find a connection", { exact: true }).fill("no-such-connection");
@@ -269,7 +309,8 @@ try {
   expect((await (await admin.request.get(backend + "/_elsa/identity/session")).json()).subject).toBe(adminSession.subject);
   // The real user-access component uses only its public bounded API and protected commands.
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.goto(componentUrl("access"));
+  if (settings.studioUrl) await activateOwnedNavigation("Operate", "User access", "access", "navigation-operate");
+  else await page.goto(componentUrl("access"));
   await expect(page.getByRole("heading", { name: "User access", level: 2, exact: true })).toBeVisible();
   const directory = await (await admin.request.get(backend + "/_elsa/identity/external-connections/users?take=25")).json();
   const target = directory.items.find(item => item.id === session.subject); expect(target).toBeTruthy();
@@ -469,14 +510,15 @@ try {
   if (settings.uiRecovery) await recovery.exerciseSelfRevocation({ page, admin, backend, componentUrl, adminSession, expect, capture, confirm: confirmStudio });
   expect(errors).toEqual([]);
   if (settings.studioUrl) await verifyUiBuild();
-  const result = { passed: true, ownedRoot, beforePreview, afterPreview, previewAdministratorTokenExchanges, ordinaryUser: { roles: session.roles, permissions: session.permissions },
-    accessibility, connectionDarkAccessibility, access, connectionLifecycle, errorRecovery, uiEvidence: uiEvidence.result(settings.uiRecovery ? [
+  if (settings.studioUrl) expect(navigationEvidence).toHaveLength(2);
+  const result = { passed: true, ownedRoot, navigation: navigationEvidence, beforePreview, afterPreview, previewAdministratorTokenExchanges, ordinaryUser: { roles: session.roles, permissions: session.permissions },
+    accessibility, connectionDarkAccessibility, access, connectionLifecycle, errorRecovery, uiEvidence: uiEvidence.result([...(settings.uiRecovery ? [
       "preferred-chooser-narrow", "key-to-name-tab", "missing-name-narrow-dark", "invalid-key", "configuration-test-failed", "corrected-draft-enter-reopen",
       "preview-provider-denied", "preview-recovery-succeeded", "connection-no-match", "connection-filter-cleared", "enable-before-escape", "enable-escape-focus", "enable-cancel-focus",
       "user-no-match", "known-user-search-recovered", "last-login-path-refused", "proved-sibling-safe-removal", "pending-user-empty-access", "identity-ownership-conflict", "revocation-before-write-failure",
       "revocation-before-write-recovered", "revocation-after-commit-failure", "revocation-after-commit-recovered", "link-draft-before-tab", "link-draft-after-tab",
       "stale-draft-preserved", "discard-conflicting-draft", "discard-cancel-preserves-draft", "conflict-recovered-save-reopen", "self-session-revoked", "self-session-reauthenticated"
-    ] : ["key-to-name-tab", "last-login-path-refused"]), provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
+    ] : ["key-to-name-tab", "last-login-path-refused"]), ...(settings.studioUrl ? ["navigation-integrations", "navigation-operate"] : [])]), provider: settings.provider === "Keycloak" ? "Keycloak 26.8.1, two independent owned providers" : "controlled owned HTTP OIDC fixture", store: "native SQLite", browser: "Chromium",
     fullStudioHost: Boolean(settings.studioUrl), buildProvenance,
     limitations: [...(settings.provider === "Keycloak" ? [] : ["not an external IdP product"]), ...(settings.studioUrl ? [] : ["not a full Studio host"]), "not server-database or separate-node qualification", "custom evidence is selected ARIA and named actions; native replay remains unverified"] };
   writeFileSync(join(ownedRoot, "browser-receipt.json"), JSON.stringify(result, null, 2));
