@@ -415,7 +415,10 @@ public sealed class ExecutableNodeCompiler(
                 Category: null,
                 IsNullable: false,
                 IsRequired: true),
-            authoredInputs[key].Value);
+            authoredInputs[key].Value,
+            string.Equals(authoredInputs[key].Value.ExpressionType, "Variable", StringComparison.OrdinalIgnoreCase)
+                ? authoredInputs[key].Conversion
+                : null);
         var bindings = inputTypes.ToDictionary(input => input.Key, input => CompileInput(input.Key, input.Value), StringComparer.Ordinal);
         if (intrinsic.Variable is not null)
         {

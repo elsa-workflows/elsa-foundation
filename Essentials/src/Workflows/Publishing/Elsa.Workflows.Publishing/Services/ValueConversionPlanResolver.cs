@@ -295,7 +295,10 @@ public enum ValueConversionRejectionReason
     LiteralCoercionFailed,
 
     /// <summary>An explicit conversion was requested for a member read whose selected contract is not known.</summary>
-    SelectedMemberContractUnknown
+    SelectedMemberContractUnknown,
+
+    /// <summary>Authored conversion settings require a variable source contract that is not pinned at publication.</summary>
+    VariableSourceContractUnknown
 }
 
 /// <summary>Publication failure with the complete pinned-contract context needed to fix a binding.</summary>
@@ -381,7 +384,7 @@ public sealed class ValueConversionPublicationException : ArgumentException
             ValueConversionMode.Auto, null, binding, inner);
 
     /// <summary>
-    /// Rejects a direct activity-result binding whose producer source contract could not be resolved.
+    /// Rejects a binding whose source contract could not be pinned by its input compilation boundary.
     /// The caller supplies the verbatim human message so existing linker diagnostics are preserved.
     /// </summary>
     public static ValueConversionPublicationException SourceContractUnavailable(
