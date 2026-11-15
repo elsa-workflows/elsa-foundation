@@ -23,7 +23,7 @@ internal sealed class ValidateActivityPublishingReplacementContractsStartupTask(
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var invalid = Contracts.Select(type => (Type: type, Count: services.Count(x => x.ServiceType == type)))
+        var invalid = Contracts.Select(type => (Type: type, Count: services.Count(x => x.ServiceType == type && !x.IsKeyedService)))
             .Where(x => x.Count != 1)
             .Select(x => $"{x.Type.Name} ({x.Count} registrations)").Order(StringComparer.Ordinal).ToArray();
         if (invalid.Length != 0)
