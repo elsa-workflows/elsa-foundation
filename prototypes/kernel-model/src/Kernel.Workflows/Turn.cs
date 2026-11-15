@@ -79,8 +79,9 @@ internal sealed class Turn : ITurn
     public void SetStatus(InstanceStatus status, string? subStatus = null, object? output = null) => (_status, _output) = (status, output);
 
     /// <summary>The turn's end is its commit, and the only one.</summary>
-    internal TurnOutcome Seal(int version)
+    internal TurnOutcome Seal(IExecutionModel model)
     {
+        var version=model.StateVersion;
         var created = _input.Row is null;
         var history = _input.Row?.History ?? _input.Spec!.History;
         if (_status != InstanceStatus.Running || Has(Flaw.HoldLoses)) _durable.HoldNothing();     // nothing is held into an ended instance
@@ -97,7 +98,14 @@ internal sealed class Turn : ITurn
         var unwritten = created ? Instance.Creation == 0 && _input.Spec!.Ephemeral : _input.Unwritten;
         // The history of its turns in memory comes with the commit that writes it (decision 4).
         List<object> entries = _input.Unwritten && _input.Pending is List<object> pending ? [.. pending, .. _entries] : _entries;
-        if (unwritten && (created || _input.Services.Now < _input.Until) && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0 && unit.Replied.Count == 0) return unit;
+        if (unwritten && (created || _input.Services.Now < _input.Until) && _status != InstanceStatus.Running && _durable.SentCount == 0 && _durable.SubscribedCount == 0 && unit.Replied.Count == 0)
+        {
+            if (!Id.StartsWith($"g{Instance.Ref.Partition}/key/", StringComparison.Ordinal)) return unit;
+            // Metadata is a persistence obligation unless its model explicitly supplies a state-free terminal
+            // protocol. Both profiles share the existing durable start-consumption commit.
+            if (model is not IModelMetadata || model is IStateFreeTerminalMetadata metadata &&
+                metadata.CanUseIdentityOnly(State,_status,Clock)) row = row with { State = "null", IdentityOnly = true };
+        }
         // Decision 4: one that waits only for its own short timers and jobs stays in memory, unwritten, up to its short wait.
         if (unwritten && _status == InstanceStatus.Running)
         {
