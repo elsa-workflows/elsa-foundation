@@ -138,9 +138,8 @@ export async function verifyScheduledRetention(j: TriggerJourney, targets: EchoT
       expect(Date.parse(String(businessOutput(result.outputs.message)))).toBe(Date.parse(armed.schedule!.nextDueUtc!));
     }
     expect((await j.read(timer.id)).configuration.interval).toBe("PT30S"); expect((await j.read(timer.id)).desiredState).toBe("Paused");
-    await j.inspectDelivery(completed);
+    await j.inspectDelivery(completed, "subscriber-runs");
     await expect(j.page.getByRole("link", { name: "Inspect actual run", exact: true })).toHaveCount(completed.acceptedCount);
-    await j.capture("subscriber-runs");
     j.requests.push({ kind: "actual-scheduled-accepted-capture-retained-after-configuration-and-serving-change", triggerId: timer.id, originalDueUtc: armed.schedule!.nextDueUtc, deliveryId: held.id, originalRecipients: held.recipients, completedRecipients: completed.recipients });
     j.observed.push("A real timer due occurrence accepted two roots; one was held after the physical dispatch seal and the other was still pending", "Pause preceded the reviewed interval edit and serving replacements; actual peer recovery completed both original captured versions and original due-time business outputs");
   } finally { await j.host("restore-features"); }
