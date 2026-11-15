@@ -18,7 +18,8 @@ internal static class IdentityTerminalJobsChecks
                 CommitTimes=c.S.CommitClockAvailable?Json.Write(new Dictionary<string,long?>{{WorkflowCommitClock.Terminal,null},{"turn:retained",null}}):null};
             Message Ticket(InboxKey key,long? due)=>new Message(key.Id,new(id),Kinds.Job,Json.Write(new {Model=model.Key,Key=key==a?"job-a":"job-b",Arguments=(string?)null}),Due:due).WithInboxScope(key.Scope);
             var lookalike=new Message(a.Id,new(id),"ordinary-lookalike");
-            var lease=await c.Take(0,"seed-"+serial);var messages=new List<Message>{Ticket(a,genuine?null:long.MaxValue),Ticket(b,long.MaxValue)};
+            var later=await c.Now()+(long)TimeSpan.FromDays(30).TotalMilliseconds;
+            var lease=await c.Take(0,"seed-"+serial);var messages=new List<Message>{Ticket(a,genuine?null:later),Ticket(b,later)};
             if(!genuine)messages.Add(lookalike);
             await c.Lands(()=>c.Commit(lease,0,[Make.Turn(id,row,sent:messages)]));await c.S.ReleaseAsync(0,lease.Epoch);
             var before=(await c.S.LoadAsync([id])).Single();
