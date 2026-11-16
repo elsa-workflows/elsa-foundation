@@ -217,7 +217,7 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
+public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
 {
     /// <summary>
     /// Whether the fence rides in the batch. The default (decided 12 and 13 November) is in the batch on every engine
@@ -409,7 +409,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                     }
                 }
                 // A key violation may be a subscription that is there already; the batch was rolled back whole.
-                if (!careful && failure.Failure is Failure.Definite && waits.ContainsValue(true)) { careful = true; continue; }
+                if (!careful && !OwnedCommit && failure.Failure is Failure.Definite && waits.ContainsValue(true)) { careful = true; continue; }
                 throw failure;
             }
         }
@@ -432,6 +432,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, CancellationToken cancellationToken)
     {
+        if (OwnedCommit) return await CommitOwnedAsync(batch, waits, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
