@@ -8,10 +8,10 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 namespace Elsa.Workflows.Runtime.Services.History;
 
 /// <summary>Bounded read projection over the same native state that atomically accepts checkpoint history.</summary>
-internal sealed class InMemoryRuntimeHistoryStore(
+internal sealed partial class InMemoryRuntimeHistoryStore(
     InMemoryRuntimeCheckpointStoreState state,
     IPersistenceAccessContextAccessor access,
-    IRuntimeRecoveryContinuationCodec codec) : IRuntimeHistoryDetailsStore
+    IRuntimeRecoveryContinuationCodec codec) : IRuntimeHistoryDetailsStore, IRuntimeHistoryOccurrenceStore
 {
     private const string EventPurpose = "runtime-history-events-v1";
     private const string BookmarkPurpose = "runtime-history-bookmarks-v1";
